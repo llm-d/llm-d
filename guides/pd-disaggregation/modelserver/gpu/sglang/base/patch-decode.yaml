@@ -25,6 +25,13 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+            # Staging buffer env variables are required for heterogeneous TP for non-MLA models.
+            - name: SGLANG_DISAGG_STAGING_BUFFER
+              value: "1"
+            - name: SGLANG_DISAGG_STAGING_BUFFER_SIZE_MB
+              value: "64"
+            - name: SGLANG_DISAGG_STAGING_POOL_SIZE_MB
+              value: "4096"
           resources:
             limits:
               cpu: "16"

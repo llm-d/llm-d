@@ -4,6 +4,7 @@ This page explains how to set up Prometheus, Grafana, and distributed tracing fo
 
 > [!NOTE]
 > Commands in this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```
@@ -170,6 +171,7 @@ Available dashboards:
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache` | KV cache utilization and performance |
 | `llm-d-pd-coordinator-metrics` | Prefill/decode disaggregation metrics |
+| `llm-d-inference-gateway` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
 
 ## Step 3: Install Distributed Tracing (Optional)
 

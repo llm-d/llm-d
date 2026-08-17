@@ -6,7 +6,7 @@ resources:
 namePrefix: tiered-prefix-cache-gpu-sglang-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-sglang
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang/release
 
 labels:
   - pairs:

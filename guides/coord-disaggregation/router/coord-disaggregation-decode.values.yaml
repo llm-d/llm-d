@@ -1,0 +1,49 @@
+## Coordinator Disaggregation guide overrides for the decode-only EPP / InferencePool,
+## part of the "3 separate EPPs" alternative to the single combined EPP (see
+## router/coord-disaggregation.values.yaml).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## This EPP only ever sees decode-labeled pods (modelServers.matchLabels below), so no
+## by-label filter is needed -- just the scorer. This matches the decode profile in
+## guides/pd-disaggregation/router/pd-disaggregation.values.yaml: decode is bound by
+## concurrent in-flight requests, not prefill throughput, so pick the least-busy
+## endpoint (active-request-scorer).
+
+# See router/httproute-3-epp.yaml for why this guide hand-authors the HTTPRoute
+# instead of using the chart's own (same reason as the single-EPP variant: it
+# needs Exact path matches to tie in specificity with the Coordinator's own
+# Exact-path HTTPRoute).
+httpRoute:
+  create: false
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which active-request-scorer consumes) is local to this EPP process, so multiple
+    # replicas would each see only a fraction of the per-endpoint load.
+    replicas: 1
+    pluginsConfigFile: "coordinator-plugins.yaml"
+    pluginsCustomConfig:
+      coordinator-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: inflight-load-producer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "coord-disaggregation"
+      llm-d.ai/role: "decode"

@@ -1,0 +1,234 @@
+{
+  "displayName": "Async Processor \u2014 Multi-tenant Pub/Sub Demo",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Request rate by team (req/s)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pool_name) (rate(llm_d_async_async_request_total[5m]))"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "req/s",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 0,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Successful request rate by team (req/s)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pool_name) (rate(llm_d_async_async_successful_requests_total[5m]))"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "req/s",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 4,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "In-flight requests by pool (quota effect)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pool_name) (llm_d_async_async_inflight_requests)"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "in-flight",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 4,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Message latency p95 by team (ms)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "histogram_quantile(0.95, sum by (le, pool_name) (rate(llm_d_async_async_message_latency_time_millis_bucket[5m])))"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "ms",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 8,
+        "width": 12,
+        "height": 4,
+        "widget": {
+          "title": "Pub/Sub backlog by team \u2014 undelivered messages (native Cloud Monitoring metric)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" resource.type=\"pubsub_subscription\" resource.label.\"subscription_id\"=starts_with(\"team-\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MEAN",
+                      "crossSeriesReducer": "REDUCE_NONE",
+                      "groupByFields": [
+                        "resource.label.\"subscription_id\""
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${resource.labels.subscription_id}"
+              }
+            ],
+            "yAxis": {
+              "label": "undelivered",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 12,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Dispatch budget by team (gate openness 0\u20131)  [#290]",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "max by (pool_name) (llm_d_async_async_dispatch_budget)"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "budget",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 12,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Gate decisions by reason (per sec)  [#291]",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (reason) (rate(llm_d_async_async_gate_decisions_total[5m]))"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.reason}"
+              }
+            ],
+            "yAxis": {
+              "label": "decisions/s",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 16,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Worker utilization by pool (in-flight \u00f7 limit)  [#290]",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pool_name)(llm_d_async_async_inflight_requests) / sum by (pool_name)(llm_d_async_async_pool_worker_limit)"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "utilization",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 16,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "Gate decisions by team & reason (per sec)  [#291]",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pool_name, reason) (rate(llm_d_async_async_gate_decisions_total[5m]))"
+                },
+                "plotType": "LINE",
+                "legendTemplate": "${metric.labels.pool_name} \u00b7 ${metric.labels.reason}"
+              }
+            ],
+            "yAxis": {
+              "label": "decisions/s",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -47,6 +47,11 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
 
 #  push:
 #    branches:
@@ -74,9 +79,10 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || '' }}
+      infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-inference-rocm-gpu' }}
+      persistent_model: ${{ inputs.persistent_model || 'true' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-rocm' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-rocm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -87,14 +93,14 @@ jobs:
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+#      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: optimized-baseline-rocm

@@ -1,0 +1,93 @@
+## Coordinator Disaggregation guide overrides for the single EPP / InferencePool that
+## covers all three roles (encode, prefill, decode).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## One EPP instance runs one scheduling profile per call, selected by the
+## coordinator's `EPP-Profile` header via the `header-profile-handler`
+## plugin (merged in llm-d-router#2134). Each profile filters the shared pool
+## down to its own role with a `*-filter` by-label plugin, so the InferencePool
+## selector below matches on the guide label only, not `llm-d.ai/role`.
+
+# The chart's own HTTPRoute (from features/httproute-flags.yaml) would be an
+# unconditional catch-all on `/` with no header match, tying in specificity
+# with the Coordinator's own catch-all `/` HTTPRoute on the same Gateway — and
+# (by creation-order tiebreak) winning, sending every client request straight
+# to this router/EPP instead of through the Coordinator. The single combined
+# router needs to match EPP-Profile being encode OR prefill OR decode, which the
+# chart's headerMatches (a single exact-match map) can't express, so we
+# disable it here and hand-author router/httproute.yaml instead (see there
+# for the OR'd header matches).
+httpRoute:
+  create: false
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting and
+    # approx-prefix-cache-producer's cache state (which token-load-scorer,
+    # prefix-cache-affinity-filter, and active-request-scorer consume across all three
+    # profiles) are local to this EPP process, so multiple replicas would each see only
+    # a fraction of the per-endpoint load/cache picture and mis-score requests.
+    replicas: 1
+    # TODO: Remove this image override once an official release including
+    # llm-d-router#2134 (header-profile-handler) is published. v0.9.0 predates
+    # that merge; main is the earliest build that has it.
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: "main"
+    flags:
+      allow-experimental-plugins: true
+    pluginsConfigFile: "coordinator-plugins.yaml"
+    pluginsCustomConfig:
+      # prefill/decode scorers below match guides/pd-disaggregation/router/pd-disaggregation.values.yaml:
+      # prefix-cache-affinity-filter + token-load-scorer for prefill (keep prefix groups
+      # on cache-warm pods, then pick by queued token load), active-request-scorer for
+      # decode (pick the least-busy endpoint). pd-disaggregation has no encode role to
+      # borrow a scorer from, so encode reuses active-request-scorer too (pick the
+      # least-busy encode pod) -- encode has no prefix-cache affinity to speak of.
+      #
+      # peakPrefillThroughput is left at the plugin's own default (not pd-disaggregation's
+      # 33821, which is calibrated for gpt-oss-120b on 8x H200 prefill -- meaningless for
+      # this guide's Qwen3-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
+      # hardware with guides/recipes/router/calibration/calibrate.sh.
+      coordinator-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: encode-filter
+        - type: prefill-filter
+        - type: decode-filter
+        - type: header-profile-handler
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: encode
+          plugins:
+          - pluginRef: encode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "coord-disaggregation"

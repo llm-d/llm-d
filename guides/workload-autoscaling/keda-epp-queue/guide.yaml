@@ -1,0 +1,140 @@
+name: keda-epp-queue
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    NAMESPACE:            llm-d-optimized-baseline
+    MONITORING_NAMESPACE: llm-d-monitoring
+    KEDA_NAMESPACE:       keda
+
+    MODEL: { default: "Qwen/Qwen3-32B" }
+
+    # Deployment the ScaledObject targets, and the KEDA-managed objects it creates.
+    TARGET_DEPLOYMENT: { default: "optimized-baseline-nvidia-gpu-vllm-decode" }
+    SCALEDOBJECT_NAME: { default: "optimized-baseline-keda-epp" }
+    HPA_NAME:          { default: "keda-hpa-optimized-baseline" }
+
+    # Target platform. `existing` = generic Kubernetes with the bundled
+    # kube-prometheus-stack (the `k8s` overlay). `ocp` = OpenShift with Thanos
+    # Querier (the `ocp` overlay, which reuses recipes/autoscaling/metrics-reader).
+    # Rendered as an annotation only — it does not gate execution.
+    ENV: { default: existing, values: [existing, ocp] }
+
+    # Autoscaling overlays for this guide (Model A: <strategy>/<topology>).
+    OVERLAY_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  # Prereq: complete the optimized-baseline guide (incl. enabling monitoring) and
+  # install KEDA. Then upgrade the router with the KEDA+EPP overlay, which turns on
+  # EPP Flow Control while keeping the monitoring feature values (EPP metrics port
+  # and its ServiceMonitor) enabled.
+  router:
+    - run: |
+        helm upgrade optimized-baseline \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+          -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+          -f ${OVERLAY_ROOT}/router.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  confirm:
+    - run: |
+        kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+        kubectl get servicemonitor -n ${NAMESPACE}
+
+deploy:
+  # Generic Kubernetes only: copy the bundled Prometheus CA into the workload
+  # namespace as the keda-prometheus-auth Secret. On OpenShift the ocp overlay's
+  # ServiceAccount token already carries service-ca.crt, so this step is skipped.
+  prometheus_auth:
+    - when: { ENV: [existing] }
+      run: |
+        kubectl create secret generic keda-prometheus-auth \
+          --namespace ${NAMESPACE} \
+          --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
+            -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  # Begin at one replica so a 1-to-N scale-up is observable.
+  prepare:
+    - run: |
+        kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
+        kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
+
+  # Apply the ScaledObject overlay for the platform. Generic Kubernetes (bundled
+  # kube-prometheus-stack, CA-only auth):
+  apply_k8s:
+    - when: { ENV: [existing] }
+      run: kubectl apply -k ${OVERLAY_ROOT}/k8s
+  # OpenShift (Thanos Querier + the shared recipes/autoscaling/metrics-reader auth):
+  apply_ocp:
+    - when: { ENV: [ocp] }
+      run: kubectl apply -k ${OVERLAY_ROOT}/ocp
+
+verify:
+  # ScaledObject Ready=True confirms the scaler config is valid; KEDA then creates
+  # the named HPA. A non-empty currentMetrics list shows the HPA is receiving KEDA's
+  # external metrics (it can take several polling intervals to appear). The
+  # scale_event test then proves load actually drives a scaling DECISION.
+  tests:
+    scaledobject:
+      - run: |
+          kubectl get scaledobject ${SCALEDOBJECT_NAME} -n ${NAMESPACE}
+          kubectl wait --for=condition=Ready scaledobject/${SCALEDOBJECT_NAME} -n ${NAMESPACE} --timeout=120s
+    hpa:
+      - run: |
+          kubectl get hpa ${HPA_NAME} -n ${NAMESPACE}
+          kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.currentMetrics}' | jq
+
+    # Fire a concurrent burst and assert the KEDA scale event fired:
+    #   baseline desiredReplicas == min -> burst -> desiredReplicas > min (up)
+    #                                   -> drain -> desiredReplicas == min (down)
+    # We assert the autoscaler DECISION (hpa .status.desiredReplicas), NOT that the
+    # new pod becomes Ready — on a contended GPU cluster the 2nd replica may stay
+    # Pending. desiredReplicas>min transitively proves the whole chain worked: EPP
+    # emits the metric -> Prometheus/Thanos -> KEDA reads it over threshold -> HPA
+    # raises the target. Ported from .github/scripts/e2e/e2e-validate-scale-event.sh.
+    scale_event:
+      - run: |
+          # Burst/timeout knobs (override via env). SCALE_DOWN_TIMEOUT matches the
+          # ScaledObject's 300s scaleDown stabilization window; the nightly lowers
+          # that window and can override this shorter.
+          : "${SCALE_CONCURRENCY:=30}" "${SCALE_TOTAL:=400}" "${SCALE_MAX_TOKENS:=512}" "${SCALE_UP_TIMEOUT:=120}" "${SCALE_DOWN_TIMEOUT:=360}"
+          MIN=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.minReplicas}' 2>/dev/null); MIN=${MIN:-1}
+          HOST=$(kubectl get service optimized-baseline-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}'):80
+          POD=curl-scale-$$
+          trap 'kubectl delete pod -n ${NAMESPACE} $POD --ignore-not-found --wait=false >/dev/null 2>&1 || true' EXIT
+          kubectl run $POD -n ${NAMESPACE} --image=curlimages/curl --restart=Never -- sleep 3600 >/dev/null
+          kubectl wait --for=condition=Ready pod/$POD -n ${NAMESPACE} --timeout=120s
+          printf '{"model":"%s","prompt":"Write a very long, detailed story about a robot that learns to paint.","max_tokens":%s}' "${MODEL}" "${SCALE_MAX_TOKENS}" \
+            | kubectl exec -i -n ${NAMESPACE} $POD -- tee /tmp/payload.json >/dev/null
+          BASE=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null); BASE=${BASE:-$MIN}
+          [ "$BASE" -le "$MIN" ] || { echo "baseline desiredReplicas=$BASE already above min=$MIN"; exit 1; }
+          echo "-- firing burst (concurrency=${SCALE_CONCURRENCY} total=${SCALE_TOTAL}) to drive running-requests over threshold --"
+          kubectl exec -n ${NAMESPACE} $POD -- sh -c \
+            "seq 1 ${SCALE_TOTAL} | xargs -I{} -P ${SCALE_CONCURRENCY} curl -sS --max-time 300 -o /dev/null -X POST http://${HOST}/v1/completions -H 'content-type: application/json' --data-binary @/tmp/payload.json" >/dev/null 2>&1 &
+          BURST=$!
+          up=false; end=$((SECONDS + SCALE_UP_TIMEOUT))
+          while [ $SECONDS -lt $end ]; do d=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null); if [ -n "$d" ] && [ "$d" -gt "$MIN" ]; then echo "  scale-up decision: desiredReplicas=$d"; up=true; break; fi; sleep 5; done
+          kill $BURST 2>/dev/null || true
+          kubectl delete pod -n ${NAMESPACE} $POD --ignore-not-found --wait=false >/dev/null 2>&1 || true
+          $up || { echo "no scale-up within ${SCALE_UP_TIMEOUT}s (raise SCALE_CONCURRENCY / SCALE_MAX_TOKENS, or check the trigger)"; exit 1; }
+          echo "-- load stopped; waiting up to ${SCALE_DOWN_TIMEOUT}s for scale-down (matches the 300s scaleDown window) --"
+          down=false; end=$((SECONDS + SCALE_DOWN_TIMEOUT))
+          while [ $SECONDS -lt $end ]; do d=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null); if [ -n "$d" ] && [ "$d" -le "$MIN" ]; then echo "  scale-down decision: desiredReplicas=$d"; down=true; break; fi; sleep 5; done
+          $down || { echo "no scale-down within ${SCALE_DOWN_TIMEOUT}s (check scaleDown stabilization/cooldown)"; exit 1; }
+          echo "Scale-event verified: min ${MIN} -> >${MIN} -> ${MIN} (decision asserted; 2nd-pod readiness intentionally not required)"
+
+cleanup:
+  # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
+  # the target Deployment or reset its replica count.
+  - when: { ENV: [existing] }
+    run: kubectl delete -k ${OVERLAY_ROOT}/k8s --ignore-not-found=true
+  - when: { ENV: [ocp] }
+    run: kubectl delete -k ${OVERLAY_ROOT}/ocp --ignore-not-found=true
+  - when: { ENV: [existing] }
+    run: kubectl delete secret keda-prometheus-auth -n ${NAMESPACE} --ignore-not-found=true

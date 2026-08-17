@@ -1,0 +1,175 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-lws-xpu-vllm-decode
+  labels:
+    llm-d.ai/model: DeepSeek-V2-Lite-Chat
+    llm-d.ai/role: decode
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 1
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: wide-ep-lws
+          llm-d.ai/accelerator-variant: xpu
+          llm-d.ai/accelerator-vendor: intel
+          llm-d.ai/model: DeepSeek-V2-Lite-Chat
+          llm-d.ai/role: decode
+      spec:
+        serviceAccountName: sa
+        securityContext:
+          fsGroup: 107
+          supplementalGroups:
+            - 107
+        resourceClaims:
+          - name: xpu-decode-claim
+            resourceClaimTemplateName: xpu-decode-claim
+        initContainers:
+          - name: routing-proxy
+            args:
+              - --port=8000
+              - --kv-connector=nixlv2
+              - --zap-log-level=1
+              - --secure-proxy=false
+              - --enable-prefiller-sampling
+            imagePullPolicy: Always
+            ports:
+              - containerPort: 8000
+                name: sidecar
+                protocol: TCP
+            resources: {}
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 16Gi
+          - name: hf-cache
+            emptyDir: {}
+          - name: vllm-cache
+            emptyDir: {}
+        containers:
+          - name: vllm
+            image: REPLACE_MODEL_SERVER_IMAGE
+            imagePullPolicy: Always
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+              runAsGroup: 0
+              runAsUser: 0
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                exec vllm serve \
+                  deepseek-ai/DeepSeek-V2-Lite-Chat \
+                  --host 0.0.0.0 \
+                  --port 8200 \
+                  --trust-remote-code \
+                  --dtype float16 \
+                  --block-size 64 \
+                  --enforce-eager \
+                  --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} \
+                  --max-model-len ${MAX_MODEL_LEN} \
+                  --tensor-parallel-size ${TP_SIZE} \
+                  --enable-expert-parallel \
+                  --all2all-backend allgather_reducescatter \
+                  --kv-transfer-config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_buffer_device":"xpu"}' \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+                value: "5600"
+              - name: VLLM_USE_V1
+                value: "1"
+              - name: VLLM_WORKER_MULTIPROC_METHOD
+                value: spawn
+              - name: VLLM_ENABLE_V1_MULTIPROCESSING
+                value: "1"
+              - name: VLLM_MULTIPROC_EXECUTE_MODEL_TIMEOUT_S
+                value: "1200"
+              - name: TORCH_LLM_ALLREDUCE
+                value: "1"
+              - name: UCX_TLS
+                value: tcp,ze_copy
+              - name: UCX_MEMTYPE_CACHE
+                value: "0"
+              - name: USER
+                value: llm-d
+              - name: TP_SIZE
+                value: "2"
+              - name: MAX_MODEL_LEN
+                value: "512"
+              - name: GPU_MEMORY_UTILIZATION
+                value: "0.8"
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: HF_HUB_CACHE
+                value: /var/cache/huggingface
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm
+            ports:
+              - containerPort: 8200
+                name: modelserver
+                protocol: TCP
+              - containerPort: 5600
+                name: nixl
+                protocol: TCP
+            startupProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              initialDelaySeconds: 30
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 120
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 20
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 6
+            resources:
+              limits:
+                cpu: "16"
+                memory: 128Gi
+              requests:
+                cpu: "16"
+                memory: 128Gi
+              claims:
+                - name: xpu-decode-claim
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: vllm-cache
+                mountPath: /var/cache/vllm

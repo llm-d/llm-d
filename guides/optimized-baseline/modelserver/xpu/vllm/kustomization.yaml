@@ -7,7 +7,7 @@ resources:
 namePrefix: optimized-baseline-xpu-vllm-
 
 components:
-  - ../../../../recipes/modelserver/components/images/xpu-vllm
+  - ../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
 
 labels:
   - pairs:

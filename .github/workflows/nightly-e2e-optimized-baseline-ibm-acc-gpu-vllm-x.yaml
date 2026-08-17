@@ -47,12 +47,17 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
 #  push:
 #    branches:
 #      - main
 
   schedule:
-    - cron: '0 10 * * *'  # 10:00 UTC daily
+    - cron: '0 3 * * *'  # 03:00 UTC daily
 
 permissions:
   contents: write
@@ -86,14 +91,14 @@ jobs:
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+#      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: optimized-baseline-ocp

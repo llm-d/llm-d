@@ -1,0 +1,39 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: coordinator
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-d-inference-gateway
+  rules:
+  # Exact-path matches, no header condition: these are the client-facing inference
+  # paths. The coordinator's own internal EPP-Profile-tagged calls reuse these same
+  # paths, but router/httproute.yaml matches them at the same (exact) path
+  # specificity plus a header condition, which takes precedence over this
+  # header-less rule whenever EPP-Profile is present -- see the comment there.
+  # Anything else without EPP-Profile (not one of these 3 paths) falls to
+  # router/httproute.yaml's catch-all instead, not to the Coordinator.
+  #
+  # SECURITY NOTE: a client that forges its own EPP-Profile header bypasses the
+  # Coordinator entirely, matching router/httproute.yaml's rule directly instead of
+  # this one -- see the SECURITY NOTE there. This split is a routing convenience, not
+  # a trust/auth boundary.
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+    backendRefs:
+    - kind: Service
+      name: llm-d-coordinator
+      port: 8080
+      weight: 1
+    timeouts:
+      request: 300s

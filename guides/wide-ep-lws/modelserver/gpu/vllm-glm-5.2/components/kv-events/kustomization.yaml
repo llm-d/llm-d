@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Emit per-rank KV-cache events for the precise prefix-cache router variant
+# (see ../../../../../README.precise-prefix-cache-routing.md). The block
+# size and PYTHONHASHSEED must be identical on every engine pod, and the block
+# size must match the router's tokenProcessorConfig.blockSizeTokens.
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: &kv-events-env |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: ENABLE_KV_EVENTS
+          value: "1"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: KV_BLOCK_SIZE
+          value: "64"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: PYTHONHASHSEED
+          value: "0"
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-decode"
+    patch: *kv-events-env

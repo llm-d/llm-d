@@ -10,8 +10,8 @@ configurations:
   - namereference.yaml
 
 components:
-  - ../../../../recipes/modelserver/components/images/xpu-vllm
-  - ../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
+  - ../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:

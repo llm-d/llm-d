@@ -1,0 +1,8 @@
+router:
+  modelServers:
+    targetPorts:
+      - number: 8000
+    matchLabels:
+      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/accelerator-variant: "xpu"
+      llm-d.ai/accelerator-vendor: "intel"

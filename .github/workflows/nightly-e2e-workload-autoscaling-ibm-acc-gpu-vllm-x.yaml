@@ -9,7 +9,7 @@ name: Nightly - Workload Autoscaling E2E (OCP GPU)
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily (staggered from tiered-prefix-cache)
+    - cron: '0 3 * * *'  # 03:00 UTC daily
   workflow_dispatch:
     inputs:
       image_tag:
@@ -76,6 +76,11 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
 
 permissions:
   contents: write
@@ -97,13 +102,13 @@ jobs:
       image_tag: ${{ steps.build.outputs.image_tag }}
     steps:
       - name: Checkout WVA source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: llm-d/llm-d-workload-variant-autoscaler
           ref: ${{ github.event.inputs.caller_ref || 'main' }}
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -161,7 +166,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: wva-ocp

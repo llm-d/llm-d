@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: modelserver
-          # TODO(#1897): Update to centralized gpu-vllm image; avoid hardcoding in patch.
+
           args:
             - "Qwen/Qwen3-32B"
             - "--tensor-parallel-size=2"

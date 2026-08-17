@@ -1,0 +1,159 @@
+name: fast-model-actuation
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: fast-model-actuation
+    NAMESPACE:  llm-d-fast-model-actuation
+
+    # FMA controller/CRD/image version. Bump alongside the pinned image tags in
+    # modelserver/launcherconfig.yaml and requester/deployment.yaml on upgrade.
+    FMA_VERSION:             { default: "0.6.4" }
+    FMA_CHART_INSTANCE_NAME: fma
+
+    MODEL:           { default: "Qwen/Qwen3-0.6B" }
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
+
+    # BENCHMARK
+    BENCHMARK_REF: main
+    HARNESS:       nop
+    WORKLOAD:      nop.yaml
+    GATEWAY_CLASS: { default: epponly, values: [epponly, gke, agentgateway, istio] }
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  fma_crds:
+    - run: |
+        export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
+        kubectl apply --server-side \
+          -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
+          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
+          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+        kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
+        kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
+        kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s
+
+  rbac:
+    - run: |
+        # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator
+        kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml
+
+        # Role (namespaced): launcher pods read their own pod spec
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml
+
+        # RoleBinding (namespaced): bind the Role to ${NAMESPACE}'s default ServiceAccount.
+        # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
+        # binding's namespace and the subject ServiceAccount's namespace.
+        kubectl create rolebinding fma-launcher-pod-reader \
+          --role=fma-launcher-pod-reader \
+          --serviceaccount=${NAMESPACE}:default \
+          -n ${NAMESPACE} \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  fma_controllers:
+    - run: |
+        helm upgrade --install ${FMA_CHART_INSTANCE_NAME} \
+          oci://ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/charts/fma-controllers \
+          --version ${FMA_VERSION} \
+          --set global.nodeViewClusterRole=fma-node-viewer \
+          -n ${NAMESPACE}
+    - run: |
+        kubectl wait --for=condition=available --timeout=180s \
+          deployment "${FMA_CHART_INSTANCE_NAME}-dual-pods-controller" -n ${NAMESPACE}
+        kubectl wait --for=condition=available --timeout=120s \
+          deployment "${FMA_CHART_INSTANCE_NAME}-launcher-populator" -n ${NAMESPACE}
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
+  # AND the server-requesting pods together
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+
+        kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    sleep_wake:
+      - run: kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
+      - run: kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
+      - run: kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
+
+benchmark:
+  setup:
+    - run: |
+        curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
+        cd llm-d-benchmark
+        source .venv/bin/activate
+        llmdbenchmark --version
+  endpoint:
+    standalone:
+      - run: export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
+  execute:
+    - run: |
+        llmdbenchmark \
+          --spec           guides/${GUIDE_NAME} \
+          run \
+          --endpoint-url   "${ENDPOINT_URL}" \
+          --gateway-class  "${GATEWAY_CLASS}" \
+          --model          "${MODEL}" \
+          --namespace      "${NAMESPACE}" \
+          --harness        "${HARNESS}" \
+          --workload       "${WORKLOAD}" \
+          --analyze
+
+cleanup:
+  # Order matters. Delete the model-server CRs and the requester Deployment
+  # FIRST (both live in modelserver/): this unbinds the requester/provider
+  # pairs and tells the dual-pods controller to tear down the launcher pods.
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+  # Then wait for the requester and launcher pods to fully drain while the
+  # controller is still running to strip their finalizers. If the controller
+  # is removed first, finalizer-bound pods get stuck in Terminating forever.
+  - run: kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+  - run: kubectl wait --for=delete pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} --timeout=120s
+  # Only after the pods have drained, remove the controllers (dual-pods
+  # controller + launcher populator), then the router and the cluster-scoped RBAC.
+  - run: helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
+  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+  # Destructive / cluster-wide -- skipped in CI, where the namespace is reused
+  # and the FMA CRDs are shared across deployments. Run only on a cluster you own.
+  - skip_in: [ci]
+    run: kubectl delete namespace ${NAMESPACE}
+  - skip_in: [ci]
+    run: kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai

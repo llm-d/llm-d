@@ -1,0 +1,98 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+  - gke-rdma-claim-gb300.yaml
+
+patches:
+  # Configure prefill deployment with DRANet resourceClaims (gke-rdma-claim-gb300), A4X Max GPU resources, env, and capabilities
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: prefill
+      spec:
+        template:
+          spec:
+            resourceClaims:
+              - name: gke-rdma-claim
+                resourceClaimTemplateName: gke-rdma-claim-gb300
+            containers:
+              - name: modelserver
+                # A4X Max requires "kv_buffer_device":"cuda" in kv-transfer-config, gpu-memory-utilization=0.9, and disabling flashinfer autotune
+                args:
+                  - openai/gpt-oss-120b
+                  - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  - --tensor-parallel-size=1
+                  - --block-size=128
+                  - --kv-transfer-config
+                  - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
+                  - --no-disable-hybrid-kv-cache-manager
+                  - --gpu-memory-utilization=0.9
+                  - --no-enable-flashinfer-autotune
+                # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X Max)
+                resources:
+                  claims:
+                    - name: gke-rdma-claim
+                  limits:
+                    nvidia.com/gpu: "1"
+                  requests:
+                    nvidia.com/gpu: "1"
+                env:
+                  - name: UCX_TLS
+                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                  - name: UCX_IB_ROCE_REACHABILITY_MODE
+                    value: "all"
+                securityContext:
+                  capabilities:
+                    add: ["IPC_LOCK", "NET_ADMIN"]
+  # Configure decode deployment with DRANet resourceClaims (gke-rdma-claim-gb300), A4X Max GPU resources, env, and capabilities
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            resourceClaims:
+              - name: gke-rdma-claim-0
+                resourceClaimTemplateName: gke-rdma-claim-gb300
+              - name: gke-rdma-claim-1
+                resourceClaimTemplateName: gke-rdma-claim-gb300
+              - name: gke-rdma-claim-2
+                resourceClaimTemplateName: gke-rdma-claim-gb300
+              - name: gke-rdma-claim-3
+                resourceClaimTemplateName: gke-rdma-claim-gb300
+            containers:
+              - name: modelserver
+                # A4X Max requires "kv_buffer_device":"cuda" in kv-transfer-config
+                args:
+                  - openai/gpt-oss-120b
+                  - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  - --tensor-parallel-size=4
+                  - --block-size=128
+                  - --kv-transfer-config
+                  - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
+                  - --no-disable-hybrid-kv-cache-manager
+                  - --port=8200
+                # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X Max)
+                resources:
+                  claims:
+                    - name: gke-rdma-claim-0
+                    - name: gke-rdma-claim-1
+                    - name: gke-rdma-claim-2
+                    - name: gke-rdma-claim-3
+                  limits:
+                    nvidia.com/gpu: "4"
+                  requests:
+                    nvidia.com/gpu: "4"
+                env:
+                  - name: UCX_TLS
+                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                  - name: UCX_IB_ROCE_REACHABILITY_MODE
+                    value: "all"
+                securityContext:
+                  capabilities:
+                    add: ["IPC_LOCK", "NET_ADMIN"]

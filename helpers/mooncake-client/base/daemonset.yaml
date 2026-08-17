@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mooncake-client
+spec:
+  template:
+    spec:
+      containers:
+        - name: mooncake-client
+          image: mooncake-client
+          command: ["mooncake_client"]
+          args:
+            - "--master_server_address=mooncake-master-store.mooncake.svc.cluster.local:50051"
+            - "--host=$(POD_IP)"
+            - "--port=50052"
+            - "--protocol=rdma"
+            - "--global_segment_size=40GB"
+            - "--enable_offload=true"
+            - "--metadata_server=P2PHANDSHAKE"
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MOONCAKE_OFFLOAD_FILE_STORAGE_PATH
+              value: /data/mooncake-offload
+            - name: MOONCAKE_OFFLOAD_STORAGE_BACKEND_DESCRIPTOR
+              value: bucket_storage_backend
+            - name: MOONCAKE_OFFLOAD_TOTAL_SIZE_LIMIT_BYTES
+              value: "536870912000"
+          ports:
+            - name: rpc
+              containerPort: 50052
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: rpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: rpc
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "2"
+              memory: 42Gi
+              rdma/ib: "1"
+            limits:
+              cpu: "4"
+              memory: 44Gi
+              rdma/ib: "1"
+          volumeMounts:
+            - name: offload-storage
+              mountPath: /data/mooncake-offload
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: offload-storage
+          hostPath:
+            path: /mnt/mooncake-offload
+            type: DirectoryOrCreate
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+      terminationGracePeriodSeconds: 30

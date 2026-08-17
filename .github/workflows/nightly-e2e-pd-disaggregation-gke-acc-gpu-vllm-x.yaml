@@ -47,6 +47,11 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
 
 #  push:
 #    branches:
@@ -74,9 +79,11 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      infra_provider: ${{ inputs.infra_provider || 'gke/base' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-gke-gpu' }}
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -94,7 +101,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: pd-disaggregation-gke

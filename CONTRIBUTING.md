@@ -79,6 +79,7 @@ These are not requirements, but contributions in the following categories tend t
 * **New features.** Even features that do not rise to a project proposal (no new public API or component) benefit from a brief issue describing the problem and the proposed approach before implementation.
 * **New testing methodologies.** Fuzzing, property-based testing, chaos testing, load testing, or other testing approaches that introduce a new class of ongoing maintenance (new CI jobs, curated inputs, triage, release-gating policy). See the worked example below.
 * **New external dependencies.** Require maintainer sign-off.
+  **Note:** Please check the licensing of all new dependencies. Dependencies must comply with the [CNCF Allowed License Policy](https://github.com/cncf/foundation/blob/main/policies-guidance/allowed-third-party-license-policy.md).
 * **Renames or other API-affecting changes.** See [API Changes and Deprecation](#api-changes-and-deprecation).
 
 Every contribution creates ongoing cost: review time, CI time, flake triage, and future maintenance. A good problem statement captures that cost alongside the benefit, which is what an issue or proposal makes visible before code is written.
@@ -291,3 +292,27 @@ Maintain appropriate security mindset for production serving. The project will e
 * Bias towards accepting experimentation with clear goals
 * Each repo must have README describing purpose and goal
 * Graduated components move to `llm-d` org
+
+## Documentation
+
+The Markdown under [`docs/`](docs/) is the source of truth for the documentation
+rendered on [llm-d.ai](https://llm-d.ai). The website ([`llm-d/llm-d.github.io`](https://github.com/llm-d/llm-d.github.io))
+syncs `docs/` from this repository on every merge to `main`, so keep pages in plain,
+portable Markdown that also reads well on GitHub.
+
+### Sidebar order and labels (`docs/menu-config.json`)
+
+The documentation sidebar is generated automatically from the `docs/` folder tree.
+Section labels, ordering, and collapse state are controlled **only** by
+[`docs/menu-config.json`](docs/menu-config.json) — **do not** add `_category_.json`
+files or `sidebar_position` / `sidebar_label` frontmatter to docs.
+
+* **`categories`** — keyed by folder path relative to `docs/` (any depth, slash-separated,
+  e.g. `well-lit-paths/foundations`). Fields: `label`, `position` (order among siblings),
+  `collapsed`.
+* **`pages`** — keyed by doc id (path under `docs/` without extension, e.g.
+  `getting-started/quickstart`). Fields: `position`, `label`.
+
+When you **add a page or folder**, add its entry to `docs/menu-config.json` so it gets a
+human-readable label and an explicit position. Items with no entry still appear, but sort
+alphabetically after positioned siblings and use an auto-generated label.

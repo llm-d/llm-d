@@ -11,7 +11,6 @@ spec:
           imagePullPolicy: Always
           args:
             - --port=8000
-            - --vllm-port=8200
             - --kv-connector=nixlv2
             - --ec-connector=ec-nixl
             - --zap-log-level=1
@@ -44,9 +43,6 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
-            - name: USER
-              value: llm-d
           ports:
             - name: modelserver
               containerPort: 8200

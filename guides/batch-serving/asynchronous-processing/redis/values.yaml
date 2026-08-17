@@ -1,0 +1,13 @@
+ap:
+  messageQueueImpl: "redis-sortedset"
+  redis:
+    enabled: true
+    # Option 1 (no auth): the connection URL directly. The chart creates the Secret.
+    url: "redis://redis-master.redis.svc.cluster.local:6379"
+    # Option 2 (auth): reference a pre-existing Secret holding the full redis URL
+    # (see the "With Authentication" prerequisite). When set, `url` is ignored.
+    # secretName: "redis-creds"
+    # secretKey: "url"
+    requestPathURL: "/v1/completions"
+    requestQueueName: "request-sortedset"
+    resultQueueName: "result-list"

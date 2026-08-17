@@ -16,7 +16,7 @@ spec:
             - "--tensor-parallel-size=2"
             - "--mem-fraction-static=0.9"
             # KV-block granularity. Must match the router scorer's
-            # tokenProcessorConfig.blockSize (default 64); SGLang's knob is
+            # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
             # --page-size, where vLLM uses --block-size.
             - "--page-size=64"
             - "--enable-metrics"

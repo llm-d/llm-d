@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - decode.yaml
+  - prefill.yaml
+  - serviceAccount.yaml
+  - kv-cache-evictor.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.2-FP8
+      llm-d.ai/guide: wide-ep-lws
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true

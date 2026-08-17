@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --tensor-parallel-size=2 \
+                --kv-transfer-config \
+                '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both"}'
+          env:
+            - name: MOONCAKE_CONFIG_PATH
+              value: /etc/mooncake/mooncake_config.json
+            - name: PYTHONHASHSEED
+              value: "0"
+          resources:
+            limits:
+              cpu: "16"
+              memory: 400Gi
+              nvidia.com/gpu: "2"
+              rdma/ib: "1"
+            requests:
+              cpu: "8"
+              memory: 200Gi
+              nvidia.com/gpu: "2"
+              rdma/ib: "1"
+          volumeMounts:
+            - mountPath: /etc/mooncake
+              name: mooncake-config
+              readOnly: true
+      volumes:
+        - name: mooncake-config
+          configMap:
+            name: mooncake-store-config

@@ -34,7 +34,6 @@ spec:
             privileged: true
       containers:
         - name: modelserver
-          image: vllm/vllm-tpu:nightly-20260504-e2a6582-67058ca
           command: ["/bin/sh", "-c"]
           args:
             - |

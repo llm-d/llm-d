@@ -10,7 +10,8 @@ Achieve SOTA Inference Performance On Any Accelerator
 </h2>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
- [![Release Status](https://img.shields.io/badge/Version-0.7-yellow)](https://github.com/llm-d/llm-d/releases)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d?ref=badge_shield)
+ [![Release Status](https://img.shields.io/badge/Version-0.8-yellow)](https://github.com/llm-d/llm-d/releases)
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 
@@ -22,13 +23,13 @@ llm-d is a [Cloud Native Computing Foundation (CNCF)](https://www.cncf.io/) sand
 
 Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/sgl-project/sglang) handle efficiently running large language models on accelerators. llm-d provides state-of-the-art orchestration and optimizations above model servers to serve high-scale real-world traffic efficiently and reliably. Our offerings are organized into four core themes:
 
-* **[Intelligent Routing:](https://llm-d.ai/docs/guides#intelligent-routing)** Maximize performance with prefix-cache and load-aware balancing, including experimental predicted latency-based scheduling to decrease latency and increase throughput.
-* **[Advanced KV-Cache Management:](https://llm-d.ai/docs/guides#advanced-kv-cache-management)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
-* **[Serving Large Models:](https://llm-d.ai/docs/guides#serving-large-models)** Optimize massive models (e.g., DeepSeek-R1, GPT-OSS) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
-* **[Operational Excellence:](https://llm-d.ai/docs/guides#operational-excellence)** Ensure production stability with intelligent flow control for multi-tenant serving and proactive, SLO-aware autoscaling based on real-time inference signals.
-* **[Batch Processing:](https://llm-d.ai/docs/guides#experimental)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
+* **[Intelligent Routing:](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline)** Maximize performance with prefix-cache and load-aware balancing, including experimental predicted latency-based scheduling to decrease latency and increase throughput.
+* **[Advanced KV-Cache Management:](https://llm-d.ai/docs/well-lit-paths/foundations/tiered-prefix-cache)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
+* **[Serving Large Models:](https://llm-d.ai/docs/well-lit-paths/foundations/wide-expert-parallelism)** Optimize massive models (e.g., DeepSeek-R1, GPT-OSS) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
+* **[Operational Excellence:](https://llm-d.ai/docs/operations)** Ensure production stability with intelligent flow control for multi-tenant serving and proactive, SLO-aware autoscaling based on real-time inference signals.
+* **[Batch Processing:](https://llm-d.ai/docs/well-lit-paths/workloads/batch-serving)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
 
-For a complete list of tested recipes and architectural patterns, see our [well-lit path guides](https://llm-d.ai/docs/guides). These guides provide benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. Our intent is to eliminate the heavy lifting common in tuning and deploying generative AI inference on modern accelerators.
+For a complete list of tested recipes and architectural patterns, see our [well-lit path guides](https://llm-d.ai/docs/well-lit-paths). These guides provide benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. Our intent is to eliminate the heavy lifting common in tuning and deploying generative AI inference on modern accelerators.
 
 ## Performance Highlights
 
@@ -48,7 +49,7 @@ Explore detailed, reproducible benchmarks on [Prism](https://prism.llm-d.ai).
 Ready to achieve SOTA performance? Follow our [Quickstart Guide](https://llm-d.ai/docs/getting-started/quickstart) to deploy your first optimized inference service on Kubernetes. You'll learn how to set up the llm-d stack, configure the intelligent router, and validate performance with production-ready benchmarks.
 
 > [!TIP]
-> Most users begin with our [Optimized Baseline](https://llm-d.ai/docs/guides/optimized-baseline), which provides a high-performance foundation for a wide range of LLM serving use cases.
+> Most users begin with our [Optimized Baseline](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline), which provides a high-performance foundation for a wide range of LLM serving use cases.
 
 ## Latest News 🔥
 
@@ -91,3 +92,5 @@ We adhere to the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/
 ## License
 
 This project is licensed under Apache License 2.0. See the [LICENSE file](LICENSE) for details.
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d?ref=badge_large)

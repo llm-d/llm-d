@@ -1,0 +1,41 @@
+# HTTPRoutes that route requests to InferencePools based on the
+# X-Gateway-Base-Model-Name header set by IPP.
+#
+# Customize:
+#   - spec.parentRefs[0].name: your Gateway name
+#   - rules[0].matches[0].headers[0].value: must match baseModel in ConfigMap
+#   - rules[0].backendRefs[0].name: your InferencePool name
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: qwen-route
+spec:
+  parentRefs:
+  - name: llm-d-inference-gateway
+  rules:
+  - matches:
+    - headers:
+      - name: X-Gateway-Base-Model-Name
+        value: Qwen/Qwen3-32B
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: qwen-pool
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: deepseek-route
+spec:
+  parentRefs:
+  - name: llm-d-inference-gateway
+  rules:
+  - matches:
+    - headers:
+      - name: X-Gateway-Base-Model-Name
+        value: deepseek/DeepSeek-r1
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: deepseek-pool

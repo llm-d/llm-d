@@ -47,21 +47,28 @@ on:
         required: false
         default: 'true'
         type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
 
 #  push:
 #    branches:
 #      - main
 
   schedule:
-    - cron: '0 12 * * *'
+    - cron: '0 14 * * *'  # 14:00 UTC daily (staggered after the "native" lane, same namespace)
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
+  # Shared with the "native" lane: both stand up in the same namespace and helm release,
+  # so they must not overlap. Queue the second run instead of cancelling the first.
   group: nightly-e2e-tiered-prefix-cache-gke-gpu
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   nightly:

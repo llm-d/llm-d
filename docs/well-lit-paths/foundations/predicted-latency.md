@@ -25,6 +25,7 @@ See the [Predicted Latency guide](../../../guides/predicted-latency-routing) for
 </p>
 
 The setup deploys an EPP with the predicted latency sidecar containers:
+
 - **Training Server** - trains the XGBoost model to predict TPOT and TTFT based on observed traffic
 - **Prediction Servers** - predict TPOT and TTFT of the request based on current server state
 

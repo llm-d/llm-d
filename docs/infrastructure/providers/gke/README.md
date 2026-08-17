@@ -6,7 +6,7 @@ This document covers configuring GKE clusters for running high performance LLM i
 
 llm-d on GKE is tested with the following configurations:
 
-* Machine types: A3, A4, ct5p, ct5lp, ct6e
+* Machine types: A3, A4, A4X, ct5p, ct5lp, ct6e
 * Versions: GKE 1.33.4+
 
 ## Cluster Configuration
@@ -27,6 +27,7 @@ This section provides specific instructions for deploying P/D (Prefill/Decode) d
 
 > [!NOTE]
 > Follow the official GCP documentation for the latest updates and detailed instructions:
+>
 > * [GKE AI Hypercomputer Custom Provisioning](https://docs.cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom)
 > * [Set up GPU Dynamic Resource Allocation (DRA)](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/set-up-dra)
 > * [Allocate network resources by using GKE managed DRANET](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/allocate-network-resources-dra#use-rdma-interfaces-gpu)
@@ -49,6 +50,7 @@ GKE network DRA (**DRANET**) supports managed networking out of the box, so you 
 ```bash
 gcloud container clusters create "${CLUSTER_NAME}" \
     --enable-dataplane-v2 \
+    --managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS \
     --location="${LOCATION}" \
     --project="${PROJECT}"
 ```
@@ -56,14 +58,13 @@ gcloud container clusters create "${CLUSTER_NAME}" \
 > [!NOTE]
 > **Deploying on an Existing GKE Cluster:**
 > If you are deploying on an existing cluster instead of creating a new one, your configuration path depends on whether Dataplane V2 is enabled:
-> 
+>
 > * **Existing Cluster with Dataplane V2 Enabled:** You can skip Step 1 (creating the cluster) and proceed directly to Step 2 (creating the node pool) using the automated GKE-managed DRANet profile (`--accelerator-network-profile=auto`).
 > * **Existing Cluster without Dataplane V2 Enabled:** GKE-managed automated DRANet is not supported. You **CANNOT** directly use the node pool creation command in ***Step 2*** below. Instead, you must **manually** configure and manage the multi-networking for the additional network interfaces (NICs) by manually creating subnetworks and mapping node pool network interfaces to them, as detailed in GKE's [Set up multi-network support for pods](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/setup-multinetwork-support-for-pods) documentation. Once the subnets and node pool are manually provisioned, proceed directly to **Step 3**.
 
-
 #### 2. Create Node Pool (Enable DRANET & Disable Default GPU Driver)
 
-GPU DRA is not yet fully managed by GKE. Therefore, you must disable the automated GPU driver and the default GPU device plugin via `--accelerator gpu-driver-version=disabled`. 
+GPU DRA is not yet fully managed by GKE. Therefore, you must disable the automated GPU driver and the default GPU device plugin via `--accelerator gpu-driver-version=disabled`.
 
 GKE managed **DRANET** is enabled by configuring `--accelerator-network-profile=auto` and adding the `cloud.google.com/gke-networking-dra-driver=true` node label:
 
@@ -165,13 +166,73 @@ items:
 
 </details>
 
+### GKE A4X (GB200) Setup
+
+For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` overlay path (`modelserver/gpu/vllm/gke/a4x`) which inherits from `gke/base`. This configuration enables native InfiniBand RDMA networking via DRANet (`mrdma.google.com`) and GPUDirect hardware acceleration:
+
+* **Hardware Interconnect**: Configures `UCX_TLS=rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self` for hardware-accelerated InfiniBand transport.
+* **DRANet Resource Claims**: Uses `gke-rdma-nic-template` to request DRANet (`mrdma.google.com`) interfaces while managing GPUs via NVIDIA Device Plugin (`nvidia.com/gpu`).
+
+## Mitigating Hugging Face Model Download Rate Limiting
+
+When deploying large-scale model inference on GKE clusters (such as multi-replica prefill and decode deployments), concurrent model weight downloads across multiple pods can trigger Hugging Face HTTP 429 Rate Limiting errors, leading to container startup timeouts.
+
+To ensure resilient model loading across pods, consider the following strategies:
+
+### 1. Node-Level Host Caching
+
+Mount a local host directory to `/root/.cache/huggingface` inside workload pods so that multiple pods scheduled on the same node share cached weights without re-downloading across pod restarts.
+
+```yaml
+        env:
+        - name: HF_HOME
+          value: /root/.cache/huggingface
+        # ...
+        volumeMounts:
+        - mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      volumes:
+      - name: huggingface-cache
+        hostPath:
+          path: /var/cache/huggingface
+          type: DirectoryOrCreate
+```
+
+> [!NOTE]
+> The host path `/var/cache/huggingface` in the manifest snippet above serves as an illustrative reference. Users can configure any suitable host directory based on their node disk allocation and storage policies.
+
+### 2. Hub Timeouts & Startup Probe Tuning
+
+Configure download retry and timeout environment variables, and increase `startupProbe.failureThreshold` (e.g., to 240) to give pods sufficient headroom to complete initial model weight downloads under network constraints:
+
+```yaml
+        env:
+        - name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+        - name: HF_HUB_ETAG_TIMEOUT
+          value: "60"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        startupProbe:
+          failureThreshold: 240
+          periodSeconds: 30
+```
+
+### 3. Google Cloud Storage Integration (Recommended for Production)
+
+For large production workloads, store model weights in a Google Cloud Storage (GCS) bucket and mount the weights directly to pods. This completely eliminates external Hugging Face network dependencies during pod scaling.
+
+For step-by-step instructions, see the [GKE Hugging Face GCS Transfer Guide](https://gke-ai-labs.dev/docs/tutorials/storage/hf-gcs-transfer/).
+
 ### TPUs
 
 For all TPU machines, follow the [TPUs in GKE documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
 
 ### Monitoring
 
-We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster.
+We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster, and [Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke) to collect telemetry data in OTLP format like traces for the llm-d stack.
+
+When creating your cluster, the `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` flag enables Managed OpenTelemetry on the cluster. Setting the scope to `COLLECTION_AND_INSTRUMENTATION_COMPONENTS` tells GKE to deploy both the OpenTelemetry Collector (in the `gke-managed-otel` namespace) and the Instrumentation Custom Resource Definition (CRD), which is used to automatically inject OpenTelemetry configurations into your workload pods.
 
 ## Workload Configuration
 
@@ -185,7 +246,7 @@ Model servers that need to use fast internode networking for P/D disaggregation 
 
 In addition, expert parallel deployments leveraging DeepEP with NVIDIA NVSHMEM will need to run their pods with `privileged: true` in order to perform GPU-initiated RDMA connections, or enable `PeerMappingOverride=1` in your NVIDIA kernel settings with a [manual GPU driver installation](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus#installing_drivers).
 
-**_NOTE:_** While GDRCopy allows CPU-initiated RDMA connections, at the current time we have not measured a benefit to this configuration and instead recommend the default GPU-initiated setting. You can disable the GDRCopy warning in NVSHMEM initialization by setting the `NVSHMEM_DISABLE_GDRCOPY=1` environment variable on your container.
+***NOTE:*** While GDRCopy allows CPU-initiated RDMA connections, at the current time we have not measured a benefit to this configuration and instead recommend the default GPU-initiated setting. You can disable the GDRCopy warning in NVSHMEM initialization by setting the `NVSHMEM_DISABLE_GDRCOPY=1` environment variable on your container.
 
 #### Ensuring network topology aware scheduling of pod replicas with RDMA
 

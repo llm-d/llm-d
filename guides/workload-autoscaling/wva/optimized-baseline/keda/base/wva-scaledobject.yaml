@@ -1,0 +1,89 @@
+# KEDA ScaledObject driven by WVA's wva_desired_replicas metric.
+#
+# This ScaledObject replaces both Prometheus Adapter and the standard HPA.
+# KEDA creates its own HPA from this ScaledObject — do NOT apply hpa.yaml alongside it.
+#
+# The llm-d.ai/* annotations are what make WVA aware of this variant: WVA watches
+# ScaledObjects (and HPAs) bearing llm-d.ai/managed: "true" and emits wva_desired_replicas
+# for them. Without the annotations the object is invisible to WVA, the metric is never
+# published, and KEDA sits on its fallback replica count.
+#
+# This base targets vanilla Kubernetes: it queries an in-cluster Prometheus with no
+# authentication. OpenShift needs Thanos Querier plus a bearer token — see the ../ocp overlay.
+#
+# Update `serverAddress` and the namespace in the trigger query to match your cluster.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-nvidia-gpu-vllm-decode-scaler
+  annotations:
+    llm-d.ai/managed: "true"
+    llm-d.ai/model-id: "Qwen3-32B"
+    llm-d.ai/variant-cost: "30.0"
+  labels:
+    # WVA copies these labels onto the variant it derives from this object; the
+    # accelerator label feeds its cost/capacity optimization.
+    inference.optimization/acceleratorName: "H100"
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: "optimized-baseline"
+    app: optimized-baseline-nvidia-gpu-vllm-decode
+    scaler: keda-workload-variant-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: optimized-baseline-nvidia-gpu-vllm-decode
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 5
+  cooldownPeriod: 30
+  initialCooldownPeriod: 30
+  fallback:
+    failureThreshold: 3
+    replicas: 2
+    behavior: currentReplicasIfHigher
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      name: wva-keda-hpa-optimized-baseline-nvidia-gpu-vllm-decode
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+          - type: Pods
+            value: 5
+            periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 60
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+          - type: Pods
+            value: 5
+            periodSeconds: 15
+  triggers:
+  - type: prometheus
+    name: wva-desired-replicas
+    metadata:
+      # In-cluster Prometheus installed by the monitoring prerequisites. If yours requires
+      # authentication, add a TriggerAuthentication and reference it — as ../ocp does for Thanos.
+      serverAddress: https://prometheus-operated.llm-d-monitoring.svc.cluster.local:9090
+      unsafeSsl: "true"
+      # `variant_name` is the name of THIS ScaledObject, not of the target Deployment.
+      # `namespace` is the scrape-target label — the namespace WVA runs in, which this guide
+      # installs alongside the workload. Run WVA elsewhere and the label you want becomes
+      # `exported_namespace` (Prometheus renames the metric's own label on collision).
+      query: |
+        wva_desired_replicas{
+          variant_name="optimized-baseline-nvidia-gpu-vllm-decode-scaler",
+          namespace="llm-d-optimized-baseline"
+        }
+      threshold: "1"
+      activationThreshold: "0"
+      # AverageValue, not Value: for External metrics the HPA multiplies a `Value` target by the
+      # current replica count, which turns a desired-replica metric into runaway growth.
+      metricType: AverageValue

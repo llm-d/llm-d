@@ -28,7 +28,7 @@ patches:
                   count: 1
               - name: nic
                 exactly:
-                  deviceClassName: rdma-dranet
+                  deviceClassName: dranet-rdma
                   count: 1
                   selectors:
                     - cel:
@@ -54,7 +54,7 @@ patches:
                   count: 1
               - name: nic
                 exactly:
-                  deviceClassName: rdma-dranet
+                  deviceClassName: dranet-rdma
                   count: 1
                   selectors:
                     - cel:

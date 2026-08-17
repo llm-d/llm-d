@@ -4,12 +4,14 @@
 [![E2E (GKE GPU LMcache)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml)
 [![E2E (GKE TPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml)
+[![E2E (Intel XPU Native)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml)
+[![E2E (Intel XPU LMcache)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml)
 
 ## Overview
 
 This guide deploys prefix-cache offloading: evicted KV-cache blocks move from accelerator HBM to larger, more cost-effective tiers (CPU RAM, and optionally a shared filesystem) and are pulled back on demand instead of being recomputed. This increases the effective cache size and prefix-cache reuse for multi-turn and long-context workloads.
 
-For the concepts, tier tradeoffs, and architecture, see the [Tiered Prefix Cache well-lit path](../../docs/well-lit-paths/capabilities/tiered-prefix-cache.md). This guide focuses on deployment. The prefix-aware request scheduling from the [optimized baseline](../optimized-baseline/README.md) also applies here.
+For the concepts, tier tradeoffs, and architecture, see the [Tiered Prefix Cache well-lit path](../../docs/well-lit-paths/foundations/tiered-prefix-cache.md). This guide focuses on deployment. The prefix-aware request scheduling from the [optimized baseline](../optimized-baseline/README.md) also applies here.
 
 ## Choosing a Path
 
@@ -19,12 +21,14 @@ Each path is a self-contained deployment using a specific offloading implementat
 | ---- | -------------- | ----- | --------- |
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
-| **SGLang HiCache** | SGLang native HiCache | CPU RAM | `modelserver/gpu/sglang/native/cpu/` |
+| **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
+| **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
-
-We recommend each model server's **native** offloading path: the `OffloadingConnector` on vLLM, and HiCache — its equivalent — on SGLang. Native offloading is low-overhead, requires no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for a non-native connector (for example LMCache) only when you need a capability the native path does not yet provide.
+| **Intel XPU** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM | `modelserver/xpu/vllm/native/cpu/`, `modelserver/xpu/vllm/lmcache-connector/cpu/` |
 
 The tiers each path supports differ — see the table above. For example, the vLLM native path also extends to a shared filesystem via multi-tier offloading (`TieringOffloadingSpec`), spilling from CPU RAM to shared storage (HBM → CPU RAM → filesystem).
+
+We recommend each model server's **native** offloading path: the `OffloadingConnector` on vLLM, and HiCache — its equivalent — on SGLang. Native offloading is low-overhead, requires no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for a non-native connector (for example LMCache) only when you need a capability the native path does not yet provide.
 
 ## Default Configuration
 
@@ -47,8 +51,27 @@ The tiers each path supports differ — see the table above. For example, the vL
 | HBM Staging Buffer Size | 1000 Blocks (~34 GB)                                    |
 | CPU Cache Offload Size  | 25000 Chunks (~780 GB)                                  |
 
+### XPU
+
+| Parameter              | Value                                                 |
+| ---------------------- | ----------------------------------------------------- |
+| Model                  | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
+| XPUs per replica (TP)  | 4                                                     |
+| XPU Accelerator        | Intel B60                                             |
+| CPU Cache Offload Size | 100 GB                                                 |
+
 > [!NOTE]
 > A `gpt-oss-120b` variant (TP=1 on NVIDIA H100, 100 GB CPU offload) is also benchmarked — see [gpt-oss-120B benchmarking results](./benchmark-results/vllm-gpt-oss-120b-h100.md).
+
+> [!IMPORTANT]
+> **Serving models with mismatched attention head dimensions (e.g. Gemma 4) under KV offloading:**
+> enabling the vLLM native `OffloadingConnector` disables vLLM's Hybrid KV Cache Manager (HMA). Most
+> models still run fine because their attention layers share one KV spec and collapse into a single
+> unified group — this includes sliding-window + full-attention models (e.g `gpt-oss-120b`) and Mamba +
+> attention hybrids ( e.g `Nemotron`, whose attention layers are uniform and whose SSM state uses a separate
+> cache). **Gemma 4 does not:** its sliding-window and full-attention layers use *different* head
+> dimensions, so their KV specs cannot be unified and the server fails to start. To serve
+> such a model, add`--no-disable-hybrid-kv-cache-manager` to the vLLM args to keep HMA enabled.
 
 ---
 
@@ -73,7 +96,8 @@ The tiers each path supports differ — see the table above. For example, the vL
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
-  kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml"
+  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
 * Create a target namespace for the installation:
@@ -112,8 +136,8 @@ helm install tiered-prefix-cache \
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
-1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
-2. _Deploy the llm-d Router and an HTTPRoute_:
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
+2. *Deploy the llm-d Router and an HTTPRoute*:
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
@@ -142,8 +166,11 @@ Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay di
 #### vLLM native — CPU RAM
 
 ```bash
+export MODEL_SERVER=vllm # vllm
+export CONNECTOR=native  # native | lmcache-connector
+export VARIANT=cpu       # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
 #### vLLM native — CPU RAM + Filesystem
@@ -174,11 +201,55 @@ export INFRA_PROVIDER=base  # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/lmcache-connector/${VARIANT}/${INFRA_PROVIDER}/
 ```
 
-#### SGLang HiCache — CPU RAM
+#### SGLang HiCache — CPU RAM and Filesystem (Lustre)
 
 ```bash
+export VARIANT=cpu          # cpu | fs
 export INFRA_PROVIDER=base  # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/native/${VARIANT}/${INFRA_PROVIDER}/
+```
+
+#### MooncakeStore - CPU DRAM
+
+MooncakeStore supports two deployment modes: embedded CPU DRAM (`cpu`) and standalone CPU DRAM + SSD (`fs`). Both require the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service. The `fs` variant additionally requires the [Mooncake Client](../../helpers/mooncake-client/), a standalone process that owns the CPU DRAM pool and SSD persistence tier.
+
+**Prerequisites:**
+
+```bash
+# Required for both cpu and fs variants
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+
+# Required for fs variant only — deploys a DaemonSet that owns the CPU + SSD pool (sized for Qwen3-32B)
+kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
+```
+
+**Deploy the model server:**
+
+```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
+```
+
+After that you can deploy the modelserver manifests:
+
+```bash
+export MODEL_SERVER=vllm    # vllm
+export VARIANT=cpu          # cpu | fs
+export INFRA_PROVIDER=base  # base
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/${MODEL_SERVER}/mooncake-store/${VARIANT}/${INFRA_PROVIDER}
+```
+
+#### MooncakeStore - fs (CPU DRAM + SSD offloading)
+
+As with the CPU mooncake offloading example, start by making sure the `mooncake-master-store` is deployed (for without monitoring, use the `base` overlay, but otherwise use the `monitoring` overlay):
+
+```bash
+k apply -k ${REPO_ROOT}/helpers/mooncake-master-store/monitoring
+```
+
+Then deploy the Mooncake Client. The Client allocates CPU DRAM and SSD resources at startup and registers them with the Master, so sizing must be set before deployment — changes require a restart. This guide provides an overlay that patches the [base helper defaults](../../helpers/mooncake-client/) (40 GB DRAM, 500 GB SSD) up to values sized for Qwen3-32B (80 GB DRAM, 1 TB SSD per node):
+
+```bash
+kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
 ```
 
 #### TPU (Google TPU v6 / v7)
@@ -186,6 +257,28 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 ```bash
 export TPU_VERSION=v7  # v6 | v7
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu/
+```
+
+#### Intel XPU — vLLM native CPU RAM
+
+This path uses vLLM's native `OffloadingConnector` to offload evicted KV blocks to CPU RAM on Intel XPU.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/native/cpu/base/
+```
+
+To deploy the VRAM-only baseline (no CPU offloading) for comparison, apply the `base` overlay directly:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/base/
+```
+
+#### Intel XPU — LMCache CPU RAM
+
+This path uses the [LMCache](https://lmcache.ai) connector to offload prefix cache to CPU RAM on Intel XPU. It runs Qwen3-8B on a single XPU (`tensor-parallel-size=1`), with the CPU offload size set via `LMCACHE_MAX_LOCAL_CPU_SIZE` (GB).
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/cpu/base/
 ```
 
 #### Storage Backends
@@ -313,9 +406,29 @@ export TPU_VERSION=v7  # v6 | v7
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu --ignore-not-found
 ```
 
+**Intel XPU path:**
+
+```bash
+# native/cpu/base = offloading; base = HBM-only baseline
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/native/cpu/base --ignore-not-found
+# lmcache-connector/cpu/base = LMCache offloading
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/cpu/base --ignore-not-found
+```
+
 ```bash
 kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml -n ${NAMESPACE} --ignore-not-found  # if a PVC was created
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
+```
+<!-- llm-d-cicd:skip end -->
+
+If you deployed Mooncake components, clean them up as well:
+
+```bash
+kubectl delete -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/  # if fs variant was used
+kubectl delete -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
 ```
 
 ---
@@ -382,7 +495,7 @@ export GATEWAY_CLASS=istio
 
 `guide_tiered-prefix-cache_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the load profile used to generate the [results below](#benchmarking-report) (250 prefix groups × 5 prompts each on a 60-second Poisson interval) and is shaped to exercise eviction across HBM and CPU RAM.
 
-Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+Benchmark results are copied to the `workspace` directory that is specified by *you* (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
 llmdbenchmark \
@@ -406,8 +519,11 @@ llmdbenchmark \
 
 Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache offloading relative to HBM-only serving configurations under high-cache workloads:
 
-- **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
-- **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
-- **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
-- **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
-
+* **[Qwen/Qwen3-32B on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with CPU RAM offloading.
+* **[Qwen/Qwen3-32B on SGLang (16×H100 CPU Offload)](./benchmark-results/sglang-qwen3-32b-h100.md)**: Headline throughput and latency comparisons across 16×H100 GPUs with SGLang HiCache CPU RAM offloading.
+* **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
+* **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
+* **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
+* **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
+* **[Qwen/Qwen3-32B on vLLM (Intel B60 XPU CPU Offload)](./benchmark-results/vllm-qwen3-32b-b60-xpu.md)**: TTFT, end-to-end latency, and throughput gains from CPU RAM offloading on 4 Intel B60 XPUs under high cache pressure.
+* **[Qwen/Qwen3-8B on vLLM (Intel B60 XPU CPU Offload)](./benchmark-results/vllm-qwen3-8b-b60-xpu.md)**: TTFT, end-to-end latency, and throughput gains from CPU RAM offloading on a single Intel B60 XPU under high cache pressure.

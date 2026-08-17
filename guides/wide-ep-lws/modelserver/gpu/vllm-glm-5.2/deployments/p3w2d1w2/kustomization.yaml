@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# GLM-5.2-FP8: 3 prefill replicas (DEP16, 2 workers each) + 1 decode replica (DEP16, 2 workers) -> 8 nodes / 64 GPUs.
+resources:
+  - ../../providers/coreweave
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 2
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-decode"
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/leaderWorkerTemplate/size
+        value: 2

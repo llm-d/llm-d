@@ -1,0 +1,105 @@
+name: Nightly - PD Disaggregation E2E (GKE GPU SGLang)
+
+on:
+  workflow_dispatch:
+    inputs:
+      decode_pods:
+        description: 'Number of decode (sglang "standalone") pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'false'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+
+  schedule:
+    - cron: '30 15 * * *'  # 15:30 UTC daily (staggered 90m after optimized-baseline SGLang at 14:00 and distinct from vLLM P/D nightlies at 03:00)
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: nightly-e2e-pd-disaggregation-gke-gpu-sglang
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
+    with:
+      scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
+      standup_method: ${{ inputs.standup_method || 'kustomize' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'pd-disaggregation' }}
+      decode_pods: ${{ inputs.decode_pods || 'auto' }}
+      prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
+      backend_type: ${{ inputs.backend_type || 'sglang' }}
+      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      connector: ${{ inputs.connector || '' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-gke-gpu-sglang' }}
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke-sglang' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke-sglang' }}
+      bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
+      bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/pd-disaggregation' }}
+      gateway_class: ${{ inputs.gateway_class || 'epponly' }}
+      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      verbose: ${{ inputs.verbose || 'false' }}
+      harness: ${{ inputs.harness || 'inference-perf' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: pd-disaggregation-gke-sglang
+      badge_label: "SGLANG GPU"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
