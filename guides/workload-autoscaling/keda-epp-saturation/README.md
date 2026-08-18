@@ -35,7 +35,7 @@ Set the guide environment variables:
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.9
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING_NAMESPACE=llm-d-monitoring

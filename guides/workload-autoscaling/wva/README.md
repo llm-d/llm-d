@@ -40,7 +40,7 @@ set it separately for cluster-wide autoscaling, and `PLATFORM` selects the
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.9
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
 export WVA_NAMESPACE=llm-d-optimized-baseline
