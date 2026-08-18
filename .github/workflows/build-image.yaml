@@ -1,4 +1,4 @@
-name: Dev LLM-D Image Build
+name: LLM-D Image Build
 
 on:
   workflow_call:
@@ -83,13 +83,30 @@ permissions:
   security-events: write
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: llm-d
+  GHCR_REGISTRY: ghcr.io
+  QUAY_REGISTRY: quay.io
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
 
 jobs:
+  resolve-registry:
+    runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.resolve.outputs.registry }}
+      is_pr: ${{ steps.resolve.outputs.is_pr }}
+    steps:
+      - name: Determine target registry
+        id: resolve
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            echo "registry=quay.io" >> $GITHUB_OUTPUT
+            echo "is_pr=true" >> $GITHUB_OUTPUT
+          else
+            echo "registry=ghcr.io" >> $GITHUB_OUTPUT
+            echo "is_pr=false" >> $GITHUB_OUTPUT
+          fi
+
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
@@ -178,7 +195,7 @@ jobs:
               - 'docker/common-versions'
 
   cuda-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.cuda == 'true' }}
     continue-on-error: true
     strategy:
@@ -186,7 +203,7 @@ jobs:
       # multi-OS build matrix: creates 4 images (2 platforms × 2 OS variants)
       # - RHEL (ubi9): default/production image (no suffix in final tags)
       # - Ubuntu (24.04): alternative base for compatibility testing (-ubuntu suffix)
-      # resulting manifests: cuda-dev (rhel) and cuda-dev-ubuntu
+      # resulting manifests: cuda (rhel) and cuda-ubuntu
       matrix:
         include:
           - platform: linux/amd64
@@ -211,6 +228,9 @@ jobs:
             image_suffix: "-ubuntu"
     runs-on: ${{ matrix.runner }}
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -238,8 +258,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Compute short SHA from checkout
         id: short-sha
@@ -249,7 +269,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -326,7 +346,7 @@ jobs:
           #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }},
+            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
             push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
@@ -338,7 +358,7 @@ jobs:
         run: |
           set -x
           digest="${{ steps.build-image-final-layer.outputs.digest }}"
-          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@${digest}"
+          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${digest}"
           echo "Checking remote ref: $ref"
           docker buildx imagetools inspect "$ref" >/dev/null
 
@@ -353,7 +373,7 @@ jobs:
         if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: digests-cuda-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          name: digests-cuda-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*
           if-no-files-found: error
           retention-days: 1
@@ -372,7 +392,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
-          pattern: digests-cuda-dev-*
+          pattern: digests-cuda-*
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         continue-on-error: true
@@ -381,7 +401,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests/rhel /tmp/digests/ubuntu
           shopt -s nullglob
-          for artifact_dir in /tmp/digests-raw/digests-cuda-dev-*; do
+          for artifact_dir in /tmp/digests-raw/digests-cuda-*; do
             if [[ "$artifact_dir" == *-rhel-* ]]; then
               cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
             elif [[ "$artifact_dir" == *-ubuntu-* ]]; then
@@ -421,7 +441,7 @@ jobs:
           echo "ubuntu_ok=${ubuntu_ok}" >> "$GITHUB_OUTPUT"
 
   cuda-manifest:
-    needs: cuda-success-check
+    needs: [cuda-success-check, resolve-registry]
     if: ${{ needs.cuda-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -439,6 +459,9 @@ jobs:
             image_suffix: "-ubuntu"
             os_ok: ubuntu_ok
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Check if OS build succeeded
         id: should-run
         run: |
@@ -453,7 +476,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
-          pattern: digests-cuda-dev-${{ matrix.os }}-*
+          pattern: digests-cuda-${{ matrix.os }}-*
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GHCR_TOKEN }}
 
@@ -462,7 +485,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests/${{ matrix.os }}
           shopt -s nullglob
-          for artifact_dir in /tmp/digests-raw/digests-cuda-dev-${{ matrix.os }}-*; do
+          for artifact_dir in /tmp/digests-raw/digests-cuda-${{ matrix.os }}-*; do
             cp -v "$artifact_dir"/* /tmp/digests/${{ matrix.os }}/ 2>/dev/null || true
           done
 
@@ -475,7 +498,7 @@ jobs:
           cd /tmp/digests/${{ matrix.os }} && printf '%s\n' *
           echo "=== Test manifest command construction ==="
           cd /tmp/digests/${{ matrix.os }} && \
-            printf '${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@sha256:%s ' *
+            printf '${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@sha256:%s ' *
 
       - name: Set up Docker Buildx
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
@@ -486,15 +509,15 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -511,24 +534,24 @@ jobs:
           # build the list of source images (by digest)
           sources=""
           for digest in *; do
-            image="${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}"
+            image="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
             sources="$sources ${image}@sha256:$digest"
           done
 
           # create manifest and tag it
-          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:sha-${SHORT_SHA}"
+          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA}"
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
              [ "${{ github.event_name }}" != "pull_request_target" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:latest"
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
           fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
           MANIFEST_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
             | awk '/^Digest:/ {print $2}')
           echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
 
@@ -538,7 +561,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: >-
-            ${{ env.REGISTRY }}/${{ github.repository }}-cuda-dev${{ matrix.image_suffix }}@${{
+            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${{
               steps.manifest.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
@@ -547,8 +570,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
@@ -568,7 +591,7 @@ jobs:
           fi
 
   aws-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.aws == 'true' }}
     continue-on-error: true
     strategy:
@@ -589,6 +612,9 @@ jobs:
           #   image_suffix: ""
     runs-on: ${{ matrix.runner }}
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -616,8 +642,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Compute short SHA from checkout
         id: short-sha
@@ -627,7 +653,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -694,7 +720,7 @@ jobs:
             VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }},
+            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }},
             push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
@@ -706,7 +732,7 @@ jobs:
         run: |
           set -x
           digest="${{ steps.build-image-final-layer.outputs.digest }}"
-          ref="${{ env.REGISTRY }}/${{ github.repository }}-aws-dev${{ matrix.image_suffix }}@${digest}"
+          ref="${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }}@${digest}"
           echo "Checking remote ref: $ref"
           docker buildx imagetools inspect "$ref" >/dev/null
 
@@ -721,7 +747,7 @@ jobs:
         if: ${{ steps.build-image-final-layer.outputs.digest != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: digests-aws-dev-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          name: digests-aws-${{ matrix.os }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           path: /tmp/digests/${{ matrix.os }}/*
           if-no-files-found: error
           retention-days: 1
@@ -739,7 +765,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
-          pattern: digests-aws-dev-*
+          pattern: digests-aws-*
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         continue-on-error: true
@@ -748,7 +774,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests/rhel
           shopt -s nullglob
-          for artifact_dir in /tmp/digests-raw/digests-aws-dev-*; do
+          for artifact_dir in /tmp/digests-raw/digests-aws-*; do
             if [[ "$artifact_dir" == *-rhel-* ]]; then
               cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
             fi
@@ -781,11 +807,14 @@ jobs:
           echo "rhel_ok=${rhel_ok}" >> "$GITHUB_OUTPUT"
 
   aws-manifest:
-    needs: aws-success-check
+    needs: [aws-success-check, resolve-registry]
     if: ${{ needs.aws-success-check.outputs.any_succeeded == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Check if build succeeded
         id: should-run
         run: |
@@ -800,7 +829,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: /tmp/digests-raw
-          pattern: digests-aws-dev-rhel-*
+          pattern: digests-aws-rhel-*
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GHCR_TOKEN }}
 
@@ -809,7 +838,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests/rhel
           shopt -s nullglob
-          for artifact_dir in /tmp/digests-raw/digests-aws-dev-rhel-*; do
+          for artifact_dir in /tmp/digests-raw/digests-aws-rhel-*; do
             cp -v "$artifact_dir"/* /tmp/digests/rhel/ 2>/dev/null || true
           done
 
@@ -822,15 +851,15 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -847,24 +876,24 @@ jobs:
           # build the list of source images (by digest)
           sources=""
           for digest in *; do
-            image="${{ env.REGISTRY }}/${{ github.repository }}-aws-dev"
+            image="${{ env.REGISTRY }}/${{ github.repository }}-aws"
             sources="$sources ${image}@sha256:$digest"
           done
 
           # create manifest and tag it
-          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:sha-${SHORT_SHA}"
+          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws:sha-${SHORT_SHA}"
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:pr-${{ github.event.pull_request.number }}"
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
              [ "${{ github.event_name }}" != "pull_request_target" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:latest"
+            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:latest"
           fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
           MANIFEST_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev:sha-${SHORT_SHA} \
+            ${{ env.REGISTRY }}/${{ github.repository }}-aws:sha-${SHORT_SHA} \
             | awk '/^Digest:/ {print $2}')
           echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
 
@@ -874,7 +903,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: >-
-            ${{ env.REGISTRY }}/${{ github.repository }}-aws-dev@${{
+            ${{ env.REGISTRY }}/${{ github.repository }}-aws@${{
               steps.manifest.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
@@ -883,8 +912,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
@@ -904,12 +933,15 @@ jobs:
           fi
 
   rdma-tools-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.rdma-tools == 'true' }}
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -934,8 +966,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Compute short SHA from checkout
         id: short-sha
@@ -945,7 +977,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools-dev
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -974,15 +1006,15 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools-dev@${{ steps.build-and-push.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools@${{ steps.build-and-push.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
           scanners: vuln
           timeout: 30m
         env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4.37.6
@@ -999,12 +1031,15 @@ jobs:
           fi
 
   xpu-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
     strategy:
       fail-fast: false
     runs-on: xpu
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -1025,8 +1060,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Set image tag
         id: set-tag
@@ -1056,9 +1091,9 @@ jobs:
             BASE_IMAGE=${{ steps.common-versions.outputs.base_image }}
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
-            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1067,7 +1102,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-dev:${{ steps.set-tag.outputs.tag }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1075,8 +1110,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4.37.6
@@ -1093,10 +1128,13 @@ jobs:
           fi
 
   xpu-sglang-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.sglang-xpu == 'true' }}
     runs-on: xpu
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -1143,8 +1181,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Extract metadata
         id: meta
@@ -1219,8 +1257,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
@@ -1238,10 +1276,13 @@ jobs:
           fi
 
   rocm-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
     runs-on: vllm-runner
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -1255,8 +1296,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Set image tag
         id: set-tag
@@ -1277,12 +1318,12 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:build-cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:build-cache,mode=max,oci-mediatypes=true,compression=zstd,ignore-error=true
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}-rocm:build-cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}-rocm:build-cache,mode=max,oci-mediatypes=true,compression=zstd,ignore-error=true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
-            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1291,7 +1332,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rocm-dev:${{ steps.set-tag.outputs.tag }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
@@ -1299,8 +1340,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4.37.6
@@ -1317,10 +1358,13 @@ jobs:
           fi
 
   cpu-build-llm-d:
-    needs: [detect-changes]
+    needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
     runs-on: vllm-runner
     steps:
+      - name: Set target registry
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -1342,8 +1386,8 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Set image tag
         id: set-tag
@@ -1377,9 +1421,9 @@ jobs:
             VLLM_REPO=${{ inputs.vllm_repo || steps.common-versions.outputs.repo }}
             VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.common-versions.outputs.commit_sha }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
-            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu-dev:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu-dev:latest', env.REGISTRY, github.repository) || '' }}
+            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -1388,7 +1432,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu-dev:${{ steps.set-tag.outputs.tag }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1396,8 +1440,8 @@ jobs:
           timeout: 30m
           skip-dirs: /root/.cache/uv
         env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4.37.6
