@@ -75,7 +75,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=release-0.9
+export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=modelexpress-p2p
 export NAMESPACE=llm-d-modelexpress-p2p
