@@ -1,0 +1,178 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: decode
+  annotations:
+    leaderworkerset.sigs.k8s.io/exclusive-topology: "cloud.google.com/gke-nodepool"
+spec:
+  replicas: 3
+  leaderWorkerTemplate:
+    size: 2
+    restartPolicy: None
+    leaderTemplate:
+      metadata:
+        labels:
+          role: leader
+          llm-d.ai/inference-serving: "true"
+      spec:
+        initContainers:
+          - name: tpu-node-setup
+            image: busybox
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                # Increase memory mapping limits for vLLM
+                sysctl -w vm.max_map_count=33554432
+                # Increase DMA entry limit for TPU driver
+                if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+                  echo 8000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+                fi
+            securityContext:
+              privileged: true
+        containers:
+          - name: modelserver-leader
+            image: REPLACE_MODEL_SERVER_IMAGE
+            env:
+            - name: SKIP_JAX_PRECOMPILE
+              value: "0"
+            - name: TPU_MULTIHOST_BACKEND
+              value: ray
+            - name: RAY_RESERVE_CPU_FOR_RAYLET
+              value: "1"
+            - name: RAY_health_check_failure_threshold
+              value: "100"                            # Allow 100 missed GCS health checks before marking node dead
+            - name: RAY_health_check_timeout_ms
+              value: "20000"                          # Timeout for each GCS health check ping
+            - name: RAY_health_check_period_ms
+              value: "10000"                          # Ping interval for GCS health check
+            - name: RAY_num_heartbeats_timeout
+              value: "300000"                         # Allow 300 missed heartbeats instead of default 30
+            - name: RAY_raylet_heartbeat_timeout_milliseconds
+              value: "3000000"                        # Drop ping intervals slightly to minimize chatter
+            - name: RAY_grpc_keepalive_timeout_ms
+              value: "3000000"
+            - name: RAY_CGRAPH_get_timeout
+              value: "6000"
+            - name: RAY_CGRAPH_submit_timeout
+              value: "6000"
+            - name: TPU_BACKEND_TYPE
+              value: jax
+            - name: MODEL_IMPL_TYPE
+              value: vllm
+            - name: JAX_PLATFORMS
+              value: ""
+            - name: PJRT_DEVICE
+              value: "TPU"
+            - name: NEW_MODEL_DESIGN
+              value: "0"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/prometheus_multiproc"
+            - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
+              value: "10000"
+            - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
+              value: "1024"
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader --ray_cluster_size=$(LWS_GROUP_SIZE);
+                VLLM_DISABLE_SHARED_EXPERTS_STREAM=1 vllm serve --port 8000 \
+                  --load-format=runai_streamer \
+                  --model=<your-model-path> \
+                  --enable-prefix-caching \
+                  --async-scheduling \
+                  --enable-chunked-prefill \
+                  --enable-expert-parallel \
+                  --seed 42 \
+                  --tensor-parallel-size 16 \
+                  --gpu-memory-utilization=0.8 \
+                  --max-model-len=71200 \
+                  --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}'
+            resources:
+              limits:
+                google.com/tpu: "4"
+            ports:
+              - containerPort: 8000
+                name: modelserver
+                protocol: TCP
+            readinessProbe:
+              tcpSocket:
+                port: 8000
+              initialDelaySeconds: 15
+              periodSeconds: 1
+            volumeMounts:
+              - mountPath: /dev/shm
+                name: dshm
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+    workerTemplate:
+      spec:
+        initContainers:
+          - name: tpu-node-setup
+            image: busybox
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                sysctl -w vm.max_map_count=33554432
+                if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+                  echo 8000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+                fi
+            securityContext:
+              privileged: true
+        containers:
+          - name: modelserver-worker
+            image: REPLACE_MODEL_SERVER_IMAGE
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker --ray_address=$(LWS_LEADER_ADDRESS)
+            resources:
+              limits:
+                google.com/tpu: "4"
+            env:
+            - name: SKIP_JAX_PRECOMPILE
+              value: "0"
+            - name: TPU_MULTIHOST_BACKEND
+              value: ray
+            - name: RAY_RESERVE_CPU_FOR_RAYLET
+              value: "1"
+            - name: RAY_health_check_failure_threshold
+              value: "100"                            # Allow 100 missed GCS health checks before marking node dead
+            - name: RAY_health_check_timeout_ms
+              value: "20000"                          # Timeout for each GCS health check ping
+            - name: RAY_health_check_period_ms
+              value: "10000"                          # Ping interval for GCS health check
+            - name: RAY_num_heartbeats_timeout
+              value: "300000"                         # Allow 300 missed heartbeats instead of default 30
+            - name: RAY_raylet_heartbeat_timeout_milliseconds
+              value: "3000000"                        # Drop ping intervals slightly to minimize chatter
+            - name: RAY_grpc_keepalive_timeout_ms
+              value: "3000000"
+            - name: RAY_CGRAPH_get_timeout
+              value: "6000"
+            - name: RAY_CGRAPH_submit_timeout
+              value: "6000"
+            - name: TPU_BACKEND_TYPE
+              value: jax
+            - name: MODEL_IMPL_TYPE
+              value: vllm
+            - name: JAX_PLATFORMS
+              value: ""
+            - name: PJRT_DEVICE
+              value: "TPU"
+            - name: NEW_MODEL_DESIGN
+              value: "0"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/prometheus_multiproc"
+            - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
+              value: "10000"
+            - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
+              value: "1024"
+            volumeMounts:
+              - mountPath: /dev/shm
+                name: dshm
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
