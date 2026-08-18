@@ -81,10 +81,11 @@ permissions:
   contents: read
   packages: write
   security-events: write
+  id-token: write
 
 env:
-  GHCR_REGISTRY: ghcr.io
-  QUAY_REGISTRY: quay.io
+  PRODUCTION_REGISTRY: ghcr.io
+  STAGING_REGISTRY: quay.io
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.sha }}
@@ -100,10 +101,10 @@ jobs:
         id: resolve
         run: |
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            echo "registry=quay.io" >> $GITHUB_OUTPUT
+            echo "registry=${{ env.STAGING_REGISTRY}}" >> $GITHUB_OUTPUT
             echo "is_pr=true" >> $GITHUB_OUTPUT
           else
-            echo "registry=ghcr.io" >> $GITHUB_OUTPUT
+            echo "registry=${{ env.PRODUCTION_REGISTRY}}" >> $GITHUB_OUTPUT
             echo "is_pr=false" >> $GITHUB_OUTPUT
           fi
 
@@ -153,7 +154,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || '' }}
           allow-unsafe-pr-checkout: true
-
       - uses: dorny/paths-filter@v4
         if: github.event_name != 'workflow_dispatch' && inputs.force_build != true && inputs.platforms == ''
         id: filter
@@ -228,9 +228,6 @@ jobs:
             image_suffix: "-ubuntu"
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Set target registry
-        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
-
       - name: Checkout code
         uses: actions/checkout@v7
         with:
@@ -257,7 +254,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -269,7 +266,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
+          images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -346,7 +343,7 @@ jobs:
           #   matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
+            type=image,name=${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }},
             push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
@@ -358,7 +355,7 @@ jobs:
         run: |
           set -x
           digest="${{ steps.build-image-final-layer.outputs.digest }}"
-          ref="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${digest}"
+          ref="${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${digest}"
           echo "Checking remote ref: $ref"
           docker buildx imagetools inspect "$ref" >/dev/null
 
@@ -498,7 +495,7 @@ jobs:
           cd /tmp/digests/${{ matrix.os }} && printf '%s\n' *
           echo "=== Test manifest command construction ==="
           cd /tmp/digests/${{ matrix.os }} && \
-            printf '${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@sha256:%s ' *
+            printf '${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@sha256:%s ' *
 
       - name: Set up Docker Buildx
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
@@ -508,7 +505,7 @@ jobs:
         if: ${{ steps.should-run.outputs.os_succeeded == 'true' }}
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -517,7 +514,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
+          images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -534,24 +531,24 @@ jobs:
           # build the list of source images (by digest)
           sources=""
           for digest in *; do
-            image="${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
+            image="${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}"
             sources="$sources ${image}@sha256:$digest"
           done
 
           # create manifest and tag it
-          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA}"
+          tags="-t ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA}"
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
+            tags="$tags -t ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
              [ "${{ github.event_name }}" != "pull_request_target" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
+            tags="$tags -t ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:latest"
           fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
           MANIFEST_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}:sha-${SHORT_SHA} \
             | awk '/^Digest:/ {print $2}')
           echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
 
@@ -561,7 +558,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: >-
-            ${{ env.REGISTRY }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${{
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${{
               steps.manifest.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
@@ -590,6 +587,13 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+      - name: Install cosign
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' && needs.resolve-registry.outputs.is_pr == 'false' && steps.manifest.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ steps.should-run.outputs.os_succeeded == 'true' && needs.resolve-registry.outputs.is_pr == 'false' && steps.manifest.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cuda${{ matrix.image_suffix }}@${{ steps.manifest.outputs.digest }}
   aws-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.aws == 'true' }}
@@ -641,7 +645,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -653,7 +657,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }}
+          images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws${{ matrix.image_suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -720,7 +724,7 @@ jobs:
             VLLM_USE_PRECOMPILED=${{ steps.common-version.outputs.use_precompiled }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: >-
-            type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }},
+            type=image,name=${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws${{ matrix.image_suffix }},
             push-by-digest=true,name-canonical=true,push=true
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
@@ -732,7 +736,7 @@ jobs:
         run: |
           set -x
           digest="${{ steps.build-image-final-layer.outputs.digest }}"
-          ref="${{ env.REGISTRY }}/${{ github.repository }}-aws${{ matrix.image_suffix }}@${digest}"
+          ref="${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws${{ matrix.image_suffix }}@${digest}"
           echo "Checking remote ref: $ref"
           docker buildx imagetools inspect "$ref" >/dev/null
 
@@ -850,7 +854,7 @@ jobs:
         if: ${{ steps.should-run.outputs.rhel_ok == 'true' }}
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -859,7 +863,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-aws
+          images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -876,24 +880,24 @@ jobs:
           # build the list of source images (by digest)
           sources=""
           for digest in *; do
-            image="${{ env.REGISTRY }}/${{ github.repository }}-aws"
+            image="${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws"
             sources="$sources ${image}@sha256:$digest"
           done
 
           # create manifest and tag it
-          tags="-t ${{ env.REGISTRY }}/${{ github.repository }}-aws:sha-${SHORT_SHA}"
+          tags="-t ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws:sha-${SHORT_SHA}"
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:pr-${{ github.event.pull_request.number }}"
+            tags="$tags -t ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws:pr-${{ github.event.pull_request.number }}"
           fi
           if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ] && \
              [ "${{ github.event_name }}" != "pull_request_target" ]; then
-            tags="$tags -t ${{ env.REGISTRY }}/${{ github.repository }}-aws:latest"
+            tags="$tags -t ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws:latest"
           fi
           docker buildx imagetools create $tags $sources
 
           # extract final manifest digest
           MANIFEST_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ github.repository }}-aws:sha-${SHORT_SHA} \
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws:sha-${SHORT_SHA} \
             | awk '/^Digest:/ {print $2}')
           echo "digest=${MANIFEST_DIGEST}" >> $GITHUB_OUTPUT
 
@@ -903,7 +907,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: >-
-            ${{ env.REGISTRY }}/${{ github.repository }}-aws@${{
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws@${{
               steps.manifest.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
@@ -932,6 +936,13 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+      - name: Install cosign
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' && needs.resolve-registry.outputs.is_pr == 'false' && steps.manifest.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ steps.should-run.outputs.rhel_ok == 'true' && needs.resolve-registry.outputs.is_pr == 'false' && steps.manifest.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-aws@${{ steps.manifest.outputs.digest }}
   rdma-tools-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.rdma-tools == 'true' }}
@@ -965,7 +976,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -977,7 +988,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools
+          images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rdma-tools
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -1006,7 +1017,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rdma-tools@${{ steps.build-and-push.outputs.digest }}
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rdma-tools@${{ steps.build-and-push.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1030,6 +1041,13 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+      - name: Install cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rdma-tools@${{ steps.build-and-push.outputs.digest }}
   xpu-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
@@ -1059,7 +1077,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -1091,7 +1109,7 @@ jobs:
             BASE_IMAGE=${{ steps.common-versions.outputs.base_image }}
             CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
             ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -1102,7 +1120,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1127,6 +1145,13 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+      - name: Install cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu@${{ steps.build-and-push.outputs.digest }}
   xpu-sglang-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.sglang-xpu == 'true' }}
@@ -1180,7 +1205,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -1188,7 +1213,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
+          images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -1227,7 +1252,7 @@ jobs:
 
       - name: Record image provenance
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang
+          IMAGE: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang
           IMAGE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
           SGLANG_REPOSITORY: ${{ steps.source.outputs.sglang_repo }}
           SGLANG_REF: ${{ inputs.sglang_xpu_ref || steps.common-versions.outputs.ref }}
@@ -1249,7 +1274,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1275,6 +1300,13 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+      - name: Install cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
   rocm-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
@@ -1295,7 +1327,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -1318,10 +1350,10 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: true
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}-rocm:build-cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository }}-rocm:build-cache,mode=max,oci-mediatypes=true,compression=zstd,ignore-error=true
+          cache-from: type=registry,ref=${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:build-cache
+          cache-to: type=registry,ref=${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:build-cache,mode=max,oci-mediatypes=true,compression=zstd,ignore-error=true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
             ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -1332,7 +1364,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
@@ -1357,6 +1389,13 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
+      - name: Install cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm@${{ steps.build-and-push.outputs.digest }}
   cpu-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
@@ -1385,7 +1424,7 @@ jobs:
       - name: Log in to Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.resolve-registry.outputs.registry }}
           username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
@@ -1421,7 +1460,7 @@ jobs:
             VLLM_REPO=${{ inputs.vllm_repo || steps.common-versions.outputs.repo }}
             VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.common-versions.outputs.commit_sha }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
             ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
             ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu:latest', env.REGISTRY, github.repository) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
@@ -1432,7 +1471,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH,MEDIUM"
@@ -1456,3 +1495,11 @@ jobs:
           else
             echo "No vulnerabilities found or scan failed."
           fi
+
+      - name: Install cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cpu@${{ steps.build-and-push.outputs.digest }}
