@@ -117,22 +117,25 @@ kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-
 
 ### 2. Grant RBAC Permissions
 
-The FMA controllers need cluster-level access to list nodes (for the launcher-populator) and namespace-level access for launcher pods to read their own pod spec. This applies the `fma-node-viewer` ClusterRole and the namespace-scoped `fma-launcher-pod-reader` Role/RoleBinding:
+The FMA controllers need cluster-level access to list nodes (for the launcher-populator), and the launcher pods run as a dedicated `fma-launcher` ServiceAccount with namespace-level access to get and patch their own pod (so the `state-change-reflector` sidecar can write the serving-state annotation). This applies the `fma-node-viewer` ClusterRole and the namespace-scoped `fma-launcher-pod-state-writer` Role/RoleBinding:
 
 <!-- guide:deploy.rbac start -->
 ```bash
 # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator
 kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml
 
-# Role (namespaced): launcher pods read their own pod spec
+# ServiceAccount + Role (namespaced): the launcher pods run as the
+# fma-launcher ServiceAccount so the state-change-reflector sidecar can
+# patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
+# annotation).
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml
 
-# RoleBinding (namespaced): bind the Role to ${NAMESPACE}'s default ServiceAccount.
+# RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
 # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
 # binding's namespace and the subject ServiceAccount's namespace.
-kubectl create rolebinding fma-launcher-pod-reader \
-  --role=fma-launcher-pod-reader \
-  --serviceaccount=${NAMESPACE}:default \
+kubectl create rolebinding fma-launcher-pod-state-writer \
+  --role=fma-launcher-pod-state-writer \
+  --serviceaccount=${NAMESPACE}:fma-launcher \
   -n ${NAMESPACE} \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
@@ -232,11 +235,27 @@ This section demonstrates FMA's core value: fast model actuation via sleep/wake.
 
 <!-- guide:verify.tests.sleep_wake start -->
 ```bash
-kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
-
-kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
-
-kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
+set -eu
+IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+for i in 1 2; do
+  echo "== sleep/wake cycle ${i} =="
+  kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
+  kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+  # Confirm the launcher actually went to sleep before we wake it.
+  kubectl wait pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
+    --for='jsonpath={.metadata.labels.dual-pods\.llm-d\.ai/sleeping}=true' \
+    --timeout=120s
+  kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
+  kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
+  kubectl get pods -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
+    -o 'jsonpath={range .items[*]}{.metadata.name}{" sleeping="}{.metadata.labels.dual-pods\.llm-d\.ai/sleeping}{"\n"}{end}' || true
+  kubectl run curl-wake-${i} --rm -i --restart=Never --attach \
+    --image=${CURL_TEST_IMAGE} \
+    --namespace="${NAMESPACE}" \
+    --env="IP=${IP}" \
+    --env="MODEL=${MODEL}" \
+    -- /bin/sh -c 'set -e; resp=$(curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}"); echo "${resp}"; echo "${resp}" | jq -e ".choices[0].text | length > 0" >/dev/null'
+done
 ```
 <!-- guide:verify.tests.sleep_wake end -->
 
@@ -312,6 +331,10 @@ helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml --ignore-not-found=true
+
+kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
