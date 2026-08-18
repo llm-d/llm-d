@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# P/D disaggregation on GKE TPU7x dynamic sub-slices (2x2x1), scheduled via
+# Kueue TAS. Cluster prerequisites (slice controller, Kueue, LocalQueue):
+# docs/infrastructure/providers/gke/dynamic-slicing/README.md
+resources:
+  - prefill.yaml
+  - decode.yaml
+
+namePrefix: pd-disaggregation-tpu-slice-vllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+      llm-d.ai/engine-type: vllm

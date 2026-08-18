@@ -1,0 +1,95 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: decode
+  labels:
+    # LocalQueue from docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+    kueue.x-k8s.io/queue-name: tpu7x-subslice-lq
+    llm-d.ai/role: decode
+spec:
+  replicas: 2
+  leaderWorkerTemplate:
+    # 2x2x1 sub-slice = 4 chips = 1 tpu7x-standard-4t host.
+    size: 1
+    restartPolicy: RecreateGroupOnPodRestart
+    workerTemplate:
+      metadata:
+        annotations:
+          cloud.google.com/gke-tpu-slice-topology: "2x2x1"
+          # Dynamic-slice pods carry no static gke-tpu-topology nodeSelector,
+          # which the GKE TPU admission webhook otherwise requires.
+          cloud.google.com/skip-tpu-webhook-check: "true"
+        labels:
+          llm-d.ai/role: decode
+          llm-d.ai/guide: optimized-baseline
+          llm-d.ai/model: Qwen3-32B
+          llm-d.ai/accelerator-variant: tpu
+          llm-d.ai/accelerator-vendor: google
+      spec:
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-partition-2x2x1-state: "HEALTHY"
+        tolerations:
+          - key: google.com/tpu
+            operator: Exists
+            effect: NoSchedule
+        containers:
+          - name: modelserver
+            image: REPLACE_MODEL_SERVER_IMAGE
+            command: ["vllm", "serve"]
+            args:
+              - "Qwen/Qwen3-32B"
+              - "--port=8000"
+              - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+              - "--tensor-parallel-size=8"
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+            ports:
+              - name: modelserver
+                containerPort: 8000
+                protocol: TCP
+            resources:
+              limits:
+                cpu: "16"
+                memory: 64Gi
+                google.com/tpu: 4
+              requests:
+                cpu: "16"
+                memory: 64Gi
+                google.com/tpu: 4
+            startupProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              initialDelaySeconds: 15
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 120
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              periodSeconds: 5
+              timeoutSeconds: 2
+              failureThreshold: 3
+            volumeMounts:
+              - mountPath: /.cache
+                name: torch-compile-cache
+              - mountPath: /.config
+                name: vllm-config
+        volumes:
+          - name: torch-compile-cache
+            emptyDir: {}
+          - name: vllm-config
+            emptyDir: {}

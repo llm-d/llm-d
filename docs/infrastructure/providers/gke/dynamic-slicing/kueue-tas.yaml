@@ -1,0 +1,62 @@
+# Cluster-scoped Kueue resources for scheduling llm-d model servers onto
+# GKE TPU7x dynamic sub-slices via Topology-Aware Scheduling (TAS).
+#
+# Reference: https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing
+#
+# Apply once per cluster:
+#   kubectl apply -f kueue-tas.yaml
+# Then create a LocalQueue per workload namespace (see kueue-localqueue.yaml).
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Topology
+metadata:
+  name: tpu7x-subslice-topology
+spec:
+  # Partition hierarchy of a TPU7x 4x4x4 sub-block, largest to smallest.
+  # Every node carries a cloud.google.com/gke-tpu-partition-<shape>-id label
+  # for each sub-slice shape it belongs to; kubernetes.io/hostname is the
+  # 2x2x1 level (one tpu7x-standard-4t host = 4 chips).
+  # TODO(reviewer): verify levels against the GKE reference configuration;
+  # the published GCP sample covers super-slicing only.
+  levels:
+    - nodeLabel: cloud.google.com/gke-tpu-partition-4x4x4-id
+    - nodeLabel: cloud.google.com/gke-tpu-partition-2x4x4-id
+    - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x4-id
+    - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x2-id
+    - nodeLabel: kubernetes.io/hostname
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ResourceFlavor
+metadata:
+  name: tpu7x-subslice-rf
+spec:
+  nodeLabels:
+    cloud.google.com/gke-tpu-accelerator: tpu7x
+  topologyName: tpu7x-subslice-topology
+---
+# Delegates slice formation to the GKE Kueue slice controller: workloads are
+# admitted only after their Slice custom resources become ACTIVE.
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: AdmissionCheck
+metadata:
+  name: tpu7x-subslice-ac
+spec:
+  controllerName: accelerator.gke.io/slice
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: tpu7x-subslice-cq
+spec:
+  namespaceSelector: {}
+  admissionChecks:
+    - tpu7x-subslice-ac
+  resourceGroups:
+    - coveredResources:
+        - google.com/tpu
+      flavors:
+        - name: tpu7x-subslice-rf
+          resources:
+            - name: google.com/tpu
+              # Set to your reserved chip count to enforce quota, or keep a
+              # large value to bypass quota management.
+              nominalQuota: "999999"

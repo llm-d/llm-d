@@ -228,6 +228,8 @@ For step-by-step instructions, see the [GKE Hugging Face GCS Transfer Guide](htt
 
 For all TPU machines, follow the [TPUs in GKE documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
 
+For Ironwood (TPU7x), GKE supports dynamic slicing: TPU capacity is provisioned as fixed sub-blocks and partitioned into workload-shaped sub-slices (e.g. `2x2x1`, `2x2x2`) at scheduling time, improving recovery time, startup latency, and fleet utilization. See [TPU Dynamic Slicing on GKE](./dynamic-slicing/README.md) for cluster setup and the corresponding llm-d model server recipes.
+
 ### Monitoring
 
 We recommend enabling Google Managed Prometheus and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) to enable automatic metrics collection and dashboards for vLLM deployed on the cluster, and [Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke) to collect telemetry data in OTLP format like traces for the llm-d stack.
