@@ -19,7 +19,7 @@ For simpler single-model deployments, see the [Optimized Baseline](../optimized-
 * Checkout llm-d repo:
 
   ```bash
-  export branch="release-0.9" # branch, tag, or commit hash
+  export branch="main" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 
