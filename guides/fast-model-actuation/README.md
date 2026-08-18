@@ -241,8 +241,12 @@ for i in 1 2; do
   echo "== sleep/wake cycle ${i} =="
   kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
   kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
+  # Confirm the launcher actually went to sleep before we wake it.
+  kubectl wait pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
+    --for='jsonpath={.metadata.labels.dual-pods\.llm-d\.ai/sleeping}=true' \
+    --timeout=120s
   kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
-  kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
+  kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
   kubectl get pods -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
     -o 'jsonpath={range .items[*]}{.metadata.name}{" sleeping="}{.metadata.labels.dual-pods\.llm-d\.ai/sleeping}{"\n"}{end}' || true
   kubectl run curl-wake-${i} --rm -i --restart=Never --attach \
@@ -327,6 +331,10 @@ helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml --ignore-not-found=true
+
+kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
