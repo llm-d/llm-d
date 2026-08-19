@@ -17,8 +17,7 @@ ARG TARGETPLATFORM
 ARG BASE_IMAGE_SUFFIX=ubi9
 ARG PYTHON_VERSION=3.12
 
-ARG USE_SCCACHE=true
-ARG BUILD_DEBUG=false
+ARG USE_SCCACHE=false
 
 # CUDA architectures to build for (reduce for faster builds and less memory usage)
 # For GB200/Blackwell: "10.0"
@@ -94,7 +93,6 @@ ARG NVSHMEM_CUDA_ARCHITECTURES
 
 ARG USE_SCCACHE
 ARG TORCH_CUDA_ARCH_LIST
-ARG BUILD_DEBUG
 ARG MAX_JOBS=3
 
 ARG ENABLE_EFA
@@ -223,7 +221,7 @@ RUN --mount=type=cache,target=/var/cache/git \
     /tmp/build-uccl.sh && \
     rm -f /tmp/build-uccl.sh
 
-# Build NVSHMEM from source (skipped for GB200 - uses pip instead)
+# Build NVSHMEM from source
 ARG NVSHMEM_USE_GIT
 ARG NVSHMEM_REPO
 COPY docker/scripts/cuda/builder/build-nvshmem.sh /tmp/build-nvshmem.sh
@@ -331,7 +329,7 @@ ENV LANG="C.UTF-8" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
-# NVSHMEM may be from source (default) or pip (GB200 with NVSHMEM_BUILD_FROM_SOURCE=false)
+# NVSHMEM may be from source (default) or pip
 ENV LD_LIBRARY_PATH="\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib:\
@@ -415,7 +413,7 @@ RUN if [ -d /tmp/gdrcopy_libs ]; then \
         rm -rf /tmp/gdrcopy_libs; \
     fi
 
-# Copy NVSHMEM from builder (populated only when NVSHMEM_BUILD_FROM_SOURCE=true; empty dir for GB200)
+# Copy NVSHMEM from builder (populated only when NVSHMEM_BUILD_FROM_SOURCE=true)
 COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
 
 COPY --from=builder /opt/nixl /opt/nixl
