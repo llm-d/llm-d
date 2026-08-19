@@ -27,6 +27,7 @@ permissions:
   contents: read
   packages: write
   security-events: write
+  id-token: write
 
 concurrency:
   group: nightly-build-image-${{ github.ref }}
