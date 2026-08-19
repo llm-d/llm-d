@@ -42,6 +42,11 @@ on:
         default: 'sanity_random.yaml'
 #        default: 'guide_optimized-baseline_1.yaml'
         type: 'string'
+      wait_timeout:
+        description: 'Timeout in seconds to wait for benchmark pods to complete'
+        required: false
+        default: '3000'
+        type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
         required: false
@@ -95,6 +100,7 @@ jobs:
       harness: ${{ inputs.harness || 'inference-perf' }}
 #      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
       workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+      wait_timeout: ${{ inputs.wait_timeout || '3000' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 
