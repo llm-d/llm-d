@@ -15,7 +15,15 @@ env:
 
     MONITORING_VALUES: {default: ""}
 
-    PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
+    # Any semver release of the llm-d-router chart; "v0" tracks the latest v0.x.
+    ROUTER_CHART_VERSION: v0
+
+    # Gateway provider for the router chart (--set provider.name=). "none" is
+    # provider-neutral and matches the chart default, but on GKE you must set
+    # "gke" or the HealthCheckPolicy is omitted and requests fail with 503s.
+    # "istio" renders a DestinationRule; "agentgateway" needs no
+    # provider-specific resources (the chart renders nothing, same as "none").
+    PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
     INFRA_PROVIDER: {default: base, values: [base, gke]}

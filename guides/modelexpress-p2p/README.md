@@ -73,6 +73,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 * Set the guide specific environment variables:
 
+`PROVIDER_NAME` selects gateway-provider-specific resources in the router chart. The default `none` renders no provider resources. On GKE, set `PROVIDER_NAME=gke`, or the load balancer health check fails against vLLM and requests return 503. `istio` adds a DestinationRule; `agentgateway` requires no provider-specific resources.
+
 <!-- guide:env.static start -->
 ```bash
 export BRANCH=main
@@ -88,7 +90,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MODEL=openai/gpt-oss-120b
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export INFRA_PROVIDER=coreweave # options: base, coreweave
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 ```
