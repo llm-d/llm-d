@@ -68,10 +68,15 @@ helm install <release-name> \
   ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
-  --set provider.name=<gke|istio|none> \
+  --set provider.name=<none|gke|agentgateway|istio> \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```
+
+`provider.name` selects gateway-provider-specific resources in the chart: `gke` renders a
+`HealthCheckPolicy` (required on GKE; without it the load balancer health check fails against
+vLLM and requests return 503), `istio` renders a `DestinationRule`, and `agentgateway` and
+`none` render no provider-specific resources.
 
 ## Enable Prometheus Monitoring (Optional)
 
@@ -90,7 +95,7 @@ helm upgrade <release-name> \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
-  --set provider.name=<gke|istio|none> \
+  --set provider.name=<none|gke|agentgateway|istio> \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```

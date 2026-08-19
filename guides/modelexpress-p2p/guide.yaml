@@ -16,7 +16,12 @@ env:
 
     MODEL: {default: "openai/gpt-oss-120b"}
 
-    PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
+    # Gateway provider for the router chart (--set provider.name=). "none" is
+    # provider-neutral and matches the chart default, but on GKE you must set
+    # "gke" or the HealthCheckPolicy is omitted and requests fail with 503s.
+    # "istio" renders a DestinationRule; "agentgateway" needs no
+    # provider-specific resources (the chart renders nothing, same as "none").
+    PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
     INFRA_PROVIDER: {default: coreweave, values: [base, coreweave]}
 
     # VERIFICATION

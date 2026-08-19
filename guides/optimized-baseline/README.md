@@ -64,6 +64,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 - Set the guide specific environment variables:
 
+`PROVIDER_NAME` selects gateway-provider-specific resources in the router chart. The default `none` renders no provider resources. On GKE, set `PROVIDER_NAME=gke`, or the load balancer health check fails against vLLM and requests return 503. `istio` adds a DestinationRule; `agentgateway` requires no provider-specific resources.
+
 <!-- guide:env.static start -->
 ```bash
 export BRANCH=main
@@ -78,6 +80,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MONITORING_VALUES=
+export ROUTER_CHART_VERSION=v0
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
@@ -88,7 +91,6 @@ export BENCHMARK_REF=main
 export HARNESS=inference-perf
 export WORKLOAD=guide_optimized-baseline_1.yaml
 export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
-export ROUTER_CHART_VERSION=v0 # options are any semver llm-d-router release of v0 for latest
 ```
 <!-- guide:env.static end -->
 
