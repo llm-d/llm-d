@@ -2,7 +2,7 @@
 # Override at build time via --build-arg BASE_IMAGE=...
 # The default value here is informational only; the workflow always passes
 # BASE_IMAGE explicitly from docker/common-versions (VLLM_XPU_BASE_IMAGE).
-ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
+ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.27.1
 
 FROM ${BASE_IMAGE}
 
