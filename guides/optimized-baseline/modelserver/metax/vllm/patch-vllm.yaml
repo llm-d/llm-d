@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command:
+            - vllm
+          args:
+            - serve
+            - /models/Qwen3-14B
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+            - --served-model-name
+            - Qwen/Qwen3-14B
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --tensor-parallel-size=1
+            - --max-num-batched-tokens=8192
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+            seccompProfile:
+              type: Unconfined
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "4"
+              memory: 16Gi
+              metax-tech.com/gpu: "1"
+            limits:
+              memory: 64Gi
+              metax-tech.com/gpu: "1"
+          volumeMounts:
+            - name: model
+              mountPath: /models/Qwen3-14B
+              readOnly: true
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: model
+          # TODO(METAX): Replace this validation-site hostPath with the
+          # documented portable storage contract before support declaration.
+          hostPath:
+            path: /mxstorage/pde_ai/models/llm/Qwen/Qwen3-14B
+            type: Directory
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Gi
