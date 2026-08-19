@@ -329,7 +329,7 @@ ENV LANG="C.UTF-8" \
     EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
-# NVSHMEM may be from source (default) or pip (GB200 with NVSHMEM_BUILD_FROM_SOURCE=false)
+# NVSHMEM may be from source (default) or pip
 ENV LD_LIBRARY_PATH="\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /opt/vllm/lib/python${PYTHON_VERSION}/site-packages/nvidia/nvshmem/lib:\
@@ -413,7 +413,7 @@ RUN if [ -d /tmp/gdrcopy_libs ]; then \
         rm -rf /tmp/gdrcopy_libs; \
     fi
 
-# Copy NVSHMEM from builder (populated only when NVSHMEM_BUILD_FROM_SOURCE=true; empty dir for GB200)
+# Copy NVSHMEM from builder (populated only when NVSHMEM_BUILD_FROM_SOURCE=true)
 COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
 
 COPY --from=builder /opt/nixl /opt/nixl
