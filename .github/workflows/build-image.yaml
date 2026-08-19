@@ -14,7 +14,7 @@ on:
         type: string
         default: ''
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,aws,rocm,xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
+        description: 'Platforms to build (comma-separated: cuda,rocm,xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
         required: false
         type: string
         default: ''
@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: cuda,aws,rocm,xpu,sglang-xpu,cpu)"
+        description: "Platforms to build (comma-separated: cuda,rocm,xpu,sglang-xpu,cpu)"
         required: false
         default: "cuda"
         type: string
@@ -112,7 +112,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       cuda: ${{ steps.force.outputs.cuda || steps.platforms-input.outputs.cuda || steps.filter.outputs.cuda }}
-      aws: ${{ steps.force.outputs.aws || steps.platforms-input.outputs.aws || steps.filter.outputs.aws }}
       rocm: ${{ steps.force.outputs.rocm || steps.platforms-input.outputs.rocm || steps.filter.outputs.rocm }}
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
       sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu }}
@@ -124,7 +123,6 @@ jobs:
         id: force
         run: |
           echo "cuda=true" >> $GITHUB_OUTPUT
-          echo "aws=true" >> $GITHUB_OUTPUT
           echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "sglang-xpu=true" >> $GITHUB_OUTPUT
@@ -145,7 +143,6 @@ jobs:
             esac
           }
           echo "cuda=$(has_platform cuda)" >> $GITHUB_OUTPUT
-          echo "aws=$(has_platform aws)" >> $GITHUB_OUTPUT
           echo "rocm=$(has_platform rocm)" >> $GITHUB_OUTPUT
           echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
           echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
@@ -160,15 +157,6 @@ jobs:
         with:
           filters: |
             cuda:
-              - 'docker/Dockerfile.cuda'
-              - 'docker/common-versions'
-              - 'docker/scripts/common/**'
-              - 'docker/scripts/cuda/**'
-              - 'docker/packages/common/**'
-              - 'docker/packages/cuda/**'
-              - 'docker/packages/rpms/**'
-              - 'patches/nvshmem_zero_ibv_ah_attr_v3.4.5-0.patch'
-            aws:
               - 'docker/Dockerfile.cuda'
               - 'docker/common-versions'
               - 'docker/scripts/common/**'

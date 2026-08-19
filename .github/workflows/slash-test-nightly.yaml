@@ -16,7 +16,7 @@ name: /test-nightly Slash Command
 #   cleanup=<bool>        Cleanup the llm-d stack after the run (default: true, set false for debugging)
 #
 # Optional parameters (passed to build-image nightly):
-#   platforms=<list>      Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,all; default: cuda)
+#   platforms=<list>      Platforms to build (comma-separated: cuda,rocm,xpu,sglang-xpu,cpu,all; default: cuda)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ocp
@@ -25,7 +25,7 @@ name: /test-nightly Slash Command
 #   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
 #   /test-nightly wva-*
 #   /test-nightly build-image
-#   /test-nightly build-image platforms=cuda,aws
+#   /test-nightly build-image platforms=cuda
 #
 # The command checks out the PR head, pushes a temp branch
 # (test-nightly/pr-<number>) into the main repo, and
@@ -142,7 +142,7 @@ jobs:
                   '- `cleanup=false` — keep the llm-d stack alive after the run (for debugging)',
                   '',
                   'Optional parameters (applied to `build-image` only):',
-                  '- `platforms=<list>` — platforms to build, comma-separated: cuda,aws,gb200,xpu,cpu,all (default: `cuda`)',
+                  '- `platforms=<list>` — platforms to build, comma-separated: cuda,rocm,xpu,sglang-xpu,cpu,all (default: `cuda`)',
                   '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
