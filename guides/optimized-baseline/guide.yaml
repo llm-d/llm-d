@@ -15,7 +15,7 @@ env:
 
     MONITORING_VALUES: {default: ""}
 
-    PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
+    PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
     INFRA_PROVIDER: {default: base, values: [base, gke]}
@@ -54,22 +54,27 @@ prerequisites:
 deploy:
 
   router_values:
-    - run: export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
     - when: {MODEL_SERVER: [vllm, sglang]}
-      run: export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
     - when: {MODEL_SERVER: [trtllm]}
       run: |
         #
         # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
         #
-        # export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+        # export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 
   monitoring_values:
     - run: |
         #
         # Uncomment the below to enable Prometheus monitoring on the llm-d router
+        #
+        # Unlike the ROUTER_*_VALUES paths above, this variable carries its own
+        # -f flag: it is empty by default, so the helm commands expand it as-is.
         #
         # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 
@@ -78,18 +83,18 @@ deploy:
         # Assuming base-directory is the root of the llm-d repo
         helm install ${GUIDE_NAME} \
           ${ROUTER_STANDALONE_CHART} \
-          ${ROUTER_BASE_VALUES} \
+          -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
-          ${ROUTER_VALUES} \
+          -f ${ROUTER_VALUES:?run the ROUTER_VALUES export from the router values step first} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   gateway:
     - run: |
         helm install ${GUIDE_NAME} \
           ${ROUTER_GATEWAY_CHART} \
-          ${ROUTER_BASE_VALUES} \
+          -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
-          ${ROUTER_VALUES} \
+          -f ${ROUTER_VALUES:?run the ROUTER_VALUES export from the router values step first} \
           --set provider.name=${PROVIDER_NAME} \
           --set httpRoute.create=true \
           --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
