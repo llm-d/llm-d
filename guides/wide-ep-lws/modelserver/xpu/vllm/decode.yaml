@@ -35,6 +35,7 @@ spec:
               - --zap-log-level=1
               - --secure-proxy=false
               - --enable-prefiller-sampling
+            image: REPLACE_ROUTING_SIDECAR_IMAGE
             imagePullPolicy: Always
             ports:
               - containerPort: 8000
