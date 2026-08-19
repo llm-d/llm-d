@@ -19,7 +19,6 @@ IMAGE_NAME="${IMAGE_NAME:-llm-d-cuda}"
 IMAGE_TAG="${IMAGE_TAG:-local}"
 TARGET="${TARGET:-}"                       # "" = full image, "builder" = builder only
 TARGETPLATFORM="${TARGETPLATFORM:-linux/amd64}"
-BUILD_DEBUG="${BUILD_DEBUG:-false}"
 ENABLE_EFA="${ENABLE_EFA:-false}"
 TARGETOS="${TARGETOS:-rhel}"
 DOCKER="${DOCKER:-docker}"                 # or podman
@@ -50,7 +49,7 @@ Options:
   -h, --help          Show this help message
 
 Environment variables:
-  IMAGE_NAME, IMAGE_TAG, TARGET, TARGETPLATFORM, BUILD_DEBUG,
+  IMAGE_NAME, IMAGE_TAG, TARGET, TARGETPLATFORM,
   ENABLE_EFA, TARGETOS, DOCKER, BUILDER, USE_SCCACHE
 EOF
     exit 0
@@ -119,7 +118,6 @@ cmd=(
     --build-arg "TARGETOS=${TARGETOS}"
     --build-arg "BUILD_BASE_IMAGE_SUFFIX=${BUILD_BASE_IMAGE_SUFFIX}"
     --build-arg "FINAL_BASE_IMAGE_SUFFIX=${FINAL_BASE_IMAGE_SUFFIX}"
-    --build-arg "BUILD_DEBUG=${BUILD_DEBUG}"
     --build-arg "USE_SCCACHE=${USE_SCCACHE}"
     --build-arg "ENABLE_EFA=${ENABLE_EFA}"
     --build-arg "VLLM_REPO=${VLLM_REPO}"
@@ -140,7 +138,7 @@ cmd+=(-t "${FULL_IMAGE}" "${REPO_ROOT}")
 
 # ── run ──────────────────────────────────────────────────────────────
 echo "==> Building ${FULL_IMAGE}"
-echo "    Platform=${TARGETPLATFORM}  OS=${TARGETOS}  DEBUG=${BUILD_DEBUG}  EFA=${ENABLE_EFA}  Builder=${BUILDER:-default}"
+echo "    Platform=${TARGETPLATFORM}  OS=${TARGETOS}  EFA=${ENABLE_EFA}  Builder=${BUILDER:-default}"
 echo "    CUDA=${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}"
 echo "    vLLM repo=${VLLM_REPO}"
 echo "    vLLM commit=${VLLM_COMMIT_SHA}"

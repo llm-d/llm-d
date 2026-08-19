@@ -6,8 +6,6 @@ set -Eeux
 # Optional environment variables:
 # - ENABLE_EFA: Enable EFA support in NVSHMEM (true/false, default: false)
 : "${ENABLE_EFA:=false}"
-# - BUILD_DEBUG: whether to build with debug symbols and logging (true/false) - defaults to false
-: "${BUILD_DEBUG:=false}"
 # Required environment variables (from Dockerfile ENV):
 # - EFA_PREFIX: Path to EFA installation (used if ENABLE_EFA=true)
 # Required environment variables:
@@ -25,12 +23,6 @@ set -Eeux
 # - PYTHON_VERSION: Python version (e.g., 3.12)
 
 cd /tmp
-
-if [ "${BUILD_DEBUG}" = "true" ]; then
-    # Disable sccache for nvshmem build in debug mode for nvcc + sccache + cmake weirdness.
-    # Not an issue for regular builds, only for BUILD_DEBUG=true
-    export USE_SCCACHE="false"
-fi
 
 . /usr/local/bin/setup-sccache
 . "${VIRTUAL_ENV}/bin/activate"
@@ -69,38 +61,6 @@ if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
         -DLIBFABRIC_HOME="${EFA_PREFIX}"
     )
 fi
-# Configure debug build options
-DEBUG_FLAGS=()
-CMAKE_EXTRA_FLAGS=()
-
-NVSHMEM_BUILD_PERF_TESTS=0 # Nvshmem perf test binaries, off by default on with debug
-if [ "${BUILD_DEBUG}" = "true" ]; then
-    echo "=== Building NVSHMEM with debug symbols and runtime logging enabled ==="
-    echo "=== This enables verbose logging that can be activated at runtime with NVSHMEM_DEBUG=TRACE ==="
-
-    CMAKE_EXTRA_FLAGS+=(
-        -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF
-    )
-
-    # NVSHMEM_DEBUG=ON enables runtime debug logging capabilities
-    # NOTE: NVSHMEM_VERBOSE is intentionally NOT set because:
-    # - It only controls build-time verbosity (ptxas info messages, etc.)
-    # - It does NOT affect runtime logging (that comes from NVSHMEM_DEBUG)
-    # - Runtime verbose logging is controlled by NVSHMEM_DEBUG=TRACE environment variable
-    # NOTE: NVSHMEM_DEVEL is intentionally NOT set because:
-    # - It only adds strict compiler warnings (-Werror -Wall -Wextra)
-    # - It defines a macro that is never used in the code
-    # - It does NOT affect debug symbols (those come from CMAKE_BUILD_TYPE)
-    # - It does NOT affect runtime debug logging (that comes from NVSHMEM_DEBUG)
-    # - It causes build failures on warnings that we cannot override without patching
-    DEBUG_FLAGS=(
-        -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        -DNVSHMEM_DEBUG=ON
-    )
-
-    # Tests taking too long to build
-    # NVSHMEM_BUILD_PERF_TESTS=1
-fi
 
 # Configure our build directory such that targets for specific nvshmem4py bindings exist
 CMAKE_EXTRA_FLAGS+=(
@@ -131,7 +91,6 @@ cmake -S . -B build -G Ninja \
     -DNVSHMEM_BUILD_TESTS="${NVSHMEM_BUILD_PERF_TESTS}" \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
     -DNVSHMEM_BUILD_PYTHON_LIB=OFF \
-    "${DEBUG_FLAGS[@]}" \
     "${CMAKE_EXTRA_FLAGS[@]}" \
     "${EFA_FLAGS[@]}"
 

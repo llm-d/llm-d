@@ -221,7 +221,7 @@ RUN --mount=type=cache,target=/var/cache/git \
     /tmp/build-uccl.sh && \
     rm -f /tmp/build-uccl.sh
 
-# Build NVSHMEM from source (skipped for GB200 - uses pip instead)
+# Build NVSHMEM from source
 ARG NVSHMEM_USE_GIT
 ARG NVSHMEM_REPO
 COPY docker/scripts/cuda/builder/build-nvshmem.sh /tmp/build-nvshmem.sh

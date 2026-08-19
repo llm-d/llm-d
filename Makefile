@@ -61,12 +61,6 @@ ifeq ($(BUILD_TYPE), dev)
 	IMAGE_BASE := $(IMAGE_BASE)-dev
 endif
 
-# BUILD_DEBUG, options ['true', 'false']
-BUILD_DEBUG ?= false
-ifeq ($(BUILD_DEBUG), true)
-	IMAGE_BASE := $(IMAGE_BASE)-debug
-endif
-
 IMG := $(IMAGE_BASE):$(VERSION)
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
@@ -101,7 +95,6 @@ help: ## Print help
 	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
 	@printf "\n\033[1mCUDA Build Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default, no EFA)\n"
-	@printf "  \033[36mmake image-build DEVICE=cuda BUILD_DEBUG=true\033[0m           # Build CUDA Docker image with debug symbols\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda ENABLE_EFA=true\033[0m            # Build CUDA image with EFA support\n"
 
 ##@ Development
@@ -178,7 +171,6 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 		--build-arg MAX_JOBS=$(MAX_JOBS) \
 		--build-arg TORCH_CUDA_ARCH_LIST="$(TORCH_CUDA_ARCH_LIST)" \
 		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
-		--build-arg BUILD_DEBUG=$(BUILD_DEBUG) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
 		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
 		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
