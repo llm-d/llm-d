@@ -233,6 +233,9 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 1. _Deploy a Kubernetes Gateway_ named `llm-d-inference-gateway` by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
+> [!IMPORTANT]
+> Set `GW_PROVIDER_NAME` to the gateway provider you deployed in step 1 (e.g. `gke`, `istio`). The default, `none`, renders no provider-specific resources — on GKE that means no `HealthCheckPolicy`, so the Gateway marks the backends unhealthy and requests fail with 503s.
+
 <!-- guide:deploy.gateway start -->
 ```bash
 export GW_PROVIDER_NAME=none # options: none, gke, agentgateway, istio
