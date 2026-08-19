@@ -279,6 +279,36 @@ The recipe (`calibrate.sh`) runs a short Kubernetes Job that measures true prefi
 
 For reference values across the (model, accelerator) combinations shipped under `guides/` — and which ones still need a calibration run — see the [**configuration matrix**](../recipes/router/calibration/configuration-matrix.md).
 
+## Optional: Enable flow control
+
+Flow control lets the router hold excess requests in the EPP instead of immediately dispatching them to already busy model servers. Pairing it with the `concurrency-detector` caps the number of in-flight requests sent to each endpoint. That cap limits simultaneous demand on the endpoint's KV cache, which can reduce cache pressure, request preemption, and KV-cache thrashing.
+
+[`concurrencyMode`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency#configuration) determines the metric used to throttle workload per backend: in-flight requests, estimated in-flight tokens, or both.
+
+To enable it, add the feature gate, detector plugin, and `flowControl` section to the `EndpointPickerConfig` embedded in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml):
+
+```yaml
+featureGates:
+- flowControl
+
+plugins:
+# Keep the existing optimized-baseline plugins here.
+- type: concurrency-detector
+  parameters:
+    maxConcurrency: 8 # Example only; tune this for each endpoint's performance and latency constraints.
+    concurrencyMode: requests
+    headroom: 0.0
+
+flowControl:
+  maxBytes: "10Gi"
+  maxRequests: "1k"
+  defaultRequestTTL: "60s"
+  saturationDetector:
+    pluginRef: concurrency-detector
+```
+
+`maxConcurrency` applies to one model-server endpoint, not the whole pool. A lower value keeps more work in the EPP and reduces pressure on the model server, but setting it too low can leave the accelerator idle. A higher value keeps the engine fed, but setting it too high can increase local queueing and KV-cache pressure. Size `maxBytes` and `maxRequests` for the EPP's available memory and expected request bodies. See [Production Tuning: Deriving `maxConcurrency`](../flow-control/tuning.md) for the measurement procedure and detector trade-offs.
+
 ## Verification
 
 ### 1. Get the IP of the Proxy
