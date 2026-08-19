@@ -6,17 +6,31 @@ ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.27.1
 
 FROM ${BASE_IMAGE}
 
-# PyTorch XPU needs UMF at runtime; upstream's setvars.sh adds this path.
-ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
+# LMCache's XPU extension is built from source and requires the DPC++ compiler.
+# vLLM >= 0.27 no longer includes the oneAPI development toolchain in its
+# runtime image because PyTorch XPU provides the runtime libraries.
+RUN wget -O- \
+      https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+      | gpg --dearmor \
+      | tee /usr/share/keyrings/oneapi-archive-keyring.gpg >/dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+      > /etc/apt/sources.list.d/oneAPI.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      intel-oneapi-compiler-dpcpp-cpp-2026.0 && \
+    rm -rf /var/lib/apt/lists/*
 
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
-    fi;
+    fi
 
 RUN source /opt/intel/oneapi/setvars.sh --force && \
+    command -v icpx && \
+    icpx --version && \
     git clone https://github.com/LMCache/LMCache.git -b v0.5.0 && \
-    cd LMCache && pip install -r requirements/build.txt && \
+    cd LMCache && \
+    pip install -r requirements/build.txt && \
     BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .
 
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
