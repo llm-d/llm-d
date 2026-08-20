@@ -98,19 +98,18 @@ We recommend using the upstream images for most guides:
 
 In addition to the upstream images, llm-d also builds and releases vLLM images with features not yet merged into vLLM upstream such as:
 
-* EFA support for AWS HPC networking
 * GKE IB networking patches
 * DeepEP patches for GB200 support
 * RIXL support on AMD ROCm
 
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
-| `ghcr.io/llm-d/llm-d-cuda`       | `v0.9.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws`        | `v0.9.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`       | `v0.9.0` | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`        | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu-sglang` | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu`        | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-cuda`             | `v0.9.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-aws` (deprecated) | `v0.9.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm`             | `v0.9.0` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu`              | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu-sglang`       | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu`              | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
 
 ## 4. Well-Lit Path Guides
 

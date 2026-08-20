@@ -69,10 +69,6 @@ BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(
 # SUPPRESS_PYTHON_OUTPUT: Set to "1" or "true" to suppress verbose pip output during build (default: verbose enabled)
 SUPPRESS_PYTHON_OUTPUT ?=
 
-# ENABLE_EFA: Set to "true" to enable AWS Elastic Fabric Adapter support in CUDA builds (default: false)
-# When enabled, EFA installer provides RDMA packages; otherwise use CUDA base image packages
-ENABLE_EFA ?= false
-
 # Override NVSHMEM version and DeepEP repo/version
 # and install NVSHMEM via pypi rather than from source
 NVSHMEM_VERSION_OVERRIDE ?=
@@ -95,7 +91,6 @@ help: ## Print help
 	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
 	@printf "\n\033[1mCUDA Build Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default, no EFA)\n"
-	@printf "  \033[36mmake image-build DEVICE=cuda ENABLE_EFA=true\033[0m            # Build CUDA image with EFA support\n"
 
 ##@ Development
 
@@ -128,7 +123,6 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  echo "🔧 Buildah detected: Building for $(ARCH) with $(DOCKERFILE_PATH)…"; \
 	  buildah build --file $(DOCKERFILE_PATH) --arch=$(ARCH) --os=linux --layers \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
-		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
 		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
 		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
 		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
@@ -142,7 +136,6 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
-		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
 		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
 		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
 		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
@@ -172,7 +165,6 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 		--build-arg TORCH_CUDA_ARCH_LIST="$(TORCH_CUDA_ARCH_LIST)" \
 		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
-		$(if $(filter cuda,$(DEVICE)),--build-arg ENABLE_EFA=$(ENABLE_EFA)) \
 		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
 		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
 		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
