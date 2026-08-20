@@ -12,7 +12,7 @@ spec:
             - vllm
           args:
             - serve
-            - /models/Qwen3-14B
+            - Qwen/Qwen3-14B
             - --host
             - 0.0.0.0
             - --port
@@ -22,6 +22,12 @@ spec:
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             - --tensor-parallel-size=1
             - --max-num-batched-tokens=8192
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
           securityContext:
             capabilities:
               add:
@@ -50,18 +56,9 @@ spec:
               memory: 64Gi
               metax-tech.com/gpu: "1"
           volumeMounts:
-            - name: model
-              mountPath: /models/Qwen3-14B
-              readOnly: true
             - name: dshm
               mountPath: /dev/shm
       volumes:
-        - name: model
-          # TODO(METAX): Replace this validation-site hostPath with the
-          # documented portable storage contract before support declaration.
-          hostPath:
-            path: /mxstorage/pde_ai/models/llm/Qwen/Qwen3-14B
-            type: Directory
         - name: dshm
           emptyDir:
             medium: Memory

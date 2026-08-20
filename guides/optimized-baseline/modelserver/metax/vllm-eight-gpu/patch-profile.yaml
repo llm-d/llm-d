@@ -11,7 +11,7 @@ spec:
         - name: modelserver
           args:
             - serve
-            - /models/DeepSeek-R1-Distill-Llama-70B
+            - deepseek-ai/DeepSeek-R1-Distill-Llama-70B
             - --host
             - 0.0.0.0
             - --port
@@ -33,8 +33,6 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
           resources:
-            # TODO(METAX): Confirm the portable CPU/memory sizing and any
-            # required node selectors or tolerations outside the test cluster.
             requests:
               cpu: "16"
               memory: 64Gi
@@ -42,16 +40,3 @@ spec:
             limits:
               memory: 256Gi
               metax-tech.com/gpu: "8"
-          volumeMounts:
-            - mountPath: /models/Qwen3-14B
-              $patch: delete
-            - name: model
-              mountPath: /models/DeepSeek-R1-Distill-Llama-70B
-              readOnly: true
-      volumes:
-        - name: model
-          # TODO(METAX): Replace this validation-site hostPath with the
-          # documented portable storage contract before support declaration.
-          hostPath:
-            path: /mxstorage/pde_ai/models/llm/DeepSeek/DeepSeek-R1-Distill-Llama-70B
-            type: Directory

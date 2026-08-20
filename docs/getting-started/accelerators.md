@@ -14,16 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
-
-<!--
-TODO(METAX): Replace every placeholder below and move this row into the
-Support table only after the public-image and release-validation requirements
-in this document are satisfied.
-
-| MetaX | C500X GPU | <MAINTAINER_NAME> (@<GITHUB_HANDLE>, <PUBLIC_EMAIL>), <OPTIONAL_SECOND_MAINTAINER> (@<GITHUB_HANDLE>, <PUBLIC_EMAIL>) |
-
-Release validation owner: <NAME_OR_TEAM> (@<GITHUB_HANDLE>, <PUBLIC_EMAIL>)
--->
+| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, lianjie.zhang@metax-tech.com) |
 
 ## Requirements
 
