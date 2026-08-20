@@ -6,25 +6,24 @@
 # Apply once per cluster:
 #   kubectl apply -f kueue-tas.yaml
 # Then create a LocalQueue per workload namespace (see kueue-localqueue.yaml).
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: Topology
 metadata:
   name: tpu7x-subslice-topology
 spec:
   # Partition hierarchy of a TPU7x 4x4x4 sub-block, largest to smallest.
   # Every node carries a cloud.google.com/gke-tpu-partition-<shape>-id label
-  # for each sub-slice shape it belongs to; kubernetes.io/hostname is the
-  # 2x2x1 level (one tpu7x-standard-4t host = 4 chips).
-  # TODO(reviewer): verify levels against the GKE reference configuration;
-  # the published GCP sample covers super-slicing only.
+  # for each sub-slice shape it belongs to.
   levels:
+    - nodeLabel: cloud.google.com/gce-topology-block
     - nodeLabel: cloud.google.com/gke-tpu-partition-4x4x4-id
     - nodeLabel: cloud.google.com/gke-tpu-partition-2x4x4-id
     - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x4-id
     - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x2-id
+    - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x1-id
     - nodeLabel: kubernetes.io/hostname
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata:
   name: tpu7x-subslice-rf
@@ -35,28 +34,37 @@ spec:
 ---
 # Delegates slice formation to the GKE Kueue slice controller: workloads are
 # admitted only after their Slice custom resources become ACTIVE.
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: AdmissionCheck
 metadata:
   name: tpu7x-subslice-ac
 spec:
   controllerName: accelerator.gke.io/slice
 ---
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
 metadata:
   name: tpu7x-subslice-cq
 spec:
   namespaceSelector: {}
-  admissionChecks:
-    - tpu7x-subslice-ac
+  admissionChecksStrategy:
+    admissionChecks:
+      - name: tpu7x-subslice-ac
   resourceGroups:
+    # cpu and memory must be covered alongside google.com/tpu so that the
+    # model server pods' full resource requests are admissible.
     - coveredResources:
         - google.com/tpu
+        - cpu
+        - memory
       flavors:
         - name: tpu7x-subslice-rf
           resources:
+            # Set nominalQuota to your reserved capacity to enforce quota, or
+            # keep large values to bypass quota management.
             - name: google.com/tpu
-              # Set to your reserved chip count to enforce quota, or keep a
-              # large value to bypass quota management.
               nominalQuota: "999999"
+            - name: cpu
+              nominalQuota: "999999"
+            - name: memory
+              nominalQuota: "999999Gi"

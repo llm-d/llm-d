@@ -22,7 +22,7 @@ spec:
         labels:
           llm-d.ai/role: decode
           llm-d.ai/guide: optimized-baseline
-          llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+          llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
           llm-d.ai/accelerator-variant: tpu
           llm-d.ai/accelerator-vendor: google
       spec:
@@ -46,22 +46,20 @@ spec:
                 # the GKE TPU webhook for multi-host groups).
                 export TPU_PROCESS_ADDRESSES=$(echo ${TPU_WORKER_HOSTNAMES} | sed 's/,/:8476,/g'):8476
 
-                # TODO(#TBD): verify the Ray multi-node helper path in the
-                # docker.io/vllm/vllm-tpu release image.
                 bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader \
                   --ray_cluster_size=${LWS_GROUP_SIZE} --ray_init_timeout=1800
 
-                exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
-                  --max-model-len=32768 \
+                exec vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
+                  --max-model-len=262144 \
                   --max-num-batched-tokens=8192 \
                   --max-num-seqs=64 \
                   --tensor-parallel-size=16 \
-                  --language-model-only \
-                  --limit-mm-per-prompt '{"image": 0, "video": 0}' \
                   --kv-cache-dtype=fp8 \
-                  --enable-expert-parallel \
+                  --language-model-only \
                   --gpu-memory-utilization=0.80 \
                   --async-scheduling \
+                  --enable-expert-parallel \
+                  --block-size=256 \
                   --port=8000 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             env:
@@ -75,6 +73,26 @@ spec:
                 value: $(LWS_WORKER_INDEX)
               - name: TPU_PROCESS_PORT
                 value: "8476"
+              - name: TPU_BACKEND_TYPE
+                value: jax
+              - name: PJRT_DEVICE
+                value: TPU
+              - name: JAX_PLATFORMS
+                value: ""
+              - name: SKIP_JAX_PRECOMPILE
+                value: "1"
+              - name: MODEL_IMPL_TYPE
+                value: vllm
+              - name: USE_BATCHED_RPA_KERNEL
+                value: "1"
+              - name: USE_MOE_EP_KERNEL
+                value: "0"
+              - name: VLLM_DISABLE_SHARED_EXPERTS_STREAM
+                value: "1"
+              - name: VLLM_MLA_DISABLE
+                value: "1"
+              - name: VLLM_ENGINE_CLIENT_STARTUP_TIMEOUT
+                value: "1800"
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -90,10 +108,10 @@ spec:
             resources:
               limits:
                 cpu: "200"
-                memory: 800Gi
+                memory: 900Gi
                 google.com/tpu: 4
               requests:
-                cpu: "200"
+                cpu: "150"
                 memory: 800Gi
                 google.com/tpu: 4
             startupProbe:
@@ -144,7 +162,7 @@ spec:
           # workers carry a different value so only the leader (which serves
           # the API endpoint for the group) receives routed traffic.
           llm-d.ai/guide: optimized-baseline-worker
-          llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+          llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
           llm-d.ai/accelerator-variant: tpu
           llm-d.ai/accelerator-vendor: google
       spec:
@@ -166,8 +184,6 @@ spec:
 
                 export TPU_PROCESS_ADDRESSES=$(echo ${TPU_WORKER_HOSTNAMES} | sed 's/,/:8476,/g'):8476
 
-                # TODO(#TBD): verify the Ray multi-node helper path in the
-                # docker.io/vllm/vllm-tpu release image.
                 exec bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker \
                   --ray_address=${LWS_LEADER_ADDRESS} --ray_init_timeout=1800
             env:
@@ -181,6 +197,24 @@ spec:
                 value: $(LWS_WORKER_INDEX)
               - name: TPU_PROCESS_PORT
                 value: "8476"
+              - name: TPU_BACKEND_TYPE
+                value: jax
+              - name: PJRT_DEVICE
+                value: TPU
+              - name: JAX_PLATFORMS
+                value: ""
+              - name: SKIP_JAX_PRECOMPILE
+                value: "1"
+              - name: MODEL_IMPL_TYPE
+                value: vllm
+              - name: USE_BATCHED_RPA_KERNEL
+                value: "1"
+              - name: USE_MOE_EP_KERNEL
+                value: "0"
+              - name: VLLM_DISABLE_SHARED_EXPERTS_STREAM
+                value: "1"
+              - name: VLLM_MLA_DISABLE
+                value: "1"
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -189,10 +223,10 @@ spec:
             resources:
               limits:
                 cpu: "200"
-                memory: 800Gi
+                memory: 900Gi
                 google.com/tpu: 4
               requests:
-                cpu: "200"
+                cpu: "150"
                 memory: 800Gi
                 google.com/tpu: 4
             volumeMounts:

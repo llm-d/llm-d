@@ -118,7 +118,17 @@ As an alternative to the statically provisioned `2x2x1` node pools used above, T
    kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
    ```
 
-3. Deploy the llm-d router and set environment variables as in the TPU v7x instructions above.
+3. Deploy the llm-d router as in the TPU v7x instructions above, with environment variables adjusted for the dynamic-slice model:
+
+   ```bash
+   source ${REPO_ROOT}/guides/env.sh
+   export GAIE_VERSION=v1.5.0
+   export GUIDE_NAME="pd-disaggregation"
+   export NAMESPACE="llm-d-pd-disaggregation"
+   export MODEL_NAME="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+   export STACK_NAME="tpu-v7-qwen3-coder-slice-pd"
+   source ${REPO_ROOT}/guides/env.sh
+   ```
 
 ### Deploy the Model Server
 
@@ -126,7 +136,7 @@ As an alternative to the statically provisioned `2x2x1` node pools used above, T
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-dynamic-slice/
 ```
 
-The manifests differ from the static `tpu/v7/vllm` overlay only in workload type and scheduling: `LeaderWorkerSet` instead of `Deployment`, the `cloud.google.com/gke-tpu-slice-topology: "2x2x1"` pod annotation, a node selector on `cloud.google.com/gke-tpu-partition-2x2x1-state: "HEALTHY"` instead of the static `cloud.google.com/gke-tpu-topology` label, and the `kueue.x-k8s.io/queue-name` label. Engine arguments, the `TPUConnectorHMA` KV connector, and the routing sidecar are identical.
+The manifests deploy `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` (TP=8 per `2x2x1` sub-slice), the model used for load testing the dynamic-slice recipes. They differ from the static `tpu/v7/vllm` overlay in workload type and scheduling: `LeaderWorkerSet` instead of `Deployment`, the `cloud.google.com/gke-tpu-slice-topology: "2x2x1"` pod annotation, a node selector on `cloud.google.com/gke-tpu-partition-2x2x1-state: "HEALTHY"` instead of the static `cloud.google.com/gke-tpu-topology` label, and the `kueue.x-k8s.io/queue-name` label. The `TPUConnectorHMA` KV connector and the routing sidecar are unchanged from the static overlay.
 
 ### Verify Slice Formation
 
@@ -137,12 +147,20 @@ kubectl get workloads -n ${NAMESPACE}
 kubectl get slices -n ${NAMESPACE}
 ```
 
-Then follow the [Verification steps in the main guide](./README.md#verification) to send a test request against `Qwen/Qwen3.5-397B-A17B-FP8`.
+Then follow the [Verification steps in the main guide](./README.md#verification) to send a test request against `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`.
 
 ### Scaling and Other Topologies
 
 * **xPyD ratios**: adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently; each replica receives its own `2x2x1` sub-slice.
 * **Larger sub-slices**: for multi-host slices (`2x2x2`, `2x2x4`, `2x4x4`), set the slice topology annotation and partition-state selector to the target shape, set the LWS `size` to the host count (chips / 4), and raise `--tensor-parallel-size` accordingly (2 cores per chip). See the [aggregated multi-topology recipes](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/README.md) for a worked `2x2x2` multi-host example.
+
+### Recovery and Scale-Up Benchmarks
+
+Measured provisioning-path results for `2x2x1` sub-slices - 42-58s MTTR from an induced node failure to a pod ready on a re-formed sub-slice, and p50 30-41s per-replica scale-up latency at 16 to 256 concurrent slices - are documented in [benchmark-results.md](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/benchmark-results.md). Serving-engine performance is unchanged relative to the static-topology recipes.
+
+### Testing Status
+
+The dynamic-slice variant is not yet in the nightly e2e matrix: an end-to-end run requires one full TPU7x cube (a `4x4x4` sub-block, 64 chips / 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not currently available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.
 
 ## Benchmarking
 

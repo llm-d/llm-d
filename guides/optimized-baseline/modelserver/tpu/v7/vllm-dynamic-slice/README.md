@@ -8,10 +8,10 @@ Each replica is a `LeaderWorkerSet` group; the GKE slice controller activates th
 
 | Directory | Slice shape | Chips | Hosts (LWS `size`) | TP | Model |
 | --- | --- | --- | --- | --- | --- |
-| [`2x2x1/`](./2x2x1/) | `2x2x1` | 4 | 1 | 8 | `Qwen/Qwen3-32B` |
-| [`2x2x2/`](./2x2x2/) | `2x2x2` | 8 | 2 | 16 | `Qwen/Qwen3.5-397B-A17B-FP8` |
+| [`2x2x1/`](./2x2x1/) | `2x2x1` | 4 | 1 | 8 | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` |
+| [`2x2x2/`](./2x2x2/) | `2x2x2` | 8 | 2 | 16 | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` |
 
-To target `2x2x4` (4 hosts, TP up to 32) or `2x4x4` (8 hosts, TP up to 64), copy the `2x2x2` variant and change the `cloud.google.com/gke-tpu-slice-topology` annotation, the `cloud.google.com/gke-tpu-partition-<shape>-state` node selector, the LWS `size`, and `--tensor-parallel-size` (2 cores per chip). Engine arguments (`--max-model-len`, `--max-num-seqs`, batch sizes) are starting points and should be tuned per model and workload.
+Both variants serve `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`, the model used for load testing these recipes; engine arguments are carried over from those load tests. To target `2x2x4` (4 hosts, TP up to 32) or `2x4x4` (8 hosts, TP up to 64), copy the `2x2x2` variant and change the `cloud.google.com/gke-tpu-slice-topology` annotation, the `cloud.google.com/gke-tpu-partition-<shape>-state` node selector, the LWS `size`, and `--tensor-parallel-size` (2 cores per chip).
 
 ## Prerequisites
 
@@ -49,8 +49,16 @@ kubectl get pods -n ${NAMESPACE}
 
 Then follow the [Optimized Baseline verification steps](../../../../README.md#verification), using the model name from the table above in the completion request.
 
+## Benchmark Results
+
+See [benchmark-results.md](./benchmark-results.md) for measured recovery time after node failure (MTTR 42-58s to a re-formed sub-slice) and workload scale-up latency at 16 to 256 concurrent slices (p50 30-41s). Serving-engine throughput and latency match the static-topology Optimized Baseline TPU recipe, since the underlying vLLM configuration is identical; dynamic slicing changes only provisioning, scheduling, and recovery.
+
 ## Notes
 
 * Increasing `spec.replicas` on the `LeaderWorkerSet` scales out one sub-slice per replica; replicas are formed from any sub-block with healthy partitions of the requested shape.
 * Different topology variants (and the [P/D dynamic-slice recipes](../../../../../pd-disaggregation/modelserver/tpu/v7/vllm-dynamic-slice/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
+
+## Testing Status
+
+These recipes are not yet covered by the nightly e2e matrix. An end-to-end run requires a GKE Standard (Rapid channel) cluster with at least one full TPU7x cube - a `4x4x4` sub-block of 64 chips (16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation - and this capacity is not currently available to llm-d CI. Until it is, the recipes are validated by kustomize dry-run in CI, and functionally by load tests on internal Google Cloud capacity (see [benchmark-results.md](./benchmark-results.md)). A nightly e2e workflow (`nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-*`) will be added once capacity is secured.

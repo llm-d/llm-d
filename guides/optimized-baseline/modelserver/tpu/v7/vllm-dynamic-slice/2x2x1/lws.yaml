@@ -22,7 +22,7 @@ spec:
         labels:
           llm-d.ai/role: decode
           llm-d.ai/guide: optimized-baseline
-          llm-d.ai/model: Qwen3-32B
+          llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
           llm-d.ai/accelerator-variant: tpu
           llm-d.ai/accelerator-vendor: google
       spec:
@@ -38,11 +38,28 @@ spec:
             image: REPLACE_MODEL_SERVER_IMAGE
             command: ["vllm", "serve"]
             args:
-              - "Qwen/Qwen3-32B"
+              - "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
               - "--port=8000"
-              - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+              - "--max-model-len=262144"
+              - "--max-num-batched-tokens=8192"
+              - "--max-num-seqs=64"
               - "--tensor-parallel-size=8"
+              - "--kv-cache-dtype=fp8"
+              - "--language-model-only"
+              - "--gpu-memory-utilization=0.80"
+              - "--async-scheduling"
+              - "--enable-expert-parallel"
+              - "--block-size=256"
+              - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: MODEL_IMPL_TYPE
+                value: vllm
+              - name: USE_BATCHED_RPA_KERNEL
+                value: "1"
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -54,12 +71,12 @@ spec:
                 protocol: TCP
             resources:
               limits:
-                cpu: "16"
-                memory: 64Gi
+                cpu: "200"
+                memory: 900Gi
                 google.com/tpu: 4
               requests:
-                cpu: "16"
-                memory: 64Gi
+                cpu: "150"
+                memory: 800Gi
                 google.com/tpu: 4
             startupProbe:
               httpGet:
@@ -68,7 +85,7 @@ spec:
               initialDelaySeconds: 15
               periodSeconds: 30
               timeoutSeconds: 5
-              failureThreshold: 120
+              failureThreshold: 480
             livenessProbe:
               httpGet:
                 path: /health
@@ -84,11 +101,17 @@ spec:
               timeoutSeconds: 2
               failureThreshold: 3
             volumeMounts:
+              - mountPath: /dev/shm
+                name: shm
               - mountPath: /.cache
                 name: torch-compile-cache
               - mountPath: /.config
                 name: vllm-config
         volumes:
+          - name: shm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 100Gi
           - name: torch-compile-cache
             emptyDir: {}
           - name: vllm-config

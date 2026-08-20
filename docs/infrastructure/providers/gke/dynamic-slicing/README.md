@@ -108,7 +108,18 @@ kubectl apply --server-side -f https://github.com/kubernetes-sigs/jobset/release
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/download/${LWS_VERSION}/manifests.yaml
 ```
 
-The Kueue controller configuration must enable the LeaderWorkerSet integration (`leaderworkerset.x-k8s.io/leaderworkerset` in `integrations.frameworks`) for LWS-based model servers to be admitted.
+The Kueue controller configuration must enable the `pod` and LeaderWorkerSet integrations for LWS-based model servers to be admitted; the stock Kueue release manifest does not enable them. Edit the `kueue-manager-config` ConfigMap in the `kueue-system` namespace so `integrations.frameworks` includes:
+
+```yaml
+integrations:
+  frameworks:
+    - "batch/job"
+    - "jobset.x-k8s.io/jobset"
+    - "pod"
+    - "leaderworkerset.x-k8s.io/leaderworkerset"
+```
+
+Then restart the Kueue controller manager to pick up the change.
 
 ### 2. Install the Kueue slice controller
 
@@ -124,12 +135,7 @@ Apply the cluster-scoped Kueue resources - a `Topology` describing the TPU7x par
 kubectl apply -f kueue-tas.yaml
 ```
 
-See [`kueue-tas.yaml`](./kueue-tas.yaml).
-
-<!-- TODO(reviewer): the published GCP sample Topology covers super-slicing only
-     (gce-topology-block / partition-4x4x4-id / hostname). The sub-slice Topology
-     levels in kueue-tas.yaml are extrapolated from the partition label hierarchy
-     and need verification against the GKE reference configuration. -->
+See [`kueue-tas.yaml`](./kueue-tas.yaml). The `Topology` levels enumerate the full partition hierarchy of a sub-block, from `cloud.google.com/gce-topology-block` down through each `cloud.google.com/gke-tpu-partition-<shape>-id` label to `kubernetes.io/hostname`.
 
 Then create a `LocalQueue` in every namespace that runs llm-d model servers, e.g. for the P/D disaggregation guide:
 

@@ -22,7 +22,7 @@ spec:
         labels:
           llm-d.ai/role: decode
           llm-d.ai/guide: pd-disaggregation
-          llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+          llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
           llm-d.ai/accelerator-variant: tpu
           llm-d.ai/accelerator-vendor: google
           llm-d.ai/engine-type: vllm
@@ -68,17 +68,17 @@ spec:
                   export VLLM_HOST_IP="${POD_IP}"
                 fi
 
-                exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+                exec vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
                   --host "${HOST_ADDR}" \
-                  --max-model-len=9216 \
+                  --max-model-len=262144 \
                   --max-num-batched-tokens=8192 \
-                  --max-num-seqs=512 \
+                  --max-num-seqs=64 \
                   --tensor-parallel-size=8 \
-                  --language-model-only \
-                  --limit-mm-per-prompt '{"image": 0, "video": 0}' \
                   --kv-cache-dtype=fp8 \
+                  --gpu-memory-utilization=0.80 \
+                  --async-scheduling \
                   --enable-expert-parallel \
-                  --no-disable-hybrid-kv-cache-manager \
+                  --block-size=256 \
                   --kv-transfer-config '{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_consumer","kv_ip":"$(POD_IP)"}' \
                   --port=8200 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models
@@ -91,6 +91,16 @@ spec:
                 value: "9600"
               - name: TPU_KV_TRANSFER_PORT
                 value: "9100"
+              - name: MODEL_IMPL_TYPE
+                value: vllm
+              - name: USE_BATCHED_RPA_KERNEL
+                value: "1"
+              - name: USE_MOE_EP_KERNEL
+                value: "0"
+              - name: VLLM_DISABLE_SHARED_EXPERTS_STREAM
+                value: "1"
+              - name: VLLM_MLA_DISABLE
+                value: "1"
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -111,12 +121,10 @@ spec:
                 protocol: TCP
             resources:
               limits:
-                cpu: "200"
-                memory: 800Gi
                 google.com/tpu: 4
               requests:
                 cpu: "200"
-                memory: 800Gi
+                memory: 900Gi
                 google.com/tpu: 4
             startupProbe:
               httpGet:
@@ -125,7 +133,7 @@ spec:
               initialDelaySeconds: 15
               periodSeconds: 30
               timeoutSeconds: 5
-              failureThreshold: 240
+              failureThreshold: 480
             livenessProbe:
               httpGet:
                 path: /health

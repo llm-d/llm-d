@@ -15,6 +15,6 @@ components:
 labels:
   - pairs:
       llm-d.ai/guide: optimized-baseline
-      llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+      llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
       llm-d.ai/accelerator-variant: tpu
       llm-d.ai/accelerator-vendor: google

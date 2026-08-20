@@ -1,7 +1,7 @@
 # Namespaced LocalQueue for llm-d model servers on TPU7x dynamic sub-slices.
 # Create one in every namespace that deploys dynamic-slice model servers:
 #   kubectl apply -n <namespace> -f kueue-localqueue.yaml
-apiVersion: kueue.x-k8s.io/v1beta1
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: tpu7x-subslice-lq
