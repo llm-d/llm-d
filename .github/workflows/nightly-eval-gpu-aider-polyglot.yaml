@@ -1,0 +1,144 @@
+name: Nightly - Eval GPU (aider-polyglot / gemini-cli)
+
+# Cron owner for the eval-containers agentic regression test that LIVES IN
+# llm-d-benchmark. This repo holds the schedule; llm-d-benchmark holds the
+# workflow. Same split as the nightly-e2e-* family: the cadence is decided
+# here, the target repo stays workflow_dispatch-only.
+#
+# Unlike the nightly-e2e-* callers, this does NOT `uses:` the llm-d-infra
+# reusable engine. That engine resolves llm-d-benchmark with
+# `git clone --branch main` and exposes neither the `tasks` (-j) nor the
+# `cluster_config` input the eval harness requires, so the eval cannot be
+# driven through it. Instead we dispatch llm-d-benchmark's own
+# ci-nightly-eval-gpu-ocp-aider-gemini.yaml, which wraps its
+# reusable-ci-nightly-eval-gpu.yaml (standup vLLM on GPU -> run eval ->
+# teardown) on the OCP pok-prod self-hosted runner.
+#
+# Requires a repository secret `EVAL_DISPATCH_TOKEN`: a fine-grained PAT (or
+# GitHub App installation token) scoped to llm-d/llm-d-benchmark with
+# "Actions: read and write" so it can trigger a workflow_dispatch there.
+# GITHUB_TOKEN cannot do this -- it is scoped to this repository only. If the
+# secret is absent the job is skipped with a notice rather than failing the
+# nightly, matching dispatch-website-sync.yaml.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily (the eval holds 1 H100 on pok-prod; staggered off the 03:00 OCP perf nightlies that contend for the same cluster)
+  workflow_dispatch:
+    inputs:
+      cluster_namespace:
+        description: 'Namespace to run the eval in'
+        required: false
+        type: 'string'
+        default: 'llmd-eval-gpu-nightly'
+      eval_service_account:
+        description: 'ServiceAccount bound to anyuid SCC (eval image + vLLM need root)'
+        required: false
+        type: 'string'
+        default: 'eval-runner'
+      tasks:
+        description: 'Number of tasks to run (-j)'
+        required: false
+        type: 'string'
+        default: '1'
+      dry_run:
+        description: 'Render without applying'
+        required: false
+        type: 'string'
+        default: 'false'
+      cleanup:
+        description: 'Teardown the vLLM model + harness pods afterward (frees the GPU)'
+        required: false
+        type: 'string'
+        default: 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-eval-gpu-aider-polyglot
+  cancel-in-progress: false
+
+jobs:
+  dispatch-eval:
+    name: dispatch-eval
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'llm-d/llm-d' }}
+    steps:
+      - name: Check dispatch token is configured
+        id: token
+        env:
+          EVAL_DISPATCH_TOKEN: ${{ secrets.EVAL_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$EVAL_DISPATCH_TOKEN" ]; then
+            echo "::notice::EVAL_DISPATCH_TOKEN is not configured; skipping the eval dispatch."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch eval nightly in llm-d-benchmark
+        if: steps.token.outputs.configured == 'true'
+        uses: actions/github-script@v9
+        env:
+          NS: ${{ inputs.cluster_namespace || 'llmd-eval-gpu-nightly' }}
+          SA: ${{ inputs.eval_service_account || 'eval-runner' }}
+          TASKS: ${{ inputs.tasks || '1' }}
+          DRY: ${{ inputs.dry_run || 'false' }}
+          CLEANUP: ${{ inputs.cleanup || 'true' }}
+        with:
+          github-token: ${{ secrets.EVAL_DISPATCH_TOKEN }}
+          script: |
+            const owner = 'llm-d';
+            const repo = 'llm-d-benchmark';
+            const workflow_id = 'ci-nightly-eval-gpu-ocp-aider-gemini.yaml';
+            const ref = 'main';
+
+            const inputs = {
+              cluster_namespace: process.env.NS,
+              eval_service_account: process.env.SA,
+              tasks: process.env.TASKS,
+              dry_run: process.env.DRY,
+              cleanup: process.env.CLEANUP,
+            };
+
+            const before = new Date();
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id, ref, inputs,
+            });
+            core.info(`Dispatched ${owner}/${repo} ${workflow_id} on ${ref}`);
+
+            // Surface the run URL so a failed eval is traceable from this run.
+            // Dispatch is async, so poll briefly for the created run.
+            let runUrl = null;
+            for (let attempt = 0; attempt < 12 && !runUrl; attempt++) {
+              await new Promise(r => setTimeout(r, 5000));
+              try {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id, branch: ref, per_page: 5,
+                });
+                const run = data.workflow_runs.find(
+                  r => new Date(r.created_at) >= before,
+                );
+                if (run) runUrl = run.html_url;
+              } catch (e) {
+                core.info(`Poll attempt ${attempt + 1} failed: ${e.message}`);
+              }
+            }
+
+            await core.summary
+              .addHeading('Eval nightly dispatched', 3)
+              .addTable([
+                [{ data: 'Detail', header: true }, { data: 'Value', header: true }],
+                ['Target', `${owner}/${repo}`],
+                ['Workflow', workflow_id],
+                ['Ref', ref],
+                ['Run', runUrl || 'not found within 60s (dispatch succeeded)'],
+                ['Tasks (-j)', inputs.tasks],
+                ['Namespace', inputs.cluster_namespace],
+              ])
+              .write();
+
+            if (!runUrl) {
+              core.warning('Dispatch accepted but no run URL found within 60s.');
+            }
