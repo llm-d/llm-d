@@ -87,7 +87,7 @@ deploy:
           ${ROUTER_STANDALONE_CHART} \
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
-          -f ${ROUTER_VALUES:?run the ROUTER_VALUES export from the router values step first} \
+          -f ${ROUTER_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   gateway:
@@ -96,7 +96,7 @@ deploy:
           ${ROUTER_GATEWAY_CHART} \
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
-          -f ${ROUTER_VALUES:?run the ROUTER_VALUES export from the router values step first} \
+          -f ${ROUTER_VALUES} \
           --set provider.name=${PROVIDER_NAME} \
           --set httpRoute.create=true \
           --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
