@@ -21,20 +21,20 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 
 ## Configuration
 
-| Parameter          | Default                                                 | Example                                                 |
-| ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
+| Parameter          | Default                                                 | Example                                                           |
+| ------------------ | ------------------------------------------------------- | ----------------------------------------------------------------- |
 | Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
-| Replicas           | 8                                                       | 16                                                        |
-| Tensor Parallelism | 2                                                       | 1                                                         |
-| GPUs per replica   | 2                                                       | 1                                                         |
-| Total GPUs         | 16                                                      | 16                                                        |
+| Replicas           | 8                                                       | 16                                                                |
+| Tensor Parallelism | 2                                                       | 1                                                                 |
+| GPUs per replica   | 2                                                       | 1                                                                 |
+| Total GPUs         | 16                                                      | 16                                                                |
 
 ### Supported Hardware Backends
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | Directory          | Notes                                      |
-| ------------------- | ------------------ | ------------------------------------------ |
+| Backend             | Directory          | Notes                                                           |
+| ------------------- | ------------------ | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
 | AMD GPU             | `amd`              | AMD GPU                                    |
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
@@ -44,6 +44,9 @@ This guide includes configurations for the following accelerators:
 | NVIDIA GPU (FlagOS) | `flagos-cuda`      | vLLM + FlagOS unified backend              |
 
 > [!NOTE]
+> "x86 with bf16 acceleration": AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`
+>
+>
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
 ## Prerequisites
@@ -183,7 +186,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
-
+<!-- This text is completely invisible in the rendered view -->
 > [!WARNING]
 > Enabling monitoring here requires the monitoring stack to be installed first. The
 > `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
@@ -207,7 +210,7 @@ helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  -f ${ROUTER_VALUES:?run the ROUTER_VALUES export from the router values step first} \
+  -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
@@ -233,7 +236,7 @@ helm install ${GUIDE_NAME} \
   ${ROUTER_GATEWAY_CHART} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  -f ${ROUTER_VALUES:?run the ROUTER_VALUES export from the router values step first} \
+  -f ${ROUTER_VALUES} \
   --set provider.name=${PROVIDER_NAME} \
   --set httpRoute.create=true \
   --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
