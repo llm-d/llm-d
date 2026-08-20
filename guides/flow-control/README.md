@@ -70,47 +70,70 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 * Checkout llm-d repo:
 
-  ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
-  ```
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main # branch, tag, or commit hash
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
 
-* Set the following environment variables:
+* Set the guide environment variables:
 
-  ```bash
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-  source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="flow-control"
-  export NAMESPACE="llm-d-flow-control"
-  export MODEL_NAME="Qwen/Qwen3-32B"
-  ```
+<!-- guide:env.static start -->
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export GUIDE_NAME=flow-control
+export NAMESPACE=llm-d-flow-control
+export MODEL_NAME=Qwen/Qwen3-32B
+export INFRA_PROVIDER=base # options: base, gke
+export ROUTER_VALUES=${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml
+export EXTRA_HELM_ARGS=
+```
+<!-- guide:env.static end -->
+
+* Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
 
 * Install the required CRDs (GAIE InferencePool + llm-d.ai InferenceObjective):
 
-  ```bash
-  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+<!-- guide:prerequisites.crds start -->
+```bash
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 
-  # ROUTER_RELEASE_URL is automatically calculated from ROUTER_RELEASE_VERSION at ${REPO_ROOT}/guides/env.sh
-  kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
-  ```
+# ROUTER_RELEASE_URL is automatically calculated from ROUTER_RELEASE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
+```
+<!-- guide:prerequisites.crds end -->
 
 * Create a target namespace for the installation:
 
-  ```bash
-  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  ```
+<!-- guide:prerequisites.namespace start -->
+```bash
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
 
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+
+<!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
-  ```bash
-  export HF_TOKEN=<your HuggingFace token>
-  kubectl create secret generic llm-d-hf-token \
-    --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    --namespace "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  ```
+```bash
+export HF_TOKEN=<your HuggingFace token>
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 ## Installation Instructions
 
@@ -120,13 +143,16 @@ Flow Control is a software-level scheduling feature at the EPP layer and is enti
 
 This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
+<!-- guide:deploy.standalone start -->
 ```bash
 helm upgrade --install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${ROUTER_VALUES} \
+    ${EXTRA_HELM_ARGS} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
 The router pod's resource requests are set in
 [base.values.yaml](../recipes/router/base.values.yaml): 4 vCPU and 8 GiB of memory for
@@ -141,16 +167,19 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. *Deploy the router and an HTTPRoute* that connects it to the Gateway as follows:
 
+<!-- guide:deploy.gateway start -->
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm upgrade --install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART}  \
+    ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${ROUTER_VALUES} \
+    ${EXTRA_HELM_ARGS} \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.gateway end -->
 
 </details>
 
@@ -160,12 +189,13 @@ Instead of maintaining duplicate hardware configurations, we dynamically render 
 
 Deploy the model server (defaulting to NVIDIA GPU / vLLM) by running:
 
+<!-- guide:deploy.modelserver start -->
 ```bash
-export INFRA_PROVIDER=base # base | gke
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
+<!-- guide:deploy.modelserver end -->
 
 ### 3. Enable monitoring (optional)
 
@@ -176,9 +206,11 @@ ServiceMonitor, whose CRD only exists after the monitoring stack is installed.
 * Add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the [router installation command](#1-deploy-the-router). If you already installed without it, re-run the same `helm upgrade --install` command with the extra `-f` appended.
 * Deploy the monitoring resources for model servers:
 
+<!-- guide:deploy.monitoring start -->
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
+<!-- guide:deploy.monitoring end -->
 
 ## Verification
 
@@ -186,16 +218,20 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 **Standalone Mode**
 
+<!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:verify.endpoint.standalone end -->
 
 <details>
 <summary> <b>Gateway Mode</b> </summary>
 
+<!-- guide:verify.endpoint.gateway start -->
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+<!-- guide:verify.endpoint.gateway end -->
 
 </details>
 
@@ -203,10 +239,12 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 Check EPP logs for feature gate activation:
 
+<!-- guide:verify.tests.feature_gate start -->
 ```bash
 # -c epp: in standalone mode kubectl defaults to the Envoy sidecar, whose log never matches
 kubectl logs deploy/${GUIDE_NAME}-epp -c epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
 ```
+<!-- guide:verify.tests.feature_gate end -->
 
 Expected: one line, `Initializing Flow Control layer`. No output means the gate is off for
 this deployment (the EPP then logs `Flow Control layer is disabled` instead) or the log
@@ -221,13 +259,15 @@ To fully verify that queuing and backpressure are working, you must apply concur
 The Use Case 2 load test sizes its burst from `MAX_CONCURRENCY`; a retuned values file
 changes the burst with it:
 
+<!-- guide:verify.tests.max_concurrency start -->
 ```bash
 MAX_CONCURRENCY=$(awk '$1 == "maxConcurrency:" {print $2; n++} END {exit n!=1}' \
-    ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml) \
+    ${ROUTER_VALUES}) \
   || echo "expected exactly one maxConcurrency: in the values file" >&2
 export MAX_CONCURRENCY
 echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the values file
 ```
+<!-- guide:verify.tests.max_concurrency end -->
 
 **Grant read access to the EPP metrics endpoint.** The EPP authenticates every metrics
 scrape against the Kubernetes API: a TokenReview on the caller's bearer token, then a
@@ -238,6 +278,7 @@ grant only when `router.monitoring.prometheus.enabled` is set, which also create
 ServiceMonitor and requires the Prometheus Operator CRDs; this guide leaves that flag
 off and creates the binding directly:
 
+<!-- guide:verify.tests.metrics_rbac start -->
 ```bash
 kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
     --verb=get --non-resource-url=/metrics \
@@ -251,6 +292,7 @@ kubectl create clusterrolebinding ${GUIDE_NAME}-epp-auth-delegator \
     --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
     --dry-run=client -o yaml | kubectl apply -f -
 ```
+<!-- guide:verify.tests.metrics_rbac end -->
 
 Without these grants the metrics endpoint returns `401 Unauthorized`, and every
 metrics check in this guide reads as empty grep output.
@@ -297,9 +339,11 @@ The `helm upgrade --install` command you ran earlier configured the EPP's underl
 
 Apply the full definitions (Premium, Standard, Best-Effort) provided in [objectives.yaml](./objectives.yaml) by running:
 
+<!-- guide:deploy.objectives start -->
 ```bash
 kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
 ```
+<!-- guide:deploy.objectives end -->
 
 The file defines three priority tiers:
 
@@ -494,17 +538,21 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 
 Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
+<!-- guide:benchmark.setup.install start -->
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 ```
+<!-- guide:benchmark.setup.install end -->
 
 Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
 
+<!-- guide:benchmark.setup.activate start -->
 ```bash
 cd llm-d-benchmark
 source .venv/bin/activate
 llmdbenchmark --version
 ```
+<!-- guide:benchmark.setup.activate end -->
 
 > [!NOTE]
 > Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
@@ -515,20 +563,24 @@ Set two variables so the rest of the section is topology-agnostic: the endpoint 
 
 **Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
 
+<!-- guide:benchmark.endpoint.standalone start -->
 ```bash
 export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
 export GATEWAY_CLASS=epponly # standalone mode
 ```
+<!-- guide:benchmark.endpoint.standalone end -->
 
 <details>
 <summary> <b>Gateway Mode</b> </summary>
 
+<!-- guide:benchmark.endpoint.gateway start -->
 ```bash
 export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
 
 # Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
 export GATEWAY_CLASS=istio
 ```
+<!-- guide:benchmark.endpoint.gateway end -->
 
 </details>
 
@@ -536,6 +588,7 @@ export GATEWAY_CLASS=istio
 
 Benchmark results are copied to the `workspace` directory that is specified by *you* (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
+<!-- guide:benchmark.execute start -->
 ```bash
 llmdbenchmark \
     --spec           guides/flow-control \
@@ -548,6 +601,7 @@ llmdbenchmark \
     --workload       random_concurrent.yaml \
     --analyze
 ```
+<!-- guide:benchmark.execute end -->
 
 > [!NOTE]
 > The harness pod requests 16 vCPU by default
@@ -565,16 +619,21 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics. Pleas
 
 To remove the deployed components:
 
+<!-- guide:cleanup start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
-export INFRA_PROVIDER=base # match the value used at deploy time
+
+# INFRA_PROVIDER must match the value used at deploy time
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
+
 kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator
 kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
 ```
+<!-- guide:cleanup end -->
 
 If you ran the Benchmarking section, also delete the harness leftovers. The workload PVC
 is backed by shared storage that bills until removed. Follow

@@ -207,7 +207,7 @@ The reader picks the line matching their config.
 >
 > Mutually exclusive steps flatten into a single fence, annotated with `# only when …` comments. A human reads the annotations and picks one. A runner scraping the rendered fence would execute *every* branch, which for some guides is destructive (workload-autoscaling explicitly warns against applying both its KEDA and HPA overlays).
 >
-> `guide.yaml` is the machine interface: `when:` is still structured there, so a runner resolves it against its own variable values and gets exactly one branch. The `<!-- llm-d-cicd:skip -->` markers exist for the *legacy* README-scraping path and should not be read as an endorsement of it.
+> `guide.yaml` is the machine interface: `when:` is still structured there, so a runner resolves it against its own variable values and gets exactly one branch. `guide.py emit` (see [Emitting bash for automation](#emitting-bash-for-automation)) performs that resolution. The `<!-- llm-d-cicd:skip -->` markers exist for the *legacy* README-scraping path and should not be read as an endorsement of it.
 
 ### Sensitive variables
 
@@ -368,7 +368,7 @@ On `README.md`:
 Exits non-zero on any error. With multiple targets every guide is reported before
 exiting, so one run surfaces every problem in the repo.
 
-### Recommended CI
+### CI
 
 One command covers both files across every guide:
 
@@ -379,6 +379,46 @@ scripts/guide.py render guides/*/ --check
 `--check` catches out-of-date READMEs — someone edited `guide.yaml` without
 re-rendering — and because `render` validates first, a schema error fails the
 same job.
+
+[`ci-guides-check.yaml`](../../.github/workflows/ci-guides-check.yaml) runs
+the command on every PR that touches `guides/**` or `scripts/guide.py`,
+alongside the guide.py unit tests in `scripts/tests/`. To fix a failing
+check, re-run `scripts/guide.py render <guide-dir>` and commit the result.
+
+### Emitting bash for automation
+
+`emit` assembles guide.yaml sections into an executable script on stdout:
+
+```bash
+scripts/guide.py emit guides/my-guide env deploy.standalone
+scripts/guide.py emit guides/my-guide env prerequisites.crds \
+    --context ci --var NAMESPACE=my-ns
+```
+
+A section is `env` or any step-list dot-path. `--context ci` drops
+`skip_in: [ci]` steps. `--var` overrides an `env.static` variable; the value
+is shell-quoted (and checked against the variable's declared `values:` list),
+while declared defaults are emitted verbatim so `$(…)` substitutions still
+run. Overrides also drive `when:` resolution, so the script contains one
+branch of any `when:`-gated alternative. A sensitive variable without an
+override is omitted rather than emitted as its placeholder, and referencing
+one from `when:` without a `--var` is an error.
+
+Quoting makes an override a single shell word at the `export`. A hook
+variable that a command later expands unquoted — the `${EXTRA_HELM_ARGS}`
+pattern — word-splits there, so every space-separated token in the override
+must stand alone as a flag or argument; a value that itself contains spaces
+(`--set-string a=x y`) cannot pass through such a hook.
+
+Only `when:` encodes exclusivity. Named sibling sub-groups
+(`deploy.standalone` vs `deploy.gateway`) look like alternatives to a human,
+but emit has no way to know that: emitting the parent (`deploy`) concatenates
+*every* sub-group, deploying both modes back to back. Pass the specific
+sub-path for any section whose children are mutually exclusive.
+
+`guides/flow-control/scripts/nightly-deploy-gke.sh` is the reference
+consumer: it emits the flow-control guide's CRD and deploy steps and layers
+its CI-only overrides on top via `--var`.
 
 ### Using it as a library
 

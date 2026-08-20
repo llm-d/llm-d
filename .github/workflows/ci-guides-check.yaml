@@ -1,0 +1,49 @@
+name: CI Guides Check
+
+# Guides on the guide.yaml method render their README bash fences from the
+# YAML (see guides/templates/README.md). The job fails when a README is stale
+# relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`) and
+# runs the guide.py unit tests.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-guides-check.yaml
+      - guides/**
+      - scripts/guide.py
+      - scripts/tests/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-guides-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guides-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+          cache: pip
+          # No requirements file — the workflow itself pins the installs.
+          cache-dependency-path: .github/workflows/ci-guides-check.yaml
+
+      - name: Install dependencies
+        run: python -m pip install --quiet 'pyyaml==6.*' pytest
+
+      - name: Check rendered READMEs are current
+        run: python scripts/guide.py render guides/*/ --check
+
+      - name: Run guide.py tests
+        run: python -m pytest scripts/tests/ -v
