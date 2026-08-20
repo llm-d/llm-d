@@ -25,11 +25,12 @@ export GUIDE_NAME="flow-control"
 INFRA_PROVIDER="gke"
 
 echo "=== Installing CRDs (GAIE InferencePool + llm-d.ai InferenceObjective) ==="
-# ROUTER_RELEASE_VERSION, not ROUTER_CHART_VERSION: the chart channel (v0)
-# floats on the OCI registry and has no matching GitHub release, so the CRD
-# bundle needs the release tag. Same pair the README's prerequisites use.
-kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml"
-kubectl apply -f "https://github.com/llm-d/llm-d-router/releases/download/${ROUTER_RELEASE_VERSION}/manifests.yaml"
+# GAIE_URL / ROUTER_RELEASE_URL are computed from *_VERSION (default latest)
+# by the env.sh sourced above. ROUTER_RELEASE_URL, not the chart channel (v0):
+# that floats on the OCI registry with no matching GitHub release, so the CRD
+# bundle needs the release path. Same pair the README's prerequisites use.
+kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml"
+kubectl apply -f "https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml"
 
 # CI-only (1 of 3): force a low concurrency-detector maxConcurrency so the
 # saturation gate closes under the validate script's modest burst. Without it
