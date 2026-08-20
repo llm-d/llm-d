@@ -44,15 +44,11 @@ The linter runs automatically via pre-commit hooks. You can also run it manually
 
 ```bash
 # single script
-./scripts/lint-envvars.py docker/scripts/cuda/builder/build-nvshmem.sh
+./scripts/lint-envvars.py docker/scripts/common/build-uccl.sh
 
 # multiple scripts
 ./scripts/lint-envvars.py docker/scripts/**/*.sh
 ```
-
-## Example
-
-See `docker/scripts/cuda/builder/build-compiled-wheels.sh` for a complete example.
 
 ## Dockerfile Validation
 
