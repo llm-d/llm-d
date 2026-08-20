@@ -14,7 +14,12 @@ import shutil
 import sys
 from typing import Optional
 
-logger = logging.getLogger("llm-d.snapshot")
+try:
+    from vllm.logger import init_logger
+
+    logger = init_logger("vllm.snapshot.providers")
+except ImportError:
+    logger = logging.getLogger("vllm.snapshot.providers")
 
 GVISOR_CHECKPOINT_PATH = "/proc/gvisor/checkpoint"
 

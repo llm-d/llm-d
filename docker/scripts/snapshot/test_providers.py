@@ -92,15 +92,14 @@ class TestClearCache(unittest.TestCase):
             provider.clear_cache()
             self.assertTrue(os.path.exists(tmpdir))
 
-    @patch("shutil.rmtree")
-    def test_clear_cache_failure_raises_snapshot_error(self, mock_rmtree):
-        mock_rmtree.side_effect = PermissionError("Permission denied")
+    def test_clear_cache_failure_raises_snapshot_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             model_dir = os.path.join(tmpdir, "models--org--repo")
             os.makedirs(model_dir)
             provider = GKESnapshotProvider(cache_dir=tmpdir)
-            with self.assertRaises(SnapshotError) as ctx:
-                provider.clear_cache()
+            with patch("shutil.rmtree", side_effect=PermissionError("Permission denied")):
+                with self.assertRaises(SnapshotError) as ctx:
+                    provider.clear_cache()
             self.assertIn("Could not delete locally stored weights", str(ctx.exception))
 
 
@@ -466,6 +465,32 @@ class TestLauncher(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 launcher.main()
             self.assertIn("vLLM must be installed to run snapshot launcher", str(ctx.exception))
+
+    def test_launcher_api_server_not_importable_warning(self):
+        from docker.scripts.snapshot import launcher
+
+        with patch.dict("sys.modules", {"vllm.entrypoints.openai.api_server": None}), \
+             patch("docker.scripts.snapshot.launcher.logger") as mock_logger:
+            result = launcher._hook_api_server()
+            self.assertFalse(result)
+            mock_logger.warning.assert_called_once()
+            self.assertIn("vLLM API server is not importable", mock_logger.warning.call_args[0][0])
+
+    def test_launcher_hook_api_server_success(self):
+        from docker.scripts.snapshot import launcher
+
+        mock_api_server = MagicMock()
+        mock_api_server.build_app = MagicMock(return_value="app")
+        modules = {
+            "vllm": MagicMock(),
+            "vllm.entrypoints": MagicMock(),
+            "vllm.entrypoints.openai": MagicMock(api_server=mock_api_server),
+            "vllm.entrypoints.openai.api_server": mock_api_server,
+        }
+        with patch.dict("sys.modules", modules):
+            result = launcher._hook_api_server()
+            self.assertTrue(result)
+            self.assertIsNotNone(mock_api_server.build_app)
 
 
 if __name__ == "__main__":
