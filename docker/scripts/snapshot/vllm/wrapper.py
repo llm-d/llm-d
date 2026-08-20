@@ -24,16 +24,12 @@ from ..providers import (
     get_snapshot_provider,
 )
 
-_handler = logging.StreamHandler(sys.stdout)
-_handler.setFormatter(
-    logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s")
-)
-_llm_d_logger = logging.getLogger("llm-d")
-_llm_d_logger.setLevel(logging.INFO)
-if not _llm_d_logger.handlers:
-    _llm_d_logger.addHandler(_handler)
+try:
+    from vllm.logger import init_logger
 
-logger = logging.getLogger("llm-d.snapshot.wrapper")
+    logger = init_logger("llm-d.snapshot.wrapper")
+except ImportError:
+    logger = logging.getLogger("llm-d.snapshot.wrapper")
 
 
 def patch_vllm_lifespan(app, snapshot_provider: Optional[GKESnapshotProvider] = None):
