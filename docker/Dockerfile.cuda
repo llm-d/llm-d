@@ -27,11 +27,6 @@ ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX"
 
 # Note: Components are listed in build order.
 
-# EFA Support: Set to "true" to enable AWS Elastic Fabric Adapter support
-# When enabled, EFA installer provides RDMA packages; otherwise use CUDA base image packages
-ARG ENABLE_EFA=false
-ARG EFA_INSTALLER_VERSION="1.49.0"
-
 ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
 ARG GDRCOPY_VERSION="v2.6"
 
@@ -95,9 +90,6 @@ ARG USE_SCCACHE
 ARG TORCH_CUDA_ARCH_LIST
 ARG MAX_JOBS=3
 
-ARG ENABLE_EFA
-ARG EFA_INSTALLER_VERSION
-
 WORKDIR /workspace
 
 RUN mkdir -p /wheels
@@ -121,16 +113,7 @@ ENV LANG="C.UTF-8" \
     VIRTUAL_ENV="/opt/vllm" \
     CUDA_HOME="/usr/local/cuda"
 
-COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
-COPY docker/packages /tmp/packages
-COPY docker/scripts/cuda/common/install-efa.sh /tmp/install-efa.sh
-RUN EFA_MODE="builder" /tmp/install-efa.sh && \
-    rm -f /tmp/install-efa.sh /tmp/package-utils.sh && \
-    rm -rf /tmp/packages
-
 # Install base packages and EPEL in single layer
-# Note: DNF/YUM will automatically recognize RDMA packages already installed by EFA
-# and skip reinstallation, so no explicit filtering needed
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
 COPY docker/packages /tmp/packages
 COPY docker/scripts/cuda/builder/install-base-packages.sh /tmp/install-base-packages.sh
@@ -163,13 +146,11 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
 ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
     UCCL_PREFIX="/opt/uccl" \
-    NIXL_PREFIX="/opt/nixl" \
-    EFA_PREFIX="/opt/amazon/efa"
+    NIXL_PREFIX="/opt/nixl"
 
 # CUDA 13.0 moved CCCL (libcudacxx) headers to include/cccl/ subdirectory
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
-${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${UCCL_PREFIX}/lib:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
@@ -183,7 +164,6 @@ ${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:\
 /usr/include:\
 ${CPATH}" \
     PKG_CONFIG_PATH="\
-${EFA_PREFIX}/lib/pkgconfig:${EFA_PREFIX}/lib64/pkgconfig:\
 ${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:\
 /usr/local/lib/pkgconfig:\
 /usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/aarch64-linux-gnu/pkgconfig:\
@@ -311,8 +291,6 @@ ARG USE_SCCACHE
 
 # Build parallelism - reduce to avoid OOM on memory-constrained systems
 ARG MAX_JOBS=3
-ARG ENABLE_EFA
-ARG EFA_INSTALLER_VERSION
 
 COPY docker/constraints.txt /tmp/constraints.txt
 
@@ -326,7 +304,6 @@ ENV LANG="C.UTF-8" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     UCX_PREFIX="/opt/ucx" \
     UCCL_PREFIX="/opt/uccl" \
-    EFA_PREFIX="/opt/amazon/efa" \
     CUDA_HOME="/usr/local/cuda"
 
 # NVSHMEM may be from source (default) or pip
@@ -336,7 +313,6 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:\
-${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${UCCL_PREFIX}/lib:\
 /usr/local/lib:/usr/local/lib64:\
@@ -351,19 +327,10 @@ ${LD_LIBRARY_PATH}" \
     LIBRARY_PATH="\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:\
-${EFA_PREFIX}/lib:${EFA_PREFIX}/lib64:\
 ${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}"
-
-# Install runtime RDMA core packages through AWS EFA installer if EFA is enabled
-COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
-COPY docker/packages /tmp/packages
-COPY docker/scripts/cuda/common/install-efa.sh /tmp/install-efa.sh
-RUN EFA_MODE="runtime" /tmp/install-efa.sh && \
-    rm -f /tmp/install-efa.sh /tmp/package-utils.sh && \
-    rm -rf /tmp/packages
 
 # Install runtime dependencies
 COPY docker/scripts/cuda/common/package-utils.sh /tmp/package-utils.sh
@@ -372,11 +339,6 @@ COPY docker/scripts/cuda/runtime/install-runtime-packages.sh /tmp/install-runtim
 RUN /tmp/install-runtime-packages.sh && \
     rm -f /tmp/install-runtime-packages.sh /tmp/package-utils.sh && \
     rm -rf /tmp/packages
-
-# Copy EFA installation if enabled
-# EFA libs are copied to /usr/lib64 during install-efa.sh and saved to /tmp/efa_libs
-COPY --from=builder /opt/amazon /opt/amazon/
-COPY --from=builder /tmp/efa_libs/ /usr/lib64/
 
 # Copy gdrcopy libraries from builder
 # Install to /usr/local/lib (always present) and multiarch lib dir

@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,aws,gb200,xpu,cpu,all)'
+        description: 'Platforms to build (comma-separated: cuda,rocm,xpu,sglang-xpu,cpu,all)'
         required: false
         default: 'cuda'
         type: string

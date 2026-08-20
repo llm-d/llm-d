@@ -190,9 +190,8 @@ For Wide Expert Parallelism, map GPUs to specific HCAs for optimal topology:
 
 - Request `rdma/roce_gdr` device resources as shown above
 
-#### AWS (EFA)
+#### AWS (EFA) (deprecated - use upstream AWS images)
 
-- EFA support is built into the llm-d CUDA image when `ENABLE_EFA=true`
 - NIXL uses the `libfabric` backend (not UCX) — see [Choosing a Transport Backend](#choosing-a-transport-backend)
 - Requires libfabric v1.21.0+ (or latest AWS EFA installer)
 - The libfabric plugin auto-discovers GPU-to-EFA topology via hwloc for optimal multi-rail placement

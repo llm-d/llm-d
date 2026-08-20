@@ -4,10 +4,7 @@ set -Eeux
 # builds and installs NVSHMEM from source with coreweave patch
 #
 # Optional environment variables:
-# - ENABLE_EFA: Enable EFA support in NVSHMEM (true/false, default: false)
-: "${ENABLE_EFA:=false}"
 # Required environment variables (from Dockerfile ENV):
-# - EFA_PREFIX: Path to EFA installation (used if ENABLE_EFA=true)
 # Required environment variables:
 # - TARGETOS: OS type (ubuntu or rhel)
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
@@ -40,7 +37,7 @@ else
 fi
 
 # No need for CKS patches if running on EKS only
-if [ "${ENABLE_EFA}" != "true" ] || [ "$TARGETOS" = "ubuntu" ]; then
+if [ "$TARGETOS" = "ubuntu" ]; then
     # Prior to NVSHMEM_VERSION 3.4.5 we have to carry a set of patches for device renaming.
     # For more info, see: https://github.com/NVIDIA/nvshmem/releases/tag/v3.4.5-0, specifically regarding NVSHMEM_HCA_PREFIX
     for i in /tmp/patches/cks_nvshmem"${NVSHMEM_VERSION}".patch /tmp/patches/nvshmem_zero_ibv_ah_attr_"${NVSHMEM_VERSION}".patch; do
@@ -53,17 +50,8 @@ if [ "${ENABLE_EFA}" != "true" ] || [ "$TARGETOS" = "ubuntu" ]; then
     done
 fi
 
-# Enable EFA only for RHEL builds (Ubuntu EFA packages require 22.04+; gated on TARGETOS=rhel for now)
-EFA_FLAGS=()
-if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
-    EFA_FLAGS=(
-        -DNVSHMEM_LIBFABRIC_SUPPORT=1
-        -DLIBFABRIC_HOME="${EFA_PREFIX}"
-    )
-fi
-
 # Configure our build directory such that targets for specific nvshmem4py bindings exist
-CMAKE_EXTRA_FLAGS+=(
+CMAKE_EXTRA_FLAGS=(
     -DPython3_EXECUTABLE="${VIRTUAL_ENV}/bin/python"
     -DPython3_ROOT_DIR="${VIRTUAL_ENV}"
     -DPython3_FIND_STRATEGY=LOCATION
@@ -91,8 +79,7 @@ cmake -S . -B build -G Ninja \
     -DNVSHMEM_BUILD_TESTS=0 \
     -DNVSHMEM_BUILD_EXAMPLES=0 \
     -DNVSHMEM_BUILD_PYTHON_LIB=OFF \
-    "${CMAKE_EXTRA_FLAGS[@]}" \
-    "${EFA_FLAGS[@]}"
+    "${CMAKE_EXTRA_FLAGS[@]}"
 
 ninja -C build -j"${MAX_JOBS}"
 cmake --install build

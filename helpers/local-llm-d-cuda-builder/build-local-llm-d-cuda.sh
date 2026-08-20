@@ -19,7 +19,6 @@ IMAGE_NAME="${IMAGE_NAME:-llm-d-cuda}"
 IMAGE_TAG="${IMAGE_TAG:-local}"
 TARGET="${TARGET:-}"                       # "" = full image, "builder" = builder only
 TARGETPLATFORM="${TARGETPLATFORM:-linux/amd64}"
-ENABLE_EFA="${ENABLE_EFA:-false}"
 TARGETOS="${TARGETOS:-rhel}"
 DOCKER="${DOCKER:-docker}"                 # or podman
 BUILDER="${BUILDER:-}"                     # buildx builder name (e.g. remote-amd64)
@@ -39,7 +38,6 @@ Options:
                       Accepted values: builder, runtime
   --platform PLAT     Target platform              (default: ${TARGETPLATFORM})
                       e.g. linux/amd64, linux/arm64
-  --efa               Enable AWS EFA support       (default: false)
   --os OS             Target OS: rhel or ubuntu    (default: ${TARGETOS})
   --sccache           Enable sccache               (default: false)
   --docker CMD        Container tool               (default: ${DOCKER})
@@ -50,7 +48,7 @@ Options:
 
 Environment variables:
   IMAGE_NAME, IMAGE_TAG, TARGET, TARGETPLATFORM,
-  ENABLE_EFA, TARGETOS, DOCKER, BUILDER, USE_SCCACHE
+  TARGETOS, DOCKER, BUILDER, USE_SCCACHE
 EOF
     exit 0
 }
@@ -62,7 +60,6 @@ while [[ $# -gt 0 ]]; do
         --tag)        IMAGE_TAG="$2";  shift 2 ;;
         --target)     TARGET="$2";     shift 2 ;;
         --platform)   TARGETPLATFORM="$2"; shift 2 ;;
-        --efa)        ENABLE_EFA=true;  shift ;;
         --os)         TARGETOS="$2";   shift 2 ;;
         --sccache)    USE_SCCACHE=true; shift ;;
         --docker)     DOCKER="$2";     shift 2 ;;
@@ -119,7 +116,6 @@ cmd=(
     --build-arg "BUILD_BASE_IMAGE_SUFFIX=${BUILD_BASE_IMAGE_SUFFIX}"
     --build-arg "FINAL_BASE_IMAGE_SUFFIX=${FINAL_BASE_IMAGE_SUFFIX}"
     --build-arg "USE_SCCACHE=${USE_SCCACHE}"
-    --build-arg "ENABLE_EFA=${ENABLE_EFA}"
     --build-arg "VLLM_REPO=${VLLM_REPO}"
     --build-arg "VLLM_COMMIT_SHA=${VLLM_COMMIT_SHA}"
     --build-arg "VLLM_PRECOMPILED_WHEEL_COMMIT=${VLLM_PRECOMPILED_WHEEL_COMMIT:-${VLLM_COMMIT_SHA}}"
@@ -138,7 +134,7 @@ cmd+=(-t "${FULL_IMAGE}" "${REPO_ROOT}")
 
 # ── run ──────────────────────────────────────────────────────────────
 echo "==> Building ${FULL_IMAGE}"
-echo "    Platform=${TARGETPLATFORM}  OS=${TARGETOS}  EFA=${ENABLE_EFA}  Builder=${BUILDER:-default}"
+echo "    Platform=${TARGETPLATFORM}  OS=${TARGETOS}  Builder=${BUILDER:-default}"
 echo "    CUDA=${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_PATCH}"
 echo "    vLLM repo=${VLLM_REPO}"
 echo "    vLLM commit=${VLLM_COMMIT_SHA}"
