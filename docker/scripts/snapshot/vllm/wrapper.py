@@ -27,9 +27,9 @@ from ..providers import (
 try:
     from vllm.logger import init_logger
 
-    logger = init_logger("llm-d.snapshot.wrapper")
+    logger = init_logger("vllm.snapshot.wrapper")
 except ImportError:
-    logger = logging.getLogger("llm-d.snapshot.wrapper")
+    logger = logging.getLogger("vllm.snapshot.wrapper")
 
 
 def patch_vllm_lifespan(app, snapshot_provider: Optional[GKESnapshotProvider] = None):
