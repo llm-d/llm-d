@@ -64,6 +64,11 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 | `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-prediction-server` | Optional sidecar for EPP, for predicted-latency scheduling | v1.5.0 |
 
+> [!IMPORTANT]
+> The EPP image was renamed from `ghcr.io/llm-d/llm-d-inference-scheduler`
+> in llm-d v0.8.0. The old package has been removed, so deployments must
+> update the image repository as well as the tag.
+
 > [!NOTE]
 > In a future release, the latency server images will be
 > released from the llm-d/llm-d-latency-predictor repo.
@@ -166,7 +171,7 @@ Clients that publish requests or consume results can import the Go modules relea
 | Repository | Language | Description |
 |------------|----------|-------------|
 | [llm-d/llm-d](https://github.com/llm-d/llm-d) | — | Main repo: docs, Dockerfiles, guides, CI |
-| [llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) | Go | EPP routing engine and P/D sidecar |
+| [llm-d/llm-d-router](https://github.com/llm-d/llm-d-router) | Go | EPP routing engine and P/D sidecar |
 | [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) | Python | XGBoost training and prediction server |
 | [llm-d/llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) | Go, Python, CPP | KV-cache block locality indexer, FS offloading |
 | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Go | SLO-aware workload autoscaler |
