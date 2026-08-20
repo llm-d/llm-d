@@ -24,24 +24,35 @@ body:
       value: "A bug happened!"
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: version
     attributes:
       label: Version
-      description: What version of our software are you running?
-      options:
-        - v0.6.0
-        - v0.5.1
-        - v0.5.0
-        - v0.4.0
-        - v0.3.1
-        - v0.3.0
-        - v0.2.2
-        - v0.2.1
-        - v0.2.0
-      default: 0
+      description: What version of llm-d are you running? Use the release tag or container image tag.
+      placeholder: ex. v0.9.0
     validations:
       required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which area of llm-d does this bug relate to?
+      options:
+        - Optimized baseline
+        - Flow Control
+        - Inference Scheduling
+        - Prefill/Decode Disaggregation
+        - KV Cache / Prefix Caching
+        - Wide Expert-Parallelism
+        - Autoscaling
+        - Observability / Monitoring
+        - Container Image / Build
+        - Deployment / Helm Charts
+        - Documentation / Guides
+        - CI/CD
+        - Other
+    validations:
+      required: false
   - type: textarea
     id: logs
     attributes:
