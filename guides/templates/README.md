@@ -75,7 +75,7 @@ Valid marker targets in the current schema (with live examples from optimized-ba
 | `env.static` | `env: static:` — rendered as `export VAR=…` lines |
 | `env.source` | `env: source:` — rendered as `source <path>` lines |
 | `prerequisites.<sub-group>` | `prerequisites:` — optimized-baseline uses `clone`, `gaie`, `namespace`, `secrets` |
-| `deploy.<sub-group>` | `deploy:` — optimized-baseline uses `values`, `standalone`, `gateway`, `modelserver`, `monitoring` |
+| `deploy.<sub-group>` | `deploy:` — optimized-baseline uses `router_values`, `monitoring_values`, `standalone`, `gateway`, `modelserver`, `monitoring` |
 | `verify.endpoint.<mode>` | one entry per mode (`standalone`, `gateway`) |
 | `verify.tests` | `verify: tests:` |
 | `benchmark.setup` / `benchmark.endpoint.<mode>` / `benchmark.execute` | (optional section) |
@@ -99,9 +99,9 @@ Concrete example — how the `helm install` block in optimized-baseline got conv
 ```bash
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 ````
@@ -114,9 +114,9 @@ deploy:
     - run: |
         helm install ${GUIDE_NAME} \
           ${ROUTER_STANDALONE_CHART} \
-          ${ROUTER_BASE_VALUES} \
+          -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
-          ${ROUTER_VALUES} \
+          -f ${ROUTER_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
