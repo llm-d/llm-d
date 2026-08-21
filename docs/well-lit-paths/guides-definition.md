@@ -306,8 +306,8 @@ A tier is a claim about the present, not a badge earned once.
 For Tier 3+: after **N consecutive nightly failures** on the
 reference environment, an issue is filed against the guide's owners; if the guide
 is still failing after **a further grace period**, it is demoted to Tier 2 and
-the failing nightly job is muted or removed. Values for N and the grace period
-are an [open question](#10-open-questions).
+the failing nightly job is muted or removed.
+
 
 Demotion is a mechanical health signal, not a punishment, and re-promotion uses
 the ordinary path.
