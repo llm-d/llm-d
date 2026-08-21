@@ -24,12 +24,12 @@ VLLM_PRECOMPILED_WHEEL_VARIANT="${VLLM_PRECOMPILED_WHEEL_VARIANT:-cu${CUDA_MAJOR
 
 # build list of packages to install
 # flashinfer-cubin/jit-cache are pre-built wheels (building from source times out)
-FLASHINFER_WHEEL_VERSION="${FLASHINFER_VERSION#v}"
 INSTALL_PACKAGES=(
   cuda-python
   'huggingface_hub[hf_xet]'
-  flashinfer-cubin=="${FLASHINFER_WHEEL_VERSION}"
-  flashinfer-jit-cache=="${FLASHINFER_WHEEL_VERSION}"
+  flashinfer-cubin=="${FLASHINFER_VERSION}"
+  flashinfer-jit-cache=="${FLASHINFER_VERSION}"
+  flashinfer-python=="${FLASHINFER_VERSION}"
   /tmp/wheels/*.whl
 )
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
@@ -151,7 +151,8 @@ if [ "${SUPPRESS_PYTHON_OUTPUT}" = "true" ] || [ "${SUPPRESS_PYTHON_OUTPUT}" = "
   VERBOSE_FLAG=""
 fi
 uv pip install ${VERBOSE_FLAG} "${INSTALL_PACKAGES[@]}" \
-  --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}"
+  --extra-index-url "https://flashinfer.ai/whl/${CUDA_SHORT_VERSION}" \
+  --extra-index-url "https://flashinfer.ai/whl/"
 
 # uninstall the pip NVSHMEM package if NVSHMEM was built from source
 if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" == "true" ]] ; then

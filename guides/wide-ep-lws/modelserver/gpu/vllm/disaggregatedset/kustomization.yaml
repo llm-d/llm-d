@@ -8,7 +8,7 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/llm-d/release
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:

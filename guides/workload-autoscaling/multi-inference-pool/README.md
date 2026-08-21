@@ -13,20 +13,41 @@ Complete the [optimized-baseline](../../optimized-baseline/README.md) guide. At 
 
 Install an additional Helm release in the same namespace as the optimized-baseline. Each release must use a **unique `matchLabels`** selector so its InferencePool discovers only the correct model's pods. The example below adds a pool called `model-b`; repeat with a different release name and values file for every additional pool.
 
-```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-source ${REPO_ROOT}/guides/env.sh
-export NAMESPACE=llm-d-optimized-baseline
+Set the guide environment variables:
 
-helm install model-b \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/workload-autoscaling/multi-inference-pool/model-b.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+<!-- guide:env.static start -->
+```bash
+export BRANCH=main
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export NAMESPACE=llm-d-optimized-baseline
+export RELEASE=model-b
+export VALUES=model-b.values.yaml
 ```
+<!-- guide:env.static end -->
+
+Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
+
+Install the additional release:
+
+<!-- guide:deploy.helm start -->
+```bash
+helm install ${RELEASE} \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/workload-autoscaling/multi-inference-pool/${VALUES} \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+<!-- guide:deploy.helm end -->
 
 > [!WARNING]
 > The standalone chart creates a `ConfigMap` named `envoy` with a hardcoded name (not prefixed with the release name). Installing another release in the same namespace will fail with an ownership conflict on this ConfigMap. To work around this, reassign the ConfigMap's Helm ownership annotations to the new release before installing it:
+>
 > ```bash
 > kubectl annotate configmap envoy -n ${NAMESPACE} \
 >   meta.helm.sh/release-name=model-b meta.helm.sh/release-namespace=${NAMESPACE} --overwrite
@@ -45,13 +66,12 @@ Deploy the model server for the new pool the same way as the [optimized-baseline
 
 ## Verification
 
+<!-- guide:verify.tests.pools start -->
 ```bash
-# Confirm all InferencePools and EPP services
 kubectl get inferencepools,svc -n ${NAMESPACE}
-
-# Confirm model server pods are discovered by their pools
 kubectl get pods -n ${NAMESPACE} --show-labels
 ```
+<!-- guide:verify.tests.pools end -->
 
 ## Configuring Autoscaling
 
@@ -77,6 +97,8 @@ Deployment. Either scaling path can be used:
 
 Uninstall each additional release you added:
 
+<!-- guide:cleanup start -->
 ```bash
-helm uninstall model-b -n ${NAMESPACE}
+helm uninstall ${RELEASE} -n ${NAMESPACE}
 ```
+<!-- guide:cleanup end -->

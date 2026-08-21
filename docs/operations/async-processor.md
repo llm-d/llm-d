@@ -172,7 +172,7 @@ ap:
 ```bash
 helm install llm-d-async \
   oci://ghcr.io/llm-d/charts/llm-d-async \
-  -f guides/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
+  -f guides/batch-serving/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
   -f resource_overrides.yaml \
   --set ap.igwBaseURL=http://${IP}:80 \
   -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
@@ -183,6 +183,6 @@ helm install llm-d-async \
 ## Related
 
 - [Asynchronous Processing Well-Lit Path](../well-lit-paths/workloads/batch-serving/asynchronous-processing.md) — overview and use cases.
-- [Asynchronous Processing Guide](../../guides/asynchronous-processing/README.md) — deployment instructions for Redis and GCP Pub/Sub.
+- [Asynchronous Processing Guide](../../guides/batch-serving/asynchronous-processing/README.md) — deployment instructions for Redis and GCP Pub/Sub.
 - [Async Processor Architecture](../architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
 - [llm-d Router Operations Guide](router.md) — sizing for the Router/EPP and standalone proxy.

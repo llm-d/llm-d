@@ -22,6 +22,7 @@ Multimodal models (such as `Qwen/Qwen3-VL-32B-Instruct`) process combinations of
 ### 1. Aggregated Serving (Aggregation)
 
 In an **aggregated** setup, every model server instance (or replica) is homogeneous and runs the full model engine. When a request arrives with an image, the same GPU replica processes:
+
 1. **Encode**: Converts the image into visual embeddings using the model's Vision Transformer (ViT) component.
 2. **Prefill**: Processes the visual embeddings and user prompt text tokens to compute KV caches.
 3. **Decode**: Generates output text tokens sequentially.
@@ -32,7 +33,7 @@ To optimize this path, the `llm-d Router` (EPP) performs **Prefix-Cache Aware** 
 
 **Encode Disaggregation** physically decouples the heavy encoder (e.g., Vision Transformer) from the rest of the text generation pipeline.
 
-It introduces dedicated **Encode (E) Workers** that only run the encoder part of the model. The downstream workers (**PD** or separated **P** and **D** workers) only process the text tokens and the pre-computed embeddings. 
+It introduces dedicated **Encode (E) Workers** that only run the encoder part of the model. The downstream workers (**PD** or separated **P** and **D** workers) only process the text tokens and the pre-computed embeddings.
 
 * **How it works**:
   1. The client sends a multimodal request.
@@ -43,6 +44,7 @@ It introduces dedicated **Encode (E) Workers** that only run the encoder part of
 Worker selection and embedding transfer depend on the serving engine. vLLM uses llm-d Router Encode selection and EC Connector transfers. SGLang has the language worker dispatch work to configured Encode endpoints and receive embeddings through its selected transfer backend.
 
 #### Supported Topologies
+
 * **E/PD**: Simple disaggregation. It has dedicated Encode workers and combined Prefill/Decode workers.
 * **E/P/D**: Full three-stage pipeline. Dedicated Encode workers, dedicated Prefill workers, and dedicated Decode workers. It inherits the benefits of [Prefill/Decode Disaggregation](../pd-disaggregation/README.md) while scaling vision encoding separately.
 
@@ -66,13 +68,15 @@ The table below contrasts Aggregated Serving against Encode-Disaggregated Servin
 
 ## When to Choose Which?
 
-### Choose Aggregated Serving (Aggregation) if:
+### Choose Aggregated Serving (Aggregation) if
+
 * Your multimodal inputs are relatively small (e.g., low-resolution images).
 * Your model is small.
 * You prefer lower deployment complexity and do not want to configure multi-tier networking (NIXL/ZMQ) across different pods.
 * You already have a strong prefix-cache hit rate, which mitigates redundant encoding.
 
-### Choose Encode-Disaggregated Serving (E-Disaggregation) if:
+### Choose Encode-Disaggregated Serving (E-Disaggregation) if
+
 * Your requests frequently contain **large or multiple media assets** (e.g., document parsing with dozens of images, high-definition videos, or long audio tracks).
 * Your model is large.
 * The Vision Encoder is extremely heavy, and running it on standard text generation pods stalls the sequential decoding phase.

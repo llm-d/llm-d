@@ -30,10 +30,12 @@ See the [P/D Disaggregation guide](../../../guides/pd-disaggregation) for manife
 </p>
 
 The setup creates 2 `Deployments` of vLLM (all are part of the same `InferencePool`):
+
 * The **prefill** `Deployment` is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`.
 * The **decode** `Deployment` is 1 replica of TP=5 vLLM - labeled with `llm-d.ai/role=decode`. All these pods have a routing proxy sidecar.
 
 During the standard request flow:
+
 * Request arrives at the proxy, which forwards the request to the EPP
 * EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants
 * Request is routed to the sidecar, which forwards the request to the prefill instance

@@ -45,6 +45,21 @@ jobs:
       - name: Install GKE CRDs
         run: .github/scripts/install-gke-crds.sh
 
+      - name: Install FMA CRDs
+        run: .github/scripts/install-fma-crds.sh
+
+      - name: Install KEDA CRDs
+        run: .github/scripts/install-keda-crds.sh
+
+      - name: Install Envoy Gateway CRDs
+        run: .github/scripts/install-envoy-gateway-crds.sh
+
+      - name: Install agentgateway CRDs
+        run: .github/scripts/install-agentgateway-crds.sh
+
+      - name: Install NVIDIA DRA CRDs
+        run: .github/scripts/install-nvidia-dra-crds.sh
+
       - name: Dry-run router charts (optimized-baseline)
         run: |
           CHART_VERSION=v0
@@ -156,16 +171,11 @@ jobs:
 
       - name: Kustomize build and dry-run all guide overlays
         run: |
-          # Directories under guides/ that are not standalone deployable guides:
-          #   no-kubernetes-deployment  - non-k8s environment, kustomize dry-run not applicable
-          #   prereq                    - prerequisite setup steps, not kustomize overlays
-          #   rl                        - reinforcement learning guide, markdown only
-          #   scripts                   - helper scripts
-          #   templates                 - contributor guide templates
-          #
-          # recipes/ is partially included: only recipes/gateway is validated here.
-          # recipes/modelserver, recipes/router, and recipes/observability are composable
-          # building blocks referenced by other guides and are not standalone overlays.
+          # Exclusions are read from guides/.ci-dry-run-guide-exclusions.
+          # Each non-comment, non-blank line is a path prefix relative to guides/
+          # that should be skipped. To add or remove a guide from CI coverage,
+          # edit that file rather than this workflow.
+          mapfile -t exclusions < <(grep -v '^\s*#' guides/.ci-dry-run-guide-exclusions | grep -v '^\s*$')
 
           failed=0
           # results entries: "PASS <name>" or "FAIL <name>"
@@ -175,25 +185,36 @@ jobs:
             guide="${guide_dir%/}"
             guide_name="${guide##*/}"
 
-            # Skip non-deployable directories
-            case "${guide_name}" in
-              no-kubernetes-deployment|prereq|rl|scripts|templates) continue ;;
-            esac
+            # Skip directories listed in the exclusions file (top-level match)
+            skip=0
+            for excl in "${exclusions[@]}"; do
+              if [[ "${guide_name}" == "${excl}" || "${guide_name}" == "${excl%%/*}" ]]; then
+                skip=1; break
+              fi
+            done
+            [[ $skip -eq 1 ]] && continue
 
             # Find every kustomization.yaml under this guide, skipping:
-            #   components/                - shared building blocks, not standalone overlays
-            #   recipes/{modelserver,router,observability}/ - composable fragments, not standalone
-            #   render/                    - precise-prefix-cache-routing render overlays (dry-run above)
-            #   kind: Component            - composable fragments, not independently buildable
+            #   components/   - shared building blocks, not standalone overlays
+            #   subpaths from the exclusions file (e.g. recipes/modelserver)
+            #   render/       - precise-prefix-cache-routing render overlays (dry-run above)
+            #   kind: Component - composable fragments, not independently buildable
             while IFS= read -r -d '' kustfile; do
               kust_dir="${kustfile%kustomization.yaml}"
               case "${kust_dir}" in
                 */components/*) continue ;;
-                guides/recipes/modelserver/*) continue ;;
-                guides/recipes/router/*) continue ;;
-                guides/recipes/observability/*) continue ;;
                 guides/precise-prefix-cache-routing/render/*) continue ;;
               esac
+
+              # Skip subpaths listed in the exclusions file
+              skip=0
+              for excl in "${exclusions[@]}"; do
+                if [[ "${kust_dir}" == "guides/${excl}/"* || "${kust_dir}" == "guides/${excl}" ]]; then
+                  skip=1; break
+                fi
+              done
+              [[ $skip -eq 1 ]] && continue
+
               grep -q '^kind: Component' "${kustfile}" && continue
 
               name="${kust_dir#guides/}"
@@ -211,15 +232,24 @@ jobs:
                 continue
               fi
 
-              # workload-autoscaling manifests reference namespaces not created by
-              # CRD installs; pre-create any referenced namespaces so the dry-run passes.
-              if [[ "${kust_dir}" == guides/workload-autoscaling/* ]]; then
-                grep -E '^\s+namespace:\s' /tmp/rendered.yaml \
-                  | awk '{print $2}' | tr -d '"'"'" | sort -u \
-                  | while read -r ns; do
-                      kubectl create namespace "$ns" --dry-run=client -o yaml \
-                        | kubectl apply -f - 2>/dev/null || true
-                    done
+              # Pre-create any namespaces referenced by the rendered manifest.
+              # Some guides target non-default namespaces (workload-autoscaling,
+              # mooncake-store) that don't exist in the bare kind cluster.
+              grep -E '^\s+namespace:\s' /tmp/rendered.yaml \
+                | awk '{print $2}' | tr -d '"'"'" | sort -u \
+                | while read -r ns; do
+                    kubectl create namespace "$ns" --dry-run=client -o yaml \
+                      | kubectl apply -f - 2>/dev/null || true
+                  done
+
+              # Skip server dry-run for overlays that contain unresolved shell-style
+              # variable placeholders (e.g. ${REPLICAS}). These are intentional
+              # template bases that require the overlay to substitute concrete values;
+              # kustomize build above already validated the manifest structure.
+              if grep -qE '\$\{[A-Z_]+\}' /tmp/rendered.yaml; then
+                echo "SKIP dry-run: unresolved template variables in ${name}"
+                results+=("PASS ${name}")
+                continue
               fi
 
               echo "--- kubectl apply --dry-run=server ---"

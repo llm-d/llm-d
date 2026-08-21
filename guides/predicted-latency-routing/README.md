@@ -47,7 +47,8 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
-    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+    # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
 - Create a target namespace for the installation:
@@ -255,9 +256,9 @@ Sheddable requests (priority < 0) are rejected at admission when no endpoint can
 
 Once traffic is flowing, confirm three things in Prometheus (see the [architecture doc](../../docs/architecture/advanced/latency-predictor.md#observability) for the metric reference):
 
-1. **Predictions are being produced.** `inference_objective_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
-2. **Predictions track reality.** Compare `inference_objective_request_predicted_ttft_seconds` against `inference_objective_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
-3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `inference_objective_request_ttft_slo_violation_total` and `..._tpot_slo_violation_total` should increment only under genuine saturation.
+1. **Predictions are being produced.** `llm_d_epp_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
+2. **Predictions track reality.** Compare `llm_d_epp_request_predicted_ttft_seconds` against `llm_d_epp_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
+3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `llm_d_epp_request_slo_violation_total` should increment only under genuine saturation.
 
 ## Benchmarking
 

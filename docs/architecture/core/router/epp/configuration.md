@@ -244,6 +244,7 @@ flowControl:
   maxBytes: 0 # Default: unlimited
   maxRequests: 0 # Default: unlimited
   defaultRequestTTL: "0s" # Default: uses client context deadline
+  enableEviction: false # Default: in-flight eviction disabled
 
   defaultPriorityBand:
     maxBytes: "1Gi" # Default
@@ -269,6 +270,7 @@ flowControl:
 - `maxBytes`: Global capacity limit across all priority levels. Supports Kubernetes resource quantity format (e.g., `10Gi`, `512Mi`) or plain integers (bytes). If `0` or omitted, no global limit is enforced (unlimited).
 - `maxRequests`: Optional global maximum request count limit. If `0` or omitted, no global limit is enforced (unlimited).
 - `defaultRequestTTL`: Fallback timeout for requests that do not carry a deadline. If `0` or omitted, it defaults to the client context deadline (which may wait indefinitely).
+- `enableEviction`: When `true`, already-dispatched **negative-priority** (`priority < 0`) requests can be evicted to reclaim capacity when higher-priority requests are blocked by pool saturation. Pacing and sizing self-configure from the selected saturation detector. Disabled by default. See [In-Flight Eviction](flow-control.md#in-flight-eviction) for the lifecycle and response mapping.
 - `defaultPriorityBand`: A template used to dynamically provision priority bands that are not explicitly configured in `priorityBands`.
 - `priorityBands`: A list of explicit configurations for specific priority levels.
 

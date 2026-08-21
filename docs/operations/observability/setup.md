@@ -4,6 +4,7 @@ This page explains how to set up Prometheus, Grafana, and distributed tracing fo
 
 > [!NOTE]
 > Commands in this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```

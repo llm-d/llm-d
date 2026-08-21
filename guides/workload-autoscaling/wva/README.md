@@ -4,7 +4,6 @@
 > The VariantAutoscaling CRD has been deprecated in llm-d 0.8.0 in favor of
 HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. The VariantAutoscaling CRD will be removed in 0.9.0.
 
-
 The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
 ## Overview
@@ -29,85 +28,96 @@ Before installing WVA, ensure you have:
     > [!NOTE]
     > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-optional-enable-monitoring).
 
-2. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
+1. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
 
-3. [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) enabled for the namespaces used by this guide.
+1. [OpenShift User Workload Monitoring](https://docs.redhat.com/en/documentation/openshift_container_platform/4.14/html/monitoring/configuring-user-workload-monitoring) enabled for the namespaces used by this guide.
 
 ## Set Namespaces
 
+Set the guide environment variables (`WVA_NAMESPACE` defaults to `NAMESPACE`;
+set it separately for cluster-wide autoscaling, and `PLATFORM` selects the
+`k8s` or `ocp` overlay used throughout):
+
+<!-- guide:env.static start -->
 ```bash
-# Namespace where your inference deployment is running
-export NAMESPACE=llm-d-optimized-baseline
-
-# Namespace for WVA controller - default to the same namespace as the inference deployment for simplicity, but can be different for cluster-wide autoscaling
-export WVA_NAMESPACE=${NAMESPACE}
-
-# Namespace where the monitoring stack (Prometheus) was installed by the prerequisites
-export MONITORING_NAMESPACE=llm-d-monitoring
-
+export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export NAMESPACE=llm-d-optimized-baseline
+export WVA_NAMESPACE=llm-d-optimized-baseline
+export MONITORING_NAMESPACE=llm-d-monitoring
+export MODEL=Qwen/Qwen3-32B
+export PLATFORM=k8s # options: k8s, ocp
+export CONTROLLER_ROOT=${REPO_ROOT}/guides/workload-autoscaling/wva/controller
+export CONSUMPTION_ROOT=${REPO_ROOT}/guides/workload-autoscaling/wva/optimized-baseline
 ```
+<!-- guide:env.static end -->
+
+Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
 
 > [!NOTE]
 > **Namespaced-Scoped Installation**: this guide installs WVA to watch resources only in the `${WVA_NAMESPACE}` namespace. For cluster-wide autoscaling, set `--watch-namespace=""` in the controller deployment.
 
 ## Installation
 
-1. Choose your platform:
+1. Verify KEDA is installed. WVA only watches ScaledObjects if the KEDA CRD is present **when the controller starts**, so install KEDA before WVA:
 
-    ```bash
-    export PLATFORM=k8s # or ocp
-    ```
-
-2.  Extract the Prometheus CA certificate and create a secret for secure communication between WVA and Prometheus:
-
-    ```bash
-    # Extract Prometheus CA cert
-    PROMETHEUS_CA_CERT=$(kubectl get secret prometheus-web-tls -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.tls\.crt}' | base64 -d)
-
-    # Create generic secret with the CA cert for WVA to access Prometheus API securely
-    kubectl create secret generic prometheus-tls-cert \
-      --from-literal=ca.crt="${PROMETHEUS_CA_CERT}" \
-      --dry-run=client -o yaml | kubectl apply -f - -n ${WVA_NAMESPACE}
-    ```
-
-3. Verify KEDA is installed. WVA only watches ScaledObjects if the KEDA CRD is present **when the controller starts**, so install KEDA before WVA:
-
-    ```bash
-    kubectl get crd scaledobjects.keda.sh
-    ```
+<!-- guide:prerequisites.keda start -->
+```bash
+kubectl get crd scaledobjects.keda.sh
+```
+<!-- guide:prerequisites.keda end -->
 
     > [!NOTE]
     > If you are still on the deprecated Prometheus Adapter, see [promadapter.md](../promadapter.md).
     > WVA no longer installs or supports it.
 
-4. Install WVA CRDs:
+2. Extract the Prometheus CA certificate and create a secret for secure communication between WVA and Prometheus:
 
-    ```bash
-    kubectl apply -k github.com/llm-d/llm-d-workload-variant-autoscaler/config/base/crd?ref=main
-    ```
+<!-- guide:deploy.prometheus_ca start -->
+```bash
+PROMETHEUS_CA_CERT=$(kubectl get secret prometheus-web-tls -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.tls\.crt}' | base64 -d)
+kubectl create secret generic prometheus-tls-cert \
+  --from-literal=ca.crt="${PROMETHEUS_CA_CERT}" \
+  --dry-run=client -o yaml | kubectl apply -f - -n ${WVA_NAMESPACE}
+```
+<!-- guide:deploy.prometheus_ca end -->
 
-5. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}`, then apply it
-   (the overlay carries its own namespace, so no `-n` is needed):
+1. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+   controller's `--watch-namespace` to match (this edits
+   `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
+   `wva/controller/base/controller-deployment-patch.yaml`; revert both with
+   `git checkout` afterwards), then apply it (no `-n` needed):
 
-    ```bash
-    (cd ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} \
-       && kustomize edit set namespace ${WVA_NAMESPACE})
+<!-- guide:deploy.controller start -->
+```bash
+(cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
 
-    kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM}
-    ```
+sed -i.bak "s|--watch-namespace=.*|--watch-namespace=${WVA_NAMESPACE}|" \
+  ${CONTROLLER_ROOT}/base/controller-deployment-patch.yaml \
+  && rm ${CONTROLLER_ROOT}/base/controller-deployment-patch.yaml.bak
 
-    > [!NOTE]
-    > This requires the [`kustomize`](https://kustomize.io/) CLI and updates the
-    > `namespace:` field in `wva-config/platform/${PLATFORM}/kustomization.yaml`. To
-    > revert that local change afterwards, run `git checkout` on the file.
+kubectl apply -k ${CONTROLLER_ROOT}/platform/${PLATFORM}
+```
+<!-- guide:deploy.controller end -->
 
 ## Verify Installation
 
 Check that the WVA controller is running:
 
+<!-- guide:verify.tests.controller start -->
 ```bash
+kubectl rollout status deployment/wva-controller-manager -n ${WVA_NAMESPACE} --timeout=180s
 kubectl get deployment -n ${WVA_NAMESPACE}
+```
+<!-- guide:verify.tests.controller end -->
+
+```
 NAME                     READY   UP-TO-DATE   AVAILABLE   AGE
 wva-controller-manager   2/2     2            2           10m
 ```
@@ -142,8 +152,7 @@ Edit the WVA configmap to enable the v2 saturation engine:
       ...
   ```
 
-The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed ` to confirm that the v2 engine is active.
-
+The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed` to confirm that the v2 engine is active.
 
 ## Enabling Autoscaling for an Inference Deployment
 
@@ -165,14 +174,16 @@ This section enables autoscaling for an existing [optimized-baseline](../../opti
 
 The manifests follow the same `${PLATFORM}` split as the WVA install above:
 
-- [`keda/base`](../optimized-baseline-autoscaling/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
-- [`keda/ocp`](../optimized-baseline-autoscaling/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
+- [`keda/base`](optimized-baseline/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
+- [`keda/ocp`](optimized-baseline/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
 
 Before applying, update `serverAddress` and the `namespace` in the trigger query to match your cluster.
 
+<!-- guide:deploy.scaledobject start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/${PLATFORM} -n ${NAMESPACE}
+kubectl apply -k ${CONSUMPTION_ROOT}/keda/${PLATFORM} -n ${NAMESPACE}
 ```
+<!-- guide:deploy.scaledobject end -->
 
 #### Key Configuration Fields
 
@@ -187,19 +198,17 @@ kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-aut
 
 #### Verify
 
+<!-- guide:verify.tests.scaler start -->
 ```bash
-# Check the ScaledObject is ready
 kubectl get scaledobject -n ${NAMESPACE}
-
-# KEDA creates an HPA automatically — verify it exists
 kubectl get hpa -n ${NAMESPACE}
 ```
+<!-- guide:verify.tests.scaler end -->
 
 #### Cleanup
 
-```bash
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda/${PLATFORM} -n ${NAMESPACE}
-```
+See [WVA Controller Cleanup](#wva-controller-cleanup) below, which removes the
+ScaledObject and the controller together.
 
 ### Using HPA Directly
 
@@ -208,7 +217,7 @@ This approach creates an HPA with WVA discovery annotations that reads the `wva_
 #### Apply the Kustomize Overlay
 
 ```bash
-kubectl apply -k optimized-baseline-autoscaling/hpa -n ${NAMESPACE}
+kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/wva/optimized-baseline/hpa -n ${NAMESPACE}
 ```
 
 > [!NOTE]
@@ -242,25 +251,22 @@ Expected output includes `"llm-d.ai/managed": "true"`, `"llm-d.ai/model-id"`, an
 To remove the autoscaling configuration, delete the Kustomize overlay:
 
 ```bash
-kubectl delete -k optimized-baseline-autoscaling/hpa -n ${NAMESPACE}
+kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva/optimized-baseline/hpa -n ${NAMESPACE}
 ```
 
 ## WVA Controller Cleanup
 
-Remove the WVA controller with Kustomize:
+Delete the ScaledObject and remove the WVA controller with Kustomize (the
+controller delete re-points the overlay namespace first, then removes it):
 
+<!-- guide:cleanup start -->
 ```bash
-(cd ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM} \
-   && kustomize edit set namespace ${WVA_NAMESPACE})
+kubectl delete -k ${CONSUMPTION_ROOT}/keda/${PLATFORM} -n ${NAMESPACE} --ignore-not-found=true
 
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/wva-config/platform/${PLATFORM}
+(cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
+kubectl delete -k ${CONTROLLER_ROOT}/platform/${PLATFORM} --ignore-not-found=true
 ```
-
-If you used KEDA, delete the ScaledObject:
-
-```bash
-kubectl delete -k guides/workload-autoscaling/optimized-baseline-autoscaling/keda/${PLATFORM} -n ${NAMESPACE}
-```
+<!-- guide:cleanup end -->
 
 ## Advanced Configuration, Updates, and Troubleshooting
 
@@ -291,6 +297,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 ### Results
 
 #### Prefill Heavy
+>
 > 4,000 input tokens · 1,000 output tokens · 20 RPS
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -300,6 +307,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Qwen3-0.6B | 1800 s | GuideLLM | 66,177 | 47.3 | 3.17 | 5 | 55.7% | 41.2 | 860 | 66 |
 
 #### Decode Heavy
+>
 > 1,000 input tokens · 4,000 output tokens · 20 RPS
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -309,6 +317,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Qwen3-0.6B | 1800 s | GuideLLM | 58,934 | 44.8 | 2.59 | 4 | 57.2% | 30.8 | 2,520 | 66 |
 
 #### Bursty
+>
 > ~1,000 input tokens · ~1,000 output tokens · Multi-stage RPS (15 → 2 → 10 → 15 → 5 → 2)
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -318,6 +327,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Qwen3-0.6B | 1800 s | inference-perf | 23,278 | 50.1 | 1.63 | 3 | 29.5% | 1.1 | 71 | 64 |
 
 #### Symmetrical
+>
 > 1,000 input tokens · 1,000 output tokens · 20 RPS
 
 | Model | Duration | Load Gen | P99 TTFT (ms) | P99 ITL (ms/tok) | Avg Replicas | Max Replicas | Avg KV Cache | Avg Queue Depth | Errors | Pod Startup (s) |
@@ -349,6 +359,6 @@ A: Run this command and check the output:
 kubectl get apiservice v1beta1.external.metrics.k8s.io -o yaml
 ```
 
-**Q: Can I use KEDA and the existing HPA from `optimized-baseline-autoscaling/hpa/hpa.yaml` together?**
+**Q: Can I use KEDA and the existing HPA from `optimized-baseline/hpa/hpa.yaml` together?**
 
 A: No. The KEDA ScaledObject creates its own HPA. Do not apply `hpa.yaml` when using KEDA. If both are present, they will conflict.

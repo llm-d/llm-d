@@ -68,4 +68,3 @@ scrape_configs:
         target_label: inferencepool
     scrape_interval: 1s
     metrics_path: /metrics
-

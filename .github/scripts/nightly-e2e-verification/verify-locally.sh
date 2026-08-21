@@ -5,9 +5,9 @@
 # where you have a benchmark results dir and want to try the same checks.
 # Only LLMDBENCH_WORKSPACE is required; everything else is inferred or
 # defaulted with a `<local>` sentinel that reads clearly in the output.
-# Any scenario-specific env vars (e.g. LLMDBENCH_CICD_OFFLOADING_TARGET) 
+# Any scenario-specific env vars (e.g. LLMDBENCH_CICD_OFFLOADING_TARGET)
 # are still required to be set in your shell if the scenario's verify.py expects them.
-# 
+#
 # Usage:
 #   ./verify-locally.sh <scenario> [<workspace-dir>]
 #

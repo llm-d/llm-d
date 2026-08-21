@@ -48,14 +48,20 @@ tables ship next to this file:
 * [`epp-load-p2p.yaml`](epp-load-p2p.yaml) - load-balanced placement +
   the pull (`minCachedTokenDelta: 2048`, from the crossover below).
 
-A second arm set belongs to the wide-EP testbed (`GLM-5.2-FP8`, 753B):
-the precise pair `epp-glm-precise{,-p2p}.yaml` and the load-first pair
-`epp-glm-loadfirst{,-p2p}.yaml` - the matched pair behind the -67% TTFT
-/ 2.7x throughput result in the GLM results page.
+The wide-EP testbed (`GLM-5.2-FP8`, 753B) ships three arm sets:
 
-For a defensible A/B, run arm pairs twice with the order alternated:
-whichever arm runs second inherits warm CPU tiers, and alternation both
-cancels that advantage and measures each arm's sensitivity to it.
+* `epp-glm-c64-{approx,approx-p2p,precise,precise-p2p}.yaml` for the C64
+  complete-policy comparison and four-arm observation.
+* `epp-glm-loadfirst{,-p2p}.yaml` for the synthetic load-spill A/B; placement
+  is identical across the pair, so it isolates the source producer.
+* `epp-glm-precise{,-p2p}.yaml` for the fixed 1P1D precise-affinity check. It
+  isolates the source producer and records the mechanism-verified null where
+  every eligible cached-token delta is zero.
+
+For a defensible A/B, run arm pairs in both orders. When arm switches reuse
+engine pods, the second arm inherits warm CPU tiers, so alternation measures
+that sensitivity. The C64 protocol assigns new engine pod UIDs to every arm;
+its reversed order checks time drift rather than inherited cache state.
 
 Rig: `openai/gpt-oss-120b`, 16x TP=1 H200 (aggregated). Sizing inputs
 measured on it: ~41.5 KB KV per token, ~1.22M tokens of GPU KV per pod
@@ -66,23 +72,34 @@ the same false plateau - see the guide's Best Practices).
 
 ## What each scenario isolates
 
-Comparisons that change placement and the pull together do not measure a
-P2P margin. The pull-isolating pair in each scenario:
+Two of the scenarios below change placement and the pull together, so their
+headline margin is not a P2P margin. Read them for what they are:
 
 | Scenario | The pull-isolating pair | Isolates the pull? |
-|---|---|---|
+| --- | --- | --- |
 | Step 0 | recompute vs pull, same pod pair, no routing | **yes** |
-| Wide-EP (GLM) | `precise` vs `precise + pull` | **yes** |
+| Wide-EP precise affinity (GLM) | `precise` vs `precise + pull` | **yes** - mechanism-verified null; no source delta reaches the threshold |
+| Wide-EP load spill (GLM) | `load-first` vs `load-first + pull` | **yes** |
+| Wide-EP C64 (GLM) | `approximate` vs `approximate + pull`; `precise` vs `precise + pull` | **yes, for the single four-arm observation** - the repeated headline remains a complete-policy comparison |
 | Uniform pool | `load` vs `load + P2P` | **yes** |
 | Hot set | `load` vs `load + P2P` | **yes** |
 | Document Q&A | `affinity` vs `affinity + P2P` | partly - the winning arm (`load + P2P`) also changes placement |
 
-The isolating pairs establish the feature's value: Step 0 (-56% to -88%
-prefill latency with RDMA), the uniform pool (+143% sustained rate at 24 req/s),
-the hot set (+224% and 274 client-timeout failures eliminated at 48
-req/s). Cross-placement comparisons (`affinity` vs `load + P2P`) answer
-a different question - which deployment to run - and should not be read
-as P2P deltas.
+The repeated C64 comparison and the document-Q&A headline compare complete
+policies. The C64 four-arm observation and the other scenarios carry
+a control arm with identical placement and no pull, so their within-routing
+margins isolate the configured pull factor. Comparisons *across* placement
+policies (`affinity` vs `load + P2P`) answer a different question - which
+deployment to run - and should not be read as P2P deltas.
+
+The isolating pairs are where the feature's value is established: Step 0
+(-56% to -88% TTFT with RDMA), the uniform pool (+143% sustained rate at 24
+req/s), the hot set (+224% and 274 client-timeout failures eliminated at
+48 req/s), and GLM load spill (-67% mean TTFT and 2.7x throughput). The
+repeated C64 comparison answers which complete deployment carries more
+successful work; its margin cannot be assigned to P2P alone. Its four-arm
+observation provides one mechanism-verified snapshot of the
+individual factors, not a repeated effect estimate.
 
 One recurring result, stated plainly: **under affinity placement the
 pull is a fallback, not a throughput feature.** Affinity keeps KV local,
@@ -184,9 +201,10 @@ a one-time session-establishment cost (~6 s measured on the wide-EP
 testbed) that steady-state pulls never see.
 
 The ladder is transport-dependent: it was measured with `rdma/ib` on
-the pods, and on TCP the crossover moves from below 2K out to ~29K (see
+the pods. The published benchmark does not include a TCP comparison, so
+calibrate separately on TCP (see
 [Supported Hardware Backends](../README.md#supported-hardware-backends)).
-`ls /dev/infiniband` in the container tells you which case you are in.
+`ls /dev/infiniband` in the container shows whether RDMA is available.
 
 The measured ladder is canonical in
 [the gpt-oss results page](../benchmark-results/gpt-oss-120b-h200.md#pull-versus-recompute-single-request):
@@ -219,7 +237,7 @@ served counts, restarts (must be 0).
 Measured (achieved req/s / TTFT p50 / request latency p50 per stage):
 
 | offered | affinity | load, no P2P | load + P2P |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 6 req/s | 5.97 / 207 ms / 0.50 s | 5.59 / 2.5 s / 5.6 s | 5.96 / 342 ms / 0.64 s |
 | 12 req/s | 11.92 / 200 ms / 0.49 s | 9.02 / 8.6 s / 26.2 s | 11.49 / 460 ms / 0.98 s |
 | 18 req/s | 17.87 / 192 ms / 0.48 s | 8.58 / 26.0 s / 45.7 s | 17.46 / 341 ms / 0.67 s |
@@ -260,7 +278,7 @@ this - that ratio decides the result.** Measured on 16x gpt-oss-120b
 (~1.22M tokens of GPU KV per pod), walking 48K-token prefixes:
 
 | hot set | vs one pod's cache | what happens |
-|---|---|---|
+| --- | --- | --- |
 | 8 prefixes (384K tok) | 0.31x | fits in every pod; every arm serves GPU hits after warmup, nothing pulls |
 | 32 prefixes (1.54M tok) | 1.26x | one stage of churn, then replication absorbs it and the arms converge |
 | **64 prefixes (3.07M tok)** | **2.5x** | **misses are permanent; the regime this scenario is about** |
@@ -268,7 +286,7 @@ this - that ratio decides the result.** Measured on 16x gpt-oss-120b
 Measured at 64 x 48K (achieved req/s / TTFT p50 / request latency p50):
 
 | offered | `affinity` | `load` - no P2P | `load + P2P` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 12 req/s | 11.94 / 188 ms / 0.30 s | 9.31 / 7.9 s / 16.6 s | 11.84 / 310 ms / 0.42 s |
 | 24 req/s | 23.04 / 183 ms / 0.31 s | 11.47 / 24.3 s / 34.5 s | 22.83 / 271 ms / 0.42 s |
 | 36 req/s | 34.03 / 190 ms / 0.36 s | 11.77 / 47.0 s / 61.6 s | 34.34 / 249 ms / 0.45 s |
@@ -321,76 +339,77 @@ looks like this one.
 
 ## Wide-EP testbed (GLM-5.2-FP8)
 
-The mechanism at the other end of the scale: `zai-org/GLM-5.2-FP8`
-(753B MoE), one prefill + one decode instance, each 16-way
-data/expert-parallel across 2 pods (32x H200). The workload replays
-recorded agentic traces (the SemiAnalysis Weka corpus) with aiperf at
-concurrencies 32/64/128. The shipped arms are the precise pair
-(`epp-glm-precise{,-p2p}.yaml`) and the load-first pair
-(`epp-glm-loadfirst{,-p2p}.yaml`). `minCachedTokenDelta: 16384` was the
-overlay-era crossover; on the upstream tier the pull floor fell to
-~1.25 s and the tie moved to ~8.7K tokens, so new deployments should
-set 12,288 (the calibration recipe measures it).
+The GLM tests use two distinct 32x H200 topologies. The crossover and
+synthetic load-spill tests use one 16-way prefill instance and one 16-way
+decode instance. The C64 policy comparison uses two prefill pods and two
+decode pods, each with DP 8 and TP 1.
 
-On the fully-fixed stack the precise pair is a mechanism-verified null:
-live sampling captured 115 source evaluations and every one ties at a
-cached-token delta of exactly 0, so no pull fires and the arms behave
-identically. That is the placement rule holding exactly at 753B - a
-consistent index under precise affinity leaves the pull nothing to
-repair. The pull's measured territory on this testbed is placement that
-trades affinity for load: the matched load-first pair (-67% mean TTFT,
-2.7x throughput) and the recorded-fork spill pair
-`epp-glm-tokenload{,-p2p}` (p90 branch-start TTFT -66% to -86%; see the
-fork-replay section below). Full tables, the crossover sweep, and the
-quarantined overlay-era grid:
-[../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h200.md).
+The C64 campaign uses these configurations:
 
-## Recorded agentic fork replay (AIPerf, wide-EP GLM)
+* [`epp-glm-c64-approx.yaml`](epp-glm-c64-approx.yaml) - calibrated
+  approximate routing without P2P.
+* [`epp-glm-c64-approx-p2p.yaml`](epp-glm-c64-approx-p2p.yaml) - calibrated
+  approximate routing with P2P.
+* [`epp-glm-c64-precise.yaml`](epp-glm-c64-precise.yaml) - DP-aware precise
+  KV events without the source producer.
+* [`epp-glm-c64-precise-p2p.yaml`](epp-glm-c64-precise-p2p.yaml) - the precise
+  policy with the source producer.
 
-The scenario that produces pulls without manufacturing load: a recorded
-Claude Code session forks tens of subagents that share one exact
-prefix, and the burst arrives faster than any single worker absorbs.
-Replayed from the public `semianalysisai/cc-traces-weka-062126` corpus
-with AIPerf, which reconstructs the recorded token counts, KV-block
-sharing structure, and subagent spawn timing:
+The precise arms use the token producer's `vllm` backend. Their URL records the
+benchmark testbed's `glm-5-2-render` Service, which selects the prefill vLLM
+APIs directly; the testbed has no separate renderer Deployment. This guide's
+equivalent podless Service is `p2p-kv-cache-sharing-render`: Service port 8000
+targets the model-server vLLM port 8200 because pod port 8000 belongs to the
+routing-proxy sidecar and does not serve `/render`. Set `modelName` and
+`vllm.url` for that deployment when adapting a benchmark arm.
+
+Each arm starts after all four engine pods receive new UIDs. Run AIPerf with
+the same public trace, seed, admission window, and drain:
 
 ```bash
-aiperf profile --model zai-org/GLM-5.2-FP8 --tokenizer zai-org/GLM-5.2-FP8   --url http://<epp>:8081 --endpoint-type chat --streaming   --input-file <window>/trace.json --custom-dataset-type weka_trace   --fixed-schedule --extra-inputs ignore_eos:true   --use-server-token-count --output-artifact-dir <out>
+aiperf profile \
+  --url "$EPP_URL" \
+  --model zai-org/GLM-5.2-FP8 \
+  --endpoint-type chat \
+  --streaming \
+  --public-dataset semianalysis_cc_traces_weka_062126 \
+  --no-fixed-schedule \
+  --concurrency 64 \
+  --num-dataset-entries 48 \
+  --synthesis-max-isl 115000 \
+  --synthesis-max-osl 2048 \
+  --benchmark-duration 300 \
+  --benchmark-grace-period 120 \
+  --random-seed 67 \
+  --ui None \
+  --output-artifact-dir "$ARTIFACT_DIR"
 ```
 
-The arms are `epp-glm-tokenload{,-p2p}.yaml`: load-modeled prefix-cache
-affinity (`prefix-cache-affinity-filter` + `token-load-scorer`),
-differing only by the `p2p-source-producer`. The load model is what
-generates spills; score-based affinity against an empty queue never
-leaves the holder and produces zero pulls by construction.
+Count requests only if they reach a terminal state within the 300-second
+admission window. Across three comparisons - two approximate-first and one
+precise+P2P-first - precise+P2P improves successful throughput over
+approximate without P2P by 5.18% to 13.77%, with a 9.97% paired median. The
+p90 end-to-end latency improves in two windows and regresses by 1.17% in the
+reversed-order window, so the repeatable result is capacity rather than a
+latency guarantee. Latency percentiles include only successful terminal
+requests inside the cutoff and therefore compare different-sized,
+right-censored populations.
 
-A replayable fork window is one burst of sibling subagents cut from a
-trace at the last child's first request. Selection and extraction
-tooling, the pre-registered windows, and raw artifacts live with the
-measurement record on the `p2p-findings` branch
-(`test/p2p-findings/configs/agentx-fork-sweep/`). Preconditions, each
-learned from a run that silently failed without it:
+The four-arm 300-second window includes all intended combinations. Relative to
+approximate routing without P2P, approximate+P2P is +4.61% in successful
+throughput, precise without P2P is +1.27%, and precise+P2P is +11.07%.
+Approximate+P2P records 37 peer-load submissions, 65 successful rounds, zero
+failed rounds, and 23,821 submitted blocks. Precise+P2P records 18
+submissions, 14 successful rounds, zero failed rounds, and 12,079 blocks. Both
+no-P2P arms record zero peer activity. This is one fixed-window observation,
+so it shows an interaction-shaped result but not repeated single-factor
+effects.
 
-* **Spawn gaps versus prefix compute.** The index learns a holder only
-  after the seed's blocks publish (~prefix-tokens / prefill-rate
-  seconds). Tighter bursts scatter cold and recompute in both arms; the
-  burst head is unrescuable and is reported as the floor.
-* **Prefix above the calibrated delta.** Every window here clears
-  `minCachedTokenDelta: 12288` with at least 3x margin.
-* **Decode KV must fit the fork.** Live decode KV is roughly
-  width x context; 44 x 40K tokens against a single DP8 decode pod
-  (1.68M tokens) crashed the engine - and the dead-fleet run still
-  produced a complete-looking export with zero TTFTs. Size decode pods
-  so `W x context <= decode KV`, and validate TTFT coverage, never
-  record counts.
-* **Cold state is part of the protocol.** Matched twin windows serve as
-  each other's control, with engine restarts between pairs and the EPP
-  restarted per arm; the comparison is repeated with the windows
-  swapped. A warm rerun of the same window correctly produces zero
-  pulls - the fleet already holds the prefix.
-
-Results: [../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h200.md)
-(fork-replay section).
+The C64 configurations use `minCachedTokenDelta: 2048`, below the separate
+upstream-tier crossover recommendation of 12,288 tokens. Use the crossover
+recipe to calibrate production deployments. Full tables, mechanism evidence,
+crossover sweep, and the quarantined overlay-era grid are in
+[the GLM results page](../benchmark-results/glm-5.2-h200.md).
 
 ## Run hygiene
 
@@ -410,6 +429,9 @@ Results: [../benchmark-results/glm-5.2-h200.md](../benchmark-results/glm-5.2-h20
 * Fleet stability gates arm validity: record engine pod ages before and
   after every arm and discard any arm whose fleet changed mid-flight. A
   keep-warm must ping every engine pod directly, not just the gateway.
+* Size the decode pool for live fan-out so `branch width x context tokens`
+  does not exceed available decode KV. Treat zero or missing TTFT alongside
+  engine exits as an invalid arm even if the benchmark export completes.
 * Restarting the EPP empties the precise index; declare a cold-or-warm
   protocol and apply it to both arms. Re-verify per-rank KV-event
   subscriptions after every EPP restart with a live socket check - they

@@ -27,6 +27,7 @@ This section provides specific instructions for deploying P/D (Prefill/Decode) d
 
 > [!NOTE]
 > Follow the official GCP documentation for the latest updates and detailed instructions:
+>
 > * [GKE AI Hypercomputer Custom Provisioning](https://docs.cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom)
 > * [Set up GPU Dynamic Resource Allocation (DRA)](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/set-up-dra)
 > * [Allocate network resources by using GKE managed DRANET](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/allocate-network-resources-dra#use-rdma-interfaces-gpu)
@@ -57,14 +58,13 @@ gcloud container clusters create "${CLUSTER_NAME}" \
 > [!NOTE]
 > **Deploying on an Existing GKE Cluster:**
 > If you are deploying on an existing cluster instead of creating a new one, your configuration path depends on whether Dataplane V2 is enabled:
-> 
+>
 > * **Existing Cluster with Dataplane V2 Enabled:** You can skip Step 1 (creating the cluster) and proceed directly to Step 2 (creating the node pool) using the automated GKE-managed DRANet profile (`--accelerator-network-profile=auto`).
 > * **Existing Cluster without Dataplane V2 Enabled:** GKE-managed automated DRANet is not supported. You **CANNOT** directly use the node pool creation command in ***Step 2*** below. Instead, you must **manually** configure and manage the multi-networking for the additional network interfaces (NICs) by manually creating subnetworks and mapping node pool network interfaces to them, as detailed in GKE's [Set up multi-network support for pods](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/setup-multinetwork-support-for-pods) documentation. Once the subnets and node pool are manually provisioned, proceed directly to **Step 3**.
 
-
 #### 2. Create Node Pool (Enable DRANET & Disable Default GPU Driver)
 
-GPU DRA is not yet fully managed by GKE. Therefore, you must disable the automated GPU driver and the default GPU device plugin via `--accelerator gpu-driver-version=disabled`. 
+GPU DRA is not yet fully managed by GKE. Therefore, you must disable the automated GPU driver and the default GPU device plugin via `--accelerator gpu-driver-version=disabled`.
 
 GKE managed **DRANET** is enabled by configuring `--accelerator-network-profile=auto` and adding the `cloud.google.com/gke-networking-dra-driver=true` node label:
 
@@ -246,7 +246,7 @@ Model servers that need to use fast internode networking for P/D disaggregation 
 
 In addition, expert parallel deployments leveraging DeepEP with NVIDIA NVSHMEM will need to run their pods with `privileged: true` in order to perform GPU-initiated RDMA connections, or enable `PeerMappingOverride=1` in your NVIDIA kernel settings with a [manual GPU driver installation](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus#installing_drivers).
 
-**_NOTE:_** While GDRCopy allows CPU-initiated RDMA connections, at the current time we have not measured a benefit to this configuration and instead recommend the default GPU-initiated setting. You can disable the GDRCopy warning in NVSHMEM initialization by setting the `NVSHMEM_DISABLE_GDRCOPY=1` environment variable on your container.
+***NOTE:*** While GDRCopy allows CPU-initiated RDMA connections, at the current time we have not measured a benefit to this configuration and instead recommend the default GPU-initiated setting. You can disable the GDRCopy warning in NVSHMEM initialization by setting the `NVSHMEM_DISABLE_GDRCOPY=1` environment variable on your container.
 
 #### Ensuring network topology aware scheduling of pod replicas with RDMA
 

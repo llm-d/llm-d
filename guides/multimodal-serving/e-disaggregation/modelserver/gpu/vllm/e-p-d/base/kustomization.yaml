@@ -2,12 +2,12 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../../../../../recipes/modelserver/base/single-host/pd/vllm
-  - ../../common
+  - encode-deployment.yaml
 
 namePrefix: e-p-d-disaggregation-nvidia-gpu-vllm-
 
 components:
-  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/release
+  - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
 
 labels:

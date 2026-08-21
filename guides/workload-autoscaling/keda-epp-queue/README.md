@@ -39,47 +39,66 @@ scaling decisions. The HPA remains visible for inspection, but KEDA owns it.
    Confirm that Prometheus is scraping the EPP metrics endpoint before
    configuring autoscaling.
 
-   Set the guide environment:
+Set the guide environment variables:
 
-   ```bash
-   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-   source ${REPO_ROOT}/guides/env.sh
-   export NAMESPACE=llm-d-optimized-baseline
-   export MONITORING_NAMESPACE=llm-d-monitoring
-   export KEDA_NAMESPACE=keda
-   ```
+<!-- guide:env.static start -->
+```bash
+export BRANCH=main
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export NAMESPACE=llm-d-optimized-baseline
+export MONITORING_NAMESPACE=llm-d-monitoring
+export KEDA_NAMESPACE=keda
+export MODEL=Qwen/Qwen3-32B
+export TARGET_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
+export SCALEDOBJECT_NAME=optimized-baseline-keda-epp
+export HPA_NAME=keda-hpa-optimized-baseline
+export ENV=existing # options: existing, ocp
+export OVERLAY_ROOT=${REPO_ROOT}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline
+```
+<!-- guide:env.static end -->
 
-2. Configure observability by following the shared
+Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
+
+1. Configure observability by following the shared
    [observability setup guide](../../../docs/operations/observability/setup.md).
    Record the Prometheus endpoint and its TLS and authentication requirements;
    you will use them when reviewing the example `ScaledObject`.
 
-3. Install KEDA, or the platform-provided KEDA operator, as described in
+2. Install KEDA, or the platform-provided KEDA operator, as described in
    [Kubernetes Metrics Adapter](../README.md#kubernetes-metrics-adapter).
 
-4. Upgrade the optimized-baseline router with the KEDA+EPP overlay. The overlay
+3. Upgrade the optimized-baseline router with the KEDA+EPP overlay. The overlay
    enables EPP Flow Control. Reapply the monitoring feature values used during
    optimized-baseline installation so that the EPP metrics port and its
    `ServiceMonitor` remain enabled:
 
-   ```bash
-   helm upgrade optimized-baseline \
-     ${ROUTER_STANDALONE_CHART} \
-     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-     -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
-     -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
-     -f ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/router.values.yaml \
-     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-   ```
+<!-- guide:prerequisites.router start -->
+```bash
+helm upgrade optimized-baseline \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+  -f ${OVERLAY_ROOT}/router.values.yaml \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+<!-- guide:prerequisites.router end -->
 
    Confirm that the pre-existing monitoring configuration remains available
    and that Flow Control is enabled:
 
-   ```bash
-   kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | \
-     grep "Flow Control enabled"
-   kubectl get servicemonitor -n ${NAMESPACE}
-   ```
+<!-- guide:prerequisites.confirm start -->
+```bash
+kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+kubectl get servicemonitor -n ${NAMESPACE}
+```
+<!-- guide:prerequisites.confirm end -->
 
 ## Validate EPP Metrics in Prometheus
 
@@ -155,19 +174,22 @@ kubectl port-forward -n ${MONITORING_NAMESPACE} \
 
 Copy the bundled Prometheus CA into the workload namespace:
 
+<!-- guide:deploy.prometheus_auth start -->
 ```bash
+# only when ENV=existing:
 kubectl create secret generic keda-prometheus-auth \
   --namespace ${NAMESPACE} \
   --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
     -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
+<!-- guide:deploy.prometheus_auth end -->
 
 #### OpenShift
 
 OpenShift environments use the Custom Metrics Autoscaler Operator (KEDA) and
 cluster monitoring through Thanos Querier. The `ocp` overlay
-([`keda-epp-queue/ocp`](../optimized-baseline-autoscaling/keda-epp-queue/ocp/))
+([`keda-epp-queue/ocp`](optimized-baseline/ocp/))
 configures this for you — apply it instead of `k8s`:
 
 - Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091`
@@ -233,7 +255,7 @@ model and hardware combinations.
 ## Apply the KEDA ScaledObject
 
 Review
-[`keda-epp-queue/base/scaledobject.yaml`](../optimized-baseline-autoscaling/keda-epp-queue/base/scaledobject.yaml) before applying it.
+[`keda-epp-queue/base/scaledobject.yaml`](optimized-baseline/base/scaledobject.yaml) before applying it.
 At minimum, verify these deployment-specific fields:
 
 - `metadata.namespace`
@@ -246,37 +268,44 @@ This walkthrough intentionally begins with one target replica so that a 1-to-N
 scale-up is observable. Scale the target Deployment down before creating the
 `ScaledObject`, then wait for it to become available:
 
+<!-- guide:deploy.prepare start -->
 ```bash
-kubectl scale deployment optimized-baseline-nvidia-gpu-vllm-decode \
-  -n ${NAMESPACE} --replicas=1
-kubectl rollout status \
-  deployment/optimized-baseline-nvidia-gpu-vllm-decode \
-  -n ${NAMESPACE} --timeout=15m
+kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
+kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 ```
+<!-- guide:deploy.prepare end -->
 
 Apply the overlay for your platform. On a generic Kubernetes cluster with the
 bundled kube-prometheus-stack (after copying the CA above), use `k8s`:
 
+<!-- guide:deploy.apply_k8s start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/k8s
+# only when ENV=existing:
+kubectl apply -k ${OVERLAY_ROOT}/k8s
 ```
+<!-- guide:deploy.apply_k8s end -->
 
 On OpenShift, use `ocp` instead (see the [OpenShift](#openshift) note — it points
 both triggers at Thanos Querier and bearer-authenticates via a dedicated
 ServiceAccount; no CA copy is needed):
 
+<!-- guide:deploy.apply_ocp start -->
 ```bash
-kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/ocp
+# only when ENV=ocp:
+kubectl apply -k ${OVERLAY_ROOT}/ocp
 ```
+<!-- guide:deploy.apply_ocp end -->
 
 ## Verify KEDA Metric Evaluation
 
 Check the `ScaledObject` status and events:
 
+<!-- guide:verify.tests.scaledobject start -->
 ```bash
-kubectl get scaledobject optimized-baseline-keda-epp -n ${NAMESPACE}
-kubectl describe scaledobject optimized-baseline-keda-epp -n ${NAMESPACE}
+kubectl get scaledobject ${SCALEDOBJECT_NAME} -n ${NAMESPACE}
+kubectl wait --for=condition=Ready scaledobject/${SCALEDOBJECT_NAME} -n ${NAMESPACE} --timeout=120s
 ```
+<!-- guide:verify.tests.scaledobject end -->
 
 `Ready=True` confirms that the scaler configuration is valid. Because this
 example has `minReplicaCount: 1`, the `Active` condition is not the best signal
@@ -286,11 +315,12 @@ activation in the optional scale-to-zero configuration below.
 
 KEDA creates the HPA named in `horizontalPodAutoscalerConfig`:
 
+<!-- guide:verify.tests.hpa start -->
 ```bash
-kubectl get hpa keda-hpa-optimized-baseline -n ${NAMESPACE}
-kubectl get hpa keda-hpa-optimized-baseline -n ${NAMESPACE} \
-  -o jsonpath='{.status.currentMetrics}' | jq
+kubectl get hpa ${HPA_NAME} -n ${NAMESPACE}
+kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.currentMetrics}' | jq
 ```
+<!-- guide:verify.tests.hpa end -->
 
 A non-empty `currentMetrics` list shows that the generated HPA is receiving
 the metrics exposed by KEDA. It can take several polling intervals for the
@@ -415,12 +445,18 @@ available, and the generated HPA has no scaling-limited conditions.
 
 ## Cleanup
 
+<!-- guide:cleanup start -->
 ```bash
-# Use the same overlay you applied: k8s (generic) or ocp (OpenShift).
-kubectl delete -k ${REPO_ROOT}/guides/workload-autoscaling/optimized-baseline-autoscaling/keda-epp-queue/k8s
-# On the bundled kube-prometheus-stack path only (the ocp overlay uses no such Secret):
-kubectl delete secret keda-prometheus-auth -n ${NAMESPACE}
+# only when ENV=existing:
+kubectl delete -k ${OVERLAY_ROOT}/k8s --ignore-not-found=true
+
+# only when ENV=ocp:
+kubectl delete -k ${OVERLAY_ROOT}/ocp --ignore-not-found=true
+
+# only when ENV=existing:
+kubectl delete secret keda-prometheus-auth -n ${NAMESPACE} --ignore-not-found=true
 ```
+<!-- guide:cleanup end -->
 
 Deleting the `ScaledObject` also removes the HPA managed by KEDA. It does not
 delete the target Deployment and can leave that Deployment at its current

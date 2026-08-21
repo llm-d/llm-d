@@ -114,8 +114,9 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 
 > [!NOTE]
 > Two older handlers are **deprecated** and kept only for backward compatibility:
-> - `pd-profile-handler` — use `disagg-profile-handler` instead.
-> - `data-parallel-profile-handler` — use `single-profile-handler` instead.
+>
+> * `pd-profile-handler` — use `disagg-profile-handler` instead.
+> * `data-parallel-profile-handler` — use `single-profile-handler` instead.
 
 ---
 
@@ -178,6 +179,14 @@ The following metrics provide visibility into the InferencePool health and sched
 | `llm_d_epp_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `endpoint_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
 | `llm_d_epp_scheduler_e2e_duration_seconds` | Histogram | *None* | End-to-end scheduling latency |
 | `llm_d_epp_plugin_duration_seconds` | Histogram | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
+| `llm_d_epp_plugin_data_scope_violations_total` | Counter | `extension_point`, `plugin_type`, `plugin_name`, `access` | Endpoint attribute accesses rejected due to undeclared DataKey (`read` or `write`) |
+
+#### In-Flight Load Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_epp_inflight_requests` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Requests currently in flight on each endpoint |
+| `llm_d_epp_inflight_tokens` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Tokens currently in flight on each endpoint |
 
 #### Disaggregation Metrics
 
