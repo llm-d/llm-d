@@ -63,6 +63,7 @@ spec:
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8000 \
+                  --enforce-eager \
                   --gpu-memory-utilization 0.80 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
@@ -100,8 +101,6 @@ spec:
               #   value: "0.1"
               - name: VLLM_ENGINE_READY_TIMEOUT_S
                 value: "3000"
-              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
-                value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: DP_SIZE_LOCAL

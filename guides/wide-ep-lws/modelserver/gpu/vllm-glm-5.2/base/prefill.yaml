@@ -144,6 +144,7 @@ spec:
                   zai-org/GLM-5.2-FP8 \
                   --port 8000 \
                   --trust-remote-code \
+                  --enforce-eager \
                   --gpu-memory-utilization $GPU_MEM_UTIL \
                   --max-model-len ${MAX_MODEL_LEN:-auto} \
                   --disable-access-log-for-endpoints=/health,/metrics \
@@ -185,8 +186,6 @@ spec:
                 value: "3"
               - name: VLLM_USE_V2_MODEL_RUNNER
                 value: "0"
-              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
-                value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: DP_SIZE_LOCAL
