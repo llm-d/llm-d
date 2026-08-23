@@ -249,17 +249,18 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 <details>
 <summary><h4>Deploying with SGLang</h4></summary>
 
-To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `coreweave`, and `gke` infra providers):
+To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `coreweave`, `gke`, `gke-lustre`, and `cks-mooncake` infra providers):
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke | cks-mooncake
+export INFRA_PROVIDER=base # base | coreweave | gke | gke-lustre | cks-mooncake
 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
 ```
 
 SGLang-specific notes:
 
-* **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
+* **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}`, `--disaggregation-transfer-backend=nixl`, and `--page-size=64` (aligned with the EPP router scorer). The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
+* **Hierarchical L2/L3 KV Cache**: decode pods enable hierarchical caching (`--enable-hierarchical-cache`) with `--hicache-write-policy=write_through` and host DRAM caching (`--hicache-size=20`). When deploying with the `gke-lustre` provider, decode pods also offload prefix tries to shared storage (`/mnt/files-storage` over GCP Managed Lustre PVC `llm-d-kv-cache-storage`) with in-memory metadata caching enabled (`SGLANG_HICACHE_FILE_BACKEND_ENABLE_METADATA_CACHE=true`), eliminating redundant NIXL/RDMA transfers across multi-turn sessions.
 * **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
 * **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/operations/disaggregation/sglang.md).
 

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: fix-lustre-permissions
+          image: busybox:1.36
+          command: ["sh", "-c", "chmod 777 /mnt/files-storage/ 2>/dev/null || true"]
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      containers:
+        - name: modelserver
+          args:
+            - "--model-path=openai/gpt-oss-120b"
+            - "--port=8200"
+            - "--host=0.0.0.0"
+            - "--disaggregation-mode=decode"
+            - "--disaggregation-transfer-backend=nixl"
+            - "--disaggregation-decode-enable-radix-cache"
+            - "--tensor-parallel-size=4"
+            - "--page-size=64"
+            - "--enable-hierarchical-cache"
+            - "--hicache-write-policy"
+            - "write_through"
+            - "--hicache-size"
+            - "100"
+            - "--hicache-io-backend"
+            - "kernel"
+            - "--hicache-storage-backend"
+            - "file"
+            - "--hicache-storage-prefetch-policy"
+            - "wait_complete"
+            - "--log-level=info"
+            - "--enable-metrics"
+            - "--uvicorn-access-log-exclude-prefixes=/metrics"
+          resources:
+            limits:
+              nvidia.com/gpu: "4"
+              memory: 180Gi
+            requests:
+              nvidia.com/gpu: "4"
+              memory: 100Gi
+          env:
+            - name: SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR
+              value: "/mnt/files-storage"
+            - name: SGLANG_HICACHE_FILE_BACKEND_ENABLE_METADATA_CACHE
+              value: "true"
+            - name: SGLANG_HICACHE_FILE_BACKEND_METADATA_TTL
+              value: "5.0"
+            - name: PYTHONHASHSEED
+              value: "42"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage
