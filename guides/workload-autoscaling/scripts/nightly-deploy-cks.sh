@@ -118,8 +118,21 @@ echo "==> Applying WVA + autoscaling assets"
 kubectl apply -k "${OUTPUT_DIR}"
 
 echo "==> Waiting for WVA controller to become Available"
-kubectl wait deployment/wva-controller-manager \
-  -n "${NAMESPACE}" --for=condition=Available --timeout=300s
+# The controller pod is force-deleted during teardown, so if it never becomes Available,
+# capture its state here — this is the only chance to see why before the evidence is gone.
+if ! kubectl wait deployment/wva-controller-manager \
+  -n "${NAMESPACE}" --for=condition=Available --timeout=300s; then
+  echo "ERROR: wva-controller-manager did not become Available — capturing diagnostics before teardown" >&2
+  echo "--- kubectl describe deploy/wva-controller-manager ---" >&2
+  kubectl describe deployment/wva-controller-manager -n "${NAMESPACE}" >&2 || true
+  for pod in $(kubectl get pods -n "${NAMESPACE}" -o name | grep '^pod/wva-controller-manager-' || true); do
+    echo "--- kubectl describe ${pod} ---" >&2
+    kubectl describe "${pod}" -n "${NAMESPACE}" >&2 || true
+    echo "--- kubectl logs ${pod} ---" >&2
+    kubectl logs "${pod}" -n "${NAMESPACE}" --all-containers --tail=200 >&2 || true
+  done
+  exit 1
+fi
 
 echo "==> Waiting for the ScaledObject to be Ready"
 # Ready only means KEDA accepted the trigger and created its HPA — not that the metric works.
