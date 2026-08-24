@@ -10,8 +10,8 @@ Achieve SOTA Inference Performance On Any Accelerator
 </h2>
 
  [![Documentation](https://img.shields.io/badge/Documentation-8A2BE2?logo=readthedocs&logoColor=white&color=1BC070)](https://www.llm-d.ai)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d?ref=badge_shield)
- [![Release Status](https://img.shields.io/badge/Version-0.8-yellow)](https://github.com/llm-d/llm-d/releases)
+ [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fllm-d%2Fllm-d?ref=badge_shield)
+ [![Release Status](https://img.shields.io/github/v/release/llm-d/llm-d?label=Version)](https://github.com/llm-d/llm-d/releases)
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 
@@ -21,7 +21,7 @@ llm-d is a [Cloud Native Computing Foundation (CNCF)](https://www.cncf.io/) sand
 
 ## What does llm-d offer to production inference?
 
-Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/sgl-project/sglang) handle efficiently running large language models on accelerators. llm-d provides state-of-the-art orchestration and optimizations above model servers to serve high-scale real-world traffic efficiently and reliably. Our offerings are organized into four core themes:
+Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/sgl-project/sglang) handle efficiently running large language models on accelerators. llm-d provides state-of-the-art orchestration and optimizations above model servers to serve high-scale real-world traffic efficiently and reliably. Our offerings are organized into the following themes:
 
 * **[Intelligent Routing:](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline)** Maximize performance with prefix-cache and load-aware balancing, including experimental predicted latency-based scheduling to decrease latency and increase throughput.
 * **[Advanced KV-Cache Management:](https://llm-d.ai/docs/well-lit-paths/foundations/tiered-prefix-cache)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
