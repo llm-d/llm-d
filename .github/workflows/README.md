@@ -37,6 +37,61 @@ workflow files:
   `v*` tag is pushed. Its badges are static, baked from the badge status captured at
   tag time, so the matrix records the state as of that release.
 
+## Slack notifications
+
+Alongside the badges, the result of every **scheduled** nightly is posted to the Slack channel of the SIG that owns it, by [`notify-slack-nightly.yaml`](notify-slack-nightly.yaml).
+
+This replaces the old `/github subscribe` integration, which had two limits that could not be worked around: it only supports one workflow per channel (so a channel like `#sig-router`, which owns 16 nightlies, could never be fully covered), and it also fired on manual `workflow_dispatch` runs, which was noise.
+
+### How routing works
+
+[`.github/slack-channels.yaml`](../slack-channels.yaml) is the source of truth. It maps each nightly to a channel, **keyed by workflow file name**, and lists the nightlies that are deliberately not notified (each with a reason).
+
+The `workflows:` list in the `workflow_run` trigger is *generated* from that file:
+
+```bash
+python scripts/sync-slack-channels.py --fix     # regenerate
+python scripts/sync-slack-channels.py --check   # verify (runs in pre-commit)
+python scripts/sync-slack-channels.py --audit   # print the routing table
+```
+
+Two different identifiers are in play, deliberately:
+
+* The **trigger** must use display names, because `workflow_run` matches on nothing else. That makes it the part that breaks silently — rename a nightly and the notifications just stop, with no error, which looks exactly like a quiet night. Generating the list means the rename turns CI red in the same PR that does the renaming.
+* **Runtime routing** uses the workflow *file* name (`workflow_run.path`), which is stable — it is already baked into `badge_name`, `release/README.md`, `/test-nightly` and the `consolidate-status-*` workflows. So a renamed display name can only stop notifications; it can never send them to the wrong channel.
+
+A nightly that is in neither `channels` nor `skip` fails the `sync-slack-channels` pre-commit hook. That check is the only place the mistake can be caught: an unrouted nightly is also absent from the generated trigger, so it never fires at all, and the symptom is *missing messages* — invisible by construction.
+
+### Deliberate decisions
+
+These are easy to mistake for bugs, so they are recorded here:
+
+* **Only `schedule` runs notify.** Manual dispatches and `/test-nightly` runs are filtered out via `github.event.workflow_run.event`. This is the whole reason the workflow exists.
+* **Re-runs of a scheduled run DO notify**, marked `(attempt N)`. When a SIG re-runs a nightly that failed on a transient cluster error, the re-run's result is the current truth about that guide — suppressing it would leave the channel showing an already-fixed failure as the last word.
+* **`cancelled` and `skipped` runs do not notify.** Every nightly sets `cancel-in-progress`, so dispatching one while a run is in flight cancels that run; that is not news for a channel. An all-skipped run means nothing exercised the guide, so there is no result to report.
+* **The guide's result is computed from the `nightly` jobs, not from the run's conclusion.** `update-badge` runs with `if: always()`, so a green test whose badge push to `gh-pages` failed comes out as a failed *run*. Reporting that verbatim would tell a channel its guide is broken when it is not, and credible false positives are what makes people stop trusting a channel. That case gets its own `test passed, update-badge failed` message instead.
+
+### Testing a change
+
+`workflow_run` **and** `workflow_dispatch` only work from the default branch, so the workflow itself cannot be exercised from a feature branch. Test the logic locally against any real run instead:
+
+```bash
+GH_TOKEN=$(gh auth token) python .github/scripts/notify-slack-nightly.py \
+    --repo llm-d/llm-d --run-id <run-id> --dry-run
+```
+
+Once merged, the workflow's `workflow_dispatch` inputs replay an existing run (`run_id`), optionally to a scratch channel (`channel_override`) and without posting (`dry_run`).
+
+### Slack app setup
+
+One-time, needs Slack workspace admin plus repo admin:
+
+1. Create an app at [api.slack.com/apps](https://api.slack.com/apps) → *From scratch* (e.g. `llm-d CI`).
+2. Under *OAuth & Permissions*, add the **`chat:write`** bot scope. Optionally add `channels:join` so the bot can add itself to public channels, which removes the `not_in_channel` failure mode. Do **not** add `chat:write.public` — it allows posting to any channel without membership, bypassing that control entirely.
+3. Install the app and copy the bot token (`xoxb-…`). A token is valid for one workspace only.
+4. **Invite the bot to every channel** in `slack-channels.yaml`, including `fallback_channel`: `/invite @llm-d CI`. This is manual and per-channel, and forgetting it is the most likely first-deploy failure — the posting step fails with `not_in_channel`.
+5. Add the token as the `SLACK_BOT_TOKEN` repository secret (*Settings → Secrets and variables → Actions*).
+
 ## Adding a new guide
 
 All nightly benchmark workflows rely heavily on these two "reusable" workflows on [`llm-d-infra`](https://github.com/llm-d/llm-d-infra):
@@ -45,6 +100,8 @@ All nightly benchmark workflows rely heavily on these two "reusable" workflows o
 * [`reusable-query-success-past-runs.yaml`](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-query-success-past-runs.yaml).
 
 Developers aiming to add a new guide or testing an existing guide on a new cluster or with a new set of parameters should open a PR with **two** new workflows: one for the "nightly benchmark", and one for "consolidated status". Again, an illustratibe example using `optimized-baseline`:
+
+The same PR must also assign the new nightly a Slack channel in [`.github/slack-channels.yaml`](../slack-channels.yaml) (or add it to `skip` with a reason) and run `python scripts/sync-slack-channels.py --fix`; see [Slack notifications](#slack-notifications) above. The `sync-slack-channels` pre-commit hook fails until this is done.
 
 ```bash
 [llm-d]$ ls .github/workflows/*optimized-baseline*
