@@ -14,7 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
-| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, lianjie.zhang@metax-tech.com) |
+| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li(@archlitchi, <mengxuan.li@dynamia.ai>) |
 
 ## Requirements
 
