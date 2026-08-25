@@ -69,6 +69,15 @@ Start here when something looks wrong.
 | **Prefill worker utilization (SGLang)** | `avg by(pod) (sglang_num_running_reqs{pod=~".*prefill.*"})` |
 | **Decode KV cache utilization** | `avg by(pod) (vllm:kv_cache_usage_perc{pod=~".*decode.*"})` |
 | **Disaggregation decision ratio** | `sum(rate(llm_d_epp_disagg_decision_total{decision_type="prefill-decode"}[5m])) / sum(rate(llm_d_epp_disagg_decision_total[5m]))` |
+| **Average NIXL transfer time (ms)** | `sum(rate(vllm:nixl_xfer_time_seconds_sum[5m])) / sum(rate(vllm:nixl_xfer_time_seconds_count[5m])) * 1000` |
+| **NIXL transfer time P95 (ms)** | `histogram_quantile(0.95, sum by(le) (rate(vllm:nixl_xfer_time_seconds_bucket[5m]))) * 1000` |
+| **Average NIXL transfer size (MiB)** | `sum(rate(vllm:nixl_bytes_transferred_sum[5m])) / sum(rate(vllm:nixl_bytes_transferred_count[5m])) / 1048576` |
+| **NIXL transfer data volume (MiB/sec)** | `sum(rate(vllm:nixl_bytes_transferred_sum[5m])) / 1048576` |
+| **Failed NIXL transfers in 5m** | `sum(increase(vllm:nixl_num_failed_transfers[5m]))` |
+| **Failed NIXL notifications in 5m** | `sum(increase(vllm:nixl_num_failed_notifications[5m]))` |
+| **Expired prefill KV requests in 5m** | `sum(increase(vllm:nixl_num_kv_expired_reqs[5m]))` |
+
+NIXL histogram observations are pooled across tensor-parallel ranks. Their counts and average sizes describe rank-level transfer observations, not inference requests or whole-request KV cache sizes.
 
 ### Flow Control
 

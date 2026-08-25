@@ -60,6 +60,23 @@ prefill-podmonitor      5m
 | `vllm:prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod. Compare across pods to spot uneven load distribution |
 | `vllm:generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput. A drop signals degraded model performance |
 
+#### vLLM NIXL KV Transfer Metrics
+
+When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for the KV cache transfers between workers. See the [vLLM NixlConnector usage guide](https://docs.vllm.ai/en/latest/features/nixl_connector_usage/) for configuration details.
+
+| Metric | What it measures | Why it matters |
+|--------|------------------|----------------|
+| `vllm:nixl_xfer_time_seconds` (histogram) | Time from posting a transfer until the backend reports completion, including submission and data movement | High tail latency can indicate network congestion, large transfers, or backend delays |
+| `vllm:nixl_post_time_seconds` (histogram) | Synchronous time spent submitting a transfer to the backend | A high value with otherwise normal transfer time points to descriptor setup or submission overhead |
+| `vllm:nixl_bytes_transferred` (histogram) | Bytes moved per transfer observation | Shows transfer size and KV cache data volume |
+| `vllm:nixl_num_descriptors` (histogram) | Memory descriptor count per transfer observation | High counts can indicate fragmented or large KV cache allocations |
+| `vllm:nixl_num_failed_transfers` (counter) | Failed NIXL KV cache transfers | Transfer failures can prevent the consumer from using remote KV blocks |
+| `vllm:nixl_num_failed_notifications` (counter) | Failed transfer completion notifications | Notification failures can prevent a peer from learning that a transfer completed |
+| `vllm:nixl_num_kv_expired_reqs` (counter) | Requests whose KV blocks expired before the decoder read them; recorded on the prefill instance | Sustained increases can indicate that `kv_lease_duration` is too short for the workload or network |
+
+> [!NOTE]
+> With tensor parallelism, vLLM pools transfer observations from all TP ranks before exporting them. Histogram counts therefore represent rank-level transfer observations, not inference requests, and byte values do not represent the total size of one request across all ranks. These are aggregate Prometheus metrics and are not correlated with individual request or trace IDs.
+
 ### Key SGLang Metrics
 
 | Metric | What it measures | Why it matters |
