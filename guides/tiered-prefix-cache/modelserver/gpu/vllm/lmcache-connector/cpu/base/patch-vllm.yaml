@@ -14,18 +14,17 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
             - "--max-num-seq=1024"
-          env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
           resources:
             limits:
               memory: 500Gi
             requests:
               memory: 500Gi
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: LMCACHE_MAX_LOCAL_CPU_SIZE
               value: "100.0"
             - name: PYTHONHASHSEED
