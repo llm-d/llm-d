@@ -175,7 +175,7 @@ For Wide Expert Parallelism, map GPUs to specific HCAs for optimal topology:
   ```
 
 - Source `set_nccl_env.sh` from `/usr/local/gib/scripts/` at container startup
-- Set `NVSHMEM_DISABLED_GDRCOPY=true` (GKE recommendation)
+- Set `NVSHMEM_DISABLE_GDRCOPY=1` (GKE recommendation)
 - Use pod affinity on `cloud.google.com/gce-topology-block` for topology-aware placement
 - GPU-initiated RDMA requires `privileged: true` in the security context
 
