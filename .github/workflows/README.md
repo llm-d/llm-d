@@ -86,10 +86,30 @@ Once merged, the workflow's `workflow_dispatch` inputs replay an existing run (`
 
 One-time, needs Slack workspace admin plus repo admin:
 
-1. Create an app at [api.slack.com/apps](https://api.slack.com/apps) → *From scratch* (e.g. `llm-d CI`).
+1. Create an app at [api.slack.com/apps](https://api.slack.com/apps). *From an app manifest* is the quickest route — paste the manifest below — or use *From scratch* and add the scope by hand in step 2.
+
+   ```yaml
+   display_information:
+     name: llm-d CI
+     description: Posts nightly CI results to the SIG channels that own each guide.
+   features:
+     bot_user:
+       display_name: llm-d-ci
+       always_online: false
+   oauth_config:
+     scopes:
+       bot:
+         - chat:write
+   settings:
+     org_deploy_enabled: false
+     socket_mode_enabled: false
+     token_rotation_enabled: false
+   ```
+
+   Note `bot_user.display_name` is the bot's handle and only accepts lowercase letters, digits, `-`, `_` and `.` — hence `llm-d-ci` rather than `llm-d CI`. That handle is what you type in step 4.
 2. Under *OAuth & Permissions*, add the **`chat:write`** bot scope. Optionally add `channels:join` so the bot can add itself to public channels, which removes the `not_in_channel` failure mode. Do **not** add `chat:write.public` — it allows posting to any channel without membership, bypassing that control entirely.
 3. Install the app and copy the bot token (`xoxb-…`). A token is valid for one workspace only.
-4. **Invite the bot to every channel** in `slack-channels.yaml`, including `fallback_channel`: `/invite @llm-d CI`. This is manual and per-channel, and forgetting it is the most likely first-deploy failure — the posting step fails with `not_in_channel`.
+4. **Invite the bot to every channel** in `slack-channels.yaml`, including `fallback_channel`: `/invite @llm-d-ci` (let Slack's autocomplete resolve the handle). For a private channel, a member has to do this from inside it. This is manual and per-channel, and forgetting it is the most likely first-deploy failure — the posting step fails with `not_in_channel`.
 5. Add the token as the `SLACK_BOT_TOKEN` repository secret (*Settings → Secrets and variables → Actions*).
 
 ## Adding a new guide
