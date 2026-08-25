@@ -458,8 +458,8 @@ described in the [Overview](#overview)). With both sides guaranteed to hit prefi
 every request, the only architectural difference left is the Coordinator's extra
 Gateway/EPP round trip per phase, and that extra hop count barely shows up in TTFT
 (time to first token) or TTOT/ITL (time per output token), and under concurrent load
-it doesn't show up at all: the Coordinator matches, and on several concurrency levels
-beats, the sidecar's latency.
+it doesn't show up at all: the Coordinator matches the sidecar's latency, and at
+several concurrency levels beats it.
 
 Both single-request sweeps below share the same deployment: `openai/gpt-oss-120b` on
 H200 GPUs, decode at 1 replica × TP4 (4 GPUs), prefill at 1 replica × TP1 (1 GPU), 5
@@ -523,7 +523,7 @@ request latency, which track the sidecar architecture within about 1.5% across e
 prompt and output length tested. Under concurrent load the extra hop doesn't cost
 anything either: at low concurrency (up to ~100 concurrent requests) the Coordinator
 actually has *lower* request latency and TTFT than the sidecar, and from there on up
-the two are essentially tied. More network hops, in other words, doesn't translate
+the two are essentially tied. More network hops, in other words, don't translate
 into a performance penalty.
 
 ## Cleanup
