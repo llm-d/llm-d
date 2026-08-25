@@ -2,8 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
 images:
-  # TODO(METAX): Confirm anonymous pull access, redistribution terms, and the
-  # public-registry digest before declaring this a supported backend.
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: harbor.sh.mxcr.io/ai-release/maca/vllm-metax
-    newTag: 0.24.0-maca.ai3.8.2.1-torch2.10-py310-ubuntu22.04-amd64
+    newName: ghcr.io/project-hami/vllm-metax
+    newTag: 0.24.0-maca.ai3.8.2.5-torch2.10-py310-ubuntu22.04-amd64
