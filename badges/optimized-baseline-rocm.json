@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCm",
-  "message": "benchmark-error",
-  "color": "yellow"
+  "message": "passing",
+  "color": "brightgreen"
 }
