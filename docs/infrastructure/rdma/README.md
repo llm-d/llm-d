@@ -139,16 +139,24 @@ Enable UCX transport logging temporarily on both prefill and decode pods:
   value: "y"
 ```
 
-Send a P/D request and inspect the model-server logs. A same-node endpoint
-configuration should include `intra-node` and `cuda_ipc/cuda`. An inter-node
-endpoint configuration on an RDMA-capable cluster should include an RDMA lane,
-such as `rc_mlx5`. Investigate the pod's RDMA devices, capabilities, UCX
-libraries, and `UCX_TLS` when the GPU data path contains only TCP transports.
+Send a representative P/D request and inspect the UCX protocol table for the
+large GPU-memory operation. Confirm the selected data lane: `cuda_ipc/cuda`
+identifies CUDA IPC, while a lane such as `rc_mlx5` identifies RDMA. Backend
+initialization, an `intra-node` endpoint, or `cuda_ipc/cuda` appearing among
+the available endpoint lanes does not prove that the KV Cache payload used
+CUDA IPC.
+
+In a standard Kubernetes deployment, separate prefill and decode pods receive
+separate GPU allocations. Same-node placement therefore must not be assumed to
+enable CUDA IPC; same-node and cross-node payloads can both select RDMA. CUDA
+IPC requires both processes to have access to the participating peer GPUs, and
+`hostIPC` alone does not provide that access. See NVIDIA Dynamo's
+[Kubernetes disaggregated-communication guidance](https://docs.nvidia.com/dynamo/dev/knowledge-base/kubernetes/kubernetes-operator/disagg-communication)
+for the cross-pod GPU-isolation constraints and recommended RDMA configuration.
 
 The NIXL side channel uses the regular network for metadata exchange, so the
 presence of TCP in a log is not by itself evidence that KV Cache payloads use
-TCP. Correlate the UCX endpoint configuration with vLLM's NIXL transfer metrics.
-Disable `UCX_PROTO_INFO` after validation because its protocol tables are
+TCP. Disable `UCX_PROTO_INFO` after validation because its protocol tables are
 verbose.
 
 ### RDMA Resources and Capabilities
