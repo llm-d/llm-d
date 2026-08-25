@@ -83,7 +83,6 @@ spec:
                   --enable-chunked-prefill \
                   --enable-expert-parallel \
                   --seed 42 \
-                  --enable_prefix_caching \
                   --tensor-parallel-size 16 \
                   --gpu-memory-utilization=0.8 \
                   --max-model-len=71200 \
