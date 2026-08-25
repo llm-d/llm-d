@@ -1,4 +1,4 @@
-name: Nightly - PD Disaggregation E2E (AMD ROCM)
+name: Nightly - PD Disaggregation E2E (AMD ROCM MORI-IO)
 
 on:
   workflow_dispatch:
@@ -58,14 +58,14 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 4 * * *'
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: nightly-e2e-pd-disaggregation-amd
+  group: nightly-e2e-pd-disaggregation-amd-moriio
   cancel-in-progress: true
 
 jobs:
@@ -80,10 +80,10 @@ jobs:
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
-      connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-amd-rocm' }}
-      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-amd' }}
-      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-amd' }}
+      connector: ${{ inputs.connector || 'moriio' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-amd-rocm-moriio' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-amd-moriio' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-amd-moriio' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
       bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
       bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/pd-disaggregation' }}
@@ -102,8 +102,8 @@ jobs:
     if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: pd-disaggregation-amd
-      badge_label: "VLLM ROCM"
+      badge_name: pd-disaggregation-amd-moriio
+      badge_label: "VLLM ROCM MORI"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
