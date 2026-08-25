@@ -105,6 +105,7 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --served-model-name DeepSeek-R1-0528 \
                   --port 8200 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \

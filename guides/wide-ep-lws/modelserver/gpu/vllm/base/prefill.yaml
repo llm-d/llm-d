@@ -62,6 +62,7 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --served-model-name DeepSeek-R1-0528 \
                   --port 8000 \
                   --gpu-memory-utilization 0.80 \
                   --disable-access-log-for-endpoints=/health,/metrics \

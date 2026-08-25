@@ -11,4 +11,6 @@ endpoints:
     address: 127.0.0.1
     port: "8000"
     labels:
-      model: Qwen/Qwen3-32B
+      # Short name matches --served-model-name on the vLLM pod; the EPP matches
+      # this label against what vLLM reports via /v1/models.
+      model: Qwen3-32B

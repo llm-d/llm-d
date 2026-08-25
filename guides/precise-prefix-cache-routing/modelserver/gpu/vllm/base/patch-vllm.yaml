@@ -15,6 +15,7 @@ spec:
             - "--tensor-parallel-size=2"
             - "--block-size=64"
             - "--kv-events-config"
+            - "--served-model-name=Qwen3-32B"
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"

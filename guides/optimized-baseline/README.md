@@ -85,7 +85,7 @@ export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
-export MODEL=Qwen/Qwen3-32B
+export MODEL=Qwen3-32B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 export BENCHMARK_REF=main
 export HARNESS=inference-perf
@@ -364,7 +364,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 ### 2. Send Test Requests
 
-**Send a completion request from a temporary pod inside the cluster (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`):**
+**Send a completion request from a temporary pod inside the cluster (model-aware; set `MODEL` to the name you want to query, e.g. `Qwen3-32B` or `gpt-oss-120b`):**
 
 <!-- guide:verify.tests start -->
 ```bash
@@ -460,7 +460,7 @@ llmdbenchmark \
 
 > [!NOTE]
 > Depending on your `cluster` you may need to extend the default `timeout` values to longer duration, as `bind`, `access` and `wait-timeout` times of `pvcs` and `pods` can be arbitrarily slower on other systems, please utilize `llmdbenchmark run --help` to view the knobs needed to increase those values.
-> Model-aware; set `model` to the name you want to query, e.g. `Qwen/Qwen3-32B` or `openai/gpt-oss-120b`
+> Model-aware; set `model` to the name you want to query, e.g. `Qwen3-32B` or `gpt-oss-120b`
 
 ## Cleanup
 

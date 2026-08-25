@@ -11,6 +11,7 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 * [Metrics](./metrics.md) — Enable and interpret model server and EPP metrics
 * [Distributed Tracing](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
 * [PromQL Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
+* [Inference Cost Tracking](../../../guides/recipes/observability/inferencecost/README.md) — Per-model cost attribution and cost-per-million-tokens via OpenCost
 * [Alerting](./alerting.md) — Apply the default EPP Prometheus alerting rules
 
 ## Runnable assets

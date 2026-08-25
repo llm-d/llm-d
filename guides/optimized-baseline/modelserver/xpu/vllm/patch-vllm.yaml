@@ -15,6 +15,7 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-0.6B"
+            - "--served-model-name=Qwen3-0.6B"
             - "--port=8000"
             - "--dtype=float16"
             - "--disable-sliding-window"

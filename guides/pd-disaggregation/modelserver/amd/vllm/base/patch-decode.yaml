@@ -11,6 +11,7 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "amd/Llama-3.3-70B-Instruct-FP8-KV"
+            - "--served-model-name=Llama-3.3-70B-Instruct-FP8-KV"
             - "--disable-uvicorn-access-log"
             - "--tensor-parallel-size=4"
             - "--block-size=128"

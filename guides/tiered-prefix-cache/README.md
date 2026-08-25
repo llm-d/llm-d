@@ -351,7 +351,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-32B",
+        "model": "Qwen3-32B",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -361,7 +361,7 @@ curl -X POST http://${IP}/v1/completions \
 ```bash
 # Long prompt (~3K tokens) to trigger offload
 PROMPT=$(printf 'Story: '; for i in $(seq 1 800); do printf 'alice met bob and they walked together. '; done)
-jq -n --arg prompt "$PROMPT" '{"model":"Qwen/Qwen3-32B", "prompt":$prompt, "max_tokens":3, "temperature":0}' | \
+jq -n --arg prompt "$PROMPT" '{"model":"Qwen3-32B", "prompt":$prompt, "max_tokens":3, "temperature":0}' | \
 curl -s http://${IP}/v1/completions \
   -H 'Content-Type: application/json' \
   -d @- | jq
@@ -503,7 +503,7 @@ llmdbenchmark \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "Qwen/Qwen3-32B" \
+    --model          "Qwen3-32B" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
     --workload       guide_tiered-prefix-cache_1.yaml \

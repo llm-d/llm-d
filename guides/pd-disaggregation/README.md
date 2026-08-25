@@ -159,7 +159,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 source ${REPO_ROOT}/guides/env.sh
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
-export MODEL_NAME="openai/gpt-oss-120b"
+export MODEL_NAME="gpt-oss-120b"
 ```
 
 * Install the Gateway API Inference Extension CRDs:
@@ -347,7 +347,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "openai/gpt-oss-120b",
+        "model": "gpt-oss-120b",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -422,7 +422,7 @@ llmdbenchmark \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "openai/gpt-oss-120b" \
+    --model          "gpt-oss-120b" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
     --workload       guide_pd-disaggregation_1.yaml \
@@ -572,7 +572,7 @@ scenario:
     input_distribution: {mean: 5000, min: 5000, max: 5000}
     output_distribution: {mean: 250, min: 250, max: 250}
   server:
-    model_name: openai/gpt-oss-120b
+    model_name: gpt-oss-120b
     type: vllm
 version: '0.1'
 ```
@@ -601,7 +601,7 @@ llmdbenchmark \
     run \
     --endpoint-url   "${ENDPOINT_URL}" \
     --gateway-class  "${GATEWAY_CLASS}" \
-    --model          "openai/gpt-oss-120b" \
+    --model          "gpt-oss-120b" \
     --namespace      "${NAMESPACE}" \
     --harness        inference-perf \
     --workload       guide_pd-disaggregation_1.yaml \

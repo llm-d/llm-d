@@ -37,8 +37,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              exec vllm serve \
-                Qwen/Qwen3-32B \
+              exec vllm serve Qwen/Qwen3-32B \
+                --served-model-name=Qwen3-32B \
                 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
                 --port 8000 \
                 --tensor-parallel-size 8
