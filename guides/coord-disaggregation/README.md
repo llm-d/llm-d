@@ -456,8 +456,14 @@ dispatching a separate prefill call), and the Coordinator ran the
 `conditional-decode` step, so it never takes the optimistic decode-first fast path
 described in the [Overview](#overview)). With both sides guaranteed to hit prefill on
 every request, the only architectural difference left is the Coordinator's extra
-Gateway/EPP round trip per phase — and that extra hop count barely shows up in TTFT
-(time to first token) or TTOT/ITL (time per output token):
+Gateway/EPP round trip per phase, and that extra hop count barely shows up in TTFT
+(time to first token) or TTOT/ITL (time per output token), and under concurrent load
+it doesn't show up at all: the Coordinator matches, and on several concurrency levels
+beats, the sidecar's latency.
+
+Both single-request sweeps below share the same deployment: `openai/gpt-oss-120b` on
+H200 GPUs, decode at 1 replica × TP4 (4 GPUs), prefill at 1 replica × TP1 (1 GPU), 5
+GPUs total, identical on both architectures.
 
 * **[Varying input prompt length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned)**
   (1, 10, 100, 1,000 prompt tokens; fixed 20-token output; prefill/decode pinned to
@@ -472,7 +478,7 @@ Gateway/EPP round trip per phase — and that extra hop count barely shows up in
   (e.g. 40.36ms vs. 38.51ms at 10 tokens); median request latency is within 0.2-1.5%;
   median ITL (time per output token) is within ±0.7%, indistinguishable from
   measurement noise. An ITL p90-p10 spread roughly 2-3x wider with the Coordinator
-  (~2.4-3.2ms vs. sidecar's ~0.8-1.5ms) is the one open secondary finding — it doesn't
+  (~2.4-3.2ms vs. sidecar's ~0.8-1.5ms) is the one open secondary finding; it doesn't
   move the median, and isn't root-caused in the linked analysis.
 
 * **[Varying output length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned)**
@@ -484,15 +490,41 @@ Gateway/EPP round trip per phase — and that extra hop count barely shows up in
   </p>
 
   Median TTFT is 1.6-4.9% higher with the Coordinator; median request latency is
-  within ±0.9% and median ITL within ±0.35% across all four output lengths — the two
+  within ±0.9% and median ITL within ±0.35% across all four output lengths: the two
   architectures are described as "essentially identical" here, with the Coordinator
   showing a heavier decode-tail (occasional slow tokens raising p95/p99 ITL) that
   doesn't move the median.
 
+* **[Concurrent stress spikes](https://github.com/dmitripikus/coordinator-performance/blob/main/pd-comparison-analysis/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/coord_vs_sidecar_random_spikes_summary.md)**:
+  a larger, concurrent deployment to check whether the extra hop shows up under
+  load instead of one request at a time. `deepseek-ai/DeepSeek-V2` on H200 GPUs,
+  decode at 6 replicas × TP4 (24 GPUs), prefill at 4 replicas × TP8 (32 GPUs), 56
+  GPUs total, identical on both architectures. `inference-perf`'s `random_spikes`
+  scenario drove fixed 1000/1500-token input/output requests through 9 concurrency
+  stages from 50 to 500; every stage hit 100% success on both sides.
+
+  <p float="left">
+    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/analysis_random_spikes/ttft_distribution.png" width="45%" />
+    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/analysis_random_spikes/request_latency_distribution.png" width="45%" />
+  </p>
+
+  At the two lowest concurrency stages the Coordinator is ahead on both metrics that
+  matter most for latency-sensitive traffic: median request latency is about 10%
+  lower at 50 concurrent requests and 7% lower at 100, and median TTFT is about 12%
+  lower at 50 and 10% lower at 100. From 150 concurrent requests up, both metrics
+  converge to within about 2-7% either way, with neither side holding a consistent
+  edge (ITL differences stay small throughout, roughly 0.1-1.9ms at any given
+  stage). Both scale similarly as load rises (TTFT from ~350-390ms to ~1850-1920ms,
+  ITL from ~16.6-18.5ms to ~37-37.2ms across the range).
+
 **Bottom line**: the Coordinator's extra per-phase network hop is measurable in TTFT
 (a consistent few-percent, single-digit-millisecond gap) but not in ITL/TTOT or overall
 request latency, which track the sidecar architecture within about 1.5% across every
-prompt and output length tested.
+prompt and output length tested. Under concurrent load the extra hop doesn't cost
+anything either: at low concurrency (up to ~100 concurrent requests) the Coordinator
+actually has *lower* request latency and TTFT than the sidecar, and from there on up
+the two are essentially tied. More network hops, in other words, doesn't translate
+into a performance penalty.
 
 ## Cleanup
 
