@@ -96,7 +96,7 @@ patch() {
     prefill_args_updated=$(echo "${prefill_args_updated}" | sed '/--port/a\  --enforce-eager \\')
 
     ### L40s Don't support DeepEP kernels, use allgather_reducescatter
-    prefill_args_updated=$(echo "${prefill_args_updated}" | sed 's/--all2all-backend deepep_high_throughput/--all2all-backend allgather_reducescatter/')
+    prefill_args_updated=$(echo "${prefill_args_updated}" | sed 's/--all2all-backend deepep_v2/--all2all-backend allgather_reducescatter/')
 
     export prefill_args_updated
 

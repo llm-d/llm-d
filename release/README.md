@@ -107,14 +107,14 @@ The final release work involves creating a tag in the llm-d repo, which triggers
 
 - **Release** images are created by the release workflow (`ci-release.yaml`) when a version tag is pushed. They follow the naming pattern
   `ghcr.io/llm-d/llm-d-{platform}:{version}` and are tagged with the release version. For example:
-  - `ghcr.io/llm-d/llm-d-cuda:v0.5.0`
-  - `ghcr.io/llm-d/llm-d-cpu:v0.5.0`
-  - `ghcr.io/llm-d/llm-d-aws:v0.5.0`
+  - `ghcr.io/llm-d/llm-d-rocm:v0.9.0`
+  - `ghcr.io/llm-d/llm-d-cpu:v0.9.0`
 
-- **Dev** images are created by the dev build workflow (`build-image.yaml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `ghcr.io/llm-d/llm-d-{platform}-dev:{tag}` and are tagged with the git short SHA or PR number. For example:
-  - `ghcr.io/llm-d/llm-d-cuda-dev:sha-abc1234`
-  - `ghcr.io/llm-d/llm-d-cpu-dev:pr-123`
-  - `ghcr.io/llm-d/llm-d-cuda-dev:latest` (from the default branch)
+
+- **Dev** images are created by the dev build workflow (`build-image.yaml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `quay.io/llm-d/llm-d-{platform}:{version}` and are tagged with the git short SHA or PR number. Please note these images are intentionally not signed as they represent work on open PR from contributors and the project is not responsible for verifying that every image works and is not nefarious. Here be dragons - be warned. Example:
+  - `quay.io/llm-d/llm-d-cpu:pr-123`
+  - `quay.io/llm-d/llm-d-rocm:latest` (from the default branch)
+
 
   The full list of platforms includes: `cuda`, `aws`, `cpu`, `rocm`, and `xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for
    the complete list.

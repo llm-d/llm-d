@@ -97,7 +97,7 @@ jobs:
       recommended_gpus: 4
       pod_wait_timeout: '30m'
       pod_readiness_delay: 180
-      image_override: 'ghcr.io/llm-d/llm-d-cuda-dev:latest'
+      image_override: 'docker.io/vllm/vllm-openai:nightly'
       allow_gpu_preemption: true
       skip_cleanup: ${{ inputs.cleanup == 'false' }}
       pr_number: ${{ github.event.inputs.pr_number }}

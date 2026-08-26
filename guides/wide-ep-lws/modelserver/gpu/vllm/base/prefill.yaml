@@ -63,6 +63,7 @@ spec:
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8000 \
+                  --enforce-eager \
                   --gpu-memory-utilization 0.80 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
@@ -78,7 +79,7 @@ spec:
                                           "kv_role":"kv_both",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm \
-                  --all2all-backend deepep_high_throughput
+                  --all2all-backend deepep_v2
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -100,8 +101,6 @@ spec:
               #   value: "0.1"
               - name: VLLM_ENGINE_READY_TIMEOUT_S
                 value: "3000"
-              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
-                value: "1"
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: DP_SIZE_LOCAL
@@ -114,12 +113,6 @@ spec:
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: NVSHMEM_REMOTE_TRANSPORT
-                value: ibgda
-              - name: NVSHMEM_IB_ENABLE_IBGDA
-                value: "true"
-              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-                value: eth0
               - name: GLOO_SOCKET_IFNAME
                 value: eth0
               - name: NCCL_SOCKET_IFNAME

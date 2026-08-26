@@ -3,34 +3,27 @@ SHELL := /usr/bin/env bash
 include docker/common-versions
 
 # Defaults
-PROJECT_NAME ?= llm-d
+IMAGE_REGISTRY ?= ghcr.io
+IMAGE_REGISTRY_ORG ?= llm-d
+IMAGE_REGISTRY_REPO ?= llm-d
 DOCKERFILE_DIR = docker
 
 ifeq ($(DEVICE), xpu)
 	DOCKERFILE ?= Dockerfile.xpu
 else ifeq ($(DEVICE), cpu)
 	DOCKERFILE ?= Dockerfile.cpu
-else
-	DOCKERFILE ?= Dockerfile.cuda
 endif # Maybe we break out version per image because they share no common bits --> independent release cycles
-VERSION ?= v0.2.1
+
+VERSION ?= v0.9.0
 
 # New tag to use if you would like to use `make image-retag`
 NEW_TAG ?= sha256...
 
-# DEVICE, options: ['cuda', 'xpu', 'cpu']
-DEVICE ?= cuda
+# DEVICE, options: ['xpu', 'cpu']
+DEVICE ?= xpu
 
 # ARCH, options: ['amd64', 'arm64']
 ARCH ?= amd64
-
-# OS, options: ['rhel', 'ubuntu']
-OS ?= rhel
-
-# CUDA version (e.g., 12.8, 13.0)
-CUDA_VERSION ?= 13.0
-CUDA_MAJOR := $(word 1,$(subst ., ,$(CUDA_VERSION)))
-CUDA_MINOR := $(word 2,$(subst ., ,$(CUDA_VERSION)))
 
 # USE_SCCACHE: set to true to enable sccache (requires AWS credentials)
 USE_SCCACHE ?= false
@@ -38,42 +31,21 @@ USE_SCCACHE ?= false
 # MAX_JOBS: parallel compilation jobs (reduce to avoid OOM, e.g., MAX_JOBS=1)
 MAX_JOBS ?= 3
 
-# TORCH_CUDA_ARCH_LIST: CUDA architectures to build for
-# TORCH_CUDA_ARCH_LIST ?= 7.0;7.5;8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX
-TORCH_CUDA_ARCH_LIST ?= "10.0"
-
-# Map OS to base image suffix
-ifeq ($(OS), ubuntu)
-	BASE_IMAGE_SUFFIX := ubuntu24.04
-else
-	BASE_IMAGE_SUFFIX := ubi9
-endif
-BUILD_BASE_IMAGE_SUFFIX := $(BASE_IMAGE_SUFFIX)
-
-IMAGE_BASE ?= ghcr.io/llm-d/$(PROJECT_NAME)-$(DEVICE)
-
-BUILD_CONTEXT ?= .
-DOCKERFILE_PATH = $(DOCKERFILE_DIR)/$(DOCKERFILE)
-
 # BUILD_TYPE, options ['dev', 'prod']
 BUILD_TYPE ?= dev
 ifeq ($(BUILD_TYPE), dev)
-	IMAGE_BASE := $(IMAGE_BASE)-dev
+	REGISTRY := quay.io
 endif
+
+IMAGE_BASE ?= $(REGISTRY)/$(IMAGE_REGISTRY_ORG)/$(IMAGE_REGISTRY_REPO)-$(DEVICE)
+
+BUILD_CONTEXT ?= .
+DOCKERFILE_PATH = $(DOCKERFILE_DIR)/$(DOCKERFILE)
 
 IMG := $(IMAGE_BASE):$(VERSION)
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
-
-# SUPPRESS_PYTHON_OUTPUT: Set to "1" or "true" to suppress verbose pip output during build (default: verbose enabled)
-SUPPRESS_PYTHON_OUTPUT ?=
-
-# Override NVSHMEM version and DeepEP repo/version
-# and install NVSHMEM via pypi rather than from source
-NVSHMEM_VERSION_OVERRIDE ?=
-DEEPEP_REPO_OVERRIDE ?=
-DEEPEP_VERSION_OVERRIDE ?=
 
 .PHONY: help
 help: ## Print help
@@ -81,16 +53,12 @@ help: ## Print help
 	@printf "\n\033[1mArchitecture Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build ARCH=amd64\033[0m                              # Build for x86_64 (default)\n"
 	@printf "  \033[36mmake image-build ARCH=arm64\033[0m                              # Build for ARM64\n"
-	@printf "  \033[36mmake image-build ARCH=arm64 OS=ubuntu\033[0m                    # ARM64 with Ubuntu base\n"
-	@printf "  \033[36mmake image-build ARCH=arm64 OS=ubuntu CUDA_VERSION=13.0\033[0m  # ARM64, Ubuntu, CUDA 13\n"
 	@printf "\n\033[1mXPU Build Examples:\033[0m\n"
 	@printf "  \033[36mmake image-build DEVICE=xpu\033[0m                    # Build Intel XPU Docker image\n"
 	@printf "  \033[36mmake image-build DEVICE=xpu VERSION=v0.2.0\033[0m     # Build with specific version\n"
 	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
 	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m       # Re-Tag Intel XPU Docker image\n"
 	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
-	@printf "\n\033[1mCUDA Build Examples:\033[0m\n"
-	@printf "  \033[36mmake image-build DEVICE=cuda\033[0m                            # Build CUDA Docker image (default, no EFA)\n"
 
 ##@ Development
 
@@ -123,9 +91,6 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  echo "🔧 Buildah detected: Building for $(ARCH) with $(DOCKERFILE_PATH)…"; \
 	  buildah build --file $(DOCKERFILE_PATH) --arch=$(ARCH) --os=linux --layers \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
-		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
-		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
-		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		-t $(IMG) $(BUILD_CONTEXT) || exit 1; \
 	  echo "🚀 Pushing image: $(IMG)"; \
 	  buildah push $(IMG) docker://$(IMG) || exit 1; \
@@ -136,9 +101,6 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
-		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
-		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
-		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		-f $(DOCKERFILE_DIR)/Dockerfile.cross $(BUILD_CONTEXT) || exit 1; \
 	  docker buildx rm image-builder || true; \
 	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
@@ -155,19 +117,9 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) for linux/$(ARCH) ====\033[0m\n"
 	$(CONTAINER_TOOL) build --progress=plain --platform linux/$(ARCH) \
-		--build-arg CUDA_MAJOR=$(CUDA_MAJOR) \
-		--build-arg CUDA_MINOR=$(CUDA_MINOR) \
-		--build-arg TARGETOS=$(OS) \
-		--build-arg BUILD_BASE_IMAGE_SUFFIX=$(BUILD_BASE_IMAGE_SUFFIX) \
-		--build-arg FINAL_BASE_IMAGE_SUFFIX=$(BASE_IMAGE_SUFFIX) \
 		--build-arg USE_SCCACHE=$(USE_SCCACHE) \
 		--build-arg MAX_JOBS=$(MAX_JOBS) \
-		--build-arg TORCH_CUDA_ARCH_LIST="$(TORCH_CUDA_ARCH_LIST)" \
-		$(if $(SUPPRESS_PYTHON_OUTPUT),--build-arg SUPPRESS_PYTHON_OUTPUT=$(SUPPRESS_PYTHON_OUTPUT)) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
-		$(if $(NVSHMEM_VERSION_OVERRIDE),--build-arg NVSHMEM_VERSION=$(NVSHMEM_VERSION_OVERRIDE)) \
-		$(if $(DEEPEP_REPO_OVERRIDE),--build-arg DEEPEP_REPO=$(DEEPEP_REPO_OVERRIDE)) \
-		$(if $(DEEPEP_VERSION_OVERRIDE),--build-arg DEEPEP_VERSION=$(DEEPEP_VERSION_OVERRIDE)) \
 		-t $(IMG) -f $(DOCKERFILE_PATH) $(BUILD_CONTEXT)
 
 .PHONY: image-push
@@ -194,22 +146,22 @@ uninstall: uninstall-docker ## Default uninstall using Docker
 .PHONY: install-docker
 install-docker: check-container-tool ## Install app using $(CONTAINER_TOOL)
 	@echo "Starting container with $(CONTAINER_TOOL)..."
-	$(CONTAINER_TOOL) run -d --name $(PROJECT_NAME)-container $(IMG)
+	$(CONTAINER_TOOL) run -d --name $(IMAGE_REGISTRY_REPO)-container $(IMG)
 	@echo "$(CONTAINER_TOOL) installation complete."
-	@echo "To use $(PROJECT_NAME), run:"
-	@echo "alias $(PROJECT_NAME)='$(CONTAINER_TOOL) exec -it $(PROJECT_NAME)-container /app/$(PROJECT_NAME)'"
+	@echo "To use $(IMAGE_REGISTRY_REPO), run:"
+	@echo "alias $(IMAGE_REGISTRY_REPO)='$(CONTAINER_TOOL) exec -it $(IMAGE_REGISTRY_REPO)-container /app/$(IMAGE_REGISTRY_REPO)'"
 
 .PHONY: uninstall-docker
 uninstall-docker: check-container-tool ## Uninstall app from $(CONTAINER_TOOL)
 	@echo "Stopping and removing container in $(CONTAINER_TOOL)..."
-	-$(CONTAINER_TOOL) stop $(PROJECT_NAME)-container && $(CONTAINER_TOOL) rm $(PROJECT_NAME)-container
-@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
+	-$(CONTAINER_TOOL) stop $(IMAGE_REGISTRY_REPO)-container && $(CONTAINER_TOOL) rm $(IMAGE_REGISTRY_REPO)-container
+@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
 
 ### Kubernetes Targets (kubectl)
 
 .PHONY: install-k8s
 install-k8s: check-kubectl check-kustomize check-envsubst ## Install on Kubernetes
-	export PROJECT_NAME=${PROJECT_NAME}
+	export IMAGE_REGISTRY_REPO=${IMAGE_REGISTRY_REPO}
 	export NAMESPACE=${NAMESPACE}
 	@echo "Creating namespace (if needed) and setting context to $(NAMESPACE)..."
 	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
@@ -219,71 +171,68 @@ install-k8s: check-kubectl check-kustomize check-envsubst ## Install on Kubernet
 	kustomize build deploy | envsubst | kubectl apply -f -
 	@echo "Waiting for pod to become ready..."
 	sleep 5
-	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -o jsonpath='{.items[0].metadata.name}'); \
+	@POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -o jsonpath='{.items[0].metadata.name}'); \
 	echo "Kubernetes installation complete."; \
 	echo "To use the app, run:"; \
-	echo "alias $(PROJECT_NAME)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(PROJECT_NAME)'"
+	echo "alias $(IMAGE_REGISTRY_REPO)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(IMAGE_REGISTRY_REPO)'"
 
 .PHONY: uninstall-k8s
 uninstall-k8s: check-kubectl check-kustomize check-envsubst ## Uninstall from Kubernetes
-	export PROJECT_NAME=${PROJECT_NAME}
+	export IMAGE_REGISTRY_REPO=${IMAGE_REGISTRY_REPO}
 	export NAMESPACE=${NAMESPACE}
 	@echo "Removing resources from Kubernetes..."
 	kustomize build deploy | envsubst | kubectl delete --force -f - || true
-	POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -o jsonpath='{.items[0].metadata.name}'); \
+	POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -o jsonpath='{.items[0].metadata.name}'); \
 	echo "Deleting pod: $$POD"; \
 	kubectl delete pod "$$POD" --force --grace-period=0 || true; \
-	echo "Kubernetes uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
+	echo "Kubernetes uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
 
 ### OpenShift Targets (oc)
 
 .PHONY: install-openshift
 install-openshift: check-kubectl check-kustomize check-envsubst ## Install on OpenShift
-	@echo $$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION
+	@echo $$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION
 	@echo "Creating namespace $(NAMESPACE)..."
 	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
 	@echo "Deploying common resources from deploy/ ..."
 	# Build and substitute the base manifests from deploy, then apply them
-	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
+	kustomize build deploy | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
 	@echo "Waiting for pod to become ready..."
 	sleep 5
-	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
+	@POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
 	echo "OpenShift installation complete."; \
 	echo "To use the app, run:"; \
-	echo "alias $(PROJECT_NAME)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(PROJECT_NAME)'"
+	echo "alias $(IMAGE_REGISTRY_REPO)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(IMAGE_REGISTRY_REPO)'"
 
 .PHONY: uninstall-openshift
 uninstall-openshift: check-kubectl check-kustomize check-envsubst ## Uninstall from OpenShift
 	@echo "Removing resources from OpenShift..."
-	kustomize build deploy | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete --force -f - || true
+	kustomize build deploy | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete --force -f - || true
 	# @if kubectl api-resources --api-group=route.openshift.io | grep -q Route; then \
-	#   envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
+	#   envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
 	# fi
-	@POD=$$(kubectl get pod -l app=$(PROJECT_NAME)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
+	@POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
 	echo "Deleting pod: $$POD"; \
 	kubectl delete pod "$$POD" --force --grace-period=0 || true; \
-	echo "OpenShift uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
+	echo "OpenShift uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
 
 ### RBAC Targets (using kustomize and envsubst)
 
 .PHONY: install-rbac
 install-rbac: check-kubectl check-kustomize check-envsubst ## Install RBAC
 	@echo "Applying RBAC configuration from deploy/rbac..."
-	kustomize build deploy/rbac | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -f -
+	kustomize build deploy/rbac | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -f -
 
 .PHONY: uninstall-rbac
 uninstall-rbac: check-kubectl check-kustomize check-envsubst ## Uninstall RBAC
 	@echo "Removing RBAC configuration from deploy/rbac..."
-	kustomize build deploy/rbac | envsubst '$$PROJECT_NAME $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete -f - || true
+	kustomize build deploy/rbac | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete -f - || true
 
 .PHONY: env
 env:
 	@echo "IMAGE_BASE=$(IMAGE_BASE)"
 	@echo "VERSION=$(VERSION)"
 	@echo "ARCH=$(ARCH)"
-	@echo "OS=$(OS)"
-	@echo "CUDA_VERSION=$(CUDA_VERSION) ($(CUDA_MAJOR).$(CUDA_MINOR))"
-	@echo "BASE_IMAGE_SUFFIX=$(BASE_IMAGE_SUFFIX)"
 	@echo "USE_SCCACHE=$(USE_SCCACHE)"
 	@echo "IMG=$(IMG)"
 	@echo "CONTAINER_TOOL=$(CONTAINER_TOOL)"
@@ -370,12 +319,12 @@ check-podman:
 ##@ Alias checking
 .PHONY: check-alias
 check-alias: check-container-tool
-	@echo "🔍 Checking alias functionality for container '$(PROJECT_NAME)-container'..."
-	@if ! $(CONTAINER_TOOL) exec $(PROJECT_NAME)-container /app/$(PROJECT_NAME) --help >/dev/null 2>&1; then \
-	  echo "⚠️  The container '$(PROJECT_NAME)-container' is running, but the alias might not work."; \
-	  echo "🔧 Try: $(CONTAINER_TOOL) exec -it $(PROJECT_NAME)-container /app/$(PROJECT_NAME)"; \
+	@echo "🔍 Checking alias functionality for container '$(IMAGE_REGISTRY_REPO)-container'..."
+	@if ! $(CONTAINER_TOOL) exec $(IMAGE_REGISTRY_REPO)-container /app/$(IMAGE_REGISTRY_REPO) --help >/dev/null 2>&1; then \
+	  echo "⚠️  The container '$(IMAGE_REGISTRY_REPO)-container' is running, but the alias might not work."; \
+	  echo "🔧 Try: $(CONTAINER_TOOL) exec -it $(IMAGE_REGISTRY_REPO)-container /app/$(IMAGE_REGISTRY_REPO)"; \
 	else \
-	  echo "✅ Alias is likely to work: alias $(PROJECT_NAME)='$(CONTAINER_TOOL) exec -it $(PROJECT_NAME)-container /app/$(PROJECT_NAME)'"; \
+	  echo "✅ Alias is likely to work: alias $(IMAGE_REGISTRY_REPO)='$(CONTAINER_TOOL) exec -it $(IMAGE_REGISTRY_REPO)-container /app/$(IMAGE_REGISTRY_REPO)'"; \
 	fi
 
 .PHONY: print-namespace
@@ -384,7 +333,7 @@ print-namespace: ## Print the current namespace
 
 .PHONY: print-project-name
 print-project-name: ## Print the current project name
-	@echo "$(PROJECT_NAME)"
+	@echo "$(IMAGE_REGISTRY_REPO)"
 
 .PHONY: install-hooks
 install-hooks: ## Install git hooks
