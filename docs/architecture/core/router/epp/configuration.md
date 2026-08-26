@@ -12,7 +12,7 @@ plugins:
 - ....
 featureGates:
   ...
-parser:
+requestHandler:
   ...
 flowControl:
   ...
@@ -169,18 +169,22 @@ This section covers components that process requests and responses before they r
 
 #### Parsers
 
-The `parser` section configures how the EPP understands protocol messages (e.g., OpenAI or vLLM payloads). To use a non-default parser, you must first instantiate it in the `plugins` section and then reference its name in the `parser` field:
+The `requestHandler.parsers` section configures how the EPP understands protocol messages (e.g., OpenAI or vLLM payloads). By default, when `requestHandler.parsers` is unspecified, the EPP configures three built-in parsers, `openai-parser`, `anthropic-parser`, and `vllmhttp-parser`, instantiated automatically without `plugins` entries. A request is handled by the first configured parser that claims its path (for example `/v1/chat/completions` by `openai-parser`, `/v1/messages` by `anthropic-parser`, `/inference/v1/generate` by `vllmhttp-parser`).
+
+Setting `parsers` replaces this default list. To use a non-default parser, you must first instantiate it in the `plugins` section and then reference its name in an entry of the `parsers` list:
 
 ```yaml
 plugins:
 - name: myParser
   type: vllmgrpc-parser
 # ...
-parser:
-  pluginRef: myParser
+requestHandler:
+  parsers:
+  - pluginRef: myParser
 ```
 
-If unspecified, `openai-parser` is used by default.
+> [!NOTE]
+> The top-level `parser` field (a single object) is deprecated in favor of the `requestHandler.parsers` list. If both are set, `requestHandler.parsers` is used. See [llm-d-router#1308](https://github.com/llm-d/llm-d-router/issues/1308).
 
 #### Admitters & Data Producers
 
