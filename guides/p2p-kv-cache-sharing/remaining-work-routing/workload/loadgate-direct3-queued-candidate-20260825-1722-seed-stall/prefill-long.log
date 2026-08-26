@@ -1,0 +1,26 @@
+2026-08-25T14:24:35.692422964Z (DPSupervisor pid=1) INFO:     10.202.208.155:39536 - "GET /health HTTP/1.1" 200 OK
+2026-08-25T14:24:35.694335099Z (DPSupervisor pid=1) INFO:     10.202.208.155:39538 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:24:45.695224716Z (DPSupervisor pid=1) INFO:     10.202.208.155:45210 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:24:55.694747907Z (DPSupervisor pid=1) INFO:     10.202.208.155:23902 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:24:59.172387651Z (APIServer_DP1 pid=206) INFO:     10.0.2.205:35174 - "POST /v1/completions HTTP/1.1" 200 OK
+2026-08-25T14:24:59.276417969Z [1787667899.276296] [glm-5-2-prefill-long-0:5906 :0]      ib_mlx5_dv.c:433  UCX  ERROR   mlx5dv_devx_obj_modify(opcode=0x503) failed, syndrome 0x5d668c: Remote I/O error
+2026-08-25T14:25:01.038015055Z (APIServer_DP1 pid=206) INFO 08-25 14:25:01 [loggers.py:310] Engine 001: Avg prompt throughput: 10240.6 tokens/s, Avg generation throughput: 0.1 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 32.4%, Prefix cache hit rate: 32.0%, External prefix cache hit rate: 0.0%
+2026-08-25T14:25:01.038071112Z (APIServer_DP1 pid=206) INFO 08-25 14:25:01 [metrics.py:103] KV Transfer metrics: OffloadingConnector={'vllm:kv_offload_store_bytes': 2577907712, 'vllm:kv_offload_store_time': 0.08575795197486878, 'vllm:kv_offload_store_size_count': 23, 'vllm:kv_offload_store_size_sum': 2577907712, 'vllm:kv_offload_cpu_cache_usage_perc': 0.0, 'vllm:kv_offload_cpu_allocation_size_count': 21, 'vllm:kv_offload_cpu_allocation_size_sum': 672, 'vllm:kv_offload_cpu_cache_write_usage_perc': 0.0, 'vllm:kv_offload_cpu_cache_read_usage_perc': 0.0}
+2026-08-25T14:25:05.691926466Z (DPSupervisor pid=1) INFO:     10.202.208.155:39536 - "GET /health HTTP/1.1" 200 OK
+2026-08-25T14:25:05.694461700Z (DPSupervisor pid=1) INFO:     10.202.208.155:39540 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:25:11.038535048Z (APIServer_DP1 pid=206) INFO 08-25 14:25:11 [loggers.py:310] Engine 001: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 32.4%, Prefix cache hit rate: 32.0%, External prefix cache hit rate: 0.0%
+2026-08-25T14:25:11.038589083Z (APIServer_DP1 pid=206) INFO 08-25 14:25:11 [metrics.py:103] KV Transfer metrics: OffloadingConnector={'vllm:kv_offload_cpu_cache_usage_perc': 0.0, 'vllm:kv_offload_cpu_cache_write_usage_perc': 0.0, 'vllm:kv_offload_cpu_cache_read_usage_perc': 0.0}
+2026-08-25T14:25:15.694312200Z (DPSupervisor pid=1) INFO:     10.202.208.155:10740 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:25:25.695172993Z (DPSupervisor pid=1) INFO:     10.202.208.155:21658 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:25:29.110255158Z (Worker_DP1_EP1 pid=5906) WARNING 08-25 14:25:29 [base_worker.py:2154] Releasing expired KV blocks for request cmpl-6a2e05e2-7e6b-474a-beeb-bda59231c186-0-ae61e755 which were retrieved by 0 remote worker(s) before lease expired.
+2026-08-25T14:25:35.692138104Z (DPSupervisor pid=1) INFO:     10.202.208.155:14964 - "GET /health HTTP/1.1" 200 OK
+2026-08-25T14:25:35.694603177Z (DPSupervisor pid=1) INFO:     10.202.208.155:14976 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:25:45.695170206Z (DPSupervisor pid=1) INFO:     10.202.208.155:28776 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:25:55.694836397Z (DPSupervisor pid=1) INFO:     10.202.208.155:61326 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:26:05.692252202Z (DPSupervisor pid=1) INFO:     10.202.208.155:60726 - "GET /health HTTP/1.1" 200 OK
+2026-08-25T14:26:05.694869475Z (DPSupervisor pid=1) INFO:     10.202.208.155:60734 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:26:15.694426161Z (DPSupervisor pid=1) INFO:     10.202.208.155:47236 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:26:25.695152312Z (DPSupervisor pid=1) INFO:     10.202.208.155:60058 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:26:35.691697702Z (DPSupervisor pid=1) INFO:     10.202.208.155:39536 - "GET /health HTTP/1.1" 200 OK
+2026-08-25T14:26:35.694700566Z (DPSupervisor pid=1) INFO:     10.202.208.155:39538 - "GET /readyz HTTP/1.1" 200 OK
+2026-08-25T14:26:45.694589367Z (DPSupervisor pid=1) INFO:     10.202.208.155:14630 - "GET /readyz HTTP/1.1" 200 OK

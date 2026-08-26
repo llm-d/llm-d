@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"name":"glm-cache-route-epp-candidate","namespace":"nilig-agentx-slo"},"spec":{"ports":[{"name":"http","port":80,"targetPort":8081},{"name":"grpc","port":9002,"targetPort":9002},{"name":"metrics","port":9090,"targetPort":9090}],"selector":{"app":"glm-cache-route-epp-candidate"}}}
+  creationTimestamp: "2026-08-25T07:06:58Z"
+  name: glm-cache-route-epp-candidate
+  namespace: nilig-agentx-slo
+  resourceVersion: "70597223"
+  uid: 4a2db25f-dd2f-45be-9f84-55f5d38df915
+spec:
+  clusterIP: 10.16.2.20
+  clusterIPs:
+  - 10.16.2.20
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8081
+  - name: grpc
+    port: 9002
+    protocol: TCP
+    targetPort: 9002
+  - name: metrics
+    port: 9090
+    protocol: TCP
+    targetPort: 9090
+  selector:
+    app: glm-cache-route-epp-candidate
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

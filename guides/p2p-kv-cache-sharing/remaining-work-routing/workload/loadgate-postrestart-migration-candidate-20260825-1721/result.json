@@ -1,0 +1,123 @@
+{
+  "arm": "candidate",
+  "background": [
+    {
+      "request_id": "glm-candidate-smoke-825172101-background-0",
+      "response_bytes": 358,
+      "seconds": 3.916965499985963,
+      "status": 200,
+      "ttft_seconds": 3.9167091669514775
+    }
+  ],
+  "cache_bust_tokens": 64,
+  "follow_up": {
+    "request_id": "glm-candidate-smoke-825172101-followup",
+    "response_bytes": 358,
+    "seconds": 3.5370150422677398,
+    "status": 200,
+    "ttft_seconds": 3.536752958316356
+  },
+  "follow_up_prompt_sha256": "911609a27553e9dd8bfb36f10a2e4f0cb40c5c7faa305ccda645af79682c261f",
+  "follow_up_tokens": 1024,
+  "initial_tokens": 102400,
+  "load_probe": {
+    "minimum_loaded_ranks": 1,
+    "minimum_tokens": 12548.0,
+    "observations": [
+      {
+        "capacity_queued_ranks": [],
+        "capacity_queues": {},
+        "loaded_ranks": [],
+        "seconds": 6.658956408500671e-07,
+        "tokens": {
+          "glm-5-2-prefill-long-0-rank-1": 0.0,
+          "glm-5-2-prefill-long-0-rank-2": 0.0,
+          "glm-5-2-prefill-long-0-rank-4": 0.0,
+          "glm-5-2-prefill-long-0-rank-5": 0.0,
+          "glm-5-2-prefill-long-0-rank-6": 0.0
+        }
+      },
+      {
+        "capacity_queued_ranks": [],
+        "capacity_queues": {},
+        "loaded_ranks": [
+          "glm-5-2-prefill-long-0-rank-5"
+        ],
+        "seconds": 1.02966812485829,
+        "tokens": {
+          "glm-5-2-prefill-long-0-rank-1": 0.0,
+          "glm-5-2-prefill-long-0-rank-2": 0.0,
+          "glm-5-2-prefill-long-0-rank-4": 0.0,
+          "glm-5-2-prefill-long-0-rank-5": 12800.0,
+          "glm-5-2-prefill-long-0-rank-6": 0.0
+        }
+      }
+    ],
+    "peak_tokens": {
+      "glm-5-2-prefill-long-0-rank-1": 0,
+      "glm-5-2-prefill-long-0-rank-2": 0,
+      "glm-5-2-prefill-long-0-rank-4": 0,
+      "glm-5-2-prefill-long-0-rank-5": 12800.0,
+      "glm-5-2-prefill-long-0-rank-6": 0
+    },
+    "reached": true,
+    "required_capacity_queued_ranks": 0
+  },
+  "mode": "exact-context-migration-smoke",
+  "model": "zai-org/GLM-5.2-FP8",
+  "salt": 825172101,
+  "schema": 1,
+  "seed": {
+    "request_id": "glm-candidate-smoke-825172101-seed",
+    "response_bytes": 363,
+    "seconds": 20.198481667321175,
+    "status": 200,
+    "ttft_seconds": 20.198386125266552
+  },
+  "seed_prompt_sha256": "167af19953eadc41aa5ab6876ef90135b8b1970981be9e1ad7af280c66a38997",
+  "session_id": "glm-candidate-smoke-825172101-session",
+  "total_follow_up_tokens": 103424,
+  "trigger_probe": {
+    "minimum_loaded_ranks": 1,
+    "minimum_tokens": 12548.0,
+    "observations": [
+      {
+        "capacity_queued_ranks": [],
+        "capacity_queues": {},
+        "loaded_ranks": [],
+        "seconds": 6.658956408500671e-07,
+        "tokens": {
+          "glm-5-2-prefill-long-0-rank-1": 0.0,
+          "glm-5-2-prefill-long-0-rank-2": 0.0,
+          "glm-5-2-prefill-long-0-rank-4": 0.0,
+          "glm-5-2-prefill-long-0-rank-5": 0.0,
+          "glm-5-2-prefill-long-0-rank-6": 0.0
+        }
+      },
+      {
+        "capacity_queued_ranks": [],
+        "capacity_queues": {},
+        "loaded_ranks": [
+          "glm-5-2-prefill-long-0-rank-5"
+        ],
+        "seconds": 1.02966812485829,
+        "tokens": {
+          "glm-5-2-prefill-long-0-rank-1": 0.0,
+          "glm-5-2-prefill-long-0-rank-2": 0.0,
+          "glm-5-2-prefill-long-0-rank-4": 0.0,
+          "glm-5-2-prefill-long-0-rank-5": 12800.0,
+          "glm-5-2-prefill-long-0-rank-6": 0.0
+        }
+      }
+    ],
+    "peak_tokens": {
+      "glm-5-2-prefill-long-0-rank-1": 0,
+      "glm-5-2-prefill-long-0-rank-2": 0,
+      "glm-5-2-prefill-long-0-rank-4": 0,
+      "glm-5-2-prefill-long-0-rank-5": 12800.0,
+      "glm-5-2-prefill-long-0-rank-6": 0
+    },
+    "reached": true,
+    "required_capacity_queued_ranks": 0
+  }
+}
