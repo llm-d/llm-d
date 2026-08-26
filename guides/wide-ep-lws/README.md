@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. This guide includes both `LeaderWorkerSet` and `DisaggregatedSet` deployment paths. It has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. The NVIDIA GPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together; the Intel XPU configuration uses plain `LeaderWorkerSet`. It has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -91,8 +91,7 @@ This guide includes configurations for the following accelerators:
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
-* To use the `DisaggregatedSet` path, install LWS `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` CRD, validating webhook, and RBAC used by the NVIDIA GPU path.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
@@ -157,30 +156,16 @@ For Intel XPU, include
 
 ### 2. Deploy the Model Server
 
-Choose one of the following deployment paths:
-
-#### Deploy using LeaderWorkerSet
-
-Apply the Kustomize overlay for your specific backend:
+The NVIDIA GPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together. Apply the Kustomize overlay for your specific backend:
 
 ```bash
 # NVIDIA GPU
-export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
+export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200, topology-aware/gke, topology-aware/gke-a4
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 
 # Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
-```
-
-#### Deploy using DisaggregatedSet
-
-Apply the `DisaggregatedSet` overlay for your provider:
-
-```bash
-# NVIDIA GPU
-export INFRA_PROVIDER=gke # options: base, gke, coreweave, topology-aware/gke, topology-aware/gke-a4
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable Monitoring

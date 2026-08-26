@@ -3,39 +3,72 @@ kind: Kustomization
 resources:
   - ../base
 
+# CoreWeave-specific configuration, expressed as JSON patches into the
+# DisaggregatedSet role pod templates: roles/0 is prefill, roles/1 is decode.
 patches:
   - target:
-      kind: LeaderWorkerSet
+      kind: DisaggregatedSet
+      name: wide-ep-lws-nvidia-gpu-vllm
     patch: |-
       # We add the volume for different providers since the hostPath can be different.
       - op: replace
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
         value:
           name: hf-cache
           hostPath:
             path: /mnt/local/hf-cache
             type: DirectoryOrCreate
       - op: replace
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: jit-cache
+          hostPath:
+            path: /mnt/local/jit-cache
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          hostPath:
+            path: /mnt/local/hf-cache
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
         value:
           name: jit-cache
           hostPath:
             path: /mnt/local/jit-cache
             type: DirectoryOrCreate
       - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
           name: NCCL_IB_HCA
           value: "ibp"
       - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NVSHMEM_HCA_PREFIX
+          value: "ibp"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_IB_HCA
+          value: "ibp"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
           name: NVSHMEM_HCA_PREFIX
           value: "ibp"
       # Add RDMA config.
       - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
         value: "1"
       - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
+        value: "1"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
+        value: "1"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
