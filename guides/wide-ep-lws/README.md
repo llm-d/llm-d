@@ -194,7 +194,11 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/x
 Apply the `DisaggregatedSet` overlay:
 
 ```bash
+# NVIDIA GPU (vLLM)
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset
+
+# NVIDIA GPU (SGLang)
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/disaggregatedset
 ```
 
 ### 3. (Optional) Enable Monitoring

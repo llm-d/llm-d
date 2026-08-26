@@ -1,0 +1,24 @@
+# Single DisaggregatedSet managing prefill and decode roles.
+# Requires LWS with DisaggregatedSet CRD and controller installed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-R1-0528
+      llm-d.ai/guide: wide-ep-lws
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: sglang
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
