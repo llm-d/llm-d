@@ -470,8 +470,8 @@ GPUs total, identical on both architectures.
   identical nodes on both architectures to isolate architecture from node variance):
 
   <p float="left">
-    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned/analysis/ttft_distribution.png" width="45%" />
-    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned/analysis/request_latency_distribution.png" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/ttft_distribution.png" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
   </p>
 
   Median TTFT is 1.8-4.8% higher with the Coordinator across all four prompt lengths
@@ -485,8 +485,8 @@ GPUs total, identical on both architectures.
   (100, 500, 1,000, 2,500 output tokens; fixed 250-token input; same node-pinning):
 
   <p float="left">
-    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned/analysis/ttft_distribution.png" width="45%" />
-    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned/analysis/request_latency_distribution.png" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/ttft_distribution.png" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
   </p>
 
   Median TTFT is 1.6-4.9% higher with the Coordinator; median request latency is
@@ -504,8 +504,8 @@ GPUs total, identical on both architectures.
   stages from 50 to 500; every stage hit 100% success on both sides.
 
   <p float="left">
-    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/analysis_random_spikes/ttft_distribution.png" width="45%" />
-    <img src="https://raw.githubusercontent.com/dmitripikus/coordinator-performance/main/pd-comparison-analysis/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/analysis_random_spikes/request_latency_distribution.png" width="45%" />
+    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/ttft_distribution.png" width="45%" />
+    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/request_latency_distribution.png" width="45%" />
   </p>
 
   At the two lowest concurrency stages the Coordinator is ahead on both metrics that
