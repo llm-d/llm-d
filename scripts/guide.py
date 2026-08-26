@@ -36,6 +36,7 @@ CLI
 
     guide.py render guides/optimized-baseline       # validate, then write
     guide.py render guides/optimized-baseline --check    # CI: fail if stale
+    guide.py render guides --recursive --check       # CI: check every guide
     guide.py render guides/optimized-baseline --dry-run  # print to stdout
 
     guide.py emit guides/flow-control env deploy.standalone
@@ -1193,7 +1194,7 @@ class Guide:
 # --------------------------------------------------------------------------
 
 
-def _iter_targets(targets: list[str]) -> Iterator[Path]:
+def _iter_targets(targets: list[str], *, recursive: bool = False) -> Iterator[Path]:
     """Expand positional targets.
 
     A *guide* is a directory containing a ``guide.yaml`` — that is what makes it
@@ -1201,11 +1202,18 @@ def _iter_targets(targets: list[str]) -> Iterator[Path]:
     only sub-guides) has a README.md that is not rendered from anything. So a
     directory without a guide.yaml is skipped when it came from a glob, and
     reported when named explicitly. To validate a lone markdown file, pass
-    ``--md``.
+    ``--md``. With ``recursive``, directories containing both ``guide.yaml`` and
+    ``README.md`` are discovered below each directory target.
     """
     explicit = len(targets) == 1
     for t in targets:
         p = Path(t)
+        if recursive and p.is_dir():
+            for guide_yaml in sorted(p.rglob(GUIDE_YAML)):
+                guide_dir = guide_yaml.parent
+                if (guide_dir / GUIDE_MD).is_file():
+                    yield guide_dir
+            continue
         if p.is_dir() and not (p / GUIDE_YAML).is_file():
             if explicit:
                 raise GuideError(f"no {GUIDE_YAML} in {p} (use --md to check a lone markdown file)")
@@ -1222,7 +1230,7 @@ def _guides(args: argparse.Namespace) -> Iterator[Guide]:
     if args.yaml or args.md:
         yield Guide.load(yaml=args.yaml, md=args.md)
         return
-    for target in _iter_targets(args.targets):
+    for target in _iter_targets(args.targets, recursive=args.recursive):
         yield Guide.load(target)
 
 
@@ -1247,6 +1255,8 @@ def _selection_error(args: argparse.Namespace) -> str | None:
     default (which ``add_common`` does), so the guard travels with the flags."""
     if (args.yaml or args.md) and args.targets:
         return "pass positional targets or --yaml/--md, not both"
+    if getattr(args, "recursive", False) and (args.yaml or args.md):
+        return "--recursive requires positional directory targets"
     if not args.yaml and not args.md and not args.targets:
         return "nothing to do — pass a target, --yaml, or --md"
     return None
@@ -1352,6 +1362,7 @@ def build_parser() -> argparse.ArgumentParser:
             "render needs both halves:\n"
             "  guide.py render guides/my-guide\n"
             "  guide.py render guides/*/ --check          CI: fail if any is stale\n"
+            "  guide.py render guides --recursive --check recursively check all guides\n"
             "\n"
             "emit needs the YAML half only:\n"
             "  guide.py emit guides/my-guide env deploy.standalone\n"
@@ -1369,6 +1380,11 @@ def build_parser() -> argparse.ArgumentParser:
         )
         p.add_argument("--yaml", metavar="PATH", help="explicit guide.yaml path")
         p.add_argument("--md", metavar="PATH", help="explicit markdown path")
+        p.add_argument(
+            "--recursive",
+            action="store_true",
+            help="recursively discover directories containing guide.yaml and README.md",
+        )
         # main() runs _selection_error for every namespace carrying this flag.
         p.set_defaults(_needs_selection=True)
 
