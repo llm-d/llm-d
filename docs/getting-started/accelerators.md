@@ -11,6 +11,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
+| Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
@@ -74,6 +75,24 @@ For P/D disaggregation with RDMA-accelerated KV-cache transfer on Intel XPU, the
 - UCX transport configured with `ib,rc,ze_copy`.
 
 The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
+
+## Iluvatar
+
+Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). P/D disaggregation has been validated end-to-end through llm-d routing on a 2x BI-V150 single-node cluster.
+
+**UCX transport (required for P/D):**
+
+`IluNixlConnector` transfers KV cache over NIXL/UCX with `kv_buffer_device=cuda` (KV stays in VRAM). UCX must be configured with CUDA-aware transports:
+
+```yaml
+- name: UCX_TLS
+  value: "cuda_copy,cuda_ipc,tcp,self,posix,sysv"
+- name: UCX_CUDA_IPC_ENABLE_SAME_PROCESS
+  value: "y"
+```
+
+Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
+
 
 ## CPU Inferencing
 

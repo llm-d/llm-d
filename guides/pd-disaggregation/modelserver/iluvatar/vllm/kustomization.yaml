@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../recipes/modelserver/base/single-host/pd/vllm
+
+namePrefix: pd-disaggregation-iluvatar-vllm-
+
+components:
+  - ../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: registry.iluvatar.com.cn:10443/k8s/vllm
+    newTag: corex450-ucx1201-nixl110
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen2.5-1.5B-Instruct
+      llm-d.ai/guide: pd-disaggregation-iluvatar
+      llm-d.ai/accelerator-variant: iluvatar
+      llm-d.ai/accelerator-vendor: iluvatar
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
