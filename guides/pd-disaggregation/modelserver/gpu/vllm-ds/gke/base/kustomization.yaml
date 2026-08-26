@@ -2,13 +2,13 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../base
+  - ../../base
 
-# Adds the gke-rdma-template ResourceClaimTemplate. The component's nested
-# NCCL patches target Deployment/LeaderWorkerSet and do not match the
-# DisaggregatedSet, so the equivalent env vars are set in the patches below.
+# Adds the gke-rdma-template ResourceClaimTemplate and the NCCL tuner/net
+# plugin env vars (the nested disable-gke-nccl-tuner-patch component patches
+# DisaggregatedSet roles directly).
 components:
-  - ../../../components/gke-rdma
+  - ../../../../components/gke-rdma
 
 # Same provider-specific configuration as the Deployment-based gke overlay
 # (../vllm/gke), expressed as JSON patches into the DisaggregatedSet role pod
@@ -40,16 +40,6 @@ patches:
         value:
           name: UCX_IB_ROCE_REACHABILITY_MODE
           value: "all"
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_TUNER_PLUGIN
-          value: "none"
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_NET_PLUGIN
-          value: ""
       - op: add
         path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
         value:
@@ -84,16 +74,6 @@ patches:
         value:
           name: UCX_IB_ROCE_REACHABILITY_MODE
           value: "all"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_TUNER_PLUGIN
-          value: "none"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_NET_PLUGIN
-          value: ""
       - op: add
         path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
         value:

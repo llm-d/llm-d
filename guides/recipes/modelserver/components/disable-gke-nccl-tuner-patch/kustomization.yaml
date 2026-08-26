@@ -28,3 +28,26 @@ patches:
         value:
           name: NCCL_NET_PLUGIN
           value: ""
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_TUNER_PLUGIN
+          value: "none"
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_NET_PLUGIN
+          value: ""
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_TUNER_PLUGIN
+          value: "none"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_NET_PLUGIN
+          value: ""

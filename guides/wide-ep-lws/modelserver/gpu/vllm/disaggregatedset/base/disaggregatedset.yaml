@@ -239,7 +239,6 @@ spec:
             - name: routing-proxy
               args:
               - --port=8000
-              - --vllm-port=8200
               - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1

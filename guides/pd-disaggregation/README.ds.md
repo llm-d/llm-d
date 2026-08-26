@@ -71,17 +71,18 @@ Deploy the router in either Standalone or Gateway mode by following the exact in
 
 Choose the overlay matching your infrastructure provider:
 
-* **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE), same as the Deployment-based `gke/base` overlay. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](./README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
+* **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE), same as the Deployment-based `gke/base` overlay. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](./README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce)). Platform sub-overlays `gke/a4x` and `gke/a4xmax` cover A4X (GB200) and A4X Max (GB300).
 * **CoreWeave**: Deploys on CoreWeave.
+* **AWS**: Deploys on AWS using EFA, same as the Deployment-based `aws` overlay.
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke
+export INFRA_PROVIDER=base # base | coreweave | gke/base | gke/a4x | gke/a4xmax | aws
 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-ds/${INFRA_PROVIDER}
 ```
 
 > [!TIP]
-> For providers and platforms without a DisaggregatedSet overlay yet (e.g. `aws`, `gke/a4x`, `gke/a4xmax`), port the patches from the corresponding [Deployment-based overlay](./README.md#2-deploy-the-model-server) under `modelserver/gpu/vllm/` — see `modelserver/gpu/vllm-ds/gke/kustomization.yaml` for the pattern.
+> For providers and platforms without a DisaggregatedSet overlay yet, port the patches from the corresponding [Deployment-based overlay](./README.md#2-deploy-the-model-server) under `modelserver/gpu/vllm/` — see `modelserver/gpu/vllm-ds/gke/base/kustomization.yaml` for the pattern.
 
 This creates one `DisaggregatedSet` named `pd-disagg`. The controller fans it out into one LeaderWorkerSet per `(slice, role)`, named `<ds>-<slice>-<revision>-<role>`:
 

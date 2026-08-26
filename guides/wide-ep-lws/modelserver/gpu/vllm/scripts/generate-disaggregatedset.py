@@ -80,6 +80,7 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parent.parent
         / "disaggregatedset"
+        / "base"
         / "disaggregatedset.yaml",
     )
     args = parser.parse_args()

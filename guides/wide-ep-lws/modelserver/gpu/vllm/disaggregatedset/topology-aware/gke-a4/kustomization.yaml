@@ -1,0 +1,6 @@
+# Same as the topology-aware gke DisaggregatedSet overlay; kept as a separate
+# overlay to mirror the LeaderWorkerSet topology-aware/gke-a4 provider path.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../gke

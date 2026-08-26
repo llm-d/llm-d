@@ -92,7 +92,7 @@ This guide includes configurations for the following accelerators:
   ```
 
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
-* To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
+* To use the `DisaggregatedSet` path, install LWS `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
@@ -175,10 +175,12 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/x
 
 #### Deploy using DisaggregatedSet
 
-Apply the `DisaggregatedSet` overlay:
+Apply the `DisaggregatedSet` overlay for your provider:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset
+# NVIDIA GPU
+export INFRA_PROVIDER=gke # options: base, gke, coreweave, topology-aware/gke, topology-aware/gke-a4
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable Monitoring
