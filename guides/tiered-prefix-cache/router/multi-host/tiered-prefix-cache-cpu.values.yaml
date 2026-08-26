@@ -22,7 +22,7 @@ router:
           name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
-            lruCapacityPerServer: 82000  # Allocating ~200GB for Qwen-32B: 82,000 blocks * 2.5MB/block (based on 160KB/token * 16 block size).
+            lruCapacityPerServer: 10000  # Allocating 10,000 blocks for Qwen3-Coder-480B-A35B-Instruct.
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
         - type: prefix-cache-scorer
