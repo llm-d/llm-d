@@ -3,6 +3,11 @@ name: Nightly - Tiered Prefix Cache CPU Offloading E2E (Intel XPU)
 on:
   workflow_dispatch:
     inputs:
+      cluster_namespace:
+        description: 'Cluster namespace'
+        required: false
+        type: 'string'
+        default: 'llm-d-nightly-tiered-prefix-cache-intel-xpu'
       decode_pods:
         description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
         required: false

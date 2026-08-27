@@ -3,6 +3,11 @@ name: Nightly - Precise Prefix Cache E2E (GKE TPU)
 on:
   workflow_dispatch:
     inputs:
+      cluster_namespace:
+        description: 'Cluster namespace'
+        required: false
+        type: 'string'
+        default: 'llm-d-nightly-prefix-cache-gke-tpu'
       decode_pods:
         description: 'Number of decode (vllm "standalone") pods (default "auto", means what was configured on the scenario)'
         required: false
