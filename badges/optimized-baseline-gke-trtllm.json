@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "TRTLLM GPU",
-  "message": "cancelled",
-  "color": "lightgrey"
+  "message": "passing",
+  "color": "brightgreen"
 }
