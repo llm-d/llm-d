@@ -99,6 +99,8 @@ jobs:
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit
 
   update-badge:
@@ -111,3 +113,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

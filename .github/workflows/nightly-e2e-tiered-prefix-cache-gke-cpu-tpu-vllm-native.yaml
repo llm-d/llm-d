@@ -120,6 +120,8 @@ jobs:
       data_access_timeout: '3600'
       wait_timeout: '3600'
       job_timeout: '3600s'
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit
 
   update-badge:
@@ -132,3 +134,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

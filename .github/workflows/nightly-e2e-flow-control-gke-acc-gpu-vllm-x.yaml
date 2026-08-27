@@ -140,6 +140,7 @@ jobs:
       skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' || github.event.inputs.cleanup == 'false' }}
       pr_number: ${{ github.event.inputs.pr_number }}
       pr_repo: ${{ github.event.inputs.pr_repo }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
     secrets: inherit
 
   update-badge:
@@ -155,3 +156,4 @@ jobs:
       # and the badge falls back to a plain pass/fail (no category granularity).
       # Same as the workload-autoscaling lanes.
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

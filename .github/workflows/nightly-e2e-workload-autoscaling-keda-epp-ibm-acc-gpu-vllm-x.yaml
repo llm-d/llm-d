@@ -112,6 +112,7 @@ jobs:
       skip_cleanup: ${{ inputs.cleanup == 'false' }}
       pr_number: ${{ github.event.inputs.pr_number }}
       pr_repo: ${{ github.event.inputs.pr_repo }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
     secrets: inherit
 
   update-badge:
@@ -124,3 +125,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

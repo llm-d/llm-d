@@ -116,6 +116,8 @@ jobs:
       cleanup: ${{ inputs.cleanup || 'true' }}
       tpu_chips: ${{ inputs.tpu_chips || '16' }}
       tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit
 
   update-badge:
@@ -128,3 +130,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
