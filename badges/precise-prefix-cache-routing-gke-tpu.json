@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM TPU",
-  "message": "cancelled",
-  "color": "lightgrey"
+  "message": "infra-error",
+  "color": "orange"
 }
