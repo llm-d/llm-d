@@ -50,11 +50,11 @@ This guide includes configurations for the following accelerators:
 
 | Backend | Directory | Notes |
 | --- | --- | --- |
-| NVIDIA GPU (GKE) | `modelserver/gpu/vllm/gke/` | GKE deployment (H200) |
-| NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/gke/` | GKE LWS multi-host deployment (H200/B200) |
-| NVIDIA GPU (GKE A4) | `modelserver/gpu/vllm/topology-aware/gke-a4/` | GKE deployment (B200) |
-| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm/coreweave/` | CoreWeave deployment |
-| NVIDIA GPU (GB200) | `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
+| NVIDIA GPU (GKE) | `modelserver/gpu/vllm-deepseek-r1-0528/gke/` | GKE deployment (H200) |
+| NVIDIA GPU (SGLang) | `modelserver/gpu/sglang-deepseek-r1-0528/gke/` | GKE LWS multi-host deployment (H200/B200) |
+| NVIDIA GPU (GKE A4) | `modelserver/gpu/vllm-deepseek-r1-0528/topology-aware/gke-a4/` | GKE deployment (B200) |
+| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm-deepseek-r1-0528/coreweave/` | CoreWeave deployment |
+| NVIDIA GPU (GB200) | `modelserver/gpu/vllm-deepseek-r1-0528/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
 | Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
 
 > [!NOTE]
@@ -179,10 +179,10 @@ Apply the Kustomize overlay for your specific backend:
 ```bash
 # NVIDIA GPU (vLLM)
 export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 
 # NVIDIA GPU (SGLang)
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang-deepseek-r1-0528/gke
 
 # Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
@@ -195,10 +195,10 @@ Apply the `DisaggregatedSet` overlay:
 
 ```bash
 # NVIDIA GPU (vLLM)
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/disaggregatedset
 
 # NVIDIA GPU (SGLang)
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/disaggregatedset
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang-deepseek-r1-0528/disaggregatedset
 ```
 
 ### 3. (Optional) Enable Monitoring
@@ -295,9 +295,9 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # If you enabled monitoring (Step 3), remove the monitoring overlay first.
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
 # NVIDIA GPU (vLLM)
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 # NVIDIA GPU (SGLang)
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/gke
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang-deepseek-r1-0528/gke
 # Intel XPU
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
 ```
