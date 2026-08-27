@@ -169,6 +169,34 @@ Calibration procedure:
    share is flat from 2K to 24K boundaries on the AgentX Weka corpus); set
    the ceiling to your `--max-model-len`.
 
+## Calibrating the work-range boundary
+
+The long/short split (`llm-d.ai/prefill-work-range`) is derived from
+deployment measurements, not workload knowledge. Run
+`calibrate_work_boundary.py` from an in-cluster pod against ONE idle
+prefill engine's direct Service:
+
+    python3 calibrate_work_boundary.py \
+        --engine-host <prefill>-direct --model <model-id> \
+        --ranks 8 --ttft-penalty-ms <gate budget> --block-size 64
+
+It measures peak per-rank prefill throughput and KV bytes/token (from the
+offload store counters), then derives two anchors: the pull-vs-recompute
+crossover (below which migrating a request cannot pay for its pull) and
+the SLO-equivalent work (the tokens one rank prefills within the load
+gate's `maxTTFTPenaltyMs`). The boundary is the crossover rounded up to
+the KV block size, clamped into that band; the script prints the labels
+and EPP parameters as one consistent set. On the GLM-5.2 cell it derives
+8,640 tokens against an independently measured 8,650 crossover.
+
+If the script reports an empty band, pulls cannot pay off inside the
+declared TTFT budget on this hardware: raise the budget or do not split
+the pool. The pull-cost defaults (`--pull-floor-s 1.25`,
+`--pull-per-token-us 134`) are measured on the GLM upstream tier; refine
+them by timing one seeded cross-engine pull on your fabric. Keep
+`minCachedTokenDelta: 1`; with a larger delta D the routed length becomes
+tail + D - 1 and the boundary must rise by D.
+
 ## Verify before benchmarking
 
 Deploy order: engines, wait Ready, then control-plane. Then gate on exact
