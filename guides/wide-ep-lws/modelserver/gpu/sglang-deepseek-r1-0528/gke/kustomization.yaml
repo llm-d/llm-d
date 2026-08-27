@@ -59,13 +59,79 @@ patches:
   - target:
       kind: LeaderWorkerSet
     patch: |-
+      # Enable privileged container on GKE to perform GPU initiated RDMA.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
         value: true
+      # GKE Warden (mutating webhook) injects resource requests for both
+      # networking.gke.io.networks/rdma-X and networking.gke.io.networks/rdma-X.IP
+      # from the networking.gke.io/interfaces annotation. Modern GKE H200/A3 nodes
+      # only advertise the .IP variant, causing pods to stay Pending without this workaround.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-0
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-0
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-1
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-1
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-2
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-2
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-3
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-3
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-4
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-4
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-5
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-5
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-6
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-6
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/networking.gke.io.networks~1rdma-7
+        value: "0"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/networking.gke.io.networks~1rdma-7
+        value: "0"
+      # Add GKE specific RDMA configuration.
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/metadata/annotations
         value:
           networking.gke.io/default-interface: 'eth0'
+          networking.gke.io/interfaces: |
+            [
+              {"interfaceName":"eth0","network":"default"},
+              {"interfaceName":"eth2","network":"rdma-0"},
+              {"interfaceName":"eth3","network":"rdma-1"},
+              {"interfaceName":"eth4","network":"rdma-2"},
+              {"interfaceName":"eth5","network":"rdma-3"},
+              {"interfaceName":"eth6","network":"rdma-4"},
+              {"interfaceName":"eth7","network":"rdma-5"},
+              {"interfaceName":"eth8","network":"rdma-6"},
+              {"interfaceName":"eth9","network":"rdma-7"}
+            ]
       - op: add
         path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
