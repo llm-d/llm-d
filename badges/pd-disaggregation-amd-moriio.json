@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCM MORI",
-  "message": "timeout",
-  "color": "yellow"
+  "message": "cancelled",
+  "color": "lightgrey"
 }
