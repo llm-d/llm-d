@@ -1,187 +1,438 @@
-# Deploying llm-d on Azure Kubernetes Service (AKS)
+# Deploying llm-d on Azure Kubernetes Service
 
-This guide provides instructions for configuring Azure Kubernetes Service (AKS) clusters to run LLM inference workloads using llm-d.
+## Status and scope
+
+This guide describes the AKS infrastructure that supports llm-d on
+RDMA-capable Azure ND-series GPU nodes. In the Azure VM SKU naming convention,
+the lower-case `r` in the capability part of the name identifies RDMA support.
+Examples of this capability part include `asr`, `amsr`, and `isr`.
+
+Examples include:
+
+- `Standard_ND96asr_v4`;
+- `Standard_ND96amsr_A100_v4`;
+- `Standard_ND96isr_H100_v5`; and
+- `Standard_ND96isr_H200_v5`.
+
+Always confirm that the selected SKU supports InfiniBand in the target region.
+Do not select a general-purpose GPU SKU only because it has NVIDIA GPUs.
+
+Use these support levels:
+
+| SKU class | Status in this guide |
+| --- | --- |
+| RDMA-capable ND-series SKU with the `r` marker | Target deployment class |
+| `Standard_ND96isr_H100_v5` | Fully qualified reference |
+| Other A100, H100, or H200 ND-series RDMA SKU | Use the procedure, then run all qualification gates |
+| GB200 or GB300 rack-scale SKU | Use the procedure plus the supported ICG/ICB placement path; qualify the SKU-specific image and topology |
+
+The same llm-d deployment pattern used by the H100 example also applies to
+supported GB-series GPU nodes. Use AKS-managed GPU support, DRANET device
+claims, `IPC_LOCK`, and the NCCL and NIXL validation gates. For GB-series
+deployments, also use the available rack-aware placement controls.
+
+The infrastructure procedure was qualified with this configuration:
+
+| Component | Qualified configuration |
+| --- | --- |
+| AKS | Kubernetes 1.34 with `resource.k8s.io/v1` DRA APIs |
+| Validated GPU node | `Standard_ND96isr_H100_v5`, eight H100 GPUs |
+| Node OS | Ubuntu 24.04 |
+| Minimum node image | `AKSUbuntu-2404gen2containerd-202608.14.0` |
+| GPU support | AKS-managed NVIDIA driver and GPU resource registration |
+| Host RDMA | Ubuntu Azure kernel inbox `mlx5` and RDMA modules |
+| GPUDirect mechanism | DMA-BUF |
+| NIC allocation | DRANET v1.3.0 with Kubernetes Dynamic Resource Allocation |
+| Workload memory locking | `IPC_LOCK` capability |
+
+This procedure prepares AKS for llm-d. The infrastructure tests include raw
+RDMA, NCCL, and NIXL. A persistent llm-d serving deployment and an inference
+request are separate application tests.
+
+The deployment model applies to RDMA-capable ND-series GPU SKUs. The recorded
+test results are specific to the qualified H100 configuration. Run the same
+qualification gates for each GPU SKU, AKS node image, and driver version.
+
+Use `AKSUbuntu-2404gen2containerd-202608.14.0` or a later Ubuntu 24.04 AKS
+node image. Later node images should work with this procedure. Run the
+qualification gates after each node-image update before you deploy llm-d.
 
 ## Prerequisites
 
-Before proceeding with this guide, ensure you have completed the following requirements:
+You need:
 
-- [client setup prerequisites](../../../../helpers/client-setup/README.md)
-- The latest [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with aks-preview extension installed (`az extension add --upgrade --name aks-preview`)
-- `ClusterAdmin` RBAC role assigned to your user account for the target AKS cluster
-- An AKS cluster. If you need to create one, refer to the [AKS quickstart guide](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-cli)
-- Sufficient quota allocated for GPU VM instances in your Azure subscription
+- an AKS cluster;
+- quota and capacity for the selected RDMA-capable ND-series GPU SKU;
+- two GPU nodes for inter-node RDMA and prefill/decode tests;
+- `az`, `kubectl`, `helm`, and `jq`;
+- cluster administrator access; and
+- a Kubernetes API server that exposes `resource.k8s.io/v1`.
 
-## Recommended GPU VM Configurations
+Set the deployment values:
 
-The following table outlines the recommended Azure GPU VM sizes optimized for high-performance LLM inference workloads with llm-d:
+```bash
+export AZURE_SUBSCRIPTION_ID='<subscription-id>'
+export AZURE_RESOURCE_GROUP='<resource-group>'
+export AKS_CLUSTER_NAME='<cluster-name>'
+export GPU_NODE_POOL='<node-pool-name>'
+export GPU_VM_SIZE='Standard_ND96isr_H100_v5'
 
-| GPU Model | VM Size                                                                                                                                      | GPU Count | Memory per GPU | Total GPU Memory | RDMA over InfiniBand Support | Supported Well-Lit Paths                                                                                                                                                                                                                                                                                                                                                                    |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------- | ---------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A100      | [Standard_NC24ads_A100_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nca100v4-series?tabs=sizebasic)    | 1         | 80 GB          | 80 GB            | ❌                           | [optimized baseline](../../../../guides/optimized-baseline/README.md)<br/>[Precise Prefix Cache Routing](../../../../guides/precise-prefix-cache-routing/README.md)                                                                                                                                                                                                            |
-| A100      | [Standard_ND96asr_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndasra100v4-series?tabs=sizebasic)      | 8         | 40 GB          | 320 GB           | ✅                           | [optimized baseline](../../../../guides/optimized-baseline/README.md)<br/>[Precise Prefix Cache Routing](../../../../guides/precise-prefix-cache-routing/README.md)                                                                                                                                                                                                            |
-| A100      | [Standard_ND96amsr_A100_v4](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndma100v4-series?tabs=sizebasic)  | 8         | 80 GB          | 640 GB           | ✅                           | [optimized baseline](../../../../guides/optimized-baseline/README.md)<br/>[Precise Prefix Cache Routing](../../../../guides/precise-prefix-cache-routing/README.md)                                                                                                                                                                                                            |
-| H100      | [Standard_ND96isr_H100_v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/ndh100v5-series?tabs=sizebasic)    | 8         | 80 GB          | 640 GB           | ✅                           | [optimized baseline](../../../../guides/optimized-baseline/README.md)<br/>[Precise Prefix Cache Routing](../../../../guides/precise-prefix-cache-routing/README.md)<br/>[P/D Disaggregation](../../../../guides/pd-disaggregation/README.md) (2 nodes required with vLLM flag `--max-model-len=4500`)                                                                              |
-| H200      | [Standard_ND96isr_H200_v5](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/nd-h200-v5-series?tabs=sizebasic)  | 8         | 141 GB         | 1128 GB          | ✅                           | [optimized baseline](../../../../guides/optimized-baseline/README.md)<br/>[Precise Prefix Cache Routing](../../../../guides/precise-prefix-cache-routing/README.md)<br/>[P/D Disaggregation](../../../../guides/pd-disaggregation/README.md) (2 nodes required)<br/>[Wide Expert Parallelism (EP/DP) with LeaderWorkerSet](../../../../guides/wide-ep-lws/README.md) (4 nodes required)|
+az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+az aks get-credentials \
+  --resource-group "${AZURE_RESOURCE_GROUP}" \
+  --name "${AKS_CLUSTER_NAME}"
 
-## Cluster Configuration
+kubectl config current-context
+```
 
-GPUDirect RDMA is essential for achieving optimal performance with advanced deployment patterns such as [P/D Disaggregation](../../../../guides/pd-disaggregation/README.md) and [Wide Expert Parallelism](../../../../guides/wide-ep-lws/README.md). To enable GPUDirect RDMA, you must create and configure a GPU node pool with the appropriate VM size and install the required drivers.
+Confirm the DRA API before you install DRANET:
 
-### Creating the GPU Node Pool
+```bash
+kubectl api-resources --api-group=resource.k8s.io
+```
 
-Before creating your GPU node pool, you must decide on your driver installation strategy. Two options are available:
+The output must include these resources at `v1`:
 
-<details>
-<summary>Option 1: Self-Managed Driver Installation</summary>
+```text
+deviceclasses
+resourceclaims
+resourceclaimtemplates
+resourceslices
+```
 
-With this approach, you retain full control over the NVIDIA driver installation process. Create the node pool with the `--gpu-driver none` flag to prevent AKS from automatically installing NVIDIA drivers.
+## 1. Create the RDMA-capable ND-series node pool
+
+Use Ubuntu 24.04 and the AKS-managed GPU stack. The following command is a
+template. Review availability zones, disk settings, autoscaling, and capacity
+requirements for your environment before you run it.
 
 ```bash
 az aks nodepool add \
+  --subscription "${AZURE_SUBSCRIPTION_ID}" \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
-  --cluster-name "${CLUSTER_NAME}" \
-  --name "${NODEPOOL_NAME}" \
-  --node-count "${NODEPOOL_NODE_COUNT}" \
-  --node-vm-size "${NODEPOOL_VM_SIZE}" \
-  --os-sku Ubuntu \
-  --gpu-driver none
+  --cluster-name "${AKS_CLUSTER_NAME}" \
+  --name "${GPU_NODE_POOL}" \
+  --node-count 2 \
+  --node-vm-size "${GPU_VM_SIZE}" \
+  --os-sku Ubuntu2404 \
+  --enable-managed-gpu true \
+  --node-taints sku=gpu:NoSchedule
 ```
 
-</details>
+`--enable-managed-gpu=true` selects the full AKS-managed GPU experience. AKS
+then manages the NVIDIA driver, Kubernetes device plugin, DCGM metrics
+exporter, and GPU health monitoring. See
+[Create an AKS-managed GPU node pool](https://learn.microsoft.com/azure/aks/aks-managed-gpu-nodes).
 
-<details>
-<summary>Option 2: AKS-Managed Driver Installation</summary>
+The `sku=gpu:NoSchedule` taint is recommended to keep general workloads off
+the GPU nodes. It is not an RDMA requirement. GPU workloads must include the
+matching toleration.
 
-With this approach, AKS handles the NVIDIA GPU driver installation automatically. Create the node pool without specifying the `--gpu-driver` parameter to use the managed driver installation.
+The managed GPU experience is currently a preview feature and can require the
+AKS preview extension:
 
 ```bash
-az aks nodepool add \
-  --resource-group "${AZURE_RESOURCE_GROUP}" \
-  --cluster-name "${CLUSTER_NAME}" \
-  --name "${NODEPOOL_NAME}" \
-  --node-count "${NODEPOOL_NODE_COUNT}" \
-  --node-vm-size "${NODEPOOL_VM_SIZE}" \
-  --os-sku Ubuntu
+az extension add --upgrade --name aks-preview
 ```
 
-</details>
+## 2. Validated host and GPU baseline
 
-### Installing the DOCA-OFED Driver
+The H100 qualification confirmed the required baseline on
+`Standard_ND96isr_H100_v5` nodes. The final conformance run used the retained
+cross-pool node pair. The detailed host inspection used two nodes with the
+same VM size, node image, kernel, and GPU driver.
 
-For VM sizes that support RDMA over InfiniBand, the DOCA-OFED driver must be installed to enable it. Deploy the driver using the [Network Operator](http://github.com/Mellanox/network-operator/):
+| Item | Confirmed result |
+| --- | --- |
+| GPU inventory | Eight NVIDIA H100 80 GB GPUs per node |
+| Kubernetes GPU resources | Eight allocatable `nvidia.com/gpu` resources per node |
+| Node OS | Ubuntu 24.04.4 LTS |
+| Kernel | `6.8.0-1064-azure` |
+| NVIDIA driver | AKS-managed NVIDIA open kernel driver `580.159.04` |
+| RDMA modules | `mlx5_core`, `mlx5_ib`, `ib_core`, and `ib_uverbs` loaded from `linux-modules-6.8.0-1064-azure` |
+| InfiniBand devices | Eight workload devices, `mlx5_0` through `mlx5_7`, Active and LinkUp at 400 Gb/s NDR |
+| DMA-BUF | NCCL reported `DMA-BUF is available` and used `GDRDMA` |
+| Containerd NRI | Enabled with `disable = false`; `/var/run/nri/nri.sock` present |
 
-```bash
-helmfile apply -f network-operator.helmfile.yaml
+The Kubernetes node result was:
+
+```text
+NAME                                  READY   GPU   OS                   KERNEL
+aks-managedh100-48873085-vmss000007   True    8     Ubuntu 24.04.4 LTS   6.8.0-1064-azure
+aks-h100xpg-32240380-vmss000001       True    8     Ubuntu 24.04.4 LTS   6.8.0-1064-azure
 ```
 
-### Configuring the nvidia-peermem Kernel Module
+The detailed host inspection recorded this module state on both inspected
+H100 hosts:
 
-After installing DOCA-OFED, you may need to install the NVIDIA GPU drivers and enable the `nvidia-peermem` kernel module, depending on your chosen installation method.
-
-<details>
-<summary>Option 1: Self-Managed Driver Installation</summary>
-
-We recommend using the [NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/index.html) to manage the installation of NVIDIA GPU drivers and related GPU components. The driver installation via the GPU Operator includes enabling the `nvidia-peermem` kernel module required for GPUDirect RDMA over InfiniBand.
-
-```bash
-helmfile apply -f gpu-operator.helmfile.yaml
+```text
+mlx5_core loaded=yes package=linux-modules-6.8.0-1064-azure
+mlx5_ib   loaded=yes package=linux-modules-6.8.0-1064-azure
+ib_core   loaded=yes package=linux-modules-6.8.0-1064-azure
+ib_uverbs loaded=yes package=linux-modules-6.8.0-1064-azure
 ```
 
-</details>
+The eight workload InfiniBand ports reported this pattern:
 
-<details>
-<summary>Option 2: AKS-Managed Driver Installation</summary>
-
-The GPU drivers installed by AKS do not enable the `nvidia-peermem` kernel module by default. This module is required for GPUDirect RDMA over InfiniBand. To load this module, deploy the `nvidia-peermem-reloader` DaemonSet:
-
-```bash
-# Deploy the nvidia-peermem-reloader DaemonSet
-# Reference: https://github.com/Azure/aks-rdma-infiniband/blob/main/configs/nvidia-peermem-reloader/ds.yaml
-kubectl apply -f https://raw.githubusercontent.com/Azure/aks-rdma-infiniband/refs/heads/main/configs/nvidia-peermem-reloader/ds.yaml
-```
-
-Subsequently, install the NVIDIA device plugin to enable GPU resource management in Kubernetes:
-
-```bash
-helmfile apply -f nvidia-device-plugin.helmfile.yaml
-```
-
-</details>
-
-### Enabling Node Resource Interface (NRI)
-
-AKS worker nodes enforce a default maximum locked memory limit (`ulimit -l`) of 64 KiB per container. This limit is insufficient for vLLM's NIXL connector, which require substantially higher locked memory allocations. To address this limitation, enable the Node Resource Interface (NRI) on all GPU nodes in your cluster. NRI allows the integration of plugins that can adjust maximum locked memory limit for containers.
-
-#### Modifying the containerd Configuration
-
-NRI must be explicitly enabled in the containerd configuration. The required configuration changes in the node's `/etc/containerd/config.toml` are as follows:
-
-```toml
+```text
+mlx5_0 state=ACTIVE physical_state=LinkUp link_layer=InfiniBand rate=400 Gb/sec
 ...
-[plugins."io.containerd.nri.v1.nri"]
+mlx5_7 state=ACTIVE physical_state=LinkUp link_layer=InfiniBand rate=400 Gb/sec
+```
+
+NCCL confirmed the GPU-direct path:
+
+```text
+DMA-BUF is available on GPU device 0
+GPU Direct RDMA Enabled for HCA 0 'mlx5_0'
+Channel 00/0 ... via NET/IB/0/GDRDMA
+```
+
+The effective containerd configuration confirmed NRI support:
+
+```text
+[plugins.'io.containerd.nri.v1.nri']
   disable = false
-...
+  socket_path = '/var/run/nri/nri.sock'
+
+/var/run/nri/nri.sock: socket, owner=root:root, mode=755
 ```
 
-To apply this configuration:
+## 3. Install DRANET
 
-1. Access each GPU node using `kubectl debug`:
+DRANET provides Kubernetes DRA allocation and isolation for the InfiniBand
+NICs. It does not install the host NIC driver.
+
+AKS-managed DRANET support is work in progress. AKS is expected to provide a
+managed DRANET solution in the future. Until that service is available, you
+must install and operate DRANET in the cluster.
+
+Create the workload namespace:
 
 ```bash
-kubectl debug node/<gpu-node-name> -it --image=ubuntu --profile=sysadmin -- chroot /host
+kubectl create namespace llm-d-infra \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-1. Within the debug pod, edit the containerd configuration file:
+Create `dranet-values.yaml`:
+
+```yaml
+image:
+  repository: registry.k8s.io/networking/dranet
+  tag: v1.3.0
+  pullPolicy: IfNotPresent
+
+nodeSelector:
+  kubernetes.azure.com/agentpool: <node-pool-name>
+
+args:
+  cloudProviderHint: AZURE
+  moveIBInterfaces: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 50Mi
+  limits:
+    memory: 256Mi
+```
+
+`moveIBInterfaces: false` keeps the IP over InfiniBand interface on the host
+and lets DRANET inject the allocated RDMA character devices.
+
+The guide uses the AKS-provided
+`kubernetes.azure.com/agentpool=<node-pool-name>` label. Custom `llm-d.ai/*`
+labels are not required. If one DRANET deployment must cover multiple RDMA
+node pools, an operator-managed common label is an optional way to select all
+of those pools.
+
+Install the pinned chart:
 
 ```bash
-vim /etc/containerd/config.toml
+helm upgrade --install dranet \
+  oci://registry.k8s.io/networking/charts/dranet \
+  --version v1.3.0 \
+  --namespace kube-system \
+  --values dranet-values.yaml \
+  --wait \
+  --timeout 10m
 ```
 
-1. Add or modify the NRI configuration section as shown above.
-
-2. Restart the containerd service to apply the changes:
+Verify that DRANET runs only on the intended RDMA nodes:
 
 ```bash
-systemctl restart containerd
+kubectl get daemonset dranet -n kube-system -o wide
+kubectl get pods -n kube-system \
+  --selector=app.kubernetes.io/name=dranet \
+  -o wide
 ```
 
-1. Exit the debug pod:
+## 4. Create the RDMA DeviceClass
+
+The `DeviceClass` accepts only RDMA-capable devices that the `dra.net` driver
+publishes:
+
+```yaml
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: dranet.net
+spec:
+  selectors:
+    - cel:
+        expression: >-
+          device.driver == "dra.net" &&
+          device.attributes["dra.net"].rdma == true
+```
+
+Apply the object:
 
 ```bash
-exit
+kubectl apply -f dranet-device-class.yaml
 ```
 
-1. Repeat these steps for each GPU node in your cluster.
-
-#### Deploying the ulimit Adjuster Plugin
-
-After successfully enabling NRI and restarting containerd on all GPU nodes, deploy the [ulimit adjuster plugin](https://github.com/containerd/nri/tree/main/plugins/ulimit-adjuster) to automatically increase the locked memory limit for GPU workloads.
+DRANET then publishes one `ResourceSlice` for each selected ND-series node.
+The number of devices is SKU-specific. Discover and record the expected count
+before you create a full-node claim. The H100 reference has eight devices.
 
 ```bash
-kubectl apply -k https://github.com/containerd/nri/contrib/kustomize/ulimit-adjuster
+kubectl get resourceslices.resource.k8s.io -o json | jq -r '
+  .items[]
+  | select(.spec.driver == "dra.net")
+  | [
+      .spec.nodeName,
+      (.spec.devices | length),
+      .spec.devices[0].attributes["azure.dra.net/vmSize"].string,
+      .spec.devices[0].attributes["azure.dra.net/placementGroupId"].string
+    ]
+  | @tsv'
 ```
 
-## Verification
+Expected shape:
 
-After completing the configuration, verify that your cluster is properly set up for GPU workloads.
+```text
+<node-1>  8  Standard_ND96isr_H100_v5  <placement-group-id>
+<node-2>  8  Standard_ND96isr_H100_v5  <placement-group-id>
+```
 
-### Verifying Node Resources
+For another SKU, set the claim count to the RDMA-device count that DRANET
+publishes for that SKU.
 
-Confirm that GPU and RDMA resources are correctly exposed on your nodes:
+## 5. Create a full-node NIC claim template
+
+Create one template for each VM size. This H100 example allocates all eight
+InfiniBand NICs to one pod. Change the name, count, and VM-size selector for a
+different RDMA-capable ND SKU:
+
+```yaml
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: nd-rdma-full-node-h100
+  namespace: llm-d-infra
+spec:
+  spec:
+    devices:
+      requests:
+        - name: rdma-nics
+          exactly:
+            deviceClassName: dranet.net
+            count: 8
+            selectors:
+              - cel:
+                  expression: >-
+                    device.attributes["azure.dra.net"]["vmSize"] ==
+                    "Standard_ND96isr_H100_v5"
+```
+
+Apply it:
 
 ```bash
-kubectl describe node <gpu-node-name>
-
-...
-Capacity:
-  nvidia.com/gpu:     8
-  rdma/ib:            8
-...
+kubectl apply -f nd-rdma-full-node-h100.yaml
 ```
 
-> **Note:** The `nvidia.com/gpu` resource represents the number of physical GPUs available on the node, while `rdma/ib` indicates the maximum number of pods that can concurrently utilize RDMA over InfiniBand. As a best practice, each pod should request exactly one `rdma/ib` resource, independent of the number of GPUs it consumes.
+Use a smaller claim count for a partial-node experiment. Partial-node GPU and
+NIC placement needs additional PCI and NUMA topology validation.
 
-## Point of Contact
+## 6. Configure llm-d model-server pods
 
-- [Ernest Wong](https://github.com/chewong)
+Each full-node model-server pod requests the GPU and NIC counts for its SKU.
+The following H100 example requests eight GPUs and the eight-NIC claim. It
+also receives `IPC_LOCK`:
+
+```yaml
+spec:
+  nodeSelector:
+    kubernetes.azure.com/agentpool: <node-pool-name>
+  tolerations:
+    - key: sku
+      operator: Equal
+      value: gpu
+      effect: NoSchedule
+  resourceClaims:
+    - name: rdma-nics
+      resourceClaimTemplateName: nd-rdma-full-node-h100
+  containers:
+    - name: modelserver
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          add:
+            - IPC_LOCK
+          drop:
+            - ALL
+      env:
+        - name: UCX_TLS
+          value: rc_x,cuda_copy,cuda_ipc,self
+      resources:
+        requests:
+          nvidia.com/gpu: 8
+        limits:
+          nvidia.com/gpu: 8
+        claims:
+          - name: rdma-nics
+```
+
+Do not add `privileged: true`. Do not set an explicit 64 GiB memory-lock
+limit. The qualified test kept the normal 8 MiB `RLIMIT_MEMLOCK` value and
+used `IPC_LOCK` to lock 64 MiB successfully.
+
+For prefill/decode disaggregation, use one full GPU node for prefill and one
+full GPU node for decode. Set the tensor-parallel size and resource counts for
+the selected SKU. Add required pod anti-affinity so the two engines run on
+different nodes.
+
+## 7. Validate before you deploy the serving stack
+
+GPU and ResourceSlice publication alone does not make the infrastructure
+ready. Run active data-path tests on the selected nodes.
+
+Required gates:
+
+1. A one-NIC DRA isolation pod sees exactly one allocated `uverbs` device.
+2. A full-node claim exposes the expected number of `uverbs` devices.
+3. Two-node `ib_write_bw` uses InfiniBand RC transport without TCP fallback.
+4. NCCL reports DMA-BUF and `GDRDMA` and completes with zero wrong values.
+5. NIXL selects UCX `rc_mlx5` and transfers GPU memory with zero wrong values.
+6. A full-node NCCL test uses all expected GPUs and RDMA rails.
+
+We validated this data path on two `Standard_ND96isr_H100_v5` nodes. All
+required tests passed:
+
+| Test | Validated result |
+| --- | --- |
+| DRA device isolation | An unprivileged pod saw only its allocated `uverbs` device |
+| Full-node DRA claim | Eight RDMA devices were visible in the pod |
+| Raw InfiniBand | `ib_write_bw` used RC transport and reached 375.97 Gb/s on one rail |
+| NCCL | Sixteen GPUs used all eight GDRDMA rails with zero wrong values |
+| NIXL | UCX `rc_mlx5` completed a verified GPU-memory transfer with zero wrong values |
+| Cross-placement-group path | Raw InfiniBand, NCCL, and NIXL passed between different placement groups |
+
+## Placement guidance
+
+Azure provides finer-grained topology scheduling for supported GB-series
+rack-scale SKUs through Interconnect Groups, Interconnect Blocks, and
+per-rack interconnect subgroups. Use this model when an llm-d workload
+requires explicit rack-aware placement. For current ND-series deployments,
+`placementGroupId` is diagnostic VMSS metadata. It is not proof that two
+nodes are in the same physical rack.
