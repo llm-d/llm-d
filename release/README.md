@@ -21,27 +21,15 @@ This document describes the release process for llm-d. The release dates should 
 
 ## Release Testing
 
-> Snapshot of guide validation captured at each release. Unlike the nightly
-> matrix above (a live mirror of `main`), this matrix is frozen at release time
-> and updated automatically by the [release matrix
-> workflow](../.github/workflows/release-matrix.yaml) whenever a `v*` tag is
-> pushed (including pre-releases such as `v0.9.0-rc1`).
+> Guide validation per release, from e2e runs made **against the release
+> branch** — unlike the nightly matrix above, which mirrors `main`.
+>
+> These runs are dispatched manually as part of the release process; see
+> [Release work](#3-release-work). Each cell is a live badge scoped to its
+> release, so re-running a single lane updates the table on its own.
 
 <!-- RELEASE-MATRIX-START -->
-**Release snapshot:** [`v0.9.0-rc.1`](https://github.com/llm-d/llm-d/releases/tag/v0.9.0-rc.1)
-
-| Guide | IBM | CKS | GKE | AMD | Intel |
-|-------|-----|-----|-----|-----|-----|
-| [Optimized Baseline](../guides/optimized-baseline/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-benchmark--error-yellow)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-benchmark--error-yellow)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml) | [![SGLang GPU](https://img.shields.io/badge/SGLang_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml) [![TRTLLM GPU](https://img.shields.io/badge/TRTLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-trtllm-x.yaml) [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-guide--error-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/badge/vLLM_TPU-infra--error-orange)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/badge/vLLM_ROCm-benchmark--error-yellow)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/badge/vLLM_XPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml) |
-| [Precise Prefix Cache Routing](../guides/precise-prefix-cache-routing/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml) | [![vLLM TPU](https://img.shields.io/badge/vLLM_TPU-not_run-lightgrey)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-gke-acc-tpu-vllm-x.yaml) [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/badge/vLLM_ROCm-guide--error-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/badge/vLLM_XPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml) |
-| [P/D Disaggregation](../guides/pd-disaggregation/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-dry--run-blue)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks-acc-gpu-vllm-x.yaml) | [![SGLang GPU](https://img.shields.io/badge/SGLang_GPU-guide--error-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-gpu-sglang-x.yaml) [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-guide--error-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/badge/vLLM_TPU-infra--error-orange)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm MORI](https://img.shields.io/badge/vLLM_ROCm-not_run-lightgrey)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-moriio.yaml) [![vLLM ROCm NIXL](https://img.shields.io/badge/vLLM_ROCm-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-nixl.yaml) | [![vLLM XPU](https://img.shields.io/badge/vLLM_XPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml) |
-| [Wide Expert Parallelism](../guides/wide-ep-lws/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-dry--run-blue)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-guide--error-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-guide--error-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-gke-acc-gpu-vllm-x.yaml) |  | [![vLLM XPU](https://img.shields.io/badge/vLLM_XPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-lws-intel-acc-xpu-vllm-x.yaml) |
-| [Tiered Prefix Cache (CPU Offloading)](../guides/tiered-prefix-cache/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml) |  | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml) [![vLLM TPU](https://img.shields.io/badge/vLLM_TPU-infra--error-orange)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml) |  |  |
-| [Tiered Prefix Cache (LMCache)](../guides/tiered-prefix-cache/README.md) |  |  | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml) |  |  |
-| [Predicted Latency-Based Routing](../guides/predicted-latency-routing/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/badge/vLLM_ROCm-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml) |  |
-| [Flow Control](../guides/flow-control/README.md) |  |  | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-prereqs--error-black)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml) |  |  |
-| [Workload Autoscaling (WVA)](../guides/workload-autoscaling/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-failing-red)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-cks-acc-gpu-vllm-x.yaml) |  |  |  |
-| [Fast Model Actuation (FMA)](../guides/fast-model-actuation/README.md) | [![vLLM GPU](https://img.shields.io/badge/vLLM_GPU-passing-brightgreen)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+_No release captured yet._
 <!-- RELEASE-MATRIX-END -->
 
 ## Phases
@@ -122,18 +110,28 @@ The final release work involves creating a tag in the llm-d repo, which triggers
 The process involves creating a Release Candidate (RC) tag for a dry run of the release workflow, which is a method to test the process and identify necessary updates (such as removing the deprecated images build from the CI). We typically delete RC tags after testing, while the final release is drafted from a new tag using the collected release notes.
 
 > [!NOTE]
-> Pushing any `v*` tag (RCs included) also triggers the [release matrix
-> workflow](https://github.com/llm-d/llm-d/blob/main/.github/workflows/release-matrix.yaml),
-> which snapshots the current guide testing badges and opens a PR against `main`
-> updating the [Release Testing](#release-testing) matrix above. The matrix is a
-> frozen record of the tag that produced it, so each RC/release refreshes it.
+> The [Release Testing](#release-testing) matrix is **not** produced by tagging.
+> The nightly e2e lanes test `main`, so a matrix that reflects the release branch
+> needs those lanes dispatched against it explicitly, in two manual steps:
 >
-> That PR needs a human to take ownership of its commit before it can merge — CI
-> cannot produce a DCO sign-off or a signature on your behalf. The PR body spells
-> out the commands; they amount to:
+> 1. [`release-e2e.yaml`](../.github/workflows/release-e2e.yaml) dispatches the
+>    `nightly-e2e-*` lanes with `matrix_type=release-${MAJOR}.${MINOR}`, which makes
+>    them check out the release branch and write their badges to
+>    `badges/<badge>_release-${MAJOR}.${MINOR}.json`.
+> 2. Once those badges exist,
+>    [`release-matrix.yaml`](../.github/workflows/release-matrix.yaml) renders that
+>    release's section of the matrix and opens a PR against `main`.
+>
+> The step-by-step commands are in the [new release issue
+> template](../.github/ISSUE_TEMPLATE/new-release.md). Because the badges are live,
+> re-running a single lane updates the matrix with no re-render.
+>
+> The PR from `release-matrix.yaml` needs a human to take ownership of its commit
+> before it can merge — CI cannot produce a DCO sign-off or a signature on your
+> behalf. The PR body spells out the commands; they amount to:
 >
 > ```bash
-> gh pr checkout release-matrix/<tag>
+> gh pr checkout release-matrix/<version>
 > git commit --amend --reset-author -s -S --no-edit
 > git push --force-with-lease
 > ```
