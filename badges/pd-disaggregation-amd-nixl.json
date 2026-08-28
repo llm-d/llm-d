@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCM NIXL",
-  "message": "guide-error",
-  "color": "red"
+  "message": "cancelled",
+  "color": "lightgrey"
 }
