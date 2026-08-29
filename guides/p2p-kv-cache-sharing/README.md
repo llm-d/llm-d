@@ -541,6 +541,18 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render
    misses recompute, so a request whose peer does not have the blocks
    degrades to baseline behavior rather than failing.
 
+## Work-range variant: remaining-work routing [Experimental]
+
+Routes long-context follow-ups by their remaining prefill work instead of
+their total length: a request whose prefix is pullable over the P2P tier
+counts only its fresh tail, so it can run on a short-work prefill class
+and pull the prefix instead of queueing behind cold long prefills. Split
+prefill classes by the `llm-d.ai/prefill-work-range` label, derive the
+boundary with the deployment-measured calibration script, and see
+[remaining-work-routing/](remaining-work-routing/README.md) for the full
+deploy and
+[benchmark results](benchmark-results/remaining-work-routing/RESULTS.md).
+
 ## P/D variant: P2P over NIXL disaggregation
 
 Measured on this topology: **6.3x median TTFT and +50% throughput**

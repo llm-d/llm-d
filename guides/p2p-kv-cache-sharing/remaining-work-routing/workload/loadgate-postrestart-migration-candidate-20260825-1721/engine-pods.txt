@@ -1,4 +1,0 @@
-NAME                      READY   STATUS    RESTARTS   AGE     IP           NODE      NOMINATED NODE   READINESS GATES
-glm-5-2-decode-0          3/3     Running   0          8m17s   10.0.2.205   g13bc90   <none>           <none>
-glm-5-2-prefill-long-0    2/2     Running   0          20m     10.0.9.113   g134dfa   <none>           <none>
-glm-5-2-prefill-short-0   2/2     Running   0          20m     10.0.8.178   gf2a19e   <none>           <none>
