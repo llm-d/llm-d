@@ -47,8 +47,8 @@ Render with the load restrictor off (the kustomizations patch base manifests
 by relative path):
 
 ```bash
-kustomize build --load-restrictor LoadRestrictionsNone engines | kubectl apply -f -
-kustomize build --load-restrictor LoadRestrictionsNone control-plane | kubectl apply -f -
+kustomize build engines | kubectl apply -f -
+kustomize build control-plane | kubectl apply -f -
 ```
 
 Per-cluster edits before applying: the `namespace` in every
