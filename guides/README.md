@@ -94,7 +94,7 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 **Overriding:** For any other non-default image — a vendor fork, platform variant, or a *specific* nightly tag that the component's moving `nightly` tag does not yet include — add an inline `images:` section in the overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an override that names the placeholder is silently ignored. Every override **must** include a `TODO` comment with a tracking issue for cleanup:
 
 ```yaml
-# TODO(#123): Remove override once upstream vLLM includes NIXL support.
+# TODO(#123): Remove override once this fix lands in an upstream vLLM release.
 images:
   - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/example/custom-vllm
