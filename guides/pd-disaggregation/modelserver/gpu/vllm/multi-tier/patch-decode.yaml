@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - "--port=8000"
+            - "--vllm-port=8200"
+            - "--kv-connector=nixlv2"
+            - "--zap-log-level=1"
+            - "--secure-proxy=false"
+      containers:
+        - name: modelserver
+          args:
+            - "openai/gpt-oss-120b"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=4"
+            - "--block-size=128"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"recompute"}'
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):8000@openai/gpt-oss-120b"}'
+            - "--no-disable-hybrid-kv-cache-manager"
+            - "--port=8200"
+          env:
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"

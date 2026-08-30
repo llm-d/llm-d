@@ -120,6 +120,19 @@ jobs:
           done
           exit $failed
 
+      - name: Dry-run router (pd-disaggregation multi-tier)
+        run: |
+          CHART_VERSION=v0
+          echo "--- helm template ---"
+          helm template pd-multi-tier-router \
+            "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
+            -f guides/recipes/router/base.values.yaml \
+            -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
+            -f guides/pd-disaggregation/router/pd-multi-tier.values.yaml \
+            --version "${CHART_VERSION}" > /tmp/rendered.yaml
+          echo "--- kubectl apply --dry-run=server ---"
+          kubectl apply --dry-run=server -f /tmp/rendered.yaml
+
       - name: Dry-run router (precise-prefix-cache-routing)
         run: |
           CHART_VERSION=v0
