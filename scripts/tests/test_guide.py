@@ -213,6 +213,13 @@ def test_emitting_parent_section_concatenates_all_subgroups():
     assert "echo gateway" in out
 
 
+def test_unhashable_yaml_key_is_reported_as_finding():
+    data, finding = guide.parse_guide_yaml("{[a, b]: c}\n")
+    assert data is None
+    assert finding is not None
+    assert "unhashable" in finding.message
+
+
 def test_cli_refuses_invalid_yaml(tmp_path, capsys):
     bad_yaml = "name: broken\nenv: {static: {}}\n"  # missing required deploy
     bad = tmp_path / "guide.yaml"
