@@ -57,8 +57,8 @@ if (( VERBOSE )); then
 fi
 
 NAMESPACE="${NAMESPACE:-$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || echo default)}"
-GATEWAY_OBJECT=$(kubectl get gateway --no-headers | grep "inference-gateway")
-GATEWAY_SERVICE=$(kubectl get services --no-headers | grep "inference-gateway" | awk '{print $1}')
+GATEWAY_OBJECT=$(kubectl get gateway -n "${NAMESPACE}" --no-headers | grep "inference-gateway")
+GATEWAY_SERVICE=$(kubectl get services -n "${NAMESPACE}" --no-headers | grep "inference-gateway" | awk '{print $1}')
 
 if [[ -z "${GATEWAY_OBJECT}" ]]; then
     echo "Error, could not find the Gateway"
