@@ -2,22 +2,22 @@
 
 **Authors**: Sima Nadler (_IBM_)
 
-Add `tenant_id`, `user_id`, and `workload_id` tracking to the OpenCost inference cost capabilities based on attribution metrics emitted by the llm-d EPP (Endpoint Picker).
+Add `tenant_id`, `user_id`, and `workload_id` tracking to the OpenCost inference cost capabilities based on attribution metrics emitted by the llm-d stack.
 
 See the following related documents:
 
-- **Proposal for adding new dimensions to llm-d:** `request-attribution-metrics.md` — covers the EPP extensions required to emit attribution labels on Prometheus metrics and structured logs.
+- **Proposal for adding new dimensions to llm-d:** `request-attribution-metrics.md` — covers the changes required to emit attribution labels on Prometheus metrics and structured logs.
 ---
 
 ## 1. Proposed Implementation
 
 ### 1.1 New types (`core/pkg/source/inference_results.go`)
 
-Add three new types to support the EPP's per-attribution-dimension token sums:
+Add three new types to support per-attribution-dimension token sums:
 
 ```go
 // InferenceDimensionKey identifies a (user_id, tenant_id, workload_id, serving_model, namespace)
-// combination. UserID may be empty when prometheusUserIdLabel: false is configured on the EPP.
+// combination. UserID may be empty when the user_id label is absent from the attribution metrics.
 type InferenceDimensionKey struct {
     UserID       string
     TenantID     string
@@ -34,7 +34,7 @@ type InferenceDimensionTokens struct {
     CompletionTokens float64
 }
 
-// InferenceDimensionResult holds per-dimension token counts from the EPP.
+// InferenceDimensionResult holds per-dimension token counts from attribution metrics.
 type InferenceDimensionResult struct {
     Values map[InferenceDimensionKey]*InferenceDimensionTokens
 }
@@ -66,10 +66,10 @@ all requests and behaves as a monotonically increasing counter. OpenCost queries
 the `_sum` series using the same `last_over_time` delta pattern as
 `queryCounterDelta` — no separate `_total` counter metrics are needed.
 
-`user_id` may or may not be present as a label depending on the EPP's
-`prometheusUserIdLabel` configuration. A single PromQL query covers both cases:
-when `user_id` is absent from the series, the `sum by (…)` simply omits it and
-the resulting `InferenceDimensionKey` is built with `UserID = ""`.
+`user_id` may or may not be present as a label on these series. A single PromQL
+query covers both cases: when `user_id` is absent from the series, the
+`sum by (…)` simply omits it and the resulting `InferenceDimensionKey` is built
+with `UserID = ""`.
 
 `QueryInferenceDimensionTokens` issues **two queries per token type** (four
 total: input + output, each at start + end of window):
@@ -97,7 +97,7 @@ The same pattern applies to `llm_d_epp_request_output_tokens_sum`. The helper
 (once per metric). Results are merged into a single `InferenceDimensionResult`,
 with `UserID = ""` for entries where `user_id` is absent from the series labels.
 
-If `INFERENCE_EPP_ATTRIBUTION_ENABLED` is false (EPP attribution not enabled),
+If `INFERENCE_ATTRIBUTION_ENABLED` is false,
 `QueryInferenceDimensionTokens` returns an empty result immediately without
 querying Prometheus.
 
@@ -107,7 +107,7 @@ Add three fields to each struct, and update `newInferenceCostResponse()` to copy
 
 ```go
 // pkg/inferencecost/types.go — InferenceCostProperties
-// Empty when not broken down by dimension, or when prometheusUserIdLabel: false (UserID only).
+// Empty when not broken down by dimension, or when user_id is absent from attribution metrics (UserID only).
 UserID     string
 TenantID   string
 WorkloadID string
@@ -150,11 +150,11 @@ Token counts are set directly from `InferenceDimensionTokens` (not scaled fracti
 
 **`CollectMetrics` return type** stays `([]*InferenceCost, error)` — it returns only the model-level slice as today. The dimension token data (`InferenceDimensionResult`) is stored as a field on `Collector` after the collect step, allowing `BuildDimensionCosts` (called from `runner.go` after the calculator) to read it without changing `CollectMetrics`' signature. `queryservice.go`'s `computeStep` calls `BuildDimensionCosts` directly after calling `CollectMetrics` and the (local) calculator.
 
-**Data quality check** — after building dimension costs, compare total EPP input token sums against vLLM prompt token totals per `serving_model:namespace`. Log a warning when the ratio falls below 0.9 (configurable), indicating requests are bypassing the EPP:
+**Data quality check** — after building dimension costs, compare total attributed input token sums against vLLM prompt token totals per `serving_model:namespace`. Log a warning when the ratio falls below 0.9 (configurable), indicating requests are not being attributed:
 
 ```go
 // sum(llm_d_epp_request_input_tokens_sum[model:ns]) / vllm_prompt_tokens[model:ns] < 0.9
-// → log.Warnf("InferenceCost: EPP coverage low for model=%s ns=%s (%.0f%% of vLLM tokens attributed)")
+// → log.Warnf("InferenceCost: attribution coverage low for model=%s ns=%s (%.0f%% of vLLM tokens attributed)")
 ```
 
 ### 1.6 Exporter (`pkg/inferencecost/exporter.go`)
@@ -171,7 +171,7 @@ dimensionCost = prometheus.NewGaugeVec(
 )
 ```
 
-When `user_id` is empty (EPP `prometheusUserIdLabel: false`), the gauge is still emitted with an empty string label value — this is valid Prometheus behaviour and preserves `tenant_id`/`workload_id` attribution.
+When `user_id` is empty (absent from the attribution metrics), the gauge is still emitted with an empty string label value — this is valid Prometheus behaviour and preserves `tenant_id`/`workload_id` attribution.
 
 ### 1.7 Aggregation & API
 
@@ -193,8 +193,8 @@ When `user_id` is empty (EPP `prometheusUserIdLabel: false`), the gauge is still
 | `core/pkg/source/mock.go` | Add | Mock impl with override injection for `QueryInferenceDimensionTokens` |
 | `modules/prometheus-source/pkg/prom/inference_queries.go` | Add | `QueryInferenceDimensionTokens` (histogram `_sum` delta strategy), `queryDimensionCounterDelta`, decoder, `mergeDimensionDeltas` |
 | `modules/collector-source/pkg/collector/metricsquerier.go` | Add | Stub impl (returns empty) for `QueryInferenceDimensionTokens` |
-| `pkg/inferencecost/types.go` | Extend | `UserID/TenantID/WorkloadID` on `InferenceCostProperties`; `EPPAttributionEnabled` on `Config` |
-| `pkg/inferencecost/env.go` | Extend | Reader for `INFERENCE_EPP_ATTRIBUTION_ENABLED` |
+| `pkg/inferencecost/types.go` | Extend | `UserID/TenantID/WorkloadID` on `InferenceCostProperties`; `AttributionEnabled` on `Config` |
+| `pkg/inferencecost/env.go` | Extend | Reader for `INFERENCE_ATTRIBUTION_ENABLED` |
 | `pkg/inferencecost/apitypes.go` | Extend | `UserID/TenantID/WorkloadID` on `InferenceCostAPIProperties`; update `newInferenceCostResponse` |
 | `pkg/inferencecost/collector.go` | Extend | `QueryInferenceDimensionTokens` future; stores `InferenceDimensionResult` as field after collect; `BuildDimensionCosts(modelCosts)` public method; coverage warning |
 | `pkg/inferencecost/aggregate.go` | Extend | 3 new dimensions in map + switch statements |
@@ -208,7 +208,7 @@ When `user_id` is empty (EPP `prometheusUserIdLabel: false`), the gauge is still
 | Test file | What to add |
 |---|---|
 | `core/pkg/source/decoders_test.go` | `TestDecodeInferenceDimensionResult` — including the case where `user_id` label is absent from the series |
-| `pkg/inferencecost/collector_test.go` | `buildDimensionCosts` unit tests: basic join formula, zero model cost (no panic), empty EPP result, missing `user_id` label, coverage warning when EPP token sums diverge from vLLM |
+| `pkg/inferencecost/collector_test.go` | `buildDimensionCosts` unit tests: basic join formula, zero model cost (no panic), empty attribution result, missing `user_id` label, coverage warning when attributed token sums diverge from vLLM |
 | `pkg/inferencecost/aggregate_test.go` | Aggregation by `user_id`/`tenant_id`/`workload_id`; filter by `tenant_id:"acme-corp"`; aggregation with empty `user_id` |
 | `pkg/inferencecost/exporter_test.go` | `llm_dimension_hourly_cost` emitted correctly; empty `user_id` emitted as empty Prometheus label value |
 | `modules/prometheus-source/pkg/prom/inference_queries_test.go` | `queryDimensionCounterDelta` unit tests: both token types present; one absent (graceful degradation); `user_id` label absent from result |
@@ -218,24 +218,24 @@ When `user_id` is empty (EPP `prometheusUserIdLabel: false`), the gauge is still
 | Decision | Chosen approach | Rationale |
 |---|---|---|
 | **Source metrics** | `llm_d_epp_request_input_tokens_sum` + `llm_d_epp_request_output_tokens_sum` | The histogram `_sum` series accumulate total tokens and behave as monotonically increasing counters — the `queryCounterDelta` pattern applies directly. No separate `_total` counters needed. |
-| **Cost join formula** | `promptTokens × (inputCostPerM / 1M) + completionTokens × (outputCostPerM / 1M)` | Token sums are the cost drivers. `llm_d_epp_request_total` (request count) is not used — per-token rates differ between input and output. |
+| **Cost join formula** | `promptTokens × (inputCostPerM / 1M) + completionTokens × (outputCostPerM / 1M)` | Token sums are the cost drivers. Request count is not used — per-token rates differ between input and output. |
 | **Calculator call order** | Calculator runs on model entries first; `buildDimensionCosts` uses the resulting rates | No need to re-run cost split logic per dimension entry. |
-| **`user_id` cardinality** | Honour EPP's `prometheusUserIdLabel` setting; empty string when absent | Matches the EPP's two-tier cardinality model. OpenCost does not impose its own cap — that decision belongs to EPP configuration. |
+| **`user_id` cardinality** | `user_id` label may or may not be present on attribution metrics; empty string when absent | OpenCost does not impose its own cardinality cap — that decision belongs to the llm-d configuration. |
 | **`CollectMetrics` signature** | Unchanged `([]*InferenceCost, error)`; `InferenceDimensionResult` stored as `Collector` field; `BuildDimensionCosts` is a separate public method | Calculator must run between collect and dimension-cost build; keeping `CollectMetrics` signature stable avoids breaking `runner.go`, `queryservice.go`, and test code that mocks the interface. |
-| **`serving_model` join key** | Label on EPP histogram metrics, populated from the vLLM response body; joined on `serving_model:namespace` in OpenCost | The value vLLM returns in the response body is guaranteed to match `vllm:prompt_tokens_total{model_name}` — join keys are consistent by construction. Falls back to `target_model_name` on error paths. |
+| **`serving_model` join key** | Label on attribution metrics, populated from the vLLM response body; joined on `serving_model:namespace` in OpenCost | The value vLLM returns in the response body is guaranteed to match `vllm:prompt_tokens_total{model_name}` — join keys are consistent by construction. Falls back to `target_model_name` on error paths. |
 | **`requested_model` excluded from group-by** | Omitted from `InferenceDimensionKey` and PromQL `sum by (…)` | Cost rate is driven by `serving_model`; including `requested_model` inflates cardinality without adding cost signal. Attribution by what was *served*, not what was *requested*, is the correct billing model. |
-| **Backward compatibility** | New fields are empty-string by default; feature is opt-in via `INFERENCE_EPP_ATTRIBUTION_ENABLED=true` | Deployments without EPP attribution configured are completely unaffected. |
+| **Backward compatibility** | New fields are empty-string by default; feature is opt-in via `INFERENCE_ATTRIBUTION_ENABLED=true` | Deployments without attribution configured are completely unaffected. |
 ---
 
 ### Appendix A — Multi-llm-d Deployment Issues
 
-A cluster may contain multiple independent llm-d deployments, each in its own namespace with its own EPP, vLLM pods, and InferencePool. OpenCost is deployed once per cluster. Multi-deployment concerns are handled naturally: the EPP metrics carry a `namespace` label, and the `serving_model:namespace` composite key partitions dimension token data per deployment automatically — no manual per-namespace configuration is required.
+A cluster may contain multiple independent llm-d deployments, each in its own namespace with its own router, vLLM pods, and InferencePool. OpenCost is deployed once per cluster. Multi-deployment concerns are handled naturally: the attribution metrics carry a `namespace` label, and the `serving_model:namespace` composite key partitions dimension token data per deployment automatically — no manual per-namespace configuration is required.
 
 One limitation pre-dates this plan and remains open:
 
 #### Known limitation — Shared infra label is a single global value ⚠️
 
-**The problem:** `INFERENCE_SHARED_INFRA_LABEL` and `INFERENCE_SHARED_INFRA_LABEL_VALUE` identify EPP/gateway pods whose costs are distributed across model pods. If two llm-d deployments use different label schemes for their shared infrastructure, there is no way to express different values per namespace.
+**The problem:** `INFERENCE_SHARED_INFRA_LABEL` and `INFERENCE_SHARED_INFRA_LABEL_VALUE` identify shared infrastructure pods whose costs are distributed across model pods. If two llm-d deployments use different label schemes for their shared infrastructure, there is no way to express different values per namespace.
 
 **Severity:** Low in practice — llm-d standardises the `llm-d.ai/inference-shared=true` label across all deployments, so divergence is unlikely.
 
@@ -245,5 +245,5 @@ One limitation pre-dates this plan and remains open:
 
 - **Model-level cost collection** — vLLM and allocation queries key by `(model_name, namespace)`, naturally partitioning deployments.
 - **`buildDimensionCosts()` join** — keys on `serving_model:namespace`, costs attributed to the correct deployment.
-- **Coverage warning** — compares EPP token sums vs vLLM token totals per `serving_model:namespace`, each deployment checked independently.
+- **Coverage warning** — compares attributed token sums vs vLLM token totals per `serving_model:namespace`, each deployment checked independently.
 - **API filtering** — `?filter=namespace:"llm-d-prod"` isolates one deployment's costs from another.

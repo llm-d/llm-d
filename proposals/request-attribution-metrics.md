@@ -218,6 +218,33 @@ from the model name returned by vLLM in the response body, defaulting to
 > are not. Per-user attribution remains fully available via the structured log
 > and distributed traces regardless of this setting.
 
+#### Label lifecycle and the `fairness_id` garbage-collector
+
+The EPP garbage-collects idle `fairness_id` label combinations from
+`llm_d_epp_*` histograms to prevent unbounded time-series growth when
+`fairness_id` values churn over time. The same GC applies to every label in
+the same histogram. For attribution labels this means:
+
+* **`tenant_id` and `workload_id`** are bounded, long-lived values (an
+  organization or named pipeline is not routinely created and destroyed).
+  In practice they will not be churned away by the GC.
+* **`user_id`** (when `prometheusUserIdLabel: true`) is potentially
+  high-churn. A tenant with thousands of occasional users will accumulate
+  many label combinations; the GC will eventually retire stale ones. Because
+  the GC fires on inactivity, gaps occur only for users who have not made a
+  request in the GC window — their historical `_sum` at the last scrape
+  before GC is the correct billing total for that window, so OpenCost's
+  `last_over_time` delta query is not affected. There are no phantom zeros
+  injected into the series.
+* **Attribution billing correctness is not GC-sensitive** as long as
+  OpenCost queries use the `last_over_time(@<end>)` minus
+  `last_over_time(@<start>)` delta pattern. Both endpoints are evaluated
+  against the value the series held when it was last scraped, which is
+  correct whether or not the series was subsequently retired by GC.
+
+This is identical to how GC interacts with `fairness_id` today and requires
+no special handling.
+
 ### Structured Log Record (Per-Request Audit)
 
 A structured JSON record is emitted by the EPP at request completion for
@@ -361,13 +388,68 @@ optionally `user_id`) are present on all histogram series — `_bucket`,
 `_count`, and `_sum` — so the `_sum` delta query naturally carries the full
 attribution context needed for chargeback.
 
+### Token Counts on Streaming Responses
+
+The EPP obtains token counts by parsing the vLLM response body inside the
+`ResponseBodyProcessor` hook — the same mechanism used today by
+`inflight-load-producer` and the existing token-usage histograms. For
+**non-streaming** responses this works unconditionally: the response body
+always contains a `usage` object.
+
+For **streaming** responses, vLLM omits the `usage` object from the SSE
+stream by default. To receive token counts the client must include
+`"stream_options": {"include_usage": true}` in the request body. If this
+field is absent, vLLM returns no usage data, the EPP observes zero tokens,
+and both the Prometheus histograms and the structured log record will record
+`prompt_tokens: 0` and `completion_tokens: 0` for that request — silently
+under-counting attribution.
+
+The EPP **must** inject `"stream_options": {"include_usage": true}` into
+every streaming request body before forwarding it to vLLM. This is a
+mechanical body-rewrite equivalent to the existing model-selector rewrite
+and fits naturally in the same request-handling path. The rewrite:
+
+* Sets `stream_options.include_usage = true` when `stream: true` is present
+  in the request body and `stream_options.include_usage` is not already
+  `true`.
+* Does **not** alter any other field.
+* Is gated on `requestAttribution.enabled: true` — operators who have not
+  enabled attribution are not affected.
+
+> [!NOTE]
+> Clients that already send `"stream_options": {"include_usage": true}` are
+> unaffected. The rewrite is idempotent.
+
 ### Changes by Repository
 
 | Repository | Change |
 |---|---|
-| `llm-d/llm-d-router` | Request handling path: extract three headers; add as Prometheus labels (with `prometheusUserIdLabel` config gate on `user_id`); emit structured JSON completion record via `epp.attribution` logger |
-| `llm-d/llm-d` | New doc `docs/operations/observability/attribution.md`; update `docs/api-reference/epp-http-headers.md`; update tracing and metrics docs; add example PromQL queries to `docs/operations/observability/promql.md` |
+| `llm-d/llm-d-router` | Request handling path: extract three headers; add as Prometheus labels (with `prometheusUserIdLabel` config gate on `user_id`); emit structured JSON completion record via `epp.attribution` logger; inject `stream_options.include_usage = true` on streaming requests when attribution is enabled |
+| `llm-d/llm-d` | New doc `docs/operations/observability/attribution.md`; update `docs/api-reference/epp-http-headers.md` to list the three attribution headers and note ext-proc forwarding requirement; update tracing and metrics docs; add example PromQL queries to `docs/operations/observability/promql.md` |
 | `opencost/opencost` | Consume `llm_d_epp_request_input_tokens_sum` and `llm_d_epp_request_output_tokens_sum` with attribution labels to produce per-`tenant_id`/`workload_id`/`user_id` cost breakdowns — see [`open-cost-new-dimensions-plan.md`](open-cost-new-dimensions-plan.md) |
+
+### ext-proc Header Forwarding
+
+The EPP receives requests from the GAIE-conformant gateway (Istio Ingress
+Gateway or agentgateway) over the Envoy ext-proc gRPC protocol. The
+`InferenceRequest` struct the EPP operates on is populated from the
+`ProcessingRequest_RequestHeaders` message, which carries **all** HTTP
+request headers forwarded by Envoy.
+
+By default Envoy forwards all request headers through ext-proc unless an
+explicit `allowed_headers` allowlist is configured on the
+`ExternalProcessor` filter. For the attribution headers to reach the EPP,
+operators must ensure that the Envoy/Istio configuration does **not**
+restrict forwarded headers to a list that excludes `x-llm-d-tenant-id`,
+`x-llm-d-user-id`, and `x-llm-d-workload-id`.
+
+The standard llm-d Helm chart and Istio overlay do not set an
+`allowed_headers` allowlist, so attribution headers are forwarded without
+additional configuration in default deployments. Operators who have
+customized their ext-proc filter configuration should verify that these
+three headers are included. This should be documented as a prerequisite in
+`docs/api-reference/epp-http-headers.md` and in the attribution operations
+guide (`docs/operations/observability/attribution.md`).
 
 ### Fallback Behaviour
 
