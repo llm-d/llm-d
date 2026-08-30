@@ -91,8 +91,14 @@ class TestFindResultsDirs(unittest.TestCase):
         return exp
 
     def test_empty_workspace_returns_none(self):
-        with patch("sys.stderr", io.StringIO()):
-            self.assertIsNone(v.find_results_dirs("", "ns"))
+        with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()):
+            old_cwd = os.getcwd()
+            os.chdir(td)
+            try:
+                self._make_run(Path("."), "user-1", "exp", "ns")
+                self.assertIsNone(v.find_results_dirs("", "ns"))
+            finally:
+                os.chdir(old_cwd)
 
     def test_empty_namespace_returns_none(self):
         with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()):
