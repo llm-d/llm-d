@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 3
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-h100-80gb
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen-Image"
+            - "--omni"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--log-stats"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            limits:
+              cpu: '16'
+              memory: 128Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: '8'
+              memory: 96Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          startupProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

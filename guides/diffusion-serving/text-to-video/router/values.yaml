@@ -1,0 +1,53 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  inferencePool:
+    failureMode: FailOpen
+
+  epp:
+    # Custom EPP build whose openai-parser claims multipart POST /v1/videos
+    # natively, extracting model/prompt/size/seconds/num_frames/fps/
+    # num_inference_steps from the form fields. The upstream image rejects the
+    # endpoint with "no parser registered matching path suffix for: /v1/videos"
+    # unless a passthrough-parser fallback is added. See README "Parsing".
+    image:
+      registry: us-central1-docker.pkg.dev/bobzetian-gke-dev/bobinference
+      repository: llm-d-router-endpoint-picker
+      tag: videos-v1
+      pullPolicy: Always
+    pluginsConfigFile: "t2v.yaml"
+    pluginsCustomConfig:
+      t2v.yaml: |
+        apiVersion: inference.networking.x-k8s.io/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - name: openaiParser
+          type: openai-parser
+        # Scores on the EPP's own count of dispatched, not-yet-complete requests.
+        # Note that POST /v1/videos returns as soon as the job is queued, so the
+        # in-flight count tracks job submission, not generation time.
+        - name: activeRequest
+          type: active-request-scorer
+        - name: maxScore
+          type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: activeRequest
+          - pluginRef: maxScore
+        requestHandler:
+          parsers:
+          - pluginRef: openaiParser
+        # vLLM-Omni serves /metrics, but under a vllm_omni: prefix the default
+        # extractor does not match, and no scorer here reads backend metrics.
+        dataLayer:
+          injectDefaults: false
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "diffusion-serving-t2v"
+    protocol: http
