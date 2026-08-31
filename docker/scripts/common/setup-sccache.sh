@@ -54,6 +54,6 @@ if [ "${USE_SCCACHE}" = "true" ]; then
     echo "  - Region: ${SCCACHE_REGION}"
     echo "  - Key prefix: ${SCCACHE_S3_KEY_PREFIX}"
     echo "  - Socket: ${SCCACHE_SERVER_UDS}"
-    echo "  - AWS credentials: $([ -n \"${AWS_ACCESS_KEY_ID:-}\" ] && echo 'set' || echo 'NOT SET')"
+    echo "  - AWS credentials: $([ -n "${AWS_ACCESS_KEY_ID:-}" ] && echo 'set' || echo 'NOT SET')"
     /usr/local/bin/sccache --show-stats 2>&1 | head -5
 fi
