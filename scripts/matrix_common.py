@@ -22,8 +22,26 @@ README_PATH = REPO_ROOT / "release" / "README.md"
 # Badge sources
 # ---------------------------------------------------------------------------
 
-BADGE_BASE = "https://github.com/llm-d/llm-d/actions/workflows"
+REPO_URL = "https://github.com/llm-d/llm-d"
+BADGE_BASE = f"{REPO_URL}/actions/workflows"
 SHIELDS_ENDPOINT = "https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges"
+
+# The matrix a run feeds. "nightly" is the live mirror of main; anything else is a
+# release branch name (e.g. "release-0.9"), which is also what the e2e workflows
+# check out.
+NIGHTLY_MATRIX_TYPE = "nightly"
+
+
+def badge_endpoint(badge_name: str, matrix_type: str = NIGHTLY_MATRIX_TYPE) -> str:
+    """Shields endpoint URL for a badge, suffixed by matrix_type.
+
+    ``nightly`` carries no suffix, so its badge files keep the names they have
+    always had. This mirrors reusable-update-badge.yaml in llm-d-infra, which
+    only appends ``_{matrix_type}`` when matrix_type is set and not "nightly" —
+    the two must agree or the matrices point at files nobody writes.
+    """
+    suffix = "" if matrix_type in ("", NIGHTLY_MATRIX_TYPE) else f"_{matrix_type}"
+    return f"{SHIELDS_ENDPOINT}/{badge_name}{suffix}.json"
 
 # ---------------------------------------------------------------------------
 # Table structure
@@ -45,17 +63,31 @@ ENGINE_LABELS = {
     "trtllm": "TRTLLM",
 }
 
+# Connectors that need to appear in the badge label because engine+accelerator
+# alone does not tell two lanes in the same cell apart (the ROCm P/D lanes are
+# both vLLM on ROCm and differ only by transport). Deliberately an allow-list:
+# connectors like "native"/"lmcache" already get their own GUIDES row, so adding
+# them here would change labels that are correct today.
+CONNECTOR_LABELS = {
+    "moriio": "MORI",
+    "nixl": "NIXL",
+}
 
-def accel_engine_label(engine: str, accelerator: str) -> str:
-    """Render a badge label like "vLLM GPU" / "SGLang GPU" / "TRTLLM GPU".
+
+def accel_engine_label(engine: str, accelerator: str, connector: str = "") -> str:
+    """Render a badge label like "vLLM GPU" / "SGLang GPU" / "vLLM ROCm NIXL".
 
     Combining the engine with the accelerator keeps multiple same-accelerator
     engines within one cell distinguishable, and is shared so the nightly and
-    release matrices label badges identically.
+    release matrices label badges identically. The connector is appended only for
+    the values in CONNECTOR_LABELS, where engine+accelerator would otherwise
+    collide.
     """
     engine_label = ENGINE_LABELS.get(engine, engine.upper())
     accelerator_label = ACCELERATOR_LABELS.get(accelerator, accelerator.upper())
-    return f"{engine_label} {accelerator_label}"
+    label = f"{engine_label} {accelerator_label}"
+    connector_label = CONNECTOR_LABELS.get(connector)
+    return f"{label} {connector_label}" if connector_label else label
 
 # (display_name, guide_path, workflow_slugs, connector_filter)
 # workflow_slugs: a string or tuple of strings to match parsed guide slugs.
@@ -122,9 +154,9 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str,
 
     Returns:
         dict keyed by (guide_slug, provider, connector) -> sorted list of
-        (accelerator, filename, badge_name, engine) tuples.
+        (accelerator, filename, badge_name, engine, connector) tuples.
     """
-    result: dict[tuple[str, str, str], list[tuple[str, str, str, str]]] = {}
+    result: dict[tuple[str, str, str], list[tuple[str, str, str, str, str]]] = {}
 
     for path in sorted(WORKFLOWS_DIR.glob(f"{WORKFLOW_PREFIX}*.yaml")):
         filename = path.name
@@ -140,9 +172,12 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str,
 
         guide_slug, provider, _offload_dest, accelerator, engine, connector = parsed
         key = (guide_slug, provider, connector)
-        # engine is appended last so the existing (accelerator, filename) sort
-        # order — and thus badge order within a cell — is unaffected.
-        result.setdefault(key, []).append((accelerator, filename, badge_name, engine))
+        # engine and connector are appended last so the existing
+        # (accelerator, filename) sort order — and thus badge order within a
+        # cell — is unaffected.
+        result.setdefault(key, []).append(
+            (accelerator, filename, badge_name, engine, connector)
+        )
 
     for entries in result.values():
         entries.sort()
@@ -151,7 +186,7 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str,
 
 
 def iter_provider_entries(workflows, guide_slugs, provider, connector_filter):
-    """Yield (accelerator, filename, badge_name, engine) for a guide/provider cell.
+    """Yield (accelerator, filename, badge_name, engine, connector) per cell.
 
     Encapsulates the connector-filter matching so both matrices resolve cells
     identically.

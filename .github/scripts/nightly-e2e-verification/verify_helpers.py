@@ -93,6 +93,9 @@ def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
     All experiments belonging to the winning run are returned (a single
     `llmdbenchmark run` invocation can produce multiple `<exp>/` subdirs).
     """
+    if not isinstance(workspace, str) or not workspace.strip():
+        error("LLMDBENCH_WORKSPACE is empty; refusing to search the current directory")
+        return None
     ws = Path(workspace)
     matches: list[Path] = []
     for meta in ws.rglob("run_metadata.yaml"):

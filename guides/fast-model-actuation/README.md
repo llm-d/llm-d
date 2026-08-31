@@ -204,6 +204,11 @@ You should see:
 - FMA controller pods
 - Router/EPP pods
 
+### 6. (Optional) Enable monitoring
+
+- Install the [Monitoring stack](../../docs/operations/observability/setup.md).
+- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#4-deploy-the-llm-d-router).
+
 ## Verification
 
 ### 1. Get the IP of the Router
