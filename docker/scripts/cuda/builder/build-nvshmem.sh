@@ -18,6 +18,7 @@ set -Eeux
 # - VIRTUAL_ENV: Path to the virtual environment from which python will be pulled
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - PYTHON_VERSION: Python version (e.g., 3.12)
+# - MAX_JOBS: number of parallel jobs for the ninja build
 
 cd /tmp
 
