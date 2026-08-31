@@ -57,7 +57,7 @@ export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
-export FMA_VERSION=0.6.4
+export FMA_VERSION=0.6.5
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -104,11 +104,8 @@ At minimum, the user running these commands needs rights to create and manage CR
 
 <!-- guide:deploy.fma_crds start -->
 ```bash
-export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
 kubectl apply --server-side \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+  -f "https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crds.yaml"
 kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
 kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
 kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s

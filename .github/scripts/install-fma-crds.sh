@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-FMA_VERSION=${FMA_VERSION:-"0.6.4"}
+FMA_VERSION=${FMA_VERSION:-"0.6.5"}
 FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
 
 for crd in \
