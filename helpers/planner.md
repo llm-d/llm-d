@@ -4,7 +4,7 @@
 
 You provide the `planner` with key details for your workload and it searches benchmark data for the model and accelerator combinations that can meet them. The `planner` will then generate deployment artifacts and manifests for the option you choose.
 
-There are a variety of ways to interact with the `planner`, some feature direct UI experience and others feature embedding it's API within your existing library (`llm-d-benchmark` leverages the `Capacity Planner` option today!).
+There are a variety of ways to interact with the `planner`, some feature direct UI experience and others feature embedding its API within your existing library (`llm-d-benchmark` leverages the `Capacity Planner` option today!).
 
 ## Contents
 
@@ -46,7 +46,7 @@ Optional extras cover the rest: `[estimation]` adds HuggingFace model config loo
 > pip install "llm-optimizer @ git+https://github.com/bentoml/llm-optimizer.git"
 > ```
 
-The upstream [README prerequisites](https://github.com/llm-d-incubation/llm-d-planner/blob/main/README.md#prerequisites) and [Developer Guide](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/DEVELOPER_GUIDE.md) carry the current list and the platform notes that go with it. Also see [Deployment Guide](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/DEPLOYMENT_GUIDE.md) covers hosting a single shared instance for a team.
+The upstream [README prerequisites](https://github.com/llm-d-incubation/llm-d-planner/blob/main/README.md#prerequisites) and [Developer Guide](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/DEVELOPER_GUIDE.md) carry the current list and the platform notes that go with it. The [Deployment Guide](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/DEPLOYMENT_GUIDE.md) covers hosting a single shared instance for a team.
 
 ## Quick start
 
@@ -138,27 +138,31 @@ print(f"per request:   {per_request_gb:.2f} GB at {MAX_MODEL_LEN} tokens")
 print(f"headroom for {concurrent} concurrent requests")
 ```
 
-These functions need the `[estimation]` extra, since they read the model config from HuggingFace. `allocatable_kv_cache_memory()` returns a negative number when the weights and activation memory do not leave room for any KV cache at all, which is how `llmdbenchmark` catches a deployment that would fail before it launches it. The full recommendation pipeline is a library too, through the `Planner` class, and both it and the matching REST endpoints are documented in the upstream [Programmatic API User Guide](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/PROGRAMMATIC_API_USER_GUIDE.md).
+These functions need the `[estimation]` extra, since they read the model config from HuggingFace. `allocatable_kv_cache_memory()` clamps at zero, returning `max(0, available_memory - total_consumed)`, so a model that leaves no room for KV cache reports `0` rather than a deficit. Callers treat `<= 0` as "does not fit" (`max_concurrent_requests()` and `auto_max_model_len()` return `0`, and `check_model_fits_gpu()` keeps only tensor-parallel sizes where the value is `> 0`), which is how `llmdbenchmark` catches a deployment that would fail before it launches it. The full recommendation pipeline is a library too, through the `Planner` class, and both it and the matching REST endpoints are documented in the upstream [Programmatic API User Guide](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/PROGRAMMATIC_API_USER_GUIDE.md).
 
 ## Use cases, traffic profiles, and SLOs
 
-The Planner does not reason about an arbitrary workload description from scratch. It recognizes nine use cases, and each one carries a traffic profile describing the token shape of the workload and an experience class describing how fast the interaction has to feel. Those two together produce the SLO targets you are asked to approve.
+The Planner does not reason about an arbitrary workload description from scratch. It recognizes nine use cases, and each one carries a traffic profile describing the token shape of the workload together with SLO target ranges for latency. Those two together produce the SLO targets you are asked to approve.
 
-| Use case | Traffic profile (prompt → output) | Experience class | TTFT p95 | ITL p95 | E2E p95 |
-| --- | --- | --- | --- | --- | --- |
-| `chatbot_conversational` | 512 → 256 | Conversational | ≤150 ms | ≤25 ms | ≤7 s |
-| `code_completion` | 512 → 256 | Instant | ≤100 ms | ≤20 ms | ≤5 s |
-| `code_generation_detailed` | 1024 → 1024 | Interactive | ≤300 ms | ≤30 ms | ≤25 s |
-| `translation` | 1024 → 1024 | Deferred | ≤400 ms | ≤35 ms | ≤35 s |
-| `content_generation` | 1024 → 1024 | Deferred / batch | ≤500 ms | ≤35 ms | ≤40 s |
-| `summarization_short` | 4096 → 512 | Interactive / deferred | ≤600 ms | ≤30 ms | ≤15–20 s |
-| `document_analysis_rag` | 4096 → 512 | Interactive | ≤600 ms | ≤30 ms | ≤18 s |
-| `long_document_summarization` | 10240 → 1536 | Deferred | ≤1 s | ≤40 ms | ≤60 s |
-| `research_legal_analysis` | 10240 → 1536 | Batch / offline | ≤2 s | ≤45 ms | ≤75–90 s |
+The token shapes line up with the use cases in Prism's [workload catalog](https://prism.llm-d.ai/?view=workload-catalog), so the profile you pick here corresponds to a workload you can go and find benchmark data for there.
 
-The split between the two columns matters because prompt tokens and output tokens stress different parts of inference. Prompt length drives prefill, which surfaces as time to first token, while output length drives generation, which surfaces as inter-token and end-to-end latency.
+| Use case | Traffic profile (prompt → output) | TTFT p95 | ITL p95 | E2E p95 |
+| --- | --- | --- | --- | --- |
+| `chatbot_conversational` | 512 → 256 | 100–500 ms | 15–50 ms | 3.9–13.3 s |
+| `code_completion` | 512 → 256 | 50–200 ms | 10–35 ms | 2.6–9.2 s |
+| `code_generation_detailed` | 1024 → 1024 | 150–600 ms | 15–45 ms | 15.5–46.7 s |
+| `translation` | 512 → 256 | 200–800 ms | 20–50 ms | 5.3–20 s |
+| `content_generation` | 512 → 256 | 200–800 ms | 20–50 ms | 5.3–25 s |
+| `summarization_short` | 4096 → 512 | 200–800 ms | 20–50 ms | 10.4–26.4 s |
+| `document_analysis_rag` | 4096 → 512 | 400–1200 ms | 25–60 ms | 13.2–40 s |
+| `long_document_summarization` | 10240 → 1536 | 800–3000 ms | 30–70 ms | 46.9–110.5 s |
+| `research_legal_analysis` | 10240 → 1536 | 1500–5000 ms | 30–80 ms | 60–300 s |
 
-Pick the use case closest to your workload, then adjust the numbers during the specification review. The upstream [Traffic and SLOs](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/traffic_and_slos.md) doc lays out the whole framework, including all five experience classes and the reasoning behind each mapping.
+Those are ranges, not fixed targets. The Planner picks a default inside each range from your latency priority: `high` takes the 25th percentile, `medium` the 50th, and `low` the 75th, computed as `min + (max - min) × percentile` and rounded to the nearest 5. `latency_priority` defaults to `medium`, so leaving it alone lands you on the midpoint.
+
+The split between prompt tokens and output tokens matters because they stress different parts of inference. Prompt length drives prefill, which surfaces as time to first token, while output length drives generation, which surfaces as inter-token and end-to-end latency.
+
+Pick the use case closest to your workload, then adjust the numbers during the specification review. The authoritative values live in the Planner's `src/planner/data/configuration/usecase_slo_workload.json`. The upstream [Traffic and SLOs](https://github.com/llm-d-incubation/llm-d-planner/blob/main/docs/traffic_and_slos.md) doc lays out the framework behind them, including the experience classes that motivate each range. Those are design rationale rather than something you select, and they are not surfaced in the UI, CLI, or API.
 
 ## Where the numbers come from
 
