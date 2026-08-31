@@ -20,18 +20,17 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-          resources:
-            limits:
-              memory: 500Gi
-            requests:
-              memory: 500Gi
-          env:
             - name: LMCACHE_MAX_LOCAL_CPU_SIZE
               value: "100.0"
             - name: PYTHONHASHSEED
               value: "123"
             - name: PROMETHEUS_MULTIPROC_DIR
               value: "/tmp/lmcache_prometheus"
+          resources:
+            limits:
+              memory: 500Gi
+            requests:
+              memory: 500Gi
           volumeMounts:
             - name: lmcache-prometheus-metrics
               mountPath: /tmp/lmcache_prometheus
