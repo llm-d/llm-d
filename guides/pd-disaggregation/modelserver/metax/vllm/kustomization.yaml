@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../recipes/modelserver/base/single-host/pd/vllm
+
+namePrefix: pd-disaggregation-metax-vllm-
+
+components:
+  - ../../../../recipes/modelserver/components/images/metax-vllm/release
+  - ../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-14B
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: metax
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
