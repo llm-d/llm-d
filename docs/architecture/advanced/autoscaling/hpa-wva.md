@@ -1,7 +1,7 @@
 # HPA/KEDA with WVA Metrics
 
 > [!WARNING]
-> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document is deprecated. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
+> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document was deprecated in llm-d 0.8.0, and the CRD was removed in 0.9.0. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
 
 ## Functionality
 
