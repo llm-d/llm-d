@@ -17,28 +17,20 @@ This overlay configures GKE-specific settings for DP-aware WideEP scheduling on 
 
 ## Cluster Prerequisites
 
-This overlay assumes your GKE cluster already has the pieces below. They are one-time
-cluster setup, separate from deploying the guide. Tested from scratch on GKE 1.36
-(a3-ultragpu-8g, H200) in August 2026.
+### RDMA node pool
 
-### 1. A multi-NIC RDMA node pool
-
-The GPU node pool needs the 8 RDMA NICs attached as additional node networks. Follow
-the [GKE AI Hypercomputer docs](https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute)
-to create the RDMA VPC (one VPC with the RoCE network profile and 8 subnets) and pass
-each subnet to the node pool with `--additional-node-network`.
+Create an RDMA VPC (RoCE network profile, 8 subnets) and attach each subnet to the GPU
+node pool with `--additional-node-network`. See the
+[GKE AI Hypercomputer docs](https://cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute).
 
 > [!WARNING]
-> Avoid `--accelerator-network-profile=auto` for now. We have seen GKE fail to tear the
-> auto-created networks down, which leaves node pools (and eventually the cluster) stuck
-> in a deleting state and blocks creating replacement pools.
+> `--accelerator-network-profile=auto` can wedge node pool deletion. Use explicit
+> `--additional-node-network` flags.
 
-### 2. The `rdma-0` through `rdma-7` Network objects
+### `rdma-0` through `rdma-7` Network objects
 
-The pod annotations in this overlay reference Kubernetes `Network` objects named
-`rdma-0` through `rdma-7`. GKE does not create these for you, and pods are rejected at
-admission until they exist. Create one `Network` + `GKENetworkParamSet` pair per RDMA
-subnet:
+Pods in this overlay reference `Network` objects `rdma-0` through `rdma-7` and fail
+admission until they exist:
 
 ```bash
 for i in $(seq 0 7); do
@@ -66,23 +58,18 @@ MANIFEST
 done
 ```
 
-Check they are ready with `kubectl get gkenetworkparamsets` (all should show Ready).
+Verify with `kubectl get gkenetworkparamsets` (all Ready).
 
-### 3. A known-good GPU driver
+### GPU driver
 
-DeepEP's high-throughput kernels (used by the prefill role) crash with
-`cudaErrorIllegalAddress` on the R580 driver series (observed with 580.173.02). Decode's
-low-latency kernels are not affected. On GKE 1.36 both `gpu-driver-version=default` and
-`latest` install R580, so pin the driver to the version your platform team has validated
-for DeepEP (the environments this guide was validated on run pre-R580 drivers) by
-disabling managed driver install and using the
+R580 drivers (both `default` and `latest` on GKE 1.36) crash DeepEP high-throughput
+kernels with `cudaErrorIllegalAddress`. Pin a pre-R580 driver: disable managed driver
+install and use the
 [NVIDIA driver installer DaemonSet](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus#installing_drivers)
-with an explicit version. As a fallback, switching the prefill role's
-`--all2all-backend` to `deepep_low_latency` starts and serves correctly on R580, at a
-cost to prefill throughput.
+with an explicit version. Fallback: set the prefill `--all2all-backend` to
+`deepep_low_latency` (reduces prefill throughput).
 
-### 4. A CPU node big enough for the router
+### Router CPU node
 
-In standalone mode the router pod runs the EPP and an Envoy proxy in one pod, which
-together request up to 12 CPUs depending on chart version. Include at least one
-`e2-standard-16` (or larger) CPU node or the pod will stay Pending.
+The standalone router pod requests up to 12 CPUs. Provide an `e2-standard-16` or larger
+CPU node.

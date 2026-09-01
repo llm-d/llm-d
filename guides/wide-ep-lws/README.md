@@ -67,11 +67,9 @@ This guide includes configurations for the following accelerators:
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-* Have a cluster with RDMA-capable accelerator nodes already set up. This is one-time
-  infrastructure work that this guide does not cover: see your provider's setup doc
-  (for GKE, [docs/infrastructure/providers/gke](../../docs/infrastructure/providers/gke/README.md))
-  and the [GKE overlay's cluster prerequisites](modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md#cluster-prerequisites)
-  for the exact networking objects, driver, and node sizing this guide needs.
+* Have a cluster with RDMA-capable accelerator nodes. For GKE, see the
+  [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the
+  [GKE overlay cluster prerequisites](modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md#cluster-prerequisites).
 * Checkout llm-d repo:
 
   ```bash
