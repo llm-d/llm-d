@@ -20,6 +20,16 @@ spec:
         llm-d.ai/role: prefill
     spec:
       replicas: 1
+      # Tear down the old group before creating the new one on updates. The
+      # DisaggregatedSet default (maxSurge=1, maxUnavailable=0) would require a
+      # full spare copy of the role to schedule, which deadlocks rollouts on
+      # clusters sized for exactly one copy. This matches the LeaderWorkerSet
+      # default the guide had before DisaggregatedSet became the base.
+      rolloutStrategy:
+        type: RollingUpdate
+        rollingUpdateConfiguration:
+          maxSurge: 0
+          maxUnavailable: 1
       leaderWorkerTemplate:
         size: 2
         workerTemplate:
@@ -220,6 +230,13 @@ spec:
         llm-d.ai/role: decode
     spec:
       replicas: 1
+      # See the prefill role above: avoid surge-based rollouts that need a
+      # spare copy of the role's GPUs.
+      rolloutStrategy:
+        type: RollingUpdate
+        rollingUpdateConfiguration:
+          maxSurge: 0
+          maxUnavailable: 1
       leaderWorkerTemplate:
         size: 2
         workerTemplate:
