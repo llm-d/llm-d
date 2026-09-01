@@ -73,18 +73,11 @@ spec:
               cpu: "16"
               memory: 400Gi
               rdma/roce_gdr: "1"
-              # Covers the disk-backed emptyDirs plus container logs. The dominant
-              # consumer is cache-volume: the Qwen3-32B weights (~65Gi across 17
-              # safetensors shards) are downloaded into /.cache/huggingface on every pod
-              # start, and were previously unaccounted -- leaving the pod liable to
-              # eviction under node disk pressure.
-              ephemeral-storage: 150Gi
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
               memory: 200Gi
               rdma/roce_gdr: "1"
-              ephemeral-storage: 130Gi
           volumeMounts:
             - mountPath: /scripts
               name: mooncake-render-script
