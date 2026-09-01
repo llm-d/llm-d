@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-store-config
+data:
+  # Template only -- NOT the file SGLang reads. The DEVICE_PLACEHOLDER and
+  # POD_IP_PLACEHOLDER values are resolved per pod by the mooncake-render-config
+  # initContainer, which writes the real config to an emptyDir. Keep comments out of the
+  # JSON body below: it is parsed with json.load(), which rejects "#" comments.
+  # See configmap-render-config.yaml for why these two values cannot be static.
+  mooncake_config.json: |
+    {
+      "metadata_server": "P2PHANDSHAKE",
+      "master_server_address": "mooncake-master-store:50051",
+      "global_segment_size": "80GB",
+      "local_buffer_size": "4GB",
+      "protocol": "rdma",
+      "device_name": "DEVICE_PLACEHOLDER",
+      "local_hostname": "POD_IP_PLACEHOLDER",
+      "enable_ssd_offload": false
+    }

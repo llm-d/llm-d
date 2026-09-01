@@ -13,16 +13,15 @@ spec:
         prometheus.io/port: "9003"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: mooncake-master-store
+      securityContext:
+        runAsUser: 0
       containers:
         - name: mooncake-master-store
-          image: ghcr.io/llm-d/mooncake-master-store:v0.8.0
+          image: ghcr.io/amit-berman/mooncake-master:0.3.11.post1
           command: ["mooncake_master"]
           args:
             - "--config_path=/etc/mooncake/master.yaml"
-            # Required for standalone-store (fs) mode — without this the Master
-            # rejects MountLocalDiskSegment RPCs from mooncake_client with UNABLE_OFFLOAD.
-            # No-op when no client attempts to mount.
-            - "--enable_offload"
           env:
             - name: MOONCAKE_SNAPSHOT_LOCAL_PATH
               value: "/data/snapshots"

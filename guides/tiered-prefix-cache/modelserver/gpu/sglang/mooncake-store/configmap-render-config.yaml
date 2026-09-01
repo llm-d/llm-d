@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-render-config
+data:
+  # Renders the final mooncake_config.json from the template in mooncake-store-config.
+  # Two values can only be resolved at runtime, per pod:
+  #
+  #   local_hostname - mooncake_store.py's from_file() loader reads this key from the JSON
+  #     only. When the key is absent it falls back to the *static default* of
+  #     MOONCAKE_LOCAL_HOSTNAME ("localhost") and ignores the env var's real value, so
+  #     setting that env var alone has no effect. "localhost" yields no routable RoCE
+  #     identity and cannot be told apart from any other pod, so it must be the pod IP.
+  #
+  #   device_name - every pod is offered 16 mlx5 devices, but only the one on fabric
+  #     172.23.0.x is reachable between nodes; the other 15 fabrics time out even on plain
+  #     TCP. Verified cross-node with ib_write_bw at 97.96 Gb/sec. The device is matched by
+  #     its RoCE v2 GID rather than by name, because device numbering does not track the
+  #     host NIC ordering (mlx5_0 is p6, a dead fabric) and the GID index differs per pod.
+  render_config.py: |
+    import glob
+    import json
+    import os
+
+    TEMPLATE = "/etc/mooncake-template/mooncake_config.json"
+    OUTPUT = "/etc/mooncake/mooncake_config.json"
+    ENV_OUTPUT = "/etc/mooncake/mooncake.env"
+    FABRIC = os.environ.get("MOONCAKE_FABRIC_PREFIX", "172.23.0.")
+
+
+    def roce_v2_ipv4(device_path, entry):
+        """Return the IPv4 address of an IPv4-mapped RoCE v2 GID, else None."""
+        port = os.path.join(device_path, "ports", "1")
+        gid = open(os.path.join(port, "gids", entry)).read().strip()
+        gid_type = open(os.path.join(port, "gid_attrs", "types", entry)).read().strip()
+        raw = gid.replace(":", "")
+        if gid_type != "RoCE v2" or len(raw) != 32:
+            return None
+        if raw[:20] != "0" * 20 or raw[20:24].lower() != "ffff":
+            return None
+        return ".".join(str(int(raw[24 + i * 2:26 + i * 2], 16)) for i in range(4))
+
+
+    def find_device():
+        """Return (device, gid_index, ip) for this pod's own RoCE v2 GID on FABRIC."""
+        for device_path in sorted(glob.glob("/sys/class/infiniband/*")):
+            gid_dir = os.path.join(device_path, "ports", "1", "gids")
+            if not os.path.isdir(gid_dir):
+                continue
+            for entry in sorted(os.listdir(gid_dir), key=lambda e: int(e)):
+                try:
+                    ip = roce_v2_ipv4(device_path, entry)
+                except (OSError, ValueError):
+                    continue
+                if ip and ip.startswith(FABRIC):
+                    return os.path.basename(device_path), entry, ip
+        return None, None, None
+
+
+    device, gid_index, gid_ip = find_device()
+    if device is None:
+        raise SystemExit(
+            f"no RDMA device with a RoCE v2 GID on fabric {FABRIC}* found. "
+            "Check that the k8s.v1.cni.cncf.io/networks attachment is present and that "
+            "MOONCAKE_FABRIC_PREFIX matches a fabric that is routable between nodes."
+        )
+
+    config = json.load(open(TEMPLATE))
+    config["device_name"] = device
+    config["local_hostname"] = os.environ["POD_IP"]
+
+    with open(OUTPUT, "w") as handle:
+        json.dump(config, handle, indent=2)
+
+    # Mooncake's own "find best gid index" heuristic is not reliable here: the RDMA device
+    # is shared node-wide, so its GID table holds every co-located pod's address plus host
+    # addresses, and it churns constantly (thousands of GID-table-change events per pod).
+    # The heuristic has been observed picking a host address on a foreign netdev
+    # ("without network device"), which cannot complete a handshake. Pin the index to this
+    # pod's own address instead. There is no config-file key for it, only MC_GID_INDEX,
+    # so it is emitted as a shell env file for the launch wrapper to source. It is
+    # recomputed on every container start because index numbering is not stable over time.
+    with open(ENV_OUTPUT, "w") as handle:
+        handle.write(f"MC_GID_INDEX={gid_index}\n")
+
+    print(f"selected RDMA device {device}, GID index {gid_index} (RoCE v2 {gid_ip})")
+    print(json.dumps(config, indent=2))
