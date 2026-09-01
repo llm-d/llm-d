@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    metadata:
+      annotations:
+        # RDMA-capable secondary interfaces via Multus, so the pod's own netns has a
+        # real netdev+GID for RoCE (the rdma/roce_gdr device plugin alone only exposes
+        # ibverbs char devices, not a netdev inside the pod). 2 interfaces to match
+        # --tensor-parallel-size=2.
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"multi-nic-inference","namespace":"amit","interface":"net1"},
+            {"name":"multi-nic-inference","namespace":"amit","interface":"net2"}
+          ]
+    spec:
+      containers:
+        - name: modelserver
+          # Resolve the per-pod Mooncake settings, then hand off to the server. This runs
+          # in the main container rather than an initContainer because MC_GID_INDEX has to
+          # be an env var of the server process, and an initContainer cannot set one. It
+          # also means both values are recomputed on every container restart, which matters
+          # because GID index numbering is not stable over time -- see
+          # configmap-render-config.yaml. The wrapper runs before the server loads any
+          # weights, so a misconfigured fabric still fails within seconds.
+          command:
+            - /bin/sh
+            - -c
+            - |
+              python3 /scripts/render_config.py || exit 1
+              set -a
+              . /etc/mooncake/mooncake.env
+              set +a
+              exec python3 -m sglang.launch_server "$@"
+            - --
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--tensor-parallel-size=2"
+            # KV-block granularity. Must match the router scorer's
+            # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
+            # --page-size, where vLLM uses --block-size.
+            - "--page-size=64"
+            - "--mem-fraction-static=0.9"
+            - "--enable-metrics"
+            - "--enable-hierarchical-cache"
+            - "--hicache-write-policy"
+            - "write_through"
+            - "--hicache-io-backend"
+            - "kernel"
+            - "--hicache-size"
+            - "200"
+            - "--hicache-storage-backend"
+            - "mooncake"
+          env:
+            - name: SGLANG_HICACHE_MOONCAKE_CONFIG_PATH
+              value: /etc/mooncake/mooncake_config.json
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: TRITON_CACHE_DIR
+              value: /.cache/triton
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              nvidia.com/gpu: "2"
+              cpu: "16"
+              memory: 400Gi
+              rdma/roce_gdr: "1"
+              # Covers the disk-backed emptyDirs plus container logs. The dominant
+              # consumer is cache-volume: the Qwen3-32B weights (~65Gi across 17
+              # safetensors shards) are downloaded into /.cache/huggingface on every pod
+              # start, and were previously unaccounted -- leaving the pod liable to
+              # eviction under node disk pressure.
+              ephemeral-storage: 150Gi
+            requests:
+              nvidia.com/gpu: "2"
+              cpu: "8"
+              memory: 200Gi
+              rdma/roce_gdr: "1"
+              ephemeral-storage: 130Gi
+          volumeMounts:
+            - mountPath: /scripts
+              name: mooncake-render-script
+              readOnly: true
+            - mountPath: /etc/mooncake-template
+              name: mooncake-config-template
+              readOnly: true
+            # Writable: the wrapper renders mooncake_config.json and mooncake.env here.
+            - mountPath: /etc/mooncake
+              name: mooncake-config
+            - mountPath: /.cache
+              name: cache-volume
+      volumes:
+        - name: mooncake-render-script
+          configMap:
+            name: mooncake-render-config
+        - name: mooncake-config-template
+          configMap:
+            name: mooncake-store-config
+        - name: mooncake-config
+          emptyDir: {}
+        - name: cache-volume
+          emptyDir: {}
