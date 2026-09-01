@@ -4,25 +4,15 @@
 
 ## Overview
 
-This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation/README.md) with **[saturation-based autoscaling via KEDA](../workload-autoscaling/keda-epp-saturation/README.md)**. A KEDA `ScaledObject` scales the FMA server-requesting Deployment (`fma-requester`) on Endpoint Picker (EPP) flow-control metrics; each new requesting pod drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**. (See the [FMA guide](../fast-model-actuation/README.md#overview) for what hot, warm, and cold start mean.)
-
-If you are new to FMA and the dual-pod technique (server-requesting pods reserve GPUs, launcher pods run vLLM, and FMA controllers bind them and orchestrate sleep/wake), read the [Fast Model Actuation guide](../fast-model-actuation/README.md) first — this guide assumes that background and focuses on the autoscaling layer on top of it.
-
-> [!NOTE]
-> **Routing topology.** Only the **bound launcher** pods serve inference (vLLM on `:8000`); the `fma-requester` pods reserve the GPU and hold the pod identity but never listen on `:8000`. FMA stamps `llm-d.ai/guide` on *both* halves, so the router's `InferencePool` (which selects on that label with `targetPorts: 8000`) also selects `llm-d.ai/model` — a label the `InferenceServerConfig` applies to a launcher only once it is bound — so only bound launchers become routable EPP endpoints. Without it, requester pods would join the pool and the EPP would intermittently return `503 upstream connect error … Connection refused` (worst right after a KEDA scale-up, when a fresh requester joins the pool). Unbound launchers are already excluded for the same reason. Keep the `llm-d.ai/model` value in `router/fast-model-actuation-keda.values.yaml` in sync with the `InferenceServerConfig` patch in `modelserver/kustomization.yaml`. See [llm-d/llm-d#2212](https://github.com/llm-d/llm-d/pull/2212).
+This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation/README.md) with **[saturation-based autoscaling via KEDA](../workload-autoscaling/keda-epp-saturation/README.md)**. A KEDA `ScaledObject` scales the FMA server-requesting Deployment (`fma-requester`) on Endpoint Picker (EPP) flow-control metrics; each new requesting pod drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**. (See the [FMA guide](../fast-model-actuation/README.md#overview) for what hot and warm start mean.)
 
 ### How the autoscaling works
 
 - The **EPP** (with the `flowControl` feature gate enabled) emits `llm_d_epp_flow_control_pool_saturation` — a 0.0–1.0+ measure of how saturated the inference pool is — and `llm_d_epp_request_running`.
 - The **KEDA ScaledObject** queries these from Prometheus and scales `fma-requester` out when saturation crosses the threshold and in when it subsides.
-- Each **scale-up** replica reserves a GPU, which the FMA controller turns into a hot or warm start; each **scale-down** deletes a requesting pod, and the controller puts its vLLM to sleep. (The hot-vs-warm decision and its scheduling dependency are FMA behavior — see the [FMA guide](../fast-model-actuation/README.md#overview).)
+- Each **scale-up** replica reserves a GPU, which the FMA controller turns into a hot or warm start; each **scale-down** deletes a requesting pod, and the controller puts its vLLM to sleep.
 
-This is the recommended saturation signal for llm-d autoscaling (`llm_d_epp_flow_control_pool_saturation` + `llm_d_epp_request_running`); it requires the EPP flow-control feature gate, which this guide's router values enable.
-
-The KEDA objects here — the [`ScaledObject`](keda/base/scaledobject.yaml) and its [`TriggerAuthentication`](keda/base/triggerauthentication.yaml) — are adapted from the [keda-epp-saturation](../workload-autoscaling/keda-epp-saturation/README.md) guide, reusing the same saturation signal and Prometheus trigger shape. The FMA-specific difference is that the `ScaledObject` targets the GPU-reserving `fma-requester` Deployment (not a vLLM server Deployment), caps `maxReplicaCount` at the launcher pool's capacity, and tunes the HPA `behavior` for prompt hot-wakes and gentle scale-down. The [`ScaledObject` file header](keda/base/scaledobject.yaml) spells out the full delta.
-
-> [!NOTE]
-> Whether a KEDA scale-up produces a hot start or a warm start depends on where the scheduler lands the new requesting pod — a hot wake needs the same node (and GPU) as the sleeping instance, otherwise FMA falls back to a warm start. See the [FMA guide](../fast-model-actuation/README.md#overview) for the details of that fallback.
+The KEDA objects here reuse the `ScaledObject` and `TriggerAuthentication` from the [keda-epp-saturation](../workload-autoscaling/keda-epp-saturation/README.md) guide directly. The  `ScaledObject` targets the GPU-reserving `fma-requester` Deployment (not a vLLM server Deployment), caps `maxReplicaCount` at the launcher pool's capacity, and tunes the HPA `behavior` for prompt hot-wakes and gentle scale-down.
 
 ## Configuration
 
@@ -43,28 +33,11 @@ This guide assumes you have a Kubernetes cluster with GPU nodes, the [llm-d rout
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- **KEDA** (or, on OpenShift, the Custom Metrics Autoscaler Operator) must be installed cluster-wide. See the [KEDA deployment docs](https://keda.sh/docs/latest/deploy/).
+- **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../workload-autoscaling/README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes [KEDA installation](../workload-autoscaling/README.md#kubernetes-metrics-adapter).
 
-- **Monitoring that scrapes the EPP.** KEDA reads the pool-saturation metric from
-  Prometheus, so the EPP must be scraped. On **OpenShift** this guide targets the
-  in-cluster Thanos querier via user-workload monitoring (UWM); UWM must be
-  enabled cluster-wide, which is a one-time **cluster-admin** action (independent
-  of this guide's namespace-scoped install):
+- **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric KEDA scales on requires the EPP flow control feature gate. This guide's router values enable the `flowControl` gate for you (applied in [step 4](#4-deploy-the-llm-d-router-epp-flow-control-enabled)), so no extra action is needed. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
 
-<!-- llm-d-cicd:skip start -->
-```bash
-# OpenShift only, one-time cluster-admin action. Enables user-workload
-# monitoring so Prometheus/Thanos scrapes the EPP ServiceMonitor that the KEDA
-# ScaledObject queries. Safe to re-run; no-op if already enabled.
-oc -n openshift-monitoring create configmap cluster-monitoring-config \
-  --from-literal=config.yaml='enableUserWorkload: true' \
-  --dry-run=client -o yaml | oc apply -f -
-```
-<!-- llm-d-cicd:skip end -->
-
-  On a shared cluster UWM is typically already enabled, in which case this is a
-  no-op. On generic Kubernetes, run the bundled llm-d Prometheus stack instead
-  (see the generic-Kubernetes note under step 6).
+- **Fast Model Actuation** — This guide reuses the base [Fast Model Actuation guide](../fast-model-actuation/README.md)'s manifests (`LauncherConfig`, `LauncherPopulationPolicy`, the requester Deployment) as a kustomize base and stands up its own FMA controllers. You do not need to deploy it separately.
 
 - Checkout llm-d repo:
 
@@ -85,7 +58,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation-keda
 export NAMESPACE=llm-d-fast-model-actuation-keda
 export MONITORING_NAMESPACE=llm-d-monitoring
-export FMA_VERSION=0.6.4
+export FMA_VERSION=0.6.5
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-32B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -138,26 +111,12 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 
 At minimum, the user running these commands needs rights to create and manage CRDs, ClusterRoles, ClusterRoleBindings, KEDA `ScaledObject`s, and Helm releases across namespaces.
 
-> [!IMPORTANT]
-> On OpenShift the RBAC step (step 2) creates a `ClusterRoleBinding` to the
-> `cluster-monitoring-view` ClusterRole so KEDA can read the saturation metric
-> from Thanos. Creating that binding requires **cluster-admin at apply time**.
-> This is a one-time bootstrap concern, not a per-namespace one: enabling
-> user-workload monitoring (see [Prerequisites](#prerequisites)) and granting
-> `cluster-monitoring-view` are both cluster-admin actions, while everything else
-> in this guide is namespace-scoped. The rest of the RBAC/KEDA wiring
-> (`system:auth-delegator`, the EPP metrics-reader binding, the ScaledObject) is
-> created alongside it in the same step.
-
 ### 1. Apply FMA CRDs
 
 <!-- guide:deploy.fma_crds start -->
 ```bash
-export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
 kubectl apply --server-side \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+  -f "https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crds.yaml"
 kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
 kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
 kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s
@@ -261,7 +220,7 @@ kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 <!-- guide:deploy.modelserver end -->
 
 > [!NOTE]
-> This guide uses [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B), which is publicly accessible and does not require a HuggingFace token. It is sized to saturate a single 80 GB GPU, so KEDA's saturation trigger does real work under load (a smaller model drains the queue too fast for the saturation signal to fire).
+> This guide uses [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B), which is publicly accessible and does not require a HuggingFace token. Saturation is a ratio of offered load to serving capacity, so any model saturates given enough load — the choice of a 32B model here is practical, not definitional: at the request rate this guide's workload generates on a single 80 GB GPU, a small model's service rate is high enough that `pool_saturation` stays near zero and never crosses the `0.7` threshold, so only the secondary `llm_d_epp_request_running` trigger would ever fire. A 32B model's lower service rate and larger KV footprint push saturation past the threshold under the same load, so the primary saturation trigger — the feature this guide exists to demonstrate — actually does the scaling.
 
 > [!NOTE]
 > `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node labeled `nvidia.com/gpu.present: "true"`. Only launchers bound to a requesting pod actually start a vLLM instance.
