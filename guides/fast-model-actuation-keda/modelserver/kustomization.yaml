@@ -6,7 +6,7 @@ kind: Kustomization
 # the base modelserver kustomization (../../fast-model-actuation/modelserver)
 # contributes the InferenceServerConfig, LauncherConfig, LauncherPopulationPolicy
 # and the requester Deployment, and the patches below apply only the KEDA-specific
-# deltas -- so a change to the shared FMA plumbing is made once, in the base guide.
+# deltas.
 #
 # Deltas patched here:
 #   - InferenceServerConfig: serve Qwen3-32B in dev mode (the admin endpoints FMA
@@ -17,8 +17,7 @@ kind: Kustomization
 #     guide's label.
 #
 # The KEDA autoscaler layer is pulled in via ../keda/overlays/ocp so a single
-# `apply -k modelserver/` brings up the model server AND its autoscaler together
-# (this is what the benchmark's kustomize standup applies).
+# `apply -k modelserver/` brings up the model server AND its autoscaler together.
 #
 # The OCP overlay pins `namespace: llm-d-fast-model-actuation-keda`, so deploy
 # this guide into that namespace (the guide default) to keep the requester and
@@ -49,13 +48,6 @@ patches:
           #   headroom (avoids the 32B warmup OOM at util 0.95).
           options: "--model Qwen/Qwen3-32B --enable-sleep-mode --no-enable-prefix-caching --load-format auto --gpu-memory-utilization 0.95 --max-model-len 16000 --kv-cache-memory 11259300148 --tensor-parallel-size 1"
           env_vars:
-            # FMA hot start wakes a sleeping vLLM via /wake_up (and sleeps it via
-            # /sleep). Those admin endpoints only exist when vLLM runs in dev mode,
-            # so without VLLM_SERVER_DEV_MODE=1 the requester cannot hot-start and
-            # every actuation falls back to a warm/cold start.
-            VLLM_SERVER_DEV_MODE: "1"
-            # --enable-sleep-mode requires the v1 engine; pin it so sleep/wake work
-            # regardless of the image's default engine selection.
             VLLM_USE_V1: "1"
           labels:
             llm-d.ai/guide: "fast-model-actuation-keda"
@@ -64,13 +56,7 @@ patches:
   # for Qwen3-0.6B (memory limit 16Gi). But the FMA controller sleeps a vacated
   # instance with vLLM sleep level 1, which offloads the model WEIGHTS from GPU to
   # CPU host memory -- so on scale-down the container must be able to hold the
-  # whole model in RAM. Qwen3-32B is ~65GB in bf16; with the 16Gi limit the /sleep
-  # OOM-kills the container (exit 137) instead of sleeping it, and the controller
-  # then tears the instance down. Remove the memory limit here (the benchmark CI
-  # FMA launcher template sets no memory limit at all, so sleep offload uses node
-  # RAM freely) so scale-down sleep -- and the subsequent hot wake -- work for 32B.
-  # JSON6902 so the removal targets the (only) inference-server container
-  # unambiguously; index 0 in the base LauncherConfig podTemplate.
+  # whole model in RAM.
   - target:
       group: fma.llm-d.ai
       version: v1alpha1

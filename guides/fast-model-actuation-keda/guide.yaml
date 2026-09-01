@@ -16,7 +16,7 @@ env:
     # fast-model-actuation guide's manifests, so the pinned launcher/requester
     # image tags live in guides/fast-model-actuation/{modelserver/launcherconfig.yaml,
     # requester/deployment.yaml}; bump them there alongside this on upgrade.
-    FMA_VERSION:             { default: "0.6.4" }
+    FMA_VERSION:             { default: "0.6.5" }
     FMA_CHART_INSTANCE_NAME: fma
 
     MODEL:           { default: "Qwen/Qwen3-32B" }
@@ -50,11 +50,8 @@ prerequisites:
 deploy:
   fma_crds:
     - run: |
-        export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
         kubectl apply --server-side \
-          -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
-          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
-          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+          -f "https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crds.yaml"
         kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
         kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
         kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s

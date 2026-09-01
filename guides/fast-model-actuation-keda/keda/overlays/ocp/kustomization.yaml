@@ -13,8 +13,8 @@
 #     prometheus-token copy step is not needed on OpenShift.
 #
 # NOTE: the PromQL label selectors inside the trigger queries are opaque strings
-# kustomize cannot reach -- edit inference_pool / model_name in
-# ../../base/scaledobject.yaml to match your EPP pool and model.
+# kustomize cannot reach -- edit inference_pool / model_name in the ScaledObject
+# query patch in ../../base/kustomization.yaml to match your EPP pool and model.
 #
 # Build:  kubectl kustomize guides/fast-model-actuation-keda/keda/overlays/ocp
 apiVersion: kustomize.config.k8s.io/v1beta1
