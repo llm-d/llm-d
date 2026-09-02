@@ -55,6 +55,7 @@ This guide includes configurations for the following accelerators and inference 
    source ${REPO_ROOT}/guides/env.sh
    export GUIDE_NAME="aggregation"
    export NAMESPACE=llm-d-multimodal-aggregation
+   export MODEL_SERVER=vllm # options: vllm, sglang
    ```
 
 4. Install the Gateway API Inference Extension CRDs:
@@ -96,7 +97,7 @@ Deploy the llm-d Router in **Standalone Mode** overlaying router custom configur
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.{MODEL_SERVER}.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.${MODEL_SERVER}.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -104,7 +105,7 @@ helm install ${GUIDE_NAME} \
 > The `token-producer` estimate in the router values must match the model you deploy in step 2.
 > The shipped default estimates image tokens from resolution, which is correct for Qwen3-VL. If you
 > deploy `google/gemma-4-31B-it`, swap in the commented-out `estimate:` block in
-> [`router/aggregation.values.yaml`](router/aggregation.values.yaml) — Gemma 4 allocates a fixed token
+> [`router/aggregation.values.vllm.yaml`](router/aggregation.values.vllm.yaml) (or [`router/aggregation.values.sglang.yaml`](router/aggregation.values.sglang.yaml)) — Gemma 4 allocates a fixed token
 > budget per image, so the resolution-based estimator would mis-price every multimodal request and skew
 > routing with no error to signal it.
 
@@ -117,12 +118,11 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
 ```bash
-export MODEL_SERVER=vllm # options: vllm, sglang
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.${MODEL_SERVER}.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \

@@ -7,7 +7,7 @@ namePrefix: mm-baseline-nvidia-gpu-sglang-
 
 components:
   - ../../../base/sglang
-  - ../../../../../../recipes/modelserver/components/images/gpu-sglang
+  - ../../../../../../recipes/modelserver/components/images/gpu-sglang/release
 
 labels:
   - pairs:
