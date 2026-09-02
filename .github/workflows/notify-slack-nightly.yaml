@@ -1,0 +1,189 @@
+---
+name: Notify Slack - Nightly Results
+
+# Posts the result of every scheduled nightly to the Slack channel owned by the
+# SIG responsible for it.
+#
+# This replaces the `/github subscribe` integration, which had two limits we
+# could not work around: it only supports one workflow per channel (so a channel
+# like #sig-router, which owns 16 nightlies, could never be covered), and it
+# notifies on manual workflow_dispatch runs too, which was pure noise.
+#
+# Channel routing lives in .github/slack-channels.yaml -- that file is the
+# source of truth. The `workflows:` list below is GENERATED from it by
+#
+#     python scripts/sync-slack-channels.py --fix
+#
+# and verified on every PR by the `sync-slack-channels` pre-commit hook.
+# DO NOT edit that list by hand.
+#
+# Why the list is generated: workflow_run can only match on a workflow's display
+# name, and a display name is easy to change. Rename a nightly and the trigger
+# silently stops matching -- no error, just no more messages, which is
+# indistinguishable from a quiet night. Generating the list means the rename
+# turns CI red in the very PR that does the renaming.
+#
+# Note that routing at runtime keys off the workflow's FILE name
+# (workflow_run.path), not its display name, so a rename can only stop
+# notifications -- it can never send them to the wrong channel.
+
+on:
+  workflow_run:
+    types:
+      - completed
+    # Filters the branch of the *upstream* run. Scheduled runs always use the
+    # default branch, so this is belt-and-braces, but it does keep runs on the
+    # temporary test-nightly/pr-* branches from reaching this workflow.
+    branches:
+      - main
+    workflows:
+      # SLACK-WORKFLOWS-START
+      - "Nightly - Fast Model Actuation E2E (OCP GPU)"
+      - "Nightly - Flow Control E2E (GKE GPU)"
+      - "Nightly - Optimized Baseline E2E (AMD ROCM)"
+      - "Nightly - Optimized Baseline E2E (CKS GPU)"
+      - "Nightly - Optimized Baseline E2E (GKE GPU SGLang)"
+      - "Nightly - Optimized Baseline E2E (GKE GPU TensorRT-LLM)"
+      - "Nightly - Optimized Baseline E2E (GKE GPU)"
+      - "Nightly - Optimized Baseline E2E (GKE TPU)"
+      - "Nightly - Optimized Baseline E2E (Intel XPU)"
+      - "Nightly - Optimized Baseline E2E (OCP GPU)"
+      - "Nightly - PD Disaggregation E2E (AMD ROCM)"
+      - "Nightly - PD Disaggregation E2E (CKS GPU)"
+      - "Nightly - PD Disaggregation E2E (GKE GPU SGLang)"
+      - "Nightly - PD Disaggregation E2E (GKE GPU)"
+      - "Nightly - PD Disaggregation E2E (GKE TPU)"
+      - "Nightly - PD Disaggregation E2E (Intel XPU)"
+      - "Nightly - PD Disaggregation E2E (OCP GPU)"
+      - "Nightly - Precise Prefix Cache E2E (GKE TPU)"
+      - "Nightly - Precise Prefix Cache Routing E2E (AMD ROCM)"
+      - "Nightly - Precise Prefix Cache Routing E2E (CKS GPU)"
+      - "Nightly - Precise Prefix Cache Routing E2E (GKE GPU)"
+      - "Nightly - Precise Prefix Cache Routing E2E (Intel XPU)"
+      - "Nightly - Precise Prefix Cache Routing E2E (OCP GPU)"
+      - "Nightly - Predicted Latency Routing E2E (AMD ROCM)"
+      - "Nightly - Predicted Latency Routing E2E (CKS GPU)"
+      - "Nightly - Predicted Latency Routing E2E (GKE GPU)"
+      - "Nightly - Predicted Latency Routing E2E (OCP GPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (Intel XPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (OCP GPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (GKE GPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (Intel XPU)"
+      - "Nightly - Tiered Prefix Cache E2E (GKE TPU)"
+      - "Nightly - Wide EP LWS E2E (CKS GPU)"
+      - "Nightly - Wide EP LWS E2E (GKE GPU)"
+      - "Nightly - Wide EP LWS E2E (Intel XPU)"
+      - "Nightly - Wide EP LWS E2E (OCP GPU)"
+      - "Nightly - Workload Autoscaling E2E (CKS GPU)"
+      - "Nightly - Workload Autoscaling E2E (OCP GPU)"
+      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
+      # SLACK-WORKFLOWS-END
+
+  # Replays an existing nightly run through the notifier. Because workflow_run
+  # (and workflow_dispatch itself) only work from the default branch, this is
+  # the only way to exercise the real posting path once merged. Before merging,
+  # run .github/scripts/notify-slack-nightly.py locally instead -- see
+  # .github/workflows/README.md.
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'ID of an existing nightly run (the trailing number in its Actions URL)'
+        required: true
+        type: string
+      dry_run:
+        description: 'true = render the payload into the job summary without posting to Slack'
+        required: false
+        default: 'true'
+        type: string
+      channel_override:
+        description: 'Post to this channel instead of the mapped one (e.g. #llm-d-ci-test)'
+        required: false
+        default: ''
+        type: string
+
+# Deliberately minimal. A workflow_run-triggered workflow is handed secrets and a
+# privileged token even when the upstream run had neither, so it should ask for
+# no more than it uses: reading the mapping out of the repo, and reading the
+# upstream run and its jobs from the API.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  # One group per upstream run. A global group would serialise 40 notifications
+  # behind each other; cancel-in-progress would drop a notification outright.
+  group: notify-slack-nightly-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    # Three independent guards:
+    #   1. repository -- forks have no SLACK_BOT_TOKEN and must not try to post.
+    #   2. event == 'schedule' -- THE reason this workflow exists. Excludes
+    #      manual dispatches of a nightly and /test-nightly runs. Note this
+    #      cannot move into `on:`: workflow_run offers no filter on the upstream
+    #      run's own event, so we pay a ~2s empty run per manual dispatch.
+    #   3. conclusion -- see the list below.
+    #
+    # 'cancelled' is excluded on purpose and is the common case: every nightly
+    # sets cancel-in-progress, so dispatching one while a run is in flight
+    # cancels that run, and that is not news for a channel. 'skipped' and
+    # 'neutral' say nothing about guide health. 'timed_out' IS notified: it is a
+    # real failure with its own signature, usually a hung standup.
+    if: >-
+      github.repository == 'llm-d/llm-d' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.event == 'schedule' &&
+        contains(fromJSON('["success", "failure", "timed_out"]'), github.event.workflow_run.conclusion)))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mapping and script
+        uses: actions/checkout@v7
+        with:
+          # Only the two files this job reads, rather than the whole repo.
+          sparse-checkout: |
+            .github/slack-channels.yaml
+            .github/scripts/notify-slack-nightly.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check pyyaml
+
+      - name: Render Slack payload
+        id: render
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          CHANNEL_OVERRIDE: ${{ inputs.channel_override }}
+        run: |
+          python .github/scripts/notify-slack-nightly.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --run-id "${RUN_ID}" \
+            ${CHANNEL_OVERRIDE:+--channel "${CHANNEL_OVERRIDE}"} \
+            --github-output
+
+      - name: Post to Slack
+        # An empty channel means the render step decided there is nothing to
+        # send. dry_run only applies to manual replays.
+        if: >-
+          steps.render.outputs.channel != '' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true')
+        # Pinned by SHA: this is a third-party action in a job that holds
+        # SLACK_BOT_TOKEN. Dependabot already tracks github-actions and will
+        # propose bumps.
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d  # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          # Fail loudly when Slack rejects the call. The likely cause is the bot
+          # not being a member of the target channel ('not_in_channel'), which is
+          # broken configuration rather than operational noise.
+          errors: true
+          payload: ${{ steps.render.outputs.payload }}
