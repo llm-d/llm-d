@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          securityContext:
+            runAsUser: 0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Enable the vLLM #42212 Triton small-copy fast path for CPU->GPU
+              # read-back. At TP=2 the Qwen3-32B KV page is 32 KiB, above the stock
+              # 28 KiB cutoff, so raise the threshold to 40 KiB so the kernel engages.
+              sed -i 's/THRESHOLD_BYTES = 28 \* 1024/THRESHOLD_BYTES = 40 * 1024/' \
+                /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/cpu/swap_blocks_triton.py
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --tensor-parallel-size=2 \
+                --kv-cache-memory-bytes=26843545600 \
+                --kv-transfer-config \
+                '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":107374182400}}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
