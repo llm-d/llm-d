@@ -154,30 +154,32 @@ A new environment variable, `OTEL_TRACES_ENABLED_SCOPES`, takes a comma-separate
 OTEL_TRACES_ENABLED_SCOPES=llm-d-router/pkg/kvcache,llm-d-router/pkg/kvevents
 ```
 
-This is implemented as a `SpanProcessor` that wraps the existing OTLP `BatchSpanProcessor` inside `InitTracing`, filtering on `ReadOnlySpan.InstrumentationScope().Name` at `OnEnd`:
+This is implemented at tracer acquisition, in `llm-d-router`'s existing `Tracer(scope ...string)` helper (`pkg/common/observability/tracing/telemetry.go`), the single place every subsystem already goes through to get its `trace.Tracer`. A disabled scope gets a no-op `trace.Tracer` instead of one backed by the real `TracerProvider`:
 
 ```go
-type scopeFilterProcessor struct {
-    next    sdktrace.SpanProcessor
-    enabled map[string]bool // nil/empty means "allow everything"
-}
-
-func (p *scopeFilterProcessor) OnEnd(s sdktrace.ReadOnlySpan) {
-    if len(p.enabled) == 0 || p.enabled[s.InstrumentationScope().Name] {
-        p.next.OnEnd(s)
+func Tracer(scope ...string) trace.Tracer {
+    name := instrumentationName
+    if len(scope) > 0 && scope[0] != "" {
+        name = scope[0]
     }
+    if !scopeEnabled(name) {
+        return noop.NewTracerProvider().Tracer(name)
+    }
+    return otel.Tracer(name, /* ... existing options ... */)
 }
 ```
 
-This runs after `OnStart`/`Start()` has already created the span (span creation itself is cheap; the cost this avoids is exporting and storing it), so filtering happens at `OnEnd`, immediately before the span would otherwise reach the batcher. Filtered-out spans are dropped locally and never leave the process.
+Filtering here, rather than in a `SpanProcessor.OnEnd`, matters for correctness, not just efficiency. `tracer.Start()` mints a span's `SpanID` at creation time; anything a disabled-scope tracer starts would still hand out a real `SpanID` for its children to record as their parent, and a `SpanProcessor` filtering later at `OnEnd` can only decide whether that already-minted span is exported, not un-mint the `SpanID` its children already captured. A child from an *enabled* scope started under a *disabled* parent would then export with a `parent_span_id` that never arrives at the collector: an orphaned span, detached from the trace tree (or rendered as the root of a spurious new one), in whichever scope happens to sit downstream of a disabled one in the call graph — scheduling and request-control sit upstream of kv-cache and kv-events, so this is not a corner case for EPP's own subsystem tree.
+
+Filtering at acquisition avoids this because the OpenTelemetry API's no-op `Tracer.Start()` (`go.opentelemetry.io/otel/trace/noop`) never mints a new `SpanID` in the first place: given a context that already carries a valid `SpanContext`, it returns that same `SpanContext` unchanged, wrapped as a non-recording span. So a disabled scope's `Start()` is a pass-through: nothing it creates is ever a parent for anything, and any enabled-scope descendant threads back to the nearest enabled ancestor's real span instead. This is the same trick the process-level `OTEL_TRACES_EXPORTER=none` path already relies on (a no-op `TracerProvider` for the whole process); this section applies it per scope instead of per process.
 
 ```mermaid
 flowchart LR
-    A["Span created<br/>tracer.Start()"] --> B["scopeFilterProcessor.OnEnd"]
-    B -->|"scope in<br/>OTEL_TRACES_ENABLED_SCOPES"| C["BatchSpanProcessor"]
-    B -->|"scope not enabled"| D["dropped locally"]
-    C --> E["OTLP exporter"]
-    E --> F["Collector"]
+    A["Tracer(scope) call"] --> B{"scope in<br/>OTEL_TRACES_ENABLED_SCOPES?"}
+    B -->|"yes"| C["real tracer<br/>Start() mints a SpanID"]
+    B -->|"no"| D["noop tracer<br/>Start() passes the parent SpanContext through unchanged"]
+    C --> E["BatchSpanProcessor"] --> F["OTLP exporter"] --> G["Collector"]
+    D --> H["no span recorded;<br/>children parent to the nearest enabled ancestor"]
 ```
 
 The instrumentation-scope names already exist in the codebase as `TracerScope` constants and do not need to be introduced:
@@ -198,7 +200,7 @@ This is scoped to EPP because it is the one binary that currently hosts this man
 
 ### Per-repo work
 
-* **llm-d-router**: already implements `OTEL_TRACES_EXPORTER=none|otlp|console` (`pkg/common/observability/tracing/telemetry.go`), with the propagator installed unconditionally so propagation survives `OTEL_TRACES_EXPORTER=none`. Its default is `otlp`, not `none`; reconcile that with this proposal's default before treating the two conventions as aligned. Remaining work is adding the `scopeFilterProcessor` and `OTEL_TRACES_ENABLED_SCOPES` wiring, scoped to the EPP binary (`cmd/epp`); no change needed for `cmd/pd-sidecar`, which already gets independent process-level control.
+* **llm-d-router**: already implements `OTEL_TRACES_EXPORTER=none|otlp|console` (`pkg/common/observability/tracing/telemetry.go`), with the propagator installed unconditionally so propagation survives `OTEL_TRACES_EXPORTER=none`. Its default is `otlp`, not `none`; reconcile that with this proposal's default before treating the two conventions as aligned. Remaining work is adding `OTEL_TRACES_ENABLED_SCOPES` handling to the `Tracer()` helper, scoped to the EPP binary (`cmd/epp`); no change needed for `cmd/pd-sidecar`, which already gets independent process-level control.
 * **llm-d-kv-cache**: align the standalone service's config surface (`pkg/telemetry/tracing.go`) with `OTEL_TRACES_EXPORTER`; confirm the same propagation guarantee; document how the embedded-in-router case (which uses the router's global `TracerProvider` instead of this package) relates to the new scope-level control.
 * **llm-d-batch-gateway**: align `internal/util/otel/otel.go` with `OTEL_TRACES_EXPORTER`; confirm propagation from the API server through to the batch processor worker.
 * **llm-d-inference-payload-processor**: align `pkg/common/observability/tracing/telemetry.go` with `OTEL_TRACES_EXPORTER`; today it unconditionally defaults `OTEL_EXPORTER_OTLP_ENDPOINT` to `http://localhost:4317` when unset, which should be revisited so the component defaults to off rather than assuming a local collector is present.
