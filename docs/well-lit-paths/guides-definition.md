@@ -34,7 +34,7 @@ A guide is the answer to: *"I want to serve LLM traffic with llm-d — what exac
 
 A directory under `guides/` is a guide if and only if all of the following hold:
 
-1. **It describes a deployment topology or a composition**, not a parameter value.
+1. **It describes a deployment topology or a composition**, with a fixed set of parameters (down to a fixed model name).
    A guide changes *what runs and how the pieces are wired* — the number and role
    of model-server groups, which router/EPP plugins are active, which cache tiers
    exist, which services sit in the request path. If the delta from an existing
