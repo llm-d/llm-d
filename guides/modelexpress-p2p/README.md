@@ -38,7 +38,7 @@ graph LR
 Use P2P weight transfer when:
 
 * Your inference pool has multiple replicas of the same model checkpoint.
-* You have an InfiniBand, RoCE, or EFA fabric exposed to pods as the `rdma/ib` extended resource (or the equivalent for your CNI and device plugin; the request lives in the `coreweave` overlay, see Step 3).
+* You have an InfiniBand, RoCE, or EFA fabric exposed to pods — either as the `rdma/ib` extended resource via a device plugin (the `coreweave` overlay, see Step 3), or through DRA on GKE (the `gke` overlay).
 * You care about cold-start tail latency on scale-outs, rolling restarts, or live-refit workloads where many pods come up close together.
 
 For workload-specific guidance (RL training rollouts, elastic bin-packed racks), see the [workload notes](./compile-cache.md#workload-notes).
@@ -59,7 +59,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 ## Prerequisites
 
 * Install the [required client tools on your local system](../../helpers/client-setup/README.md) to use this guide.
-* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200 with InfiniBand recommended) and a device plugin that exposes `rdma/ib` (or your fabric's equivalent; adjust the resource name in the `coreweave` overlay, see Step 3).
+* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200). Fabric access comes either from a device plugin that exposes `rdma/ib` (the `coreweave` overlay; adjust the resource name for your fabric's equivalent, see Step 3), or on GKE from GPU DRA + DRANet (the `gke` overlay) — to pre-provision a GKE cluster with DRA & RDMA/RoCE, follow the [same setup as the P/D guide](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce).
 
 * Checkout llm-d repo:
 

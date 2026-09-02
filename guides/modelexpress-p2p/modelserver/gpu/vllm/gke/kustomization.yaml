@@ -8,7 +8,7 @@ resources:
 # pd-disaggregation gke overlay — plus the UCX reachability/multipath settings
 # for GKE's rail fabric.
 components:
-  - ../../../../../pd-disaggregation/modelserver/components/gke-rdma
+  - ../../../../../recipes/modelserver/components/gke-rdma
 
 patches:
   - patch: |-
