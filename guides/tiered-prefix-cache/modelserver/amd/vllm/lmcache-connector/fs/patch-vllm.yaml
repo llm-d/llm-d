@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--tensor-parallel-size=2"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            - "--max-num-seqs=1024"
+          resources:
+            limits:
+              memory: 500Gi
+            requests:
+              memory: 500Gi
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # 100 GB CPU tier total, matching gpu/vllm/lmcache-connector/cpu guide.
+            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
+              value: "100.0"
+            # Disk tier on the shared RWX NFS PVC (host-bounced POSIX, NOT GDS).
+            - name: LMCACHE_LOCAL_DISK
+              value: "file:///mnt/files-storage/kv-cache/"
+            # NFS: O_DIRECT is unreliable/unsupported on many NFS mounts — use buffered I/O.
+            # Must be a JSON boolean (false), NOT the string "False": LMCache json.loads()
+            # this and checks `if not use_odirect`, so a non-empty string ("False") is
+            # truthy and would wrongly enable O_DIRECT.
+            - name: LMCACHE_EXTRA_CONFIG
+              value: '{"use_odirect": false}'
+            # Per-GPU-worker disk cap: 120 GB × 8 workers (4 replicas × TP2) ≈ 960 GB ≤ 1 TiB PVC.
+            - name: LMCACHE_MAX_LOCAL_DISK_SIZE
+              value: "120.0"
+            - name: PYTHONHASHSEED
+              value: "123"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/lmcache_prometheus"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+            - name: lmcache-prometheus-metrics
+              mountPath: /tmp/lmcache_prometheus
+      volumes:
+        # Shared RWX NFS PVC (same one the native fs path uses), for cross-replica reuse.
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage
+        - name: lmcache-prometheus-metrics
+          emptyDir: {}
