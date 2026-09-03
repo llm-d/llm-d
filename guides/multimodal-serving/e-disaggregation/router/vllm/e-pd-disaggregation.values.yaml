@@ -61,6 +61,14 @@ router:
             # parity with the previous weighted-scorer stack). Reduce toward the
             # default for text-dominant traffic.
             maxTTFTPenaltyMs: 36000
+        - type: mm-embeddings-cache-producer
+          # cacheSizeInMBPerServer defaults to 4096 MiB (~2048 tracked images per
+          # encode pod at the fixed 2 MiB/image proxy the plugin uses). Left unset
+          # here to match this guide's large vLLM num_ec_blocks (1,000,000 blocks,
+          # eviction-resistant). If you lower num_ec_blocks on the encode workers,
+          # set this proportionally so the EPP does not claim hits the server has
+          # already evicted. Tune empirically via the encoder_cache_hit_ratio metric.
+        - type: mm-embeddings-cache-scorer
         - type: token-load-scorer
         - type: queue-scorer
         - type: max-score-picker
@@ -68,6 +76,8 @@ router:
         - name: encode
           plugins:
           - pluginRef: encode-filter
+          - pluginRef: mm-embeddings-cache-scorer
+            weight: 4
           - pluginRef: queue-scorer
             weight: 2
           - pluginRef: max-score-picker
