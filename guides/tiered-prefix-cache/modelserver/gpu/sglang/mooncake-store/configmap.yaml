@@ -3,19 +3,34 @@ kind: ConfigMap
 metadata:
   name: mooncake-store-config
 data:
-  # Template only -- NOT the file SGLang reads. The DEVICE_PLACEHOLDER and
-  # POD_IP_PLACEHOLDER values are resolved per pod by the mooncake-render-config
-  # initContainer, which writes the real config to an emptyDir. Keep comments out of the
-  # JSON body below: it is parsed with json.load(), which rejects "#" comments.
-  # See configmap-render-config.yaml for why these two values cannot be static.
+  # Template only -- NOT the file SGLang reads. DEVICE_PLACEHOLDER and POD_IP_PLACEHOLDER
+  # are resolved per pod by the launch wrapper in patch-sglang.yaml, which writes the real
+  # config to an emptyDir. Keep comments out of the JSON body below: it is parsed with
+  # json.load(), which rejects "#" comments.
+  # See configmap-render-config.yaml for why those two values cannot be static.
+  #
+  # Tiers: L1 GPU -> L2 host DRAM (--hicache-size) -> L3 Mooncake.
+  # Within L3 each pod contributes two distinct resources, which the master tracks
+  # separately as "Mem Storage" and "SSD Storage":
+  #   global_segment_size - host DRAM registered for RDMA. Deliberately small: it is the
+  #     landing zone for incoming writes, not the capacity tier. It cannot be 0 outside
+  #     "standalone-store" mode (the client enforces 1024 <= size <= 1TiB).
+  #   ssd_offload_path    - local disk, and the actual capacity. Once the DRAM segment hits
+  #     the master's eviction_high_watermark_ratio, evicted objects spill here instead of
+  #     being dropped.
+  # The master indexes replicas across all clients, so the per-pod volumes together form
+  # one cluster-wide pool. ssd_offload_path must match both the volume mount in
+  # patch-sglang.yaml and the master's root_fs_dir, which is pushed to clients via
+  # GetStorageConfig().
   mooncake_config.json: |
     {
       "metadata_server": "P2PHANDSHAKE",
       "master_server_address": "mooncake-master-store:50051",
-      "global_segment_size": "80GB",
+      "global_segment_size": "4GB",
       "local_buffer_size": "4GB",
       "protocol": "rdma",
-      "device_name": "DEVICE_PLACEHOLDER",
+      "device_name": "",
       "local_hostname": "POD_IP_PLACEHOLDER",
-      "enable_ssd_offload": false
+      "enable_ssd_offload": true,
+      "ssd_offload_path": "/data/mooncake-offload"
     }

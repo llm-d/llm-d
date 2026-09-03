@@ -20,11 +20,24 @@ data:
     default_kv_lease_ttl: 5000
     default_kv_soft_pin_ttl: 1800000
     allow_evict_soft_pinned_objects: true
-    eviction_ratio: 0.05
-    eviction_high_watermark_ratio: 0.95
+    # Start draining the DRAM pool to disk well before it is full, and free more per cycle.
+    # At the defaults (0.95 / 0.05) a sustained writer exhausts DRAM faster than the offload
+    # path can drain it: puts succeeded up to the pool size and then failed outright rather
+    # than spilling. 0.7 leaves 30% of the pool as burst headroom instead of 5%.
+    eviction_ratio: 0.2
+    eviction_high_watermark_ratio: 0.7
 
     memory_allocator: "offset"
     allocation_strategy: "random"
+
+    # Disk tier. The Master hands root_fs_dir to Clients via GetStorageConfig(); each
+    # Client uses root_fs_dir/cluster_id as its base directory, so this path must match
+    # what the Clients actually have mounted -- see ssd_offload_path in the modelserver's
+    # mooncake_config.json and the volume mounted there. The Master also needs
+    # --enable_offload (see deployment.yaml) or it rejects MountLocalDiskSegment with
+    # UNABLE_OFFLOAD.
+    cluster_id: "mooncake_cluster"
+    root_fs_dir: "/data/mooncake-offload"
 
     enable_snapshot: true
     enable_snapshot_restore: true
