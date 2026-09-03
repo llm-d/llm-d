@@ -1,0 +1,247 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: decode
+  labels:
+    # LocalQueue from docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+    kueue.x-k8s.io/queue-name: tpu7x-subslice-lq
+    llm-d.ai/role: decode
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    # 2x2x2 sub-slice = 8 chips = 2 tpu7x-standard-4t hosts.
+    size: 2
+    restartPolicy: RecreateGroupOnPodRestart
+    leaderTemplate:
+      metadata:
+        annotations:
+          cloud.google.com/gke-tpu-slice-topology: "2x2x2"
+          # Dynamic-slice pods carry no static gke-tpu-topology nodeSelector,
+          # which the GKE TPU admission webhook otherwise requires.
+          cloud.google.com/skip-tpu-webhook-check: "true"
+        labels:
+          llm-d.ai/role: decode
+          llm-d.ai/guide: optimized-baseline
+          llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
+          llm-d.ai/accelerator-variant: tpu
+          llm-d.ai/accelerator-vendor: google
+      spec:
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-partition-2x2x2-state: "HEALTHY"
+        tolerations:
+          - key: google.com/tpu
+            operator: Exists
+            effect: NoSchedule
+        containers:
+          - name: modelserver
+            image: REPLACE_MODEL_SERVER_IMAGE
+            command:
+              - /bin/bash
+              - -c
+              - |
+                set -euo pipefail
+
+                # JAX mesh addresses for this LWS group (hostnames injected by
+                # the GKE TPU webhook for multi-host groups).
+                export TPU_PROCESS_ADDRESSES=$(echo ${TPU_WORKER_HOSTNAMES} | sed 's/,/:8476,/g'):8476
+
+                bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader \
+                  --ray_cluster_size=${LWS_GROUP_SIZE} --ray_init_timeout=1800
+
+                exec vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
+                  --max-model-len=262144 \
+                  --max-num-batched-tokens=8192 \
+                  --max-num-seqs=64 \
+                  --tensor-parallel-size=16 \
+                  --kv-cache-dtype=fp8 \
+                  --language-model-only \
+                  --gpu-memory-utilization=0.80 \
+                  --async-scheduling \
+                  --enable-expert-parallel \
+                  --block-size=256 \
+                  --port=8000 \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: TPU_MULTIHOST_BACKEND
+                value: ray
+              - name: TPU_NODE_ID
+                value: $(LWS_WORKER_INDEX)
+              - name: TPU_PROCESS_PORT
+                value: "8476"
+              - name: TPU_BACKEND_TYPE
+                value: jax
+              - name: PJRT_DEVICE
+                value: TPU
+              - name: JAX_PLATFORMS
+                value: ""
+              - name: SKIP_JAX_PRECOMPILE
+                value: "1"
+              - name: MODEL_IMPL_TYPE
+                value: vllm
+              - name: USE_BATCHED_RPA_KERNEL
+                value: "1"
+              - name: USE_MOE_EP_KERNEL
+                value: "0"
+              - name: VLLM_DISABLE_SHARED_EXPERTS_STREAM
+                value: "1"
+              - name: VLLM_MLA_DISABLE
+                value: "1"
+              - name: VLLM_ENGINE_CLIENT_STARTUP_TIMEOUT
+                value: "1800"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+            ports:
+              - name: modelserver
+                containerPort: 8000
+                protocol: TCP
+              - name: jax-coord
+                containerPort: 8476
+                protocol: TCP
+            resources:
+              limits:
+                cpu: "200"
+                memory: 900Gi
+                google.com/tpu: 4
+              requests:
+                cpu: "150"
+                memory: 800Gi
+                google.com/tpu: 4
+            startupProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              initialDelaySeconds: 15
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 480
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              periodSeconds: 5
+              timeoutSeconds: 2
+              failureThreshold: 3
+            volumeMounts:
+              - mountPath: /dev/shm
+                name: shm
+              - mountPath: /.cache
+                name: torch-compile-cache
+              - mountPath: /.config
+                name: vllm-config
+        volumes:
+          - name: shm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 100Gi
+          - name: torch-compile-cache
+            emptyDir: {}
+          - name: vllm-config
+            emptyDir: {}
+    workerTemplate:
+      metadata:
+        annotations:
+          cloud.google.com/gke-tpu-slice-topology: "2x2x2"
+          cloud.google.com/skip-tpu-webhook-check: "true"
+        labels:
+          # The InferencePool selects pods by llm-d.ai/guide=optimized-baseline;
+          # workers carry a different value so only the leader (which serves
+          # the API endpoint for the group) receives routed traffic.
+          llm-d.ai/guide: optimized-baseline-worker
+          llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
+          llm-d.ai/accelerator-variant: tpu
+          llm-d.ai/accelerator-vendor: google
+      spec:
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-partition-2x2x2-state: "HEALTHY"
+        tolerations:
+          - key: google.com/tpu
+            operator: Exists
+            effect: NoSchedule
+        containers:
+          - name: modelserver
+            image: REPLACE_MODEL_SERVER_IMAGE
+            command:
+              - /bin/bash
+              - -c
+              - |
+                set -euo pipefail
+
+                export TPU_PROCESS_ADDRESSES=$(echo ${TPU_WORKER_HOSTNAMES} | sed 's/,/:8476,/g'):8476
+
+                exec bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker \
+                  --ray_address=${LWS_LEADER_ADDRESS} --ray_init_timeout=1800
+            env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: TPU_MULTIHOST_BACKEND
+                value: ray
+              - name: TPU_NODE_ID
+                value: $(LWS_WORKER_INDEX)
+              - name: TPU_PROCESS_PORT
+                value: "8476"
+              - name: TPU_BACKEND_TYPE
+                value: jax
+              - name: PJRT_DEVICE
+                value: TPU
+              - name: JAX_PLATFORMS
+                value: ""
+              - name: SKIP_JAX_PRECOMPILE
+                value: "1"
+              - name: MODEL_IMPL_TYPE
+                value: vllm
+              - name: USE_BATCHED_RPA_KERNEL
+                value: "1"
+              - name: USE_MOE_EP_KERNEL
+                value: "0"
+              - name: VLLM_DISABLE_SHARED_EXPERTS_STREAM
+                value: "1"
+              - name: VLLM_MLA_DISABLE
+                value: "1"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+            resources:
+              limits:
+                cpu: "200"
+                memory: 900Gi
+                google.com/tpu: 4
+              requests:
+                cpu: "150"
+                memory: 800Gi
+                google.com/tpu: 4
+            volumeMounts:
+              - mountPath: /dev/shm
+                name: shm
+              - mountPath: /.cache
+                name: torch-compile-cache
+              - mountPath: /.config
+                name: vllm-config
+        volumes:
+          - name: shm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 100Gi
+          - name: torch-compile-cache
+            emptyDir: {}
+          - name: vllm-config
+            emptyDir: {}

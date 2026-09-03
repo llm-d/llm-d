@@ -52,6 +52,7 @@ This guide includes configuration for the following accelerators:
 | NVIDIA GPU (vLLM + DisaggregatedSet) | `modelserver/gpu/vllm-ds/` | Manages the whole P/D topology as one LWS `DisaggregatedSet` with `slices`, see [DisaggregatedSet Guide](./README.ds.md) |
 | NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang, validated each release                           |
 | Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & v7x), see [TPU Guide](./README.tpu.md) |
+| Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [TPU Guide](./README.tpu.md#pd-on-dynamic-tpu-sub-slices-tpu7x) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
