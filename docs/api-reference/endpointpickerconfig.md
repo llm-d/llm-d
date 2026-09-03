@@ -74,7 +74,7 @@ Configures request handling behavior.
 
 | Field | Description |
 | --- | --- |
-| `parser` | [ParserConfig](#parserconfig) <br/> Specifies the parsing logic for protocol messages. |
+| `parsers` | [][ParserConfig](#parserconfig) <br/> List of parsing plugins used to process protocol messages. If unspecified, `openai-parser`, `anthropic-parser`, and `vllmhttp-parser` are configured by default. |
 
 ## DataLayerConfig
 
@@ -99,4 +99,4 @@ Configures request handling behavior.
 
 | Field | Description |
 | --- | --- |
-| `pluginRef` | `string` <br/> **Required** <br/> Reference to a parser plugin (default: `openai-parser`). |
+| `pluginRef` | `string` <br/> **Required** <br/> Reference to a parser plugin instance. |
