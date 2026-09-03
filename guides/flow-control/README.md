@@ -256,7 +256,7 @@ metrics endpoint (see [Proof of Queuing](#3-proof-of-queuing)).
 To fully verify that queuing and backpressure are working, you must apply concurrent load; [Use Case 2](#use-case-2-backpressure-management) does that with a burst of concurrent requests. For now, set up the test environment.
 
 **Read `maxConcurrency` from [router/flow-control.values.yaml](./router/flow-control.values.yaml).**
-The Use Case 2 load test sizes its burst from `MAX_CONCURRENCY`; a retuned values file
+The Use Case 2 load test sizes its burst from `MAX_CONCURRENCY`; a returned values file
 changes the burst with it:
 
 <!-- guide:verify.tests.max_concurrency start -->
