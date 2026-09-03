@@ -1,0 +1,47 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which the token-load-scorer consumes) is local to each EPP process, so
+    # multiple replicas would each see only a fraction of the per-endpoint load.
+    replicas: 1
+    pluginsConfigFile: "pd-config.yaml"
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: inflight-load-producer
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        # Prefill does the prompt pass: pick by queued prefill token load.
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "pd-disaggregation-iluvatar"

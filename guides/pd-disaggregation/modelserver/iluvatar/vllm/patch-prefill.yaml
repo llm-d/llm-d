@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "/models/Qwen2.5-1.5B-Instruct"
+            - "--served-model-name=qwen"
+            - "--tensor-parallel-size=1"
+            - "--max-model-len=2048"
+            - "--gpu-memory-utilization=0.6"
+            - "--enforce-eager"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"IluNixlConnector","kv_role":"kv_both","kv_buffer_device":"cuda"}'
+          env:
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: TRANSFORMERS_OFFLINE
+              value: "1"
+            - name: UCX_TLS
+              value: "cuda_copy,cuda_ipc,tcp,self,posix,sysv"
+            - name: UCX_PROTO_ENABLE
+              value: "y"
+            - name: UCX_CUDA_IPC_ENABLE_SAME_PROCESS
+              value: "y"
+            - name: UCX_NET_DEVICES
+              value: "eth0"
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5600"
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+          resources:
+            limits:
+              cpu: "8"
+              memory: 20Gi
+              iluvatar.com/gpu: "1"
+            requests:
+              cpu: "8"
+              memory: 20Gi
+              iluvatar.com/gpu: "1"
+          volumeMounts:
+            - mountPath: /models
+              name: models
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 20
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+      volumes:
+        - name: models
+          hostPath:
+            path: /root/models
+            type: Directory
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+        - name: torch-compile-cache
+          emptyDir: {}
