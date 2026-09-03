@@ -13,6 +13,7 @@ set -Eeux
 # - VIRTUAL_ENV: Path to the virtual environment
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - TARGETOS: OS type (ubuntu or rhel)
+# - MAX_JOBS: number of parallel jobs for the ninja build
 
 if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
     echo "NIXL will be installed be vLLM and not built from source."
