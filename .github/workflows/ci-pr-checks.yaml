@@ -39,3 +39,8 @@ jobs:
         uses: j178/prek-action@v2
         with:
           extra-args: ''
+
+      - name: Run unit tests
+        run: |
+          python3 -m unittest discover -t . -s docker/scripts/snapshot
+
