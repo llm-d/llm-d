@@ -1,17 +1,17 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../../recipes/modelserver/base/single-host/pd/vllm
+  - ../../../../../../recipes/modelserver/base/single-host/pd/vllm
 
 namePrefix: pd-disaggregation-rocm-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/amd-vllm/llm-d
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../../recipes/modelserver/components/images/amd-vllm/llm-d
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:
-      llm-d.ai/model: Llama-3.3-70B-Instruct-FP8-KV
+      llm-d.ai/model: gpt-oss-120b
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: amd

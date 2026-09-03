@@ -90,7 +90,7 @@ jobs:
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
-      connector: ${{ inputs.connector || '' }}
+      connector: ${{ inputs.connector || 'nixl' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-amd-rocm' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-amd' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-amd' }}
