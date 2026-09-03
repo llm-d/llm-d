@@ -26,10 +26,10 @@ on:
   workflow_dispatch:
     inputs:
       tasks:
-        description: 'Number of parallel harness tasks ("-j"). One agent pod per task; size off free GPUs.'
+        description: 'Number of parallel harness tasks ("-j"). One agent pod per task; size off the scenario''s decode replicas and free GPUs.'
         required: false
         type: 'string'
-        default: '1'
+        default: '20'
       monitoring_enabled:
         description: 'Enabled monitoring ("true", "false")'
         required: true
@@ -96,15 +96,16 @@ jobs:
       # Supplies pok-prod's RWX storage class + the anyuid-bound serviceAccount
       # and runAsUser that the cluster-generic scenario deliberately leaves unset.
       cluster_config: 'config/cluster-configs/examples/openshift-pokprod.yaml'
-      # "-j": the eval fans out one agent pod per task. KV cache is a fixed token
-      # budget (~2-3 concurrent tasks per H100 at maxModelLen 32768), so raise
-      # this only alongside the scenario's decode replicas and free GPUs. The
-      # scenario ships 10 decode pods; -j is deliberately 1 here so a nightly
-      # regression signal costs one task, not a full sweep.
+      # "-j": the eval fans out one agent pod per task. 20 tasks against the
+      # scenario's 10 decode replicas is 2 concurrent requests per H100, which is
+      # about what a 32768-token KV budget sustains -- KV is a fixed token
+      # allowance, so context length and concurrency trade off directly. Raising
+      # this without adding replicas queues requests behind the KV ceiling rather
+      # than finishing sooner.
       # NOTE: decode replicas are NOT overridable from here -- the engine's
       # decode_pods input only patches kustomize manifests, and this scenario
       # stands up via modelservice. Change replicas in the scenario itself.
-      tasks: ${{ inputs.tasks || '1' }}
+      tasks: ${{ inputs.tasks || '20' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
     secrets: inherit
