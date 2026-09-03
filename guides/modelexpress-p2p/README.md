@@ -38,7 +38,7 @@ graph LR
 Use P2P weight transfer when:
 
 * Your inference pool has multiple replicas of the same model checkpoint.
-* You have an InfiniBand, RoCE, or EFA fabric exposed to pods as the `rdma/ib` extended resource (or the equivalent for your CNI and device plugin; the request lives in the `coreweave` overlay, see Step 3).
+* You have an InfiniBand, RoCE, or EFA fabric exposed to pods — either as the `rdma/ib` extended resource via a device plugin (the `coreweave` overlay, see Step 3), or through DRA on GKE (the `gke` overlay).
 * You care about cold-start tail latency on scale-outs, rolling restarts, or live-refit workloads where many pods come up close together.
 
 For workload-specific guidance (RL training rollouts, elastic bin-packed racks), see the [workload notes](./compile-cache.md#workload-notes).
@@ -51,7 +51,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 | Replicas | 2 (1 seed + 1 receiver; scale wider for a real fan-out) |
 | Tensor Parallelism | 2 |
 | Total GPUs | 4 |
-| Fabric resource | `rdma/ib` (2 per pod, via the `coreweave` overlay) |
+| Fabric resource | `rdma/ib` (2 per pod, via the `coreweave` overlay), or GKE DRA `mrdma` claims (via the `gke` overlay) |
 | Image | Shared GPU vLLM image + ModelExpress client baked in (build it yourself, see [Image](#image-building-a-modelexpress-enabled-model-server-image)) |
 | MX backend | `kubernetes` (CRDs, no Redis) |
 | Weight transport | NIXL/RDMA, GPU HBM -> GPU HBM |
@@ -59,7 +59,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 ## Prerequisites
 
 * Install the [required client tools on your local system](../../helpers/client-setup/README.md) to use this guide.
-* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200 with InfiniBand recommended) and a device plugin that exposes `rdma/ib` (or your fabric's equivalent; adjust the resource name in the `coreweave` overlay, see Step 3).
+* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200). Fabric access comes either from a device plugin that exposes `rdma/ib` (the `coreweave` overlay; adjust the resource name for your fabric's equivalent, see Step 3), or on GKE from GPU DRA + DRANet (the `gke` overlay) — to pre-provision a GKE cluster with DRA & RDMA/RoCE, follow the [same setup as the P/D guide](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce).
 
 * Checkout llm-d repo:
 
@@ -89,7 +89,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```bash
 export MODEL=openai/gpt-oss-120b
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
-export INFRA_PROVIDER=coreweave # options: base, coreweave
+export INFRA_PROVIDER=coreweave # options: base, coreweave, gke
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 ```
 <!-- guide:env.static end -->
@@ -263,8 +263,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 | --- | --- |
 | `base` | Nothing fabric-specific. Use only if your CNI auto-injects RDMA devices, or for a non-RDMA dry run where P2P falls back to host networking. |
 | `coreweave` | `rdma/ib: 2` extended-resource request per pod (matches CoreWeave, OpenShift k8s-rdma-shared-dev-plugin, and most stock IB device-plugin setups). |
+| `gke` | GKE A3 Ultra (H200 + RoCE): GPU DRA + DRANet claims in place of the `nvidia.com/gpu` extended resource, plus the UCX settings for GKE's rail fabric. |
 
-If your cluster uses a different fabric resource (`rdma/roce`, `vpc.amazonaws.com/efa`, GKE GPUDirect-TCPXO, and so on), see [Notes & Trade-offs](#notes--trade-offs) for how to adapt the overlay (and the `MX_NIXL_BACKEND=LIBFABRIC` override for EFA).
+If your cluster uses a different fabric resource (`rdma/roce`, `vpc.amazonaws.com/efa`, and so on), see [Notes & Trade-offs](#notes--trade-offs) for how to adapt the overlay (and the `MX_NIXL_BACKEND=LIBFABRIC` override for EFA).
 
 > [!WARNING]
 > The `coreweave` overlay requests the `rdma/ib` extended resource. On a cluster that does not expose it, pods stay `Pending` with no obvious cause. Use the `base` overlay there instead.
@@ -417,6 +418,8 @@ Example observation with the guide's default configuration (`openai/gpt-oss-120b
 | Default loader ← warm NFS RWX PVC | 30.3 s | ~1.1 GB/s |
 | ModelExpress P2P | **0.93 s** | ~287 Gbps (~36 GB/s) |
 | fastsafetensors | n/a | cannot load MXFP4 |
+
+On GKE A3 Ultra (H200 + RoCE, `gke` overlay, seed and receiver on separate nodes), the same default configuration observed **0.70 s / ~382 Gbps** per TP rank for the P2P weight transfer; see [the GKE report](./benchmark-results/gke-a3u-roce-gpt-oss-120b.md).
 
 With [P2P cache artifact transfer](./compile-cache.md) also enabled, the receiver reuses the seed's 148 MiB torch.compile bundle (installed in 0.9 s): `torch.compile` drops from 20.1 s to 3.4 s and receiver pod-Ready time from 181 s to 156 s. Cudagraph capture is per-pod and remains the largest fixed cost.
 

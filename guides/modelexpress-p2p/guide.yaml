@@ -17,7 +17,7 @@ env:
     MODEL: {default: "openai/gpt-oss-120b"}
 
     PROVIDER_NAME: {default: gke, values: [none, gke, agentgateway, istio]}
-    INFRA_PROVIDER: {default: coreweave, values: [base, coreweave]}
+    INFRA_PROVIDER: {default: coreweave, values: [base, coreweave, gke]}
 
     # VERIFICATION
     CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
