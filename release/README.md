@@ -17,6 +17,7 @@ This document describes the release process for llm-d. The release dates should 
 | [Flow Control](../guides/flow-control/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/flow-control-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml) |  |  |
 | [Workload Autoscaling (WVA)](../guides/workload-autoscaling/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wva-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wva-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-cks-acc-gpu-vllm-x.yaml) |  |  |  |
 | [Fast Model Actuation (FMA)](../guides/fast-model-actuation/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+| [Fast Model Actuation + KEDA Autoscaling](../guides/fast-model-actuation-keda/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-keda-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
 <!-- NIGHTLY-MATRIX-END -->
 
 ## Release Testing

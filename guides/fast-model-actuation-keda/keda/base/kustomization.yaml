@@ -1,0 +1,71 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base KEDA bundle. Rather than carry its own copies, this guide REUSES the
+# ScaledObject + TriggerAuthentication from the keda-epp-saturation WLP as a
+# kustomize base and patches only the FMA-specific deltas, so the two guides
+# stay in sync as the saturation signal evolves. Applied with
+# `kubectl apply -n ${NAMESPACE} -k ...` on generic k8s (bundled Prometheus);
+# OpenShift users apply overlays/ocp instead, which repoints serverAddress/auth.
+#
+# The TriggerAuthentication is reused verbatim (already named `prometheus-auth`).
+# The single ScaledObject patch below applies the FMA deltas:
+#   - rename to this guide's ScaledObject name (referenced throughout the README
+#     and by overlays/ocp); metadata.name is kustomize's merge key, so it is
+#     changed with a JSON6902 replace, not a strategic merge;
+#   - scaleTargetRef -> the GPU-reserving `fma-requester` Deployment (scaling a
+#     requester is what drives an FMA hot/warm start), not the vLLM server;
+#   - maxReplicaCount capped at the launcher pool's capacity (LauncherConfig
+#     maxInstances = 2) -- extra requesters would have no launcher slot to bind;
+#   - add fast-up / gentle-down HPA behavior so scale-up hot-wakes promptly and
+#     brief saturation dips do not tear instances down;
+#   - repoint both PromQL queries at this guide's InferencePool + model. The
+#     saturation guide pins a `namespace` label; this guide's overlay is
+#     namespace-agnostic, so the queries omit it.
+resources:
+  - ../../../workload-autoscaling/keda-epp-saturation/optimized-baseline/base
+
+patches:
+  - target:
+      group: keda.sh
+      version: v1alpha1
+      kind: ScaledObject
+      name: optimized-baseline-nvidia-gpu-vllm-decode-saturation
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: fast-model-actuation-keda-saturation
+      - op: replace
+        path: /metadata/labels/app
+        value: fma-requester
+      - op: replace
+        path: /spec/scaleTargetRef/name
+        value: fma-requester
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 2
+      - op: add
+        path: /spec/advanced
+        value:
+          horizontalPodAutoscalerConfig:
+            behavior:
+              scaleUp:
+                stabilizationWindowSeconds: 0
+                policies:
+                  - type: Percent
+                    value: 100
+                    periodSeconds: 15
+              scaleDown:
+                stabilizationWindowSeconds: 300
+                policies:
+                  - type: Percent
+                    value: 100
+                    periodSeconds: 15
+      - op: replace
+        path: /spec/triggers/0/metadata/query
+        value: |
+          max(llm_d_epp_flow_control_pool_saturation{inference_pool="fast-model-actuation-keda"})
+      - op: replace
+        path: /spec/triggers/1/metadata/query
+        value: |
+          sum(llm_d_epp_request_running{model_name="Qwen/Qwen3-32B"})
