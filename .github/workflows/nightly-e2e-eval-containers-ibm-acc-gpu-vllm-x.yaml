@@ -1,0 +1,122 @@
+name: Nightly - Eval Containers E2E (OCP GPU)
+
+# Nightly agentic regression test: stands up Qwen/Qwen3.6-27B on pok-prod H100s
+# via modelservice, then drives the aider-polyglot / gemini-cli coding agent
+# against that in-cluster endpoint and scores whether it actually solved the
+# tasks. The eval is the WORKLOAD here ("harness: eval-containers"), the same
+# way inference-perf is the workload for the perf nightlies.
+#
+# Cluster: OCP pok-prod. The reusable engine infers the provider from this
+# workflow's name -- "OCP" above selects the self-hosted pok-prod runner pool
+# and KUBECONFIG_DATA_OCP -- so the "(OCP GPU)" suffix is load-bearing, not
+# decoration.
+#
+# Cron is 02:00 UTC, staggered off the 03:00 slot the other eight OCP nightlies
+# share, because this holds GPUs on the same cluster they contend for.
+#
+# ONE-TIME PREREQUISITE, per namespace (not done by CI):
+#   oc create serviceaccount eval-runner -n llm-d-nightly-eval-containers-ibm-gpu
+#   oc adm policy add-scc-to-user anyuid -z eval-runner \
+#     -n llm-d-nightly-eval-containers-ibm-gpu
+# The eval image and vLLM both run as root. openshift-pokprod.yaml supplies the
+# serviceAccount/runAsUser to the scenario; the SCC binding itself is cluster
+# state, documented as a prerequisite in that cluster-config's own header.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasks:
+        description: 'Number of parallel harness tasks ("-j"). One agent pod per task; size off free GPUs.'
+        required: false
+        type: 'string'
+        default: '1'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow (frees the GPUs)'
+        required: false
+        default: 'true'
+        type: 'string'
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: 'string'
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC daily (staggered off the 03:00 OCP nightlies contending for this cluster)
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: nightly-e2e-eval-containers-ibm
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
+    with:
+      scenario_dir: 'examples'
+      standup_scenario: 'eval-containers-aider-polyglot-gpu'
+      standup_method: 'modelservice'
+      accelerator_type: 'gpu'
+      backend_type: 'vllm'
+      cluster_namespace: 'llm-d-nightly-eval-containers-ibm-gpu'
+      helm_release: 'llmdbenchcicdr-eval-ibm'
+      workspace_dir: '/tmp/llmdbenchcicd-eval-ibm'
+      bucket_project: 'llm-d-scale'
+      bucket_provider: 'gcs'
+      bucket_path: 'llm-d-benchmarks/regressions/eval-containers'
+      gateway_class: 'epponly'
+      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      verbose: ${{ inputs.verbose || 'false' }}
+      harness: 'eval-containers'
+      workload: 'aider-polyglot.yaml'
+      # Supplies pok-prod's RWX storage class + the anyuid-bound serviceAccount
+      # and runAsUser that the cluster-generic scenario deliberately leaves unset.
+      cluster_config: 'config/cluster-configs/examples/openshift-pokprod.yaml'
+      # "-j": the eval fans out one agent pod per task. KV cache is a fixed token
+      # budget (~2-3 concurrent tasks per H100 at maxModelLen 32768), so raise
+      # this only alongside the scenario's decode replicas and free GPUs. The
+      # scenario ships 10 decode pods; -j is deliberately 1 here so a nightly
+      # regression signal costs one task, not a full sweep.
+      # NOTE: decode replicas are NOT overridable from here -- the engine's
+      # decode_pods input only patches kustomize manifests, and this scenario
+      # stands up via modelservice. Change replicas in the scenario itself.
+      tasks: ${{ inputs.tasks || '1' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: eval-containers-ocp
+      badge_label: "VLLM GPU"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
