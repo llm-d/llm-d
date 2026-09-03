@@ -11,7 +11,7 @@ components:
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: registry.iluvatar.com.cn:10443/k8s/vllm
-    newTag: corex450-ucx1201-nixl110
+    newTag: corex510
 
 labels:
   - pairs:
