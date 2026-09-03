@@ -1,0 +1,13 @@
+# Use PR-2476 that teaches EPP to read ATOM metrics
+#
+# Usage:
+#   helm install ... \
+#     -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
+#     -f guides/pd-disaggregation/modelserver/amd/atom/moriio/router-atom.values.yaml
+
+router:
+  epp:
+    image:
+      registry: ghcr.io/vcave/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: "pr-2476"
