@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+  - envoy-proxy.yaml
+  - client-traffic-policy.yaml
+  - backend-traffic-policy.yaml
+patches:
+  - target:
+      kind: Gateway
+      name: llm-d-inference-gateway
+    patch: |-
+      - op: add
+        path: /spec/gatewayClassName
+        value: ack-gateway
+      - op: add
+        path: /spec/infrastructure
+        value:
+          parametersRef:
+            group: gateway.envoyproxy.io
+            kind: EnvoyProxy
+            name: ack-envoy-proxy-config
