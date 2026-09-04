@@ -170,7 +170,7 @@ for i in {1..10}; do
     "model":"'"$MODEL_ID"'",
     "messages":[{"role":"user","content":"Hello!  Who are you?"}]
   }'
-  run_curl curl -sS --max-time 120 --retry 2 --retry-delay 5 \
+  run_curl curl -sS --fail-with-body --max-time 120 --retry 2 --retry-delay 5 \
     -X POST "http://${SVC_HOST}/v1/chat/completions" \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
@@ -188,7 +188,7 @@ for i in {1..10}; do
     "model":"'"$MODEL_ID"'",
     "prompt":"You are a helpful AI assistant."
   }'
-  run_curl curl -sS --max-time 120 --retry 2 --retry-delay 5 \
+  run_curl curl -sS --fail-with-body --max-time 120 --retry 2 --retry-delay 5 \
     -X POST "http://${SVC_HOST}/v1/completions" \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
