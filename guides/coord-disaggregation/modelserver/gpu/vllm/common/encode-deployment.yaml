@@ -27,7 +27,9 @@ spec:
             - "--enforce-eager"
             - "--no-enable-prefix-caching"
             - "--ec-transfer-config"
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer"}'
+            # ec_cpu_bytes defines the capacity of the shared encoder cache in bytes.
+            # Increase it for workloads with large or numerous multimodal items.
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"ec_cpu_bytes": 4294967296}}'
           env:
             - name: MODEL_NAME
               value: "Qwen/Qwen3-VL-32B-Instruct"
