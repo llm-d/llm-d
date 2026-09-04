@@ -7,8 +7,10 @@ metadata:
 spec:
   # This Service owns no pods of its own: it fronts the prefill model server
   # pods deployed by ../modelserver/, so the EPP `token-producer` tokenizes
-  # prompts on the same vLLM pods that serve inference. `vllm serve` already
-  # exposes the /v1/*/render endpoints, so no model-server flag is needed.
+  # prompts on the same vLLM pods that serve inference. `vllm serve` exposes
+  # the /v1/*/render endpoints only with VLLM_ENABLE_SCALE_OUT_ENDPOINTS=1,
+  # which the modelserver `render-endpoints` component sets; without it every
+  # render call returns 404.
   #
   # Prefill pods are selected rather than decode because the decode pods'
   # port 8000 belongs to the routing-proxy sidecar, not vLLM. Only Ready
