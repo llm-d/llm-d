@@ -92,7 +92,7 @@ kubectl get prometheusrules -n ${NAMESPACE}
 You should then see the `batch-gateway.rules` group under **Status → Rule Health** in the Prometheus UI.
 
 > [!IMPORTANT]
-> Every expression in this file is scoped with `namespace="batch-gateway"`, the namespace the Batch Gateway guide deploys into. The Batch Gateway metric names are unprefixed and generic (`jobs_processed_total`, `active_workers`), so an unscoped rule can pick up unrelated workloads. If you deployed into a different namespace, edit the matchers to match — applying the `PrometheusRule` into your namespace does **not** scope its queries.
+> Every expression in this file is scoped with `namespace="batch-gateway"`, the namespace the Batch Gateway guide deploys into. The Batch Gateway metric names are unprefixed and generic (`jobs_processed_total`, `active_workers`), so an unscoped rule can pick up unrelated workloads. If you deployed into a different namespace, edit the matchers to match — applying the `PrometheusRule` into your namespace does **not** scope its queries. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: batch-gateway-metrics` (not `app: epp-metrics`, which is specific to the EPP rule).
 
 | Alert | Severity | Fires when | Why it matters |
 |-------|----------|-----------|----------------|

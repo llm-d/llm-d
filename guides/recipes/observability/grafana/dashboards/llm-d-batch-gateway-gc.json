@@ -198,11 +198,7 @@
         "type": "datasource"
       },
       {
-        "current": {
-          "selected": false,
-          "text": "default",
-          "value": "default"
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
@@ -211,7 +207,7 @@
         "includeAll": false,
         "multi": false,
         "name": "namespace",
-        "refresh": 2,
+        "refresh": 1,
         "type": "query"
       }
     ]
