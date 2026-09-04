@@ -52,6 +52,7 @@ This guide includes configuration for the following accelerators:
 | NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang, validated each release                           |
 | Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & v7x), see [TPU Guide](./README.tpu.md) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
+| MetaX GPU           | `modelserver/metax/vllm/`  | MetaX C500X, community contributed. Reduced 1P+1D / Qwen3-14B / TP=1 for compatibility checks. |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
 
@@ -270,8 +271,30 @@ SGLang-specific notes:
 >
 > * Disaggregation lives in the llm-d Router (EPP) and is engine-agnostic, so SGLang P/D composes with the same prefix-cache-aware and load-aware routing as vLLM.
 > * SGLang P/D is **validated each release** on NVIDIA GPU but is not yet part of the nightly E2E CI that covers the vLLM path (the badges above).
-> * The SGLang P/D overlays are **NVIDIA GPU only** today; the AMD overlay (`modelserver/amd/vllm/`) provides vLLM P/D only.
+> * The SGLang P/D overlays are **NVIDIA GPU only** today; the AMD overlay (`modelserver/amd/vllm/`) and MetaX overlay (`modelserver/metax/vllm/`) provide vLLM P/D only.
 > * On the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts. See the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md).
+
+<details>
+<summary><h4>Deploying on MetaX C500X</h4></summary>
+
+This overlay is a reduced compatibility configuration: **1 Prefill + 1 Decode**, each `TP=1` on `metax-tech.com/gpu`, serving `Qwen/Qwen3-14B` over `NixlConnector` and the llm-d routing sidecar (`nixlv2`). It is not a production xPyD sizing example.
+
+Prerequisites:
+
+* MetaX device plugin exposing `metax-tech.com/gpu`.
+* Public MetaX vLLM image (`ghcr.io/project-hami/vllm-metax`). Air-gapped sites can retag the same bits from a private registry.
+* HuggingFace token secret `llm-d-hf-token` (or replace the model args with a local `hostPath` mount).
+* Pod network allowing Prefill↔Decode **TCP 5600** (NIXL side channel) in addition to HTTP 8000/8200. There is no RDMA requirement; TCP is enough for functional validation.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/metax/vllm
+```
+
+Re-measure `peakPrefillThroughput` in the router values for this model and card before performance work. An aggregated C500X / Qwen3-14B / TP=1 calibration was **5773** tok/s; the default `pd-disaggregation.values.yaml` figure is for gpt-oss-120b on NVIDIA and is not valid here.
+
+Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`. Verify P/D with Router `/v1/completions` or `/v1/chat/completions`, then confirm decode logs show an external prefix-cache hit / successful KV transfer rather than decode-only recompute.
+
+</details>
 
 ### 3. Enable Monitoring (optional)
 
