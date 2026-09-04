@@ -15,7 +15,7 @@ spec:
             - "--host=0.0.0.0"
             - "--disaggregation-mode=prefill"
             - "--disaggregation-transfer-backend=nixl"
-            - "--tensor-parallel-size=1"
+            - "--tensor-parallel-size=2"
             - "--log-level=info"
             - "--enable-metrics"
             - "--uvicorn-access-log-exclude-prefixes=/metrics"
@@ -34,13 +34,13 @@ spec:
               value: "4096"
           resources:
             limits:
-              cpu: "8"
-              memory: 16Gi
-              nvidia.com/gpu: "1"
+              cpu: "16"
+              memory: 64Gi
+              nvidia.com/gpu: "2"
             requests:
-              cpu: "8"
-              memory: 16Gi
-              nvidia.com/gpu: "1"
+              cpu: "16"
+              memory: 64Gi
+              nvidia.com/gpu: "2"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm

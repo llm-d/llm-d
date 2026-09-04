@@ -11,15 +11,11 @@ spec:
         - key: nvidia.com/gpu
           operator: Exists
           effect: NoSchedule
-      # Request 4 GKE DRA RDMA claims for PCIe root switch rail-aligned RoCE inter-pod transfer
+      # Request 2 GKE DRA RDMA claims for PCIe root switch rail-aligned RoCE inter-pod transfer
       resourceClaims:
         - name: gke-rdma-claim-0
           resourceClaimTemplateName: gke-rdma-template
         - name: gke-rdma-claim-1
-          resourceClaimTemplateName: gke-rdma-template
-        - name: gke-rdma-claim-2
-          resourceClaimTemplateName: gke-rdma-template
-        - name: gke-rdma-claim-3
           resourceClaimTemplateName: gke-rdma-template
       containers:
         - name: modelserver
@@ -30,9 +26,24 @@ spec:
               value: "60"
             - name: HF_HUB_DISABLE_XET
               value: "1"
-            # Enable RoCE reachability across all subnet interfaces
+            # UCX and RoCE configurations for GKE Container-Optimized OS
             - name: UCX_IB_ROCE_REACHABILITY_MODE
               value: "all"
+            - name: UCX_CUDA_COPY_DMABUF
+              value: "y"
+            - name: UCX_MEMTYPE_CACHE
+              value: "n"
+            - name: UCX_IB_PCI_RELAXED_ORDERING
+              value: "y"
+            - name: UCX_IB_GID_INDEX
+              value: "3"
+            - name: UCX_TLS
+              value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+                - SYS_RAWIO
           resources:
             limits:
               cpu: "64"
@@ -40,12 +51,10 @@ spec:
             requests:
               cpu: "32"
               memory: "128Gi"
-            # Bind the 4 GKE DRA claims to the modelserver container
+            # Bind the 2 GKE DRA claims to the modelserver container
             claims:
               - name: gke-rdma-claim-0
               - name: gke-rdma-claim-1
-              - name: gke-rdma-claim-2
-              - name: gke-rdma-claim-3
           volumeMounts:
             # Mount a persistent volume for huggingface cache, so that the cache is shared across restarts
             - mountPath: /root/.cache/huggingface
