@@ -117,7 +117,7 @@ jobs:
     if: always()
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: tiered-prefix-cache-gke-cpu-llmcache
+      badge_name: tiered-prefix-cache-gke-cpu-native
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
