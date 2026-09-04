@@ -285,6 +285,8 @@ Prerequisites:
 * Public MetaX vLLM image (`ghcr.io/project-hami/vllm-metax`). Air-gapped sites can retag the same bits from a private registry.
 * HuggingFace token secret `llm-d-hf-token` (or replace the model args with a local `hostPath` mount).
 * Pod network allowing Prefill↔Decode **TCP 5600** (NIXL side channel) in addition to HTTP 8000/8200. There is no RDMA requirement; TCP is enough for functional validation.
+* UCX on this path is `maca_ipc,maca_copy,tcp`. Do not copy NVIDIA `cuda_ipc` / `cuda_copy` values.
+* `kv_load_failure_policy=fail` so a failed KV pull errors out instead of Decode silently recomputing the prompt (which looks like HTTP 200 without a real P/D transfer).
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/metax/vllm

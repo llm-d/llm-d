@@ -20,11 +20,9 @@ spec:
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=1"
             - "--max-num-batched-tokens=8192"
-            # 14B on C500X (64 GiB) peaks near 93% VRAM in aggregated serving;
-            # leave headroom for NIXL KV registration on the P/D path.
-            - "--gpu-memory-utilization=0.55"
+            - "--gpu-memory-utilization=0.9"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}'
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -41,6 +39,11 @@ spec:
             # conn timeout (90s, from Go http.Transport), causing TCP RSTs on reuse.
             - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
               value: "120"
+            # MetaX UCX; cuda_ipc/cuda_copy are not valid on C500X.
+            - name: UCX_TLS
+              value: maca_ipc,maca_copy,tcp
+            - name: UCX_PROTO_ENABLE
+              value: "y"
           securityContext:
             capabilities:
               add:

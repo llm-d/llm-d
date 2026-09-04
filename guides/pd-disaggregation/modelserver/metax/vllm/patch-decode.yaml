@@ -20,9 +20,9 @@ spec:
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=1"
             - "--max-num-batched-tokens=8192"
-            - "--gpu-memory-utilization=0.55"
+            - "--gpu-memory-utilization=0.9"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}'
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -37,6 +37,17 @@ spec:
               value: "5600"
             - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
               value: "120"
+            - name: UCX_TLS
+              value: maca_ipc,maca_copy,tcp
+            - name: UCX_PROTO_ENABLE
+              value: "y"
+          ports:
+            - name: modelserver
+              containerPort: 8200
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
           securityContext:
             capabilities:
               add:
