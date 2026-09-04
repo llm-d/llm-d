@@ -1,0 +1,116 @@
+# Encode pod (Stage 0, model_stage=text_encode) — ALSO the Omni master + HTTP
+# API server (/v1/videos). Runs ONLY the UMT5 text encoder, claims 1 Intel XPU.
+#
+# This uses vLLM-Omni's OWN native multi-stage distributed serving — NOT Dynamo.
+# Pattern mirrors the shipped example
+# vllm_omni/examples/online_serving/bagel/run_server_stage_cli.sh:
+#   * the stage that owns --stage-id 0 (no --headless) is the master and serves
+#     the OpenAI HTTP API on --port;
+#   * the generator pod registers to this master in --headless mode.
+# The only cross-pod channel is the master's ZMQ port (omni-master Service).
+# No etcd, no NATS, no Dynamo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: encode
+  labels:
+    llm-d.ai/role: encode
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wan-eg-encode
+  template:
+    metadata:
+      labels:
+        app: wan-eg-encode
+        llm-d.ai/role: encode
+        # The master serves /v1/videos, so EPP/InferencePool selects it.
+        llm-d.ai/guide: multimodal-video
+    spec:
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              # --stage-id 0 (no --headless) => this process is the Omni master
+              # and the HTTP API server. It owns the text_encode stage and waits
+              # for the headless generator stage to register on the master port.
+              exec vllm serve "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" --omni \
+                --port 8000 \
+                --stage-configs-path /etc/wan/wan2_2_epd.yaml \
+                --stage-id 0 \
+                --omni-master-address "${POD_IP}" \
+                --omni-master-port 8092 \
+                --enforce-eager
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: omni-master
+              containerPort: 8092
+          env:
+            # The master advertises this Pod's routable IP to headless replicas.
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            limits:
+              cpu: "8"
+              memory: 32Gi
+            requests:
+              cpu: "8"
+              memory: 32Gi
+            claims:
+              - name: xpu-encode-claim
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      resourceClaims:
+        - name: xpu-encode-claim
+          resourceClaimTemplateName: xpu-encode-claim
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+---
+# Omni master Service: the headless generator pod connects its ZMQ stage sockets
+# to this stable DNS name (resolves to the encode/master Pod). This Service is
+# REQUIRED — it is the only cross-pod channel between the generator stage and the
+# master. (The HTTP /v1/videos surface needs no Service: the llm-d gateway
+# routes via HTTPRoute -> InferencePool, where the EPP selects the master Pod
+# directly by label. For ad-hoc local testing use `kubectl port-forward`.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: omni-master
+spec:
+  selector:
+    app: wan-eg-encode
+  ports:
+    - name: omni-master
+      port: 8092
+      targetPort: omni-master
+      protocol: TCP

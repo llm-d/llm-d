@@ -1,0 +1,34 @@
+# Path-scoped HTTPRoute for the disaggregated (EG) Wan text-to-video endpoint.
+#
+# Sends only /v1/videos to the EG InferencePool. The encode/master Pod serves
+# the OpenAI-compatible video API, so the pool front is the same /v1/videos
+# surface as the aggregated guide — only the backing topology differs.
+#
+# Prereqs:
+#   * A Gateway named `llm-d-inference-gateway` (see guides/prereq/gateways).
+#   * The router installed with router.httpRoute.create=false (router/eg-video-xpu.values.yaml)
+#     and a Helm release name of `wan-video-eg-xpu`, which is the InferencePool
+#     name referenced below. If you install under a different release name,
+#     update backendRefs[0].name to match.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wan-video-eg-xpu
+  labels:
+    llm-d.ai/guide: multimodal-video
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/videos
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: wan-video-eg-xpu
+      timeouts:
+        request: "0s"
