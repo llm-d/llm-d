@@ -111,6 +111,18 @@ def test_non_bool_sensitive_flag_fails_validation():
     assert any("TOKEN" in str(f) and "boolean" in str(f) for f in findings)
 
 
+def test_invalid_env_var_name_fails_validation():
+    data = _minimal()
+    data["env"]["static"]["BAD-NAME"] = "value"
+    findings = guide.Guide.from_text(yaml_text=yaml.safe_dump(data)).check()
+    assert any("BAD-NAME" in str(f) and "identifier" in str(f) for f in findings)
+
+    data["env"]["static"].pop("BAD-NAME")
+    data["env"]["static"]["lowercase_is_valid"] = "value"
+    findings = guide.Guide.from_text(yaml_text=yaml.safe_dump(data)).check()
+    assert findings.ok()
+
+
 def test_provenance_records_var_names_not_values():
     out = guide.emit_script(_minimal(), ["env"], {"SECRET_TOKEN": "hunter2"})
     header = out.split("# === ")[0]

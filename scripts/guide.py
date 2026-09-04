@@ -381,6 +381,12 @@ def _check_env(env: Any, f: Findings) -> set[str]:
         return declared
 
     for var, spec in static.items():
+        if not isinstance(var, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", var):
+            f.error(
+                f"env.static.{var}: variable name must be a shell identifier "
+                f"matching [A-Za-z_][A-Za-z0-9_]*"
+            )
+            continue
         declared.add(var)
         if not isinstance(spec, dict):
             if spec is None or isinstance(spec, bool):
