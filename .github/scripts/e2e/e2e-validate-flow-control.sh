@@ -249,7 +249,31 @@ for _ in $(seq 1 "$POLL_ATTEMPTS"); do
   sleep "$POLL_INTERVAL_SECONDS"
 done
 
-wait "$PID_PREMIUM" "$PID_STANDARD" "$PID_BEST" 2>/dev/null || true
+# Join every band even if an earlier one failed, and report request failures
+# before interpreting metrics as a flow-control configuration problem.
+burst_failed=false
+for band in "100:$PID_PREMIUM" "0:$PID_STANDARD" "-10:$PID_BEST"; do
+  pri=${band%%:*}
+  if wait "${band#*:}"; then
+    if ! awk -v expected="$BURST" '
+      /^[2][0-9][0-9]$/ { successful++ }
+      END { exit !(NR == expected && successful == expected) }
+    ' "/tmp/burst-${pri}.log"; then
+      echo "Error: burst priority=${pri} did not return ${BURST} successful HTTP responses." >&2
+      cat "/tmp/burst-${pri}.log" >&2
+      burst_failed=true
+    fi
+  else
+    burst_exit=$?
+    echo "Error: burst priority=${pri} failed (exit ${burst_exit}); kubectl/curl output:" >&2
+    cat "/tmp/burst-${pri}.log" >&2
+    burst_failed=true
+  fi
+done
+if $burst_failed; then
+  echo "Error: request burst failed; skipping flow-control metric assertions." >&2
+  exit 1
+fi
 echo "  burst response codes:"
 for pri in 100 0 -10; do
   printf '    priority=%s: ' "$pri"
