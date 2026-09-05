@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../recipes/modelserver/base/multi-host/default
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct
+      llm-d.ai/guide: tiered-prefix-cache
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+    includeSelectors: true
+    fields:
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/leaderTemplate/metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        create: true
+
+patches:
+  - path: patch-vllm.yaml

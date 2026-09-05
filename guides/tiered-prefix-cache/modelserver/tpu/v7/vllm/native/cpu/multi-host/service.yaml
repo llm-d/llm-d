@@ -1,0 +1,26 @@
+# This headless service is CRITICAL for multi-host pod-to-pod communication (e.g., Ray).
+# It enables DNS resolution for individual pods in the format:
+# <pod-name>.<service-name>.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: decode
+spec:
+  clusterIP: None
+  # publishNotReadyAddresses is required because workers need to resolve the leader's
+  # hostname to join the Ray cluster BEFORE the leader passes its readiness probe.
+  # Without this, a circular dependency deadlock occurs.
+  publishNotReadyAddresses: true
+  ports:
+  - name: vllm
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+  - name: ray-gcs
+    port: 6379
+    protocol: TCP
+    targetPort: 6379
+  selector:
+    leaderworkerset.sigs.k8s.io/name: tpu-v7-vllm-decode
+  sessionAffinity: None
+  type: ClusterIP
