@@ -195,7 +195,7 @@ QSIZE=llm_d_epp_flow_control_queue_size
 SAT=llm_d_epp_flow_control_pool_saturation
 QD=llm_d_epp_flow_control_request_queue_duration_seconds
 
-# Background one band's burst; FlowKey = (fairness id, objective-derived priority).
+# Run one band's burst; FlowKey = (fairness id, objective-derived priority).
 fire_band() {
   local objective="$1" priority="$2" tenant="$3"
   kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "
@@ -206,17 +206,20 @@ fire_band() {
         -H 'x-llm-d-inference-fairness-id: ${tenant}' \
         -H 'x-llm-d-inference-objective: ${objective}' \
         --data-binary @/tmp/payload.json
-  " >"/tmp/burst-${priority}.log" 2>&1 &
-  echo $!
+  " >"/tmp/burst-${priority}.log" 2>&1
 }
 
 # ── Mixed-contention burst: all three bands at once ─────────────────────────
 # Firing every band simultaneously is what surfaces QoS: under a closed gate the
 # hardcoded strict-priority dispatcher must drain premium before best-effort.
 echo "── Firing ${BURST} requests into each band simultaneously (premium=100, standard=0, best-effort=-10) ──"
-PID_PREMIUM=$(fire_band premium-traffic     100 tenant-a)
-PID_STANDARD=$(fire_band standard-traffic   0   tenant-b)
-PID_BEST=$(fire_band best-effort-traffic    -10 tenant-c)
+# Start each band in this shell so wait can join all three before the final scrape.
+fire_band premium-traffic     100 tenant-a &
+PID_PREMIUM=$!
+fire_band standard-traffic   0   tenant-b &
+PID_STANDARD=$!
+fire_band best-effort-traffic    -10 tenant-c &
+PID_BEST=$!
 
 peak_total_q=0
 peak_sat=0
@@ -246,7 +249,31 @@ for _ in $(seq 1 "$POLL_ATTEMPTS"); do
   sleep "$POLL_INTERVAL_SECONDS"
 done
 
-wait "$PID_PREMIUM" "$PID_STANDARD" "$PID_BEST" 2>/dev/null || true
+# Join every band even if an earlier one failed, and report request failures
+# before interpreting metrics as a flow-control configuration problem.
+burst_failed=false
+for band in "100:$PID_PREMIUM" "0:$PID_STANDARD" "-10:$PID_BEST"; do
+  pri=${band%%:*}
+  if wait "${band#*:}"; then
+    if ! awk -v expected="$BURST" '
+      /^[2][0-9][0-9]$/ { successful++ }
+      END { exit !(NR == expected && successful == expected) }
+    ' "/tmp/burst-${pri}.log"; then
+      echo "Error: burst priority=${pri} did not return ${BURST} successful HTTP responses." >&2
+      cat "/tmp/burst-${pri}.log" >&2
+      burst_failed=true
+    fi
+  else
+    burst_exit=$?
+    echo "Error: burst priority=${pri} failed (exit ${burst_exit}); kubectl/curl output:" >&2
+    cat "/tmp/burst-${pri}.log" >&2
+    burst_failed=true
+  fi
+done
+if $burst_failed; then
+  echo "Error: request burst failed; skipping flow-control metric assertions." >&2
+  exit 1
+fi
 echo "  burst response codes:"
 for pri in 100 0 -10; do
   printf '    priority=%s: ' "$pri"
