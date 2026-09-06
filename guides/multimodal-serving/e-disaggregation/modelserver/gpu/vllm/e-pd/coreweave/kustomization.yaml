@@ -3,10 +3,19 @@ kind: Kustomization
 resources:
   - ../base
 patches:
-  # Unscoped on purpose: encode and decode both transfer over NIXL,
-  # so every one of them needs an IB device.
   - target:
       kind: Deployment
+      name: decode
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
+        value: "1"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
+        value: "1"
+  - target:
+      kind: Deployment
+      name: encode
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
