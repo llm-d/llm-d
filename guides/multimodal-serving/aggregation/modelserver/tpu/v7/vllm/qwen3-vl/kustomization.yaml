@@ -7,7 +7,7 @@ namePrefix: mm-baseline-tpu-v7-vllm-
 
 components:
   - ../../../../base/vllm
-  - ../../../../../../../recipes/modelserver/components/images/tpu-vllm
+  - ../../../../../../../recipes/modelserver/components/images/tpu-vllm/release
 
 labels:
   - pairs:

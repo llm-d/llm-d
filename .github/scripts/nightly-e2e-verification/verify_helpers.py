@@ -93,6 +93,9 @@ def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
     All experiments belonging to the winning run are returned (a single
     `llmdbenchmark run` invocation can produce multiple `<exp>/` subdirs).
     """
+    if not isinstance(workspace, str) or not workspace.strip():
+        error("LLMDBENCH_WORKSPACE is empty; refusing to search the current directory")
+        return None
     ws = Path(workspace)
     matches: list[Path] = []
     for meta in ws.rglob("run_metadata.yaml"):
@@ -111,7 +114,7 @@ def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
 
 
 def get_vllm_version(namespace: str, pod: str) -> tuple[int, ...] | None:
-    """Return vLLM's version tuple from `pod`, or None if unavailable. 
+    """Return vLLM's version tuple from `pod`, or None if unavailable.
     For example, '0.24.0rc1' or '0.24.0' will return (0, 24, 0).
     """
     out = kubectl(
@@ -354,4 +357,3 @@ def get_model_pods(namespace: str) -> list[str]:
             "-l", "llm-d.ai/inferenceServing=true", "-o", "name",
         ]).split())
     return pods
-

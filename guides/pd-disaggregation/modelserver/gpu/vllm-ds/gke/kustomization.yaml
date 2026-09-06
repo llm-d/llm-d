@@ -1,0 +1,107 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+# Adds the gke-rdma-template ResourceClaimTemplate. The component's nested
+# NCCL patches target Deployment/LeaderWorkerSet and do not match the
+# DisaggregatedSet, so the equivalent env vars are set in the patches below.
+components:
+  - ../../../components/gke-rdma
+
+# Same provider-specific configuration as the Deployment-based gke overlay
+# (../vllm/gke), expressed as JSON patches into the DisaggregatedSet role pod
+# templates: roles/0 is prefill (TP=1, one gpu+nic claim), roles/1 is decode
+# (TP=4, four gpu+nic claims). GPUs are allocated through DRA, so the
+# nvidia.com/gpu resource requests are removed.
+patches:
+  - target:
+      kind: DisaggregatedSet
+      name: pd-disagg
+    patch: |-
+      # prefill
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: kubernetes.io/arch
+            operator: Exists
+            effect: NoSchedule
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+        value:
+          - name: gke-rdma-claim
+            resourceClaimTemplateName: gke-rdma-template
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: UCX_IB_ROCE_REACHABILITY_MODE
+          value: "all"
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_TUNER_PLUGIN
+          value: "none"
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_NET_PLUGIN
+          value: ""
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+        value:
+          - name: gke-rdma-claim
+      - op: remove
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/nvidia.com~1gpu
+      # decode
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: kubernetes.io/arch
+            operator: Exists
+            effect: NoSchedule
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+        value:
+          - name: gke-rdma-claim-0
+            resourceClaimTemplateName: gke-rdma-template
+          - name: gke-rdma-claim-1
+            resourceClaimTemplateName: gke-rdma-template
+          - name: gke-rdma-claim-2
+            resourceClaimTemplateName: gke-rdma-template
+          - name: gke-rdma-claim-3
+            resourceClaimTemplateName: gke-rdma-template
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: UCX_IB_ROCE_REACHABILITY_MODE
+          value: "all"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_TUNER_PLUGIN
+          value: "none"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_NET_PLUGIN
+          value: ""
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+        value:
+          - name: gke-rdma-claim-0
+          - name: gke-rdma-claim-1
+          - name: gke-rdma-claim-2
+          - name: gke-rdma-claim-3
+      - op: remove
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/nvidia.com~1gpu

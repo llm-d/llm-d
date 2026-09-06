@@ -16,8 +16,6 @@ parser:
   ...
 flowControl:
   ...
-saturationDetector:
-  ...
 schedulingProfiles:
 - ....
 - ....
@@ -32,7 +30,7 @@ dataLayer:
 - **Plugins**: Defines the set of plugins that will be instantiated and their parameters.
 - **Feature Gates**: Enables or disables specific experimental or optional features (such as Flow Control).
 - **Request Handling**: Manages the full lifecycle of requests around the scheduling phase, spanning protocol parsing, state preparation via data producers, and final admission decisions.
-- **Flow Control**: Manages pool defense and multi-tenancy by queuing requests at the gateway to enforce priority and fairness, while evaluating pool saturation to prevent overload (combines `flowControl` and `saturationDetector` fields).
+- **Flow Control**: Manages pool defense and multi-tenancy by queuing requests at the gateway to enforce priority and fairness, while evaluating pool saturation to prevent overload (configured via the `flowControl` field, including its nested `saturationDetector`).
 - **Scheduling**: Defines the profiles and plugins used to select the optimal model server candidate for each request (via Filter -> Score -> Pick lifecycle).
 - **Data Layer**: Configures the backend sources and metrics collection used for smart scheduling decisions and observability.
 
@@ -51,7 +49,7 @@ This design allows you to define a plugin once and reuse it across multiple prof
 
 To ensure the integrity of this graph, the following **validation rules** apply across all layers:
 
-- **Valid References**: Any field that references a plugin (e.g., `pluginRef` in `schedulingProfiles` or `saturationDetector`) must reference a valid name defined in the top-level `plugins` section.
+- **Valid References**: Any field that references a plugin (e.g., `pluginRef` in `schedulingProfiles` or `flowControl.saturationDetector`) must reference a valid name defined in the top-level `plugins` section.
 - **Unique Names**: All instances within lists that require naming (like `schedulingProfiles`) must have unique, non-empty names.
 - **Data Dependencies**: The system validates that metrics extractors form a Directed Acyclic Graph (DAG) without circular dependencies, ensuring correct execution order.
 
@@ -221,7 +219,7 @@ The `flowControl` section configures the EPP's Flow Control layer, which acts as
 
 When flow control is enabled (via the `FlowControl` feature gate), incoming requests are queued in memory and dispatched according to configured priority bands, fairness policies, and ordering policies. When the pool is saturated (as determined by the [saturation detector](#saturation-detector)), requests are held in the queue until capacity frees up.
 
-The following example demonstrates a complete `EndpointPickerConfig` with flow control enabled, showing how to configure the `featureGates`, `plugins`, `saturationDetector`, and `flowControl` sections to work together.
+The following example demonstrates a complete `EndpointPickerConfig` with flow control enabled, showing how to configure the `featureGates`, `plugins`, and `flowControl` sections (including the nested `saturationDetector`) to work together.
 
 ```yaml
 apiVersion: llm-d.ai/v1alpha1
@@ -237,13 +235,14 @@ plugins:
 - type: utilization-detector
 # ... other plugins ...
 
-saturationDetector:
-  pluginRef: utilization-detector # Default
-
 flowControl:
   maxBytes: 0 # Default: unlimited
   maxRequests: 0 # Default: unlimited
   defaultRequestTTL: "0s" # Default: uses client context deadline
+  enableEviction: false # Default: in-flight eviction disabled
+
+  saturationDetector:
+    pluginRef: utilization-detector # Default
 
   defaultPriorityBand:
     maxBytes: "1Gi" # Default
@@ -269,6 +268,7 @@ flowControl:
 - `maxBytes`: Global capacity limit across all priority levels. Supports Kubernetes resource quantity format (e.g., `10Gi`, `512Mi`) or plain integers (bytes). If `0` or omitted, no global limit is enforced (unlimited).
 - `maxRequests`: Optional global maximum request count limit. If `0` or omitted, no global limit is enforced (unlimited).
 - `defaultRequestTTL`: Fallback timeout for requests that do not carry a deadline. If `0` or omitted, it defaults to the client context deadline (which may wait indefinitely).
+- `enableEviction`: When `true`, already-dispatched **negative-priority** (`priority < 0`) requests can be evicted to reclaim capacity when higher-priority requests are blocked by pool saturation. Pacing and sizing self-configure from the selected saturation detector. Disabled by default. See [In-Flight Eviction](flow-control.md#in-flight-eviction) for the lifecycle and response mapping.
 - `defaultPriorityBand`: A template used to dynamically provision priority bands that are not explicitly configured in `priorityBands`.
 - `priorityBands`: A list of explicit configurations for specific priority levels.
 
@@ -286,17 +286,16 @@ For a full list of available Fairness and Ordering policies, see the [Flow Contr
 
 #### Saturation Detector
 
-> [!NOTE]
-> While `saturationDetector` is presented here conceptually as part of Flow Control, it is a **top-level field** in the YAML schema, at the same level as `flowControl`.
-
-The `saturationDetector` section configures the mechanism that evaluates whether the backend InferencePool is overloaded.
-
-The `saturationDetector` section has the following form:
+The `saturationDetector` section configures the mechanism that evaluates whether the backend InferencePool is overloaded. It is nested under `flowControl` and has the following form:
 
 ```yaml
-saturationDetector:
-  pluginRef: utilization-detector # Default
+flowControl:
+  saturationDetector:
+    pluginRef: utilization-detector # Default
 ```
+
+> [!NOTE]
+> The top-level `saturationDetector` field is deprecated in favor of `flowControl.saturationDetector`. If both are set, `flowControl.saturationDetector` is used. See [llm-d-router#1308](https://github.com/llm-d/llm-d-router/issues/1308).
 
 ##### Fields
 

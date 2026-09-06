@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: render
+  labels:
+    app.kubernetes.io/component: vllm-render
+spec:
+  # This Service owns no pods of its own: it fronts the prefill model server
+  # pods deployed by ../modelserver/, so the EPP `token-producer` tokenizes
+  # prompts on the same vLLM pods that serve inference. `vllm serve` already
+  # exposes the /v1/*/render endpoints, so no model-server flag is needed.
+  #
+  # Prefill pods are selected rather than decode because the decode pods'
+  # port 8000 belongs to the routing-proxy sidecar, not vLLM. Only Ready
+  # endpoints receive traffic, so render calls are never sent to a pod that
+  # is still loading weights - but until the first prefill is Ready the
+  # Service has no endpoints and token-producer calls fail.
+  #
+  # On multi-port DP pods a Service has one targetPort, so only rank 0's API
+  # server receives render calls: render capacity is (pods x 1 process), not
+  # (pods x ranks).
+  selector:
+    llm-d.ai/guide: wide-ep-lws
+    llm-d.ai/role: prefill
+  ports:
+    - name: render-http
+      port: 8000
+      # Named container port on the prefill pods (containerPort 8000).
+      targetPort: dp0
+      protocol: TCP

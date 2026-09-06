@@ -52,6 +52,16 @@ on:
         required: false
         default: 'true'
         type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
 
 #  push:
 #    branches:
@@ -97,6 +107,8 @@ jobs:
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
 #      workload: ${{ inputs.workload || 'guide_pd-disaggregation_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit
 
   update-badge:
@@ -109,3 +121,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

@@ -11,15 +11,10 @@ spec:
         - key: nvidia.com/gpu
           operator: Exists
           effect: NoSchedule
-      # Request 4 GKE DRA RDMA claims for PCIe root switch rail-aligned RoCE inter-pod transfer
+      # Request 1 GKE DRA RDMA claim (1 GPU + 1 rail-aligned NIC) to match the
+      # prefill server's --tensor-parallel-size=1
       resourceClaims:
-        - name: gke-rdma-claim-0
-          resourceClaimTemplateName: gke-rdma-template
-        - name: gke-rdma-claim-1
-          resourceClaimTemplateName: gke-rdma-template
-        - name: gke-rdma-claim-2
-          resourceClaimTemplateName: gke-rdma-template
-        - name: gke-rdma-claim-3
+        - name: gke-rdma-claim
           resourceClaimTemplateName: gke-rdma-template
       containers:
         - name: modelserver
@@ -40,12 +35,9 @@ spec:
             requests:
               cpu: "32"
               memory: "128Gi"
-            # Bind the 4 GKE DRA claims to the modelserver container
+            # Bind the GKE DRA claim to the modelserver container
             claims:
-              - name: gke-rdma-claim-0
-              - name: gke-rdma-claim-1
-              - name: gke-rdma-claim-2
-              - name: gke-rdma-claim-3
+              - name: gke-rdma-claim
           volumeMounts:
             # Mount a persistent volume for huggingface cache, so that the cache is shared across restarts
             - mountPath: /root/.cache/huggingface

@@ -17,7 +17,8 @@ case "$ARCH" in
 esac
 
 # Install to /usr/local without prompts
-curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-${CMAKE_ARCH}.sh" \
--o /tmp/cmake.sh
+curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+    "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-${CMAKE_ARCH}.sh" \
+    -o /tmp/cmake.sh
 chmod +x /tmp/cmake.sh
 /tmp/cmake.sh --skip-license --prefix=/usr/local --exclude-subdir

@@ -6,11 +6,15 @@ spec:
   maxInstances: 2
   podTemplate:
     spec:
+      # Run launcher pods as the fma-launcher SA (rbac/role.yaml) so the
+      # state-change-reflector sidecar can patch its own pod's serving-state
+      # annotation.
+      serviceAccountName: fma-launcher
       runtimeClassName: nvidia
       containers:
         - name: inference-server
           # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
-          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/launcher:v0.6.2
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/launcher:v0.6.5
           command: ["/bin/bash", "-c"]
           args:
             - |

@@ -141,8 +141,8 @@ For implementation details and advanced configuration, see the [llm-d FS backend
 
 The `MooncakeStoreConnector` integrates this store with vLLM's V1 Connector API. It converts vLLM's content-addressed KV cache chunks into Mooncake object keys and maps their tensor data to the byte ranges stored and transferred by Mooncake. This allows multiple vLLM instances to retrieve and reuse cached prefixes, reducing redundant prefill computation.
 
-  - At the vLLM boundary, cache data is identified as content-addressed KV-cache blocks or chunks derived from vLLM block hashes.
-  - At the Mooncake boundary, each content-addressed key identifies a variable-length byte object. The connector maps that object to one or more registered memory ranges containing the corresponding K/V tensor data.
+- At the vLLM boundary, cache data is identified as content-addressed KV-cache blocks or chunks derived from vLLM block hashes.
+- At the Mooncake boundary, each content-addressed key identifies a variable-length byte object. The connector maps that object to one or more registered memory ranges containing the corresponding K/V tensor data.
 
 > [!NOTE]
 > `MooncakeStoreConnector` (distributed cache offloading) is distinct from `MooncakeConnector` (point-to-point KV transfer for P/D disaggregation). They share the same Transfer Engine for RDMA data movement but serve different purposes and are configured independently. They can be composed via vLLM's `MultiConnector` when both P/D disaggregation and shared cache offloading are needed.
@@ -290,7 +290,6 @@ For advanced use and older vLLM releases, the equivalent `--kv-transfer-config` 
 | `threads_per_gpu` | integer | `64` | I/O worker threads per GPU |
 
 For the full configuration reference including GDS modes and environment variables, see the [llm-d FS backend README](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
-
 
 ## Examples
 

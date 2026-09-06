@@ -42,6 +42,11 @@ on:
         default: 'sanity_random.yaml'
 #        default: 'guide_optimized-baseline_1.yaml'
         type: 'string'
+      wait_timeout:
+        description: 'Timeout in seconds to wait for benchmark pods to complete'
+        required: false
+        default: '3000'
+        type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
         required: false
@@ -52,6 +57,16 @@ on:
         required: false
         default: 'true'
         type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
 
 #  push:
 #    branches:
@@ -79,9 +94,10 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'base' }}
+      infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-inference-rocm-gpu' }}
+      persistent_model: ${{ inputs.persistent_model || 'true' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-rocm' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-rocm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -92,9 +108,12 @@ jobs:
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
-#      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+#      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
+      wait_timeout: ${{ inputs.wait_timeout || '3000' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit
 
   update-badge:
@@ -107,3 +126,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

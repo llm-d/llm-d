@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/default
+
+namespace: llm-d-diffusion-t2i
+
+namePrefix: diffusion-serving-t2i-nvidia-gpu-vllm-omni-
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm-omni/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: diffusion-serving-t2i
+      llm-d.ai/model: Qwen-Image
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm-omni
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-vllm-omni.yaml

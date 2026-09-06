@@ -1,7 +1,7 @@
 name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)
 
 # Nightly regression test for the queue-based KEDA + EPP autoscaling path
-# (guides/workload-autoscaling/README.hpa-epp.md) on OpenShift. Deploys the
+# (guides/workload-autoscaling/keda-epp-queue/README.md) on OpenShift. Deploys the
 # optimized-baseline modelserver + EPP router and scales the decode Deployment
 # directly from EPP queue metrics via KEDA (keda-epp-queue/ocp) — there is NO
 # WVA controller on this path.
@@ -61,6 +61,16 @@ on:
         required: false
         default: 'true'
         type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
 
 permissions:
   contents: write
@@ -102,6 +112,7 @@ jobs:
       skip_cleanup: ${{ inputs.cleanup == 'false' }}
       pr_number: ${{ github.event.inputs.pr_number }}
       pr_repo: ${{ github.event.inputs.pr_repo }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
     secrets: inherit
 
   update-badge:
@@ -114,3 +125,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

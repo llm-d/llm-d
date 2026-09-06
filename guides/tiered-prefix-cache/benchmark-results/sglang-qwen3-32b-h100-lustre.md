@@ -45,7 +45,7 @@ Without L3 storage offloading, recomputing those evicted 16,000-token tries from
 
 ### 16K system prompt length (1,000 prefix groups, KVCache size ~2.4 TiB) — Storage Overflow Sweep (KV Cache >> Host DRAM)
 
-To evaluate storage offloading under heavy eviction where the working set exceeds total cluster host DRAM capacity by 1.5×, prefix tries are continuously evicted to and restored from the GCP Managed Lustre storage tier. 
+To evaluate storage offloading under heavy eviction where the working set exceeds total cluster host DRAM capacity by 1.5×, prefix tries are continuously evicted to and restored from the GCP Managed Lustre storage tier.
 
 Without disk support, recomputing evicted 16k prefill tries from scratch on the GPU causes Mean TTFT to spike up to $22.06\text{s}$ at 10 QPS and $15.98\text{s}$ at 20 QPS. Enabling L3 Managed Lustre restores evicted tries from shared storage at high speed, cutting Mean TTFT by **up to -79.8%**, cutting P90 TTFT by **up to -66.0%**, and increasing total throughput by **+24.8% (from 164,299 tok/s to 205,037 tok/s)** at 20 QPS.
 
@@ -55,4 +55,3 @@ Without disk support, recomputing evicted 16k prefill tries from scratch on the 
 | **SGLang + CPU offloading + Lustre** *(With L3)* | 10 QPS | **4.46 (-79.8%)** | **13.67 (-66.0%)** | **18.02 (-53.4%)** | **31.41 (-40.1%)** | **111,939 (+24.8%)** |
 | **Baseline SGLang + CPU offloading** *(No L3)* | 20 QPS | 15.98 | 42.04 | 29.66 | 57.31 | 164,299 |
 | **SGLang + CPU offloading + Lustre** *(With L3)* | 20 QPS | **7.06 (-55.8%)** | **20.51 (-51.2%)** | **18.19 (-38.7%)** | **34.50 (-39.8%)** | **205,037 (+24.8%)** |
-

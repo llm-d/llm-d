@@ -35,26 +35,28 @@ if [ "${USE_SCCACHE}" = "true" ]; then
 
     if ! /usr/local/bin/sccache --start-server; then
         echo "Warning: sccache failed to start, continuing without cache" >&2
-        # Remove sccache binary so meson/cmake can't accidentally try to use it
-        rm -f /usr/local/bin/sccache || true
         unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_CUDA_COMPILER_LAUNCHER
+        # Sourcing scripts branch on this to decide whether to put sccache in CC/CXX
+        export USE_SCCACHE="false"
         return 0
     fi
 
     if ! /usr/local/bin/sccache --show-stats >/dev/null 2>&1; then
         echo "Warning: sccache not responding properly, disabling cache" >&2
         /usr/local/bin/sccache --stop-server 2>/dev/null || true
-        # Remove sccache binary so meson/cmake can't accidentally try to use it
-        rm -f /usr/local/bin/sccache || true
         unset CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER CMAKE_CUDA_COMPILER_LAUNCHER
+        export USE_SCCACHE="false"
         return 0
     fi
+
+    aws_creds_status="NOT SET"
+    [ -n "${AWS_ACCESS_KEY_ID:-}" ] && aws_creds_status="set"
 
     echo "sccache successfully configured:"
     echo "  - Bucket: ${SCCACHE_BUCKET}"
     echo "  - Region: ${SCCACHE_REGION}"
     echo "  - Key prefix: ${SCCACHE_S3_KEY_PREFIX}"
     echo "  - Socket: ${SCCACHE_SERVER_UDS}"
-    echo "  - AWS credentials: $([ -n \"${AWS_ACCESS_KEY_ID:-}\" ] && echo 'set' || echo 'NOT SET')"
+    echo "  - AWS credentials: ${aws_creds_status}"
     /usr/local/bin/sccache --show-stats 2>&1 | head -5
 fi

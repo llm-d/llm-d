@@ -190,6 +190,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - **GitHub Issues**: [github.com/llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler/issues)
 
 **👥 Emeritus Leadership:**
+
 - [Tamar Eilam](https://github.com/eilamt)
 
 ### SIG Observability
@@ -237,12 +238,12 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 **Key Areas**:
 
-  - Unified serving of in-cluster and out-of-cluster models through a single inference gateway
-  - Intelligent model selection via pluggable Filter/Score/Picker pipeline based on runtime signals
-  - Custom payload processing including request/response mutations, field extraction, and header transformations
-  - Circuit breaking and resilience patterns for model endpoints
-  - API key injection and credential management for out-of-cluster model providers
-  - Integration with payload-level systems such as guardrails, content filtering, metering, and usage tracking
+- Unified serving of in-cluster and out-of-cluster models through a single inference gateway
+- Intelligent model selection via pluggable Filter/Score/Picker pipeline based on runtime signals
+- Custom payload processing including request/response mutations, field extraction, and header transformations
+- Circuit breaking and resilience patterns for model endpoints
+- API key injection and credential management for out-of-cluster model providers
+- Integration with payload-level systems such as guardrails, content filtering, metering, and usage tracking
 
 **💬 Communication**:
 

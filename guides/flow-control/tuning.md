@@ -127,10 +127,10 @@ plugins:
     maxConcurrency: <N_active + B> # From wizard output
     headroom: 0.0
 
-saturationDetector:
-  pluginRef: concurrency-detector
-
 flowControl:
+  saturationDetector:
+    pluginRef: concurrency-detector
+
   maxRequests: 200 # Set a healthy burst queue limit
   maxBytes: "10Gi" # Adjust to protect host memory
 ```

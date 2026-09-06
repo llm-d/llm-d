@@ -75,7 +75,7 @@ Valid marker targets in the current schema (with live examples from optimized-ba
 | `env.static` | `env: static:` — rendered as `export VAR=…` lines |
 | `env.source` | `env: source:` — rendered as `source <path>` lines |
 | `prerequisites.<sub-group>` | `prerequisites:` — optimized-baseline uses `clone`, `gaie`, `namespace`, `secrets` |
-| `deploy.<sub-group>` | `deploy:` — optimized-baseline uses `values`, `standalone`, `gateway`, `modelserver`, `monitoring` |
+| `deploy.<sub-group>` | `deploy:` — optimized-baseline uses `router_values`, `monitoring_values`, `standalone`, `gateway`, `modelserver`, `monitoring` |
 | `verify.endpoint.<mode>` | one entry per mode (`standalone`, `gateway`) |
 | `verify.tests` | `verify: tests:` |
 | `benchmark.setup` / `benchmark.endpoint.<mode>` / `benchmark.execute` | (optional section) |
@@ -99,9 +99,9 @@ Concrete example — how the `helm install` block in optimized-baseline got conv
 ```bash
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 ````
@@ -114,9 +114,9 @@ deploy:
     - run: |
         helm install ${GUIDE_NAME} \
           ${ROUTER_STANDALONE_CHART} \
-          ${ROUTER_BASE_VALUES} \
+          -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
-          ${ROUTER_VALUES} \
+          -f ${ROUTER_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -207,7 +207,7 @@ The reader picks the line matching their config.
 >
 > Mutually exclusive steps flatten into a single fence, annotated with `# only when …` comments. A human reads the annotations and picks one. A runner scraping the rendered fence would execute *every* branch, which for some guides is destructive (workload-autoscaling explicitly warns against applying both its KEDA and HPA overlays).
 >
-> `guide.yaml` is the machine interface: `when:` is still structured there, so a runner resolves it against its own variable values and gets exactly one branch. The `<!-- llm-d-cicd:skip -->` markers exist for the *legacy* README-scraping path and should not be read as an endorsement of it.
+> `guide.yaml` is the machine interface: `when:` is still structured there, so a runner resolves it against its own variable values and gets exactly one branch. `guide.py emit` (see [Emitting bash for automation](#emitting-bash-for-automation)) performs that resolution. The `<!-- llm-d-cicd:skip -->` markers exist for the *legacy* README-scraping path and should not be read as an endorsement of it.
 
 ### Sensitive variables
 
@@ -351,6 +351,7 @@ README.md: OK  (structure only — pass --yaml to resolve marker paths)
 ```
 
 On `guide.yaml`:
+
 - All top-level keys are known (`name`, `env`, `prerequisites`, `deploy`, `verify`, `benchmark`, `cleanup`)
 - No duplicate keys in any mapping — YAML silently keeps only the last value, which has already hidden one real bug
 - Every step is a map with a `run:` string
@@ -359,6 +360,7 @@ On `guide.yaml`:
 - Categorical vars with `values:` have their `default:` in-list
 
 On `README.md`:
+
 - Markers are properly paired, nested marker pairs are rejected
 - Every `guide:<path>` resolves to a real YAML node
 - The body between each marker pair is a fenced ```` ```bash ```` block
@@ -366,7 +368,7 @@ On `README.md`:
 Exits non-zero on any error. With multiple targets every guide is reported before
 exiting, so one run surfaces every problem in the repo.
 
-### Recommended CI
+### CI
 
 One command covers both files across every guide:
 
@@ -377,6 +379,46 @@ scripts/guide.py render guides/*/ --check
 `--check` catches out-of-date READMEs — someone edited `guide.yaml` without
 re-rendering — and because `render` validates first, a schema error fails the
 same job.
+
+[`ci-guides-check.yaml`](../../.github/workflows/ci-guides-check.yaml) runs
+the command on every PR that touches `guides/**` or `scripts/guide.py`,
+alongside the guide.py unit tests in `scripts/tests/`. To fix a failing
+check, re-run `scripts/guide.py render <guide-dir>` and commit the result.
+
+### Emitting bash for automation
+
+`emit` assembles guide.yaml sections into an executable script on stdout:
+
+```bash
+scripts/guide.py emit guides/my-guide env deploy.standalone
+scripts/guide.py emit guides/my-guide env prerequisites.crds \
+    --context ci --var NAMESPACE=my-ns
+```
+
+A section is `env` or any step-list dot-path. `--context ci` drops
+`skip_in: [ci]` steps. `--var` overrides an `env.static` variable; the value
+is shell-quoted (and checked against the variable's declared `values:` list),
+while declared defaults are emitted verbatim so `$(…)` substitutions still
+run. Overrides also drive `when:` resolution, so the script contains one
+branch of any `when:`-gated alternative. A sensitive variable without an
+override is omitted rather than emitted as its placeholder, and referencing
+one from `when:` without a `--var` is an error.
+
+Quoting makes an override a single shell word at the `export`. A hook
+variable that a command later expands unquoted — the `${EXTRA_HELM_ARGS}`
+pattern — word-splits there, so every space-separated token in the override
+must stand alone as a flag or argument; a value that itself contains spaces
+(`--set-string a=x y`) cannot pass through such a hook.
+
+Only `when:` encodes exclusivity. Named sibling sub-groups
+(`deploy.standalone` vs `deploy.gateway`) look like alternatives to a human,
+but emit has no way to know that: emitting the parent (`deploy`) concatenates
+*every* sub-group, deploying both modes back to back. Pass the specific
+sub-path for any section whose children are mutually exclusive.
+
+`guides/flow-control/scripts/nightly-deploy-gke.sh` is the reference
+consumer: it emits the flow-control guide's CRD and deploy steps and layers
+its CI-only overrides on top via `--var`.
 
 ### Using it as a library
 

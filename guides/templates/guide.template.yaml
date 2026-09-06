@@ -8,20 +8,20 @@ env:
   # Variables the renderer emits as `export VAR=…`. Referenced by `when:` filters.
   static:
     GUIDE_NAME: <guide-name>
-    NAMESPACE:  llm-d-<guide-name>
-    REPO_ROOT:  $(realpath $(git rev-parse --show-toplevel))
-    MODEL:   { default: "<HuggingFace/Model-Name>" }
+    NAMESPACE: llm-d-<guide-name>
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+    MODEL: {default: "<HuggingFace/Model-Name>"}
     # Sensitive vars: `default:` is the README placeholder; compiler fails if unset.
-    HF_TOKEN:   { default: HF_TOKEN_PLACEHOLDER, sensitive: true }
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
     # Target environment. Gate steps that differ per platform with
     # `when: { ENV: [kind] }`. Name this axis ENV across guides so runners
     # (e.g. a pre-merge Kind runner) can set it uniformly. Drop values the
     # guide has not been validated against.
-    ENV:  { default: existing, values: [kind, existing, ocp] }
+    ENV: {default: existing, values: [kind, existing, ocp]}
     # Include `sim` only if the guide ships a GPU-free overlay backed by
     # llm-d-inference-sim — that is what makes a guide runnable on Kind.
     # Never advertise a value with no overlay behind it.
-    MODEL_SERVER: { default: vllm, values: [vllm, sglang, trtllm, sim] }
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm, sim]}
   # Files to source verbatim (write the full path including ${REPO_ROOT}/ if needed).
   source: ["${REPO_ROOT}/guides/env.sh"]
 
@@ -52,4 +52,5 @@ verify:
 
 cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-  - run: kubectl delete namespace ${NAMESPACE}
+  - skip_in: [ci]
+    run: kubectl delete namespace ${NAMESPACE}

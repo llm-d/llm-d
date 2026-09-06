@@ -94,7 +94,10 @@ curl -sS "http://${IP}/v1/completions" -d '{"model":"'"${MODEL}"'","prompt":"hi"
 <!-- guide:cleanup start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->

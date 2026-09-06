@@ -57,7 +57,7 @@ spec:
               type: DirectoryOrCreate
         containers:
           - name: vllm
-            image: vllm/vllm-openai:nightly
+            image: REPLACE_MODEL_SERVER_IMAGE
             securityContext:
               capabilities:
                 add:
@@ -123,6 +123,23 @@ spec:
                     ;;
                 esac
 
+                KV_EVENTS_ARGS=""
+                if [ "${ENABLE_KV_EVENTS:-0}" = "1" ]; then
+                  # vLLM offsets the configured ZMQ publisher port by the GLOBAL
+                  # data-parallel rank. On multi-pod DP groups every pod receives
+                  # the same configured base, so compensate by the pod's start
+                  # rank to land publishers on contiguous local ports
+                  # (5557..5557+DP_SIZE_LOCAL-1). See llm-d-router#2227.
+                  KV_EVENTS_BASE=$((5557 - START_RANK))
+                  KV_EVENTS_ARGS="--kv-events-config {\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:${KV_EVENTS_BASE}\",\"topic\":\"kv@${POD_IP}:8000@zai-org/GLM-5.2-FP8\"}"
+                fi
+                BLOCK_SIZE_ARGS=""
+                if [ -n "${KV_BLOCK_SIZE:-}" ]; then
+                  # Must match the router's precise-prefix-cache-producer
+                  # tokenProcessorConfig.blockSizeTokens, or the index stays empty.
+                  BLOCK_SIZE_ARGS="--block-size ${KV_BLOCK_SIZE}"
+                fi
+
                 exec vllm serve $MTP_ARGS --kv-cache-dtype fp8 \
                   zai-org/GLM-5.2-FP8 \
                   --port 8000 \
@@ -141,9 +158,14 @@ spec:
                   --max-num-batched-tokens 2048 \
                   --data-parallel-start-rank $START_RANK \
                   --kv_transfer_config "$KV_TRANSFER_CONFIG" \
+                  $KV_EVENTS_ARGS $BLOCK_SIZE_ARGS \
                   --moe-backend deep_gemm \
                   --all2all-backend deepep_high_throughput
             env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:

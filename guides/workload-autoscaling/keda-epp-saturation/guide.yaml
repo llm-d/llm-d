@@ -1,0 +1,69 @@
+name: keda-epp-saturation
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    NAMESPACE:            llm-d-optimized-baseline
+    MONITORING_NAMESPACE: llm-d-monitoring
+
+    MODEL: { default: "Qwen/Qwen3-32B" }
+
+    # Target platform. `existing` = generic Kubernetes with the bundled
+    # kube-prometheus-stack (the `k8s` overlay). `ocp` = OpenShift with Thanos
+    # Querier (the `ocp` overlay, which reuses recipes/autoscaling/metrics-reader).
+    # Rendered as an annotation only — it does not gate execution.
+    ENV: { default: existing, values: [existing, ocp] }
+
+    # Autoscaling overlays for this guide (Model A: <strategy>/<topology>).
+    OVERLAY_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-saturation/optimized-baseline
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+deploy:
+  # Generic Kubernetes only: KEDA needs a bearer token + CA to reach the bundled
+  # kube-prometheus-stack over HTTPS. Extract them from the Prometheus
+  # ServiceAccount's token Secret and create the prometheus-token Secret in the
+  # workload namespace. On OpenShift the ocp overlay provisions its own SA token,
+  # so this step is skipped.
+  prometheus_auth:
+    - when: { ENV: [existing] }
+      run: |
+        SERVICEACCOUNT_SECRET=$(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}')
+        TOKEN=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
+        CA_CRT=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}' | base64 -d)
+        kubectl create secret generic prometheus-token \
+          --from-literal=token="${TOKEN}" \
+          --from-literal=ca.crt="${CA_CRT}" \
+          --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
+
+  # Apply the EPP config, ScaledObject, and TriggerAuthentication overlay for the
+  # platform. Generic Kubernetes (bundled kube-prometheus-stack):
+  apply_k8s:
+    - when: { ENV: [existing] }
+      run: kubectl apply -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE}
+  # OpenShift (Thanos Querier + the shared recipes/autoscaling/metrics-reader auth):
+  apply_ocp:
+    - when: { ENV: [ocp] }
+      run: kubectl apply -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE}
+
+verify:
+  # ScaledObject Ready=True confirms the scaler config is valid; KEDA then creates
+  # its own HPA. Do not apply a separate hpa.yaml — KEDA owns the generated HPA.
+  tests:
+    scaledobject_hpa:
+      - run: |
+          kubectl get scaledobject -n ${NAMESPACE}
+          kubectl wait --for=condition=Ready scaledobject --all -n ${NAMESPACE} --timeout=120s
+          kubectl get hpa -n ${NAMESPACE}
+
+cleanup:
+  # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
+  # the target Deployment or reset its replica count.
+  - when: { ENV: [existing] }
+    run: kubectl delete -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE} --ignore-not-found=true
+  - when: { ENV: [ocp] }
+    run: kubectl delete -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE} --ignore-not-found=true
+  - when: { ENV: [existing] }
+    run: kubectl delete secret prometheus-token -n ${NAMESPACE} --ignore-not-found=true

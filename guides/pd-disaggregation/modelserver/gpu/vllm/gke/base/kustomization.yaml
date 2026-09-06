@@ -5,6 +5,7 @@ resources:
   - ../../base
 
 components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
   - ../../../../components/gke-rdma
 
 patches:
@@ -31,9 +32,25 @@ patches:
                 env:
                   - name: UCX_IB_ROCE_REACHABILITY_MODE
                     value: "all"
+                  - name: HF_HOME
+                    value: /root/.cache/huggingface
+                  - name: HF_HUB_DOWNLOAD_TIMEOUT
+                    value: "60"
+                  # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+                  - name: HF_HUB_DISABLE_XET
+                    value: "1"
                 resources:
                   claims:
                     - name: gke-rdma-claim
+                volumeMounts:
+                  # Node-local HuggingFace cache shared across pods and restarts
+                  - mountPath: /root/.cache/huggingface
+                    name: huggingface-cache
+            volumes:
+              - name: huggingface-cache
+                hostPath:
+                  path: /var/cache/huggingface
+                  type: DirectoryOrCreate
   - target:
       kind: Deployment
       name: prefill
@@ -71,12 +88,28 @@ patches:
                 env:
                   - name: UCX_IB_ROCE_REACHABILITY_MODE
                     value: "all"
+                  - name: HF_HOME
+                    value: /root/.cache/huggingface
+                  - name: HF_HUB_DOWNLOAD_TIMEOUT
+                    value: "60"
+                  # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+                  - name: HF_HUB_DISABLE_XET
+                    value: "1"
                 resources:
                   claims:
                     - name: gke-rdma-claim-0
                     - name: gke-rdma-claim-1
                     - name: gke-rdma-claim-2
                     - name: gke-rdma-claim-3
+                volumeMounts:
+                  # Node-local HuggingFace cache shared across pods and restarts
+                  - mountPath: /root/.cache/huggingface
+                    name: huggingface-cache
+            volumes:
+              - name: huggingface-cache
+                hostPath:
+                  path: /var/cache/huggingface
+                  type: DirectoryOrCreate
   - target:
       kind: Deployment
       name: decode

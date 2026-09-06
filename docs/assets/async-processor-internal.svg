@@ -5,7 +5,7 @@
       <stop offset="0%" stop-color="#1e293b"/>
       <stop offset="100%" stop-color="#0f172a"/>
     </linearGradient>
-    
+
     <linearGradient id="gate-grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#3b0764"/>
       <stop offset="100%" stop-color="#1e1b4b"/>

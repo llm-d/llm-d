@@ -35,7 +35,8 @@ For simpler single-model deployments, see the [Optimized Baseline](../optimized-
 * Install the Gateway API Inference Extension CRDs:
 
   ```bash
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
 * Create a target namespace for the installation:
@@ -46,7 +47,7 @@ For simpler single-model deployments, see the [Optimized Baseline](../optimized-
 
 * [Create the `llm-d-hf-token` secret in your target namespace](../../helpers/hf-token.md) with a valid HuggingFace token.
 
-* **Multiple InferencePools deployed**, each serving a different base model. Follow the [Optimized Baseline](../optimized-baseline/README.md) guide for each pool, or [Multi-Inference Pool Setup](../workload-autoscaling/README.multi-inference-pool.md) for adding pools to an existing deployment.
+* **Multiple InferencePools deployed**, each serving a different base model. Follow the [Optimized Baseline](../optimized-baseline/README.md) guide for each pool, or [Multi-Inference Pool Setup](../workload-autoscaling/multi-inference-pool/README.md) for adding pools to an existing deployment.
 
   > [!IMPORTANT]
   > When deploying InferencePools for this guide, do **not** use `--set httpRoute.create=true`. This guide's HTTPRoutes (Step 3) handle routing based on model name headers. Pool-level catch-all routes would conflict with header-based routing.
@@ -95,9 +96,9 @@ Each ConfigMap must have the label `inference.llm-d.ai/ipp-managed: "true"` and 
 
 Create HTTPRoutes that match on the `X-Gateway-Base-Model-Name` header injected by IPP. Review and customize [`manifests/httproutes.yaml`](manifests/httproutes.yaml) for your setup:
 
-- Update `spec.parentRefs[0].name` to match your Gateway name
-- Update `backendRefs[0].name` to match your InferencePool names
-- Ensure the header `value` matches the `baseModel` in the corresponding ConfigMap
+* Update `spec.parentRefs[0].name` to match your Gateway name
+* Update `backendRefs[0].name` to match your InferencePool names
+* Ensure the header `value` matches the `baseModel` in the corresponding ConfigMap
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/multi-model-routing/manifests/httproutes.yaml
@@ -159,8 +160,12 @@ helm uninstall ipp -n ${NAMESPACE}
 rm -rf /tmp/ipp
 
 # Remove namespace (if no longer needed)
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Advanced: LoRA Adapter Routing
 

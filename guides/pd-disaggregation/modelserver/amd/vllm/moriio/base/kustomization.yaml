@@ -8,8 +8,8 @@ resources:
 namePrefix: pd-disaggregation-rocm-moriio-vllm-
 
 components:
-  - ../../../../../../recipes/modelserver/components/images/amd-vllm
-  - ../../../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../../../recipes/modelserver/components/images/amd-vllm/llm-d
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 #TODO-MORI: will become upstream images
 images:

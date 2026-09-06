@@ -5,11 +5,9 @@ resources:
 
 namePrefix: pd-disaggregation-nvidia-gpu-vllm-mooncake-
 
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/vllm/vllm-openai
-    newTag: v0.26.0
-
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:

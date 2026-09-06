@@ -36,10 +36,19 @@ CLI
 
     guide.py render guides/optimized-baseline       # validate, then write
     guide.py render guides/optimized-baseline --check    # CI: fail if stale
+    guide.py render guides --recursive --check       # CI: check every guide
     guide.py render guides/optimized-baseline --dry-run  # print to stdout
+
+    guide.py emit guides/flow-control env deploy.standalone
+    guide.py emit guides/flow-control env prerequisites.crds \
+        --context ci --var NAMESPACE=my-ns          # bash on stdout, for tooling
 
 ``render`` validates before it writes and refuses to render an invalid guide,
 so a normal authoring loop only ever needs ``guide.py render <dir>``.
+
+``emit`` assembles an executable bash script from guide.yaml sections, so
+deployment tooling (e.g. the nightly deploy scripts) consumes the guide's
+commands instead of copying them.
 
 Library
 -------
@@ -62,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,6 +84,7 @@ __all__ = [
     "Findings",
     "Guide",
     "GuideError",
+    "emit_script",
     "parse_guide_yaml",
 ]
 
@@ -340,6 +351,12 @@ def _check_step_list(node: Any, path: str, declared: set[str], f: Findings) -> N
     )
 
 
+def _in_values(value: Any, allowed: list) -> bool:
+    """Membership against a declared ``values:`` list, compared as strings —
+    YAML may parse entries (or the candidate) as ints or booleans."""
+    return str(value) in [str(v) for v in allowed]
+
+
 def _check_env(env: Any, f: Findings) -> set[str]:
     declared: set[str] = set()
 
@@ -366,7 +383,29 @@ def _check_env(env: Any, f: Findings) -> set[str]:
     for var, spec in static.items():
         declared.add(var)
         if not isinstance(spec, dict):
+            if spec is None or isinstance(spec, bool):
+                # YAML null/true/false would render and emit as the Python
+                # repr (`export VAR=None`). Quote the intended string.
+                f.error(
+                    f"env.static.{var}: value must be a string, got {spec!r} "
+                    f"(quote YAML null/booleans)"
+                )
             continue
+        if "sensitive" in spec and not isinstance(spec["sensitive"], bool):
+            # A truthy non-bool (`sensitive: "true"`) would pass the checks
+            # below as non-sensitive yet be treated as sensitive by render
+            # and emit — reject it before the semantics can diverge.
+            f.error(
+                f"env.static.{var}.sensitive: must be a YAML boolean, "
+                f"got {spec['sensitive']!r}"
+            )
+        if "default" in spec and (
+            spec["default"] is None or isinstance(spec["default"], bool)
+        ):
+            f.error(
+                f"env.static.{var}.default: must be a string, got "
+                f"{spec['default']!r} (quote YAML null/booleans)"
+            )
         if spec.get("sensitive") is True:
             if "default" not in spec:
                 f.error(
@@ -384,7 +423,7 @@ def _check_env(env: Any, f: Findings) -> set[str]:
             if not isinstance(spec["values"], list):
                 f.error(f"env.static.{var}.values: must be a list")
             elif "default" in spec and spec["values"] and not spec.get("sensitive"):
-                if str(spec["default"]) not in [str(v) for v in spec["values"]]:
+                if not _in_values(spec["default"], spec["values"]):
                     f.error(
                         f"env.static.{var}: default {spec['default']!r} "
                         f"not in values {spec['values']}"
@@ -599,11 +638,12 @@ def _fence(body: str) -> str:
     return f"```bash\n{body}\n```"
 
 
-def _env_static_lines(node: Any) -> list[tuple[bool, str]]:
-    """``(is_sensitive, export_line)`` for each variable, in declaration order."""
+def _env_static_lines(node: Any) -> list[tuple[str, bool, str]]:
+    """``(var, is_sensitive, export_line)`` for each variable, in declaration
+    order. Shared by render (README fences) and emit (executable scripts)."""
     if not isinstance(node, dict):
         raise GuideError("env.static must be a map")
-    out: list[tuple[bool, str]] = []
+    out: list[tuple[str, bool, str]] = []
     for var, spec in node.items():
         if isinstance(spec, dict):
             if spec.get("sensitive"):
@@ -612,18 +652,18 @@ def _env_static_lines(node: Any) -> list[tuple[bool, str]]:
                         f"sensitive variable {var!r} has no `default:` to use as "
                         f"README placeholder"
                     )
-                out.append((True, f"export {var}={spec['default']}"))
+                out.append((var, True, f"export {var}={spec['default']}"))
             elif "default" in spec:
                 line = f"export {var}={spec['default']}"
                 if spec.get("values"):
                     line += " # options: " + ", ".join(str(v) for v in spec["values"])
-                out.append((False, line))
+                out.append((var, False, line))
             else:
                 raise GuideError(
-                    f"variable {var!r} has neither a value nor a default — cannot render"
+                    f"variable {var!r} has neither a value nor a default"
                 )
         else:
-            out.append((False, f"export {var}={spec}"))
+            out.append((var, False, f"export {var}={spec}"))
     return out
 
 
@@ -641,7 +681,7 @@ def _render_env_static(node: Any) -> str:
     sensitive entries cannot simply be hoisted to the end.
     """
     groups: list[tuple[bool, list[str]]] = []
-    for sensitive, line in _env_static_lines(node):
+    for _var, sensitive, line in _env_static_lines(node):
         if groups and groups[-1][0] == sensitive:
             groups[-1][1].append(line)
         else:
@@ -747,6 +787,153 @@ def render_md(guide: Any, text: str) -> str:
         return f"{match.group(1)}\n{render_path(guide, match.group('path'))}\n{match.group(4)}"
 
     return MARKER_PAIR.sub(replace, text)
+
+
+# --------------------------------------------------------------------------
+# Emitting — executable bash from the YAML
+# --------------------------------------------------------------------------
+#
+# ``emit`` assembles executable bash from guide.yaml sections. Deployment
+# tooling (the nightly deploy scripts) consumes guide.yaml through emit, so a
+# fix to a guide's commands reaches CI without a second edit.
+
+
+def _emit_env_lines(env: Any, overrides: dict[str, str]) -> list[str]:
+    """Bash lines for the ``env`` section: one export per ``env.static``
+    variable in declaration order (the same lines render puts in the README,
+    via :func:`_env_static_lines`), then the ``env.source`` lines.
+
+    Overridden values are shell-quoted because they come from a caller and may
+    carry spaces or flags. Defaults are emitted verbatim so command
+    substitutions like ``$(git rev-parse ...)`` still run at execution time. A
+    sensitive variable without an override becomes a comment; its README
+    placeholder is never emitted.
+    """
+    if not isinstance(env, dict) or not isinstance(env.get("static"), dict):
+        raise GuideError("env.static must be a map")
+    lines: list[str] = []
+    for var, sensitive, line in _env_static_lines(env["static"]):
+        if var in overrides:
+            lines.append(f"export {var}={shlex.quote(overrides[var])}")
+        elif sensitive:
+            lines.append(f"# {var} is sensitive — provide it out-of-band or via --var")
+        else:
+            lines.append(line)
+    src = env.get("source")
+    if src:
+        lines.extend(_env_source_body(src).splitlines())
+    return lines
+
+
+_SENSITIVE = object()
+"""Sentinel in the resolved-env map: declared sensitive, no override given."""
+
+
+def _resolved_env_values(env: Any, overrides: dict[str, str]) -> dict[str, Any]:
+    """The value each ``env.static`` variable takes for ``when:`` filtering:
+    the override when given, the declared default otherwise. A sensitive
+    variable without an override resolves to :data:`_SENSITIVE` — its declared
+    default is a README placeholder, and branch selection must never key off a
+    value the author declared to be fake (see :func:`_step_included`)."""
+    resolved: dict[str, Any] = {}
+    static = env.get("static") if isinstance(env, dict) else None
+    for var, spec in (static or {}).items():
+        if var in overrides:
+            resolved[var] = overrides[var]
+        elif isinstance(spec, dict):
+            resolved[var] = _SENSITIVE if spec.get("sensitive") else spec.get("default")
+        else:
+            resolved[var] = spec
+    return resolved
+
+
+def _step_included(step: dict, contexts: set[str], resolved: dict[str, Any]) -> bool:
+    if contexts & set(step.get("skip_in") or []):
+        return False
+    for var, allowed in (step.get("when") or {}).items():
+        value = resolved.get(var, "")
+        if value is _SENSITIVE:
+            raise GuideError(
+                f"when: references sensitive variable {var!r} with no override — "
+                f"its README placeholder cannot drive branch selection; pass --var {var}=..."
+            )
+        if not _in_values(value, allowed):
+            return False
+    return True
+
+
+def emit_steps(node: Any, contexts: set[str], resolved: dict[str, Any]) -> str:
+    """Bash for a step-list node: the ``run:`` bodies that survive
+    ``skip_in``/``when`` filtering, joined by blank lines. ``render`` keeps
+    every step and annotates it; ``emit`` produces a script for a single
+    context, so filtered-out steps are dropped."""
+    steps = [s for s in _flatten_steps(node) if _step_included(s, contexts, resolved)]
+    return "\n\n".join(str(s["run"]).rstrip() for s in steps)
+
+
+def emit_script(
+    guide: Any,
+    sections: list[str],
+    overrides: dict[str, str] | None = None,
+    contexts: set[str] | None = None,
+    label: str = "<guide>",
+) -> str:
+    """An executable bash script assembled from ``sections`` in the order
+    given. A section is the literal ``env`` or a dot-path resolving to a
+    step-list node (``deploy.standalone``, ``prerequisites.crds``, ...).
+
+    The provenance comment records override names but not values. Emitted
+    scripts end up in CI logs, and an override may hold a credential.
+    """
+    overrides = overrides or {}
+    contexts = contexts or set()
+    if not isinstance(guide, dict):
+        raise GuideError(f"top level: must be a map, got {type(guide).__name__}")
+
+    env = guide.get("env") or {}
+    static = env.get("static") if isinstance(env, dict) else None
+    static = static if isinstance(static, dict) else {}
+    unknown = set(overrides) - set(static)
+    if unknown:
+        raise GuideError(
+            f"--var names not declared in env.static: {', '.join(sorted(unknown))}"
+        )
+    # An override must respect the variable's declared vocabulary. A typo'd
+    # value would otherwise sail through and silently when:-filter every
+    # gated step out of the script.
+    for var, value in overrides.items():
+        spec = static.get(var)
+        if isinstance(spec, dict) and spec.get("values"):
+            if not _in_values(value, spec["values"]):
+                raise GuideError(
+                    f"--var {var}={value!r} not in declared values {spec['values']}"
+                )
+    resolved = _resolved_env_values(env, overrides)
+
+    provenance = f"# Emitted by scripts/guide.py from {label} — do not edit."
+    detail = f"# sections: {' '.join(sections)}"
+    if contexts:
+        detail += f" | context: {','.join(sorted(contexts))}"
+    if overrides:
+        detail += f" | vars: {','.join(sorted(overrides))}"
+
+    parts = ["#!/usr/bin/env bash", provenance, detail, "set -euo pipefail"]
+    for section in sections:
+        if section == "env":
+            body = "\n".join(_emit_env_lines(env, overrides))
+        else:
+            found, node, msg = resolve_path(guide, section)
+            if not found:
+                raise GuideError(msg)
+            body = emit_steps(node, contexts, resolved)
+        parts.append(f"\n# === {section} ===")
+        if body:
+            parts.append(body)
+        else:
+            # Mark the empty section so a consumer piping the script to bash
+            # can see that filtering removed every step.
+            parts.append("# (no steps after skip_in/when filtering)")
+    return "\n".join(parts) + "\n"
 
 
 # --------------------------------------------------------------------------
@@ -948,13 +1135,17 @@ class Guide:
 
     # -- rendering ---------------------------------------------------------
 
+    def _require_parsed_yaml(self, action: str) -> None:
+        """Raise unless a guide.yaml is loaded and parsed clean."""
+        if not self.has_yaml:
+            raise GuideError(f"{self.label}: no guide.yaml loaded to {action} from")
+        if self._parse_error is not None:
+            raise GuideError(f"{self.label}: {self._parse_error}", Findings([self._parse_error]))
+
     def render(self) -> str:
         """Render the markdown from the YAML and return it. Needs both halves.
         Does not write."""
-        if not self.has_yaml:
-            raise GuideError(f"{self.label}: no guide.yaml loaded to render from")
-        if self._parse_error is not None:
-            raise GuideError(f"{self.label}: {self._parse_error}", Findings([self._parse_error]))
+        self._require_parsed_yaml("render")
         if self.md is None:
             raise GuideError(f"{self.label}: no markdown loaded to render into")
         return render_md(self.data, self.md)
@@ -962,6 +1153,24 @@ class Guide:
     def is_current(self) -> bool:
         """True if the markdown already matches what :meth:`render` produces."""
         return self.has_md and self.render() == self.md
+
+    def emit(
+        self,
+        sections: Iterable[str],
+        *,
+        variables: dict[str, str] | None = None,
+        contexts: Iterable[str] | None = None,
+    ) -> str:
+        """Executable bash for ``sections``, assembled from the YAML. Needs the
+        YAML half only. See :func:`emit_script`."""
+        self._require_parsed_yaml("emit")
+        return emit_script(
+            self.data,
+            list(sections),
+            dict(variables or {}),
+            set(contexts or ()),
+            label=str(self.yaml_path or self.name or "<guide>"),
+        )
 
     def write(self, path: Path | str | None = None) -> bool:
         """Render and write. Returns True if the file changed on disk.
@@ -985,7 +1194,7 @@ class Guide:
 # --------------------------------------------------------------------------
 
 
-def _iter_targets(targets: list[str]) -> Iterator[Path]:
+def _iter_targets(targets: list[str], *, recursive: bool = False) -> Iterator[Path]:
     """Expand positional targets.
 
     A *guide* is a directory containing a ``guide.yaml`` — that is what makes it
@@ -993,11 +1202,18 @@ def _iter_targets(targets: list[str]) -> Iterator[Path]:
     only sub-guides) has a README.md that is not rendered from anything. So a
     directory without a guide.yaml is skipped when it came from a glob, and
     reported when named explicitly. To validate a lone markdown file, pass
-    ``--md``.
+    ``--md``. With ``recursive``, directories containing both ``guide.yaml`` and
+    ``README.md`` are discovered below each directory target.
     """
     explicit = len(targets) == 1
     for t in targets:
         p = Path(t)
+        if recursive and p.is_dir():
+            for guide_yaml in sorted(p.rglob(GUIDE_YAML)):
+                guide_dir = guide_yaml.parent
+                if (guide_dir / GUIDE_MD).is_file():
+                    yield guide_dir
+            continue
         if p.is_dir() and not (p / GUIDE_YAML).is_file():
             if explicit:
                 raise GuideError(f"no {GUIDE_YAML} in {p} (use --md to check a lone markdown file)")
@@ -1014,7 +1230,7 @@ def _guides(args: argparse.Namespace) -> Iterator[Guide]:
     if args.yaml or args.md:
         yield Guide.load(yaml=args.yaml, md=args.md)
         return
-    for target in _iter_targets(args.targets):
+    for target in _iter_targets(args.targets, recursive=args.recursive):
         yield Guide.load(target)
 
 
@@ -1031,6 +1247,19 @@ def _scope_note(g: Guide) -> str:
 def _report_failure(g: Guide, findings: Findings) -> None:
     findings.report()
     print(f"{len(findings.errors)} error(s) — {g.label}\n", file=sys.stderr)
+
+
+def _selection_error(args: argparse.Namespace) -> str | None:
+    """Validate the file-selection flags added by ``add_common``. Enforced once
+    in ``main`` for every subcommand whose parser sets the ``_needs_selection``
+    default (which ``add_common`` does), so the guard travels with the flags."""
+    if (args.yaml or args.md) and args.targets:
+        return "pass positional targets or --yaml/--md, not both"
+    if getattr(args, "recursive", False) and (args.yaml or args.md):
+        return "--recursive requires positional directory targets"
+    if not args.yaml and not args.md and not args.targets:
+        return "nothing to do — pass a target, --yaml, or --md"
+    return None
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
@@ -1092,6 +1321,31 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _cmd_emit(args: argparse.Namespace) -> int:
+    g = Guide.load(args.target)
+    if not g.has_yaml:
+        print(f"error: {g.label}: emit needs a {GUIDE_YAML}", file=sys.stderr)
+        return 1
+
+    # Same contract as render: an invalid guide must not drive a deployment.
+    if not args.no_validate:
+        findings = g.check_yaml()
+        if not findings.ok():
+            _report_failure(g, findings)
+            return 1
+
+    overrides: dict[str, str] = {}
+    for pair in args.var or []:
+        name, sep, value = pair.partition("=")
+        if not sep or not name:
+            print(f"error: --var must be NAME=VALUE, got {pair!r}", file=sys.stderr)
+            return 2
+        overrides[name] = value
+
+    sys.stdout.write(g.emit(args.sections, variables=overrides, contexts=args.context or []))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="guide.py",
@@ -1108,6 +1362,11 @@ def build_parser() -> argparse.ArgumentParser:
             "render needs both halves:\n"
             "  guide.py render guides/my-guide\n"
             "  guide.py render guides/*/ --check          CI: fail if any is stale\n"
+            "  guide.py render guides --recursive --check recursively check all guides\n"
+            "\n"
+            "emit needs the YAML half only:\n"
+            "  guide.py emit guides/my-guide env deploy.standalone\n"
+            "  guide.py emit guides/my-guide env deploy --context ci --var NAMESPACE=ns\n"
         ),
     )
     sub = ap.add_subparsers(dest="command", required=True)
@@ -1121,6 +1380,13 @@ def build_parser() -> argparse.ArgumentParser:
         )
         p.add_argument("--yaml", metavar="PATH", help="explicit guide.yaml path")
         p.add_argument("--md", metavar="PATH", help="explicit markdown path")
+        p.add_argument(
+            "--recursive",
+            action="store_true",
+            help="recursively discover directories containing guide.yaml and README.md",
+        )
+        # main() runs _selection_error for every namespace carrying this flag.
+        p.set_defaults(_needs_selection=True)
 
     c = sub.add_parser(
         "check",
@@ -1150,19 +1416,52 @@ def build_parser() -> argparse.ArgumentParser:
     )
     r.set_defaults(func=_cmd_render)
 
+    e = sub.add_parser(
+        "emit",
+        help="print executable bash assembled from guide.yaml sections",
+        description=(
+            "Emit an executable bash script from guide.yaml, for CI and "
+            "deployment tooling. TARGET is a guide directory or a guide.yaml "
+            "path. SECTION is the literal `env` or a dot-path to a step list "
+            "(e.g. deploy.standalone, prerequisites.crds); sections are "
+            "emitted in the order given. Steps whose skip_in matches a "
+            "--context tag, or whose when: filter excludes the resolved "
+            "variable values, are dropped."
+        ),
+    )
+    e.add_argument("target", metavar="TARGET", help="guide directory or guide.yaml path")
+    e.add_argument(
+        "sections",
+        nargs="+",
+        metavar="SECTION",
+        help="`env` or a step-list dot-path; repeatable, emitted in order",
+    )
+    e.add_argument(
+        "--var",
+        action="append",
+        metavar="NAME=VALUE",
+        help="override an env.static variable (value is shell-quoted); repeatable",
+    )
+    e.add_argument(
+        "--context",
+        action="append",
+        metavar="CTX",
+        help="drop steps with this skip_in tag, e.g. ci; repeatable",
+    )
+    e.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="emit without validating first (escape hatch; not for CI)",
+    )
+    e.set_defaults(func=_cmd_emit)
+
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if (args.yaml or args.md) and args.targets:
-        print(
-            "error: pass positional targets or --yaml/--md, not both",
-            file=sys.stderr,
-        )
-        return 2
-    if not args.yaml and not args.md and not args.targets:
-        print("error: nothing to do — pass a target, --yaml, or --md", file=sys.stderr)
+    if getattr(args, "_needs_selection", False) and (err := _selection_error(args)):
+        print(f"error: {err}", file=sys.stderr)
         return 2
     try:
         return args.func(args)

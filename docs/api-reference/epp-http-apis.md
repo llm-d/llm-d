@@ -352,7 +352,6 @@ data: {"type":"message_stop"}
 
 </details>
 
-
 ### vLLM `/inference/v1/generate`
 
 This endpoint requires the model server to be vLLM. Sampling controls must be nested inside a `sampling_params` object rather than placed at the top level.

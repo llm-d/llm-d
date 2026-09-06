@@ -4,7 +4,8 @@
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-gke-acc-gpu-vllm-x.yaml)
 [![E2E (GKE TPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-gke-acc-tpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-gke-acc-tpu-vllm-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml)
-[![E2E (AMD ROCM MORI)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-amd-ci-acc-rocm-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-amd-ci-acc-rocm-vllm-x.yaml)
+[![E2E (AMD ROCM NIXL)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-amd-ci-acc-rocm-vllm-nixl.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-amd-ci-acc-rocm-vllm-nixl.yaml)
+[![E2E (AMD ROCM MORI)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-amd-ci-acc-rocm-vllm-moriio.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-pd-disaggregation-amd-ci-acc-rocm-vllm-moriio.yaml)
 
 ## Overview
 
@@ -39,7 +40,7 @@ As a result, as you tune your P/D deployments, we suggest focusing on the follow
 * **xPyD Ratios**: tuning the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio
 
 > [!WARNING]
-> The NixlConnector has known issues and limitations around TP ratio direction and stale agent caching after prefill pod restarts. See [Known NIXL Connector Issues and Limitations](../../docs/architecture/advanced/disaggregation/operations-vllm.md#known-nixl-connector-issues-and-limitations) for details.
+> The NixlConnector has known issues and limitations around TP ratio direction and stale agent caching after prefill pod restarts. See [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) for details.
 
 ### Supported Hardware Backends
 
@@ -63,7 +64,7 @@ This guide includes configuration for the following accelerators:
 P/D disaggregation requires a KV transfer backend to move KV cache blocks from prefill workers to decode workers. The transfer backend is configured via vLLM's `--kv-transfer-config` flag.
 
 > [!NOTE]
-> The following table represents vLLM's KVTransfer compatability. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
+> The following table represents vLLM's KVTransfer compatibility. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
 
 | Connector | Overlay | Transport | Notes |
 | --------- | ------- | --------- | ----- |
@@ -81,13 +82,15 @@ The `cks-mooncake` overlay uses [Mooncake Transfer Engine](https://github.com/kv
 > This overlay configures `MooncakeConnector` for P/D KV transfer only. It does **not** configure Mooncake Store (`MooncakeStoreConnector`), which provides distributed KV storage for tiered cache offloading and is a separate integration.
 
 **Constraints:**
-- MooncakeConnector requires the **same `tensor-parallel-size`** on both prefill and decode instances. The `cks-mooncake` overlay uses TP=1 for both. If your model requires higher TP, set both sides to the same value and adjust GPU resource requests.
-- `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
+
+* MooncakeConnector requires the **same `tensor-parallel-size`** on both prefill and decode instances. The `cks-mooncake` overlay uses TP=1 for both. If your model requires higher TP, set both sides to the same value and adjust GPU resource requests.
+* `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
 
 **CKS / RDMA prerequisites:**
-- NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
-- InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
-- RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
+
+* NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
+* InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
+* RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
 
 Validate RDMA from inside a test pod before deploying:
 
@@ -120,9 +123,10 @@ client request → llm-d routing → vLLM prefill (kv_producer) → MooncakeConn
 | `VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT` | `480` | Seconds before a prefiller releases KV cache if the decoder does not acknowledge. |
 
 **Troubleshooting:**
-- **No RDMA in pod**: Check that `rdma/ib` appears in `kubectl describe node` allocatable resources and that the RDMA device plugin is running.
-- **MooncakeConnector fails to init**: Verify `mooncake-transfer-engine` is installed (`pip show mooncake-transfer-engine` inside the pod) and the bootstrap port is free.
-- **KV transfer failures**: Confirm prefill and decode use the same TP size and can reach each other over the RDMA network.
+
+* **No RDMA in pod**: Check that `rdma/ib` appears in `kubectl describe node` allocatable resources and that the RDMA device plugin is running.
+* **MooncakeConnector fails to init**: Verify `mooncake-transfer-engine` is installed (`pip show mooncake-transfer-engine` inside the pod) and the bootstrap port is free.
+* **KV transfer failures**: Confirm prefill and decode use the same TP size and can reach each other over the RDMA network.
 
 </details>
 
@@ -148,6 +152,7 @@ To create the cluster, node pool, and install the required GPU DRA / network DRA
 export branch="main" # branch, tag, or commit hash
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
 ```
+
 * Set the following environment variables:
 
 ```bash
@@ -157,11 +162,14 @@ export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
 export MODEL_NAME="openai/gpt-oss-120b"
 ```
+
 * Install the Gateway API Inference Extension CRDs:
 
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
+
 * Create a target namespace for the installation
 
 ```bash
@@ -223,8 +231,9 @@ Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU
 #### GPU
 
 Choose the overlay matching your infrastructure provider:
-- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
-- **CoreWeave**: Deploys on CoreWeave.
+
+* **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
+* **CoreWeave**: Deploys on CoreWeave.
 
 > [!TIP]
 > Check subdirectories under your provider folder (e.g. `modelserver/gpu/vllm/gke/a4x` and `modelserver/gpu/vllm/gke/a4xmax` for GKE A4X/A4X Max / GB200/GB300 platforms) for platform-specific overlays. If your target hardware has specialized driver, memory, or network interconnect requirements, default provider settings may not adapt to your platform, and you should select the corresponding platform sub-overlay (for example, `export INFRA_PROVIDER=gke/a4xmax`).
@@ -253,7 +262,7 @@ SGLang-specific notes:
 
 * **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
 * **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
-* **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/architecture/advanced/disaggregation/operations-sglang.md).
+* **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/operations/disaggregation/sglang.md).
 
 </details>
 
@@ -263,7 +272,7 @@ SGLang-specific notes:
 > * Disaggregation lives in the llm-d Router (EPP) and is engine-agnostic, so SGLang P/D composes with the same prefix-cache-aware and load-aware routing as vLLM.
 > * SGLang P/D is **validated each release** on NVIDIA GPU but is not yet part of the nightly E2E CI that covers the vLLM path (the badges above).
 > * The SGLang P/D overlays are **NVIDIA GPU only** today; the AMD overlay (`modelserver/amd/vllm/`) provides vLLM P/D only.
-> * On the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts. See the [SGLang operations doc](../../docs/architecture/advanced/disaggregation/operations-sglang.md).
+> * On the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts. See the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md).
 
 ### 3. Enable Monitoring (optional)
 
@@ -295,7 +304,7 @@ In a P/D deployment the prefill and decode pools scale and fail independently, a
 
 #### Common failure modes
 
-* **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect NIXL transfer (see the [SGLang operations doc](../../docs/architecture/advanced/disaggregation/operations-sglang.md) for the prefill-side KV-strand caveat).
+* **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect NIXL transfer (see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
 * **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode `Deployment` needs more replicas or a larger TP degree.
 * **Both pools underutilized but latency high** — routing problem. Check the P/D decision ratio and EPP scheduler e2e latency before touching the model servers.
 
@@ -406,7 +415,7 @@ export GATEWAY_CLASS=istio
 
 `guide_pd-disaggregation_1.yaml` is a **dedicated workload profile** shipped with `llm-d-benchmark` specifically for this guide — it reproduces the saturation load used to generate the [graphs at the bottom of this guide](#benchmarking-report) (constant rate=45 with 45 workers and per-worker concurrency=100) and is shaped to highlight the strengths of the prefill-decode disaggregation pattern under load.
 
-Benchmark results are copied to the `workspace` directory that is specified by _you_ (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
+Benchmark results are copied to the `workspace` directory that is specified by *you* (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
 ```bash
 llmdbenchmark \
@@ -580,7 +589,7 @@ The following scripts run the same benchmark against a standard deployment and s
 * Deploy (16 replicas of TP=1, with a standard k8s service)
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/pd-disaggregation/baseline/manifest.yaml
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/baseline
 ```
 
 * Benchmark (using the same workload profile as the main run, but pointed at the baseline service rather than the EPP):

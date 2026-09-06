@@ -47,7 +47,8 @@ Skip it when your pool is **heterogeneous** — mixed GPU types, model variants,
 - Install the Gateway API Inference Extension CRDs:
 
   ```bash
-    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+    # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
 - Create a target namespace for the installation:
@@ -190,7 +191,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelser
 
 ### 3. Enable monitoring (optional)
 
-Follow [optimized-baseline → Enable monitoring](../optimized-baseline/README.md#3-optional-enable-monitoring) — the same steps apply since this guide reuses the same model server manifests.
+- Install the [Monitoring stack](../../docs/operations/observability/setup.md).
+- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+- For model server monitoring, follow [optimized-baseline → Enable monitoring](../optimized-baseline/README.md#3-optional-enable-monitoring) — the same steps apply since this guide reuses the same model server manifests.
 
 ## Send Requests
 
@@ -255,9 +258,9 @@ Sheddable requests (priority < 0) are rejected at admission when no endpoint can
 
 Once traffic is flowing, confirm three things in Prometheus (see the [architecture doc](../../docs/architecture/advanced/latency-predictor.md#observability) for the metric reference):
 
-1. **Predictions are being produced.** `inference_objective_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
-2. **Predictions track reality.** Compare `inference_objective_request_predicted_ttft_seconds` against `inference_objective_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
-3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `inference_objective_request_ttft_slo_violation_total` and `..._tpot_slo_violation_total` should increment only under genuine saturation.
+1. **Predictions are being produced.** `llm_d_epp_request_ttft_prediction_duration_seconds` has non-zero samples. If it stays empty, the predictor sidecar is not being called — tail the EPP logs for `predicted-latency-producer` errors.
+2. **Predictions track reality.** Compare `llm_d_epp_request_predicted_ttft_seconds` against `llm_d_epp_request_ttft_seconds` over a rolling window. A healthy deployment converges to within a few percent after warmup.
+3. **SLOs are being honored.** If you're sending SLO-annotated traffic, `llm_d_epp_request_slo_violation_total` should increment only under genuine saturation.
 
 ## Benchmarking
 
@@ -462,8 +465,12 @@ kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/aggregation/modelserver/gpu/vllm/${INFRA_PROVIDER} --ignore-not-found
 # for sglang deployments
 kubectl delete  -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER} --ignore-not-found
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 ## Troubleshooting
 

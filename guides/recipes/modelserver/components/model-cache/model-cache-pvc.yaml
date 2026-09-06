@@ -7,7 +7,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: model-cache
+  name: model-pvc
 spec:
   accessModes:
     - ReadWriteMany

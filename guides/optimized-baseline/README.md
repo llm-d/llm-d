@@ -21,28 +21,31 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 
 ## Configuration
 
-| Parameter          | Default                                                 | Example                                                 |
-| ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
+| Parameter          | Default                                                 | Example                                                           |
+| ------------------ | ------------------------------------------------------- | ----------------------------------------------------------------- |
 | Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
-| Replicas           | 8                                                       | 16                                                        |
-| Tensor Parallelism | 2                                                       | 1                                                         |
-| GPUs per replica   | 2                                                       | 1                                                         |
-| Total GPUs         | 16                                                      | 16                                                        |
+| Replicas           | 8                                                       | 16                                                                |
+| Tensor Parallelism | 2                                                       | 1                                                                 |
+| GPUs per replica   | 2                                                       | 1                                                                 |
+| Total GPUs         | 16                                                      | 16                                                                |
 
 ### Supported Hardware Backends
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | Directory          | Notes                                      |
-| ------------------- | ------------------ | ------------------------------------------ |
+| Backend             | Directory          | Notes                                                           |
+| ------------------- | ------------------ | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
-| AMD GPU             | `amd`              | AMD GPU                                    |
-| Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
-| Google TPU v6e      | `tpu/v6`           | GKE TPU                                    |
-| Google TPU v7       | `tpu/v7`           | GKE TPU                                    |
-| CPU                 | `cpu`              | x86 with bf16 acceleration — AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`. |
+| AMD GPU             | `amd`              | AMD GPU                                                         |
+| Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+                                 |
+| Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
+| Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
+| CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
+> "x86 with bf16 acceleration": AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`
+>
+>
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
 ## Prerequisites
@@ -78,7 +81,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MONITORING_VALUES=
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
@@ -106,13 +109,16 @@ source ${REPO_ROOT}/guides/env.sh
 > [!NOTE]
 > This file defines shared variables required by subsequent steps, including
 > `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
-> the selected deployment mode.
+> the selected deployment mode. `env.sh` always sets `ROUTER_CHART_VERSION=v0`
+> (the floating release channel); to pin a specific llm-d-router chart release,
+> re-export the variable after sourcing.
 
 - Install the Gateway API Inference Extension CRDs:
 
 <!-- guide:prerequisites.gaie start -->
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 <!-- guide:prerequisites.gaie end -->
 
@@ -160,22 +166,34 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> As denoted above, **vllm, sglang** share a values file, while  
+> As denoted above, **vllm, sglang** share a values file, while
 > **TensorRT-LLM** (`trtllm-serve`) has it's own values file.
 
 - Optionally, to enable `Prometheus Monitoring` on the `llm-d` router define the `helm` values file:
 
 <!-- guide:deploy.monitoring_values start -->
 ```bash
-# 
+#
 # Uncomment the below to enable Prometheus monitoring on the llm-d router
-# 
+#
+# Unlike the ROUTER_*_VALUES paths above, this variable carries its own
+# -f flag: it is empty by default, so the helm commands expand it as-is.
+#
 # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- guide:deploy.monitoring_values end -->
 
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
+<!-- This text is completely invisible in the rendered view -->
+> [!WARNING]
+> Enabling monitoring here requires the monitoring stack to be installed first. The
+> `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
+> Operator CRDs. Deploying the router with this file before the monitoring stack is ready
+> (see [Step 3: Enable monitoring](#3-optional-enable-monitoring)) will fail with a Helm
+> validation error. If you want monitoring enabled from the start, install the monitoring
+> stack before the router, or leave `MONITORING_VALUES` empty and `helm upgrade` with the
+> monitoring values after Step 3.
 
 #### Standalone Mode
 
@@ -208,6 +226,8 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 > [!IMPORTANT]
 > Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
+>
+> Also set `PROVIDER_NAME` to the gateway provider you deployed in step 1 (e.g. `gke`, `istio`). The default, `none`, renders no provider-specific resources — on GKE that means no `HealthCheckPolicy`, so the Gateway marks the backends unhealthy and requests fail with 503s.
 
 <!-- guide:deploy.gateway start -->
 ```bash
@@ -236,9 +256,9 @@ kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
 # only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
-# 
+#
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
-# 
+#
 # kubectl apply -n ${NAMESPACE} \
 #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
 #
@@ -274,6 +294,32 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
+### 4. Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+
+This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for the optimized baseline | Where to look |
+|--------|-------------------------------------------|---------------|
+| Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+
+> SGLang deployments expose the equivalent signals under `sglang_*` (`sglang_num_running_reqs`, `sglang_token_usage`, `sglang_cache_hit_rate`); the PromQL reference lists both.
+
+#### Common failure modes
+
+- **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter (see [Adapting to other hardware](#adapting-to-other-hardware)).
+- **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
+- **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
+
+For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
+
 ## Adapting to other hardware
 
 The routing plugins ship with defaults tuned for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2), so **no calibration is needed to run the guide as written**.
@@ -292,6 +338,36 @@ The recipe (`calibrate.sh`) runs a short Kubernetes Job that measures true prefi
 - [`guides/recipes/router/calibration/README.md`](../recipes/router/calibration/README.md)
 
 For reference values across the (model, accelerator) combinations shipped under `guides/` — and which ones still need a calibration run — see the [**configuration matrix**](../recipes/router/calibration/configuration-matrix.md).
+
+## Optional: Enable flow control
+
+Flow control lets the router hold excess requests in the EPP instead of immediately dispatching them to already busy model servers. Pairing it with the `concurrency-detector` caps the number of in-flight requests sent to each endpoint. That cap limits simultaneous demand on the endpoint's KV cache, which can reduce cache pressure, request preemption, and KV-cache thrashing.
+
+[`concurrencyMode`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency#configuration) determines the metric used to throttle workload per backend: in-flight requests, estimated in-flight tokens, or both.
+
+To enable it, add the feature gate, detector plugin, and `flowControl` section to the `EndpointPickerConfig` embedded in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml):
+
+```yaml
+featureGates:
+- flowControl
+
+plugins:
+# Keep the existing optimized-baseline plugins here.
+- type: concurrency-detector
+  parameters:
+    maxConcurrency: 8 # Example only; tune this for each endpoint's performance and latency constraints.
+    concurrencyMode: requests
+    headroom: 0.0
+
+flowControl:
+  maxBytes: "10Gi"
+  maxRequests: "1k"
+  defaultRequestTTL: "60s"
+  saturationDetector:
+    pluginRef: concurrency-detector
+```
+
+`maxConcurrency` applies to one model-server endpoint, not the whole pool. A lower value keeps more work in the EPP and reduces pressure on the model server, but setting it too low can leave the accelerator idle. A higher value keeps the engine fed, but setting it too high can increase local queueing and KV-cache pressure. Size `maxBytes` and `maxRequests` for the EPP's available memory and expected request bodies. See [Production Tuning: Deriving `maxConcurrency`](../flow-control/tuning.md) for the measurement procedure and detector trade-offs.
 
 ## Verification
 
@@ -434,9 +510,12 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
-
+```
+<!-- llm-d-cicd:skip start -->
+```bash
 kubectl delete namespace ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
 
 ## Benchmarking Reports

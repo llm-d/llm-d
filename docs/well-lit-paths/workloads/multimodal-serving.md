@@ -1,7 +1,7 @@
 # Multimodal Workload Serving
 
-Multimodal inputs are fundamentally changing the shape of production LLM traffic. 
-A single prompt expands beyond text to include dense, non-text modalities—high-resolution images, video frames, or audio clips. 
+Multimodal inputs are fundamentally changing the shape of production LLM traffic.
+A single prompt expands beyond text to include dense, non-text modalities—high-resolution images, video frames, or audio clips.
 Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin request scheduling strategies balance this load well.
 LLM requests break all three assumptions. Multimodal LLM requests (containing images, video, or audio) break them even further:
 
@@ -54,6 +54,7 @@ Both strategies need per-asset metadata (dimensions for images; duration, FPS, a
 ##### A. Dimension-Based Approximation (e.g., Qwen-VL)
 
 ###### Image
+
 Estimate tokens based on image width and height:
 $$\text{Tokens} = \frac{\text{Image Width} \times \text{Image Height}}{\text{Factor}}$$
 
@@ -94,6 +95,7 @@ estimate:
 Directly use fixed values from user configuration matching the model's support levels:
 
 ###### Image
+
 * Gemma 4 supported values: 70, 140, 280 (default), 560, or 1120 tokens per image.
 
 ###### Video
