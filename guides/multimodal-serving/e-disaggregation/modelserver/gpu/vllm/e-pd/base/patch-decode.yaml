@@ -36,9 +36,12 @@ spec:
             - "20"
             - "--port=8200"
             - "--ec-transfer-config"
-            # ec_cpu_bytes defines the capacity of the shared encoder cache in bytes.
-            # Increase it for workloads with large or numerous multimodal items.
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"ec_cpu_bytes": 4294967296}}'
+            # ec_cpu_bytes (required) sizes the shared CPU encoder cache for multimodal
+            # items, in bytes. Increase this value for workloads with large or numerous
+            # images to prevent cache evictions and costly re-encodings that degrade
+            # system performance. ec_enable_nixl moves the cached encoder outputs over
+            # the NIXL data plane instead of the local mmap region only.
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"ec_cpu_bytes": 1073741824, "ec_enable_nixl": true}}'
           env:
             - name: HF_TOKEN
               valueFrom:

@@ -11,6 +11,14 @@ router:
       e-p-d-config.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
+        # STALE CALIBRATION: every measured value below (token-producer `factor`,
+        # `peakPrefillThroughput`, `maxTTFTPenaltyMs`) was taken against
+        # Qwen3-VL-32B-Instruct on the vLLM build this profile used to pin. The
+        # profile now serves Qwen2.5-VL on the nightly image, because Qwen3-VL
+        # cannot start with a NixlConnector kv-transfer config
+        # (vllm-project/vllm#53699). The numbers have not been re-measured for the
+        # new model or image: treat them as placeholders, and recalibrate with
+        # guides/recipes/router/calibration before drawing conclusions from them.
         # Token-based routing, matching the optimized-baseline reference stack.
         # Prefill is token-load-aware: prefix-cache-affinity-filter selects the
         # endpoint set and token-load-scorer picks on queued prefill token load,

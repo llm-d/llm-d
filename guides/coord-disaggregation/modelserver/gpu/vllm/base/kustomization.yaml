@@ -6,15 +6,13 @@ resources:
 
 namePrefix: coord-disaggregation-nvidia-gpu-vllm-
 
-# TODO: Remove override once upstream vLLM includes encode-disaggregation support in an official release.
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/revit13/vllm-openai
-    newTag: 61e53561a
+# TODO: Switch to the release image once encode-disaggregation ships in an official vLLM release.
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
 
 labels:
   - pairs:
-      llm-d.ai/model: Qwen3-VL-32B-Instruct
+      llm-d.ai/model: Qwen2.5-VL-32B-Instruct
       llm-d.ai/guide: coord-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia

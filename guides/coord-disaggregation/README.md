@@ -76,7 +76,7 @@ topology choice:
 
 | Parameter          | Value                                                              |
 | ------------------ | ------------------------------------------------------------------ |
-| Model              | [Qwen/Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) |
+| Model              | [Qwen/Qwen2.5-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen2.5-VL-32B-Instruct) |
 | Roles              | encode, prefill, decode                                            |
 | Replicas per role  | encode: 2, prefill: 4, decode: 4 (encode: 0 in the PD-only deployment) |
 | Tensor Parallelism | 2                                                                   |
@@ -91,11 +91,19 @@ topology choice:
 
 > [!NOTE]
 > Encoder-cache transfer (`--ec-transfer-config`) is not yet in an official vLLM
-> release, so the model server manifests pin a dev build
-> (`ghcr.io/revit13/vllm-openai`) — the same one the
+> release, so the model server manifests pin the nightly build
+> (`docker.io/vllm/vllm-openai:nightly`) — the same one the
 > [Encode Disaggregation guide](../multimodal-serving/e-disaggregation/README.md)
-> uses. Replace the proprietary build with an official vLLM image once encoder-cache
-> transfer lands upstream.
+> uses. Switch to a release tag once encoder-cache transfer lands in one.
+
+> [!NOTE]
+> This guide previously served `Qwen/Qwen3-VL-32B-Instruct`. On the nightly image,
+> Qwen3-VL raises `IndexError` during engine start-up in any pod configured with a
+> NixlConnector `--kv-transfer-config`, which this guide sets on both prefill and
+> decode ([vllm-project/vllm#53699](https://github.com/vllm-project/vllm/pull/53699)),
+> so the default model is now Qwen2.5-VL. Any performance figures quoted for this
+> guide, and the calibration comments in `router/`, were taken with Qwen3-VL on the
+> earlier pinned build.
 
 ## Prerequisites
 
@@ -114,7 +122,7 @@ topology choice:
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="coord-disaggregation"
   export NAMESPACE="llm-d-coord-disaggregation"
-  export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
+  export MODEL_NAME="Qwen/Qwen2.5-VL-32B-Instruct"
   ```
 
 * Install the Gateway API Inference Extension CRDs:
@@ -401,7 +409,7 @@ kubectl run curl-debug --rm -it \
 curl -X POST http://${IP}:${PORT}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-32B-Instruct",
+        "model": "Qwen/Qwen2.5-VL-32B-Instruct",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -416,7 +424,7 @@ decode` pipeline:
 curl -X POST http://${IP}:${PORT}/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-VL-32B-Instruct",
+        "model": "Qwen/Qwen2.5-VL-32B-Instruct",
         "messages": [
             {
                 "role": "user",

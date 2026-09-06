@@ -8,11 +8,11 @@ namePrefix: e-p-d-disaggregation-nvidia-gpu-vllm-
 
 components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
-  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
 
 labels:
   - pairs:
-      llm-d.ai/model: Qwen3-VL-32B-Instruct
+      llm-d.ai/model: Qwen2.5-VL-32B-Instruct
       llm-d.ai/guide: e-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
