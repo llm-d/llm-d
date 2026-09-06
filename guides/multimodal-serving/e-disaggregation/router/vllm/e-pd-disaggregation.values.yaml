@@ -11,10 +11,6 @@ router:
       e-pd-config.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
-        # The measured values below were taken on the vLLM build this profile used
-        # to pin, not the nightly image it now uses. The model is unchanged
-        # (Qwen3-VL-32B-Instruct), so they remain indicative, but recalibrate with
-        # guides/recipes/router/calibration before relying on them.
         # Token-based routing, matching the optimized-baseline reference stack.
         # Prefill and decode are colocated on the `decode` profile, so it is routed
         # like a prefill pool: prefix-cache-affinity-filter + token-load-scorer
