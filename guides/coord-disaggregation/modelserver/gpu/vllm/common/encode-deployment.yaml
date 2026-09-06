@@ -27,10 +27,13 @@ spec:
             - "--enforce-eager"
             - "--no-enable-prefix-caching"
             - "--ec-transfer-config"
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer"}'
+            # ec_cpu_bytes (required) sizes the shared CPU encoder cache in bytes;
+            # ec_enable_nixl moves cached encoder outputs over the NIXL data plane.
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"ec_cpu_bytes": 1073741824, "ec_enable_nixl": true}}'
           env:
+            # Qwen2.5-VL, not Qwen3-VL: see the model note in the guide README (vllm-project/vllm#53699).
             - name: MODEL_NAME
-              value: "Qwen/Qwen3-VL-32B-Instruct"
+              value: "Qwen/Qwen2.5-VL-32B-Instruct"
             - name: VLLM_EC_SIDE_CHANNEL_HOST
               valueFrom:
                 fieldRef:
@@ -43,9 +46,6 @@ spec:
                   name: llm-d-hf-token
                   key: HF_TOKEN
                   optional: true
-            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
-            - name: USER
-              value: llm-d
           ports:
             - name: modelserver
               containerPort: 8000

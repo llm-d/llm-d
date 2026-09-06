@@ -18,7 +18,9 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-VL-32B-Instruct"
+            # Qwen2.5-VL, not Qwen3-VL: Qwen3-VL fails to start in any pod with a
+            # NixlConnector kv-transfer config on vLLM nightly (vllm-project/vllm#53699).
+            - "Qwen/Qwen2.5-VL-32B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
             - "--mm-processor-cache-gb"

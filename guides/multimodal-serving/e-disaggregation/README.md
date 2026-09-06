@@ -96,11 +96,19 @@ export ROUTER_INFERENCE_POOL_CREATE="true"
 
 For the vLLM E/P/D profile:
 
+> [!NOTE]
+> This profile serves Qwen2.5-VL, while the E/PD profile above serves Qwen3-VL. On
+> the current vLLM image, Qwen3-VL raises `IndexError` during engine start-up in any
+> pod configured with a NixlConnector `--kv-transfer-config`, which E/P/D sets on both
+> prefill and decode ([vllm-project/vllm#53699](https://github.com/vllm-project/vllm/pull/53699)).
+> E/PD is unaffected because its colocated decode carries no KV transfer config.
+> Restore Qwen3-VL here once that fix ships in the image.
+
 ```bash
 export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
-export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
+export MODEL_NAME="Qwen/Qwen2.5-VL-32B-Instruct"
 export INFRA_PROVIDER="gke" # base | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"

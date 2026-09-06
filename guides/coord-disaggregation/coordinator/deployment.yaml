@@ -4,7 +4,7 @@ metadata:
   name: llm-d-coordinator
   labels:
     app: llm-d-coordinator
-    llm-d.ai/model: Qwen3-VL-32B-Instruct
+    llm-d.ai/model: Qwen2.5-VL-32B-Instruct
 spec:
   replicas: 1
   selector:
@@ -14,7 +14,7 @@ spec:
     metadata:
       labels:
         app: llm-d-coordinator
-        llm-d.ai/model: Qwen3-VL-32B-Instruct
+        llm-d.ai/model: Qwen2.5-VL-32B-Instruct
     spec:
       terminationGracePeriodSeconds: 30
       containers:
@@ -67,8 +67,9 @@ spec:
         command: ["vllm", "launch", "render"]
         args: ["$(MODEL_NAME)", "--port=8000"]
         env:
+        # Qwen2.5-VL, not Qwen3-VL: see the model note in the guide README (vllm-project/vllm#53699).
         - name: MODEL_NAME
-          value: "Qwen/Qwen3-VL-32B-Instruct"
+          value: "Qwen/Qwen2.5-VL-32B-Instruct"
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:

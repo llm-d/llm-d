@@ -20,7 +20,9 @@ spec:
           image: REPLACE_MODEL_SERVER_IMAGE
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-VL-32B-Instruct"
+            # Qwen2.5-VL, not Qwen3-VL: Qwen3-VL fails to start in any pod with a
+            # NixlConnector kv-transfer config on vLLM nightly (vllm-project/vllm#53699).
+            - "Qwen/Qwen2.5-VL-32B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
             - "--trust-remote-code"
@@ -30,11 +32,12 @@ spec:
             - "--enforce-eager"
             - "--no-enable-prefix-caching"
             - "--ec-transfer-config"
-            # num_ec_blocks (Default: 100,000) defines the capacity of the shared encoder
-            # cache for multimodal items. Increase this value for workloads with large or
-            # numerous images to prevent cache evictions and costly re-encodings that
-            # degrade system performance.
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"num_ec_blocks": 1000000}}'
+            # ec_cpu_bytes (required) sizes the shared CPU encoder cache for multimodal
+            # items, in bytes. Increase this value for workloads with large or numerous
+            # images to prevent cache evictions and costly re-encodings that degrade
+            # system performance. ec_enable_nixl moves the cached encoder outputs over
+            # the NIXL data plane instead of the local mmap region only.
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"ec_cpu_bytes": 1073741824, "ec_enable_nixl": true}}'
           env:
             - name: VLLM_EC_SIDE_CHANNEL_HOST
               valueFrom:
