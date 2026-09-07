@@ -64,14 +64,25 @@ class DockerfileParser:
 
             # detect new build stage
             if line.upper().startswith('FROM'):
-                match = re.match(r'FROM\s+.*?\s+AS\s+(\w+)', line, re.IGNORECASE)
+                match = re.match(
+                    r'FROM\s+(?:(?:--\S+)\s+)*(?P<base>\S+)'
+                    r'(?:\s+AS\s+(?P<stage>\w+))?',
+                    line,
+                    re.IGNORECASE,
+                )
                 if match:
-                    self.current_stage = match.group(1)
+                    base_stage = match.group('base')
+                    self.current_stage = match.group('stage') or 'default'
                 else:
+                    base_stage = None
                     self.current_stage = 'default'
 
                 if self.current_stage not in self.stages:
-                    self.stages[self.current_stage] = {'ARG': set(), 'ENV': set()}
+                    inherited = self.stages.get(base_stage, {}) if base_stage else {}
+                    self.stages[self.current_stage] = {
+                        'ARG': set(inherited.get('ARG', set())),
+                        'ENV': set(inherited.get('ENV', set())),
+                    }
 
             # track ARG declarations
             elif line.upper().startswith('ARG'):
