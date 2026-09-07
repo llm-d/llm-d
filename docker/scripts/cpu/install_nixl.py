@@ -4,6 +4,7 @@ import subprocess
 import sys
 import argparse
 import glob
+from packaging.utils import InvalidWheelFilename, parse_wheel_filename
 
 # --- Configuration ---
 WHEELS_CACHE_HOME = os.environ.get("WHEELS_CACHE_HOME", "/workspace/wheels_cache")
@@ -34,12 +35,15 @@ def find_nixl_wheel_in_cache(cache_dir):
     """Finds a nixl wheel file in the specified cache directory."""
     # The repaired wheel will have a 'manylinux' tag, but this glob still works.
     search_pattern = os.path.join(cache_dir, "nixl*.whl")
-    wheels = glob.glob(search_pattern)
-    if wheels:
-        # Sort to get the most recent/highest version if multiple exist
-        wheels.sort()
-        return wheels[-1]
-    return None
+    wheels = []
+    for wheel in glob.glob(search_pattern):
+        try:
+            name, version, _, _ = parse_wheel_filename(os.path.basename(wheel))
+        except InvalidWheelFilename:
+            continue
+        if name == "nixl":
+            wheels.append((version, wheel))
+    return max(wheels)[1] if wheels else None
 
 
 def install_system_dependencies():
