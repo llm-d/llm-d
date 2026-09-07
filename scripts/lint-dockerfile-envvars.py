@@ -99,8 +99,34 @@ class DockerfileParser:
         return self.stages[stage]['ARG'] | self.stages[stage]['ENV']
 
 
-def find_script_runs(dockerfile_content: str) -> List[Tuple[str, str, int]]:
-    """find all RUN commands that execute scripts, return (stage, script_path, line_num)"""
+_RUN_ASSIGNMENT = re.compile(r'([A-Z_][A-Z0-9_]*)=.*')
+
+
+def _run_environment(command_prefix: str) -> Set[str]:
+    """Return environment assignments immediately before a script command."""
+    # Only inspect the current shell command.  Assignments in an earlier
+    # command (for example, ``echo x=1 &&``) do not affect the script.
+    command = re.split(r'&&|\|\||;', command_prefix)[-1].strip()
+    tokens = command.split()
+
+    # Docker's RUN flags are not shell environment assignments.
+    while tokens and tokens[0].startswith('--'):
+        tokens.pop(0)
+    if tokens and tokens[0] == 'env':
+        tokens.pop(0)
+
+    assignments: Set[str] = set()
+    while tokens:
+        match = _RUN_ASSIGNMENT.fullmatch(tokens[0])
+        if not match:
+            break
+        assignments.add(match.group(1))
+        tokens.pop(0)
+    return assignments
+
+
+def find_script_runs(dockerfile_content: str) -> List[Tuple[str, str, int, Set[str]]]:
+    """Find RUN scripts and command-level environment assignments."""
     runs = []
     current_stage = None
     line_num = 0
@@ -120,11 +146,17 @@ def find_script_runs(dockerfile_content: str) -> List[Tuple[str, str, int]]:
         # find script executions
         if stripped.upper().startswith('RUN'):
             # match: RUN /path/to/script.sh or RUN chmod ... && /path/to/script.sh
-            script_matches = re.findall(r'(/[^\s]+\.sh)', stripped)
-            for script in script_matches:
+            command = stripped[3:].strip()
+            for match in re.finditer(r'(/[^\s]+\.sh)', command):
+                script = match.group(1)
                 # normalize path (remove /tmp/ prefix if present)
                 script_name = Path(script).name
-                runs.append((current_stage, script_name, line_num))
+                runs.append((
+                    current_stage,
+                    script_name,
+                    line_num,
+                    _run_environment(command[:match.start()]),
+                ))
 
     return runs
 
@@ -138,7 +170,7 @@ def lint_dockerfile(dockerfile_path: Path, scripts_dir: Path) -> Tuple[bool, Lis
 
     errors = []
 
-    for stage, script_name, line_num in script_runs:
+    for stage, script_name, line_num, run_env in script_runs:
         # find the script file
         script_path = None
         for candidate in scripts_dir.rglob(script_name):
@@ -154,7 +186,7 @@ def lint_dockerfile(dockerfile_path: Path, scripts_dir: Path) -> Tuple[bool, Lis
             continue  # no requirements declared
 
         # get available vars in this stage
-        available_vars = parser.get_available_vars(stage)
+        available_vars = parser.get_available_vars(stage) | run_env
 
         # check for missing vars
         missing = required_vars - available_vars
