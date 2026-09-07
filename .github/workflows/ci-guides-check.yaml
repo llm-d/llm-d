@@ -5,7 +5,8 @@ name: CI Guides Check
 # relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`),
 # when a guide's `support:` matrix disagrees with its overlays or nightly E2E
 # workflows, or when the llm-d.ai publish manifest is invalid, and runs the
-# unit tests under scripts/tests/.
+# Python tests under scripts/tests/ and docker/scripts/cpu/, plus
+# nightly E2E verification, smoke-test, and async-multitenant tests.
 
 on:
   pull_request:
@@ -22,6 +23,7 @@ on:
       - scripts/matrix_common.py
       - scripts/seed-release-badges.py
       - scripts/tests/**
+      - docker/scripts/cpu/**
       - .github/scripts/nightly-e2e-verification/**
       - docs/operations/validation/smoke-test/**
   workflow_dispatch:
@@ -51,7 +53,7 @@ jobs:
           cache-dependency-path: .github/workflows/ci-guides-check.yaml
 
       - name: Install dependencies
-        run: python -m pip install --quiet 'pyyaml==6.*' pytest
+        run: python -m pip install --quiet 'pyyaml==6.*' 'packaging>=24.2' pytest
 
       - name: Check rendered READMEs are current
         run: python scripts/guide.py render guides/*/ guides/models/*/ guides/fast-model-actuation/fast-model-actuation-keda/ guides/batch-serving/asynchronous-processing/multitenant/ --check
@@ -61,4 +63,4 @@ jobs:
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
 
       - name: Run Python tests
-        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ .github/scripts/e2e/async-multitenant/ -v
+        run: python -m pytest scripts/tests/ docker/scripts/cpu/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ .github/scripts/e2e/async-multitenant/ -v
