@@ -174,7 +174,7 @@ Build it and push to a registry your cluster can pull from:
 ```bash
 export BASE_MODELSERVER_IMAGE=$(
   yq -r '.images[] | select(.name == "REPLACE_MODEL_SERVER_IMAGE") | "\(.newName):\(.newTag)"' \
-    ${REPO_ROOT}/guides/recipes/modelserver/components/images/gpu-vllm/kustomization.yaml
+    ${REPO_ROOT}/guides/recipes/modelserver/components/images/gpu-vllm/release/kustomization.yaml
 )
 export MODELSERVER_IMAGE=<your-registry>/modelexpress-p2p-vllm:latest
 docker build \
