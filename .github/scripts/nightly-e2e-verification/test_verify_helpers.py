@@ -199,6 +199,12 @@ class TestGetVllmVersion(unittest.TestCase):
         self.assertEqual(v.get_vllm_version("ns", "pod"), (0, 24, 0))
 
     @patch("verify_helpers.kubectl")
+    def test_normalizes_abbreviated_rc_version(self, mock_kubectl):
+        # vLLM may omit the patch component when reporting a release candidate.
+        mock_kubectl.return_value = "0.24rc1"
+        self.assertEqual(v.get_vllm_version("ns", "pod"), (0, 24, 0))
+
+    @patch("verify_helpers.kubectl")
     def test_stops_at_non_digit_segment(self, mock_kubectl):
         # First non-digit-led segment stops the parse entirely.
         mock_kubectl.return_value = "0.24.dev0"
