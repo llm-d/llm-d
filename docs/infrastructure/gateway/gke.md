@@ -83,10 +83,114 @@ llm-d-inference-gateway   gke-l7-regional-external-managed   xx.xx.xx.xx     Tru
 
 Wait until `PROGRAMMED` shows `True` before proceeding.
 
-## Step 4: Send a Request
+## Step 4: Deploy a Model Serving Workload
+
+Before sending inference requests through the Gateway, you must deploy a model server (such as vLLM), an `InferencePool`, and an `HTTPRoute` connecting the Gateway to the pool. You can deploy using a standard baseline or enable High Availability.
+
+### Option A: Standard Deployment (Well-Lit Path)
+
+Deploy one of the well-lit path guides with the GKE Gateway provider enabled:
+
+1. **Deploy the llm-d Router in Gateway mode:**
+
+```bash
+export PROVIDER_NAME=gke
+helm install ${GUIDE_NAME} \
+  ${ROUTER_GATEWAY_CHART} \
+  -f ${ROUTER_BASE_VALUES} \
+  ${MONITORING_VALUES} \
+  -f ${ROUTER_VALUES} \
+  --set provider.name=${PROVIDER_NAME} \
+  --set httpRoute.create=true \
+  --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+2. **Deploy the model server with the GKE overlay:**
+
+```bash
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export MODEL_SERVER=vllm    # options: vllm, sglang, trtllm
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/gke/
+```
+
+### Option B: High Availability with Preferred Backends
+Deploying Endpoint Picker (EPP) with [GKE Preferred Backends](https://docs.cloud.google.com/load-balancing/docs/service-lb-policy#preferred-backends) enables an active-passive routing topology backed by Cloud Load Balancing. Steady-state ext_proc traffic routes exclusively to the primary EPP replica (epp-0) to keep KV-cache tracking and request state centralized. If epp-0 becomes unhealthy, Cloud Load Balancing shifts traffic to the warm standby replica (epp-1), with InferencePool fail-open mode providing an additional safety net against dropped requests.
+
+#### Key Benefits
+* **State Consistency**: Directs 100% of steady-state `ext_proc` traffic to the primary EPP instance (`epp-0`), preserving KV-cache state and request scheduling context.
+* **Zero-Downtime Failover**: If the primary EPP pod crashes or undergoes maintenance, Cloud Load Balancer detects the failure via active gRPC health checks and immediately routes traffic to the warm standby replica (`epp-1`).
+* **Fail-Open Resilience**: Paired with `failureMode: FailOpen` on the `InferencePool`, transient routing blips bypass EPP and forward directly to model servers without dropping user requests.
+
+#### 1. **Deploy the llm-d Router with Preferred Backends enabled:**
+> [!NOTE]
+> When Preferred Backends is enabled, the chart deploys a single StatefulSet where pod ordinals map to target priority tiers and generates corresponding GCPBackendPolicy resources for each tier.
+
+```bash
+export PROVIDER_NAME=gke
+helm install ${GUIDE_NAME} \
+  ${ROUTER_GATEWAY_CHART} \
+  -f ${ROUTER_BASE_VALUES} \
+  ${MONITORING_VALUES} \
+  -f ${ROUTER_VALUES} \
+  --set provider.name=${PROVIDER_NAME} \
+  --set provider.gke.preferredBackends.enabled=true \
+  --set provider.gke.preferredBackends.preferredReplicas=1 \
+  --set provider.gke.preferredBackends.defaultReplicas=1 \
+  --set httpRoute.create=true \
+  --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+Key configuration parameters (see [`values.yaml`](https://github.com/llm-d/llm-d-router/blob/main/config/charts/llm-d-router-gateway/values.yaml)):
+* `preferredReplicas` (Default: `1`): the replica count for active primary pod ordinals pinned to the `PREFERRED` backend preference tier (`epp-0`). Setting a value greater than 1 scales concurrent active routing capacity.
+* `defaultReplicas` (Default: `1`): the replica count for standby pod ordinals pinned to the `DEFAULT` backend preference tier (`epp-1`). Setting a value greater than 1 scales warm standby failover capacity.
+* `balancingMode` (Default: `RATE`): the [calculation mode](https://docs.cloud.google.com/load-balancing/docs/backend-service#traffic_distribution) used to determine load thresholds (`RATE`, `UTILIZATION`, or `CONNECTION`).
+* `maxRatePerEndpoint` (Default: `100`): the maximum requests per second per pod instance before spilling over to standby tiers.
+* `capacityScalerPercent` (Default: `100`): the effective capacity ceiling percentage (0 to 100).
+
+#### 2. **Deploy the model server with the GKE overlay:**
+
+```bash
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export MODEL_SERVER=vllm    # options: vllm, sglang, trtllm
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/gke/
+```
+
+#### 3. **Discover and attach the primary Preferred Network Endpoint Groups (NEGs) across zones to the generated Google Cloud `BackendService`:**
+
+> [!NOTE]
+> The `InferencePool` resource natively targets the standby backup Service (`Service/${GUIDE_NAME}-epp-backup`).
+> Anchoring declarative Gateway ownership to the standby Service ensures that GKE Gateway Controller reconciliation loops do not detach manually attached primary NEGs during pod restarts or updates.
+
+```bash
+export PROJECT="<your GCP project>"
+export REGION="<your GCP region>"
+export NAMESPACE="<your namespace>"
+export GUIDE_NAME="<llm-d guide name>"
+
+export BACKEND_SERVICE=$(gcloud compute backend-services list --project=${PROJECT} --format="value(name)" | grep "${GUIDE_NAME}-epp")
+
+export PRIMARY_NEG=$(kubectl get svc ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.metadata.annotations.cloud\.google\.com/neg-status}' | jq -r '.network_endpoint_groups["9002"]')
+
+for ZONE in $(kubectl get svc ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.metadata.annotations.cloud\.google\.com/neg-status}' | jq -r '.zones[]'); do
+  gcloud compute backend-services add-backend ${BACKEND_SERVICE} \
+    --network-endpoint-group=${PRIMARY_NEG} \
+    --network-endpoint-group-zone=${ZONE} \
+    --region=${REGION} \
+    --project=${PROJECT} \
+    --balancing-mode=RATE \
+    --max-rate-per-endpoint=100
+  sleep 15
+done
+```
 
 > [!IMPORTANT]
-> Before sending requests, you must deploy a well-lit path guide. This sets up a model server deployment, an `InferencePool`, and an `HTTPRoute` to connect the Gateway to the pool.
+> Once zonal NEGs are attached to the Google Cloud `BackendService`, scaling replica counts (`preferredReplicas` or `defaultReplicas`) or restarting pods does not require running `gcloud` commands again. The GKE NEG Controller automatically synchronizes individual pod IP endpoints into the registered zonal NEGs.
+>
+> If you delete and recreate the parent `Gateway` or `InferencePool` resource, the GKE Gateway Controller recreates the underlying Google Cloud `BackendService` with a new cloud identifier. In that event, execute the attachment workflow above to attach primary zonal NEGs to the newly created `BackendService`.
+
+## Step 5: Send a Request
 
 Get the `Gateway` external address:
 
