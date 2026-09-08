@@ -1,0 +1,13 @@
+# Kueue quota objects for GPU-budget rebalancing across model deployments.
+#
+# ResourceFlavor and ClusterQueue are cluster-scoped, so this overlay is applied
+# once per cluster; LocalQueue is namespaced and pins the workload namespace.
+# Rename the queues before applying if another namespace on the same cluster
+# already uses these ClusterQueue names.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - resourceflavor.yaml
+  - clusterqueues.yaml
+  - localqueues.yaml

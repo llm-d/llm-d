@@ -1,0 +1,63 @@
+# One ClusterQueue per model, both in the same cohort.
+#
+#   nominalQuota  the model's guaranteed floor - it can always reclaim this much
+#   cohortName    the pool the floors are lent into and borrowed from
+#
+# The floors sum to the physical GPU count (5 + 5 = 10), replacing the
+# `requests.nvidia.com/gpu: "10"` ResourceQuota used by the replica rebalancer.
+# Set them to the GPUs actually installed: `kubectl describe nodes | grep nvidia.com/gpu`.
+#
+# Kueue accounting is nominal, not physical. Quota larger than the cluster admits
+# pods the scheduler then cannot place, so they sit Pending as Unschedulable
+# instead of gated.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: model-a-cq
+spec:
+  # Same cohort in both queues: idle GPUs are lent across models.
+  cohortName: llm-d-gpu
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["nvidia.com/gpu", "cpu", "memory"]
+      flavors:
+        - name: gpu-default
+          resources:
+            # model-a's guaranteed floor; it borrows above this when model-b is idle.
+            - name: "nvidia.com/gpu"
+              nominalQuota: 5
+            # cpu and memory are deliberately generous. Every resource a pod
+            # requests must be covered by the ClusterQueue or its Workload is
+            # inadmissible, and GPU must stay the only binding constraint.
+            - name: "cpu"
+              nominalQuota: 200
+            - name: "memory"
+              nominalQuota: 2000Gi
+  preemption:
+    # Take lent GPUs back on demand: a pod that fits inside its own floor may
+    # preempt a pod from another queue in the cohort that is over its floor.
+    reclaimWithinCohort: Any
+    # Within one model, evict the newest replica first.
+    withinClusterQueue: LowerOrNewerEqualPriority
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: model-b-cq
+spec:
+  cohortName: llm-d-gpu
+  namespaceSelector: {}
+  resourceGroups:
+    - coveredResources: ["nvidia.com/gpu", "cpu", "memory"]
+      flavors:
+        - name: gpu-default
+          resources:
+            - name: "nvidia.com/gpu"
+              nominalQuota: 5
+            - name: "cpu"
+              nominalQuota: 200
+            - name: "memory"
+              nominalQuota: 2000Gi
+  preemption:
+    reclaimWithinCohort: Any
+    withinClusterQueue: LowerOrNewerEqualPriority
