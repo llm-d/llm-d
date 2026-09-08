@@ -6,8 +6,6 @@ spec:
   replicas: 3
   template:
     spec:
-      nodeSelector:
-        cloud.google.com/gke-accelerator: nvidia-h100-80gb
       tolerations:
         - key: nvidia.com/gpu
           operator: Exists
