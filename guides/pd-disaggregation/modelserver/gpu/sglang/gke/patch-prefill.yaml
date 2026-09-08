@@ -43,7 +43,6 @@ spec:
             capabilities:
               add:
                 - IPC_LOCK
-                - SYS_RAWIO
           resources:
             limits:
               cpu: "64"
