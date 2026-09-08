@@ -124,12 +124,19 @@ def get_vllm_version(namespace: str, pod: str) -> tuple[int, ...] | None:
     ).strip()
     if not out:
         return None
+    segments = out.split(".")
     parts: list[int] = []
-    for seg in out.split("."):
+    for seg in segments:
         m = re.match(r"\d+", seg)
         if not m:
             break
         parts.append(int(m.group()))
+    # PEP 440 permits omitting a trailing zero, e.g. ``0.24rc1``.  Keep the
+    # tuple shape stable for callers that compare it with ``(major, minor,
+    # patch)``.  A dotted pre-release such as ``0.24.dev0`` deliberately keeps
+    # its two-part tuple so it remains below the corresponding final release.
+    if len(parts) == 2 and len(segments) == 2:
+        parts.append(0)
     return tuple(parts) if parts else None
 
 # ---------------------------------------------------------------------------
