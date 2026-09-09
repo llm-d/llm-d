@@ -1,0 +1,48 @@
+## Overlay for LMetric routing experiments.
+## Layer after precise-prefix-cache-routing.values.yaml.
+## Requires a router image that includes the lmetric-scorer plugin.
+router:
+  epp:
+    pluginsConfigFile: "precise-prefix-cache-routing-lmetric-plugins.yaml"
+    pluginsCustomConfig:
+      precise-prefix-cache-routing-lmetric-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              modelName: Qwen/Qwen3-32B
+              vllm:
+                url: "http://precise-prefix-cache-routing-render:8000"
+          - type: endpoint-notification-source
+          - type: inflight-load-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: precise-prefix-cache-producer
+            parameters:
+              tokenProcessorConfig:
+                blockSizeTokens: 64
+              speculativeIndexing: true
+              indexerConfig:
+                kvBlockIndexConfig:
+                  enableMetrics: true
+              kvEventsConfig:
+                topicFilter: "kv@"
+                concurrency: 8
+                discoverPods: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+          - type: lmetric-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              inFlightLoadProducerName: inflight-load-producer
+        dataLayer:
+          sources:
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: lmetric-scorer
+                weight: 1.0
