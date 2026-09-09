@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pd-multi-tier-render
+spec:
+  # vLLM serves /v1/completions/render on each prefill engine.
+  selector:
+    llm-d.ai/guide: pd-disaggregation
+    llm-d.ai/model: gpt-oss-120b
+    llm-d.ai/role: prefill
+  ports:
+    - name: render-http
+      port: 8000
+      targetPort: 8000
