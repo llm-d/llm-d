@@ -1,0 +1,21 @@
+# Minimal "for now" image: validated ROCm nightly + LMCache v0.5.3 built from source.
+# Base is pinned to the EXACT image the single-GPU round-trip was validated on
+# (rocm/vllm-dev:nightly, vLLM v0.23.1rc1.dev1120, unified KV cache layout).
+# LMCache v0.5.3 is required for that layout (v0.5.0 -> Unsupported EngineKVFormat).
+ARG BASE_IMAGE=rocm/vllm-dev:nightly
+FROM ${BASE_IMAGE}
+
+ARG LMCACHE_VERSION=v0.5.3
+# gfx950 = MI350X/MI355X. Use gfx942 for MI300X/MI325X (or list both, space-separated).
+ARG PYTORCH_ROCM_ARCH=gfx950
+
+RUN git clone https://github.com/LMCache/LMCache.git /opt/LMCache && \
+    cd /opt/LMCache && \
+    git checkout ${LMCACHE_VERSION} && \
+    pip install -r requirements/build.txt && \
+    PYTORCH_ROCM_ARCH="${PYTORCH_ROCM_ARCH}" TORCH_DONT_CHECK_COMPILER_ABI=1 \
+      CXX=hipcc BUILD_WITH_HIP=1 \
+      pip install -e . --no-build-isolation && \
+    python -c "import lmcache; print('lmcache', lmcache.__version__)"
+
+ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
