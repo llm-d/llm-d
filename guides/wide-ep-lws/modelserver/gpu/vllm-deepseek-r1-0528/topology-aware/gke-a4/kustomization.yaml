@@ -1,6 +1,0 @@
-# Same as the topology-aware gke overlay; kept as a separate overlay to
-# preserve the gke-a4 provider path.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - ../gke

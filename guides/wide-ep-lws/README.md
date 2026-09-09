@@ -51,7 +51,6 @@ This guide includes configurations for the following accelerators:
 | Backend | Directory | Notes |
 | --- | --- | --- |
 | NVIDIA GPU (GKE) | `modelserver/gpu/vllm-deepseek-r1-0528/gke/` | GKE deployment (H200) |
-| NVIDIA GPU (GKE A4) | `modelserver/gpu/vllm-deepseek-r1-0528/topology-aware/gke-a4/` | GKE deployment (B200) |
 | NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm-deepseek-r1-0528/coreweave/` | CoreWeave deployment |
 | NVIDIA GPU (GB200) | `modelserver/gpu/vllm-deepseek-r1-0528/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
 | Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
@@ -163,7 +162,7 @@ The NVIDIA GPU path deploys a single `DisaggregatedSet` that manages the prefill
 
 ```bash
 # NVIDIA GPU
-export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200, topology-aware/gke, topology-aware/gke-a4
+export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 
 # Intel XPU
@@ -183,17 +182,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/x
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-```
-
-### 4. (Optional) Topology Aware Scheduling (TAS)
-
-For information on how to use topology aware scheduling using Kueue, see [LWS + TAS user guide](https://lws.sigs.k8s.io/docs/examples/tas/). To deploy the guide with TAS enabled, use the following command:
-
-```bash
-# H200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/topology-aware/gke
-# B200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/topology-aware/gke-a4
 ```
 
 ## Verification
