@@ -57,3 +57,36 @@ accelerator, and topology, so compare results within each sub-guide.
 The guides report request-level throughput, TTFT, and ITL, plus session or task metrics where
 the benchmark provides them. Replaying complete agent dependency graphs with tool timing and
 sub-agent fan-out remains a separate evaluation mode.
+
+### Task-completion benchmarking (`eval-containers`)
+
+The load generators above measure how fast the stack serves an agentic *shape*. A second,
+complementary mode drives a **real coding agent** against the deployed endpoint and scores
+whether it solved the tasks:
+[`benchmark-templates/agentic-serving-eval-containers.yaml`](benchmark-templates/agentic-serving-eval-containers.yaml)
+runs the `eval-containers` harness through
+[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) on the
+[aider-polyglot](https://github.com/Aider-AI/polyglot-benchmark) task set (Exercism
+code-editing across 6 languages, fully offline).
+
+It reports **reward** — the fraction of tasks solved — rather than latency, which catches a
+class of regression throughput cannot see: a broken tool-call parser, reasoning traces leaking
+into content, or truncation mid-solution each leave TTFT and ITL healthy while the agent
+silently fails every task. A uniform reward of 0.0 across tasks indicates a transport or parser
+fault; a spread indicates genuine task difficulty.
+
+The template is model-agnostic — the harness reads the served handle from the deployment — so it
+applies to any of the deployments above, and to smaller models where a cheap, repeatable signal
+matters more than frontier scale. Render and run it as with the other templates:
+
+```bash
+export NAMESPACE=<your-namespace>
+export IP=$(kubectl get service <guide>-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+export BENCHMARK_PVC=benchmark-results
+export MODEL=<exact handle the stack serves>
+export TASKS=50 EVAL_TIMEOUT=1500
+envsubst < ${REPO_ROOT}/guides/agentic-serving/benchmark-templates/agentic-serving-eval-containers.yaml > config.yaml
+```
+
+Note `TASKS` is also the pod fan-out: the eval runs one agent pod per task, so size it off free
+accelerators rather than off the task count.
