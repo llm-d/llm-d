@@ -68,7 +68,7 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily
+    - cron: '0 6 * * *'  # 06:00 UTC daily
 
 permissions:
   contents: write
@@ -80,7 +80,7 @@ concurrency:
 
 jobs:
   nightly:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@splice_connector_into_guide_path
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}

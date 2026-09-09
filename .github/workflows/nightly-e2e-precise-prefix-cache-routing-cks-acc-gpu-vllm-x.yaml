@@ -58,9 +58,9 @@ on:
         default: 'nightly'
         type: 'string'
       harness_resources:
-        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 24/48Gi)'
         required: false
-        default: '32/64Gi'
+        default: '24/48Gi'
         type: 'string'
 
 #  push:
@@ -80,7 +80,7 @@ concurrency:
 
 jobs:
   nightly:
-    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@splice_connector_into_guide_path
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
@@ -106,7 +106,7 @@ jobs:
 #      workload: ${{ inputs.workload || 'guide_precise-prefix-cache-routing_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
-      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
+      harness_resources: ${{ inputs.harness_resources || '24/48Gi' }}
     secrets: inherit
 
   update-badge:
