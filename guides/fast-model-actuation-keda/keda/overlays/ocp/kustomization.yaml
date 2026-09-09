@@ -1,20 +1,20 @@
-# OpenShift overlay for the FMA + KEDA saturation autoscaling guide.
+# OpenShift overlay for the FMA + KEDA scale-from-zero autoscaling guide.
 #
 # On OpenShift, metrics live in Thanos Querier, whose :9091 endpoint rejects
 # unauthenticated queries with a 401 -- and KEDA suppresses that error and
 # silently serves `fallback` replicas, so an unauthenticated trigger looks
-# healthy while autoscaling does nothing. This overlay makes the saturation path
+# healthy while autoscaling does nothing. This overlay makes the queue-depth path
 # work on OpenShift by:
-#   - pointing both triggers at Thanos Querier and enabling bearer auth, and
+#   - pointing the trigger at Thanos Querier and enabling bearer auth, and
 #   - provisioning a dedicated metrics-reader ServiceAccount + token Secret and
 #     repointing the TriggerAuthentication at that token. On OpenShift the
 #     service-ca operator injects `service-ca.crt` (the CA that signs Thanos's
 #     serving cert) into the token Secret automatically -- so the guide's manual
 #     prometheus-token copy step is not needed on OpenShift.
 #
-# NOTE: the PromQL label selectors inside the trigger queries are opaque strings
-# kustomize cannot reach -- edit inference_pool / model_name in the ScaledObject
-# query patch in ../../base/kustomization.yaml to match your EPP pool and model.
+# NOTE: the PromQL label selector inside the trigger query is an opaque string
+# kustomize cannot reach -- edit inference_pool in the ScaledObject query patch
+# in ../../base/kustomization.yaml to match your EPP pool.
 #
 # Build:  kubectl kustomize guides/fast-model-actuation-keda/keda/overlays/ocp
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -23,9 +23,9 @@ kind: Kustomization
 resources:
   - ../../base
   # EPP -> user-workload-monitoring scrape path (the standalone router chart
-  # ships no ServiceMonitor): make the pool-saturation metric reach Thanos. The
-  # SA's token authorizes the scrape; the matching /metrics-reader CRB is
-  # imperative in the RBAC step.
+  # ships no ServiceMonitor): make the flow-control queue-depth metric reach
+  # Thanos. The SA's token authorizes the scrape; the matching /metrics-reader
+  # CRB is imperative in the RBAC step.
   - epp-servicemonitor.yaml
   - epp-metrics-reader-serviceaccount.yaml
   - epp-metrics-reader-token.yaml
@@ -50,7 +50,7 @@ patches:
     target:
       kind: TriggerAuthentication
       name: prometheus-auth
-  # Point both triggers at Thanos Querier and enable bearer authentication.
+  # Point the queue-depth trigger at Thanos Querier and enable bearer authentication.
   - patch: |-
       - op: replace
         path: /spec/triggers/0/metadata/serverAddress
@@ -58,12 +58,6 @@ patches:
       - op: add
         path: /spec/triggers/0/metadata/authModes
         value: "bearer"
-      - op: replace
-        path: /spec/triggers/1/metadata/serverAddress
-        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
-      - op: add
-        path: /spec/triggers/1/metadata/authModes
-        value: "bearer"
     target:
       kind: ScaledObject
-      name: fast-model-actuation-keda-saturation
+      name: fast-model-actuation-keda-queue

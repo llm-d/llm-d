@@ -7,7 +7,7 @@ kind: Kustomization
 #   kubectl kustomize modelserver/<accelerator>/<backend>/.../base
 # and reads the served model from a Deployment's container args. FMA's real
 # model is declared in an InferenceServerConfig (reused from the base
-# fast-model-actuation guide and patched to Qwen3-32B in ../../kustomization.yaml),
+# fast-model-actuation guide and patched to Qwen3-0.6B in ../../kustomization.yaml),
 # which has no container args, so that step cannot detect it and fails.
 #
 # This overlay exists ONLY to satisfy that model auto-detection: it emits a

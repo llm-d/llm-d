@@ -12,14 +12,11 @@ env:
     # step copies the prometheus-token secret from here into ${NAMESPACE}.
     MONITORING_NAMESPACE: { default: "llm-d-monitoring" }
 
-    # FMA controller/CRD/image version. This guide reuses the base
-    # fast-model-actuation guide's manifests, so the pinned launcher/requester
-    # image tags live in guides/fast-model-actuation/{modelserver/launcherconfig.yaml,
-    # requester/deployment.yaml}; bump them there alongside this on upgrade.
+    # FMA controller/CRD/image version.
     FMA_VERSION:             { default: "0.6.5" }
     FMA_CHART_INSTANCE_NAME: fma
 
-    MODEL:           { default: "Qwen/Qwen3-32B" }
+    MODEL:           { default: "Qwen/Qwen3-0.6B" }
 
     # VERIFICATION
     CURL_TEST_IMAGE: { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
@@ -59,13 +56,13 @@ deploy:
   rbac:
     - run: |
         # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator.
-        # Reused verbatim from the base fast-model-actuation guide (identical RBAC).
+        # Reused verbatim from the base guide (identical RBAC).
         kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml
 
         # ServiceAccount + Role (namespaced): the launcher pods run as the
         # fma-launcher ServiceAccount so the state-change-reflector sidecar can
         # patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
-        # annotation). Reused verbatim from the base fast-model-actuation guide.
+        # annotation). Reused verbatim from the base guide.
         kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml
 
         # RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
@@ -122,15 +119,14 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
-  # AND the server-requesting pods together. The requester Deployment starts at
-  # replicas: 1 (the KEDA floor); KEDA scales it from there.
+  # AND the server-requesting pods together.
   modelserver:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
-  # KEDA saturation autoscaling of the requester Deployment. On OpenShift the
+  # KEDA scale-from-zero autoscaling of the requester Deployment. On OpenShift the
   # ScaledObject/TriggerAuthentication, the EPP ServiceMonitor, and the
   # metrics-reader RBAC (keda/overlays/ocp) are deployed together with the model
   # server -- ../keda/overlays/ocp is a resource of modelserver/ -- so there is
@@ -139,7 +135,7 @@ deploy:
   keda:
     - run: |
         kubectl wait --for=condition=Ready --timeout=120s \
-          scaledobject/fast-model-actuation-keda-saturation -n ${NAMESPACE}
+          scaledobject/fast-model-actuation-keda-queue -n ${NAMESPACE}
 
 verify:
   endpoint:
@@ -147,54 +143,27 @@ verify:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
     request:
+      # Baseline sanity check.
       - run: |
           kubectl run curl-test --rm -i --restart=Never \
-            --image=${CURL_TEST_IMAGE} \
-            --namespace="${NAMESPACE}" \
-            --env="IP=${IP}" \
-            --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
-    warm_start:
-      # WARM start: with launchers up but no sleeping vLLM to wake, scaling the
-      # requester creates a NEW vLLM instance on an existing launcher, reusing the
-      # launcher's already-loaded Python modules (faster than a cold launcher).
-      # KEDA is paused first so the HPA does not immediately reconcile the manual
-      # scale; it is resumed at the end of the hot-start demo.
-      - run: kubectl annotate scaledobject fast-model-actuation-keda-saturation -n ${NAMESPACE} autoscaling.keda.sh/paused="true" --overwrite
-      - run: kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
-      - run: time kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
-      - run: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=dual-pods-controller --tail=500 | grep -i "create_instance" || true
-    hot_start:
-      # HOT start: scaling to 0 puts the vLLM instances to SLEEP (tensors stay in
-      # GPU memory); scaling back up WAKES them, resuming in seconds -- no model
-      # load, no CUDA graph recompile. Then resume KEDA autoscaling.
-      #
-      # KEDA is paused first so the HPA does not immediately reconcile the manual
-      # scale; it is resumed at the end.
-      - run: kubectl annotate scaledobject fast-model-actuation-keda-saturation -n ${NAMESPACE} autoscaling.keda.sh/paused="true" --overwrite
-      - run: |
-          set -eu
-          IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-          kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=0
-          kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
-          # Confirm the launcher actually went to sleep before we wake it.
-          kubectl wait pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
-            --for='jsonpath={.metadata.labels.dual-pods\.llm-d\.ai/sleeping}=true' \
-            --timeout=120s
-          kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
-          time kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=120s
-          kubectl get pods -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
-            -o 'jsonpath={range .items[*]}{.metadata.name}{" sleeping="}{.metadata.labels.dual-pods\.llm-d\.ai/sleeping}{"\n"}{end}' || true
-          # Post-wake inference request THROUGH THE EPP.
-          kubectl run curl-postwake --rm -i --restart=Never --attach \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --pod-running-timeout=180s \
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'set -e; resp=$(curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}"); echo "${resp}"; echo "${resp}" | jq -e ".choices[0].text | length > 0" >/dev/null'
-      - run: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=dual-pods-controller --tail=500 | grep -i "wake" || true
-      - run: kubectl annotate scaledobject fast-model-actuation-keda-saturation -n ${NAMESPACE} autoscaling.keda.sh/paused- || true
+            -- /bin/sh -c '
+              set -e
+              i=0
+              while [ $i -lt 12 ]; do
+                code=$(curl -s -o /tmp/b -w "%{http_code}" --max-time 90 \
+                  -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}" || echo 000)
+                echo "attempt ${i}: HTTP ${code}"
+                if [ "${code}" = "200" ]; then cat /tmp/b; echo; jq -e ".choices[0].text | length > 0" /tmp/b >/dev/null; exit 0; fi
+                i=$((i+1)); sleep 15
+              done
+              echo "no 200 after retries"; cat /tmp/b 2>/dev/null || true; exit 1'
 
 benchmark:
   setup:

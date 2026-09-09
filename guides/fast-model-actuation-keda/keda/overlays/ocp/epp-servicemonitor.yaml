@@ -1,8 +1,8 @@
 # ServiceMonitor so OpenShift user-workload-monitoring scrapes the EPP's
-# /metrics (llm_d_epp_flow_control_pool_saturation) into Thanos, which the KEDA
-# saturation trigger then queries. The llm-d-router-standalone chart (unlike the
+# /metrics (llm_d_epp_flow_control_queue_size) into Thanos, which the KEDA
+# queue trigger then queries. The llm-d-router-standalone chart (unlike the
 # gateway chart) does not create one, so this guide ships it for the OCP path.
-# Without it the pool-saturation series never reaches Thanos and KEDA's query
+# Without it the queue-depth series never reaches Thanos and KEDA's query
 # silently coerces the missing value to 0 (ScaledObject looks Ready while
 # autoscaling can never fire).
 #

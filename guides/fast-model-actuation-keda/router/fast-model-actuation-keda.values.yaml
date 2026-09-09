@@ -2,8 +2,7 @@
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## Same as the fast-model-actuation router values, but the EPP has the
-## `flowControl` feature gate enabled so it emits the pool-saturation metric
-## (`llm_d_epp_flow_control_pool_saturation`) that KEDA scales on.
+## `flowControl` feature gate enabled so it emits the flow-control metrics.
 
 router:
   extraServicePorts:
@@ -18,9 +17,6 @@ router:
       fast-model-actuation-keda-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
-        # Required for the pool-saturation metric KEDA reads. Without this gate
-        # the EPP does not run flow control and llm_d_epp_flow_control_pool_saturation
-        # is never emitted, so the ScaledObject's saturation trigger stays at 0.
         featureGates:
           - flowControl
         plugins:
@@ -46,4 +42,4 @@ router:
     # modelserver/kustomization.yaml.
     matchLabels:
       llm-d.ai/guide: "fast-model-actuation-keda"
-      llm-d.ai/model: "qwen3-32b"
+      llm-d.ai/model: "qwen3-0.6b"

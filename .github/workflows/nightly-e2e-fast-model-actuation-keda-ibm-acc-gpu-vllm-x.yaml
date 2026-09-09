@@ -42,14 +42,14 @@ on:
         default: 'shared_prefix_synthetic_heavy.yaml'
         type: 'string'
       wait_timeout:
-        description: 'Timeout (s) to wait for benchmark pods to complete. 32B warm-under-load runs need more than the reusable default (1200s); matches the benchmark FMA warm arm.'
+        description: 'Timeout (s) to wait for benchmark pods to complete.'
         required: false
-        default: '5400'
+        default: '1800'
         type: 'string'
       standup_timeout:
-        description: 'Timeout (s) for standup. The first launcher warm-loads Qwen3-32B on bind, so raise above the reusable default (2400s).'
+        description: 'Timeout (s) for standup.'
         required: false
-        default: '3600'
+        default: '1800'
         type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
@@ -101,8 +101,8 @@ jobs:
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'shared_prefix_synthetic_heavy.yaml' }}
-      wait_timeout: ${{ inputs.wait_timeout || '5400' }}
-      standup_timeout: ${{ inputs.standup_timeout || '3600' }}
+      wait_timeout: ${{ inputs.wait_timeout || '1800' }}
+      standup_timeout: ${{ inputs.standup_timeout || '1800' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
     secrets: inherit
 

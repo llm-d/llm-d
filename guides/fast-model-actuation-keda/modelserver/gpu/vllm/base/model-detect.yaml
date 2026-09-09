@@ -17,4 +17,4 @@ spec:
         - name: model-detect
           image: registry.k8s.io/pause:3.10
           args:
-            - Qwen/Qwen3-32B
+            - Qwen/Qwen3-0.6B
