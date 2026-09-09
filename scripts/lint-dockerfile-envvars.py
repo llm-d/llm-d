@@ -25,6 +25,13 @@ def parse_script_requirements(script_path: Path) -> Set[str]:
             in_block = True
             continue
 
+        # Vars under an "Optional" heading aren't required by the Dockerfile
+        # (they're allowed to be unset at runtime), so stop collecting here
+        # rather than sweeping them into the required set below.
+        if '# Optional environment variables:' in line:
+            in_block = False
+            continue
+
         if in_block:
             if not line.strip().startswith('#'):
                 break
