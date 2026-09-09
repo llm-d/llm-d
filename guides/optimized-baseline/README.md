@@ -41,6 +41,7 @@ This guide includes configurations for the following accelerators:
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
 | CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
+| NVIDIA GPU (FlagOS) | `flagos-cuda`      | vLLM + FlagOS unified backend                                   |
 
 > [!NOTE]
 > "x86 with bf16 acceleration": AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`
@@ -82,7 +83,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```bash
 export MONITORING_VALUES=
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu, flagos-cuda
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
 export MODEL=Qwen/Qwen3-32B
