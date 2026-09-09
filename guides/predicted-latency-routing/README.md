@@ -4,6 +4,7 @@
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml)
 [![E2E (AMD ROCm)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml)
+[![E2E (Intel XPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-intel-acc-xpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-predicted-latency-routing-intel-acc-xpu-vllm-x.yaml)
 
 ## Overview
 
@@ -183,7 +184,19 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/aggregat
 
 Two things differ from the text-only aggregated path. The `token-producer` (image → token-count estimation) stays in the pipeline: the predictor's features and the affinity filter need per-request token counts, and image inputs have no text length to read — each image is folded into the prefix-cache signal as a content hash weighted by its estimated token count. And the predictor trains on **end-to-end request latency** (`streamingMode` left at its default `false`), which works for both streaming and non-streaming clients.
 
-For other backends (AMD GPU, Intel XPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
+#### Intel XPU — Qwen3-0.6B
+
+Predicted-latency scheduling also runs on Intel XPU. Reuse the [optimized-baseline guide's](../optimized-baseline) Intel XPU model server (2 × vLLM, one Intel Arc Pro B60 per pod, `Qwen/Qwen3-0.6B`) unchanged — the predictor is EPP-side only, and the base manifests already carry `llm-d.ai/guide=optimized-baseline`, so the router values above select these pods with no override:
+
+```bash
+export MODEL_NAME="Qwen/Qwen3-0.6B"
+
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/modelserver/xpu/vllm/
+```
+
+Intel XPU CI runners are single-GPU-per-pod, so this path does not carry the GPU path's `--tensor-parallel-size=2` / RoPE-scaled `--max-model-len=131072` long-context config — there isn't enough device memory for it on `Qwen3-32B`. Use `Qwen/Qwen3-0.6B` for verification and benchmarking on this path.
+
+For other backends (AMD GPU, CPU), see [optimized-baseline → Deploy the Model Server](../optimized-baseline/README.md#2-deploy-the-model-server). For example, for sglang deployments:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/sglang/${INFRA_PROVIDER}/
