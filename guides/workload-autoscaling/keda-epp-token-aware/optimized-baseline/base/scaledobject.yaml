@@ -1,0 +1,134 @@
+# Token-aware KEDA autoscaling for the P+D co-located (kv_both) topology.
+#
+# "P+D co-located" = prefill and decode run together in the SAME pod, as opposed
+# to P/D-disaggregated, where they are split across separate pods.
+#
+# One ScaledObject, two triggers, one Deployment. P+D co-located pods run both
+# phases, so there is nothing to scale independently: KEDA evaluates both
+# triggers and scales the Deployment to the MAX of their desired replica counts,
+#
+#   replicas = max( ceil(prefill_backlog_s / 1.5) , ceil(kv_pods_worth / 0.8) )
+#
+# so whichever phase is the current bottleneck wins. The trade-off against the
+# pd-disaggregation overlay is that a prompt-heavy burst and a generation-heavy
+# burst both scale the whole pod.
+#
+# Before applying, update:
+#   - peakPrefillThroughput — the `/ 15928` divisor in the prefill query. This is
+#     the ONE hardware-specific constant the design needs, and the shipped value
+#     is calibrated for Qwen3-32B / H100-80GB / TP=2. Measure your own with
+#     guides/recipes/router/calibration/calibrate.sh. A wrong divisor silently
+#     changes when prefill scales — the same offered load asked for 8 replicas at
+#     2696 tok/s and 3 replicas at 15928 tok/s on one reference stack.
+#   - namespace in both queries, to your deployment's namespace
+#   - threshold on each trigger (the prefill one is workload-dependent — see
+#     "Choosing the two thresholds" in the README)
+#   - minReplicaCount / maxReplicaCount
+#   - serverAddress if your Prometheus is not the bundled llm-d stack (see ../ocp)
+#
+# Both queries pin `namespace`. On a cluster-wide store (OpenShift Thanos, or any
+# Prometheus scraping several namespaces) an unpinned query silently aggregates
+# every EPP on the cluster, so a shared-cluster deployment would scale on other
+# tenants' traffic. Kustomize cannot reach inside these PromQL strings, so the
+# label must be edited by hand to match the target namespace.
+#
+# KEDA will create its own HPA from this ScaledObject. Do NOT apply a separate hpa.yaml.
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-nvidia-gpu-vllm-token-aware
+  labels:
+    app.kubernetes.io/part-of: keda-epp-token-aware
+    app: optimized-baseline-nvidia-gpu-vllm-decode
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: optimized-baseline-nvidia-gpu-vllm-decode
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  triggers:
+    # ── PREFILL: seconds of uncached prefill backlog ────────────────────────────
+    # inflight_tokens is a token count; dividing by peakPrefillThroughput turns it
+    # into SECONDS of prefill backlog, which is what `threshold` is denominated in.
+    # KEDA has no arithmetic of its own, so the division must live in the PromQL.
+    #
+    # A plain sum() is correct as of llm-d-router#2577, which prunes inflight_tokens
+    # series when an endpoint is removed (llm-d-router#2529). That fix is on `main`
+    # — the ROUTER_EPP_VERSION default — but landed after v0.10.0, so on an EPP
+    # pinned to v0.10.0 or earlier a scaled-down pod strands a frozen series and the
+    # sum never falls back. See "Endpoint-removal note for older EPP images" in the
+    # README for the liveness-intersection workaround if you are pinned to a release.
+    #
+    # sum(), not max(): with metricType AverageValue the HPA computes
+    # ceil(value / threshold), so the numerator must GROW with the pool or the
+    # replica count is structurally capped. sum() also guarantees an empty label
+    # set, which is what lets `or vector(0)` collapse to the single series KEDA
+    # requires — without it the result keeps its pod labels, `or` appends a second
+    # {} series, and KEDA fails with FailedGetExternalMetric.
+    - type: prometheus
+      name: prefill-backlog-seconds
+      metricType: AverageValue
+      metadata:
+        serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+        query: |
+          (
+            sum(llm_d_epp_inflight_tokens{namespace="llm-d-optimized-baseline",
+                                          producer_name="inflight-load-producer"}) / 15928
+          ) or vector(0)
+        # Seconds of prefill queue wait tolerated per replica. This is a share of
+        # your TTFT budget, not a measured quantity: threshold ~= TTFT_SLO - ISL/V_P.
+        # 1.5 suits interactive / short-context traffic (~2 s TTFT SLO); long-context
+        # serving needs more. See the README.
+        threshold: "1.5"
+        activationThreshold: "0"
+        unsafeSsl: "false"
+      authenticationRef:
+        name: prometheus-auth
+    # ── DECODE: pods' worth of full KV cache ────────────────────────────────────
+    # kv_cache_usage_perc is already a fraction of capacity, so no unit conversion
+    # is needed and the threshold is compared to it directly. When a pod's KV cache
+    # fills, vLLM stops admitting requests outright, so you act before that: 0.8
+    # means "one replica per 0.8 pods' worth of occupied cache".
+    #
+    # sum(), not avg(), for the same reason as above: avg() cannot exceed ~1.0 no
+    # matter how many pods are full, so ceil(avg / 0.8) pins the Deployment at 2
+    # replicas forever. sum() grows with the pool, and AverageValue divides it back
+    # out per replica, which is what makes 0.8 mean "80 % full per pod".
+    #
+    # vllm:* is scraped from each pod's own /metrics, so a removed pod's scrape
+    # target disappears and its series goes stale on its own.
+    - type: prometheus
+      name: decode-kv-utilization
+      metricType: AverageValue
+      metadata:
+        serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+        query: |
+          sum(vllm:kv_cache_usage_perc{namespace="llm-d-optimized-baseline"}) or vector(0)
+        # Pods' worth of full KV cache per replica. Lower keeps more headroom,
+        # higher runs hotter.
+        threshold: "0.8"
+        activationThreshold: "0"
+        unsafeSsl: "false"
+      authenticationRef:
+        name: prometheus-auth
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        # Model weights take minutes to load, so a replica bought on a burst that
+        # drains in seconds is pure cost. Add at most one pod per 3 min and remove
+        # at most one per 5 min, with a 5 min scale-down stabilization window.
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 180
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 300
