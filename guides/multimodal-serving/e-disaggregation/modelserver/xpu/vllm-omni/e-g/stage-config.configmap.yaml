@@ -1,0 +1,72 @@
+# vLLM-Omni 2-stage EG topology, shipped as a ConfigMap so the encode worker,
+# generator worker, and omni-router Pods all mount the IDENTICAL stage config at
+# /etc/wan/wan2_2_epd.yaml (legacy filename kept for compatibility; each role
+# selects its slice via --stage-id / --omni-router).
+#
+# Content is the validated wan2_2_epd.yaml from
+# vllm_omni/platforms/xpu/stage_configs/wan2_2_epd.yaml (HW-validated on Arc
+# Pro B60). Keeping it here decouples the manifest from the image's built-in
+# path; if you prefer the in-image copy, drop this ConfigMap and point
+# --stage-configs-path at the package path instead.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wan-eg-stage-config
+data:
+  wan2_2_epd.yaml: |
+    stage_args:
+      - stage_id: 0
+        stage_type: diffusion
+        runtime:
+          process: true
+          # DRA exposes only the allocated XPU to the container, so the
+          # visible-device ordinal is 0 inside each worker Pod.
+          devices: "0"
+          max_batch_size: 1
+        engine_args:
+          # Text-encode-only stage: loads ONLY the UMT5 text encoder + tokenizer.
+          model_stage: text_encode
+          model_class_name: WanPipeline
+          max_num_seqs: 1
+          enforce_eager: true
+          trust_remote_code: true
+          distributed_executor_backend: "mp"
+          engine_output_type: custom
+          parallel_config:
+            tensor_parallel_size: 1
+        final_output: false
+
+      - stage_id: 1
+        stage_type: diffusion
+        runtime:
+          process: true
+          devices: "0"
+          max_batch_size: 1
+        engine_args:
+          model_stage: dit
+          model_class_name: WanPipeline
+          max_num_seqs: 1
+          enforce_eager: true
+          trust_remote_code: true
+          distributed_executor_backend: "mp"
+          vae_use_tiling: true
+          engine_output_type: video
+          # EG generator stage: embeddings come from stage 0, so skip loading
+          # the ~10 GiB UMT5 text encoder (dead weight here) — the bulk of the
+          # EG memory win on the generator card.
+          skip_text_encoder: true
+          parallel_config:
+            tensor_parallel_size: 1
+        engine_input_source: [0]
+        custom_process_input_func: vllm_omni.model_executor.stage_input_processors.wan_encode.encode2diffusion
+        final_output: true
+        final_output_type: video
+        is_comprehension: false
+        default_sampling_params:
+          seed: 42
+
+    runtime:
+      enabled: true
+      defaults:
+        window_size: -1
+        max_inflight: 1

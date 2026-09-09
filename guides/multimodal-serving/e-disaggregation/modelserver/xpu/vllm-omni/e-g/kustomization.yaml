@@ -1,0 +1,60 @@
+# Two-pool Encoder/Generator (EG) disaggregated Wan text-to-video model server
+# on Intel XPU, using vLLM-Omni's OWN native multi-stage distributed serving.
+#
+# Topology (NO Dynamo, NO etcd, NO NATS):
+#   * encode Pod    = Omni master + HTTP API (/v1/videos) + Stage 0 (UMT5).
+#   * generator Pod = headless Stage 1 (DiT + VAE), registers to the master via
+#                     the omni-master Service (ZMQ).
+#   Both Pods run the SAME vllm-omni:xpu image; each selects its stage from the
+#   shared wan2_2_epd.yaml stage config (mounted from a ConfigMap).
+#
+# This is the disaggregated counterpart of the aggregated server in
+# ../../../../../aggregation/modelserver/xpu/vllm-omni/. The two
+# pools scale independently (encode is light UMT5; generator is the heavy DiT loop).
+#
+# NOTE: no namePrefix is applied. The generator Pod reaches the master via the
+# fixed `omni-master` Service DNS name, so renaming Services would break that
+# in-manifest dependency. Deploy into a dedicated namespace for isolation
+# instead (kubectl create namespace wan-eg && kubectl apply -k . -n wan-eg).
+#
+# Cross-pod stage transport for the embeddings rides the native Omni stage
+# sockets; cross-NODE XPU GDR (NIXL/UCX ze_copy) is the P3 follow-up. For
+# single-node bring-up, schedule both Pods on the same node.
+
+resources:
+  - resource-claim-templates.yaml
+  - stage-config.configmap.yaml
+  - encode-deployment.yaml
+  - decode-deployment.yaml
+
+# Shared pod config (securityContext, XPU env, stage-config/cache volumes+mounts)
+# is injected into both Deployments from here, so the manifests above only carry
+# their per-pod specifics.
+components:
+  - components/common
+
+images:
+  # No public llm-d XPU + vllm-omni image is published yet; replace before apply.
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: REPLACE_MODEL_SERVER_IMAGE
+    newTag: latest
+
+labels:
+  - pairs:
+      llm-d.ai/model: Wan2.1-T2V-1.3B
+      llm-d.ai/guide: multimodal-video
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
+      llm-d.ai/engine-type: vllm-omni
+    includeSelectors: false
+    includeTemplates: true
+    fields:
+      - group: apps
+        version: v1
+        kind: Deployment
+        path: metadata/labels
+        create: true
+      - version: v1
+        kind: Service
+        path: metadata/labels
+        create: true

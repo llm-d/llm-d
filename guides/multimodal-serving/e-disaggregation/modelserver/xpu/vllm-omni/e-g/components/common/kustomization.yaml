@@ -1,0 +1,57 @@
+# Common pod configuration shared by the encode (master) and generator
+# (headless) Deployments. Injected via a kustomize Component so the shared
+# securityContext, XPU env, stage-config / cache volumes and mounts live in one
+# place. Per-pod specifics (args, ports, resources, probes, claim names, the
+# /dev/shm size) stay in the individual deployment manifests.
+#
+# Both containers are named `modelserver`, so this strategic-merge patch applies
+# to each Deployment uniformly.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: shared
+      spec:
+        template:
+          spec:
+            securityContext:
+              fsGroup: 107
+              supplementalGroups:
+                - 107
+            containers:
+              - name: modelserver
+                env:
+                  - name: VLLM_TARGET_DEVICE
+                    value: "xpu"
+                  - name: VLLM_OMNI_TARGET_DEVICE
+                    value: "xpu"
+                  # DRA exposes only the allocated XPU, so it is index 0 in the Pod.
+                  - name: ZE_AFFINITY_MASK
+                    value: "0"
+                  - name: VLLM_WORKER_MULTIPROC_METHOD
+                    value: "spawn"
+                  - name: HF_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: llm-d-hf-token
+                        key: HF_TOKEN
+                volumeMounts:
+                  - mountPath: /etc/wan
+                    name: stage-config
+                    readOnly: true
+                  - mountPath: /dev/shm
+                    name: shm
+                  - mountPath: /.cache
+                    name: torch-compile-cache
+            volumes:
+              - name: stage-config
+                configMap:
+                  name: wan-eg-stage-config
+              - name: torch-compile-cache
+                emptyDir: {}
