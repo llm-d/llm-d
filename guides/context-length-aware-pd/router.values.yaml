@@ -1,0 +1,78 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "pd-config.yaml"
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        # --- P/D disaggregation ---
+        - type: disagg-headers-handler
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciderPluginName: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+
+        # Imprecise token counting: the tokenizer-free `estimate` backend packs
+        # the request's input bytes at 4 bytes per pseudo-token. No tokenizer, no
+        # model download, no network call to vLLM.
+        #
+        # This whole block is optional. `context-length-aware` declares
+        # TokenizedPrompt as a required input, so if no token-producer is
+        # configured the framework auto-creates one with nil parameters — which
+        # lands on exactly this same `estimate` backend. It is spelled out here
+        # so the choice is visible rather than implicit.
+        #
+        # To get exact counts instead, swap `estimate` for the vLLM /render
+        # backend (see README):
+        #   parameters:
+        #     modelName: Qwen/Qwen3-0.6B
+        #     vllm: { url: http://prefill-tokenizer:8000 }
+        - type: token-producer
+          parameters:
+            estimate: {}
+
+        # Reads llm-d.ai/context-length-range off each pod. With enableFiltering,
+        # a pod whose "min-max" range does not contain the request's token count
+        # is dropped before scoring. Pods without the label are left untouched,
+        # so this is a no-op for the decode pods.
+        - type: context-length-aware
+          parameters:
+            label: llm-d.ai/context-length-range
+            enableFiltering: true
+
+        # --- generic load/affinity scorers ---
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: active-request-scorer
+
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          # Filters short-vs-long, then breaks ties among the survivors.
+          - pluginRef: context-length-aware
+            weight: 1
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "context-length-aware"
