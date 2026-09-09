@@ -76,8 +76,7 @@ spec:
               - |
                 bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader --ray_cluster_size=$(LWS_GROUP_SIZE);
                 VLLM_DISABLE_SHARED_EXPERTS_STREAM=1 vllm serve --port 8000 \
-                  --load-format=runai_streamer \
-                  --model=<your-model-path> \
+                  --model=Qwen/Qwen3-Coder-480B-A35B-Instruct \
                   --enable-prefix-caching \
                   --async-scheduling \
                   --enable-chunked-prefill \
