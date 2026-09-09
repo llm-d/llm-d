@@ -47,13 +47,13 @@ ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
 ARG NIXL_VERSION="v1.3.2"
 
 # Kernels
-ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
-ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
+ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
+ARG DEEPEP_VERSION="d4f41e4e93602a15e95f55f6ee8df8f1aaa0e4bb"
 
 ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
-ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
+ARG DEEPGEMM_VERSION="8b1392b978f5a03c828dd1711090d7fb50958b8a"
 
-ARG FLASHINFER_VERSION="0.6.14"
+ARG FLASHINFER_VERSION="0.6.16.post3"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args

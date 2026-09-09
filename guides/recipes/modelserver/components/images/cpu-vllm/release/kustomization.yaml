@@ -3,7 +3,7 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/vllm/vllm-openai-cpu
-    newTag: v0.26.0
+    newTag: v0.27.1
 
 patches:
   - target:
