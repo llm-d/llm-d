@@ -88,7 +88,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MODEL=openai/gpt-oss-120b
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export INFRA_PROVIDER=coreweave # options: base, coreweave
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 ```
@@ -230,6 +230,9 @@ To use a Kubernetes Gateway managed proxy instead of the standalone version, fol
 
 1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
+
+> [!IMPORTANT]
+> Set `PROVIDER_NAME` to the gateway provider you deployed in step 1 (e.g. `gke`, `istio`). The default, `none`, renders no provider-specific resources — on GKE that means no `HealthCheckPolicy`, so the Gateway marks the backends unhealthy and requests fail with 503s.
 
 <!-- guide:deploy.gateway start -->
 ```bash
