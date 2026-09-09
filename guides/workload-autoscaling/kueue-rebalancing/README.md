@@ -33,23 +33,6 @@ when demand returns.
          admitted pods → scheduled    over-budget pods → gated (Pending)
 ```
 
-## How It Compares to the Replica Rebalancer
-
-| | Replica rebalancer | Kueue |
-|---|---|---|
-| Where the budget is enforced | above the HPA, by patching `maxReplicas` | below the HPA, by gating pods |
-| GPU budget defined as | `ResourceQuota` `requests.nvidia.com/gpu` | `ClusterQueue` `nominalQuota`, shared through a cohort |
-| Reaction time | the `COORDINATOR_INTERVAL` loop (default 15s) | event-driven, on pod creation and deletion |
-| Opt-in | `llm-d.ai/epp-inference-pool` annotation on the HPA | `kueue.x-k8s.io/queue-name` label on the Deployment |
-| GPUs per replica | computed by the controller | read from the pod's `resources.requests` |
-| KEDA-generated HPAs | needs annotation propagation, not covered | works unchanged — Kueue never reads the HPA |
-| Reclaiming lent capacity | not supported | `preemption.reclaimWithinCohort: Any` |
-| Over-budget demand | never created, because the ceiling drops | created and queued as gated pods |
-| Extra components | WVA controller with the coordinator enabled | Kueue |
-
-Both keep total GPU usage inside the budget. They must not run at the same time:
-each would react to the capacity the other freed.
-
 ## Prerequisites
 
 1. Multiple inference pools in one namespace, from the
