@@ -154,10 +154,6 @@ Then follow the [Verification steps in the main guide](./README.md#verification)
 * **xPyD ratios**: adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently; each replica receives its own `2x2x1` sub-slice.
 * **Larger sub-slices**: for multi-host slices (`2x2x2`, `2x2x4`, `2x4x4`), set the slice topology annotation and partition-state selector to the target shape, set the LWS `size` to the host count (chips / 4), and raise `--tensor-parallel-size` accordingly (2 cores per chip). See the [aggregated multi-topology recipes](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/README.md) for a worked `2x2x2` multi-host example.
 
-### Recovery and Scale-Up Benchmarks
-
-Measured provisioning-path results for `2x2x1` sub-slices - 42-58s MTTR from an induced node failure to a pod ready on a re-formed sub-slice, and p50 30-41s per-replica scale-up latency at 16 to 256 concurrent slices - are documented in [benchmark-results.md](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/benchmark-results.md). Serving-engine performance is unchanged relative to the static-topology recipes.
-
 ### Testing Status
 
 The dynamic-slice variant is not yet in the nightly e2e matrix: an end-to-end run requires one full TPU7x cube (a `4x4x4` sub-block, 64 chips / 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not currently available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.

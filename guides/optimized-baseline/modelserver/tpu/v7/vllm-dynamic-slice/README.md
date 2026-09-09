@@ -49,10 +49,6 @@ kubectl get pods -n ${NAMESPACE}
 
 Then follow the [Optimized Baseline verification steps](../../../../README.md#verification), using the model name from the table above in the completion request.
 
-## Benchmark Results
-
-See [benchmark-results.md](./benchmark-results.md) for measured recovery time after node failure (MTTR 42-58s to a re-formed sub-slice) and workload scale-up latency at 16 to 256 concurrent slices (p50 30-41s). Serving-engine throughput and latency match the static-topology Optimized Baseline TPU recipe, since the underlying vLLM configuration is identical; dynamic slicing changes only provisioning, scheduling, and recovery.
-
 ## Notes
 
 * Increasing `spec.replicas` on the `LeaderWorkerSet` scales out one sub-slice per replica; replicas are formed from any sub-block with healthy partitions of the requested shape.
@@ -61,4 +57,4 @@ See [benchmark-results.md](./benchmark-results.md) for measured recovery time af
 
 ## Testing Status
 
-These recipes are not yet covered by the nightly e2e matrix. An end-to-end run requires a GKE cluster with at least one full TPU7x cube - a `4x4x4` sub-block of 64 chips (16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation - and this capacity is not currently available to llm-d CI. Until it is, the recipes are validated by kustomize dry-run in CI, and functionally by load tests on internal Google Cloud capacity (see [benchmark-results.md](./benchmark-results.md)). A nightly e2e workflow (`nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-*`) will be added once capacity is secured.
+These recipes are not yet covered by the nightly e2e matrix. An end-to-end run requires a GKE cluster with at least one full TPU7x cube - a `4x4x4` sub-block of 64 chips (16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation - and this capacity is not currently available to llm-d CI. Until it is, the recipes are validated by kustomize dry-run in CI, and functionally by load tests on internal Google Cloud capacity during the dynamic-slicing beta. A nightly e2e workflow (`nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-*`) will be added once capacity is secured.
