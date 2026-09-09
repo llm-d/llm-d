@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM GPU",
-  "message": "benchmark-error",
-  "color": "yellow"
+  "message": "cancelled",
+  "color": "lightgrey"
 }
