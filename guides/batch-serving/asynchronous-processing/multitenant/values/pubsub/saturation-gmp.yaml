@@ -12,8 +12,7 @@
 # requests at which a model is considered saturated).
 ap:
 
-  messageQueueImpl: "gcp-pubsub-gated"
-  igwBaseURL: "http://IGW_HOST:80"
+  transport: "gcp-pubsub"
 
   prometheusURL: "http://gmp-frontend.NAMESPACE.svc.cluster.local:9090"
   prometheusCacheTTL: "5s"
@@ -22,12 +21,21 @@ ap:
     type: "tier-priority"
     parameters:
       priority_header: "x-gateway-priority"
+      objective_header: "x-llm-d-inference-objective"
+      fairness_header: "x-llm-d-inference-fairness-id"
+      fairness_attribute: "team"
+      lane_objectives:
+        reserved-interactive: "reserved-interactive"
+        reserved-async: "reserved-async"
+        reserved-batch: "reserved-batch"
+        overflow-interactive: "overflow-interactive"
+        overflow-async: "overflow-async"
+        overflow-batch: "overflow-batch"
 
-  gcpPubSub:
-    enabled: true
-    projectId: "PROJECT_ID"
-    resultTopicId: "projects/PROJECT_ID/topics/results"
-    topicsConfig:
+  transportConfig:
+    project_id: "PROJECT_ID"
+    result_topic_id: "projects/PROJECT_ID/topics/results"
+    topics:
       # ---------- MODEL A ----------
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-a-requests-sub"
         worker_pool_id: "model-a"

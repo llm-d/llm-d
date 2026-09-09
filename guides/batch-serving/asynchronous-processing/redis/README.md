@@ -21,7 +21,7 @@ This implementation uses Redis Sorted Sets as the backend for the request queue.
      helm install redis bitnami/redis -n redis --create-namespace --set auth.enabled=true --set auth.password=$REDIS_PASSWORD
 
      # Create a secret holding the full connection URL for the Async Processor
-     # (referenced via ap.redis.secretName / ap.redis.secretKey in values.yaml):
+     # (referenced via ap.transportConfig.urlSecret.name / ap.transportConfig.urlSecret.key in values.yaml):
      kubectl create secret generic redis-creds -n llm-d-async \
        --from-literal=url="redis://:$REDIS_PASSWORD@redis-master.redis.svc.cluster.local:6379"
      ```
@@ -34,12 +34,19 @@ Edit the `values.yaml` file with your specific Redis connection:
 
 ```yaml
 ap:
-  redis:
+  transport: "redis-sortedset"
+  transportConfig:
     # No auth: the connection URL directly (the chart creates the Secret).
-    url: "redis://redis-master.redis.svc.cluster.local:6379"
-    # With auth: reference the Secret created above instead of `url`.
-    # secretName: "redis-creds"
-    # secretKey: "url"
+    urlSecret:
+      url: "redis://redis-master.redis.svc.cluster.local:6379"
+    # With auth: reference the Secret created above instead of `urlSecret.url`.
+    # urlSecret:
+    #   name: "redis-creds"
+    #   key: "url"
+    queues:
+      - queue_name: "request-sortedset"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://<igw-host>:80"
 ```
 
 For deployment instructions, please refer to the [main README](../README.md#installation).

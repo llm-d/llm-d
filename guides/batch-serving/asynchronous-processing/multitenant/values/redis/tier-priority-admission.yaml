@@ -1,26 +1,24 @@
-# Values for the multi-tenant Pub/Sub demo — team × tier × MODEL (Scenarios A + B).
+# Values for Multi-Tenant Async Processing using tier-priority-admission
+# worker pool gate with prometheus-saturation.
 #
-# Replace: PROJECT_ID, NAMESPACE, IGW_HOST (one gateway routing by payload.model to
-# two InferencePools), POOL_A / POOL_B (used by the saturation overlay). 6 topics =
-# 3 teams × 2 models; the publisher sends model-a traffic to the *-a subscriptions
-# (payload.model = MODEL_A) and model-b to *-b.
+# Replace placeholders: NAMESPACE, IGW_HOST, POOL_A, POOL_B, PROM_URL
 #
-# MODEL_A / MODEL_B below are the guide's ${MODEL_A} / ${MODEL_B} shell variables,
-# not placeholders in this file: the served model names reach the system through
-# payload.model in the publisher, never through these values.
-#
-#   - MODEL -> its own worker pool (model-a / model-b): independent concurrency and
-#     (saturation overlay) saturation back-off.
-#   - TEAM  -> per-(team, model) reserved quota (redis-quota, classifying; per-model
-#     prefix quota:a: / quota:b:): within quota -> reserved, over -> overflow.
-#   - TIER  -> per-topic `tier` label; the tier-priority merge policy orders each
-#     pool's reserved/overflow × tier lanes and stamps x-gateway-priority.
-#
-# Pub/Sub publishes all results to the single resultTopicId (unlike Redis, which
-# uses per-model result lists).
+#  - Worker Pool Gate: tier-priority-admission
+#    Uses an inner saturation gate (prometheus-saturation) querying
+#    flow_control_pool_saturation for the pool.
+#    When saturated:
+#      - reserved traffic parks cleanly in memory (ActionWait)
+#      - interactive overflow is dropped immediately (429)
+#      - async & batch overflow traffic is refused (ActionRefuse, returns to queue)
+#    When not saturated:
+#      - all traffic continues freely (ActionContinue)
+#  - Merge Policy: tier-priority with lane_objectives mapping to InferenceObjectives
 ap:
 
-  transport: "gcp-pubsub"
+  transport: "redis-sortedset"
+
+  prometheusURL: "PROM_URL"
+  prometheusCacheTTL: "5s"
 
   requestMergePolicyConfig:
     type: "tier-priority"
@@ -38,15 +36,18 @@ ap:
         overflow-batch: "overflow-batch"
 
   transportConfig:
-    project_id: "PROJECT_ID"
-    result_topic_id: "projects/PROJECT_ID/topics/results"
-    topics:
-      # ---------- MODEL A (pool model-a, payload.model = MODEL_A) ----------
-      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-a-requests-sub"
+    urlSecret:
+      url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+    result_queue_name: "results-a-list"
+    poll_interval_ms: 500
+    batch_size: 10
+    queues:
+      # ---------- MODEL A ----------
+      - queue_name: "team-premium-a"
         worker_pool_id: "model-a"
-        inference_objective: "latency"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
         labels: { tier: "interactive" }
         gate_type: "redis-quota"
         gate_params:
@@ -56,10 +57,11 @@ ap:
           gating_mode: "classifying"
           limit: "2"
           prefix: "quota:a:"
-      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-a-requests-sub"
+      - queue_name: "team-standard-a"
         worker_pool_id: "model-a"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
         labels: { tier: "async" }
         gate_type: "redis-quota"
         gate_params:
@@ -69,11 +71,11 @@ ap:
           gating_mode: "classifying"
           limit: "2"
           prefix: "quota:a:"
-      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-a-requests-sub"
+      - queue_name: "team-batch-a"
         worker_pool_id: "model-a"
-        inference_objective: "throughput"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
         labels: { tier: "batch" }
         gate_type: "redis-quota"
         gate_params:
@@ -84,12 +86,12 @@ ap:
           limit: "1"
           prefix: "quota:a:"
 
-      # ---------- MODEL B (pool model-b, payload.model = MODEL_B) ----------
-      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-b-requests-sub"
+      # ---------- MODEL B ----------
+      - queue_name: "team-premium-b"
         worker_pool_id: "model-b"
-        inference_objective: "latency"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
         labels: { tier: "interactive" }
         gate_type: "redis-quota"
         gate_params:
@@ -99,10 +101,11 @@ ap:
           gating_mode: "classifying"
           limit: "2"
           prefix: "quota:b:"
-      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-b-requests-sub"
+      - queue_name: "team-standard-b"
         worker_pool_id: "model-b"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
         labels: { tier: "async" }
         gate_type: "redis-quota"
         gate_params:
@@ -112,11 +115,11 @@ ap:
           gating_mode: "classifying"
           limit: "2"
           prefix: "quota:b:"
-      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-b-requests-sub"
+      - queue_name: "team-batch-b"
         worker_pool_id: "model-b"
-        inference_objective: "throughput"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
         labels: { tier: "batch" }
         gate_type: "redis-quota"
         gate_params:
@@ -127,11 +130,22 @@ ap:
           limit: "1"
           prefix: "quota:b:"
 
+  # Worker pools with tier-priority-admission gate backed by prometheus-saturation
   workerPools:
     - id: "model-a"
       workers: 8
+      gate_type: "tier-priority-admission"
+      gate_params:
+        saturation_gate: "prometheus-saturation"
+        saturation_gate_params: '{"pool":"POOL_A","threshold":"0.8"}'
+        tier_label: "tier"
     - id: "model-b"
       workers: 8
+      gate_type: "tier-priority-admission"
+      gate_params:
+        saturation_gate: "prometheus-saturation"
+        saturation_gate_params: '{"pool":"POOL_B","threshold":"0.8"}'
+        tier_label: "tier"
 
   resources:
     requests:
