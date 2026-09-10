@@ -8,14 +8,12 @@ name: Nightly - Workload Autoscaling E2E (AMD ROCm)
 # chart on main may require features not yet in a tagged release image.
 #
 # The ROCm cluster is shared with four other nightlies, so this run does not
-# preempt: allow_gpu_preemption stays false and the deploy script sets no
-# PriorityClass.
-#
-# Dispatch-only for now. The 13:00 UTC schedule, which is clear of the
-# 03:00/05:00/07:00/10:00 slots the other four ROCm nightlies hold, is added
-# alongside the deploy script this lane calls.
+# preempt: allow_gpu_preemption stays false, the deploy script sets no
+# PriorityClass, and the schedule is clear of the 03:00/05:00/07:00/10:00 slots.
 
 on:
+  schedule:
+    - cron: '0 13 * * *'  # 13:00 UTC daily (clear of the other four ROCm nightlies)
   workflow_dispatch:
     inputs:
       image_tag:
