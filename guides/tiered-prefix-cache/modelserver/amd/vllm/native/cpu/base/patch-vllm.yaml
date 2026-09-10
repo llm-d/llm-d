@@ -13,9 +13,9 @@ spec:
           args:
             - |
               # See native/README.md for Triton threshold background and calculation.
-              sed -i 's/THRESHOLD_BYTES = 28 \* 1024/THRESHOLD_BYTES = 40 * 1024/' \
-                /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/cpu/swap_blocks_triton.py \
-                || echo "WARNING: Triton threshold patch skipped (file not found or already patched); fast path may not engage"
+              # Keep the sed command on ONE line: the nightly CI model-detector greps these
+              # container args, and a standalone file-path line gets mistaken for the model name.
+              sed -i 's/THRESHOLD_BYTES = 28 \* 1024/THRESHOLD_BYTES = 40 * 1024/' /usr/local/lib/python3.12/dist-packages/vllm/v1/kv_offload/cpu/swap_blocks_triton.py || echo "WARNING: Triton threshold patch skipped (file not found or already patched); fast path may not engage"
               exec vllm serve \
                 Qwen/Qwen3-32B \
                 --tensor-parallel-size=2 \
