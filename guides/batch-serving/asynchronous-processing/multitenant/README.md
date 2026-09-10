@@ -18,12 +18,12 @@ walkthroughs are identical across both; only the queue wiring and how you publis
 
 ## Overview
 
-The demo runs **two models**, each served by its own `InferencePool` behind one gateway. Each model
-gets its **own worker pool** (`model-a`, `model-b`) — so concurrency and saturation are isolated per
-model — and within each pool three teams contend by **tier** and **quota**. That's **6 queues**
-(3 teams × 2 models) → **2 pools**:
+The demo simulates **two model pipelines** (`model-a`, `model-b`) behind llm-d Router. Each model
+pipeline gets its **own worker pool** in `llm-d-async` — isolating worker concurrency, queue draining, and saturation
+back-off per model — and within each pool three teams contend by **tier** and **quota**. That's **6 queues**
+(3 teams × 2 models) → **2 worker pools**:
 
-| Model → pool | Team | Queue (Redis) | Tier | Reserved quota | Quota prefix |
+| Model Pipeline → Worker Pool | Team | Queue (Redis) | Tier | Reserved quota | Quota prefix |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | **`model-a`** | premium | `team-premium-a` | `interactive` | concurrency **2** | `quota:a:` |
 | | standard | `team-standard-a` | `async` | concurrency **2** | `quota:a:` |
@@ -32,11 +32,12 @@ model — and within each pool three teams contend by **tier** and **quota**. Th
 | | standard | `team-standard-b` | `async` | concurrency **2** | `quota:b:` |
 | | batch | `team-batch-b` | `batch` | concurrency **1** | `quota:b:` |
 
+> [!NOTE]
+> **Single-Router Demo vs. Multi-Model Production:** In a full multi-model production environment, each model is typically served by its own `InferencePool` behind a gateway (e.g. using Gateway API HTTPRoutes with dedicated llm-d Routers). To keep this demo lightweight and runnable on a single GPU (or CPU test cluster), the walkthrough deploys a **single `llm-d-router` instance** and a single vLLM model server (`Qwen/Qwen3-8B`), with both logical model pipelines (`model-a` and `model-b`) pointing to that shared llm-d Router pool (`POOL_A=llm-d-router`, `POOL_B=llm-d-router`). If your cluster already has multiple `InferencePool`s deployed, you can point `POOL_A` and `POOL_B` to distinct pools for full physical backend isolation.
+
 The three dimensions:
 
-- **Model → pool isolation.** The publisher sets `payload.model`, which the gateway routes to that model's
-  `InferencePool`. Each model gets its own worker pool (`model-a`, `model-b`) and independent saturation gate,
-  so one model saturating does not park the other.
+- **Model → worker pool isolation.** Each model track gets its own `llm-d-async` worker pool (`model-a`, `model-b`), independent concurrency limits, and dedicated saturation gates. In production with multiple `InferencePool`s, saturating one model pool parks only that model's workers without affecting the other. In this single-pool demo environment, both worker pools dispatch through the shared `llm-d-router` instance while demonstrating the independent queue, quota, and worker isolation mechanisms.
 - **Queue as the serving dimension (tier × model).** A queue represents a **serving tier** for a target model
   (e.g., interactive latency-sensitive, standard async, or batch throughput), **not a rigid single-tenant silo**.
   In production, multiple distinct teams can publish into the **same queue** concurrently. The request payload
@@ -55,7 +56,7 @@ The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/2
 By defining matching [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router)
 resources in the cluster, `llm-d-async` and `llm-d-router` Flow Control speak the exact same language.
 Requests carry the authoritative objective and tenant identity (`x-llm-d-inference-fairness-id`), allowing
-`llm-d-router` to enforce multi-tenant fairness and priority band admission at the gateway:
+`llm-d-router` to enforce multi-tenant fairness and priority band admission:
 
 | Lane | Objective (`lane_objectives`) | Header `x-llm-d-inference-objective` | Router Band Priority | Who (within one model) |
 | :-- | :-- | :-- | :-- | :-- |
@@ -77,7 +78,7 @@ Downstream priority is propagated via lane objective stamping (**`x-llm-d-infere
 #### With Flow Control ON (`llm-d-router`)
 When `llm-d-router` is deployed with Flow Control enabled (`featureGates: [flowControl]` in `flow-control.yaml`):
 - **Centralized Priority Bands:** When model server capacity saturates (detected in real time via `concurrency-detector` or `utilization-detector`), requests are held in memory across priority bands matching the `InferenceObjective` priority (100, 60, 30, 10, 0, -10).
-- **Strict Band Dispatch:** The gateway scheduler drains highest-priority bands first: all `reserved` bands (100, 60, 30) dispatch before any `overflow` band (10, 0, -10) is admitted.
+- **Strict Band Dispatch:** llm-d router drains highest-priority bands first: all `reserved` bands (100, 60, 30) dispatch before any `overflow` band (10, 0, -10) is admitted.
 - **Band Capacity & Drops on Full Bands:** Each priority band enforces isolated buffer limits via `maxRequests` and `maxBytes`. When a priority band reaches capacity, new incoming requests for that band are **dropped immediately (HTTP 429) regardless of that band's priority**. A high priority level does not grant unbounded buffer capacity; an overloaded priority 100 band drops its own incoming traffic rather than evicting queued requests from other bands.
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
@@ -96,7 +97,7 @@ When `llm-d-router` operates in standard baseline mode (without the `flowControl
   - When downstream saturation is detected via Prometheus, the worker pool gate (`wait-on-refuse` or `tier-priority-admission`) intervenes directly in `llm-d-async` by parking workers in-memory (`ActionWait`), refusing messages (`ActionRefuse`), or dropping them (`ActionDrop`).
   - As a result, model servers remain protected against overload even without router-side priority queuing.
 
-#### With Flow Control OFF (Baseline Router with Saturation Detection)
+#### With Flow Control OFF (Baseline Router without Saturation Detection)
 When saturation detection is disabled (no saturation detector configured in `llm-d-router`) every request is immediately dispatched to available model servers regardless of its assigned priority value.
 
 > [!NOTE]
@@ -111,7 +112,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
 [Prerequisites](../README.md#prerequisites) first (client tools, cluster, GAIE CRDs,
 [`guides/env.sh`](../../../env.sh), the HF-token secret), then add the following.
 
-- **Inference Gateway with Flow Control.** This guide uses `llm-d-router` configured with **Flow Control**
+- **llm-d router with Flow Control.** This guide uses `llm-d-router` configured with **Flow Control**
   enabled rather than the standard baseline router. Flow Control assigns incoming requests to priority bands
   based on the `InferenceObjective` CRD referenced by each request.
 
@@ -119,8 +120,9 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   `x-llm-d-inference-objective` header matching the request's priority lane. You must install the
   `InferenceObjective` CRD and define the objective resources in your cluster matching your `InferencePool`.
 
-- **Model Serving Stack.** Either two `InferencePool`s (`POOL_A`, `POOL_B`) for two-model isolation, or a
-  single model server (e.g., vLLM serving `Qwen/Qwen3-8B`) pointed to by both pools.
+- **Model Serving Stack & Router.** The walkthrough deploys a single `llm-d-router` instance (which creates
+  the `llm-d-router` InferencePool) and a single vLLM model server serving `Qwen/Qwen3-8B`. In a multi-model
+  environment, you can point `POOL_A` and `POOL_B` to separate `InferencePool`s for physical pool isolation.
 
 - **Environment.** In addition to the base guide's variables:
 
@@ -132,7 +134,8 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export NAMESPACE=llm-d-async
   export ASYNC_VERSION=v0.9.1          # llm-d-async release (supports lane_objectives & tier-priority)
 
-  # InferencePool names (saturation-gate scope) and served model names (go in payload.model):
+  # InferencePool names (saturation-gate scope) and served model names (go in payload.model).
+  # In this single-router demo, both logical model pools point to the deployed llm-d-router instance:
   export POOL_A=llm-d-router POOL_B=llm-d-router       # InferencePool names (saturation-gate scope)
   export MODEL_A=Qwen/Qwen3-8B MODEL_B=Qwen/Qwen3-8B   # served model names (go in payload.model)
 
@@ -201,6 +204,9 @@ helm upgrade --install llm-d-router \
 export IP=$(kubectl get service llm-d-router-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
 
+> [!NOTE]
+> **Single Router & InferencePool in Demo:** Deploying `llm-d-router` creates a single `InferencePool` named `llm-d-router`. Both `model-a` and `model-b` worker pools dispatch through this shared llm-d Router. In production environments with multiple distinct models and pools, each pool can be addressed individually via separate `InferencePool` resources or multi-model HTTPRoutes.
+
 ### 3. Deploy Redis and llm-d-async
 
 The bundled Redis backs both the per-team request queues and the quota counters.
@@ -259,15 +265,13 @@ Workload Identity, follow the printed binding to map the GSA onto the chart's `l
 
 ## Publishing requests
 
-A request is a JSON body — `id`, `created`, `deadline`, a `payload` (a completions body whose **`model`
-selects the model/pool at the gateway**), and `metadata.team` (the tenant identifier that the quota gate
-and downstream fairness policy evaluate).
+A request is a JSON body — `id`, `created`, `deadline`, a `payload` (the inference request that is dispatched to llm-d Router), and `metadata.team` (the tenant identifier that the quota gate evaluates).
 
 ### Queues as Serving Dimensions vs. Team Identity
 - **The Queue is a Serving Dimension:** A queue corresponds to an service tier and model pair (e.g., `interactive` tier for `model-a`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue. 
 - **Multiple Teams in One Queue:** Requests from different teams can be published into the **exact same queue**. The team identity is carried per-request inside `metadata.team` (e.g., `team: "marketing"` vs. `team: "engineering"`).
 - **Per-Team Quota Accounting:** The `redis-quota` gate dynamically reads `metadata.team` on each request and increments/decrements that specific team's counter (`quota:<model>:team:<team>`). If Team A saturates its reserved limit, Team A's excess traffic is deprioritized to `overflow`, while Team B publishing to that same queue continues to receive `reserved` capacity.
-- **Gateway Fairness ID:** At dispatch, `llm-d-async` stamps `metadata.team` into the `x-llm-d-inference-fairness-id` header so that `llm-d-router`'s Flow Control fairness policy treats tenants equitably during gateway queue contention.
+- **Fairness ID:** At dispatch, `llm-d-async` stamps `metadata.team` into the `x-llm-d-inference-fairness-id` header so that `llm-d-router`'s Flow Control fairness policy treats tenants equitably during queue contention.
 
 In this demo walkthrough, queues are labeled with team names (e.g. `team-premium-a`) for clear attribution, but you can pass any team name into `publish <team> <a|b> [count]`:
 
@@ -319,7 +323,7 @@ publish() {                                   # publish <team> <a|b> [count]
 
 ### Stress Testing Scripts
 
-Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to drive sustained multi-tenant traffic (team × tier × model) concurrently with background gateway saturation to test quota, priority lanes, and populate dashboard metrics:
+Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to drive sustained multi-tenant traffic (team × tier × model) concurrently to test quota, priority lanes, and populate dashboard metrics:
 
 - **GCP Pub/Sub:** [`scripts/stress-test-pubsub.py`](scripts/stress-test-pubsub.py)
   ```bash
@@ -414,7 +418,9 @@ wait
 
 As model A's `InferencePool` saturates, `model-a`'s budget → 0 and its workers **park in-memory
 (`ActionWait`)** — so `model-a` stops pulling new work without churning the backlog, while **`model-b`
-keeps dispatching at full rate** (its own gate reads only `POOL_B`). As `model-a`'s capacity frees, its
+keeps dispatching at full rate** when `POOL_B` points to an independent, unsaturated pool. *(Note: In this
+single-router demo where both `POOL_A` and `POOL_B` point to `llm-d-router`, both gates monitor the shared model
+server; in a multi-pool setup where `POOL_A != POOL_B`, only model A parks.)* As capacity frees, the
 merge policy drains the highest lanes first. Query each model's budget independently:
 
 ```bash
@@ -464,7 +470,7 @@ issues a **three-way verdict** based on saturation × tier × classification:
 
 | Pool Status | Request Classification & Tier | Gate Verdict | Behavior |
 | :-- | :-- | :-- | :-- |
-| **Unsaturated** | Any | `ActionContinue` | Dispatches immediately to the gateway |
+| **Unsaturated** | Any | `ActionContinue` | Dispatches immediately to llm-d router |
 | **Saturated** | `reserved` (any tier) | `ActionWait` | Parks the worker in-memory until capacity frees |
 | **Saturated** | `overflow` + `interactive` | `ActionDrop` | Drops immediately with an HTTP 429 payload |
 | **Saturated** | `overflow` + `async` / `batch` | `ActionRefuse` | Refuses message and re-enqueues for later delivery |

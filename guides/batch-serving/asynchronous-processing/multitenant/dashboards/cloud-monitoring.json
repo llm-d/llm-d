@@ -1,5 +1,5 @@
 {
-  "displayName": "LLM-D Async Processor",
+  "displayName": "llm-d Async Processor Multi-tenant Demo",
   "mosaicLayout": {
     "columns": 12,
     "tiles": [
