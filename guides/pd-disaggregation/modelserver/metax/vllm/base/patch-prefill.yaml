@@ -1,28 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: decode
+  name: prefill
 spec:
-  replicas: 1
+  replicas: 4
   template:
     spec:
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-14B"
-            - "--host"
-            - "0.0.0.0"
-            - "--port"
-            - "8200"
-            - "--served-model-name"
-            - "Qwen/Qwen3-14B"
+            - "Qwen/Qwen3-32B"
+            - "--port=8000"
+            - "--tensor-parallel=2"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=1"
             - "--max-num-batched-tokens=8192"
-            - "--gpu-memory-utilization=0.9"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}'
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail"}'
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -35,15 +29,17 @@ spec:
                   fieldPath: status.podIP
             - name: VLLM_NIXL_SIDE_CHANNEL_PORT
               value: "5600"
-            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
-              value: "120"
             - name: UCX_TLS
               value: maca_ipc,maca_copy,tcp
             - name: UCX_PROTO_ENABLE
               value: "y"
+            # Default vLLM keep-alive (5s) is shorter than llm-d-routing-sidecar's default idle
+            # conn timeout (90s, from Go http.Transport), causing TCP RSTs on reuse.
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
           ports:
             - name: modelserver
-              containerPort: 8200
+              containerPort: 8000
               protocol: TCP
             - name: nixl
               containerPort: 5600
@@ -56,34 +52,21 @@ spec:
               type: Unconfined
           resources:
             limits:
-              memory: 64Gi
-              metax-tech.com/gpu: "1"
+              memory: 128Gi
+              metax-tech.com/gpu: "2"
             requests:
-              cpu: "4"
-              memory: 16Gi
-              metax-tech.com/gpu: "1"
+              cpu: "16"
+              memory: 64Gi
+              metax-tech.com/gpu: "2"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
             - mountPath: /.cache
               name: torch-compile-cache
-          startupProbe:
-            initialDelaySeconds: 15
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 180
-          livenessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
-          readinessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
       volumes:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 100Gi
+            sizeLimit: 2Gi
         - name: torch-compile-cache
           emptyDir: {}

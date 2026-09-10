@@ -12,11 +12,10 @@ components:
 labels:
   - pairs:
       llm-d.ai/guide: optimized-baseline
-      llm-d.ai/model: Qwen3-14B
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: metax
+      llm-d.ai/model: DeepSeek-R1-Distill-Llama-70B
     includeSelectors: true
     includeTemplates: true
-
 patches:
   - path: patch-vllm.yaml
