@@ -4,11 +4,6 @@ resources:
   - ../../../base
   - pvc.yaml
 
-images:
-  - name: ghcr.io/llm-d/llm-d-rocm
-    newName: rocm/vllm-dev
-    newTag: nightly
-
 labels:
   - pairs:
       llm-d.ai/guide: tiered-prefix-cache

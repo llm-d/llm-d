@@ -6,7 +6,7 @@ resources:
 namePrefix: amd-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/amd-vllm/llm-d
+  - ../../../../../recipes/modelserver/components/images/amd-vllm/release
 
 labels:
   - pairs:
