@@ -40,6 +40,10 @@ spec:
                   fieldPath: status.podIP
             - name: VLLM_EC_SIDE_CHANNEL_PORT
               value: "5610"
+            # ECCPUConnector requires the V2 model runner. vLLM selects it by default only
+            # when no V2-unsupported feature is enabled, so set it explicitly.
+            - name: VLLM_USE_V2_MODEL_RUNNER
+              value: "1"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:

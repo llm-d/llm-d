@@ -43,6 +43,10 @@ spec:
             # the NIXL data plane instead of the local mmap region only.
             - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"ec_cpu_bytes": 1073741824, "ec_enable_nixl": true}}'
           env:
+            # ECCPUConnector requires the V2 model runner. vLLM selects it by default only
+            # when no V2-unsupported feature is enabled, so set it explicitly.
+            - name: VLLM_USE_V2_MODEL_RUNNER
+              value: "1"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:

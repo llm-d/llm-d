@@ -22,3 +22,14 @@ labels:
 
 patches:
   - path: patch-decode.yaml
+  # The vLLM nightly tag moves. With the default IfNotPresent policy, a node reuses the
+  # build it cached earlier, so prefill and decode can run different vLLM versions and
+  # NIXL then rejects the P/D handshake. Always pulls the current build on every pod
+  # start. It does not prevent skew when only some pods restart after the tag moves;
+  # pin a digest for that.
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
