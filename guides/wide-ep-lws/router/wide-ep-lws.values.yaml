@@ -12,6 +12,15 @@ router:
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         plugins:
+        # Pin each request to a single DisaggregatedSet revision during
+        # rollouts so prefill and decode never pair across revisions.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "disaggregatedset.x-k8s.io/name=wide-ep-lws-nvidia-gpu-vllm"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
         - type: always-disagg-pd-decider
         - type: disagg-profile-handler
           parameters:
