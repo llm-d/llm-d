@@ -136,6 +136,16 @@ is_openshift() {
   return 1
 }
 
+is_autopilot() {
+  if $KCMD get ns gke-managed-system &>/dev/null; then
+    return 0
+  fi
+  if $KCMD get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null | grep -q '^gk3-'; then
+    return 0
+  fi
+  return 1
+}
+
 check_servicemonitor_crd() {
   log_info "🔍 Checking for ServiceMonitor CRD (monitoring.coreos.com)..."
   if ! $KCMD get crd servicemonitors.monitoring.coreos.com &>/dev/null; then
@@ -161,6 +171,10 @@ check_servicemonitor_crd() {
 
 check_existing_node_exporter() {
   log_info "🔍 Checking for existing node-exporter installations..."
+  if is_autopilot; then
+    log_info "ℹ️ GKE Autopilot detected - node-exporter will be disabled (host namespaces restricted in Autopilot)"
+    return 0
+  fi
   # Shared clusters with existing monitoring commonly have pre-existing node-exporters,
   # and it's not necessary to have multiple of these running (they would conflict on port 9100)
   local existing_exporters=$($KCMD get pods --all-namespaces -l app=node-exporter -o name 2>/dev/null | wc -l)
@@ -408,6 +422,18 @@ install_prometheus_grafana() {
 
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     cat <<EOF > /tmp/prometheus-values.yaml
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
 grafana:
   adminPassword: admin
   service:
@@ -459,6 +485,18 @@ $(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; f
 EOF
   else
     cat <<EOF > /tmp/prometheus-values.yaml
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
 grafana:
   adminPassword: admin
   service:
