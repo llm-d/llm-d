@@ -23,7 +23,7 @@
 # The tier-priority merge policy runs per pool independently: within each model it
 # dispatches the 6 (classification × tier) lanes in strict order (all reserved
 # before any overflow; interactive>async>batch within each) and stamps
-# x-gateway-priority and x-llm-d-inference-objective. Results land on a per-model
+# x-llm-d-inference-objective. Results land on a per-model
 # list (results-a-list / -b-list).
 ap:
 
@@ -32,7 +32,6 @@ ap:
   requestMergePolicyConfig:
     type: "tier-priority"
     parameters:
-      priority_header: "x-gateway-priority"
       objective_header: "x-llm-d-inference-objective"
       fairness_header: "x-llm-d-inference-fairness-id"
       fairness_attribute: "team"

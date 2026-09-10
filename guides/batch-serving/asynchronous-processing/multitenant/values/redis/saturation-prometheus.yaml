@@ -7,7 +7,7 @@
 #  - TEAM quota (redis-quota, classifying): within quota -> reserved, over ->
 #    overflow. Per-model prefix (quota:a: / quota:b:).
 #  - TIER: per-queue label; the tier-priority merge policy orders each pool's
-#    reserved/overflow × tier lanes and stamps x-gateway-priority and x-llm-d-inference-objective.
+#    reserved/overflow × tier lanes and stamps x-llm-d-inference-objective.
 #
 # Replace: NAMESPACE, IGW_HOST, POOL_A/POOL_B (InferencePool names), PROM_URL,
 # SAT_CAP (concurrent requests at which a model is considered saturated).
@@ -21,7 +21,6 @@ ap:
   requestMergePolicyConfig:
     type: "tier-priority"
     parameters:
-      priority_header: "x-gateway-priority"
       objective_header: "x-llm-d-inference-objective"
       fairness_header: "x-llm-d-inference-fairness-id"
       fairness_attribute: "team"

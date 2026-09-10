@@ -14,7 +14,7 @@
 #   - TEAM  -> per-(team, model) reserved quota (redis-quota, classifying; per-model
 #     prefix quota:a: / quota:b:): within quota -> reserved, over -> overflow.
 #   - TIER  -> per-topic `tier` label; the tier-priority merge policy orders each
-#     pool's reserved/overflow × tier lanes and stamps x-gateway-priority.
+#     pool's reserved/overflow × tier lanes and stamps x-llm-d-inference-objective.
 #
 # Pub/Sub publishes all results to the single resultTopicId (unlike Redis, which
 # uses per-model result lists).
@@ -25,7 +25,6 @@ ap:
   requestMergePolicyConfig:
     type: "tier-priority"
     parameters:
-      priority_header: "x-gateway-priority"
       objective_header: "x-llm-d-inference-objective"
       fairness_header: "x-llm-d-inference-fairness-id"
       fairness_attribute: "team"

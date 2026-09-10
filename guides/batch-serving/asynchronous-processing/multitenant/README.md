@@ -50,8 +50,7 @@ The three dimensions:
 
 The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/294) runs
 **per pool independently**: within each model it buckets requests into **6 strict lanes** by
-`(classification, tier)`, dispatches them in order, and stamps both **`x-gateway-priority`** (0 = highest …
-5 = lowest) and **`x-llm-d-inference-objective`** via `lane_objectives`.
+`(classification, tier)`, dispatches them in order, and stamps **`x-llm-d-inference-objective`** via `lane_objectives`.
 
 By defining matching [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router)
 resources in the cluster, `llm-d-async` and `llm-d-router` Flow Control speak the exact same language.
@@ -73,9 +72,7 @@ is earliest-deadline-first (the deadline is the sorted-set score).
 
 ### Priority Values: Flow Control ON vs. Flow Control OFF
 
-The system establishes two complementary priority representations:
-- **`x-gateway-priority` (0 to 5):** A scalar integer priority where **0 is highest and 5 is lowest**. This is standard for generic reverse proxies, HTTP load balancers, or Envoy ingress filters that order dispatch based on ascending integer rank.
-- **`x-llm-d-inference-objective` & Router Band Priority (100 to -10):** The Kubernetes [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router) specification, where **higher numerical values represent higher scheduling priority**.
+Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
 
 #### With Flow Control ON (`llm-d-router`)
 When `llm-d-router` is deployed with Flow Control enabled (`featureGates: [flowControl]` in `flow-control.yaml`):
@@ -342,7 +339,7 @@ for t in premium standard batch; do publish "$t" a 1 & done; wait
 ```
 
 Every request is within its team's quota, so all are `reserved` and dispatched in tier order
-(premium→standard→batch), stamped `x-gateway-priority` 0/1/2. Read results from the per-model list:
+(premium→standard→batch), stamped with their respective lane objectives (`reserved-interactive`, `reserved-async`, `reserved-batch`). Read results from the per-model list:
 
 ```bash
 kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli LRANGE results-a-list 0 -1   # model B -> results-b-list

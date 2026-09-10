@@ -23,7 +23,6 @@ ap:
   requestMergePolicyConfig:
     type: "tier-priority"
     parameters:
-      priority_header: "x-gateway-priority"
       objective_header: "x-llm-d-inference-objective"
       fairness_header: "x-llm-d-inference-fairness-id"
       fairness_attribute: "team"
