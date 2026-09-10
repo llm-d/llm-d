@@ -80,5 +80,3 @@ spec:
       - name: shm
         emptyDir:
           medium: Memory
-      nodeSelector:
-        cloud.google.com/compute-class: l4-dws-spot
