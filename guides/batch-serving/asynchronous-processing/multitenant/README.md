@@ -37,7 +37,7 @@ The three dimensions:
 - **Model → pool isolation.** The publisher sets `payload.model`, which the gateway routes to that model's
   `InferencePool`. Each model gets its own worker pool (`model-a`, `model-b`) and independent saturation gate,
   so one model saturating does not park the other.
-- **Queue as the serving dimension (tier × model).** A queue represents a **serving SLA tier** for a target model
+- **Queue as the serving dimension (tier × model).** A queue represents a **serving tier** for a target model
   (e.g., interactive latency-sensitive, standard async, or batch throughput), **not a rigid single-tenant silo**.
   In production, multiple distinct teams can publish into the **same queue** concurrently. The request payload
   identifies the team via `metadata.team`.
@@ -46,7 +46,7 @@ The three dimensions:
   each team maintains its own independent concurrency counter in Redis. When multiple teams share a serving queue,
   one team exceeding its quota does not exhaust another team's budget: within quota → `reserved` (org-guaranteed),
   over quota → `overflow` (admitted and deprioritized, **not** nacked).
-- **Tier → priority.** A per-queue `tier` label: `interactive` (premium SLA) > `async` (standard SLA) > `batch`.
+- **Tier → priority.** A per-queue `tier` label: `interactive` (premium tier) > `async` (standard tier) > `batch`.
 
 The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/294) runs
 **per pool independently**: within each model it buckets requests into **6 strict lanes** by
@@ -82,7 +82,7 @@ When `llm-d-router` is deployed with Flow Control enabled (`featureGates: [flowC
 - **Centralized Priority Bands:** When model server capacity saturates (detected in real time via `concurrency-detector` or `utilization-detector`), requests are held in memory across priority bands matching the `InferenceObjective` priority (100, 60, 30, 10, 0, -10).
 - **Strict Band Dispatch:** The gateway scheduler drains highest-priority bands first: all `reserved` bands (100, 60, 30) dispatch before any `overflow` band (10, 0, -10) is admitted.
 - **Band Capacity & Drops on Full Bands:** Each priority band enforces isolated buffer limits via `maxRequests` and `maxBytes`. When a priority band reaches capacity, new incoming requests for that band are **dropped immediately (HTTP 429) regardless of that band's priority**. A high priority level does not grant unbounded buffer capacity; an overloaded priority 100 band drops its own incoming traffic rather than evicting queued requests from other bands.
-- **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** (honoring `Retry-After` headers if returned), provided the request's deadline has not expired.
+- **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
 - **In-Flight Eviction (`enableEviction: true`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`, such as `overflow-batch` at priority `-10`) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
@@ -92,6 +92,7 @@ When `llm-d-router` is deployed with Flow Control enabled (`featureGates: [flowC
 When `llm-d-router` operates in standard baseline mode (without the `flowControl` feature gate):
 - **Pass-Through Scheduling:** The router does not maintain priority band queues or tenant fairness buffers.
 - **Immediate Rejection of Sheddable Requests:** When the pool is saturated, **"sheddable" requests (those with negative priority, `priority < 0`) are immediately rejected with HTTP 429 (Too Many Requests)**. All other requests pass directly to the model servers and are scheduled via baseline routing plugins (such as `prefix-cache-scorer` and `queue-scorer`).
+- **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Saturation Telemetry:** The router still exposes real-time pool saturation metrics (`inference_extension_flow_control_pool_saturation` or vLLM metrics).
 - **Upstream Priority & Backpressure in `llm-d-async`:** Priority enforcement shifts entirely **upstream to the Async Processor**:
   - The `tier-priority` merge policy ensures that all `reserved` requests are dequeued and dispatched before `overflow` traffic, and higher tiers dispatch before lower tiers.
@@ -266,7 +267,7 @@ selects the model/pool at the gateway**), and `metadata.team` (the tenant identi
 and downstream fairness policy evaluate).
 
 ### Queues as Serving Dimensions vs. Team Identity
-- **The Queue is a Serving Dimension:** A queue corresponds to an SLA tier and model pair (e.g., `interactive` tier for `model-a`), not an isolated single-tenant partition.
+- **The Queue is a Serving Dimension:** A queue corresponds to an service tier and model pair (e.g., `interactive` tier for `model-a`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue. 
 - **Multiple Teams in One Queue:** Requests from different teams can be published into the **exact same queue**. The team identity is carried per-request inside `metadata.team` (e.g., `team: "marketing"` vs. `team: "engineering"`).
 - **Per-Team Quota Accounting:** The `redis-quota` gate dynamically reads `metadata.team` on each request and increments/decrements that specific team's counter (`quota:<model>:team:<team>`). If Team A saturates its reserved limit, Team A's excess traffic is deprioritized to `overflow`, while Team B publishing to that same queue continues to receive `reserved` capacity.
 - **Gateway Fairness ID:** At dispatch, `llm-d-async` stamps `metadata.team` into the `x-llm-d-inference-fairness-id` header so that `llm-d-router`'s Flow Control fairness policy treats tenants equitably during gateway queue contention.
