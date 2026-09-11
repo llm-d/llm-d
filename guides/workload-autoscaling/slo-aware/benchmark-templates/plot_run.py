@@ -176,6 +176,8 @@ def main():
 
     ax[3].plot(mins(n_s), vals(n_s), color=BLUE, lw=2, drawstyle="steps-post", label="provisioned")
     ax[3].plot(mins(r_s), vals(r_s), color=AQUA, lw=2, ls=":", drawstyle="steps-post", label="ready")
+    ax[3].plot([(t - t0) / 60 for t in ts_d], desired, color=AMBER, lw=1.5,
+               ls="--", drawstyle="steps-post", label="formula desired")
     ax[3].set_ylabel("replicas")
     ax[3].set_ylim(NMIN - 0.5, NMAX + 0.5)
     ax[3].legend(loc="upper left", frameon=False, ncol=2)
