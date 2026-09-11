@@ -76,15 +76,16 @@ spec:
             - name: VLLM_RBLN_USE_VLLM_MODEL
               value: "1"
           resources:
-            # Anonymous memory measured 51Gi both idle and under load; the rest of
-            # this limit is headroom for the page cache the model read charges to
-            # the cgroup. Keep cpu even — a node with an SMT-aligned static CPU
-            # manager rejects odd counts.
+            # cpu is the host's core count divided by its NPU count, so a pod gets the
+            # share that goes with the one NPU it claims. Keep it even — a node with an
+            # SMT-aligned static CPU manager rejects odd counts. Anonymous memory
+            # measured 51Gi both idle and under load; the rest of that limit is headroom
+            # for the page cache the model read charges to the cgroup.
             limits:
-              cpu: "10"
+              cpu: "16"
               memory: 157Gi
             requests:
-              cpu: "10"
+              cpu: "16"
               memory: 157Gi
             claims:
               - name: npu-decode-claim
