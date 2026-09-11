@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  # A rolling update keeps the old and the new pod of a replica both holding a
+  # claim, so neither becomes ready where there is no spare accelerator.
+  strategy:
+    type: Recreate
+  # Matches the startupProbe budget below. Left at the 600s default, a compile
+  # still running inside its budget trips ProgressDeadlineExceeded at ten minutes
+  # and anything reading Deployment conditions calls the rollout degraded.
+  progressDeadlineSeconds: 7215
+  template:
+    spec:
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 0
+        fsGroup: 1600
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "openai/gpt-oss-120b"
+            - "--served-model-name=openai/gpt-oss-120b"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--max-model-len=131072"
+            - "--block-size=4096"
+            - "--enable-chunked-prefill"
+            - "--max-num-batched-tokens=512"
+            # The runtime turns prefix caching off for sliding-window models, so leaving
+            # it on reports 0 hits over every query. Drop this once that support lands.
+            - "--no-enable-prefix-caching"
+            # Both measured on one Rebellions NPU at this data-parallel size. The block floor
+            # is ceil(max-model-len / block-size) = 32, so 34 leaves one spare.
+            - "--num-gpu-blocks-override=34"
+            - "--max-num-seqs=1"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_CACHE_ROOT
+              value: /workspace/.cache
+            - name: RBLN_COMP_DTYPE
+              value: dlfloat
+            - name: RBLN_LOCAL_IP
+              value: 127.0.0.1
+            - name: RBLN_ROOT_IP
+              value: 127.0.0.1
+            - name: RBLN_WEIGHT_FREE
+              value: "1"
+            # Unreachable in practice: the startupProbe budget below is 7215s.
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "9600"
+            - name: VLLM_RBLN_AUTO_PORT
+              value: "1"
+            - name: VLLM_RBLN_BATCH_ATTN_OPT
+              value: "1"
+            - name: VLLM_RBLN_COMPILE_STRICT_MODE
+              value: "1"
+            - name: VLLM_RBLN_METRICS
+              value: "1"
+            - name: VLLM_RBLN_MOE_REDUCE_SCATTER
+              value: "1"
+            - name: VLLM_RBLN_SAMPLER
+              value: "1"
+            - name: VLLM_RBLN_SORT_BATCH
+              value: "1"
+            - name: VLLM_RBLN_SUB_BLOCK_CACHE
+              value: "False"
+            - name: VLLM_RBLN_USE_DEVICE_TENSOR
+              value: "1"
+            - name: VLLM_RBLN_USE_VLLM_MODEL
+              value: "1"
+          resources:
+            # Anonymous memory measured 51Gi both idle and under load; the rest of
+            # this limit is headroom for the page cache the model read charges to
+            # the cgroup. Keep cpu even — a node with an SMT-aligned static CPU
+            # manager rejects odd counts.
+            limits:
+              cpu: "10"
+              memory: 157Gi
+            requests:
+              cpu: "10"
+              memory: 157Gi
+            claims:
+              - name: npu-decode-claim
+          volumeMounts:
+            - mountPath: /workspace/.cache
+              name: rbln-compile-cache
+            - mountPath: /dev/shm
+              name: shm
+          # 15 + 30x240 = 7215s, wider than the 3615s the other overlays in this
+          # guide use. A cold compile measured 314s on one Rebellions NPU and the cache
+          # is an emptyDir, so a restart pays that again — but the first start also
+          # pulls 65GiB of weights, which on its own ran past half the narrower
+          # budget. The vendor's own reference deployment allows the same 240 checks.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      resourceClaims:
+        - name: npu-decode-claim
+          resourceClaimTemplateName: npu-claim-template-decode
+      volumes:
+        - name: rbln-compile-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
