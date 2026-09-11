@@ -1,0 +1,87 @@
+# Token-aware KEDA autoscaling for the DECODE role of a P/D-disaggregated topology.
+#
+# Decode has no equivalent of peakPrefillThroughput — no measured rate, no unit
+# conversion. Its query returns KV cache occupancy, which is already a fraction of
+# capacity, so the threshold is compared to it directly. The unit is "pods' worth
+# of full KV cache".
+#
+# Before applying, update:
+#   - namespace in the query, to your deployment's namespace
+#   - the .*decode.* pod selector if your Deployments are named differently
+#   - threshold, minReplicaCount, maxReplicaCount
+#   - serverAddress if your Prometheus is not the bundled llm-d stack (see ../ocp)
+#
+# KEDA will create its own HPA from this ScaledObject. Do NOT apply a separate hpa.yaml.
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: pd-disaggregation-nvidia-gpu-vllm-decode-token-aware
+  labels:
+    app.kubernetes.io/part-of: keda-epp-token-aware
+    llm-d.ai/role: decode
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pd-disaggregation-nvidia-gpu-vllm-decode
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  triggers:
+    # DECODE: pods' worth of full KV cache, summed over decode pods.
+    #
+    # When a decode pod's KV cache fills, vLLM stops admitting requests outright, so
+    # you act before that: 0.8 means "one replica per 0.8 pods' worth of occupied
+    # cache".
+    #
+    # This is a vLLM metric rather than an EPP one on purpose. The autoscaler needs a
+    # KV reading PER POD so it can filter to decode pods and sum them; vLLM reports
+    # exactly that. The EPP's only KV metric is a single pool-wide average covering
+    # both roles, which cannot be split by role.
+    #
+    # The pod=~".*decode.*" filter is load-bearing: without it the query sums prefill
+    # KV usage into the decode replica count.
+    #
+    # sum(), not avg() or max(): with metricType AverageValue the HPA computes
+    # ceil(value / threshold), so the numerator must grow with the pool. A per-pod
+    # average cannot exceed ~1.0 however many pods are full, which would pin decode
+    # at 2 replicas forever. sum() also guarantees the empty label set that lets
+    # `or vector(0)` collapse to the single series KEDA requires.
+    #
+    # vllm:* is scraped from each pod's own /metrics, so a removed pod's scrape target
+    # disappears and its series goes stale on its own — this trigger was never exposed
+    # to the EPP gauge-pruning issue (llm-d-router#2529) the prefill one was.
+    - type: prometheus
+      name: decode-kv-utilization
+      metricType: AverageValue
+      metadata:
+        serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+        query: |
+          sum(vllm:kv_cache_usage_perc{namespace="llm-d-pd-disaggregation",
+                                       pod=~".*decode.*"}) or vector(0)
+        # Pods' worth of full KV cache per replica. Lower keeps more headroom,
+        # higher runs hotter.
+        threshold: "0.8"
+        activationThreshold: "0"
+        unsafeSsl: "false"
+      authenticationRef:
+        name: prometheus-auth
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        # Decode holds each request for its whole generation, so its scale-down is
+        # deliberately slower than its scale-up: removing a pod mid-generation
+        # costs in-flight requests.
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 180
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 300

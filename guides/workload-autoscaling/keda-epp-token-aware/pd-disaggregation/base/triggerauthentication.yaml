@@ -1,0 +1,22 @@
+# KEDA TriggerAuthentication for Prometheus bearer token access.
+#
+# Shared by both ScaledObjects in this overlay. References the `prometheus-token`
+# Secret that the guide's Configure step copies from the monitoring namespace into
+# the workload namespace — it carries both the bearer token and the CA certificate
+# needed to reach the bundled kube-prometheus-stack over HTTPS.
+#
+# On OpenShift the ../ocp overlay repoints this at the auto-provisioned
+# metrics-reader ServiceAccount token instead, so the copy step is not needed.
+
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: prometheus-auth
+spec:
+  secretTargetRef:
+    - parameter: bearerToken
+      name: prometheus-token
+      key: token
+    - parameter: ca
+      name: prometheus-token
+      key: ca.crt

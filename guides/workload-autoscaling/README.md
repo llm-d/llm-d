@@ -56,9 +56,17 @@ Adapter.
 
 The [Saturation-based Autoscaling](./keda-epp-saturation/README.md) path has KEDA query Prometheus directly for InferencePool-scoped saturation and running-request metrics, then scale the model server Deployment. KEDA consumes two EPP metrics — pool saturation level (0.0–1.0+, normalized measure of how loaded the pool is) and active in-flight request count — and drives scaling decisions. Well-suited for simple homogeneous deployments where each model scales independently and you want minimal operational overhead.
 
+#### Token-Aware Autoscaling
+
+The [Token-Aware Autoscaling](./keda-epp-token-aware/README.md) path scales on **tokens of outstanding work** rather than a count of requests. An 8192-token prompt is 16x the prefill work of a 512-token one, and a request or queue-depth counter rates them the same, so the same request rate can mean a third of a replica or three replicas of prefill work.
+
+This path measures each phase in its own unit: prefill divides the EPP's in-flight token backlog by a calibrated `peakPrefillThroughput` to get **seconds of queue wait**, comparable directly against a share of your TTFT SLO, while decode reads per-pod KV cache occupancy. Overlays are provided for both topologies: P+D co-located (both phases in one pod) and P/D-disaggregated (split across pods). Best when prompt sizes vary widely, or when you want the prefill threshold derived from a latency target rather than tuned by trial. Requires one calibration run per hardware/model combination.
+
 #### SLO-Aware Autoscaling (KEDA + estimated latency)
 
-A specialization of this path drives the HPA from the pool's **latency** rather than its queue depth. The [SLO-Aware Autoscaling](./slo-aware/README.md) sub-path scales directly against latency SLOs, using the EPP's **estimated** TTFT/TPOT as the signal — either its ML-predicted latency (from the online-trained predictor) or the actual measured latency aggregated in real time when the predictor isn't enabled. A Prometheus recording rule turns that estimate into a single saturation ratio (latency ÷ SLO), and a KEDA `ScaledObject` with an [expr-lang](https://expr-lang.org/) formula computes the desired replica count and drives a standard HPA — no custom controller. With the ML predictor, capacity is added as pressure builds rather than after the queue has already formed. Best when clients express per-request latency SLOs and you want scaling driven by the objective itself rather than a proxy metric.
+A specialization of this path drives the HPA from the pool's **latency** rather than its queue depth. The [SLO-Aware Autoscaling](./slo-aware/README.md) sub-path scales directly against latency SLOs, using the EPP's **estimated** TTFT/TPOT as the signal — either its ML-predicted latency (from the online-trained predictor) or the actual measured latency aggregated in real time when the predictor isn't enabled.
+
+A Prometheus recording rule turns that estimate into a single saturation ratio (latency ÷ SLO), and a KEDA `ScaledObject` with an [expr-lang](https://expr-lang.org/) formula computes the desired replica count and drives a standard HPA — no custom controller. With the ML predictor, capacity is added as pressure builds rather than after the queue has already formed. Best when clients express per-request latency SLOs and you want scaling driven by the objective itself rather than a proxy metric.
 
 ### KEDA + WVA Metrics (Legacy)
 
@@ -68,22 +76,24 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Scaling Signal
 
-| | [Queue-based Autoscaling](./keda-epp-queue/README.md) | [Saturation-based Autoscaling](./keda-epp-saturation/README.md) | [SLO-Aware Autoscaling](./slo-aware/README.md) | [KEDA + WVA Metrics](./wva/README.md) |
-|---|---|---|---|---|
-| **Best for** | Homogeneous deployments; scale on absolute queue depth / running requests (lagging, per-deployment thresholds, no over-provisioning) | Homogeneous deployments; scale on a normalized saturation ratio (leading, more portable thresholds, can potentially over-provision) | Single-pool deployments with per-request latency SLOs, scaled on predicted latency | Multi-variant deployments with cost-aware placement across heterogeneous hardware |
-| **Scaling signal** | EPP metrics such as queue depth and running request count | normalized pool saturation level (0.0–1.0+) and running request count | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO | KV cache utilization, queue depth, performance budgets |
-| **Cost optimization** | None — scales based on load signals only | None — scales based on load signals only | Minimizes replicas needed to meet the SLO | Optimizes across variants by preferring lower-cost hardware |
-| **Additional components** | KEDA and Prometheus only | KEDA and Prometheus only | KEDA + one Prometheus recording rule | KEDA and WVA controller |
-| **Scale to zero** | Supported | Supported (Needs Validation) | Supported (via KEDA) | Supported |
+| | [Queue-based Autoscaling](./keda-epp-queue/README.md) | [Saturation-based Autoscaling](./keda-epp-saturation/README.md) | [Token-Aware Autoscaling](./keda-epp-token-aware/README.md) | [SLO-Aware Autoscaling](./slo-aware/README.md) | [KEDA + WVA Metrics](./wva/README.md) |
+| --- | --- | --- | --- | --- | --- |
+| **Best for** | Homogeneous deployments; scale on absolute queue depth / running requests (lagging, per-deployment thresholds, no over-provisioning) | Homogeneous deployments; scale on a normalized saturation ratio (leading, more portable thresholds, can potentially over-provision) | Deployments with heterogeneous prompt sizes; scale on token backlog, with the prefill threshold derived from a TTFT SLO | Single-pool deployments with per-request latency SLOs, scaled on predicted latency | Multi-variant deployments with cost-aware placement across heterogeneous hardware |
+| **Scaling signal** | EPP metrics such as queue depth and running request count | normalized pool saturation level (0.0–1.0+) and running request count | EPP in-flight tokens ÷ calibrated prefill throughput (seconds of backlog), and per-pod KV cache occupancy | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO | KV cache utilization, queue depth, performance budgets |
+| **Cost optimization** | None — scales based on load signals only | None — scales based on load signals only | None — scales based on load signals only | Minimizes replicas needed to meet the SLO | Optimizes across variants by preferring lower-cost hardware |
+| **Additional components** | KEDA and Prometheus only | KEDA and Prometheus only | KEDA and Prometheus, plus one `peakPrefillThroughput` calibration run | KEDA + one Prometheus recording rule | KEDA and WVA controller |
+| **Scale to zero** | Supported | Supported (Needs Validation) | Supported (Needs Validation) | Supported (via KEDA) | Supported |
 
 ## Observability & Troubleshooting
 
-Autoscaling is a closed loop, so the useful view is not a single metric but the **composed signal** across the model servers, the autoscaler, and the resulting pool. Watch the loop end to end: a demand signal rises, the autoscaler raises a replica target, new replicas become ready, and the demand signal comes back down. When scaling misbehaves, the break is almost always at one of those handoffs. Full definitions for the model-server and EPP signals live in the [metric reference](../../docs/operations/observability/metrics.md) and [PromQL reference](../../docs/operations/observability/promql.md); WVA's own metrics are defined in the [WVA Prometheus reference](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/developer-guide/prometheus.md).
+Autoscaling is a closed loop, so the useful view is not a single metric but the **composed signal** across the model servers, the autoscaler, and the resulting pool. Watch the loop end to end: a demand signal rises, the autoscaler raises a replica target, new replicas become ready, and the demand signal comes back down. When scaling misbehaves, the break is almost always at one of those handoffs.
 
-#### Key metrics for this path
+Full definitions for the model-server and EPP signals live in the [metric reference](../../docs/operations/observability/metrics.md) and [PromQL reference](../../docs/operations/observability/promql.md); WVA's own metrics are defined in the [WVA Prometheus reference](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/developer-guide/prometheus.md).
+
+### Key metrics for this path
 
 | Stage in the loop | Signal | Why it matters |
-|-------------------|--------|----------------|
+| ------------------- | -------- | ---------------- |
 | Demand | `vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc` ([PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving)) | The leading indicators autoscaling exists to react to. Queue depth and KV pressure rise before latency does |
 | Demand (EPP view) | `llm_d_epp_request_running` ([Metrics → EPP](../../docs/operations/observability/metrics.md#key-llm-d-router-epp-metrics)) | On the KEDA + EPP path this is the scaling signal itself. Compare it against replica count to see whether scaling is tracking demand |
 | Decision (WVA) | `wva_desired_replicas`, `wva_current_replicas`, `wva_saturation_utilization` | WVA's replica target vs. what is running. A gap that persists means the decision is made but not being actuated |
@@ -91,7 +101,7 @@ Autoscaling is a closed loop, so the useful view is not a single metric but the 
 | Convergence | `llm_d_epp_ready_endpoints` ([Metrics → EPP](../../docs/operations/observability/metrics.md#key-llm-d-router-epp-metrics)) | The pool the router can actually route to. If desired replicas climb but ready endpoints do not follow, new pods are not becoming Ready |
 | Outcome | `vllm:time_to_first_token_seconds`, `vllm:num_requests_waiting` ([Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics)) | Confirms the loop closed: after capacity lands, queue depth and TTFT should recover. If they do not, you scaled on the wrong signal |
 
-#### Common failure modes
+### Common failure modes
 
 * **Demand signal saturated but replicas flat** — the autoscaler is not reacting. On the WVA path check `wva_metrics_freshness_status` and `wva_desired_replicas` for the variant; on the KEDA + EPP path check that the `ScaledObject` is Ready and the external metric is resolving. See the metric-plumbing steps in the [KEDA + EPP troubleshooting](./keda-epp-queue/README.md#troubleshooting) section.
 * **Replica target climbs but the pool does not grow** — `wva_desired_replicas` (or the HPA desired count) rises while `wva_current_replicas` / `llm_d_epp_ready_endpoints` lag. New pods are not scheduling or not passing readiness, usually GPU quota or image pull. See [Desired replicas increase but new replicas are not Ready](./keda-epp-queue/README.md#desired-replicas-increase-but-new-replicas-are-not-ready).
