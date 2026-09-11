@@ -63,6 +63,6 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 2Gi
+            sizeLimit: 32Gi
         - name: torch-compile-cache
           emptyDir: {}
