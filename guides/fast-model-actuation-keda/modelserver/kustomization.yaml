@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - ../../fast-model-actuation/modelserver
-  - ../keda/overlays/ocp
 
 patches:
   - target:
@@ -16,10 +15,8 @@ patches:
         name: fma-isc
       spec:
         modelServerConfig:
-          options: "--model Qwen/Qwen3-0.6B --enable-sleep-mode --gpu-memory-utilization 0.9"
           labels:
             llm-d.ai/guide: "fast-model-actuation-keda"
-            llm-d.ai/model: "qwen3-0.6b"
   - target:
       kind: Deployment
       name: fma-requester
