@@ -71,10 +71,6 @@ class DockerfileParser:
 
             # detect new build stage
             if line.upper().startswith('FROM'):
-                match = re.match(r'FROM\s+(\S+)(?:\s+AS\s+(\w+))?', line, re.IGNORECASE)
-                base_ref = match.group(1) if match else None
-                if match and match.group(2):
-                    self.current_stage = match.group(2)
                 match = re.match(
                     r'FROM\s+(?:(?:--\S+)\s+)*(?P<base>\S+)'
                     r'(?:\s+AS\s+(?P<stage>\w+))?',
@@ -90,14 +86,17 @@ class DockerfileParser:
 
                 if self.current_stage not in self.stages:
                     # A stage built FROM an earlier named stage inherits that
-                    # stage's ENV (but not ARG — ARGs are scoped to the stage
-                    # that declares them and don't cross a FROM boundary,
-                    # per https://docs.docker.com/reference/dockerfile/#arg).
-                    # base_ref is a literal match only; a templated ref like
-                    # `FROM base-${TARGETARCH}` won't match a known stage
-                    # name, so no inheritance is assumed there.
-                    inherited_env = set(self.stages[base_ref]['ENV']) if base_ref in self.stages else set()
-                    self.stages[self.current_stage] = {'ARG': set(), 'ENV': inherited_env}
+                    # stage's ARG and ENV declarations. Confirmed empirically
+                    # with `docker build`: a stage-scoped ARG (declared after
+                    # that stage's own FROM) carries forward through
+                    # descendant stages without needing re-declaration — only
+                    # a *global* ARG declared before the first FROM needs a
+                    # bare `ARG NAME` to be re-imported into a stage, and
+                    # global ARGs are out of scope here since this parser
+                    # only starts tracking once self.current_stage is set.
+                    # base_stage is a literal match only; a templated ref
+                    # like `FROM base-${TARGETARCH}` won't match a known
+                    # stage name, so no inheritance is assumed there.
                     inherited = self.stages.get(base_stage, {}) if base_stage else {}
                     self.stages[self.current_stage] = {
                         'ARG': set(inherited.get('ARG', set())),
