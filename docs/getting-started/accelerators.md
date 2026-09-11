@@ -78,7 +78,7 @@ The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM bas
 
 ## Iluvatar
 
-Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). P/D disaggregation has been validated end-to-end through llm-d routing on a 2x BI-V150 single-node cluster.
+Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). The P/D overlay serves `Qwen/Qwen3-32B` on 8× BI-V150 (1× TP=4 prefill + 1× TP=4 decode).
 
 **UCX transport (required for P/D):**
 

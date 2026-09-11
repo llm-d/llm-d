@@ -10,19 +10,19 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "/models/Qwen2.5-1.5B-Instruct"
-            - "--served-model-name=qwen"
-            - "--tensor-parallel-size=1"
-            - "--max-model-len=2048"
-            - "--gpu-memory-utilization=0.6"
-            - "--enforce-eager"
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=4"
+            - "--block-size=128"
             - "--kv-transfer-config"
             - '{"kv_connector":"IluNixlConnector","kv_role":"kv_both","kv_buffer_device":"cuda"}'
+            - "--no-disable-hybrid-kv-cache-manager"
           env:
-            - name: HF_HUB_OFFLINE
-              value: "1"
-            - name: TRANSFORMERS_OFFLINE
-              value: "1"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: UCX_TLS
               value: "cuda_copy,cuda_ipc,tcp,self,posix,sysv"
             - name: UCX_PROTO_ENABLE
@@ -41,41 +41,43 @@ spec:
               value: "120"
           resources:
             limits:
-              cpu: "8"
-              memory: 20Gi
-              iluvatar.com/gpu: "1"
+              cpu: "16"
+              memory: 64Gi
+              iluvatar.com/gpu: "4"
             requests:
-              cpu: "8"
-              memory: 20Gi
-              iluvatar.com/gpu: "1"
+              cpu: "16"
+              memory: 64Gi
+              iluvatar.com/gpu: "4"
           volumeMounts:
-            - mountPath: /models
-              name: models
             - mountPath: /dev/shm
               name: shm
             - mountPath: /.cache
               name: torch-compile-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /.triton
+              name: triton-cache
           startupProbe:
-            initialDelaySeconds: 30
+            initialDelaySeconds: 15
             periodSeconds: 30
-            timeoutSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 120
           livenessProbe:
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 20
-          readinessProbe:
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 60
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
       volumes:
-        - name: models
-          hostPath:
-            path: /root/models
-            type: Directory
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 8Gi
+            sizeLimit: 20Gi
         - name: torch-compile-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: triton-cache
           emptyDir: {}

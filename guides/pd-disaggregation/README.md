@@ -54,7 +54,7 @@ This guide includes configuration for the following accelerators:
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
-| Iluvatar GPU        | `modelserver/iluvatar/vllm/` | Iluvatar BI-V150, community contributed; vendor-fork `IluNixlConnector` with `kv_buffer_device=cuda` |
+| Iluvatar GPU        | `modelserver/iluvatar/vllm/base/` | Iluvatar BI-V150, community contributed; Qwen3-32B on 8 GPUs (1× TP=4 prefill + 1× TP=4 decode); vendor-fork `IluNixlConnector` with `kv_buffer_device=cuda` |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
