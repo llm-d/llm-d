@@ -1,0 +1,22 @@
+# A pod can only name a LocalQueue in its own namespace, never a ClusterQueue,
+# so one LocalQueue per model is the required indirection. When both models live
+# in the same namespace these are also the only thing routing each model's pods
+# to its own ClusterQueue - namespaceSelector cannot tell them apart.
+#
+# They double as the per-model view: `kubectl get localqueue -n <namespace>`
+# reports pending and admitted workloads per model.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: model-a-lq
+  namespace: llm-d-optimized-baseline
+spec:
+  clusterQueue: model-a-cq
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: model-b-lq
+  namespace: llm-d-optimized-baseline
+spec:
+  clusterQueue: model-b-cq

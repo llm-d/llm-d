@@ -54,6 +54,9 @@ jobs:
       - name: Install KEDA CRDs
         run: .github/scripts/install-keda-crds.sh
 
+      - name: Install Kueue CRDs
+        run: .github/scripts/install-kueue-crds.sh
+
       - name: Install Envoy Gateway CRDs
         run: .github/scripts/install-envoy-gateway-crds.sh
 

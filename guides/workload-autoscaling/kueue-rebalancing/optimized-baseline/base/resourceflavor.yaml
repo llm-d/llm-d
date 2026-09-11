@@ -1,0 +1,10 @@
+# One homogeneous accelerator pool. An empty spec matches every node, so quota
+# is enforced on the GPU count alone.
+#
+# For heterogeneous hardware, define one ResourceFlavor per GPU type with
+# nodeLabels (for example nvidia.com/gpu.product: NVIDIA-A100-SXM4-80GB) and
+# give each flavor its own nominalQuota in the ClusterQueues below.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: gpu-default

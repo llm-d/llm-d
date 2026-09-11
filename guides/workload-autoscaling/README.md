@@ -109,3 +109,15 @@ annotated HPAs when multiple models share a GPU budget. Integration with
 KEDA-generated HPAs requires annotation-propagation support and is not covered
 by the KEDA+EPP guide. The feature is a proof of concept and is not
 production-ready; use it only in test or development environments.
+
+### Kueue-Based Replica Rebalancing (Experimental)
+
+The [Kueue-Based Replica Rebalancing guide](./kueue-rebalancing/README.md)
+enforces the same shared GPU budget with [Kueue](https://kueue.sigs.k8s.io/)
+instead of a control loop over HPAs. Each model gets a `ClusterQueue` with a
+guaranteed GPU floor in a shared cohort, and replica pods are admitted only when
+quota is free — so an idle model's GPUs are lent to a busy one and reclaimed by
+preemption. Enforcement happens below the HPA, so KEDA-generated HPAs work
+unmodified, but over-budget demand shows up as `Pending` pods rather than a
+lowered `maxReplicas`. Do not run this alongside the experimental replica
+rebalancer.

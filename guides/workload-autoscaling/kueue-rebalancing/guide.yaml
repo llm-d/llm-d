@@ -1,0 +1,123 @@
+name: kueue-rebalancing
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    NAMESPACE:       llm-d-optimized-baseline
+    KUEUE_NAMESPACE: kueue-system
+
+    # Kueue chart version. 0.19.x serves the v1beta2 API used by the quota
+    # overlay, and enables the `pod` and `deployment` integrations by default.
+    KUEUE_VERSION: { default: "0.19.1" }
+
+    # The two model server Deployments that share one GPU budget. Model A is the
+    # optimized-baseline decode Deployment; model B is the second pool added by
+    # the multi-inference-pool guide. Set these to your own Deployment names.
+    DEPLOYMENT_A: { default: "optimized-baseline-nvidia-gpu-vllm-decode" }
+    DEPLOYMENT_B: { default: "model-b-nvidia-gpu-vllm-decode" }
+
+    # LocalQueue each Deployment opts into, from the quota overlay below.
+    QUEUE_A: { default: "model-a-lq" }
+    QUEUE_B: { default: "model-b-lq" }
+
+    # Quota overlay for this guide (ResourceFlavor, ClusterQueues, LocalQueues).
+    QUOTA_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/kueue-rebalancing/optimized-baseline
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  # Install Kueue. The chart is published as an OCI artifact; --wait blocks until
+  # the controller manager and its webhooks are serving, which the quota objects
+  # below depend on.
+  kueue:
+    - run: |
+        helm install kueue oci://registry.k8s.io/kueue/charts/kueue \
+          --version ${KUEUE_VERSION} \
+          -n ${KUEUE_NAMESPACE} --create-namespace --wait
+
+  # Confirm the controller is up and that the `pod` and `deployment` integrations
+  # are active. They are on by default in 0.19.x; without them the queue-name
+  # label is inert and no pod is ever gated.
+  integrations:
+    - run: |
+        kubectl wait --for=condition=Available -n ${KUEUE_NAMESPACE} \
+          deploy/kueue-controller-manager --timeout=180s
+        kubectl get cm kueue-manager-config -n ${KUEUE_NAMESPACE} \
+          -o jsonpath='{.data.controller_manager_config\.yaml}' \
+          | grep -A 20 'integrations:'
+
+deploy:
+  # Apply the quota objects: one ResourceFlavor, one ClusterQueue per model in a
+  # shared cohort, and one LocalQueue per model in the workload namespace.
+  # Edit the nominalQuota floors to match your GPU count before applying.
+  quota:
+    - run: kubectl apply -k ${QUOTA_ROOT}/base
+
+  # Opt each Deployment in with the queue-name label. On the Deployment it is the
+  # documented opt-in surface, and Kueue's webhook copies it to the pod template;
+  # setting it on the template too makes the opt-in explicit and independent of
+  # that propagation. Every replica the HPA creates inherits it and becomes its
+  # own Kueue Workload. Deployments without the label are untouched by Kueue.
+  optin:
+    - run: |
+        for pair in "${DEPLOYMENT_A}:${QUEUE_A}" "${DEPLOYMENT_B}:${QUEUE_B}"; do
+          deployment=${pair%%:*}; queue=${pair##*:}
+          kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
+            "{\"metadata\":{\"labels\":{\"kueue.x-k8s.io/queue-name\":\"${queue}\"}},\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"kueue.x-k8s.io/queue-name\":\"${queue}\"}}}}}"
+        done
+
+  # Roll out with no surge. At full quota a surge pod has no GPU to claim, so it
+  # is gated and the rollout stalls behind it; terminating first keeps rollouts
+  # moving. The alternative is to keep one replica of slack in the budget.
+  rollout_strategy:
+    - run: |
+        for deployment in ${DEPLOYMENT_A} ${DEPLOYMENT_B}; do
+          kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge \
+            -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":0,"maxUnavailable":1}}}}'
+        done
+
+verify:
+  tests:
+    # ClusterQueue status is the whole picture: admitted GPUs per model, how many
+    # are borrowed from the cohort, and how many workloads are waiting. The
+    # LocalQueues give the same per-model view from inside the namespace.
+    queues:
+      - run: |
+          kubectl get clusterqueues -o wide
+          kubectl get localqueues -n ${NAMESPACE}
+
+    # One Workload per replica pod, and pods above quota sitting Pending behind a
+    # scheduling gate rather than being scheduled onto GPUs that do not exist.
+    workloads:
+      - run: |
+          kubectl get workloads -n ${NAMESPACE}
+          kubectl get pods -n ${NAMESPACE} \
+            -l kueue.x-k8s.io/queue-name --show-labels
+          kubectl get pods -n ${NAMESPACE} -o json \
+            | jq -r '.items[] | select((.spec.schedulingGates // []) | length > 0)
+                     | "gated: \(.metadata.name) \([.spec.schedulingGates[].name] | join(","))"'
+
+    # A gated pod explains itself through its Workload: which queue it is in, and
+    # exactly which resource the cohort could not satisfy.
+    gated:
+      - run: |
+          for w in $(kubectl get workloads -n ${NAMESPACE} -o json \
+            | jq -r '.items[] | select((.status.conditions // [])
+                     | any(.type=="QuotaReserved" and .status!="True")) | .metadata.name'); do
+            kubectl get workload "$w" -n ${NAMESPACE} -o json \
+              | jq -r '"workload: \(.metadata.name)  queue: \(.spec.queueName)",
+                       (.status.conditions[]? | "  \(.type)=\(.status) reason=\(.reason)\n    \(.message)")'
+          done
+
+cleanup:
+  # Removing the label stops Kueue managing pods created from then on; pods
+  # already admitted keep running. Do this before deleting the quota objects, so
+  # no replica is left gated with no ClusterQueue to admit it.
+  - run: |
+      for deployment in ${DEPLOYMENT_A} ${DEPLOYMENT_B}; do
+        kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
+          '{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":null}},"spec":{"template":{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":null}}}}}'
+      done
+  - run: kubectl delete -k ${QUOTA_ROOT}/base --ignore-not-found=true
