@@ -1,0 +1,75 @@
+# OpenShift overlay for the FMA + KEDA scale-from-zero autoscaling guide.
+#
+# Mirrors the keda-epp-queue sibling's ocp overlay: it pulls the shared
+# recipes/autoscaling/metrics-reader auth bundle (a dedicated
+# keda-epp-metrics-reader ServiceAccount + token Secret) as a Component, points
+# the queue-depth trigger at Thanos Querier, and enables bearer auth. On
+# OpenShift the service-ca operator injects `service-ca.crt` (the CA that signs
+# Thanos's serving cert) into the token Secret automatically, so no manual
+# token/CA copy is required.
+#
+# FMA delta vs. the sibling: this overlay is namespace-agnostic (the benchmark
+# applies it with `kubectl apply -n ${NAMESPACE} -k ...`), so it carries no
+# `namespace:` transformer. The metrics-reader Component's ClusterRoleBinding is
+# transformer-dependent (its subject namespace would not be rewritten), so it is
+# removed here and created imperatively -- with a namespace-unique name -- in the
+# guide's RBAC step. The Component's ServiceAccount and token Secret carry no
+# namespace, so they land in ${NAMESPACE} via the `-n` flag.
+#
+# The EPP /metrics scrape is handled by the router chart's ServiceMonitor
+# (enabled via recipes/router/features/monitoring.values.yaml at router install),
+# so this overlay ships no ServiceMonitor or EPP metrics-reader of its own.
+#
+# NOTE: the PromQL label selector inside the trigger query is an opaque string
+# kustomize cannot reach -- edit inference_pool in the ScaledObject query patch
+# in ../base/kustomization.yaml to match your EPP pool.
+#
+# Build:  kubectl kustomize guides/fast-model-actuation-keda/keda/ocp
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+# Shared OCP metrics-reader auth (SA + token Secret; its ClusterRoleBinding is
+# removed below and created imperatively in the guide's RBAC step).
+components:
+  - ../../../recipes/autoscaling/metrics-reader
+
+patches:
+  # Drop the Component's ClusterRoleBinding: it pins a subject namespace and
+  # relies on a namespace transformer this overlay deliberately omits. The guide
+  # creates the equivalent binding imperatively, with a namespace-unique name, in
+  # its RBAC step.
+  - patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: keda-epp-metrics-reader-monitoring-view
+  # Repoint the TriggerAuthentication from CA-only to bearer+CA, using the
+  # ServiceAccount token Secret (token + service-ca.crt).
+  - patch: |-
+      - op: replace
+        path: /spec/secretTargetRef
+        value:
+          - parameter: bearerToken
+            name: keda-epp-metrics-reader-token
+            key: token
+          - parameter: ca
+            name: keda-epp-metrics-reader-token
+            key: service-ca.crt
+    target:
+      kind: TriggerAuthentication
+      name: keda-prometheus-auth
+  # Point the queue-depth trigger at Thanos Querier and enable bearer authentication.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+    target:
+      kind: ScaledObject
+      name: fast-model-actuation-keda-queue

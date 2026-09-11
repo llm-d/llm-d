@@ -1,0 +1,60 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Mirror the keda-epp-queue sibling's queue-size ScaledObject base (threshold 1,
+# metricType AverageValue), adapted for FMA's two constraints:
+#   1. Namespace-agnostic — the benchmark kustomize standup applies this guide
+#      with `kubectl apply -n ${NAMESPACE} -k ...` to arbitrary namespaces, so we
+#      strip the base's pinned `namespace:` from both the ScaledObject and the
+#      TriggerAuthentication. The kustomize output then carries no namespace and
+#      the `-n` flag places every resource in the target namespace.
+#   2. Scale-from-zero on queue depth only — minReplicaCount 0, maxReplicaCount 2,
+#      and the running-requests trigger removed, leaving a single flow-control
+#      queue-size trigger keyed on the FMA EPP's inference_pool.
+resources:
+  - ../../../workload-autoscaling/keda-epp-queue/optimized-baseline/base
+
+patches:
+  - target:
+      group: keda.sh
+      version: v1alpha1
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp
+    patch: |-
+      - op: remove
+        path: /metadata/namespace
+      - op: replace
+        path: /metadata/name
+        value: fast-model-actuation-keda-queue
+      - op: replace
+        path: /spec/scaleTargetRef/name
+        value: fma-requester
+      - op: replace
+        path: /spec/minReplicaCount
+        value: 0
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 2
+      # Let KEDA auto-name the generated HPA (the base pins an
+      # optimized-baseline-specific name).
+      - op: remove
+        path: /spec/advanced/horizontalPodAutoscalerConfig/name
+      # Key the queue-depth query on this guide's EPP inference_pool. The base's
+      # namespace/service/model_name selectors are optimized-baseline-specific;
+      # inference_pool alone is sufficient and namespace-agnostic.
+      - op: replace
+        path: /spec/triggers/0/metadata/query
+        value: |
+          sum(llm_d_epp_flow_control_queue_size{inference_pool="fast-model-actuation-keda"})
+      # Queue-only: drop the running-requests trigger (scale-from-zero is driven
+      # solely by flow-control queue depth).
+      - op: remove
+        path: /spec/triggers/1
+  - target:
+      group: keda.sh
+      version: v1alpha1
+      kind: TriggerAuthentication
+      name: keda-prometheus-auth
+    patch: |-
+      - op: remove
+        path: /metadata/namespace
