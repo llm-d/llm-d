@@ -9,14 +9,15 @@ This guide shows how to deploy llm-d with
 
 ## Prerequisites
 
-1. You have verified the version in and sourced in the llm-d repo wide `env.sh` file:
+1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
+2. You have verified the version in and sourced in the llm-d repo wide `env.sh` file:
 
-```bash
-export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-source ${REPO_ROOT}/guides/env.sh
-```
+   ```bash
+   export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+   source ${REPO_ROOT}/guides/env.sh
+   ```
 
-1. The following steps from the [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
+3. The following steps from the [GKE Inference Gateway deployment documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway) should be run:
 
 * [Verify your prerequisites](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#before-you-begin)
 * [Configure a proxy-only subnet](https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways#configure_a_proxy-only_subnet)
