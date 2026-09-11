@@ -7,15 +7,20 @@ and monitors multi-minute in-process queue draining and upstream completion.
 
 import argparse
 import json
+import os
 import random
+import socket
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 
-NAMESPACE = "llm-d-async"
-REDIS_DEPLOY = "deploy/redis"
-MODEL = "Qwen/Qwen3-8B"
+NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
+REDIS_DEPLOY = os.environ.get("REDIS_DEPLOY", "deploy/redis")
+MODEL = os.environ.get("MODEL", "Qwen/Qwen3-8B")
+PROM_URL = os.environ.get("PROM_URL", "http://localhost:9090")
+MONITORING_NAMESPACE = os.environ.get("MONITORING_NAMESPACE", "llm-d-monitoring")
 TTL = 3600  # 1 hour deadline
 
 QUEUES_SPEC = [
@@ -26,6 +31,23 @@ QUEUES_SPEC = [
     ("team-standard-b", "standard", "b", 100),
     ("team-batch-b", "batch", "b", 50),
 ]
+
+def check_port_open(host="127.0.0.1", port=9090):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1.0)
+        return s.connect_ex((host, port)) == 0
+
+def start_prom_port_forward(namespace=MONITORING_NAMESPACE, local_port=9090):
+    if check_port_open("127.0.0.1", local_port):
+        return None
+    print(f"[*] Starting background port-forward to svc/llmd-kube-prometheus-stack-prometheus on port {local_port}...")
+    proc = subprocess.Popen(
+        ["kubectl", "port-forward", "-n", namespace, "svc/llmd-kube-prometheus-stack-prometheus", f"{local_port}:9090"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(2)
+    return proc
 
 def clear_existing_results():
     print("[*] Clearing previous results lists...")
@@ -77,25 +99,22 @@ def enqueue_all(model_name=MODEL, max_tokens=80):
     print(f"[*] Total requests successfully enqueued into Redis: {total_enqueued}\n")
     return total_enqueued
 
-def query_prom(query):
+def query_prom(query, prom_url=None):
+    if prom_url is None:
+        prom_url = PROM_URL
     try:
-        cmd = [
-            "kubectl", "-n", NAMESPACE, "exec", "deploy/prometheus", "--",
-            "wget", "-qO-", f"http://localhost:9090/api/v1/query?query={urllib.parse.quote(query)}"
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        data = json.loads(res.stdout)
-        results = data.get("data", {}).get("result", [])
-        if results:
-            return float(results[0]["value"][1])
+        url = f"{prom_url}/api/v1/query?query={urllib.parse.quote(query)}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            results = data.get("data", {}).get("result", [])
+            if results:
+                return float(results[0]["value"][1])
     except Exception:
         pass
     return 0.0
 
-def monitor_drain(total_enqueued, max_wait_sec=600):
-    import urllib.parse
-    globals()["urllib"].parse = urllib.parse
-
+def monitor_drain(total_enqueued, max_wait_sec=600, prom_url=None):
     print("[*] Monitoring drain progress across Redis, In-Process Queues, and GPU...")
     start_time = time.time()
 
@@ -133,8 +152,8 @@ def monitor_drain(total_enqueued, max_wait_sec=600):
         pct = (total_done / total_enqueued) * 100 if total_enqueued > 0 else 0
 
         # Query Prometheus live gauges
-        in_flight = int(query_prom("sum(llm_d_async_async_inflight_requests)"))
-        q_depth = int(query_prom("sum(llm_d_async_async_queue_depth)"))
+        in_flight = int(query_prom("sum(llm_d_async_async_inflight_requests)", prom_url=prom_url))
+        q_depth = int(query_prom("sum(llm_d_async_async_queue_depth)", prom_url=prom_url))
 
         print(f"[{elapsed:03d}s] Completed: {total_done:3d}/{total_enqueued} ({pct:5.1f}%) | In-Flight: {in_flight:2d} | In-Process Depth: {q_depth:3d} | Redis ZCARD: {q_backlog:3d} | A: {done_a:3d}, B: {done_b:3d}")
 
@@ -151,11 +170,20 @@ def main():
     parser = argparse.ArgumentParser(description="Heavy multi-tenant Redis benchmark")
     parser.add_argument("--tokens", type=int, default=80, help="Max completion tokens per request")
     parser.add_argument("--timeout", type=int, default=600, help="Max wait duration in seconds")
+    parser.add_argument("--prom-url", type=str, default=PROM_URL, help="Prometheus base URL (default: http://localhost:9090)")
     args = parser.parse_args()
 
-    clear_existing_results()
-    total = enqueue_all(max_tokens=args.tokens)
-    monitor_drain(total, max_wait_sec=args.timeout)
+    pf_proc = None
+    if "localhost" in args.prom_url or "127.0.0.1" in args.prom_url:
+        pf_proc = start_prom_port_forward()
+
+    try:
+        clear_existing_results()
+        total = enqueue_all(max_tokens=args.tokens)
+        monitor_drain(total, max_wait_sec=args.timeout, prom_url=args.prom_url)
+    finally:
+        if pf_proc:
+            pf_proc.terminate()
 
 if __name__ == "__main__":
     main()

@@ -137,6 +137,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   # InferencePool names (saturation-gate scope) and served model names (go in payload.model).
   # In this single-router demo, both logical model pools point to the deployed llm-d-router instance:
   export POOL_A=llm-d-router POOL_B=llm-d-router       # InferencePool names (saturation-gate scope)
+  export POOL_NAME=llm-d-router                       # Shared pool name for InferenceObjectives
   export MODEL_A=Qwen/Qwen3-8B MODEL_B=Qwen/Qwen3-8B   # served model names (go in payload.model)
 
   # Scenario C only: the base URL the saturation gates read PromQL from. The default
@@ -158,7 +159,7 @@ environment before installing:
 render() {   # render <overlay-path> -> stdout
   sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
       -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
-      -e "s/POOL_NAME/${POOL_A}/g" \
+      -e "s/POOL_NAME/${POOL_NAME:-${POOL_A}}/g" \
       -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
       -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" "$1"
 }
@@ -205,7 +206,9 @@ export IP=$(kubectl get service llm-d-router-epp -n ${NAMESPACE} -o jsonpath='{.
 ```
 
 > [!NOTE]
-> **Single Router & InferencePool in Demo:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`. Both `model-a` and `model-b` worker pools dispatch through this shared llm-d Router. In production environments with multiple distinct models and pools, each pool can be addressed individually via separate `InferencePool` resources or multi-model HTTPRoutes.
+> **Single Router & InferencePool in Demo:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`. Both `model-a` and `model-b` worker pools dispatch through this shared llm-d Router, so `render` maps `POOL_NAME` to `${POOL_NAME:-${POOL_A}}` (`llm-d-router`), binding all 6 `InferenceObjective`s to this shared pool.
+>
+> **Multi-Pool Isolation Architecture:** An `InferenceObjective` resource binds to a single `poolRef.name`, and Kubernetes resource names are unique per namespace. In a production multi-tenant architecture with separate Inference Pools (`POOL_A != POOL_B`), the recommended pattern isolates each pool and router in its own namespace (e.g., `ns-pool-a` and `ns-pool-b`). In that case, apply `manifests/inferenceobjectives.yaml` in each namespace with `POOL_NAME` set to that namespace's respective pool name.
 
 ### 3. Deploy Redis and llm-d-async
 
@@ -504,17 +507,29 @@ helm upgrade llm-d-async \
 ```
 </details>
 
-The inner `prometheus-saturation` gate queries `inference_extension_flow_control_pool_saturation` (or `llm_d_epp_flow_control_pool_saturation`) directly from llm-d Router's metrics endpoint. Verify that the gate evaluates metrics live:
+The inner `prometheus-saturation` gate queries the Prometheus server (`${PROM_URL}`) for the metric `inference_extension_flow_control_pool_saturation` exported by llm-d Router's EPP `/metrics` endpoint.
+
+> [!IMPORTANT]
+> **Router Metrics Scraping:** `values/router/flow-control.yaml` configures `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `inference_extension_flow_control_pool_saturation` (and `llm_d_epp_flow_control_pool_saturation`). Without these metrics in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
+
+Verify that the metric is being scraped and that the gate evaluates metrics live:
 
 ```bash
-# Verify the gate initialized with the inner prometheus-saturation source:
+# 1. Verify Prometheus has scraped the saturation metric from llm-d-router:
+curl -s localhost:9090/api/v1/query --data-urlencode \
+    "query=inference_extension_flow_control_pool_saturation{inference_pool=\"${POOL_A}\"}"
+
+# 2. Verify the gate initialized with the inner prometheus-saturation source:
 kubectl logs -n ${NAMESPACE} deploy/llm-d-async | grep -i "tier-priority-admission"
 
-# Check gate evaluation and source availability metrics:
+# 3. Check gate evaluation and verify source availability (must report 1, not 0):
 ASYNC_POD_IP=$(kubectl get pod -l app.kubernetes.io/name=llm-d-async -n ${NAMESPACE} -o jsonpath='{.items[0].status.podIP}')
 kubectl run curl-prom --rm -i --restart=Never -n ${NAMESPACE} --image=curlimages/curl -- \
-    curl -s "http://${ASYNC_POD_IP}:9090/metrics" | grep "async_gate_metric"
+    curl -s "http://${ASYNC_POD_IP}:9090/metrics" | grep "async_gate_metric_source_available"
 ```
+
+> [!NOTE]
+> `async_gate_metric_source_available` must be `1`. If it reports `0`, the gate failed to query Prometheus or received no metric samples, causing it to fall back to an open budget (`fallback: 1.0`). A value of `1` confirms that the gate is receiving real live measurements from Prometheus.
 
 ## Observability
 
@@ -526,7 +541,7 @@ to install the standard Prometheus and Grafana stack:
 # 1. Install standard Prometheus + Grafana stack
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
-# 2. Scrape the vLLM model server (adjust selector/namespace/port in the manifest)
+# 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
 kubectl apply -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
 ```
 
@@ -589,9 +604,9 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
   keep the **sum** of that model's reserved quotas at or below the pool's worker count.
 - **Per-model quota counters** are keyed `quota:<a|b>:team:<team>`, so a team's reserved capacity on
   model A is independent of its capacity on model B.
-- **Saturation gate.** These overlays use `prometheus-query` over `vllm:num_requests_running`. The
-  `prometheus-saturation` gate instead expects the EPP metric
-  `llm_d_epp_flow_control_pool_saturation`.
+- **Saturation gate.** The Scenario C overlays use `prometheus-query` over `vllm:num_requests_running`. The
+  `prometheus-saturation` gate (Scenario D) instead expects the EPP metric
+  `inference_extension_flow_control_pool_saturation`.
 - **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
   saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
   running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see

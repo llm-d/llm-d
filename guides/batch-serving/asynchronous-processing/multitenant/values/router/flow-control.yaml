@@ -7,6 +7,7 @@ router:
       targetPort: 8081
   monitoring:
     prometheus:
+      enabled: true
       auth:
         enabled: false
   epp:
