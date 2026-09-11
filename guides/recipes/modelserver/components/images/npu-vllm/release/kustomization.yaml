@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Rebellions publishes this image while the RBLN SDK is pre-GA: some packages it carries
+# are internal dev builds. Moves to a docker/Dockerfile.rbln built by llm-d at GA.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: ghcr.io/rbln-sw/rbln-serve
+    newTag: 0.11.3a1
+
+# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11+
+# This image pins vLLM 0.24.0 on torch 2.11.0, so it is in range.
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
