@@ -10,8 +10,9 @@ name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)
 # WVA path); the two test different autoscalers and must not replace each other.
 
 on:
-  schedule:
-    - cron: '0 5 * * *'  # 05:00 UTC daily (staggered from the WVA path at 03:00)
+  # Scheduled execution temporarily disabled.
+  # schedule:
+  #   - cron: '0 5 * * *'  # 05:00 UTC daily (staggered from the WVA path at 03:00)
   workflow_dispatch:
     inputs:
       # decode_pods/prefill_pods/harness/workload are accepted only for
