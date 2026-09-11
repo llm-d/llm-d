@@ -4,9 +4,9 @@ resources:
   - ../../../base
 
 images:
-  - name: ghcr.io/llm-d/llm-d-rocm
-    newName: ghcr.io/vcave/lmcache/vllm-pr-51681-lmcache
-    newTag: v0.5.3
+  - name: docker.io/vllm/vllm-openai-rocm
+    newName: ghcr.io/vcave/lmcache/vllm-pr-51681-lmcache-v0.5.3
+    newTag: latest
 
 labels:
   - pairs:
