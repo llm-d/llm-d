@@ -27,6 +27,7 @@ rows because the serving engine changes prefill throughput.
 | `gpu/sglang`       | NVIDIA H100 80 GB · SGLang | v0.5.13.post1        | 2 | Qwen3-32B               | **30720** |
 | `amd/vllm`    | AMD GPU · vLLM             | rocm v0.7.0          | 2 | Qwen3-32B               | 15928 ‡ |
 | `amd/sglang`  | AMD GPU · SGLang          | v0.5.13.post1 (rocm) | 2 | Qwen3-32B               | 30720 ‡ |
+| `metax/vllm` | MetaX C500X 64 GB · vLLM-MetaX | 0.24.0 (MACA 3.8.2.1) | 8 | DeepSeek-R1-Distill-Llama-70B | **5468** |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
 | `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
@@ -46,9 +47,14 @@ rows because the serving engine changes prefill throughput.
   Calibrated at `CHUNK_SIZE=2048` (the CPU vLLM chunked-prefill default), not 8192.
 - **26290 / 27336** — measured for `tpu/v6/vllm` (TPU v6e, 2x4 = **8 chips**) and `tpu/v7/vllm`
   (TPU v7x, 2x2x1 = **4 chips**), both Qwen3-32B at TP=8.
-- The GPU/TPU paths run at the vLLM default `--max-num-batched-tokens=8192`, so calibrate those
-  with `CHUNK_SIZE=8192`. **Re-measure** if you change TP, chunk size, quantization, or
-  `--max-model-len` — those move the number more than the model identity does.
+- **5773 / 5468** — measured on MetaX C500X for `metax/vllm` (Qwen3-14B, TP=1,
+  `CHUNK_SIZE=8192`) and `metax/vllm` (DeepSeek-R1-Distill-Llama-70B,
+  TP=8, `CHUNK_SIZE=4095`). The single-GPU value is the higher of two valid runs
+  (5361 and 5773 tokens/sec). The eight-GPU chunk size stays below that profile's
+  `--max-model-len=4096` so the calibration prompt plus one output token fits.
+- The other GPU/TPU paths run at the vLLM default `--max-num-batched-tokens=8192`, so
+  calibrate those with `CHUNK_SIZE=8192`. **Re-measure** if you change TP, chunk size,
+  quantization, or `--max-model-len` — those move the number more than the model identity does.
 - **`npu/vllm`** — gpt-oss-120B on one Rebellions NPU at dp1 and `--max-num-seqs=1`,
   `--max-num-batched-tokens=512`, so calibrate this path with `CHUNK_SIZE=512`. This path
   does not borrow a proxy: the closest measured row (`gpu/vllm/gpt-oss`, 39065) is an H100

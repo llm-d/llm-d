@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
+            - "--port=8000"
+            - "--trust-remote-code"
+            - "--tensor-parallel-size=8"
+            - "--gpu-memory-utilization=0.85"
+            - "--max-model-len=20480"
+            - "--max-num-batched-tokens=8192"
+            - "--distributed-executor-backend=mp"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          startupProbe:
+            failureThreshold: 360
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "16"
+              memory: 64Gi
+              metax-tech.com/gpu: "8"
+            limits:
+              memory: 256Gi
+              metax-tech.com/gpu: "8"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+            seccompProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
