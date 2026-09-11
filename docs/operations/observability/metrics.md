@@ -265,6 +265,8 @@ llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
 llm-d-performance-kv-cache                        1      30s
 llm-d-pd-coordinator-metrics                      1      30s
+llm-d-wva-operational                             1      30s
+llm-d-wva-benchmark-scaleup                       1      30s
 ```
 
 Or import individual dashboard JSON files manually from `guides/recipes/observability/grafana/dashboards/`:

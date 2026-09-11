@@ -1,6 +1,6 @@
 # Alerting
 
-This page covers a default set of Prometheus alerting rules for the EPP (Endpoint Picker). For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
+This page covers the default sets of Prometheus alerting rules shipped for the EPP (Endpoint Picker) and the Workload-Variant-Autoscaler (WVA). For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
 
 The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/getting-started/design/#prometheusrule) custom resource, so they require the Prometheus Operator (bundled with the kube-prometheus-stack installed by the [setup guide](./setup.md)).
 
@@ -80,6 +80,44 @@ The error-ratio alerts are `0/0`-safe: with no traffic the expression yields no 
 > [!NOTE]
 > `EPPExtProcStreamErrors` relies on opt-in metrics enabled by the EPP `--enable-grpc-stream-metrics` flag. When the flag is unset, the series are absent and the alert never fires. The matcher excludes `OK` and `Canceled` (a normal client disconnect) — adjust it for your environment.
 
+## WVA Alerts
+
+The Workload-Variant-Autoscaler ships its own rule set covering autoscaler health rather than request-path health. It is independent of the EPP rules — apply either or both.
+
+### Apply
+
+```bash
+kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/alerts/wva-alerting-rules.yaml
+```
+
+The same `ruleSelector` caveat in [Step 1](#step-1-apply-the-alerting-rules) applies; this resource carries `app: wva-metrics`.
+
+### Verify
+
+```bash
+kubectl get prometheusrules -n ${NAMESPACE}
+```
+
+```text
+NAME                 AGE
+wva-alerting-rules   10s
+```
+
+The rules load as a single `wva.rules` group.
+
+### Alert Reference (`wva.rules`)
+
+| Alert | Severity | Fires when | Why it matters |
+|---|---|---|---|
+| `WVAHighErrorRate` | warning | `wva_errors_total` rate above 0.1/s for 5m, by component and error type | The autoscaler is erroring internally; scaling decisions may be stale or missing |
+| `WVAOptimizationLoopStalled` | info | Zero models processed for 15m | The optimization loop is not running — replicas will not track demand, but nothing is actively failing |
+| `WVAMetricsCollectionFailing` | warning | Metric collection failing for 5m, by query type | WVA cannot read the signals it scales on, so decisions fall back to stale data |
+| `WVAGPUResourceExhausted` | warning | GPU-labeled nodes report zero allocatable accelerators for 5m | Capacity WVA believes it can schedule onto is not actually available |
+| `WVAReplicaScalingThrashing` | warning | Repeated scale up/down for the same variant over 10m | Replicas are oscillating rather than converging, which causes pod churn mid-request |
+
+> [!NOTE]
+> These fire on autoscaler behaviour, not on served traffic. `WVAOptimizationLoopStalled` is `info` because a stalled loop is not itself an outage — it means replica counts are frozen at their last decision.
+
 ## Customization
 
 These rules are a starting point, not a tuned policy. Common adjustments:
@@ -94,6 +132,7 @@ See the [PromQL Reference](./promql.md) for more queries you can promote into al
 
 ```bash
 kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/epp-alerting-rules.yaml
+kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/wva-alerting-rules.yaml
 ```
 
 ## Troubleshooting

@@ -1,0 +1,54 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wva-alerting-rules
+  labels:
+    app: wva-metrics
+spec:
+  groups:
+  - name: wva.rules
+    rules:
+    - alert: WVAHighErrorRate
+      expr: sum by (component, error_type) (rate(wva_errors_total[5m])) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "WVA error rate elevated in {{ $labels.component }}"
+        description: "WVA component '{{ $labels.component }}' error_type '{{ $labels.error_type }}' rate is {{ $value | printf \"%.2f\" }}/sec (>6/min threshold) sustained for 5+ minutes. Check controller logs for error patterns."
+
+    - alert: WVAOptimizationLoopStalled
+      expr: max_over_time(wva_models_processed[10m]) == 0 or absent_over_time(wva_models_processed[10m])
+      for: 15m
+      labels:
+        severity: info
+      annotations:
+        summary: "WVA has processed zero models for 15+ minutes"
+        description: "wva_models_processed has been 0 (or absent) over a 10-minute window, sustained for 15+ minutes. This is EXPECTED when no VariantAutoscaling resources are being managed (an idle controller). If you do have managed workloads, it can indicate the optimization loop is stalled/crashed or metric collection is failing — check controller pod status and logs, and Prometheus connectivity."
+
+    - alert: WVAMetricsCollectionFailing
+      expr: sum by (query_type, reason) (rate(wva_metrics_collection_errors_total[5m])) > 0.0833
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "WVA metrics collection failing for {{ $labels.query_type }}"
+        description: "Metrics collection query_type '{{ $labels.query_type }}' failing with reason '{{ $labels.reason }}' at {{ $value | printf \"%.2f\" }}/sec (>5/min threshold) sustained for 5+ minutes. Scaling decisions may be based on stale data. Verify Prometheus/metrics endpoint connectivity."
+
+    - alert: WVAGPUResourceExhausted
+      expr: wva_available_gpus == 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "GPU-labeled {{ $labels.accelerator_type }} nodes report zero allocatable accelerators"
+        description: "WVA sees zero allocatable {{ $labels.accelerator_vendor }} {{ $labels.accelerator_model }} ({{ $labels.accelerator_type }}) GPUs for 5+ minutes. Note: this reflects node *allocatable* capacity (not free/schedulable GPUs), and wva_available_gpus is only emitted when the GPU limiter is enabled (enableLimiter=true). A GPU-labeled node advertising zero allocatable accelerators usually means it is NotReady or its device plugin/driver is not installed — check GPU node status and device-plugin pods."
+
+    - alert: WVAReplicaScalingThrashing
+      expr: sum by (namespace, variant_name) (rate(wva_replica_scaling_total[10m])) > 0.033
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "WVA scaling thrashing detected for {{ $labels.namespace }}/{{ $labels.variant_name }}"
+        description: "Variant {{ $labels.namespace }}/{{ $labels.variant_name }} scaling at {{ $value | printf \"%.3f\" }}/sec (>2/min threshold) sustained for 10+ minutes, indicating possible thrashing. Review scaling thresholds and consider adjusting stabilization window or thresholds."
