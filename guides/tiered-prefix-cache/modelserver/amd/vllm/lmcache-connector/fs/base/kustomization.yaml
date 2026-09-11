@@ -6,7 +6,7 @@ resources:
 images:
   - name: docker.io/vllm/vllm-openai-rocm
     newName: ghcr.io/vcave/lmcache/vllm-pr-51681-lmcache-v0.5.3
-    newTag: latest
+    newTag: r0.1
 
 labels:
   - pairs:

@@ -31,8 +31,10 @@ spec:
             # Must be a JSON boolean (false)
             - name: LMCACHE_EXTRA_CONFIG
               value: '{"use_odirect": false}'
+            # Per-rank limit. All ranks (replicas x TP = 4 x 2 = 8) share the single
+            # 1 Ti PVC, so 8 x 125 GB = 1000 GB stays under capacity.
             - name: LMCACHE_MAX_LOCAL_DISK_SIZE
-              value: "400.0"
+              value: "125.0"
             - name: PYTHONHASHSEED
               value: "123"
             - name: PROMETHEUS_MULTIPROC_DIR

@@ -25,9 +25,10 @@ This is a temporary workaround and will be removed once a ROCm-specific fast cop
 
 ## CPU offloading
 
-The patch is applied automatically at pod startup via `native/cpu/patch-vllm.yaml`.
+The patch is applied automatically at pod startup via `native/cpu/base/patch-vllm.yaml`.
 
 ## FS offloading
 
-The Triton fast path is not currently supported on ROCm for filesystem-backed offloading.
-The patch is not applied in `native/fs/patch-vllm.yaml`.
+The filesystem overlay (`native/fs/base/patch-vllm.yaml`) is still applied, but it omits the
+Triton threshold change — the fast path is not currently supported on ROCm for filesystem-backed
+offloading.

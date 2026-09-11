@@ -20,6 +20,7 @@ Each path is a self-contained deployment using a specific offloading implementat
 | Path | Implementation | Tiers | Directory |
 | ---- | -------------- | ----- | --------- |
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
+| **AMD (ROCm)** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/amd/vllm/native/`, `modelserver/amd/vllm/lmcache-connector/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
 | **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
 | **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
