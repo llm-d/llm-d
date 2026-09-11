@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--tensor-parallel-size=2"
+            - "--max-num-seqs=1024"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+          resources:
+            limits:
+              memory: 500Gi
+            requests:
+              memory: 500Gi
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Disk tier on the shared RWX NFS PVC (host-bounced POSIX, NOT GDS).
+            - name: LMCACHE_LOCAL_DISK
+              value: "file:///mnt/files-storage/kv-cache/"
+            # NFS: O_DIRECT is unreliable/unsupported on many NFS mounts — use buffered I/O.
+            # Must be a JSON boolean (false)
+            - name: LMCACHE_EXTRA_CONFIG
+              value: '{"use_odirect": false}'
+            # Per-rank limit. All ranks (replicas x TP = 4 x 2 = 8) share the single
+            # 1 Ti PVC, so 8 x 125 GB = 1000 GB stays under capacity.
+            - name: LMCACHE_MAX_LOCAL_DISK_SIZE
+              value: "125.0"
+            - name: PYTHONHASHSEED
+              value: "123"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/lmcache_prometheus"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+            - name: lmcache-prometheus-metrics
+              mountPath: /tmp/lmcache_prometheus
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage
+        - name: lmcache-prometheus-metrics
+          emptyDir: {}
