@@ -8,8 +8,9 @@ name: Nightly - Workload Autoscaling E2E (OCP GPU)
 # chart on main may require features not yet in a tagged release image.
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily
+  # Scheduled execution temporarily disabled.
+  # schedule:
+  #   - cron: '0 3 * * *'  # 03:00 UTC daily
   workflow_dispatch:
     inputs:
       image_tag:
