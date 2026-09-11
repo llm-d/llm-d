@@ -1,6 +1,6 @@
 # Alerting
 
-This page covers a default set of Prometheus alerting rules for the EPP (Endpoint Picker). For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
+This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker) and for the Batch Gateway. For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
 
 The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/getting-started/design/#prometheusrule) custom resource, so they require the Prometheus Operator (bundled with the kube-prometheus-stack installed by the [setup guide](./setup.md)).
 
@@ -80,6 +80,32 @@ The error-ratio alerts are `0/0`-safe: with no traffic the expression yields no 
 > [!NOTE]
 > `EPPExtProcStreamErrors` relies on opt-in metrics enabled by the EPP `--enable-grpc-stream-metrics` flag. When the flag is unset, the series are absent and the alert never fires. The matcher excludes `OK` and `Canceled` (a normal client disconnect) — adjust it for your environment.
 
+### Batch Gateway (`batch-gateway.rules`)
+
+These alerts cover the Batch Gateway processor and GC reconciler rather than the request path, so they are shipped as a separate `PrometheusRule` and are only relevant if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md).
+
+```bash
+kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/alerts/batch-gateway-alerting-rules.yaml
+kubectl get prometheusrules -n ${NAMESPACE}
+```
+
+You should then see the `batch-gateway.rules` group under **Status → Rule Health** in the Prometheus UI.
+
+> [!IMPORTANT]
+> Every expression in this file is scoped with `namespace="batch-gateway"`, the namespace the Batch Gateway guide deploys into. The Batch Gateway metric names are unprefixed and generic (`jobs_processed_total`, `active_workers`), so an unscoped rule can pick up unrelated workloads. If you deployed into a different namespace, edit the matchers to match — applying the `PrometheusRule` into your namespace does **not** scope its queries. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: batch-gateway-metrics` (not `app: epp-metrics`, which is specific to the EPP rule).
+
+| Alert | Severity | Fires when | Why it matters |
+|-------|----------|-----------|----------------|
+| `BatchGatewayHighQueueWait` | warning | p95 `job_queue_wait_duration_seconds` > 300s for 15m | Jobs are backing up in the priority queue faster than workers drain it |
+| `BatchGatewayHighJobFailureRate` | warning | Failed share of `jobs_processed_total` > 10% for 10m | Job execution is failing at a rate users will notice |
+| `BatchGatewayExpiredJobsDetected` | warning | Expired share of `jobs_processed_total` > 3% for 10m | Jobs are aging out before execution — capacity or completion-window problem, not a code failure |
+| `BatchGatewayWorkersSaturated` | warning | `active_workers / total_workers` > 90% for 15m | The worker pool is the bottleneck; raise `NumWorkers` or add replicas |
+| `BatchReconcilerErrors` | warning | `batch_reconciler_errors_total` increased over 65m | The GC orphan reconciler is failing, so orphaned jobs are not being recovered |
+
+The two ratio alerts use `clamp_min` on the denominator, so they stay silent when no jobs are being processed rather than dividing by zero.
+
+`BatchReconcilerErrors` uses `increase()` over a 65m window rather than `rate()`: the reconciler runs on a 60m interval by default and increments the counter at most once per cycle, which is too sparse for a `rate()` threshold. If you shorten `reconciler.interval` in the GC config, shorten the window to match — a window shorter than the interval can miss a once-per-cycle failure, and a much longer one keeps the alert firing after the error has aged out.
+
 ## Customization
 
 These rules are a starting point, not a tuned policy. Common adjustments:
@@ -94,6 +120,7 @@ See the [PromQL Reference](./promql.md) for more queries you can promote into al
 
 ```bash
 kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/epp-alerting-rules.yaml
+kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/batch-gateway-alerting-rules.yaml
 ```
 
 ## Troubleshooting
