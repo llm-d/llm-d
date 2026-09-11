@@ -29,6 +29,7 @@ rows because the serving engine changes prefill throughput.
 | `amd/sglang`  | AMD GPU · SGLang          | v0.5.13.post1 (rocm) | 2 | Qwen3-32B               | 30720 ‡ |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
+| `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12884** |
 | `xpu/vllm`    | Intel XPU · vLLM          | xpu v0.7.0           | 1 | Qwen3-0.6B              | 1970 ‡ |
 | `cpu/vllm`    | CPU · vLLM (AMX)          | cpu v0.6.0           | 1 | Llama-3.2-3B-Instruct   | **1970** |
 
@@ -48,6 +49,10 @@ rows because the serving engine changes prefill throughput.
 - The GPU/TPU paths run at the vLLM default `--max-num-batched-tokens=8192`, so calibrate those
   with `CHUNK_SIZE=8192`. **Re-measure** if you change TP, chunk size, quantization, or
   `--max-model-len` — those move the number more than the model identity does.
+- **`npu/vllm`** — gpt-oss-120B on one Rebellions NPU at dp1 and `--max-num-seqs=1`,
+  `--max-num-batched-tokens=512`, so calibrate this path with `CHUNK_SIZE=512`. This path
+  does not borrow a proxy: the closest measured row (`gpu/vllm/gpt-oss`, 39065) is an H100
+  MXFP4 number and applying it here would open the saturation gate when it should stay shut.
 - **‡ proxy, not measured** — these paths are not yet calibrated, so they borrow the closest
   measured value as a starting point: the **AMD** paths use the same-engine H100 values
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
