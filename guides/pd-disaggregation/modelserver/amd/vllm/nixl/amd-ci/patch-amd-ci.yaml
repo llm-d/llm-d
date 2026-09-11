@@ -1,0 +1,76 @@
+#
+# AMD-CI temporary test setup:
+# - TCP pipe cleaner
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net4"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net5"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net6"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net7"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net8"}
+          ]
+    spec:
+      hostIPC: true # TODO this is not in mori-io
+      containers:
+        - name: modelserver
+          imagePullPolicy: Always
+          resources:
+            limits:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+            requests:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+          env:
+            - { name: UCX_TLS,                        value: "self,rocm,shm,rc" }
+            - { name: UCX_LOG_LEVEL,                  value: "INFO" }
+            - { name: UCX_PROTO_INFO,                 value: "n" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net4"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net5"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net6"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net7"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net8"}
+          ]
+    spec:
+      hostIPC: true
+      containers:
+        - name: modelserver
+          imagePullPolicy: Always
+          resources:
+            limits:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+            requests:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+          env:
+            - { name: UCX_TLS,                        value: "self,rocm,shm,rc" }
+            - { name: UCX_LOG_LEVEL,                  value: "INFO" }
+            - { name: UCX_PROTO_INFO,                 value: "n" }
