@@ -71,14 +71,23 @@ class DockerfileParser:
 
             # detect new build stage
             if line.upper().startswith('FROM'):
-                match = re.match(r'FROM\s+.*?\s+AS\s+(\w+)', line, re.IGNORECASE)
-                if match:
-                    self.current_stage = match.group(1)
+                match = re.match(r'FROM\s+(\S+)(?:\s+AS\s+(\w+))?', line, re.IGNORECASE)
+                base_ref = match.group(1) if match else None
+                if match and match.group(2):
+                    self.current_stage = match.group(2)
                 else:
                     self.current_stage = 'default'
 
                 if self.current_stage not in self.stages:
-                    self.stages[self.current_stage] = {'ARG': set(), 'ENV': set()}
+                    # A stage built FROM an earlier named stage inherits that
+                    # stage's ENV (but not ARG — ARGs are scoped to the stage
+                    # that declares them and don't cross a FROM boundary,
+                    # per https://docs.docker.com/reference/dockerfile/#arg).
+                    # base_ref is a literal match only; a templated ref like
+                    # `FROM base-${TARGETARCH}` won't match a known stage
+                    # name, so no inheritance is assumed there.
+                    inherited_env = set(self.stages[base_ref]['ENV']) if base_ref in self.stages else set()
+                    self.stages[self.current_stage] = {'ARG': set(), 'ENV': inherited_env}
 
             # track ARG declarations
             elif line.upper().startswith('ARG'):
