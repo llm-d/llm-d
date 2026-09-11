@@ -1,0 +1,55 @@
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: glm-cache-route-baseline
+  namespace: nilig-agentx-slo
+spec:
+  appProtocol: http
+  endpointPickerRef:
+    failureMode: FailOpen
+    group: ""
+    kind: Service
+    name: glm-cache-route-epp-baseline
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      llm-d.ai/benchmark: p2p-cache-routing-glm
+      llm-d.ai/inference-serving: "true"
+  targetPorts:
+  - number: 8000
+  - number: 8001
+  - number: 8002
+  - number: 8003
+  - number: 8004
+  - number: 8005
+  - number: 8006
+  - number: 8007
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: glm-cache-route-candidate
+  namespace: nilig-agentx-slo
+spec:
+  appProtocol: http
+  endpointPickerRef:
+    failureMode: FailOpen
+    group: ""
+    kind: Service
+    name: glm-cache-route-epp-candidate
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      llm-d.ai/benchmark: p2p-cache-routing-glm
+      llm-d.ai/inference-serving: "true"
+  targetPorts:
+  - number: 8000
+  - number: 8001
+  - number: 8002
+  - number: 8003
+  - number: 8004
+  - number: 8005
+  - number: 8006
+  - number: 8007

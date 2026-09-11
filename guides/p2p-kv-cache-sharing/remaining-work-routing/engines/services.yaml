@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: glm-5-2-render
+  namespace: nilig-agentx-slo
+  labels:
+    llm-d.ai/benchmark: p2p-cache-routing-glm
+spec:
+  selector:
+    llm-d.ai/benchmark: p2p-cache-routing-glm
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: prefill
+  ports:
+  - name: http
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glm-5-2-prefill-long-direct
+  namespace: nilig-agentx-slo
+  labels:
+    llm-d.ai/benchmark: p2p-cache-routing-glm
+spec:
+  selector:
+    llm-d.ai/benchmark: p2p-cache-routing-glm
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: prefill
+    llm-d.ai/prefill-class: long
+  ports:
+  - name: rank0
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+  - name: rank1
+    port: 8001
+    protocol: TCP
+    targetPort: 8001
+  - name: rank2
+    port: 8002
+    protocol: TCP
+    targetPort: 8002
+  - name: rank3
+    port: 8003
+    protocol: TCP
+    targetPort: 8003
+  - name: rank4
+    port: 8004
+    protocol: TCP
+    targetPort: 8004
+  - name: rank5
+    port: 8005
+    protocol: TCP
+    targetPort: 8005
+  - name: rank6
+    port: 8006
+    protocol: TCP
+    targetPort: 8006
+  - name: rank7
+    port: 8007
+    protocol: TCP
+    targetPort: 8007
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glm-5-2-prefill-short-direct
+  namespace: nilig-agentx-slo
+  labels:
+    llm-d.ai/benchmark: p2p-cache-routing-glm
+spec:
+  selector:
+    llm-d.ai/benchmark: p2p-cache-routing-glm
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: prefill
+    llm-d.ai/prefill-class: short
+  ports:
+  - name: rank0
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+  - name: rank1
+    port: 8001
+    protocol: TCP
+    targetPort: 8001
+  - name: rank2
+    port: 8002
+    protocol: TCP
+    targetPort: 8002
+  - name: rank3
+    port: 8003
+    protocol: TCP
+    targetPort: 8003
+  - name: rank4
+    port: 8004
+    protocol: TCP
+    targetPort: 8004
+  - name: rank5
+    port: 8005
+    protocol: TCP
+    targetPort: 8005
+  - name: rank6
+    port: 8006
+    protocol: TCP
+    targetPort: 8006
+  - name: rank7
+    port: 8007
+    protocol: TCP
+    targetPort: 8007

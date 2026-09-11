@@ -1,0 +1,73 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nilig-agentx-slo
+resources:
+- ../base/prefill
+patches:
+- target:
+    group: leaderworkerset.x-k8s.io
+    version: v1
+    kind: LeaderWorkerSet
+    name: glm-5-2-prefill
+  patch: |-
+    - op: replace
+      path: /metadata/name
+      value: glm-5-2-prefill-long
+    - op: add
+      path: /metadata/labels/llm-d.ai~1benchmark
+      value: p2p-cache-routing-glm
+    - op: add
+      path: /metadata/labels/llm-d.ai~1prefill-class
+      value: long
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1benchmark
+      value: p2p-cache-routing-glm
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1prefill-class
+      value: long
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1prefill-work-range
+      value: 8193-120000
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1context-length-range
+      value: 0-120000
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
+      value:
+        nvidia.com/gpu.product: NVIDIA-H200
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity/nodeAffinity
+      value:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+              - g134dfa
+              - g13bc90
+              - gf2a19e
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/7/value
+      value: "68719476736"
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/startupProbe/failureThreshold
+      value: 720
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/startupProbe/periodSeconds
+      value: 10
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/30/value
+      value: /var/cache/vllm/vllm
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/image
+      value: quay.io/niliguy/vllm-openai:nightly-6f91edf9-pr50302@sha256:58daa6bf5b15d1885a8af2129f744e8731e1a175f131b27cd18162ed31a583a1
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+      value: IfNotPresent
+- target:
+    group: leaderworkerset.x-k8s.io
+    version: v1
+    kind: LeaderWorkerSet
+    name: glm-5-2-prefill-long
+  path: prefill-runtime.json
