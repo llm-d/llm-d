@@ -167,6 +167,17 @@ helm install tiered-prefix-cache \
 
 Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay directory. For the GPU paths, `INFRA_PROVIDER` selects a `base` overlay or a provider-specific one (for example `gke`); the TPU path does not use an infra-provider overlay.
 
+#### AMD (ROCm)
+
+Supports `native` (vLLM `OffloadingConnector`) and `lmcache-connector` connectors, each with a CPU RAM (`cpu`) or CPU RAM + Filesystem (`fs`) storage tier. The `fs` variant requires a ReadWriteMany PVC — see [Storage Backends](#storage-backends).
+
+```bash
+export CONNECTOR=native      # native | lmcache-connector
+export VARIANT=cpu           # cpu | fs
+export INFRA_PROVIDER=amd-ci # amd-ci | base
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/amd/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+```
+
 #### vLLM native — CPU RAM
 
 ```bash
