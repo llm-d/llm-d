@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/default
+
+namespace: llm-d-diffusion-tts
+
+namePrefix: diffusion-serving-tts-nvidia-gpu-vllm-omni-
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm-omni/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: diffusion-serving-tts
+      llm-d.ai/model: Qwen3-TTS-12Hz-1.7B-CustomVoice
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm-omni
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-vllm-omni-tts.yaml

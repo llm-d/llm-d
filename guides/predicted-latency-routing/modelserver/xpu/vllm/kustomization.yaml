@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Reuse the optimized-baseline guide's Intel XPU model server unchanged: Qwen3-0.6B on a
+# single Intel Arc Pro B60 per pod. Intel XPU CI runners are single-GPU-per-pod, so this
+# overlay does not carry the GPU path's TP=2 / RoPE-scaled long-context Qwen3-32B config —
+# there isn't enough device memory for it. The latency predictor is EPP-side only, so the
+# model server needs no predictor-specific changes, and the base manifests already carry
+# llm-d.ai/guide=optimized-baseline, matching the router values shipped with this guide
+# with no override — same pattern as the TPU path.
+resources:
+  - ../../../../optimized-baseline/modelserver/xpu/vllm

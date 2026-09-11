@@ -75,7 +75,17 @@ class DockerfileParser:
                 base_ref = match.group(1) if match else None
                 if match and match.group(2):
                     self.current_stage = match.group(2)
+                match = re.match(
+                    r'FROM\s+(?:(?:--\S+)\s+)*(?P<base>\S+)'
+                    r'(?:\s+AS\s+(?P<stage>\w+))?',
+                    line,
+                    re.IGNORECASE,
+                )
+                if match:
+                    base_stage = match.group('base')
+                    self.current_stage = match.group('stage') or 'default'
                 else:
+                    base_stage = None
                     self.current_stage = 'default'
 
                 if self.current_stage not in self.stages:
@@ -88,6 +98,11 @@ class DockerfileParser:
                     # name, so no inheritance is assumed there.
                     inherited_env = set(self.stages[base_ref]['ENV']) if base_ref in self.stages else set()
                     self.stages[self.current_stage] = {'ARG': set(), 'ENV': inherited_env}
+                    inherited = self.stages.get(base_stage, {}) if base_stage else {}
+                    self.stages[self.current_stage] = {
+                        'ARG': set(inherited.get('ARG', set())),
+                        'ENV': set(inherited.get('ENV', set())),
+                    }
 
             # track ARG declarations
             elif line.upper().startswith('ARG'):

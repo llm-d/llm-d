@@ -20,6 +20,10 @@ Production rollout strategies including Blue-Green updates and live LoRA adapter
 
 Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are only marked Ready when models are fully loaded.
 
+### [Graceful Shutdown & Request Draining](graceful-shutdown.md)
+
+Draining in-flight requests during scale-down, rolling updates, and node drains for general serving: the Kubernetes termination sequence, vLLM `--shutdown-timeout`, request cancellation on client disconnect, and EPP flow-control drain semantics.
+
 ### [Serve External APIs](serve-external-apis/README.md)
 
 Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs.

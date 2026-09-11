@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${STUB_LOG:?STUB_LOG must be set}"
+: "${STUB_MUTATIONS:?STUB_MUTATIONS must be set}"
+
+command_name="${STUB_COMMAND:?STUB_COMMAND must be set}"
+arguments=""
+for argument in "$@"; do
+  arguments+="[$argument]"
+done
+printf 'command=%s kubeconfig=[%s] args=%s\n' \
+  "$command_name" "${KUBECONFIG-<unset>}" "$arguments" >> "$STUB_LOG"
+
+record_mutation() {
+  printf 'command=%s kubeconfig=[%s] args=%s\n' \
+    "$command_name" "${KUBECONFIG-<unset>}" "$arguments" >> "$STUB_MUTATIONS"
+}
+
+case "$command_name:$1" in
+  kubectl:cluster-info)
+    if [[ "${STUB_MODE:-}" == selected-fails && "${KUBECONFIG:-}" == "${SELECTED_KUBECONFIG:-}" ]]; then
+      exit 1
+    fi
+    ;;
+  kubectl:get)
+    case "${2:-}" in
+      clusterversion|crd)
+        exit 1
+        ;;
+      namespace)
+        [[ "${STUB_MODE:-}" == tls ]] && exit 0
+        ;;
+      secret|configmap)
+        exit 1
+        ;;
+    esac
+    ;;
+  kubectl:create|kubectl:apply|kubectl:delete|helm:install|helm:uninstall|oc:create)
+    record_mutation
+    ;;
+esac
+
+if [[ "$command_name" == helm && "${1:-}" == repo && "${2:-}" == list ]]; then
+  printf '%s\n' 'prometheus-community https://prometheus-community.github.io/helm-charts'
+fi
+
+if [[ "$command_name" == helm && "${1:-}" == show && "${2:-}" == crds ]]; then
+  printf '%s\n' 'apiVersion: apiextensions.k8s.io/v1'
+fi

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Aggregated multi-host vLLM on a GKE TPU7x 2x2x2 dynamic sub-slice
+# (8 chips, 2 hosts, TP=16), scheduled via Kueue TAS. Prerequisites:
+# docs/infrastructure/providers/gke/dynamic-slicing/README.md
+resources:
+  - lws.yaml
+
+namePrefix: optimized-baseline-tpu-slice-vllm-
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: optimized-baseline
+      llm-d.ai/model: Qwen3-Coder-480B-A35B-Instruct-FP8
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google

@@ -66,6 +66,26 @@ log()  { printf '\033[1;34m[%s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*"; }
 ok()   { printf '\033[1;32m[ OK ]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[FAIL]\033[0m %s\n' "$*" >&2; }
 
+# Dump everything needed to diagnose a failure post-mortem from CI logs: pod
+# list, recent events, and per-pod describe + current and previous-crash logs.
+# The namespaces here hold only a handful of pods, so dump all of them.
+dump_debug() {
+  local ns="$1"
+  log "---- debug dump: namespace ${ns} ----"
+  kubectl get pods -n "${ns}" -o wide || true
+  kubectl get events -n "${ns}" --sort-by=.lastTimestamp 2>/dev/null | tail -n 40 || true
+  local pod
+  for pod in $(kubectl get pods -n "${ns}" -o name); do
+    log "describe ${pod}"
+    kubectl describe -n "${ns}" "${pod}" | tail -n 40 || true
+    log "logs ${pod} (current)"
+    kubectl logs -n "${ns}" "${pod}" --all-containers --tail=100 2>/dev/null || true
+    log "logs ${pod} (previous crash)"
+    kubectl logs -n "${ns}" "${pod}" --all-containers --previous --tail=100 2>/dev/null || true
+  done
+  log "---- end debug dump: namespace ${ns} ----"
+}
+
 cleanup() {
   local rc=$?
   if [ "$KEEP" = "1" ]; then
@@ -171,7 +191,7 @@ log "Waiting up to ${BASELINE_TIMEOUT}s for the baseline stack to become ready"
 if ! kubectl wait --for=condition=available --timeout="${BASELINE_TIMEOUT}s" \
       deployment --all -n "${BASELINE_NAMESPACE}"; then
   fail "Baseline stack did not become ready"
-  kubectl get pods -n "${BASELINE_NAMESPACE}"
+  dump_debug "${BASELINE_NAMESPACE}"
   exit 1
 fi
 ok "Baseline stack ready"
@@ -205,7 +225,7 @@ helm install llm-d-async \
 if ! kubectl wait --for=condition=available --timeout=300s \
       deployment --all -n "${NAMESPACE}"; then
   fail "Async Processor did not become ready"
-  kubectl get pods -n "${NAMESPACE}"
+  dump_debug "${NAMESPACE}"
   exit 1
 fi
 ok "Async Processor ready"
@@ -227,8 +247,10 @@ if kubectl run async-smoketest --rm -i --restart=Never --image=redis -- \
   ok "Smoke test PASSED — async result returned"
 else
   fail "Smoke test FAILED — no result on result-list"
-  log "Async Processor logs (tail):"
-  kubectl logs -n "${NAMESPACE}" deployment/llm-d-async --tail=50 2>/dev/null || true
+  # A smoke-test timeout can also be the backing stack's fault (EPP or model
+  # server), so dump both namespaces.
+  dump_debug "${NAMESPACE}"
+  dump_debug "${BASELINE_NAMESPACE}"
   exit 1
 fi
 

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${STUB_OPENSSL_LOG:?STUB_OPENSSL_LOG must be set}"
+arguments=""
+for argument in "$@"; do
+  arguments+="[$argument]"
+done
+printf 'command=openssl args=%s\n' "$arguments" >> "$STUB_OPENSSL_LOG"
+
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == -out ]]; then
+    shift
+    : > "${1:?missing -out value}"
+    break
+  fi
+  shift
+done
+
+if [[ "${1:-}" == x509 ]]; then
+  printf '%s\n' 'X509v3 Subject Alternative Name'
+fi

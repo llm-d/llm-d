@@ -39,11 +39,25 @@ PROMETHEUS_ADDRESS="${PROMETHEUS_ADDRESS:-https://prometheus-operated.llm-d-moni
 mkdir -p "${OUTPUT_DIR}"
 
 # Nightly-only model server tweaks: GPU priority class, writable Triton cache, 2 replicas.
-yq '.spec.template.spec.priorityClassName="nightly-gpu-critical"' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
-yq '.spec.template.spec.volumes += {"name": "triton-cache", "emptyDir": {}}' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
-yq '.spec.template.spec.containers[0].volumeMounts += {"mountPath": "/.triton", "name": "triton-cache"}' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
-yq '.spec.replicas=2' -i guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml
-kubectl apply -k guides/optimized-baseline/modelserver/gpu/vllm/base -n "${NAMESPACE}"
+# Keep the well-lit-path source immutable.  The nightly patch is rendered in the temporary
+# output directory so a failed run, a rerun, or a local invocation cannot alter tracked files.
+MODEL_SERVER_OUTPUT_DIR="${OUTPUT_DIR}/modelserver"
+mkdir -p "${MODEL_SERVER_OUTPUT_DIR}"
+cp "${REPO_ROOT}/guides/workload-autoscaling/wva/controller/base/patch-vllm.yaml" \
+  "${MODEL_SERVER_OUTPUT_DIR}/patch-vllm.yaml"
+MODEL_SERVER_REL="$(${_realpath} --relative-to="${MODEL_SERVER_OUTPUT_DIR}" "${REPO_ROOT}")"
+cat > "${MODEL_SERVER_OUTPUT_DIR}/kustomization.yaml" <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ${MODEL_SERVER_REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
+patches:
+  - path: patch-vllm.yaml
+    target:
+      kind: Deployment
+      name: optimized-baseline-nvidia-gpu-vllm-decode
+EOF
+kubectl apply -k "${MODEL_SERVER_OUTPUT_DIR}" -n "${NAMESPACE}"
 
 helm install workload-variant-autoscaler-inferencepool-standalone \
   "${ROUTER_STANDALONE_CHART}" \

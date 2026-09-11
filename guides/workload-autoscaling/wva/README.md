@@ -177,6 +177,8 @@ The manifests follow the same `${PLATFORM}` split as the WVA install above:
 - [`keda/base`](optimized-baseline/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
 - [`keda/ocp`](optimized-baseline/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
 
+The ScaledObject in `keda/base` is named and labelled for the NVIDIA model server. On AMD, layer the [`keda/components/amd`](optimized-baseline/keda/components/amd/kustomization.yaml) component onto your overlay to retarget it at the ROCm model server and MI355X; [`scripts/nightly-deploy-amd.sh`](../scripts/nightly-deploy-amd.sh) shows it in use.
+
 Before applying, update `serverAddress` and the `namespace` in the trigger query to match your cluster.
 
 <!-- guide:deploy.scaledobject start -->

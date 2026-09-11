@@ -132,6 +132,12 @@ CHECKS_FAILED=0
 CHECKS_WARNED=0
 FAILURES=""
 WARNINGS=""
+# The check functions update the counters above.  Keep their result strings in
+# globals as well, because invoking them through $(...) would run them in a
+# subshell and discard the counter updates.
+HEALTH_RESULT=""
+MODELS_RESULT=""
+INFER_RESULT=""
 
 pass() { CHECKS_TOTAL=$((CHECKS_TOTAL + 1)); CHECKS_PASSED=$((CHECKS_PASSED + 1)); }
 warn() {
@@ -162,7 +168,7 @@ check_health() {
       warn "/health returned HTTP ${http_code} (not required)"
     fi
   fi
-  echo "$http_code"
+  HEALTH_RESULT="$http_code"
 }
 
 # ── Check 2: /v1/models endpoint (readiness + optional model discovery) ──────
@@ -176,7 +182,7 @@ check_models() {
 
   if [[ "$http_code" != "200" ]]; then
     fail "/v1/models returned HTTP ${http_code}"
-    echo "000|"
+    MODELS_RESULT="000|"
     return
   fi
 
@@ -185,7 +191,7 @@ check_models() {
     model_count=$(echo "$body" | jq -r '.data | length' 2>/dev/null || echo "0")
     if [[ "$model_count" == "0" ]]; then
       fail "/v1/models returned 0 models"
-      echo "${http_code}|0"
+      MODELS_RESULT="${http_code}|0"
       return
     fi
 
@@ -201,7 +207,7 @@ check_models() {
   fi
 
   pass
-  echo "${http_code}|${model_count}"
+  MODELS_RESULT="${http_code}|${model_count}"
 }
 
 # ── Internal: POST helper (returns "HTTP|LATENCY|PATH_USED") ─────────────────
@@ -232,7 +238,7 @@ post_inference() {
 check_inference() {
   if [[ -z "$MODEL_ID" && "$HAS_JQ" != "true" ]]; then
     fail "Inference skipped — MODEL_ID is required when jq is not available"
-    echo "000|0|/v1/completions"
+    INFER_RESULT="000|0|/v1/completions"
     return
   fi
 
@@ -292,7 +298,7 @@ check_inference() {
 
   if [[ "$http_code" != "200" ]]; then
     fail "${path} returned HTTP ${http_code}"
-    echo "${http_code}|${latency_ms}|${path}"
+    INFER_RESULT="${http_code}|${latency_ms}|${path}"
     return
   fi
 
@@ -302,7 +308,7 @@ check_inference() {
     has_choices=$(echo "$body" | jq -r 'has("choices")' 2>/dev/null || echo "false")
     if [[ "$has_choices" != "true" ]]; then
       fail "${path} response missing 'choices' field"
-      echo "${http_code}|${latency_ms}|${path}"
+      INFER_RESULT="${http_code}|${latency_ms}|${path}"
       return
     fi
   fi
@@ -310,12 +316,12 @@ check_inference() {
   # Latency threshold check
   if [[ "$MAX_LATENCY" -gt 0 && "$latency_ms" -gt "$MAX_LATENCY" ]]; then
     fail "${path} latency ${latency_ms}ms exceeds threshold ${MAX_LATENCY}ms"
-    echo "${http_code}|${latency_ms}|${path}"
+    INFER_RESULT="${http_code}|${latency_ms}|${path}"
     return
   fi
 
   pass
-  echo "${http_code}|${latency_ms}|${path}"
+  INFER_RESULT="${http_code}|${latency_ms}|${path}"
 }
 
 # ── Report: text ─────────────────────────────────────────────────────────────
@@ -416,9 +422,12 @@ report_json() {
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
-health_code="$(check_health)"
-models_result="$(check_models)"
-infer_result="$(check_inference)"
+check_health
+health_code="$HEALTH_RESULT"
+check_models
+models_result="$MODELS_RESULT"
+check_inference
+infer_result="$INFER_RESULT"
 
 case "$OUTPUT_FORMAT" in
   json) report_json "$health_code" "$models_result" "$infer_result" ;;

@@ -35,6 +35,7 @@ Workload-centric guides — each provides the recommended, cohesive deployment f
 
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
 * [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
+* [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
 * [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
 * [Batch Serving](./batch-serving/README.md) - Deploy batch and asynchronous inference processing using an OpenAI-compatible Batch API or lightweight queue-based dispatchers with dynamic metric gating.
 
@@ -94,7 +95,7 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 **Overriding:** For any other non-default image — a vendor fork, platform variant, or a *specific* nightly tag that the component's moving `nightly` tag does not yet include — add an inline `images:` section in the overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an override that names the placeholder is silently ignored. Every override **must** include a `TODO` comment with a tracking issue for cleanup:
 
 ```yaml
-# TODO(#123): Remove override once upstream vLLM includes NIXL support.
+# TODO(#123): Remove override once this fix lands in an upstream vLLM release.
 images:
   - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/example/custom-vllm

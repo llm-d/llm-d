@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--port=8200"
+            - "--tensor-parallel=4"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--max-num-batched-tokens=8192"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_load_failure_policy":"fail"}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5600"
+            - name: UCX_TLS
+              value: maca_ipc,maca_copy,tcp
+            - name: UCX_PROTO_ENABLE
+              value: "y"
+          ports:
+            - name: modelserver
+              containerPort: 8200
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+            seccompProfile:
+              type: Unconfined
+          resources:
+            limits:
+              memory: 128Gi
+              metax-tech.com/gpu: "4"
+            requests:
+              cpu: "24"
+              memory: 64Gi
+              metax-tech.com/gpu: "4"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
+        - name: torch-compile-cache
+          emptyDir: {}
