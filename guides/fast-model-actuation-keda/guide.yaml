@@ -8,8 +8,9 @@ env:
     GUIDE_NAME: fast-model-actuation-keda
     NAMESPACE:  llm-d-fast-model-actuation-keda
 
-    # Namespace where Prometheus/monitoring runs and scrapes the EPP. The `keda`
-    # step copies the prometheus-token secret from here into ${NAMESPACE}.
+    # Namespace where Prometheus/monitoring runs and scrapes the EPP. On generic
+    # Kubernetes, the keda/k8s overlay's TriggerAuthentication reads the bundled
+    # Prometheus CA copied from here (see the guide's generic-Kubernetes note).
     MONITORING_NAMESPACE: { default: "llm-d-monitoring" }
 
     # FMA controller/CRD/image version.
@@ -74,21 +75,6 @@ deploy:
           -n ${NAMESPACE} \
           --dry-run=client -o yaml | kubectl apply -f -
 
-        # ClusterRoleBinding (cluster-scoped): grant the EPP's ServiceAccount
-        # system:auth-delegator.
-        kubectl create clusterrolebinding "${GUIDE_NAME}-epp-auth-delegator-${NAMESPACE}" \
-          --clusterrole=system:auth-delegator \
-          --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
-          --dry-run=client -o yaml | kubectl apply -f -
-
-        # ClusterRoleBinding (cluster-scoped): grant the EPP metrics-reader
-        # ServiceAccount `get` on the EPP's /metrics nonResourceURL, so the token
-        # user-workload-monitoring uses to scrape the EPP is authorized.
-        kubectl create clusterrolebinding "${GUIDE_NAME}-epp-metrics-reader-${NAMESPACE}" \
-          --clusterrole=inference-gateway-metrics-reader \
-          --serviceaccount=${NAMESPACE}:fast-model-actuation-keda-epp-metrics-reader \
-          --dry-run=client -o yaml | kubectl apply -f -
-
         # ClusterRoleBinding (cluster-scoped): grant the KEDA metrics-reader
         # ServiceAccount cluster-monitoring-view, the role Thanos Querier requires
         # to answer KEDA's trigger queries.
@@ -116,6 +102,7 @@ deploy:
           ${ROUTER_STANDALONE_CHART} \
           -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
           -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
@@ -126,14 +113,17 @@ deploy:
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
-  # KEDA scale-from-zero autoscaling of the requester Deployment. On OpenShift the
-  # ScaledObject/TriggerAuthentication, the EPP ServiceMonitor, and the
-  # metrics-reader RBAC (keda/overlays/ocp) are deployed together with the model
-  # server -- ../keda/overlays/ocp is a resource of modelserver/ -- so there is
-  # nothing to apply in this step; it just confirms the ScaledObject reconciled
-  # Ready.
+  # KEDA scale-from-zero autoscaling of the requester Deployment. Apply the OCP
+  # KEDA overlay -- the ScaledObject, its TriggerAuthentication, and the shared
+  # metrics-reader ServiceAccount + token -- into ${NAMESPACE}, then confirm the
+  # ScaledObject reconciled Ready. KEDA then creates the HPA and owns the replica
+  # count, scaling fma-requester to 0 when the flow-control queue is empty and
+  # back up on the next queued request. The overlay is namespace-agnostic, so all
+  # of its resources land in ${NAMESPACE} from the -n flag.
   keda:
     - run: |
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
+
         kubectl wait --for=condition=Ready --timeout=120s \
           scaledobject/fast-model-actuation-keda-queue -n ${NAMESPACE}
 
@@ -191,7 +181,7 @@ benchmark:
 cleanup:
   # Order matters. Delete the KEDA ScaledObject/TriggerAuth FIRST so the HPA stops
   # scaling the requester while we tear it down.
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/overlays/ocp --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
   # Then the model-server CRs and the requester Deployment (both in modelserver/):
   # this unbinds the requester/provider pairs and tells the controller to tear
   # down the launcher pods.
@@ -209,10 +199,8 @@ cleanup:
   # plus the imperatively-created RoleBinding).
   - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
   - run: kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
-  # The per-deployment ClusterRoleBindings are namespace-suffixed, so they are
-  # unique to this deployment and safe to delete on a shared cluster.
-  - run: kubectl delete clusterrolebinding "${GUIDE_NAME}-epp-auth-delegator-${NAMESPACE}" --ignore-not-found=true
-  - run: kubectl delete clusterrolebinding "${GUIDE_NAME}-epp-metrics-reader-${NAMESPACE}" --ignore-not-found=true
+  # The per-deployment ClusterRoleBinding is namespace-suffixed, so it is unique
+  # to this deployment and safe to delete on a shared cluster.
   - run: kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAMESPACE}" --ignore-not-found=true
   # Skipped in CI, where the cluster is shared; run only on a cluster you own.
   - skip_in: [ci]

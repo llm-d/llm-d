@@ -14,7 +14,7 @@ This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation/README.
 | Requester replicas       | 0 (KEDA floor, idle) … 2 (KEDA ceiling)                      |
 | Launcher count           | 1 (per matching GPU node)                                    |
 | GPUs per requester pod   | 1                                                            |
-| Scale metric             | `llm_d_epp_flow_control_queue_size` (threshold `5`, activation `0`) |
+| Scale metric             | `llm_d_epp_flow_control_queue_size` (threshold `1`, activation `0`) |
 | Autoscaler               | KEDA `ScaledObject` → HPA on `fma-requester` (scale-from-zero) |
 | Router                   | llm-d-router-standalone (EPP `flowControl` enabled)          |
 
@@ -117,7 +117,7 @@ kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-
 
 ### 2. Grant RBAC Permissions
 
-The FMA controllers need cluster-level access to list nodes (for the launcher-populator) and namespace-level access for launcher pods to read their own pod spec:
+The FMA controllers need cluster-level access to list nodes (for the launcher-populator) and namespace-level access for launcher pods to patch their own pod state. In addition, KEDA needs a metrics-reader ServiceAccount bound to `cluster-monitoring-view` so OpenShift's Thanos Querier authorizes its trigger queries. (The EPP `/metrics` scrape needs no RBAC here — it is handled by the router chart's ServiceMonitor, enabled unauthenticated at router install in [step 4](#4-deploy-the-llm-d-router-epp-flow-control-enabled).)
 
 <!-- guide:deploy.rbac start -->
 ```bash
@@ -138,21 +138,6 @@ kubectl create rolebinding fma-launcher-pod-state-writer \
   --role=fma-launcher-pod-state-writer \
   --serviceaccount=${NAMESPACE}:fma-launcher \
   -n ${NAMESPACE} \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# ClusterRoleBinding (cluster-scoped): grant the EPP's ServiceAccount
-# system:auth-delegator.
-kubectl create clusterrolebinding "${GUIDE_NAME}-epp-auth-delegator-${NAMESPACE}" \
-  --clusterrole=system:auth-delegator \
-  --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# ClusterRoleBinding (cluster-scoped): grant the EPP metrics-reader
-# ServiceAccount `get` on the EPP's /metrics nonResourceURL, so the token
-# user-workload-monitoring uses to scrape the EPP is authorized.
-kubectl create clusterrolebinding "${GUIDE_NAME}-epp-metrics-reader-${NAMESPACE}" \
-  --clusterrole=inference-gateway-metrics-reader \
-  --serviceaccount=${NAMESPACE}:fast-model-actuation-keda-epp-metrics-reader \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # ClusterRoleBinding (cluster-scoped): grant the KEDA metrics-reader
@@ -195,13 +180,14 @@ helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
 
 ### 5. Deploy the Model Server (Dual Pods)
 
-Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` — **together with** the server-requesting `fma-requester` Deployment **and the KEDA autoscaling layer** in a single `kubectl apply -k modelserver/`. This guide's `modelserver/` reuses the base [`fast-model-actuation`](../fast-model-actuation) guide's manifests as a kustomize base — so the shared FMA plumbing (`LauncherConfig`, `LauncherPopulationPolicy`, the requester Deployment) is maintained once — and patches only the KEDA-specific deltas: the `InferenceServerConfig` serves Qwen3-0.6B, and the requester is applied at 1 replica so the stack comes up serving — KEDA then owns the count, scaling it to 0 once the flow-control queue is empty and back to 1 on the next request. The autoscaler is pulled in via `../keda/overlays/ocp`. Bundling KEDA here — rather than as a separate apply — is what lets the benchmark's kustomize standup bring up the autoscaler; the overlay is namespace-agnostic, so all of these resources land in `${NAMESPACE}` from the `-n` flag:
+Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` — **together with** the server-requesting `fma-requester` Deployment in a single `kubectl apply -k modelserver/`. This guide's `modelserver/` reuses the base [`fast-model-actuation`](../fast-model-actuation) guide's manifests as a kustomize base — so the shared FMA plumbing (the `InferenceServerConfig`, `LauncherConfig`, `LauncherPopulationPolicy`, and the requester Deployment, all serving Qwen3-0.6B) is maintained once — and patches only what this guide changes: the `llm-d.ai/guide` label, and the requester applied at 1 replica so the stack comes up serving. KEDA takes ownership of the replica count in the [next step](#6-enable-scale-from-zero-autoscaling-keda), scaling the requester to 0 once the flow-control queue is empty and back to 1 on the next queued request:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -213,44 +199,48 @@ kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
 ### 6. Enable Scale-from-Zero Autoscaling (KEDA)
 
-On OpenShift the KEDA layer (the `ScaledObject`, its `TriggerAuthentication`, the
-EPP `ServiceMonitor`, and the two metrics-reader ServiceAccounts + tokens) was
-**already deployed in step 5** — the `ocp` overlay is a resource of
-`modelserver/`, so a single `kubectl apply -k modelserver/` brought it up with
-the model server. The overlay points the triggers at thanos-querier and enables
-bearer auth; the service-ca operator injects the Thanos CA (`service-ca.crt`)
-into the token Secret automatically, so **no `prometheus-token` copy is
-required** on OpenShift. The three cluster-scoped ClusterRoleBindings the layer
-needs (`system:auth-delegator`, `inference-gateway-metrics-reader`, and
-`cluster-monitoring-view`) were created imperatively in the [RBAC step](#2-grant-rbac-permissions),
-where `${NAMESPACE}` drives the subject namespace (the namespace-agnostic overlay
-cannot carry them). This step therefore only confirms the `ScaledObject`
-reconciled `Ready`:
+Apply the KEDA layer — the `ScaledObject`, its `TriggerAuthentication`, and the
+shared metrics-reader ServiceAccount + token — from the `ocp` overlay, then wait
+for the `ScaledObject` to reconcile `Ready`. The overlay mirrors the
+[`keda-epp-queue`](../workload-autoscaling/keda-epp-queue) sibling: it points the
+queue-depth trigger at Thanos Querier and enables bearer auth, and the service-ca
+operator injects the Thanos CA (`service-ca.crt`) into the token Secret
+automatically, so **no `prometheus-token` copy is required** on OpenShift. The one
+cluster-scoped binding KEDA needs (`cluster-monitoring-view`, so Thanos Querier
+authorizes the trigger queries) was created imperatively in the
+[RBAC step](#2-grant-rbac-permissions), where `${NAMESPACE}` drives the subject
+namespace — the namespace-agnostic overlay cannot carry it. Once the
+`ScaledObject` is `Ready`, KEDA creates the HPA and begins owning the requester's
+replica count:
 
 <!-- guide:deploy.keda start -->
 ```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
+
 kubectl wait --for=condition=Ready --timeout=120s \
   scaledobject/fast-model-actuation-keda-queue -n ${NAMESPACE}
 ```
 <!-- guide:deploy.keda end -->
 
 > [!NOTE]
-> **Generic Kubernetes (non-OpenShift).** The steps above target OpenShift's
-> Thanos/user-workload-monitoring. On generic Kubernetes with the bundled llm-d
-> Prometheus stack, remove `../keda/overlays/ocp` from
-> `modelserver/kustomization.yaml`, then apply the base KEDA bundle separately
-> and first copy the Prometheus token into the workload namespace so the base
-> `TriggerAuthentication` can authenticate. The `cluster-monitoring-view` binding
-> and the auto-provisioned metrics-reader tokens are OpenShift-specific and are
-> not needed here.
+> **Generic Kubernetes (non-OpenShift).** The command above uses the `ocp`
+> overlay, which targets OpenShift's Thanos Querier and its service-ca-provisioned
+> token. On generic Kubernetes with the bundled llm-d kube-prometheus-stack, apply
+> the `keda/k8s` overlay instead — its base `TriggerAuthentication` does CA-only
+> auth against the bundled Prometheus service, so first copy that stack's CA into
+> the workload namespace as the `keda-prometheus-auth` Secret. The
+> `cluster-monitoring-view` binding and the metrics-reader ServiceAccount token are
+> OpenShift-specific and are not needed here.
 
 <!-- llm-d-cicd:skip start -->
 ```bash
 # Generic Kubernetes only (do NOT run on OpenShift):
-kubectl get secret prometheus-token -n ${MONITORING_NAMESPACE} -o yaml \
-  | sed "s/namespace: ${MONITORING_NAMESPACE}/namespace: ${NAMESPACE}/" \
-  | kubectl apply -n ${NAMESPACE} -f -
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/base
+kubectl create secret generic keda-prometheus-auth \
+  --namespace ${NAMESPACE} \
+  --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
+    -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/k8s
 ```
 <!-- llm-d-cicd:skip end -->
 
@@ -294,7 +284,7 @@ kubectl run curl-test --rm -i --restart=Never \
 
 ## Benchmarking
 
-This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking. The commands below run the `inference-perf` harness with the `shared_prefix_synthetic_heavy.yaml` workload, which drives sustained load through the EPP so you can watch the flow-control queue rise and KEDA scale the requester up from zero, then drain and scale it back down; the richer, FMA/KEDA-specific experimentation workflow lives in [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) itself.
+This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking. The commands below run the `inference-perf` harness with the `shared_prefix_synthetic_heavy.yaml` workload. On this small model (Qwen3-0.6B) each request drains in tens of milliseconds, so the flow-control queue does not stay backed up — the value you are exercising is the **scale-from-zero transition**: when the requester has scaled to 0, the benchmark's first arrivals enqueue, KEDA's activation trip on that cold-start queue transient wakes the pool (0→1), and the arrival stream keeps it warm for the run. This exercises the wake-from-zero and cooldown-to-zero behavior rather than a sustained multi-replica scale-out; the richer, FMA/KEDA-specific experimentation workflow lives in [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) itself.
 
 > [!IMPORTANT]
 > The Benchmarking section below contains only the **guide-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
@@ -347,7 +337,7 @@ To remove all deployed components:
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/overlays/ocp --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
 
@@ -362,10 +352,6 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
 
 kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
-
-kubectl delete clusterrolebinding "${GUIDE_NAME}-epp-auth-delegator-${NAMESPACE}" --ignore-not-found=true
-
-kubectl delete clusterrolebinding "${GUIDE_NAME}-epp-metrics-reader-${NAMESPACE}" --ignore-not-found=true
 
 kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAMESPACE}" --ignore-not-found=true
 ```

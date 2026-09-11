@@ -3,9 +3,12 @@ kind: Kustomization
 
 resources:
   - ../../fast-model-actuation/modelserver
-  - ../keda/overlays/ocp
 
 patches:
+  # The base fast-model-actuation ISC already serves Qwen3-0.6B with the same
+  # options and llm-d.ai/model label, so the only remaining delta is the guide
+  # label (used by the router/ServiceMonitor selectors and by benchmark
+  # bookkeeping). Merge just that key; the rest of the ISC is inherited verbatim.
   - target:
       kind: InferenceServerConfig
       name: fma-isc
@@ -16,10 +19,8 @@ patches:
         name: fma-isc
       spec:
         modelServerConfig:
-          options: "--model Qwen/Qwen3-0.6B --enable-sleep-mode --gpu-memory-utilization 0.9"
           labels:
             llm-d.ai/guide: "fast-model-actuation-keda"
-            llm-d.ai/model: "qwen3-0.6b"
   - target:
       kind: Deployment
       name: fma-requester

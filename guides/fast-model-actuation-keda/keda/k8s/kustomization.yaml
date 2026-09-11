@@ -1,0 +1,11 @@
+# Generic Kubernetes overlay for the FMA + KEDA scale-from-zero autoscaling
+# guide. The base ScaledObject targets the bundled kube-prometheus-stack with a
+# CA-only TriggerAuthentication, so this is a passthrough (mirroring the
+# keda-epp-queue sibling's k8s overlay). Apply this on non-OpenShift clusters;
+# use ../ocp on OpenShift. First copy the Prometheus CA into ${NAMESPACE} as the
+# keda-prometheus-auth Secret (see the guide's generic-Kubernetes note).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
