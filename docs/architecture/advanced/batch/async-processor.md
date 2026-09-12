@@ -155,7 +155,7 @@ Queue configurations define the input message queue source parameters (such as R
 | Implementation | Characteristics |
 |---------------|-----------------|
 | Redis Sorted Set | Persisted, priority-ordered by deadline. Supports per-queue gate configurations. |
-| Redis Pub/Sub | Ephemeral, fan-out delivery. |
+| Redis Pub/Sub (**deprecated** — prefer Redis Sorted Set) | Ephemeral, fan-out delivery. Still functional; scheduled for removal in a future release. |
 | GCP Pub/Sub | Cloud-native, scalable. Supports per-subscription gating. |
 
 ## Configuration
