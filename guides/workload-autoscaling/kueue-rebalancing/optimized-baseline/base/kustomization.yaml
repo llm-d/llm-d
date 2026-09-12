@@ -11,3 +11,15 @@ resources:
   - resourceflavor.yaml
   - clusterqueues.yaml
   - localqueues.yaml
+
+# Namespace for the LocalQueues. Change this one line to retarget the overlay;
+# ClusterQueue and ResourceFlavor are cluster-scoped and ignore it.
+namespace: llm-d-optimized-baseline
+
+# A common label so `kubectl get clusterqueues -l ...` can pick this guide's
+# queues out of every queue on the cluster. Not a selector: ClusterQueue has no
+# pod selector to break.
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: llm-d-kueue-rebalancing
+    includeSelectors: false

@@ -10,12 +10,11 @@ this *above* the HPA: a control loop reads a `ResourceQuota` and patches
 `spec.maxReplicas` on annotated HPAs so the ceilings always sum to the budget.
 
 This guide solves it *below* the HPA with [Kueue](https://kueue.sigs.k8s.io/).
-With the `deployment` integration, every replica pod becomes its own Kueue
-`Workload`, and Kueue holds a pod at a scheduling gate until GPU quota is free
-for it. The HPA is never touched, so it needs no annotation and KEDA keeps sole
-ownership of the HPA it generates. Each model gets a guaranteed floor of GPUs,
-lends what it is not using to the others, and preempts to take its floor back
-when demand returns.
+Every replica pod becomes its own Kueue `Workload`, and Kueue holds a pod at a
+scheduling gate until GPU quota is free for it. The HPA is never touched, so it
+needs no annotation and KEDA keeps sole ownership of the HPA it generates. Each
+model gets a guaranteed floor of GPUs, lends what it is not using to the others,
+and preempts to take its floor back when demand returns.
 
 ```text
       KEDA ScaledObject            KEDA ScaledObject
@@ -35,8 +34,12 @@ when demand returns.
 
 ## Prerequisites
 
-1. Multiple inference pools in one namespace, from the
-   [Multi-Inference Pool Setup guide](../multi-inference-pool/README.md).
+1. Two or more model server Deployments in one namespace. The
+   [Multi-Inference Pool Setup guide](../multi-inference-pool/README.md) adds
+   the second router and `InferencePool`; it does not add a second model server,
+   so `DEPLOYMENT_B` below is a placeholder for whichever Deployment you run as
+   the second model. With a single model server there is nothing to rebalance —
+   one ClusterQueue would own the whole budget.
 2. An autoscaler per pool — either
    [KEDA + EPP Metrics](../keda-epp-queue/README.md) or
    [KEDA + WVA Metrics](../wva/README.md). Nothing in this guide changes that
@@ -73,7 +76,11 @@ export DEPLOYMENT_A=optimized-baseline-nvidia-gpu-vllm-decode
 export DEPLOYMENT_B=model-b-nvidia-gpu-vllm-decode
 export QUEUE_A=model-a-lq
 export QUEUE_B=model-b-lq
-export QUOTA_ROOT=${REPO_ROOT}/guides/workload-autoscaling/kueue-rebalancing/optimized-baseline
+export CQ_A=llm-d-model-a-cq
+export CQ_B=llm-d-model-b-cq
+export QUOTA_LABEL=app.kubernetes.io/part-of=llm-d-kueue-rebalancing
+export GUIDE_ROOT=${REPO_ROOT}/guides/workload-autoscaling/kueue-rebalancing
+export QUOTA_ROOT=${GUIDE_ROOT}/optimized-baseline
 ```
 <!-- guide:env.static end -->
 
@@ -91,18 +98,56 @@ source ${REPO_ROOT}/guides/env.sh
 ```bash
 helm install kueue oci://registry.k8s.io/kueue/charts/kueue \
   --version ${KUEUE_VERSION} \
-  -n ${KUEUE_NAMESPACE} --create-namespace --wait
+  -n ${KUEUE_NAMESPACE} --create-namespace --wait \
+  -f ${GUIDE_ROOT}/kueue.values.yaml
 ```
 <!-- guide:prerequisites.kueue end -->
 
+[`kueue.values.yaml`](kueue.values.yaml) exists to keep the install narrow. The
+chart enables the `pod` and `deployment` integrations by default, and it derives
+every webhook's `namespaceSelector` from `managedJobsNamespaceSelector` in the
+manager config. Left at the default, `mpod.kb.io` intercepts pod creation in
+*every* namespace except `kube-system` and the release namespace, with
+`failurePolicy: Fail` — so a Kueue outage would block pod creation across the
+cluster. Naming the model namespace confines both the webhooks and the
+controller's reconciliation to it, and is the only edit the file makes:
+
+```console
+$ diff <(helm template ... ) <(helm template ... -f kueue.values.yaml)   # ConfigMap
+> managedJobsNamespaceSelector:
+>   matchExpressions:
+>   - key: kubernetes.io/metadata.name
+>     operator: In
+>     values:
+>     - llm-d-optimized-baseline
+```
+
+That single field narrows all 36 namespace-scoped webhooks in the chart, in both
+webhook configurations. `managedJobsNamespaceSelector` lives inside the
+`controllerManagerConfigYaml` *string*, which Helm replaces rather than merges,
+so the file has to repeat the chart's defaults — re-diff it against
+`helm show values` when you bump `KUEUE_VERSION`.
+
 > [!NOTE]
-> On OpenShift, Kueue is also available as the Red Hat build of Kueue operator.
-> Install it instead of the upstream chart; the quota objects in this guide are
-> the same either way.
+> On OpenShift, install the Red Hat build of Kueue operator from OperatorHub
+> instead of the upstream chart (it requires the cert-manager operator and
+> installs into `openshift-kueue-operator`, not `kueue-system`). The quota
+> objects in this guide are unchanged — Red Hat build of Kueue 1.3 and later
+> serve `kueue.x-k8s.io/v1beta2` — but the setup differs in three ways:
+> integrations are configured in a cluster-scoped `Kueue` CR
+> (`kueue.openshift.io/v1`, `metadata.name: cluster`) at
+> `spec.config.integrations.frameworks`, where the names are capitalised and the
+> field is required with no default, so `Pod` and `Deployment` must be listed
+> explicitly; verification reads `oc get kueue cluster` and the
+> `kueue-manager-config` ConfigMap in `openshift-kueue-operator`; and the
+> operator manages only namespaces labelled `kueue.openshift.io/managed=true`,
+> so label the model namespace or nothing is ever gated. Follow the Red Hat
+> build of Kueue documentation for the authoritative steps.
 
 Confirm the controller is running and that the `pod` and `deployment`
-integrations are enabled — they are on by default in 0.19.x, and without them
-the queue-name label is inert and no pod is ever gated:
+integrations are enabled — the chart turns both on by default (the Kueue API's
+own default is `batch/job` alone), and without them the queue-name label is
+inert and no pod is ever gated:
 
 <!-- guide:prerequisites.integrations start -->
 ```bash
@@ -120,10 +165,16 @@ Five objects across three files, in
 [`kueue-rebalancing/optimized-baseline/base`](optimized-baseline/base/):
 
 | File | Object | Role |
-|---|---|---|
-| [`resourceflavor.yaml`](optimized-baseline/base/resourceflavor.yaml) | `ResourceFlavor` | the accelerator pool being rationed. One empty flavor for homogeneous nodes; one per GPU type, with `nodeLabels`, otherwise |
-| [`clusterqueues.yaml`](optimized-baseline/base/clusterqueues.yaml) | `ClusterQueue` ×2 | one per model. `nominalQuota` is that model's guaranteed floor; a shared `cohortName` makes the floors lendable |
-| [`localqueues.yaml`](optimized-baseline/base/localqueues.yaml) | `LocalQueue` ×2 | the namespaced handle each Deployment points at. A pod can only name a LocalQueue, never a ClusterQueue |
+| --- | --- | --- |
+| [`resourceflavor.yaml`](optimized-baseline/base/resourceflavor.yaml) | `ResourceFlavor` `llm-d-gpu-default` | the accelerator pool being rationed. One empty flavor for homogeneous nodes; one per GPU type, with `nodeLabels`, otherwise |
+| [`clusterqueues.yaml`](optimized-baseline/base/clusterqueues.yaml) | `ClusterQueue` `llm-d-model-a-cq`, `llm-d-model-b-cq` | one per model. `nominalQuota` is that model's guaranteed floor; a shared `cohortName` makes the floors lendable |
+| [`localqueues.yaml`](optimized-baseline/base/localqueues.yaml) | `LocalQueue` `model-a-lq`, `model-b-lq` | the namespaced handle each Deployment points at. A pod can only name a LocalQueue, never a ClusterQueue |
+
+ClusterQueues and ResourceFlavors are cluster-scoped, hence the `llm-d-` prefix:
+two teams both reaching for `model-a-cq` on one cluster would collide. The
+kustomization stamps the namespace onto the LocalQueues and puts
+`app.kubernetes.io/part-of: llm-d-kueue-rebalancing` on all five, so this
+guide's queues can be selected out of a cluster that has others.
 
 The defaults describe 10 GPUs split into two floors of 5, replacing a
 `requests.nvidia.com/gpu: "10"` ResourceQuota. Before applying, set each
@@ -138,7 +189,8 @@ larger than the cluster admits pods the scheduler cannot place, which then sit
 `Pending` as unschedulable instead of gated. Summing to less than capacity
 simply leaves GPUs unused.
 
-Apply them:
+Apply them before the model servers start pointing at the queues, so the
+LocalQueue exists when the first Workload appears:
 
 <!-- guide:deploy.quota start -->
 ```bash
@@ -148,55 +200,144 @@ kubectl apply -k ${QUOTA_ROOT}/base
 
 ## Step 3: Opt Each Deployment In
 
-One label per Deployment, replacing the rebalancer's HPA annotation:
+A model server joins the budget by carrying `kueue.x-k8s.io/queue-name`. Where
+that label goes decides which Kueue integration manages it, and — because Kueue
+validates the Deployment-level label as immutable — whether you can add it to a
+Deployment that is already running.
 
-<!-- guide:deploy.optin start -->
-```bash
-for pair in "${DEPLOYMENT_A}:${QUEUE_A}" "${DEPLOYMENT_B}:${QUEUE_B}"; do
-  deployment=${pair%%:*}; queue=${pair##*:}
-  kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
-    "{\"metadata\":{\"labels\":{\"kueue.x-k8s.io/queue-name\":\"${queue}\"}},\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"kueue.x-k8s.io/queue-name\":\"${queue}\"}}}}}"
-done
-```
-<!-- guide:deploy.optin end -->
-
-The label on the Deployment is Kueue's documented opt-in surface, and its
-webhook copies the label to the pod template; the patch sets it on the template
-too, so the opt-in is explicit in the object rather than a webhook side effect.
-Every replica the HPA creates inherits it and becomes its own Workload.
-Deployments without the label are untouched by Kueue.
-
-To make the opt-in part of the model server's own Kustomize overlay rather than
-a live patch, add it there instead:
+**At install time (preferred).** If you are about to create the model server, put
+the label on the Deployment itself and let the `deployment` integration own it.
+The model servers in these guides are plain kustomize overlays, so this is a
+patch in the model server's own kustomization, for example in
+`guides/optimized-baseline/modelserver/gpu/vllm/base/kustomization.yaml`:
 
 ```yaml
-labels:
-  - pairs:
-      kueue.x-k8s.io/queue-name: model-a-lq
-    includeSelectors: false   # the pod selector must not change
-    includeTemplates: true    # every replica pod needs the label
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: decode          # the pre-namePrefix name in that overlay
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: unused
+        labels:
+          kueue.x-k8s.io/queue-name: model-a-lq
+      spec:
+        strategy:
+          rollingUpdate:
+            maxSurge: 0     # see below
+            maxUnavailable: 1
+        template:
+          metadata:
+            labels:
+              kueue.x-k8s.io/queue-name: model-a-lq
 ```
 
-Finally, roll out with no surge. At full quota a surge pod has no GPU to claim,
-so it is gated and the rollout waits behind it:
+The label must not reach `spec.selector.matchLabels`, which is immutable after
+create — so if you use a kustomize `labels:` transformer instead of a patch, it
+has to be a second entry with `includeSelectors: false` and
+`includeTemplates: true`, never folded into an existing entry that sets
+selectors.
+
+**On a Deployment that is already serving.** The Deployment-level label cannot
+be added retroactively. Kueue's `vdeployment` webhook enforces it as immutable
+whenever `status.readyReplicas > 0`, and rejects removing it at any replica
+count:
+
+```console
+$ kubectl patch deployment ${DEPLOYMENT_A} -n ${NAMESPACE} --type=merge \
+    -p '{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":"model-a-lq"}}}'
+Error from server (Forbidden): admission webhook "vdeployment.kb.io" denied the
+request: metadata.labels[kueue.x-k8s.io/queue-name]: Invalid value: "model-a-lq":
+field is immutable
+```
+
+Label the **pod template** instead. Each replica pod is then admitted, gated and
+preempted individually by the `pod` integration — same quota, same borrowing,
+same preemption — and the label can be patched back out later, which the
+Deployment-level one cannot.
+
+First set the rollout strategy, before anything touches the pod template:
 
 <!-- guide:deploy.rollout_strategy start -->
 ```bash
+rc=0
 for deployment in ${DEPLOYMENT_A} ${DEPLOYMENT_B}; do
   kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge \
-    -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":0,"maxUnavailable":1}}}}'
+    -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":0,"maxUnavailable":1}}}}' \
+    || { echo "FAILED to patch ${deployment}" >&2; rc=1; }
 done
+(exit ${rc})
 ```
 <!-- guide:deploy.rollout_strategy end -->
 
+At `replicas: 1` the default 25% strategy rounds to `maxSurge: 1`,
+`maxUnavailable: 0` — strictly create-before-delete. Once the budget is fully
+admitted the surge pod has no quota to claim, so Kueue gates it and the rollout
+waits behind a pod that can never start:
+
+```text
+NAME                     PHASE     GATES
+model-a-...-ds6cq        Pending   kueue.x-k8s.io/admission,kueue.x-k8s.io/topology
+```
+
+`maxSurge: 0` inverts that into terminate-then-create, which frees the GPU the
+replacement needs. Patching `spec.strategy` does not touch the pod template, so
+this step rolls nothing by itself — the alternative is to keep one replica of
+slack in the budget instead.
+
+Then opt in:
+
+<!-- guide:deploy.optin start -->
+```bash
+rc=0
+for pair in "${DEPLOYMENT_A}:${QUEUE_A}" "${DEPLOYMENT_B}:${QUEUE_B}"; do
+  deployment=${pair%%:*}; queue=${pair##*:}
+  kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
+    "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"kueue.x-k8s.io/queue-name\":\"${queue}\"}}}}}" \
+    || { echo "FAILED to opt ${deployment} in to ${queue}" >&2; rc=1; }
+  kubectl rollout status deployment/"${deployment}" -n ${NAMESPACE} --timeout=10m || rc=1
+done
+(exit ${rc})
+```
+<!-- guide:deploy.optin end -->
+
+This does change the pod template, so every model server restarts once, one
+replica at a time. Every replica the HPA creates from then on inherits the label
+and becomes its own Workload. Deployments without the label are untouched by
+Kueue.
+
 ## Step 4: Verify
+
+Assert first that a controller is reconciling these queues and that the cohort
+survived the apply. Without an `Active` condition nothing is gated and every
+command below still exits 0; without a cohort the floors cannot be lent or
+borrowed, which is the whole point:
+
+<!-- guide:verify.tests.admission start -->
+```bash
+rc=0
+for cq in ${CQ_A} ${CQ_B}; do
+  active=$(kubectl get clusterqueue "${cq}" \
+    -o jsonpath='{.status.conditions[?(@.type=="Active")].status}')
+  cohort=$(kubectl get clusterqueue "${cq}" -o jsonpath='{.spec.cohortName}')
+  echo "${cq}: Active=${active:-<none>} cohort=${cohort:-<none>}"
+  [ "${active}" = "True" ] || { echo "  ^ no Active condition: is the Kueue controller running?" >&2; rc=1; }
+  [ -n "${cohort}" ] || { echo "  ^ no cohort: floors cannot be lent or borrowed" >&2; rc=1; }
+done
+(exit ${rc})
+```
+<!-- guide:verify.tests.admission end -->
 
 `ClusterQueue` status is the whole picture — admitted GPUs per model, how many
 of them are borrowed from the cohort, and how many workloads are waiting:
 
 <!-- guide:verify.tests.queues start -->
 ```bash
-kubectl get clusterqueues -o wide
+kubectl get clusterqueues -l ${QUOTA_LABEL} -o wide
 kubectl get localqueues -n ${NAMESPACE}
 ```
 <!-- guide:verify.tests.queues end -->
@@ -213,6 +354,7 @@ kubectl get pods -n ${NAMESPACE} \
 kubectl get pods -n ${NAMESPACE} -o json \
   | jq -r '.items[] | select((.spec.schedulingGates // []) | length > 0)
            | "gated: \(.metadata.name) \([.spec.schedulingGates[].name] | join(","))"'
+echo "workloads: $(kubectl get workloads -n ${NAMESPACE} --no-headers 2>/dev/null | wc -l | tr -d ' ')"
 ```
 <!-- guide:verify.tests.workloads end -->
 
@@ -234,19 +376,25 @@ done
 ```text
 QuotaReserved=False  reason=Pending
   couldn't assign flavors to pod set main: insufficient unused quota for
-  nvidia.com/gpu in flavor gpu-default, 1 more needed
+  nvidia.com/gpu in flavor llm-d-gpu-default, 1 more needed
 ```
 
-Preemption is visible in namespace events:
+Preemption is visible in namespace events, and names both sides of the cohort:
 
 ```bash
 kubectl get events -n ${NAMESPACE} --field-selector reason=Preempted
 ```
 
+```text
+Preempted to accommodate a workload ... due to reclamation within the cohort;
+preemptor path: /llm-d-gpu/llm-d-model-b-cq;
+preemptee path: /llm-d-gpu/llm-d-model-a-cq
+```
+
 ## How It Interacts With the HPA
 
 | Layer | Actor | What it controls |
-|---|---|---|
+| --- | --- | --- |
 | Demand signal | Prometheus / EPP metrics | when to scale |
 | Replica count | HPA (owned by KEDA) | how many replicas are requested |
 | GPU budget | Kueue | which of those replicas get a GPU now |
@@ -269,7 +417,7 @@ arithmetic. Re-check this if you switch a trigger to `Utilization`.
 ## Perceived Effects
 
 | Condition | Replica rebalancer | Kueue |
-|---|---|---|
+| --- | --- | --- |
 | Demand rises, budget full | lowers `spec.maxReplicas` on the next loop | extra pods are created and gated |
 | Demand drops | raises `maxReplicas` back toward the manifest value | pods are deleted, quota is released within seconds |
 | One model idle | its unused GPUs raise the other's ceiling | the other ClusterQueue borrows above its own floor |
@@ -315,7 +463,13 @@ The floors are the dial. Beyond them:
 
 - **Nominal accounting.** Kueue admits against the quota you declare, not
   against live node capacity. Quota above physical capacity produces
-  unschedulable pods rather than gated ones.
+  unschedulable pods rather than gated ones — a `FailedScheduling` event
+  instead of an admission gate.
+- **The queue-name label is one-way on a Deployment.** Kueue rejects removing
+  `metadata.labels[kueue.x-k8s.io/queue-name]` from a Deployment at any replica
+  count, and rejects changing it while any replica is ready. Opting a Deployment
+  back out means recreating it. The pod-template label used above has no such
+  restriction, which is why the steps use it.
 - **Gated pods accumulate.** Keep `maxReplicaCount` at a sane physical ceiling;
   every replica the HPA asks for and cannot place stays as a `Pending` pod.
 - **Rollouts need slack.** With `maxSurge: 0` a rollout terminates before it
@@ -328,14 +482,26 @@ The floors are the dial. Beyond them:
 
 <!-- guide:cleanup start -->
 ```bash
+rc=0
 for deployment in ${DEPLOYMENT_A} ${DEPLOYMENT_B}; do
   kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
-    '{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":null}},"spec":{"template":{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":null}}}}}'
+    '{"spec":{"template":{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":null}}}}}' \
+    || { echo "FAILED to remove the label from ${deployment}" >&2; rc=1; }
+  kubectl rollout status deployment/"${deployment}" -n ${NAMESPACE} --timeout=10m || rc=1
 done
+(exit ${rc})
 
 kubectl delete -k ${QUOTA_ROOT}/base --ignore-not-found=true
 ```
 <!-- guide:cleanup end -->
 
-Removing the label stops Kueue managing pods created from then on; pods already
-admitted keep running.
+The first patch rolls every model server once more, one replica at a time; pods
+created after it are invisible to Kueue. It has to come first, so that no
+replica is left gated with no ClusterQueue to admit it and so the Workloads
+holding the `kueue.x-k8s.io/resource-in-use` finalizer are gone before the
+delete blocks on it.
+
+If you also labelled a Deployment at install time, this does not opt it back
+out — that label cannot be removed, so recreate the Deployment without it.
+`helm uninstall kueue -n ${KUEUE_NAMESPACE}` removes the webhook enforcing the
+rule, after which the leftover label is inert.

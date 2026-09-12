@@ -5,18 +5,19 @@
 #
 # They double as the per-model view: `kubectl get localqueue -n <namespace>`
 # reports pending and admitted workloads per model.
+#
+# The namespace comes from kustomization.yaml, so retargeting this overlay at
+# another namespace is a one-line change there.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: model-a-lq
-  namespace: llm-d-optimized-baseline
 spec:
-  clusterQueue: model-a-cq
+  clusterQueue: llm-d-model-a-cq
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata:
   name: model-b-lq
-  namespace: llm-d-optimized-baseline
 spec:
-  clusterQueue: model-b-cq
+  clusterQueue: llm-d-model-b-cq
