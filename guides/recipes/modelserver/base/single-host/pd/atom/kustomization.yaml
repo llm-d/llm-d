@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+patches:
+  # Add routing sidecar to the decode deployment
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode
