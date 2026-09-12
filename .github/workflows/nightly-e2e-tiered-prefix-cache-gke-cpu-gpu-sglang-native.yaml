@@ -1,0 +1,130 @@
+name: Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU SGLang)
+
+on:
+  workflow_dispatch:
+    inputs:
+      decode_pods:
+        description: 'Number of decode (sglang "standalone") pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: '2'
+      prefill_pods:
+        description: 'Number of prefill pods (default "auto", means what was configured on the scenario)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Class of gateway used ("istio", "agentgateway", "epponly" (i.e., "standalone"), "none")'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Enabled monitoring ("true", "false")'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'false'
+      verbose:
+        description: 'Execute workflow in "verbose" mode ("true", "false")'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
+        required: false
+        default: 'sanity_random.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
+
+  schedule:
+    - cron: '30 16 * * *'  # 16:30 UTC daily (60m after P/D SGLang at 15:30, 30m before flow-control at 17:00)
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  # Distinct from the vLLM "native"/"lmcache" lanes: this lane has its own
+  # namespace and helm release, so it does not need to queue behind them.
+  group: nightly-e2e-tiered-prefix-cache-gke-gpu-sglang
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
+    with:
+      scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
+      standup_method: ${{ inputs.standup_method || 'kustomize' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'tiered-prefix-cache' }}
+      # The guide overlay is tuned for a 16xH100 benchmark (8 replicas x TP=2).
+      # This lane is a functional gate, not a perf run, so it stands up 2 pods.
+      # Requires modelserver/gpu/sglang/base/patch-decode.yaml to keep that
+      # filename -- see the comment in its kustomization.yaml.
+      decode_pods: ${{ inputs.decode_pods || '2' }}
+      prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
+      accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
+      backend_type: ${{ inputs.backend_type || 'sglang' }}
+      infra_provider: ${{ inputs.infra_provider || 'gke' }}
+      # offloading_target maps to the guide README's ${VARIANT}; together with
+      # connector this resolves to
+      # guides/tiered-prefix-cache/modelserver/gpu/sglang/native/cpu/gke/
+      offloading_target: ${{ inputs.offloading_target || 'cpu' }}
+      connector: ${{ inputs.connector || 'native' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-tiered-prefix-cache-gke-gpu-sglang' }}
+      # Same cluster as the other two GKE SGLang lanes (optimized-baseline and
+      # P/D), whose decode pods already run with a 512Gi memory limit.
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
+      helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke-sglang' }}
+      workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke-sglang' }}
+      bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
+      bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/tiered-prefix-cache' }}
+      gateway_class: ${{ inputs.gateway_class || 'epponly' }}
+      monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      verbose: ${{ inputs.verbose || 'false' }}
+      harness: ${{ inputs.harness || 'inference-perf' }}
+      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
+      cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: tiered-prefix-cache-gke-sglang-cpu-native
+      badge_label: "SGLANG GPU"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

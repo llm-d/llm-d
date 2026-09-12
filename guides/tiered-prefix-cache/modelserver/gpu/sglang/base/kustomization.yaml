@@ -18,4 +18,11 @@ labels:
     includeSelectors: true
     includeTemplates: true
 patches:
-  - path: patch-sglang.yaml
+  # Named "patch-decode.yaml", not "patch-sglang.yaml", because this is where
+  # spec.replicas is declared. llm-d-benchmark's CI applies its decode_pods
+  # override by globbing for "patch-vllm.yaml"/"patch-decode.yaml" under
+  # modelserver/, so any other filename silently ignores the override and the
+  # nightly lane runs at whatever replica count is hardcoded here. This also
+  # matches the pd-disaggregation SGLang overlays, which already use
+  # patch-decode.yaml / patch-prefill.yaml.
+  - path: patch-decode.yaml
