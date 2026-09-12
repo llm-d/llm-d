@@ -11,7 +11,7 @@
 ##
 ## peakPrefillThroughput is left at the plugin's own default (not pd-disaggregation's
 ## calibrated 33821, which is tuned for gpt-oss-120b on 8x H200 prefill -- meaningless
-## for this guide's Qwen3-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
+## for this guide's Qwen2.5-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
 ## hardware with guides/recipes/router/calibration/calibrate.sh.
 
 # See router/httproute-3-epp.yaml for why this guide hand-authors the HTTPRoute

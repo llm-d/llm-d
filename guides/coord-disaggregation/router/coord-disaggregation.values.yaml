@@ -54,7 +54,7 @@ router:
       #
       # peakPrefillThroughput is left at the plugin's own default (not pd-disaggregation's
       # 33821, which is calibrated for gpt-oss-120b on 8x H200 prefill -- meaningless for
-      # this guide's Qwen3-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
+      # this guide's Qwen2.5-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
       # hardware with guides/recipes/router/calibration/calibrate.sh.
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
