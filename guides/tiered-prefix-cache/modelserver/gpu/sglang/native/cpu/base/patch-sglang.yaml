@@ -19,9 +19,10 @@ spec:
             - "--mem-fraction-static=0.9"
             - "--enable-metrics"
             - "--enable-hierarchical-cache"
-            - "--hicache-write-policy"
-            - "write_through"
-            - "--hicache-io-backend"
-            - "kernel"
-            - "--hicache-size"
-            - "200"
+            # Keep every flag in "--flag=value" form. llm-d-benchmark's CI
+            # auto-detects the served model by discarding args that look like
+            # flags; a bare value on its own line (e.g. "write_through") is
+            # indistinguishable from a model name and corrupts that detection.
+            - "--hicache-write-policy=write_through"
+            - "--hicache-io-backend=kernel"
+            - "--hicache-size=200"
