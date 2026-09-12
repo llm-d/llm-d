@@ -9,7 +9,7 @@ The Async Processor is a lightweight dispatch agent that pulls inference request
   </picture>
 </p>
 
-### Internal Pipeline Architecture
+## Internal Pipeline Architecture
 
 <p align="center">
   <picture>
@@ -37,7 +37,7 @@ Gates can be configured at two distinct levels:
 - **Worker Pool Admission Level**: Controls entry into the worker pool execution pipeline. Multiple gates can be combined for a pool using a **composite gate**.
 
 | Gate type | Behavior |
-|-----------|----------|
+| --- | --- |
 | `constant` | Always open — no throttling. |
 | `redis` | Reads budget values from Redis keys, allowing external orchestrators to dynamically adjust rate limits per queue or pool. |
 | `prometheus-saturation` | Queries Prometheus for model server saturation metrics (e.g., KV cache pressure, queue depth). Allows ingestion and admission when saturation is below a configurable threshold. |
@@ -66,7 +66,7 @@ A single **Request Merge Policy** is configured globally at the pipeline level f
 The two supported global merge policies are:
 
 | Policy | Description |
-|--------|-------------|
+| --- | --- |
 | `random-robin` | Default policy. Randomly picks messages from all queues configured for a each pool. |
 | `tier-priority` | Buckets requests into 6 strict priority lanes using routing tags (`(classification, tier)`). Within each bucket, it round-robins across different client channels and stamps the chosen priority header (`x-gateway-priority` by default). |
 
@@ -83,7 +83,7 @@ The Async Processor defines standardized JSON schemas for requests published to 
 ### Request Message Schema
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `id` | `string` | Unique identifier for result mapping (required). |
 | `created` | `int64` | Created timestamp in Unix seconds. |
 | `deadline` | `int64` | Deadline in Unix seconds (required, must be positive). |
@@ -113,7 +113,7 @@ The Async Processor defines standardized JSON schemas for requests published to 
 ### Result Message Schema
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `id` | `string` | Unique identifier mapped to the corresponding request. |
 | `payload` | `bytes` / `object` | Inference result payload returned from downstream model server. |
 | `status_code` | `int` | HTTP response status code (non-zero value indicates an HTTP response was received). |
@@ -153,9 +153,9 @@ The Async Processor defines standardized JSON schemas for requests published to 
 Queue configurations define the input message queue source parameters (such as Redis keys or Pub/Sub subscription IDs) and specify the target **`llm-d-router` endpoint information** (such as URL path and target model endpoint) for dispatched requests.
 
 | Implementation | Characteristics |
-|---------------|-----------------|
+| --- | --- |
 | Redis Sorted Set | Persisted, priority-ordered by deadline. Supports per-queue gate configurations. |
-| Redis Pub/Sub | Ephemeral, fan-out delivery. |
+| Redis Pub/Sub (**deprecated** — prefer Redis Sorted Set) | Ephemeral, fan-out delivery. Still functional; scheduled for removal in a future release. |
 | GCP Pub/Sub | Cloud-native, scalable. Supports per-subscription gating. |
 
 ## Configuration
@@ -167,7 +167,7 @@ The Async Processor is configured via high-level schema definitions for message 
 Queue configurations specify input message queue parameters, target `llm-d Router` endpoints, routing tags, and optional queue-level dispatch gates.
 
 | Field | Type | Required | Description | Example Value |
-|-------|------|----------|-------------|---------------|
+| --- | --- | --- | --- | --- |
 | `queue_name` / `subscriber_id` | String | Yes | Name of the input queue or Pub/Sub subscriber ID. | `"batch_queue"` |
 | `worker_pool_id` | String | Yes | Target worker pool ID to route messages polled from this queue. | `"worker_pool_1"` |
 | `igw_base_url` | String | Yes | Base URL of the target `llm-d Router` endpoint. | `"http://localhost:80/"` |
@@ -199,7 +199,7 @@ Queue configurations specify input message queue parameters, target `llm-d Route
 Worker pool configurations define dedicated worker concurrency limits and pool admission gates for isolated execution pipelines.
 
 | Field | Type | Required | Description | Example Value |
-|-------|------|----------|-------------|---------------|
+| --- | --- | --- | --- | --- |
 | `id` | String | Yes | Unique pool identifier referenced by queue/topic configurations (`worker_pool_id`). | `"worker-pool_1"` |
 | `workers` | Integer | Yes | Number of concurrent workers dedicated to this pool. Must be positive. | `32` |
 | `gate_type` | String | Optional | The type of dispatch gate to apply to the pool (e.g., `local-max-concurrency`, `prometheus-saturation`). | `"prometheus-saturation"` |
