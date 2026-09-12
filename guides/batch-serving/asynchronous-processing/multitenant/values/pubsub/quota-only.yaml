@@ -14,25 +14,32 @@
 #   - TEAM  -> per-(team, model) reserved quota (redis-quota, classifying; per-model
 #     prefix quota:a: / quota:b:): within quota -> reserved, over -> overflow.
 #   - TIER  -> per-topic `tier` label; the tier-priority merge policy orders each
-#     pool's reserved/overflow × tier lanes and stamps x-gateway-priority.
+#     pool's reserved/overflow × tier lanes and stamps x-llm-d-inference-objective.
 #
 # Pub/Sub publishes all results to the single resultTopicId (unlike Redis, which
 # uses per-model result lists).
 ap:
 
-  messageQueueImpl: "gcp-pubsub-gated"
-  igwBaseURL: "http://IGW_HOST:80"
+  transport: "gcp-pubsub"
 
   requestMergePolicyConfig:
     type: "tier-priority"
     parameters:
-      priority_header: "x-gateway-priority"
+      objective_header: "x-llm-d-inference-objective"
+      fairness_header: "x-llm-d-inference-fairness-id"
+      fairness_attribute: "team"
+      lane_objectives:
+        reserved-interactive: "reserved-interactive"
+        reserved-async: "reserved-async"
+        reserved-batch: "reserved-batch"
+        overflow-interactive: "overflow-interactive"
+        overflow-async: "overflow-async"
+        overflow-batch: "overflow-batch"
 
-  gcpPubSub:
-    enabled: true
-    projectId: "PROJECT_ID"
-    resultTopicId: "projects/PROJECT_ID/topics/results"
-    topicsConfig:
+  transportConfig:
+    project_id: "PROJECT_ID"
+    result_topic_id: "projects/PROJECT_ID/topics/results"
+    topics:
       # ---------- MODEL A (pool model-a, payload.model = MODEL_A) ----------
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-a-requests-sub"
         worker_pool_id: "model-a"

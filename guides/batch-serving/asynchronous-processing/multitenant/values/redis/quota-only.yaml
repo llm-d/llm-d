@@ -23,28 +23,36 @@
 # The tier-priority merge policy runs per pool independently: within each model it
 # dispatches the 6 (classification × tier) lanes in strict order (all reserved
 # before any overflow; interactive>async>batch within each) and stamps
-# x-gateway-priority. Results land on a per-model list (results-a-list / -b-list).
+# x-llm-d-inference-objective. Results land on a per-model
+# list (results-a-list / -b-list).
 ap:
 
-  messageQueueImpl: "redis-sortedset"
-  igwBaseURL: "http://IGW_HOST:80"
+  transport: "redis-sortedset"
 
   requestMergePolicyConfig:
     type: "tier-priority"
     parameters:
-      priority_header: "x-gateway-priority"
+      objective_header: "x-llm-d-inference-objective"
+      fairness_header: "x-llm-d-inference-fairness-id"
+      fairness_attribute: "team"
+      lane_objectives:
+        reserved-interactive: "reserved-interactive"
+        reserved-async: "reserved-async"
+        reserved-batch: "reserved-batch"
+        overflow-interactive: "overflow-interactive"
+        overflow-async: "overflow-async"
+        overflow-batch: "overflow-batch"
 
-  redis:
-    enabled: true
-    url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
-    resultQueueName: "results-a-list"   # default; per-queue result_queue_name overrides below
-    pollIntervalMs: 500
-    batchSize: 10
-    queuesConfig:
+  transportConfig:
+    urlSecret:
+      url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+    result_queue_name: "results-a-list"   # default; per-queue result_queue_name overrides below
+    poll_interval_ms: 500
+    batch_size: 10
+    queues:
       # ---------- MODEL A (pool model-a, payload.model = MODEL_A) ----------
       - queue_name: "team-premium-a"
         worker_pool_id: "model-a"
-        inference_objective: "latency"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
         result_queue_name: "results-a-list"
@@ -75,7 +83,6 @@ ap:
           prefix: "quota:a:"
       - queue_name: "team-batch-a"
         worker_pool_id: "model-a"
-        inference_objective: "throughput"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
         result_queue_name: "results-a-list"
@@ -93,7 +100,6 @@ ap:
       # ---------- MODEL B (pool model-b, payload.model = MODEL_B) ----------
       - queue_name: "team-premium-b"
         worker_pool_id: "model-b"
-        inference_objective: "latency"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
         result_queue_name: "results-b-list"
@@ -124,7 +130,6 @@ ap:
           prefix: "quota:b:"
       - queue_name: "team-batch-b"
         worker_pool_id: "model-b"
-        inference_objective: "throughput"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
         result_queue_name: "results-b-list"

@@ -64,12 +64,14 @@ Deploy the Async Processor using the selected queue implementation's configurati
 ```bash
 export NAMESPACE=llm-d-async
 export MQ_PROVIDER=gcp-pubsub # options are gcp-pubsub or redis
-export ASYNC_VERSION=v0.9.0   # latest llm-d-async release
+export ASYNC_VERSION=v0.9.1   # llm-d-async release
+
+[ "$MQ_PROVIDER" = "redis" ] && TARGET_KEY="ap.transportConfig.queues[0].igw_base_url" || TARGET_KEY="ap.transportConfig.topics[0].igw_base_url"
 
 helm install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f ${REPO_ROOT}/guides/batch-serving/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
-    --set ap.igwBaseURL=http://${IP}:80 \
+    --set ${TARGET_KEY}=http://${IP}:80 \
     -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
 

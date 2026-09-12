@@ -64,10 +64,14 @@ Edit the `values.yaml` file with your specific GCP project and resources:
 
 ```yaml
 ap:
-  gcpPubSub:
-    projectId: "<your-project>"
-    requestSubscriberId: "projects/<your-project>/subscriptions/async-proc-requests-sub"
-    resultTopicId: "projects/<your-project>/topics/async-proc-results"
+  transport: "gcp-pubsub"
+  transportConfig:
+    project_id: "<your-project>"
+    result_topic_id: "projects/<your-project>/topics/async-proc-results"
+    topics:
+      - subscriber_id: "projects/<your-project>/subscriptions/async-proc-requests-sub"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://<igw-host>:80"
 ```
 
 For deployment instructions, please refer to the [main README](../README.md#installation).
