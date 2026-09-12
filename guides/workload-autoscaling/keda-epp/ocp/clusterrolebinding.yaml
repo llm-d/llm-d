@@ -1,0 +1,22 @@
+# Grants the dedicated KEDA+EPP Prometheus client read access to OpenShift's
+# Thanos Querier. This object is cluster-scoped and must be deleted explicitly;
+# deleting the workload namespace is not sufficient.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: keda-epp-prometheus-cluster-monitoring-view
+  labels:
+    app.kubernetes.io/name: keda-epp-prometheus
+    app.kubernetes.io/component: thanos-auth
+    app.kubernetes.io/managed-by: kustomize
+  annotations:
+    llm-d.ai/owner-namespace: llm-d-optimized-baseline
+    llm-d.ai/cleanup: explicit-cluster-scoped-cleanup-required
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: keda-epp-prometheus
+    namespace: llm-d-optimized-baseline
