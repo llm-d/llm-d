@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          resources:
+            limits:
+              cpu: '16'
+              memory: 256Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 128Gi
+              nvidia.com/gpu: 2
+
