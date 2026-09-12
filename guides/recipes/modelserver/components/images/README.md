@@ -38,6 +38,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── metax-vllm
 │   └── release
+├── npu-vllm
+│   └── release
 ├── routing-sidecar
 │   ├── nightly
 │   └── release

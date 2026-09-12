@@ -1,7 +1,7 @@
 name: optimized-baseline
 
 _lists:
-  non_gpu: &non_gpu [amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu]
+  non_gpu: &non_gpu [amd, xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu]
 
 env:
   static:
@@ -16,7 +16,7 @@ env:
     MONITORING_VALUES: {default: ""}
 
     PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", cpu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
     INFRA_PROVIDER: {default: base, values: [base, gke]}
 

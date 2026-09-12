@@ -14,7 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
-| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
+| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>), Minho Park (@rebel-minhopark, <minho.park@rebellions.ai>) |
 
 ## Requirements
 
@@ -81,6 +81,48 @@ The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM bas
 ## MetaX C500X
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
+
+## Rebellions NPU
+
+Rebellions NPUs are supported through `vllm-rbln`, an out-of-tree vLLM platform
+plugin that registers on the `vllm.platform_plugins` entry point, shipped in a publicly
+pullable container image. The optimized-baseline overlay (`modelserver/npu/vllm/`)
+serves `openai/gpt-oss-120b` on two replicas of one NPU each, so the router balances
+across two model servers.
+
+**Cluster prerequisites:**
+
+- [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html),
+  which installs the driver and the `npu.rebellions.ai` DRA DeviceClass
+- Kubernetes 1.34 with the `resource.k8s.io/v1` DRA APIs
+
+**Device allocation.** NPUs are requested through DRA, not an extended resource. One
+DeviceClass serves every Rebellions product, so a claim reaches a specific NPU only by
+filtering on `productName` in a CEL selector — see
+`resource-claim-template.yaml` in the overlay. Omitting the selector lets the claim bind to
+a different Rebellions product than the guide was measured on.
+
+**NUMA alignment.** This overlay claims one NPU and no NIC, so it sets no
+`resource.kubernetes.io/numaNode` match constraint — such a constraint needs two or more
+requests in one claim to bind together.
+
+**Prefix caching is off, so layer the NPU router values.** The runtime disables prefix
+caching for sliding-window models, and `openai/gpt-oss-120b` is one: enabling it reports
+0 hits over every query. The guide's default scheduling profile is prefix-cache aware, so
+apply [`router/npu.rbln.values.yaml`](../../guides/optimized-baseline/router/npu.rbln.values.yaml)
+after the guide's own values to fall back to the load scorer alone. Both the flag and that
+file go away once the runtime supports prefix caching here.
+
+**Set `MODEL` when running the guide's steps.** The overlay pins
+`openai/gpt-oss-120b`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
+`MODEL=openai/gpt-oss-120b` so the validation and benchmark steps address the served model.
+
+**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation/README.md),
+because the runtime does not support sleep and wake; LoRA adapters; and multimodal models,
+which on this runtime need a code path that cannot run alongside a KV connector.
+
+**Verification.** The maintainers listed above stand up the optimized-baseline overlay once
+per llm-d release tag against the release image and record the result.
 
 ## CPU Inferencing
 
