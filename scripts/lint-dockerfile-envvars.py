@@ -114,11 +114,16 @@ def find_script_runs(dockerfile_content: str) -> List[Tuple[str, str, int]]:
     """find all RUN commands that execute scripts, return (stage, script_path, line_num)"""
     runs = []
     current_stage = None
-    line_num = 0
+    lines = dockerfile_content.split('\n')
+    i = 0
 
-    for line in dockerfile_content.split('\n'):
-        line_num += 1
-        stripped = line.strip()
+    while i < len(lines):
+        line_num = i + 1
+        stripped = lines[i].strip()
+
+        while stripped.endswith('\\') and i + 1 < len(lines):
+            i += 1
+            stripped = stripped[:-1] + ' ' + lines[i].strip()
 
         # track stage
         if stripped.upper().startswith('FROM'):
@@ -132,10 +137,12 @@ def find_script_runs(dockerfile_content: str) -> List[Tuple[str, str, int]]:
         if stripped.upper().startswith('RUN'):
             # match: RUN /path/to/script.sh or RUN chmod ... && /path/to/script.sh
             script_matches = re.findall(r'(/[^\s]+\.sh)', stripped)
-            for script in script_matches:
+            for script in dict.fromkeys(script_matches):
                 # normalize path (remove /tmp/ prefix if present)
                 script_name = Path(script).name
                 runs.append((current_stage, script_name, line_num))
+
+        i += 1
 
     return runs
 
