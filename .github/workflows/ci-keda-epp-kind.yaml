@@ -1,0 +1,384 @@
+name: CI KEDA EPP Kind Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-keda-epp-kind.yaml
+      - guides/env.sh
+      - guides/recipes/observability/**
+      - guides/recipes/modelserver/**
+      - guides/recipes/router/**
+      - guides/optimized-baseline/modelserver/**
+      - guides/optimized-baseline/router/**
+      - guides/workload-autoscaling/keda-epp/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      WVA_REVISION: 8ff1ce41b1765843b99e2039c2616927d825b4fe
+      KIND_VERSION: v0.31.0
+      KUBECTL_VERSION: v1.35.0
+      KIND_NODE_VERSION: v1.35.0@sha256:4613778f3cfcd10e615029370f5786704559103cf27bef934597ba562b269661
+      GAIE_VERSION: v1.5.0
+      PROMETHEUS_CHART_VERSION: 62.7.0
+      KEDA_CHART_VERSION: 2.20.0
+      ROUTER_CHART_VERSION: v0.9.0
+      SIM_IMAGE: ghcr.io/llm-d/llm-d-inference-sim:v0.9.0@sha256:be957b008416a645f206532aad408b5ff29dc81c628b8486479e79d0c2b3801b
+      LLMD_NAMESPACE: llm-d-optimized-baseline
+      MONITORING_NAMESPACE: llm-d-monitoring
+      KEDA_NAMESPACE: keda
+      CLUSTER_NAME: llmd-keda-epp-contract-${{ github.run_id }}-${{ github.run_attempt }}
+      KUBECONFIG: /tmp/llmd-keda-epp-${{ github.run_id }}-${{ github.run_attempt }}.kubeconfig
+      CERT_DIR: /tmp/llmd-keda-epp-certs-${{ github.run_id }}-${{ github.run_attempt }}
+      ARTIFACT_DIR: /tmp/llmd-keda-epp-wva-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+      LLMD_ROOT: ${{ github.workspace }}/llm-d
+      WVA_ROOT: ${{ github.workspace }}/wva
+    steps:
+      - name: Checkout llm-d
+        uses: actions/checkout@v7
+        with:
+          path: llm-d
+          persist-credentials: false
+
+      - name: Checkout WVA lifecycle
+        uses: actions/checkout@v7
+        with:
+          repository: llm-d/llm-d-workload-variant-autoscaler
+          ref: 8ff1ce41b1765843b99e2039c2616927d825b4fe
+          path: wva
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: wva/go.mod
+          cache-dependency-path: wva/go.sum
+
+      - name: Install and verify Kind and kubectl
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl --fail --location --silent --show-error \
+            --output /tmp/kind-linux-amd64 \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          curl --fail --location --silent --show-error \
+            --output /tmp/kind-linux-amd64.sha256sum \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64.sha256sum"
+          (cd /tmp && sha256sum --check kind-linux-amd64.sha256sum)
+          sudo install -m 0755 /tmp/kind-linux-amd64 /usr/local/bin/kind
+
+          curl --fail --location --silent --show-error \
+            --output /tmp/kubectl \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl --fail --location --silent --show-error \
+            --output /tmp/kubectl.sha256 \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+          printf '%s  %s\n' "$(tr -d '[:space:]' < /tmp/kubectl.sha256)" /tmp/kubectl \
+            | sha256sum --check
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+
+          test "$(kind version | awk '{print $2}')" = "${KIND_VERSION}"
+          test "$(kubectl version --client -o json | jq -r '.clientVersion.gitVersion')" = "${KUBECTL_VERSION}"
+          test "$(git -C "${WVA_ROOT}" rev-parse HEAD)" = "${WVA_REVISION}"
+
+      - name: Initialize isolated contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${ARTIFACT_DIR}"
+          printf '%s\n' "${CLUSTER_NAME}" > "${ARTIFACT_DIR}/cluster-name.txt"
+          kind get clusters > "${ARTIFACT_DIR}/clusters-before.txt"
+          if grep -Fxq "${CLUSTER_NAME}" "${ARTIFACT_DIR}/clusters-before.txt"; then
+            echo "Refusing to reuse existing Kind cluster ${CLUSTER_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Create WVA Kind cluster
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "${WVA_ROOT}"
+          K8S_VERSION="${KIND_NODE_VERSION}" \
+          ENABLE_SCALE_TO_ZERO=false \
+          bash deploy/kind-emulator/setup.sh \
+            -c "${CLUSTER_NAME}" -n 1 -g 0 -t nvidia \
+            2>&1 | tee "${ARTIFACT_DIR}/cluster-create.log"
+          kubectl cluster-info > "${ARTIFACT_DIR}/cluster-info.txt"
+          kubectl get nodes -o wide > "${ARTIFACT_DIR}/nodes-after-create.txt"
+
+      - name: Prepare llm-d TLS and CA inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          kubectl create namespace "${MONITORING_NAMESPACE}"
+          kubectl create namespace "${KEDA_NAMESPACE}"
+          kubectl create namespace "${LLMD_NAMESPACE}"
+
+          kubectl apply -k \
+            "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=${GAIE_VERSION}" \
+            > "${ARTIFACT_DIR}/gaie-crds.log"
+
+          "${LLMD_ROOT}/guides/recipes/observability/generate-prometheus-tls-certs.sh" \
+            --namespace "${MONITORING_NAMESPACE}" \
+            --cert-dir "${CERT_DIR}" \
+            --validity 7 \
+            --context "${KUBECONFIG}" \
+            > "${ARTIFACT_DIR}/tls-generation.log"
+
+          openssl verify -CAfile "${CERT_DIR}/ca.crt" "${CERT_DIR}/tls.crt" \
+            > "${ARTIFACT_DIR}/tls-verification.txt"
+          openssl x509 -in "${CERT_DIR}/tls.crt" -noout \
+            -subject -issuer -dates -ext subjectAltName \
+            > "${ARTIFACT_DIR}/tls-certificate-metadata.txt"
+
+          kubectl create secret generic llmd-prometheus-ca \
+            --namespace "${KEDA_NAMESPACE}" \
+            --from-file=ca.crt="${CERT_DIR}/ca.crt"
+          kubectl create secret generic keda-prometheus-auth \
+            --namespace "${LLMD_NAMESPACE}" \
+            --from-file=ca.crt="${CERT_DIR}/ca.crt"
+
+      - name: Install Prometheus and KEDA through WVA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "${WVA_ROOT}"
+          ENVIRONMENT=kind-emulator \
+          CREATE_CLUSTER=false \
+          CLUSTER_NAME="${CLUSTER_NAME}" \
+          DEPLOY_WVA=false \
+          DEPLOY_PROMETHEUS=true \
+          DEPLOY_OPERATIONAL_DASHBOARD=false \
+          DEPLOY_ALERTING_RULES=false \
+          LLMD_NS="${LLMD_NAMESPACE}" \
+          MONITORING_NAMESPACE="${MONITORING_NAMESPACE}" \
+          WVA_NS=workload-variant-autoscaler-system \
+          PROMETHEUS_RELEASE_NAME=llmd \
+          PROMETHEUS_SVC_NAME=llmd-kube-prometheus-stack-prometheus \
+          PROMETHEUS_CHART_VERSION="${PROMETHEUS_CHART_VERSION}" \
+          PROMETHEUS_HELM_VALUES="${LLMD_ROOT}/guides/workload-autoscaling/keda-epp/kind/monitoring.values.yaml" \
+          PROMETHEUS_TLS_SECRET_PRECREATED=true \
+          SCALER_BACKEND=keda \
+          KEDA_NAMESPACE="${KEDA_NAMESPACE}" \
+          KEDA_CHART_VERSION="${KEDA_CHART_VERSION}" \
+          KEDA_HELM_VALUES="${LLMD_ROOT}/guides/workload-autoscaling/keda-epp/kind/keda.values.yaml" \
+          KEDA_HELM_TIMEOUT=15m \
+          ENABLE_SCALE_TO_ZERO=false \
+          SIM_IMAGE="${SIM_IMAGE}" \
+          ./deploy/install.sh 2>&1 | tee "${ARTIFACT_DIR}/wva-infrastructure.log"
+
+      - name: Install llm-d router and guide
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          helm upgrade --install optimized-baseline \
+            oci://ghcr.io/llm-d/charts/llm-d-router-standalone \
+            --version "${ROUTER_CHART_VERSION}" \
+            --namespace "${LLMD_NAMESPACE}" \
+            -f "${LLMD_ROOT}/guides/recipes/router/base.values.yaml" \
+            -f "${LLMD_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml" \
+            -f "${LLMD_ROOT}/guides/recipes/router/features/monitoring.values.yaml" \
+            -f "${LLMD_ROOT}/guides/workload-autoscaling/keda-epp/router.values.yaml" \
+            -f "${LLMD_ROOT}/guides/workload-autoscaling/keda-epp/kind/router.values.yaml" \
+            --wait --timeout 8m \
+            2>&1 | tee "${ARTIFACT_DIR}/router-install.log"
+
+          kubectl kustomize \
+            "${LLMD_ROOT}/guides/workload-autoscaling/keda-epp/kind" \
+            --load-restrictor=LoadRestrictionsNone \
+            > "${ARTIFACT_DIR}/kind-kustomize.yaml"
+          kubectl apply -f "${ARTIFACT_DIR}/kind-kustomize.yaml" \
+            2>&1 | tee "${ARTIFACT_DIR}/kind-apply.log"
+
+      - name: Run WVA direct KEDA guide contract
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "${WVA_ROOT}"
+          make test-e2e-keda-epp-guide KUBECONFIG="${KUBECONFIG}" \
+            2>&1 | tee "${ARTIFACT_DIR}/keda-epp-guide.log"
+
+      - name: Collect focused diagnostics
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+
+          capture_secret_metadata() {
+            local namespace=$1
+            local secret_name=$2
+            local final_path=$3
+            local error_path=$4
+            local temporary_path="${ARTIFACT_DIR}/.secret-metadata-${namespace}-${secret_name}.tmp"
+
+            rm -f -- "${temporary_path}" "${final_path}" "${error_path}"
+            kubectl get secret "${secret_name}" -n "${namespace}" -o json 2>/dev/null \
+              | jq -e '{
+                  apiVersion,
+                  kind,
+                  metadata: {
+                    name: .metadata.name,
+                    namespace: .metadata.namespace
+                  },
+                  type,
+                  keys: (.data | keys)
+                }' > "${temporary_path}" 2>/dev/null
+            local pipeline_status=("${PIPESTATUS[@]}")
+
+            if (( pipeline_status[0] == 0 && pipeline_status[1] == 0 )) &&
+              jq -e '
+                type == "object" and
+                (.apiVersion | type == "string") and
+                (.kind == "Secret") and
+                (.metadata.name | type == "string") and
+                (.metadata.namespace | type == "string") and
+                (.type | type == "string") and
+                (.keys | type == "array")
+              ' "${temporary_path}" >/dev/null 2>&1; then
+              mv -f -- "${temporary_path}" "${final_path}"
+              return 0
+            fi
+
+            rm -f -- "${temporary_path}" "${final_path}"
+            {
+              printf 'secret_metadata_retrieval=failed\n'
+              printf 'namespace=%s\n' "${namespace}"
+              printf 'secret=%s\n' "${secret_name}"
+              printf 'kubectl_exit=%s\n' "${pipeline_status[0]:-not-run}"
+              printf 'jq_exit=%s\n' "${pipeline_status[1]:-not-run}"
+            } > "${error_path}"
+            return 0
+          }
+
+          mkdir -p "${ARTIFACT_DIR}"
+          kind get clusters > "${ARTIFACT_DIR}/clusters-before-cleanup.txt" 2>&1
+          docker stats --no-stream > "${ARTIFACT_DIR}/docker-stats.txt" 2>&1
+
+          if kind get clusters 2>/dev/null | grep -Fxq "${CLUSTER_NAME}"; then
+            kubectl get nodes -o wide > "${ARTIFACT_DIR}/nodes.txt" 2>&1
+            kubectl get pods -A -o wide > "${ARTIFACT_DIR}/pods.txt" 2>&1
+            kubectl get events -A --sort-by=.lastTimestamp \
+              > "${ARTIFACT_DIR}/events.txt" 2>&1
+            kubectl get scaledobject,triggerauthentication,hpa,deployment,pods \
+              -n "${LLMD_NAMESPACE}" -o yaml \
+              > "${ARTIFACT_DIR}/guide-resources.yaml" 2>&1
+            helm list -A > "${ARTIFACT_DIR}/helm-releases.txt" 2>&1
+            kubectl logs -n "${KEDA_NAMESPACE}" deployment/keda-operator \
+              --all-containers --prefix \
+              > "${ARTIFACT_DIR}/keda-operator.log" 2>&1
+            kubectl logs -n "${KEDA_NAMESPACE}" \
+              deployment/keda-operator-metrics-apiserver \
+              --all-containers --prefix \
+              > "${ARTIFACT_DIR}/keda-metrics-apiserver.log" 2>&1
+
+            capture_secret_metadata \
+              "${KEDA_NAMESPACE}" \
+              llmd-prometheus-ca \
+              "${ARTIFACT_DIR}/keda-ca-secret-metadata.json" \
+              "${ARTIFACT_DIR}/keda-ca-secret-metadata-retrieval.txt"
+            capture_secret_metadata \
+              "${LLMD_NAMESPACE}" \
+              keda-prometheus-auth \
+              "${ARTIFACT_DIR}/keda-auth-secret-metadata.json" \
+              "${ARTIFACT_DIR}/keda-auth-secret-metadata-retrieval.txt"
+            capture_secret_metadata \
+              "${MONITORING_NAMESPACE}" \
+              prometheus-web-tls \
+              "${ARTIFACT_DIR}/prometheus-tls-secret-metadata.json" \
+              "${ARTIFACT_DIR}/prometheus-tls-secret-metadata-retrieval.txt"
+
+            {
+              printf 'x509=%s\n' \
+                "$(grep -Eic 'x509' "${ARTIFACT_DIR}/keda-operator.log" || true)"
+              printf 'unknown_authority=%s\n' \
+                "$(grep -Eic 'unknown authority' "${ARTIFACT_DIR}/keda-operator.log" || true)"
+              printf 'trigger_error=%s\n' \
+                "$(grep -Eic 'TriggerError' "${ARTIFACT_DIR}/keda-operator.log" || true)"
+            } > "${ARTIFACT_DIR}/keda-log-scan.txt"
+          fi
+          exit 0
+
+      - name: Delete only the isolated cluster
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${ARTIFACT_DIR}"
+          if [[ ! ${CLUSTER_NAME} =~ ^llmd-keda-epp-contract-[0-9]+-[0-9]+$ ]]; then
+            echo "Refusing unsafe cluster identity ${CLUSTER_NAME}" >&2
+            exit 1
+          fi
+
+          KIND_NAME="${CLUSTER_NAME}" \
+            bash "${WVA_ROOT}/deploy/kind-emulator/teardown.sh" \
+            2>&1 | tee "${ARTIFACT_DIR}/cleanup.log"
+          rm -rf -- "${CERT_DIR}"
+          rm -f -- "${KUBECONFIG}"
+
+          kind get clusters > "${ARTIFACT_DIR}/clusters-after.txt"
+          if test -f "${ARTIFACT_DIR}/clusters-before.txt"; then
+            sort "${ARTIFACT_DIR}/clusters-before.txt" \
+              > "${ARTIFACT_DIR}/clusters-before.sorted"
+            sort "${ARTIFACT_DIR}/clusters-after.txt" \
+              > "${ARTIFACT_DIR}/clusters-after.sorted"
+            diff -u \
+              "${ARTIFACT_DIR}/clusters-before.sorted" \
+              "${ARTIFACT_DIR}/clusters-after.sorted" \
+              > "${ARTIFACT_DIR}/cluster-inventory-diff.txt"
+          fi
+
+      - name: Verify artifact safety
+        id: artifact-safety
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -d "${ARTIFACT_DIR}"
+
+          if grep -RIlE -- \
+            '-----BEGIN (CERTIFICATE|[^-]*PRIVATE KEY)-----' \
+            "${ARTIFACT_DIR}" > "${ARTIFACT_DIR}/unsafe-pem-files.txt"; then
+            echo "Artifact directory contains PEM or private-key material" >&2
+            cat "${ARTIFACT_DIR}/unsafe-pem-files.txt" >&2
+            exit 1
+          fi
+
+          if find "${ARTIFACT_DIR}" -type f \
+            \( -name '*.key' -o -name 'kubeconfig' -o -name '*.kubeconfig' \) \
+            -print -quit | grep -q .; then
+            echo "Artifact directory contains a key or kubeconfig file" >&2
+            exit 1
+          fi
+
+          for metadata in "${ARTIFACT_DIR}"/*-secret-metadata.json; do
+            test -e "${metadata}" || continue
+            jq -e '
+              (has("data") | not) and
+              (has("stringData") | not) and
+              (.metadata | has("annotations") | not)
+            ' "${metadata}" >/dev/null
+          done
+
+          printf '%s\n' \
+            'pem_or_private_key_files=0' \
+            'key_or_kubeconfig_files=0' \
+            'secret_payload_fields=0' \
+            > "${ARTIFACT_DIR}/artifact-safety-report.txt"
+
+      - name: Upload sanitized contract artifacts
+        if: ${{ always() && steps.artifact-safety.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: keda-epp-kind-contract-${{ github.run_id }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 7
