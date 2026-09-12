@@ -39,7 +39,9 @@ def find_locally_defined_vars(script_content: str) -> Set[str]:
 
     # match various assignment patterns:
     # VAR="value", VAR=$(cmd), VAR=, export VAR="value", etc.
-    assign_pattern = r'^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)='
+    # Anchored on line start OR on a `case` arm's `)` so one-liners like
+    # `linux/arm64) export VAR="..." ;;` are recognized too.
+    assign_pattern = r'(?:^\s*|\)\s*)(?:export\s+)?([A-Z_][A-Z0-9_]*)='
 
     # match array declarations: VAR=( ... )
     array_pattern = r'^\s*([A-Z_][A-Z0-9_]*)=\('
@@ -53,7 +55,7 @@ def find_locally_defined_vars(script_content: str) -> Set[str]:
             continue
 
         # check for assignments
-        match = re.match(assign_pattern, line)
+        match = re.search(assign_pattern, line)
         if match:
             defined.add(match.group(1))
             continue
@@ -151,8 +153,8 @@ def main():
     if all_errors:
         for error in all_errors:
             print(error, file=sys.stderr)
-        print(f"\n⚠ {len(all_errors)} warning(s) found", file=sys.stderr)
-        sys.exit(0)
+        print(f"\n✗ {len(all_errors)} error(s) found", file=sys.stderr)
+        sys.exit(1)
 
     print(f"✓ Checked {success_count} script(s) - all environment variables properly declared")
     sys.exit(0)

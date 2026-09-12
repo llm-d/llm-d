@@ -3,9 +3,6 @@ set -Eeu
 
 # installs vllm and dependencies in runtime stage
 #
-# Optional environment variables:
-# - SUPPRESS_PYTHON_OUTPUT: If we should suppress vLLM installation logs
-: "${SUPPRESS_PYTHON_OUTPUT:=}"
 # Required environment variables:
 # - VLLM_REPO: vLLM git repository URL
 # - VLLM_COMMIT_SHA: vLLM commit SHA to checkout
@@ -13,7 +10,21 @@ set -Eeu
 # - VLLM_USE_PRECOMPILED: whether to use precompiled binaries (1/0)
 # - VLLM_PRECOMPILED_WHEEL_COMMIT: commit SHA for precompiled wheel lookup (defaults to VLLM_COMMIT_SHA)
 # - CUDA_MAJOR: The major CUDA version
+# - CUDA_MINOR: The minor CUDA version
 # - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
+# - FLASHINFER_VERSION: flashinfer package version to install
+#
+# Optional environment variables:
+# - SUPPRESS_PYTHON_OUTPUT: If we should suppress vLLM installation logs
+# - NVSHMEM_BUILD_FROM_SOURCE: whether NVSHMEM was built from source in the builder stage (true/false)
+# - VLLM_CHERRYPICK_1: optional commit to cherry-pick onto VLLM_COMMIT_SHA
+# - VLLM_CHERRYPICK_1_REMOTE: git remote/URL for VLLM_CHERRYPICK_1 (defaults to origin)
+# - VLLM_CHERRYPICK_2: optional second commit to cherry-pick onto VLLM_COMMIT_SHA
+# - VLLM_CHERRYPICK_2_REMOTE: git remote/URL for VLLM_CHERRYPICK_2 (defaults to origin)
+# - VLLM_SETUPTOOLS_SCM_PRETEND_VERSION: currently unused (see commented-out
+#   SETUPTOOLS_SCM_PRETEND_VERSION export below); kept documented so it isn't
+#   silently undeclared if that line is re-enabled
+: "${SUPPRESS_PYTHON_OUTPUT:=}"
 
 . /opt/vllm/bin/activate
 
