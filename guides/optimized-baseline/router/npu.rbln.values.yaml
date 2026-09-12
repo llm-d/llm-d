@@ -1,5 +1,6 @@
 # Rebellions NPU overrides for optimized-baseline.values.yaml. Apply after it;
-# everything not named here is inherited.
+# everything not named here is inherited. Named for the RBLN runtime rather than
+# for NPUs in general, since the limitation below is that runtime's.
 #
 # The NPU path serves gpt-oss-120b with prefix caching off, so the scheduling
 # profile drops the prefix-cache-affinity-filter and keeps the load scorer.

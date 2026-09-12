@@ -107,7 +107,7 @@ requests in one claim to bind together.
 **Prefix caching is off, so layer the NPU router values.** The runtime disables prefix
 caching for sliding-window models, and `openai/gpt-oss-120b` is one: enabling it reports
 0 hits over every query. The guide's default scheduling profile is prefix-cache aware, so
-apply [`router/npu.values.yaml`](../../guides/optimized-baseline/router/npu.values.yaml)
+apply [`router/npu.rbln.values.yaml`](../../guides/optimized-baseline/router/npu.rbln.values.yaml)
 after the guide's own values to fall back to the load scorer alone. Both the flag and that
 file go away once the runtime supports prefix caching here.
 

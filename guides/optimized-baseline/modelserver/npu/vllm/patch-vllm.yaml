@@ -23,17 +23,15 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "openai/gpt-oss-120b"
-            - "--served-model-name=openai/gpt-oss-120b"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--max-model-len=131072"
             - "--block-size=4096"
-            - "--enable-chunked-prefill"
             - "--max-num-batched-tokens=512"
             # The runtime turns prefix caching off for sliding-window models, so leaving
             # it on reports 0 hits over every query. Drop this once that support lands.
             - "--no-enable-prefix-caching"
             # Both measured on one Rebellions NPU at this data-parallel size. The block floor
-            # is ceil(max-model-len / block-size) = 32, so 34 leaves one spare.
+            # is ceil(131072 / block-size) = 32 at the model's own context length, so 34
+            # leaves one spare.
             - "--num-gpu-blocks-override=34"
             - "--max-num-seqs=1"
           env:
@@ -46,10 +44,6 @@ spec:
               value: /workspace/.cache
             - name: RBLN_COMP_DTYPE
               value: dlfloat
-            - name: RBLN_LOCAL_IP
-              value: 127.0.0.1
-            - name: RBLN_ROOT_IP
-              value: 127.0.0.1
             - name: RBLN_WEIGHT_FREE
               value: "1"
             # Unreachable in practice: the startupProbe budget below is 7215s.
