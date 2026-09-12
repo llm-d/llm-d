@@ -16,6 +16,25 @@ spec:
             - "--disaggregation-mode=decode"
             - "--disaggregation-transfer-backend=nixl"
             - "--tensor-parallel-size=2"
+            # KV-block granularity. Must match the router scorer's
+            # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
+            # --page-size, where vLLM uses --block-size.
+            - "--page-size=64"
+            # Decode-side prefix caching. SGLang forces disable_radix_cache=True
+            # on decode servers unless the first flag is passed, so without it a
+            # decode pod keeps no prefix state and every turn of a conversation
+            # re-transfers its whole prefix from prefill. The second flag adds a
+            # host-DRAM tier beneath HBM; host memory on a GPU node is otherwise
+            # idle, so this costs no accelerator capacity.
+            #
+            # --hicache-size is deliberately NOT set. It is GB *per TP rank*, and
+            # SGLang asserts the host pool exceeds the device pool, so any
+            # constant below the (model- and GPU-dependent) device KV pool makes
+            # decode fail at startup. Unset selects hicache_ratio=2.0, correct by
+            # construction and bounded by HBM -- which is why the memory limit
+            # below is sized for 2x the device pool per rank.
+            - "--disaggregation-decode-enable-radix-cache"
+            - "--enable-hierarchical-cache"
             - "--log-level=info"
             - "--enable-metrics"
             - "--uvicorn-access-log-exclude-prefixes=/metrics"
@@ -33,9 +52,16 @@ spec:
             - name: SGLANG_DISAGG_STAGING_POOL_SIZE_MB
               value: "4096"
           resources:
+            # memory limit vs request: the hierarchical cache host pool is
+            # allocated eagerly and pinned, per TP rank, at hicache_ratio x the
+            # device KV pool. Since the device pool cannot exceed HBM, the pool
+            # is bounded by 2 x HBM per rank -- 512Gi covers TP=2 on 80GB-class
+            # cards. The request stays at 64Gi so scheduling density is
+            # unchanged; raise it if you run without hierarchical caching
+            # headroom on the node.
             limits:
               cpu: "16"
-              memory: 64Gi
+              memory: 512Gi
               nvidia.com/gpu: "2"
             requests:
               cpu: "16"

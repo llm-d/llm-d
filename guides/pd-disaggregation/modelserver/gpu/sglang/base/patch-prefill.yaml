@@ -16,6 +16,10 @@ spec:
             - "--disaggregation-mode=prefill"
             - "--disaggregation-transfer-backend=nixl"
             - "--tensor-parallel-size=2"
+            # KV-block granularity. Must match the router scorer's
+            # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
+            # --page-size, where vLLM uses --block-size.
+            - "--page-size=64"
             - "--log-level=info"
             - "--enable-metrics"
             - "--uvicorn-access-log-exclude-prefixes=/metrics"

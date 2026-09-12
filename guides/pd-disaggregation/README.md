@@ -252,7 +252,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 <details>
 <summary><h4>Deploying with SGLang</h4></summary>
 
-To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `coreweave`, and `gke` infra providers):
+To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `coreweave`, `gke`, and `cks-mooncake` infra providers):
 
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke | cks-mooncake
@@ -262,7 +262,11 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 SGLang-specific notes:
 
-* **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
+* **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}`, `--disaggregation-transfer-backend=nixl`, and `--page-size=64` (aligned with the EPP router scorer). The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
+* **Decode-side prefix caching**: decode pods run with `--disaggregation-decode-enable-radix-cache` and `--enable-hierarchical-cache`. SGLang forces `disable_radix_cache=True` on decode servers unless the first flag is passed, so without it a decode pod keeps no prefix state and every turn of a conversation re-transfers its whole prefix from prefill. The second adds a host-DRAM (L2) tier beneath HBM. Host memory on a GPU node is otherwise idle, so this costs no accelerator capacity. Measured on 2x prefill + 2x decode (TP=2, Qwen2.5-7B, ~12k-token prompts), a follow-up turn served by the replica holding the prefix drops TTFT from ~1.25 s to ~0.26 s.
+  * `--hicache-size` is deliberately **not** set. It is interpreted as GB *per TP rank*, and SGLang asserts that the host pool is larger than the device pool, so a hard-coded value below the (model- and GPU-dependent) device KV pool makes decode fail at startup. Leaving it unset selects `hicache_ratio=2.0`, which is correct by construction and bounded by HBM.
+  * Because that host pool is allocated eagerly and pinned per TP rank, the decode memory **limit** is 512Gi — enough for 2x the device pool per rank at TP=2 on 80GB-class cards. The memory **request** is left at 64Gi so scheduling density is unchanged.
+  * The cache is **per decode pod**, and the router does not try to reuse it. Compare the two scheduling profiles in [`router/pd-disaggregation.values.yaml`](./router/pd-disaggregation.values.yaml): the *prefill* profile includes `prefix-cache-affinity-filter`, so a prompt is steered to a prefill pod that already holds its prefix, but the *decode* profile is `decode-filter` -> `active-request-scorer` -> `max-score-picker`, which picks the least-busy decode pod and ignores cache contents entirely. So the follow-up turn of a conversation hits the decode pod that cached it only by chance. When it lands elsewhere you get the same behaviour as before this change — a full KV transfer from prefill — so the cache is never a regression, just not always a win.
 * **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
 * **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/operations/disaggregation/sglang.md).
 
