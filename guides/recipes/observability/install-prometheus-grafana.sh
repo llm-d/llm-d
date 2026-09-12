@@ -12,6 +12,9 @@ KUBERNETES_CONTEXT=""
 DEBUG=""
 CENTRAL_MODE=true
 ENABLE_TLS=false
+# Namespace holding the tracing stack (installed separately by
+# install-otel-collector-jaeger.sh). Auto-detected when unset.
+TRACING_NAMESPACE="${TRACING_NAMESPACE:-}"
 
 ### HELP & LOGGING ###
 print_help() {
@@ -32,6 +35,8 @@ Options:
 
 Environment Variables:
   MONITORING_NAMESPACE        Override default monitoring namespace
+  TRACING_NAMESPACE           Namespace of the Jaeger install to link exemplars to
+                              (auto-detected when unset)
 
 Examples:
   $(basename "$0")                              # Install central monitoring in llm-d-monitoring (watches all namespaces)
@@ -220,6 +225,23 @@ check_prometheus_operator() {
   fi
 }
 
+detect_jaeger() {
+  # The tracing stack is installed separately by install-otel-collector-jaeger.sh
+  # into a namespace the operator picks, so locate it rather than assume one.
+  # Echoes the namespace when found, nothing otherwise.
+  if [[ -n "$TRACING_NAMESPACE" ]]; then
+    if $KCMD get svc jaeger-collector -n "$TRACING_NAMESPACE" &>/dev/null; then
+      echo "$TRACING_NAMESPACE"
+    else
+      log_info "⚠️ No jaeger-collector service in TRACING_NAMESPACE=${TRACING_NAMESPACE}" >&2
+    fi
+    return 0
+  fi
+
+  $KCMD get svc --all-namespaces --field-selector metadata.name=jaeger-collector \
+    -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true
+}
+
 setup_tls_certificates() {
   if [[ "$ENABLE_TLS" != "true" ]]; then
     return 0
@@ -406,6 +428,44 @@ install_prometheus_grafana() {
     WEB_TLS_CONFIG=""
   fi
 
+  # Grafana datasource wiring for metric-to-trace navigation.
+  #
+  # The EPP attaches the OpenTelemetry trace ID to its latency histograms as a
+  # Prometheus exemplar (llm-d/llm-d-router#2637). Three things have to line up
+  # for that to be clickable in Grafana, and none of them error when missing:
+  #   1. Prometheus must be started with the exemplar-storage feature, or it
+  #      parses the exemplar off the scrape and discards it (see enableFeatures
+  #      in prometheusSpec below).
+  #   2. Grafana needs a traces datasource to send the operator to.
+  #   3. The Prometheus datasource needs exemplarTraceIdDestinations to turn the
+  #      trace_id label into a link into that traces datasource.
+  # Tracing is an optional add-on, so 2 and 3 are wired only when Jaeger is found.
+  JAEGER_NAMESPACE="$(detect_jaeger)"
+  PROMETHEUS_JSONDATA=""
+  JAEGER_DATASOURCE=""
+
+  if [[ "$ENABLE_TLS" == "true" ]]; then
+    PROMETHEUS_JSONDATA="          tlsSkipVerify: true"
+  fi
+
+  if [[ -n "$JAEGER_NAMESPACE" ]]; then
+    log_info "🔗 Found Jaeger in ${JAEGER_NAMESPACE}, linking exemplars to traces"
+    PROMETHEUS_JSONDATA="${PROMETHEUS_JSONDATA:+${PROMETHEUS_JSONDATA}\n}          exemplarTraceIdDestinations:
+            - name: trace_id
+              datasourceUid: jaeger"
+    JAEGER_DATASOURCE="      - name: Jaeger
+        type: jaeger
+        uid: jaeger
+        url: http://jaeger-collector.${JAEGER_NAMESPACE}.svc.cluster.local:16686
+        access: proxy"
+  else
+    log_info "ℹ️ No Jaeger install found, skipping exemplar-to-trace links"
+  fi
+
+  if [[ -n "$PROMETHEUS_JSONDATA" ]]; then
+    PROMETHEUS_JSONDATA="        jsonData:\n${PROMETHEUS_JSONDATA}"
+  fi
+
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     cat <<EOF > /tmp/prometheus-values.yaml
 grafana:
@@ -428,13 +488,15 @@ grafana:
         url: ${PROMETHEUS_PROTOCOL}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:${PROMETHEUS_PORT}
         access: proxy
         isDefault: true
-$(if [[ "$ENABLE_TLS" == "true" ]]; then echo "        jsonData:
-          tlsSkipVerify: true"; fi)
+$(if [[ -n "$PROMETHEUS_JSONDATA" ]]; then echo -e "$PROMETHEUS_JSONDATA"; fi)
+$(if [[ -n "$JAEGER_DATASOURCE" ]]; then echo -e "$JAEGER_DATASOURCE"; fi)
 prometheus:
   service:
     type: ClusterIP
     sessionAffinity: ""
   prometheusSpec:
+    enableFeatures:
+      - exemplar-storage
 $(if [[ -n "$PROMETHEUS_IMAGE_CONFIG" ]]; then echo -e "$PROMETHEUS_IMAGE_CONFIG"; fi)
 $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -481,13 +543,15 @@ grafana:
         url: ${PROMETHEUS_PROTOCOL}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:${PROMETHEUS_PORT}
         access: proxy
         isDefault: true
-$(if [[ "$ENABLE_TLS" == "true" ]]; then echo "        jsonData:
-          tlsSkipVerify: true"; fi)
+$(if [[ -n "$PROMETHEUS_JSONDATA" ]]; then echo -e "$PROMETHEUS_JSONDATA"; fi)
+$(if [[ -n "$JAEGER_DATASOURCE" ]]; then echo -e "$JAEGER_DATASOURCE"; fi)
 prometheus:
   service:
     type: ClusterIP
     sessionAffinity: ""
   prometheusSpec:
+    enableFeatures:
+      - exemplar-storage
 $(if [[ -n "$PROMETHEUS_IMAGE_CONFIG" ]]; then echo -e "$PROMETHEUS_IMAGE_CONFIG"; fi)
 $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     serviceMonitorSelectorNilUsesHelmValues: false
