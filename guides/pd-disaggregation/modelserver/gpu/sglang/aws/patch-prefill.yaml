@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 2
   template:
     spec:
       affinity:
@@ -30,26 +29,6 @@ spec:
                 topologyKey: "kubernetes.io/hostname"
       containers:
         - name: modelserver
-          command: ["python3", "-m", "sglang.launch_server"]
-          args:
-            - "--model-path=openai/gpt-oss-120b"
-            - "--port=8000"
-            - "--host=0.0.0.0"
-            - "--disaggregation-mode=prefill"
-            - "--disaggregation-transfer-backend=nixl"
-            - "--tensor-parallel-size=4"
-            - "--log-level=info"
-            - "--enable-metrics"
-            - "--uvicorn-access-log-exclude-prefixes=/metrics"
-          resources:
-            limits:
-              cpu: "16"
-              memory: 64Gi
-              nvidia.com/gpu: "4"
-            requests:
-              cpu: "16"
-              memory: 64Gi
-              nvidia.com/gpu: "4"
           securityContext:
             capabilities:
               add:
