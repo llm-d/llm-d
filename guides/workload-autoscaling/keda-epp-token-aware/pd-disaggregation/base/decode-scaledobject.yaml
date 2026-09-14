@@ -27,7 +27,13 @@ spec:
     name: pd-disaggregation-nvidia-gpu-vllm-decode
   minReplicaCount: 1
   maxReplicaCount: 10
-  pollingInterval: 15
+  # No pollingInterval here on purpose. KEDA only honours it when it owns
+  # activation or caching — minReplicaCount: 0, idleReplicaCount: 0, or a trigger
+  # with useCachedMetrics — and setting it otherwise makes KEDA 2.20 emit
+  # "PollingInterval is configured but is not relevant" on every apply. With
+  # minReplicaCount: 1 the HPA's own sync period (kube-controller-manager's
+  # --horizontal-pod-autoscaler-sync-period, 15s by default) governs how often the
+  # triggers are evaluated. Tune responsiveness with the behavior block below.
   triggers:
     # DECODE: pods' worth of full KV cache, summed over decode pods.
     #

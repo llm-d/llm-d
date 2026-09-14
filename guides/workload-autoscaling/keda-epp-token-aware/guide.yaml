@@ -89,11 +89,16 @@ verify:
     # errors — a 401 from Thanos, a typo'd label, a metric that does not exist —
     # KEDA suppresses the error and serves `fallback` replicas, so autoscaling
     # looks healthy while doing nothing. ScalingActive=True with reason
-    # ValidMetricFound is the check that the queries actually resolve.
+    # ValidMetricFound is the check that the queries actually resolve, and the
+    # HPA's TARGETS column separates "resolving at 0" from "not resolving at all".
+    #
+    # Deliberately no `grep` here: a pattern that stops matching prints nothing
+    # and exits non-zero, which is the same silent-success failure this step
+    # exists to catch. Both commands always produce output.
     trigger_metrics:
       - run: |
           kubectl get hpa -n ${NAMESPACE} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[?(@.type=="ScalingActive")]}{.status}{" "}{.reason}{end}{"\n"}{end}'
-          kubectl describe hpa -n ${NAMESPACE} | grep -A2 "External metric"
+          kubectl get hpa -n ${NAMESPACE}
 
 cleanup:
   # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete

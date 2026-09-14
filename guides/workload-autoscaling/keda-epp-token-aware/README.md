@@ -258,7 +258,35 @@ At `V_P = 2696` tok/s with every request at ISL 8192, one replica retires `V_P �
 
 The knee lands where the math predicts: 0.50 req/s is the first stage past one replica's 0.33 req/s ceiling. Note that the trigger does not watch offered rate — it watches *measured* backlog, so observed replicas can lead this table during a transient.
 
+> [!IMPORTANT]
+> This table assumes **open-loop** arrivals — a request rate that continues regardless of how fast the pool answers. Under **closed-loop** load, where a fixed number of clients each wait for a reply before sending again, `inflight_tokens` settles at `concurrency × ISL` and is *invariant to capacity*: adding replicas does not reduce it, because the clients simply get served faster and immediately re-send.
+>
+> The prefill trigger then climbs to `maxReplicaCount` by construction and stays there for as long as the load runs. That is the load generator's behaviour, not a stuck metric — check that per-endpoint `inflight_tokens` values are evenly spread to confirm the series are live. Size the ramp against offered *rate* if you want the replica counts above to be reproducible.
+
 ### Platform-specific notes
+
+#### Generic Kubernetes with an unauthenticated Prometheus
+
+The `k8s` overlay assumes the bundled kube-prometheus-stack, which serves HTTPS and requires a bearer token — hence Configure step 1 and the `TriggerAuthentication`. If your Prometheus is reachable over plain HTTP with no auth (a common in-cluster development setup), that machinery has nothing to do: **skip Configure step 1**, then drop the `authenticationRef` block from each trigger and remove `triggerauthentication.yaml` from the base, e.g. from your own overlay:
+
+```yaml
+patches:
+  - patch: |-
+      - op: remove
+        path: /spec/triggers/1/authenticationRef
+      - op: remove
+        path: /spec/triggers/0/authenticationRef
+    target:
+      kind: ScaledObject
+  - patch: |-
+      $patch: delete
+      apiVersion: keda.sh/v1alpha1
+      kind: TriggerAuthentication
+      metadata:
+        name: prometheus-auth
+```
+
+Remove the higher trigger index first — a JSON Patch is applied in order, and removing index 0 first renumbers the list. Also update `serverAddress` to your `http://` endpoint.
 
 #### OpenShift
 
@@ -286,15 +314,17 @@ kubectl get hpa -n ${NAMESPACE}
 ```
 <!-- guide:verify.tests.scaledobject_hpa end -->
 
-Expected output on the P+D co-located topology (one ScaledObject; P/D yields two, one per role):
+Expected output on the P+D co-located topology (one ScaledObject; P/D yields two, one per role). Columns are as KEDA 2.20 prints them, trimmed here to the ones that carry the result:
 
 ```text
-NAME                                              READY   ACTIVE   AGE
-optimized-baseline-nvidia-gpu-vllm-token-aware    True    True     1m
+NAME                                             SCALETARGETNAME                             MIN  MAX  READY  ACTIVE  FALLBACK  PAUSED  TRIGGERS    AGE
+optimized-baseline-nvidia-gpu-vllm-token-aware   optimized-baseline-nvidia-gpu-vllm-decode   1    10   True   False   False     False   prometheus  1m
 
-NAME                                                       REFERENCE                                           TARGETS          MINPODS   MAXPODS   REPLICAS   AGE
-keda-hpa-optimized-baseline-nvidia-gpu-vllm-token-aware    Deployment/optimized-baseline-nvidia-gpu-vllm-decode 0/1500m, 0/800m  1         10        1          1m
+NAME                                                      REFERENCE                                              TARGETS                        MINPODS  MAXPODS  REPLICAS  AGE
+keda-hpa-optimized-baseline-nvidia-gpu-vllm-token-aware   Deployment/optimized-baseline-nvidia-gpu-vllm-decode   0/1.500 (avg), 0/800m (avg)    1        10       1         1m
 ```
+
+`ACTIVE` is `False` while the pool is idle — it flips to `True` once a trigger passes its `activationThreshold`. The two `TARGETS` pairs are the prefill and decode triggers in declaration order.
 
 > [!NOTE]
 > KEDA creates its own HPA object from the ScaledObject. Do **not** apply a separate `hpa.yaml` — doing so will cause conflicts.
@@ -304,11 +334,20 @@ keda-hpa-optimized-baseline-nvidia-gpu-vllm-token-aware    Deployment/optimized-
 <!-- guide:verify.tests.trigger_metrics start -->
 ```bash
 kubectl get hpa -n ${NAMESPACE} -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[?(@.type=="ScalingActive")]}{.status}{" "}{.reason}{end}{"\n"}{end}'
-kubectl describe hpa -n ${NAMESPACE} | grep -A2 "External metric"
+kubectl get hpa -n ${NAMESPACE}
 ```
 <!-- guide:verify.tests.trigger_metrics end -->
 
-Every HPA should report `True ValidMetricFound`.
+Every HPA should report `True ValidMetricFound`, and every `TARGETS` pair should show a **number** on the left:
+
+```text
+0/1.500 (avg), 0/800m (avg)                    <- healthy: queries resolve, pool idle
+<unknown>/1.500 (avg), <unknown>/800m (avg)    <- broken: the query is not resolving
+```
+
+That distinction is the one worth internalising. `0` means the query ran and the pool is quiet; `<unknown>` means KEDA could not evaluate the trigger at all — a 401 from Thanos, a mistyped label, a metric that does not exist — and KEDA reports the failure only as an HPA condition while serving `fallback` replicas. `kubectl describe hpa -n ${NAMESPACE}` prints the same pair under `Metrics:` alongside the `ScalingActive` message if you need the underlying error.
+
+Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscaler-sync-period`, 15 s by default), not by a `pollingInterval` on the ScaledObject: KEDA honours that field only when it owns activation or caching — `minReplicaCount: 0`, `idleReplicaCount: 0`, or a trigger with `useCachedMetrics`. Setting it otherwise is inert and makes KEDA 2.20 warn on every apply, so these overlays omit it. Use the `behavior` block to change how fast replicas are added or removed; if you set `minReplicaCount: 0` to scale to zero, `pollingInterval` starts mattering and should be set deliberately.
 
 ## Cleanup
 
