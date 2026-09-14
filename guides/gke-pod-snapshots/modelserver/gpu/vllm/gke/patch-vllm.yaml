@@ -1,9 +1,11 @@
+# The PodSnapshotStorageConfig uses tokenSource "podKSA", so the gVisor sandbox
+# authenticates to GCS as this KSA principal directly via Workload Identity
+# Federation. No `iam.gke.io/gcp-service-account` annotation is needed -- the
+# bucket IAM binding targets the `principal://.../sa/<ksa>` subject instead.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: sa
-  annotations:
-    iam.gke.io/gcp-service-account: snapshot-manager@PROJECT_ID_PLACEHOLDER.iam.gserviceaccount.com
 ---
 apiVersion: apps/v1
 kind: Deployment

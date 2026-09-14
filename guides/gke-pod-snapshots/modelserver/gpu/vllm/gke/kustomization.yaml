@@ -1,7 +1,7 @@
 # Unlike the other guides, this overlay has no `../base` sibling to build on.
 # Every resource here is GKE-specific -- podsnapshot.gke.io CRs, runtimeClassName
-# gvisor, the iam.gke.io Workload Identity annotation -- so a `base/` would be a
-# base that only builds on GKE. The layers are collapsed into this one overlay.
+# gvisor -- so a `base/` would be a base that only builds on GKE. The layers are
+# collapsed into this one overlay.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
