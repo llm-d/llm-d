@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 2
+  # A rolling update keeps the old and the new pod of a replica both holding a
+  # claim, so neither becomes ready where there is no spare accelerator.
+  strategy:
+    type: Recreate
+  # Matches the startupProbe budget below. Left at the 600s default, a compile
+  # still running inside its budget trips ProgressDeadlineExceeded at ten minutes
+  # and anything reading Deployment conditions calls the rollout degraded.
+  progressDeadlineSeconds: 7215
+  template:
+    spec:
+      # The two roles want separate nodes when the cluster has them, and still
+      # co-locate on a single-node cluster because this is only a preference.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/guide: pd-disaggregation
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 0
+        fsGroup: 1600
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "MiniMaxAI/MiniMax-M2.7"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            # Pipeline parallelism, not data parallelism: one API server drives all four
+            # NPUs, so this role keeps the single port the base declares.
+            - "--pipeline-parallel-size=4"
+            - "--block-size=4096"
+            - "--max-num-batched-tokens=512"
+            - "--enable-prefix-caching"
+            - "--prefix-caching-hash-algo=sha256_cbor"
+            - "--safetensors-load-strategy=prefetch"
+            - "--trust-remote-code"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=minimax_m2"
+            - '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
+            # A pp4 rank holds one stage rather than all layers, so KV per block is a
+            # quarter of dp4's. 200 = max-num-seqs x the floor of 50.
+            - "--num-gpu-blocks-override=200"
+            - "--max-num-seqs=4"
+            - '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_CACHE_ROOT
+              value: /workspace/.cache
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5600"
+            # The pipeline spans all four claimed NPUs; the runtime does not infer that.
+            - name: RBLN_DEVICES
+              value: "0,1,2,3"
+            - name: RBLN_FORCE_CCL_ASYNC
+              value: "1"
+            - name: RBLN_LOCAL_IP
+              value: 127.0.0.1
+            - name: RBLN_ROOT_IP
+              value: 127.0.0.1
+            - name: RBLN_WEIGHT_FREE
+              value: "1"
+            - name: SAFETENSORS_FAST_GPU
+              value: "1"
+            # Unreachable in practice: the startupProbe budget below is 7215s.
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "9600"
+            - name: VLLM_RPC_TIMEOUT
+              value: "1800000"
+            - name: VLLM_RBLN_AUTO_PORT
+              value: "1"
+            - name: VLLM_RBLN_BATCH_ATTN_OPT
+              value: "1"
+            - name: VLLM_RBLN_COMPILE_STRICT_MODE
+              value: "1"
+            - name: VLLM_RBLN_DISABLE_OFFLOAD
+              value: "1"
+            - name: VLLM_RBLN_MOE_REDUCE_SCATTER
+              value: "1"
+            - name: VLLM_RBLN_SAMPLER
+              value: "1"
+            - name: VLLM_RBLN_SORT_BATCH
+              value: "1"
+            - name: VLLM_RBLN_SUB_BLOCK_CACHE
+              value: "0"
+            - name: VLLM_RBLN_USE_DEVICE_TENSOR
+              value: "1"
+            - name: VLLM_RBLN_USE_VLLM_MODEL
+              value: "1"
+          resources:
+            # Anonymous memory measured 59Gi for this role once serving; the rest of the
+            # limit is headroom for the page cache the model read charges to the cgroup.
+            # Keep cpu even — a node with an SMT-aligned static CPU manager rejects odd
+            # counts.
+            limits:
+              cpu: "40"
+              memory: 460Gi
+            requests:
+              cpu: "40"
+              memory: 460Gi
+            claims:
+              - name: npu-prefill-claim
+          volumeMounts:
+            - mountPath: /workspace/.cache
+              name: rbln-compile-cache
+            - mountPath: /dev/shm
+              name: shm
+          # 15 + 30x240 = 7215s, the same 240 checks the vendor's own reference
+          # deployment allows. Measured on one node this role reached ready well
+          # inside that, but only with the weights already cached; a first start
+          # also pulls them, and the compile cache is an emptyDir so every restart
+          # recompiles from zero.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      resourceClaims:
+        - name: npu-prefill-claim
+          resourceClaimTemplateName: npu-prefill-claim
+      volumes:
+        - name: rbln-compile-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi

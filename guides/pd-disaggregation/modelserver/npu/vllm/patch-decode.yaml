@@ -1,0 +1,217 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  # A rolling update keeps the old and the new pod of a replica both holding a
+  # claim, so neither becomes ready where there is no spare accelerator.
+  strategy:
+    type: Recreate
+  # Matches the startupProbe budget below. Left at the 600s default, a compile
+  # still running inside its budget trips ProgressDeadlineExceeded at ten minutes
+  # and anything reading Deployment conditions calls the rollout degraded.
+  progressDeadlineSeconds: 7215
+  template:
+    spec:
+      # The two roles want separate nodes when the cluster has them, and still
+      # co-locate on a single-node cluster because this is only a preference.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/guide: pd-disaggregation
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 0
+        fsGroup: 1600
+      initContainers:
+        - name: routing-proxy
+          args:
+            # The proxy listens on [port, port+data-parallel-size-1] and forwards each
+            # to the vLLM rank on the matching port, so the EPP addresses a rank directly.
+            - --port=8000
+            - --data-parallel-size=4
+            - --kv-connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+            - containerPort: 8001
+              name: sidecar-rank1
+              protocol: TCP
+            - containerPort: 8002
+              name: sidecar-rank2
+              protocol: TCP
+            - containerPort: 8003
+              name: sidecar-rank3
+              protocol: TCP
+      containers:
+        - name: modelserver
+          # One API server per data-parallel rank. vLLM's
+          # --data-parallel-multi-port-external-lb does the same in a single process tree,
+          # but that path is not yet validated on this runtime.
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              COMMON=(
+                MiniMaxAI/MiniMax-M2.7
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                --data-parallel-size=4
+                --data-parallel-address="${POD_IP}"
+                --data-parallel-rpc-port=5555
+                --enable-expert-parallel
+                --block-size=4096
+                --max-num-batched-tokens=512
+                --enable-prefix-caching
+                --prefix-caching-hash-algo=sha256_cbor
+                --safetensors-load-strategy=prefetch
+                --trust-remote-code
+                --enable-auto-tool-choice
+                --tool-call-parser=minimax_m2
+                '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
+                --num-gpu-blocks-override=50
+                --max-num-seqs=4
+                '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
+              )
+              pids=()
+              trap 'kill "${pids[@]}" 2>/dev/null || true' TERM
+              for i in 0 1 2 3; do
+                RBLN_DEVICES="${i}" \
+                VLLM_NIXL_SIDE_CHANNEL_HOST="${POD_IP}" \
+                VLLM_NIXL_SIDE_CHANNEL_PORT="$((5600 + i))" \
+                vllm serve "${COMMON[@]}" \
+                  --port="$((8200 + i))" \
+                  --data-parallel-rank="${i}" &
+                pids+=("$!")
+              done
+              # Any rank exiting takes the pod down: a partial data-parallel group cannot serve.
+              wait -n
+          ports:
+            - containerPort: 8200
+              name: modelserver
+              protocol: TCP
+            - containerPort: 8201
+              name: rank1
+              protocol: TCP
+            - containerPort: 8202
+              name: rank2
+              protocol: TCP
+            - containerPort: 8203
+              name: rank3
+              protocol: TCP
+            - containerPort: 5555
+              name: dp-rpc
+              protocol: TCP
+            - containerPort: 5600
+              name: nixl
+              protocol: TCP
+            - containerPort: 5601
+              name: nixl-rank1
+              protocol: TCP
+            - containerPort: 5602
+              name: nixl-rank2
+              protocol: TCP
+            - containerPort: 5603
+              name: nixl-rank3
+              protocol: TCP
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_CACHE_ROOT
+              value: /workspace/.cache
+            - name: RBLN_FORCE_CCL_ASYNC
+              value: "1"
+            - name: RBLN_LOCAL_IP
+              value: 127.0.0.1
+            - name: RBLN_ROOT_IP
+              value: 127.0.0.1
+            - name: RBLN_WEIGHT_FREE
+              value: "1"
+            - name: SAFETENSORS_FAST_GPU
+              value: "1"
+            # Unreachable in practice: the startupProbe budget below is 7215s.
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "9600"
+            - name: VLLM_RPC_TIMEOUT
+              value: "1800000"
+            - name: VLLM_RBLN_AUTO_PORT
+              value: "1"
+            - name: VLLM_RBLN_BATCH_ATTN_OPT
+              value: "1"
+            - name: VLLM_RBLN_COMPILE_STRICT_MODE
+              value: "1"
+            - name: VLLM_RBLN_DISABLE_OFFLOAD
+              value: "1"
+            - name: VLLM_RBLN_MOE_REDUCE_SCATTER
+              value: "1"
+            - name: VLLM_RBLN_SAMPLER
+              value: "1"
+            - name: VLLM_RBLN_SORT_BATCH
+              value: "1"
+            - name: VLLM_RBLN_SUB_BLOCK_CACHE
+              value: "0"
+            - name: VLLM_RBLN_USE_DEVICE_TENSOR
+              value: "1"
+            - name: VLLM_RBLN_USE_VLLM_MODEL
+              value: "1"
+          resources:
+            # Anonymous memory measured 68Gi for this role once serving; the rest of the
+            # limit is headroom for the page cache the model read charges to the cgroup.
+            # Keep cpu even — a node with an SMT-aligned static CPU manager rejects odd
+            # counts.
+            limits:
+              cpu: "40"
+              memory: 460Gi
+            requests:
+              cpu: "40"
+              memory: 460Gi
+            claims:
+              - name: npu-decode-claim
+          volumeMounts:
+            - mountPath: /workspace/.cache
+              name: rbln-compile-cache
+            - mountPath: /dev/shm
+              name: shm
+          # 15 + 30x240 = 7215s, the same 240 checks the vendor's own reference
+          # deployment allows. Measured on one node this role reached ready well
+          # inside that, but only with the weights already cached; a first start
+          # also pulls them, and the compile cache is an emptyDir so every restart
+          # recompiles from zero.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      resourceClaims:
+        - name: npu-decode-claim
+          resourceClaimTemplateName: npu-decode-claim
+      volumes:
+        - name: rbln-compile-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
