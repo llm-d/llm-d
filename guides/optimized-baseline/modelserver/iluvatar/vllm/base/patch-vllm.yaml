@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: prefill
+  name: decode
 spec:
   replicas: 1
   template:
@@ -21,75 +21,65 @@ spec:
                   export CUDA_VISIBLE_DEVICES="$(seq -s, 0 $((${#_uuids[@]} - 1)))"
                 fi
               fi
-              exec vllm serve Qwen/Qwen3-32B \
-                --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
-                --tensor-parallel-size=4 \
+              exec vllm serve deepseek-ai/DeepSeek-V4-Flash \
+                --port=8000 \
+                --trust-remote-code \
+                --data-parallel-size=8 \
+                --enable-expert-parallel \
                 --block-size=256 \
+                --gpu-memory-utilization=0.9 \
                 --max-model-len=20480 \
                 --max-num-seqs=64 \
                 --max-num-batched-tokens=8192 \
-                --kv-transfer-config '{"kv_connector":"IluNixlConnector","kv_role":"kv_both","kv_buffer_device":"cuda"}'
+                --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models
           env:
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            - name: UCX_TLS
-              value: "cuda_copy,cuda_ipc,tcp,self,posix,sysv"
-            - name: UCX_PROTO_ENABLE
-              value: "y"
-            - name: UCX_CUDA_IPC_ENABLE_SAME_PROCESS
-              value: "y"
-            - name: UCX_NET_DEVICES
-              value: "eth0"
-            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-              value: "5600"
-            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
-              value: "120"
+            - name: VLLM_ENFORCE_CUDA_GRAPH
+              value: "1"
           resources:
             limits:
-              cpu: "16"
-              memory: 64Gi
-              iluvatar.com/gpu: "2"
+              cpu: "32"
+              memory: 256Gi
+              iluvatar.com/gpu: "4"
             requests:
-              cpu: "16"
-              memory: 64Gi
-              iluvatar.com/gpu: "2"
+              cpu: "32"
+              memory: 128Gi
+              iluvatar.com/gpu: "4"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
             - mountPath: /.cache
               name: torch-compile-cache
-            - mountPath: /.config
-              name: vllm-config
             - mountPath: /.triton
               name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 120
+            failureThreshold: 240
           livenessProbe:
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 6
           readinessProbe:
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
       volumes:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 20Gi
+            sizeLimit: 32Gi
         - name: torch-compile-cache
           emptyDir: {}
-        - name: vllm-config
-          emptyDir: {}
         - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
           emptyDir: {}

@@ -81,7 +81,7 @@ The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM bas
 
 ## Iluvatar
 
-Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). The P/D overlay serves `Qwen/Qwen3-32B` on 8× BI-V150 (1× TP=4 prefill + 1× TP=4 decode).
+Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). Each board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board); with ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards and vLLM parallel sizes count CUDA devices (2 per board). The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The P/D overlay serves `Qwen/Qwen3-32B` on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode). The optimized-baseline overlay serves `deepseek-ai/DeepSeek-V4-Flash` on 4 boards / 8 CUDA devices (DP=8 + EP).
 
 **UCX transport (required for P/D):**
 

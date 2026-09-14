@@ -41,6 +41,7 @@ This guide includes configurations for the following accelerators:
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
 | Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
+| Iluvatar GPU        | `iluvatar/vllm/base` | Iluvatar BI-V150 (dual-die), community contributed; DeepSeek-V4-Flash on 4 boards / 8 CUDA devices (DP=8 + EP) |
 | CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
@@ -277,7 +278,6 @@ For example to deploy other models:
 ```bash
 # NVIDIA GPU / vLLM — openai/gpt-oss-120b
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
-```
 
 </details>
 
