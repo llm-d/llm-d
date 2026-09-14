@@ -135,25 +135,34 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
      --soft-delete-duration=0 \
      --uniform-bucket-level-access
 
-   # Create GCP Service Account for Workload Identity
-   gcloud iam service-accounts create snapshot-manager \
-     --display-name="Snapshot Manager"
-
-   # Grant bucket storage admin to the GCP Service Account
-   gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
-     --member="serviceAccount:snapshot-manager@<PROJECT_ID>.iam.gserviceaccount.com" \
-     --role="roles/storage.admin"
-
    # Grant bucket object user to the GKE Service Agent (required by GKE's controller to delete snapshots)
    gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
      --member="serviceAccount:service-${PROJECT_NUMBER}@container-engine-robot.iam.gserviceaccount.com" \
      --role="roles/storage.objectUser"
 
-   # Allow the Kubernetes Service Account (KSA) to impersonate the GCP Service Account
-   gcloud iam service-accounts add-iam-policy-binding snapshot-manager@<PROJECT_ID>.iam.gserviceaccount.com \
-     --role="roles/iam.workloadIdentityUser" \
-     --member="serviceAccount:<PROJECT_ID>.svc.id.goog[<NAMESPACE>/gke-pod-snapshots-nvidia-gpu-vllm-sa]"
+   # Grant the Kubernetes Service Account (KSA) principal direct read/write
+   # access to the bucket. The PodSnapshotStorageConfig in this guide uses
+   # tokenSource "podKSA", so the gVisor sandbox authenticates to GCS as the KSA
+   # principal itself via Workload Identity Federation. No GCP service account
+   # and no impersonation binding are involved in the snapshot path.
+   gcloud iam roles create podSnapshotGcsReadWriter \
+     --project="<PROJECT_ID>" \
+     --permissions="storage.objects.get,storage.objects.create,storage.objects.delete,storage.folders.create"
+
+   gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
+     --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/gke-pod-snapshots-nvidia-gpu-vllm-sa" \
+     --role="projects/<PROJECT_ID>/roles/podSnapshotGcsReadWriter"
    ```
+
+> [!IMPORTANT]
+> Omitting the `principal://` binding above is the most common cause of a failed
+> checkpoint. The symptom is unhelpful: the `PodSnapshot` reports
+> `runsc error: exit status 128` and the model server logs
+> `gVisor checkpoint returned unexpected status: b'e'`. The underlying error is
+> only visible in the sandbox log on the node
+> (`/var/log/runsc/runsc.log.*.boot.txt`):
+> `403 ... Permission 'storage.objects.create' denied on resource
+> '//storage.googleapis.com/.../pages.img'`.
 
 ### Checkout Repo & Setups
 
@@ -180,7 +189,6 @@ export NAMESPACE=llm-d-gke-pod-snapshots
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
-export PROJECT_ID=PROJECT_ID_PLACEHOLDER
 export GCS_BUCKET=GCS_BUCKET_PLACEHOLDER
 export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```
@@ -278,14 +286,10 @@ Apply the Kustomize overlay to deploy the `PodSnapshotStorageConfig`, `PodSnapsh
 <!-- guide:deploy.modelserver start -->
 ```bash
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
-  | sed "s/PROJECT_ID_PLACEHOLDER/${PROJECT_ID}/g" \
   | sed "s/GCS_BUCKET_PLACEHOLDER/${GCS_BUCKET}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 <!-- guide:deploy.modelserver end -->
-
-> [!NOTE]
-> **Workload Identity Race Condition:** The Kustomize overlay includes the `iam.gke.io/gcp-service-account` annotation directly on the `ServiceAccount` (`gke-pod-snapshots-nvidia-gpu-vllm-sa`) so that it is applied atomically alongside the `Deployment`. Running `kubectl annotate serviceaccount` as a separate step *after* `kubectl apply` can cause a race condition where the first pod starts before the Workload Identity annotation is present, resulting in GCS authentication failures during snapshot upload.
 
 ---
 
@@ -307,7 +311,7 @@ Wait for the initial cold start to complete and check the `PodSnapshot` status:
 
 <!-- guide:verify.tests.snapshot start -->
 ```bash
-kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
+kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=2400s
 kubectl get podsnapshots -n ${NAMESPACE}
 ```
 <!-- guide:verify.tests.snapshot end -->
@@ -324,7 +328,7 @@ Delete the running pod so the Deployment schedules a replacement replica that re
 <!-- guide:verify.tests.restore start -->
 ```bash
 kubectl delete pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}
-kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=180s
+kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
 kubectl logs -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --tail=20
 ```
 <!-- guide:verify.tests.restore end -->

@@ -9,9 +9,8 @@ env:
     NAMESPACE: llm-d-gke-pod-snapshots
 
     # Supplied out-of-band. The `default:` is only the README placeholder — a
-    # runner injects the real project and bucket, and the cicd:skip wrapper
-    # keeps these placeholders from shadowing the injected values.
-    PROJECT_ID: {default: PROJECT_ID_PLACEHOLDER, sensitive: true}
+    # runner injects the real bucket and token, and the cicd:skip wrapper keeps
+    # these placeholders from shadowing the injected values.
     GCS_BUCKET: {default: GCS_BUCKET_PLACEHOLDER, sensitive: true}
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
@@ -72,24 +71,27 @@ deploy:
           --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
-  # PROJECT_ID and GCS_BUCKET land in a ServiceAccount annotation and a GKE
-  # CRD respectively, neither of which Kustomize can parameterise. Both
-  # placeholders are suffixed so the global substitution cannot match the
-  # Python sources carried in the snapshot-scripts ConfigMap.
+  # GCS_BUCKET lands in a GKE CRD field that Kustomize cannot parameterise. The
+  # placeholder is suffixed so the global substitution cannot match the Python
+  # sources carried in the snapshot-scripts ConfigMap.
   modelserver:
     - run: |
         kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
-          | sed "s/PROJECT_ID_PLACEHOLDER/${PROJECT_ID}/g" \
           | sed "s/GCS_BUCKET_PLACEHOLDER/${GCS_BUCKET}/g" \
           | kubectl apply -n ${NAMESPACE} -f -
 
 verify:
   tests:
-    # Cold start loads the weights, sleeps the engine, and uploads the
-    # checkpoint, so this wait covers a full model download.
+    # The pod only reports Ready once the cold start has finished AND the first
+    # checkpoint has been written and the process resumed, so this wait covers:
+    # weight download, model load, engine.sleep(), and the full snapshot upload
+    # to GCS. The upload is bandwidth-bound and the snapshot is roughly
+    # weights-sized, because engine.sleep(level=1) backs the weights up into host
+    # memory, which is then saved into pages.img. At an observed ~80 MB/s to GCS,
+    # budget several minutes per 10 GiB of model weights on top of the download.
     snapshot:
       - run: |
-          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
+          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=2400s
           kubectl get podsnapshots -n ${NAMESPACE}
 
     # Deleting the pod forces the Deployment to schedule a replacement that
@@ -97,7 +99,7 @@ verify:
     restore:
       - run: |
           kubectl delete pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}
-          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=180s
+          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
           kubectl logs -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --tail=20
 
     request:
