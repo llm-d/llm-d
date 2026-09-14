@@ -26,6 +26,16 @@ Start here when something looks wrong.
 
 ## Tier 2: Diagnostic Drill-Down
 
+### GKE TPU Hardware
+
+For GKE TPU hardware metrics, see the [TPU metric interface and checks](./tpu.md#metric-interface).
+For example, `tensorcore_utilization{job="kube-system/tpu-metrics-exporter",make="cloud-tpu"}`
+returns per-series utilization in percent; `memory_used{job="kube-system/tpu-metrics-exporter",make="cloud-tpu"}`
+returns bytes. Substitute the actual scrape job. These gauges do not need `rate()`.
+Keep accelerator and instance labels when displaying them, and do not substitute
+zero for an absent series. The [TPU dashboard](../../../guides/recipes/observability/grafana/dashboards/llm-d-tpu-overview.json)
+adds instance, model, and topology filters.
+
 ### Basic Model Serving
 
 | Metric Need | PromQL Query |
