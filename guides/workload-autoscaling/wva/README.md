@@ -1,8 +1,8 @@
 # Autoscaling Workloads with HPA and WVA Metrics
 
 > [!WARNING]
-> The VariantAutoscaling CRD has been deprecated in llm-d 0.8.0 in favor of
-HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. The VariantAutoscaling CRD will be removed in 0.9.0.
+> The VariantAutoscaling CRD was deprecated in llm-d 0.8.0 in favor of
+HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. As of 0.9.0, the VariantAutoscaling CRD has been removed.
 
 The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
@@ -124,26 +124,26 @@ wva-controller-manager   2/2     2            2           10m
 
 This guide configures the controller deployment with `replicas: 2` and leader election enabled for HA (one active leader plus one standby).
 
-## Enabling Saturation Engine V2 (Recommended)
+## Saturation Engine V2 (Default as of 0.9.0)
 
-Saturation engine v2 will be the default in the next release (0.9.0), but for now it must be enabled manually. The v1 saturation engine will be deprecated in 0.9.0 and removed in 0.10.0.
+As of 0.9.0, saturation engine v2 is the default and no longer needs to be enabled manually. The v1 saturation engine is deprecated as of 0.9.0 and will be removed in 0.10.0.
 
 > [!CAUTION]
-> Enabling the v2 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
+> Opting back to the v1 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
 
-Edit the WVA configmap to enable the v2 saturation engine:
+To opt out of the v2 saturation engine and fall back to v1, edit the WVA configmap:
 
   ```bash
   kubectl edit configmap wva-saturation-scaling-config -n ${WVA_NAMESPACE}
   ```
 
-  Under the `default:` key, append `analyzers: - name: saturation` to enable the token-based saturation analyzer. The full config should look like this:
+  Under the `default:` key, remove the `analyzers: - name: saturation` entry to fall back to the percentage-based v1 analyzer. The default config (v2, active) looks like this:
 
   ```yaml
   apiVersion: v1
   data:
     default: |
-      # Select the V2 token-based saturation analyzer.
+      # Select the V2 token-based saturation analyzer (default as of 0.9.0).
       # Remove this list to fall back to the V1
       # percentage-based analyzer.
       analyzers:
@@ -152,7 +152,7 @@ Edit the WVA configmap to enable the v2 saturation engine:
       ...
   ```
 
-The WVA controller will automatically pick up the config change and start using the new saturation engine for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed` to confirm that the v2 engine is active.
+The WVA controller will automatically pick up the config change and switch saturation engines for scaling decisions. You can verify this by checking the controller logs for messages indicating the active saturation engine. Look for a log line like `V2 saturation analysis completed` to confirm that the v2 engine is active.
 
 ## Enabling Autoscaling for an Inference Deployment
 
