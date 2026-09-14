@@ -12,6 +12,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
+| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
 
@@ -55,6 +56,8 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
 
+On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/dynamic-slicing/README.md).
+
 ## AMD ROCm
 
 AMD GPUs are supported via ROCm. The specific GPU models supported are determined by the inference container image. See the AMD device plugin or DRA driver below for cluster setup.
@@ -74,6 +77,10 @@ For P/D disaggregation with RDMA-accelerated KV-cache transfer on Intel XPU, the
 - UCX transport configured with `ib,rc,ze_copy`.
 
 The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
+
+## MetaX C500X
+
+MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
 
 ## CPU Inferencing
 

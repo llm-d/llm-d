@@ -36,6 +36,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── gpu-vllm-omni
 │   └── release
+├── metax-vllm
+│   └── release
 ├── routing-sidecar
 │   ├── nightly
 │   └── release

@@ -57,8 +57,8 @@ if (( VERBOSE )); then
 fi
 
 NAMESPACE="${NAMESPACE:-$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || echo default)}"
-GATEWAY_OBJECT=$(kubectl get gateway --no-headers | grep "inference-gateway")
-GATEWAY_SERVICE=$(kubectl get services --no-headers | grep "inference-gateway" | awk '{print $1}')
+GATEWAY_OBJECT=$(kubectl get gateway -n "${NAMESPACE}" --no-headers | grep "inference-gateway")
+GATEWAY_SERVICE=$(kubectl get services -n "${NAMESPACE}" --no-headers | grep "inference-gateway" | awk '{print $1}')
 
 if [[ -z "${GATEWAY_OBJECT}" ]]; then
     echo "Error, could not find the Gateway"
@@ -83,7 +83,7 @@ if [[ "${MODELS_ENDPOINT_CURL_STATUS}" != 0 ]]; then
     exit 1
 
 else
-    MODEL_NAME=$(echo "${MODELS_ENDPOINT_CURL}" | jq '.data[0].id' )
+    MODEL_NAME=$(echo "${MODELS_ENDPOINT_CURL}" | jq -r '.data[0].id // empty' )
     if [[ -z "${MODEL_NAME}" || "${MODEL_NAME}" == "null"  ]]; then
         echo "Could not discover model name from vLLM server"
         exit 1
