@@ -106,7 +106,13 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
-  # AND the server-requesting pods together.
+  # AND the server-requesting pods together, at 1 replica -- the ScaledObject floor.
+  # The flow-control queue metric KEDA scales on is not emitted until the EPP has a
+  # ready backend. Starting at 0 leaves it without one, so KEDA queries an empty
+  # series and silently falls back.
+  #
+  # So bring one up here, let KEDA scale it to 0 in step 6, and exercise
+  # scale-from-zero from there.
   modelserver:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
@@ -121,10 +127,68 @@ deploy:
   # back up on the next queued request.
   keda:
     - run: |
+        export SO="scaledobject/${GUIDE_NAME}-queue"
+
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
 
-        kubectl wait --for=condition=Ready --timeout=120s \
-          scaledobject/fast-model-actuation-keda-queue -n ${NAMESPACE}
+        kubectl wait --for=condition=Ready --timeout=120s ${SO} -n ${NAMESPACE}
+    # The EPP registers the flow-control series on the first request through it, or
+    # the gate below reads an empty series. The first request does that; the other
+    # two just cover a transient failure, since this block is best-effort.
+    # In-cluster because the EPP Service is a ClusterIP.
+    - run: |
+        kubectl run keda-epp-warmup -n ${NAMESPACE} --rm -i --quiet \
+          --image=${CURL_TEST_IMAGE} --restart=Never \
+          --env="URL=http://${GUIDE_NAME}-epp/v1/completions" \
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c '
+            for i in 1 2 3; do
+              curl -sS --max-time 60 -o /dev/null -w "  warmup ${i}: HTTP %{http_code}\n" \
+                -X POST "${URL}" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"warmup\", \"max_tokens\": 1}" || true
+              sleep 2
+            done' || true
+
+    # Ready only means KEDA accepted the trigger and created its HPA -- it does not
+    # prove the metric pipeline works. Fallback=False is the signal that KEDA is
+    # serving a real query rather than suppressing an error (ignoreNullValues) and
+    # falling back, which would look healthy while autoscaling is dead.
+    #
+    # Require the reading to HOLD: Fallback reads False before KEDA's first poll,
+    # so a single sample proves nothing (hence a streak, not `kubectl wait`).
+    - run: |
+        streak=0
+        for _ in $(seq 1 30); do
+          if [ "$(kubectl get ${SO} -n ${NAMESPACE} \
+                -o jsonpath='{.status.conditions[?(@.type=="Fallback")].status}')" = "False" ]; then
+            streak=$((streak + 1))
+            [ "${streak}" -ge 3 ] && break
+          else
+            streak=0
+          fi
+          sleep 10
+        done
+
+        if [ "${streak}" -lt 3 ]; then
+          cat >&2 <<'EOF'
+        KEDA is not reading the EPP queue metric: replicas come from spec.fallback, so
+        autoscaling is dead. Check that the EPP is scraped and the trigger query returns
+        data -- see guides/workload-autoscaling/keda-epp-queue/README.md#troubleshooting
+        EOF
+          kubectl get ${SO} -n ${NAMESPACE} \
+            -o jsonpath='{range .status.conditions[*]}  {.type}={.status} ({.reason}: {.message}){"\n"}{end}' >&2
+          exit 1
+        fi
+        echo "KEDA is scaling on the real metric (Fallback=False held)"
+    # Now wait for KEDA to take the idle requester to 0. Budget covers
+    # cooldownPeriod (30s) plus the HPA's scaleDown stabilization window (30s)
+    # plus polling slack. Reaching 0 is what makes the verification request an
+    # actual scale-from-zero test.
+    - run: |
+        kubectl wait --for=jsonpath='{.spec.replicas}'=0 \
+          deployment/fma-requester -n ${NAMESPACE} --timeout=240s
+
+        kubectl get deployment/fma-requester -n ${NAMESPACE}
 
 verify:
   endpoint:
@@ -132,7 +196,12 @@ verify:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
     request:
-      # Baseline sanity check.
+      # Scale-from-zero check: the pool is at 0, so this request is the demand
+      # signal. EPP holds it in the flow-control queue while KEDA activates,
+      # scales 0->1, and FMA brings vLLM up, then serves it -- so one request
+      # with a long --max-time blocks through the whole transition. No retry loop.
+      # Warm start, not hot: nothing is sleeping yet on a fresh deploy, so the
+      # launcher creates a new instance. Hot start needs a prior scale-down.
       - run: |
           kubectl run curl-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
@@ -142,17 +211,15 @@ verify:
             --env="MODEL=${MODEL}" \
             -- /bin/sh -c '
               set -e
-              i=0
-              while [ $i -lt 12 ]; do
-                code=$(curl -s -o /tmp/b -w "%{http_code}" --max-time 90 \
-                  -X POST "http://${IP}/v1/completions" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}" || echo 000)
-                echo "attempt ${i}: HTTP ${code}"
-                if [ "${code}" = "200" ]; then cat /tmp/b; echo; jq -e ".choices[0].text | length > 0" /tmp/b >/dev/null; exit 0; fi
-                i=$((i+1)); sleep 15
-              done
-              echo "no 200 after retries"; cat /tmp/b 2>/dev/null || true; exit 1'
+              code=$(curl -sS -o /tmp/body -w "%{http_code}" --max-time 600 \
+                -X POST "http://${IP}/v1/completions" \
+                -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"The capital of France is,\", \"max_tokens\": 10}")
+              echo "HTTP ${code}"
+              jq . /tmp/body || cat /tmp/body
+              [ "${code}" = "200" ] || { echo "expected HTTP 200, got ${code}" >&2; exit 1; }
+              jq -e ".choices[0].text | length > 0" /tmp/body >/dev/null \
+                || { echo "no completion text in response" >&2; exit 1; }'
 
 benchmark:
   setup:

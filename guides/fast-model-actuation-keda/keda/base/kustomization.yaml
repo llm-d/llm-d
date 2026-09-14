@@ -3,6 +3,9 @@ kind: Kustomization
 resources:
   - ../../../workload-autoscaling/keda-epp-queue/optimized-baseline/base
 
+# pollingInterval 15 is inherited from the upstream base. The two scale-down
+# delays are shortened below so the guide demonstrates scale-to-zero in about a
+# minute instead of ten; production values belong nearer the upstream defaults.
 patches:
   - target:
       group: keda.sh
@@ -24,6 +27,16 @@ patches:
       - op: replace
         path: /spec/maxReplicaCount
         value: 2
+      # Seconds of zero demand before KEDA scales to 0 (that direction only;
+      # scale-up from 0 is the trigger's activation threshold).
+      - op: replace
+        path: /spec/cooldownPeriod
+        value: 30
+      # The HPA's own scale-down delay, which applies before cooldownPeriod is
+      # even reached. Both must be short or the wait stays minutes long.
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/behavior/scaleDown/stabilizationWindowSeconds
+        value: 30
       - op: remove
         path: /spec/advanced/horizontalPodAutoscalerConfig/name
       - op: replace
