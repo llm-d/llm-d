@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Expose vLLM's /v1/*/render endpoints on the prefill pods that the render
+# Service (../../../../../render) fronts, for the precise prefix-cache router
+# variant (see ../../../../../README.precise-prefix-cache-routing.md).
+#
+# vLLM serves the scale-out endpoints (/render, /derender,
+# /inference/v1/generate) only when VLLM_ENABLE_SCALE_OUT_ENDPOINTS is 1.
+# Without it the EPP token-producer's render call returns 404, so no request
+# carries token IDs, the precise producer never runs, and requests are still
+# answered 200 by the remaining scorers - the router degrades silently rather
+# than failing.
+#
+# Builds that predate the opt-in ignore the variable and serve the endpoints
+# unconditionally, so setting it is safe across versions.
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: ".*-prefill"
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: VLLM_ENABLE_SCALE_OUT_ENDPOINTS
+          value: "1"

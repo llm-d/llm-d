@@ -3,7 +3,10 @@ kind: Kustomization
 
 # Render (tokenizer) Service for the precise prefix-cache routing variant.
 # Pairs with the token-producer `vllm.url` in
-# ../router/precise-routing.values.yaml.
+# ../router/precise-routing.values.yaml, and with the modelserver
+# `render-endpoints` component, which opts the prefill pods into vLLM's
+# scale-out endpoints so the /v1/*/render calls this Service forwards are
+# served.
 namePrefix: wide-ep-lws-
 
 resources:
