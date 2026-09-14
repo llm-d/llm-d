@@ -278,6 +278,7 @@ For example to deploy other models:
 ```bash
 # NVIDIA GPU / vLLM — openai/gpt-oss-120b
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
+```
 
 </details>
 
