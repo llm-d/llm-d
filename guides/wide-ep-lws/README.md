@@ -63,6 +63,11 @@ This guide includes configurations for the following accelerators:
 > NIC IDs (rail-only connectivity) will fail. The Intel XPU backend uses XCCL
 > and `allgather_reducescatter`; it does not use DeepEP, but still requires
 > full-mesh pod network connectivity between decode and prefill workers.
+>
+> See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+> for transport configuration and network verification, and the
+> [multi-node serving guide](../../docs/infrastructure/multi-node.md) for LWS
+> installation and topology-aware scheduling.
 
 ## Prerequisites
 
@@ -93,6 +98,7 @@ This guide includes configurations for the following accelerators:
 
 * You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
 * To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
+* Your cluster provides full-mesh connectivity between workers. NVIDIA backends using DeepEP require All-to-All RDMA connectivity; the validated Intel XPU configuration uses TCP. See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md) for configuration and verification.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
