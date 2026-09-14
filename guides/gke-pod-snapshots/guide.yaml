@@ -1,0 +1,126 @@
+name: gke-pod-snapshots
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: gke-pod-snapshots
+    NAMESPACE: llm-d-gke-pod-snapshots
+
+    # Supplied out-of-band. The `default:` is only the README placeholder — a
+    # runner injects the real project and bucket, and the cicd:skip wrapper
+    # keeps these placeholders from shadowing the injected values.
+    PROJECT_ID: {default: PROJECT_ID_PLACEHOLDER, sensitive: true}
+    GCS_BUCKET: {default: GCS_BUCKET_PLACEHOLDER, sensitive: true}
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
+
+    # SNAPSHOT_PROVIDER is deliberately absent. It is a *container* env var set
+    # by the overlay (modelserver/gpu/vllm/gke/patch-vllm.yaml) and read by
+    # docker/scripts/snapshot/providers.py — not a shell variable. Its value is
+    # fixed per overlay because it must agree with the manifests beside it: the
+    # gke/ overlay applies podsnapshot.gke.io CRDs that only gke_gvisor honors.
+    # A second provider is a sibling overlay directory, not a different export.
+
+    MODEL: {default: "Qwen/Qwen3-32B"}
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH:-main}
+
+  gaie:
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router_values:
+    - run: export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+    - run: export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          ${ROUTER_BASE_VALUES} \
+          ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  gateway:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_GATEWAY_CHART} \
+          ${ROUTER_BASE_VALUES} \
+          ${ROUTER_VALUES} \
+          --set provider.name=gke \
+          --set httpRoute.create=true \
+          --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  # PROJECT_ID and GCS_BUCKET land in a ServiceAccount annotation and a GKE
+  # CRD respectively, neither of which Kustomize can parameterise. Both
+  # placeholders are suffixed so the global substitution cannot match the
+  # Python sources carried in the snapshot-scripts ConfigMap.
+  modelserver:
+    - run: |
+        kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
+          | sed "s/PROJECT_ID_PLACEHOLDER/${PROJECT_ID}/g" \
+          | sed "s/GCS_BUCKET_PLACEHOLDER/${GCS_BUCKET}/g" \
+          | kubectl apply -n ${NAMESPACE} -f -
+
+verify:
+  tests:
+    # Cold start loads the weights, sleeps the engine, and uploads the
+    # checkpoint, so this wait covers a full model download.
+    snapshot:
+      - run: |
+          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
+          kubectl get podsnapshots -n ${NAMESPACE}
+
+    # Deleting the pod forces the Deployment to schedule a replacement that
+    # GKE restores from the snapshot — the shorter timeout is the assertion.
+    restore:
+      - run: |
+          kubectl delete pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}
+          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=180s
+          kubectl logs -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --tail=20
+
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+    gateway:
+      - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+
+# PodSnapshot resources must go before the storage config: GKE's controller
+# needs the config still present to delete the backing objects from GCS.
+cleanup:
+  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  - run: kubectl delete podsnapshots --all -n ${NAMESPACE} --ignore-not-found=true
+  - run: |
+      kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
+        | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
+  - run: kubectl delete namespace ${NAMESPACE}

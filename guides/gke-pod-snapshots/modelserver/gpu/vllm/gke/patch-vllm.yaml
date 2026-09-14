@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa
+  annotations:
+    iam.gke.io/gcp-service-account: snapshot-manager@PROJECT_ID_PLACEHOLDER.iam.gserviceaccount.com
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  # At replicas=1 on a single-GPU pool, the default RollingUpdate wants to
+  # schedule the new Pod before releasing the old one's GPU, so every rollout
+  # deadlocks. Recreate frees the GPU first.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        # Opts into GKE Sandbox's fast-startup path, matching the reference Pod.
+        # Note: /proc/gvisor/checkpoint was writable without it, so this is not
+        # what exposes the file. Kept for parity.
+        cloud.google.com/gke-fast-pod-startup: "true"
+    spec:
+      runtimeClassName: gvisor
+      # recipes/modelserver/common/sa.yaml disables token automounting, which is
+      # right for model servers that never call a GCP API. This guide does: the
+      # PodSnapshotStorageConfig uses tokenSource "podKSA", so GKE reaches GCS as
+      # this Pod's KSA and needs its projected token.
+      automountServiceAccountToken: true
+      nodeSelector:
+        sandbox.gke.io/runtime: gvisor
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "docker.scripts.snapshot.launcher"]
+          args:
+            - "--model"
+            - "Qwen/Qwen3-32B"
+            - "--safetensors-load-strategy"
+            - "eager"
+            # Required for engine.sleep(level=1) to reclaim VRAM at all: vLLM
+            # only routes weights through CuMemAllocator when sleep mode is on at
+            # engine construction. Without it, sleep succeeds but frees nothing.
+            - "--enable-sleep-mode"
+            - "--gpu-memory-utilization"
+            - "0.90"
+            # Disables CUDA graph capture, matching the reference Pod. Note:
+            # graphs were tested and are NOT the cause of checkpoint failures.
+            # Costs decode latency, so re-evaluate once snapshots succeed.
+            - "--enforce-eager"
+            - "--port"
+            - "8000"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          env:
+            # Snapshot configuration
+            - name: PYTHONPATH
+              value: "/workspace"
+            # Asks vLLM to keep the API server and engine core in one process so
+            # cuda-checkpoint need not cross a process boundary. Note: vLLM 0.25
+            # recognises this but still forks an "(EngineCore pid=NN)" child on
+            # the V1 path, so it has no effect today. Kept for parity.
+            - name: VLLM_ENABLE_V1_MULTIPROCESSING
+              value: "0"
+            # Without this, vLLM's stdout is block-buffered and a slow cold start
+            # is indistinguishable from a hang in kubectl logs.
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: SNAPSHOT_PROVIDER
+              value: "gke_gvisor"
+            # Opts into the pre-checkpoint disk purge; unset means "do not
+            # purge". expanduser resolves this to /root/.cache/huggingface/hub,
+            # which is the container's writable layer -- not the /.cache volume
+            # mounted below, which vLLM uses for its compile cache.
+            - name: MODEL_CACHE_DIR
+              value: "~/.cache/huggingface/hub"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # gVisor and NCCL compatibility settings, matching the reference Pod
+            # this guide was derived from. Several are provably inert at
+            # world_size=1 (vLLM picks its own rendezvous port over MASTER_*, and
+            # NCCL_P2P/SHM_DISABLE gate transports a single rank never uses), but
+            # are kept for parity until a passing snapshot exists to compare to.
+            - name: VLLM_HOST_IP
+              value: "127.0.0.1"
+            - name: MASTER_ADDR
+              value: "127.0.0.1"
+            - name: MASTER_PORT
+              value: "29500"
+            - name: NCCL_SOCKET_IFNAME
+              value: "lo"
+            - name: GLOO_SOCKET_IFNAME
+              value: "lo"
+            - name: NCCL_P2P_DISABLE
+              value: "1"
+            - name: NCCL_SHM_DISABLE
+              value: "1"
+            - name: TORCH_NCCL_ENABLE_MONITORING
+              value: "0"
+            - name: TORCH_NCCL_ASYNC_ERROR_HANDLING
+              value: "0"
+          resources:
+            limits:
+              cpu: "16"
+              memory: 128Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "8"
+              memory: 96Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            # One mount per Python package level, matching the ConfigMaps
+            # generated in docker/scripts/snapshot. Nesting the second inside the
+            # first is what lets both use plain basenames as keys.
+            - mountPath: /workspace/docker/scripts/snapshot
+              name: snapshot-scripts
+              readOnly: true
+            - mountPath: /workspace/docker/scripts/snapshot/vllm
+              name: snapshot-scripts-vllm
+              readOnly: true
+          # The base recipe omits probe timings, leaving the Kubernetes defaults
+          # (3 x 10s = a 30s startup budget). A cold start has to download and
+          # load weights, so the container is killed long before it can serve.
+          # Values match the other model server guides.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: snapshot-scripts
+          configMap:
+            name: snapshot-scripts
+        - name: snapshot-scripts-vllm
+          configMap:
+            name: snapshot-scripts-vllm

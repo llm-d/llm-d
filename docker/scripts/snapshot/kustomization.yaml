@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# DRAFT: shipping runtime code as a ConfigMap is provisional. Revisit this file
+# once we decide between committing to the ConfigMap approach and baking the
+# snapshot runtime into an image -- an image removes all of the below.
+#
+# Packages the snapshot runtime as ConfigMaps so guides can mount it into a
+# stock model-server image, which does not ship this code. It lives here, not in
+# the consuming overlay, because Kustomize forbids `configMapGenerator.files:`
+# from reading outside its own root but allows a `resources:` entry pointing at
+# a directory with its own kustomization. That keeps these files the single
+# source of truth and gives the generated name a content hash, so editing any of
+# them rolls the pods that mount it.
+#
+# One ConfigMap per Python package level: keys cannot contain '/', so a single
+# map would have to encode the nesting and have every consumer decode it with a
+# volume `items:` mapping -- the same file list written twice, in two trees.
+#
+# test_providers.py is deliberately excluded: it is not runtime code.
+configMapGenerator:
+  - name: snapshot-scripts
+    files:
+      - __init__.py
+      - launcher.py
+      - providers.py
+  # Keys become __init__.py and wrapper.py; mount one level deeper, at
+  # <snapshot-dir>/vllm.
+  - name: snapshot-scripts-vllm
+    files:
+      - vllm/__init__.py
+      - vllm/wrapper.py
