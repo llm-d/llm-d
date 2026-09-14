@@ -85,6 +85,14 @@ Because the decode role runs one API server per data-parallel rank, the EPP must
 rank port. Layer [`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own
 values file when installing the router.
 
+**This path needs an endpoint picker that skips endpoints it cannot reach.** Those rank ports
+apply to the whole pool, which selects both roles, so the EPP can offer a prefill endpoint on a
+port a pipeline-parallel prefill never opens. The picker the router chart installs by default
+probes such an endpoint and leaves it out, and 40 requests through it all returned 200. Pinning
+the chart to `v0.10.0` instead pins the picker to the same release, and 30 of those 40 came back
+502 — the decode sidecar reporting a refused connection to the prefill. Earlier releases are
+untested here. Take the chart default unless you have measured otherwise.
+
 **NUMA alignment.** Each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over
 that VF. The claim constrains all five devices to one NUMA node on
 `resource.kubernetes.io/numaNode`, which both the NPU driver and dranet advertise. Without that
