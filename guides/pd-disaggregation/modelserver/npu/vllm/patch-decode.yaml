@@ -54,46 +54,34 @@ spec:
               protocol: TCP
       containers:
         - name: modelserver
-          # One API server per data-parallel rank. vLLM's
-          # --data-parallel-multi-port-external-lb does the same in a single process tree,
-          # but that path is not yet validated on this runtime.
-          command: ["/bin/bash", "-c"]
+          # vLLM runs one API server per data-parallel rank and hands rank i its own
+          # device, so the pod needs no per-rank launcher: --data-parallel-size-local
+          # keeps all four ranks here and the external load balancer mode gives each one
+          # a port from --port upward, which is what the sidecar and the EPP address.
+          command: ["vllm", "serve"]
           args:
-            - |
-              set -euo pipefail
-              COMMON=(
-                MiniMaxAI/MiniMax-M2.7
-                --disable-access-log-for-endpoints=/health,/metrics,/v1/models
-                --data-parallel-size=4
-                --data-parallel-address="${POD_IP}"
-                --data-parallel-rpc-port=5555
-                --enable-expert-parallel
-                --block-size=4096
-                --max-num-batched-tokens=512
-                --enable-prefix-caching
-                --prefix-caching-hash-algo=sha256_cbor
-                --safetensors-load-strategy=prefetch
-                --trust-remote-code
-                --enable-auto-tool-choice
-                --tool-call-parser=minimax_m2
-                '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
-                --num-gpu-blocks-override=50
-                --max-num-seqs=4
-                '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
-              )
-              pids=()
-              trap 'kill "${pids[@]}" 2>/dev/null || true' TERM
-              for i in 0 1 2 3; do
-                RBLN_DEVICES="${i}" \
-                VLLM_NIXL_SIDE_CHANNEL_HOST="${POD_IP}" \
-                VLLM_NIXL_SIDE_CHANNEL_PORT="$((5600 + i))" \
-                vllm serve "${COMMON[@]}" \
-                  --port="$((8200 + i))" \
-                  --data-parallel-rank="${i}" &
-                pids+=("$!")
-              done
-              # Any rank exiting takes the pod down: a partial data-parallel group cannot serve.
-              wait -n
+            - "MiniMaxAI/MiniMax-M2.7"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--port=8200"
+            - "--data-parallel-size=4"
+            - "--data-parallel-size-local=4"
+            - "--data-parallel-multi-port-external-lb"
+            - "--data-parallel-rpc-port=5555"
+            - "--enable-expert-parallel"
+            - "--block-size=4096"
+            - "--max-num-batched-tokens=512"
+            - "--enable-prefix-caching"
+            - "--prefix-caching-hash-algo=sha256_cbor"
+            - "--safetensors-load-strategy=prefetch"
+            - "--trust-remote-code"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=minimax_m2"
+            - '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
+            # A dp4 rank holds every layer, so its KV per block is four times a pp4
+            # rank's. 50 = max-num-seqs x one full context.
+            - "--num-gpu-blocks-override=50"
+            - "--max-num-seqs=4"
+            - '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
           ports:
             - containerPort: 8200
               name: modelserver
