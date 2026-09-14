@@ -1,0 +1,15 @@
+apiVersion: podsnapshot.gke.io/v1
+kind: PodSnapshotPolicy
+metadata:
+  name: pod-snapshot-policy
+spec:
+  # Kustomize does not apply namePrefix to podsnapshot.gke.io fields, so this
+  # must be kept in sync with namePrefix in kustomization.yaml by hand. A stale
+  # value applies cleanly and silently prevents any snapshot from being taken.
+  storageConfigName: gke-pod-snapshots-nvidia-gpu-vllm-pod-snapshot-storage-config
+  selector:
+    matchLabels:
+      llm-d.ai/guide: gke-pod-snapshots
+  triggerConfig:
+    type: workload
+    postCheckpoint: resume
