@@ -1,0 +1,18 @@
+# Rebellions NPU overrides for the pd-disaggregation router. Layer this over
+# pd-disaggregation.values.yaml; everything not named here is inherited from it.
+# Named for the RBLN runtime rather than for NPUs in general, since the rank-to-port
+# layout below follows that runtime pinning a rank to a device.
+router:
+  modelServers:
+    # The decode role runs one API server per data-parallel rank behind the routing
+    # sidecar, so all four rank ports must be listed. Without this the EPP sends every
+    # request to rank 0. Prefill serves on 8000 alone (pipeline parallel, one server).
+    targetPorts:
+      - number: 8000
+      - number: 8001
+      - number: 8002
+      - number: 8003
+    matchLabels:
+      llm-d.ai/guide: "pd-disaggregation"
+      llm-d.ai/accelerator-variant: "npu"
+      llm-d.ai/accelerator-vendor: "rebellions"
