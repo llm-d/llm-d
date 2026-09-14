@@ -264,13 +264,8 @@ First set the rollout strategy, before anything touches the pod template:
 
 <!-- guide:deploy.rollout_strategy start -->
 ```bash
-rc=0
-for deployment in ${DEPLOYMENT_A} ${DEPLOYMENT_B}; do
-  kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge \
-    -p '{"spec":{"strategy":{"rollingUpdate":{"maxSurge":0,"maxUnavailable":1}}}}' \
-    || { echo "FAILED to patch ${deployment}" >&2; rc=1; }
-done
-(exit ${rc})
+kubectl patch deployment ${DEPLOYMENT_A} ${DEPLOYMENT_B} -n ${NAMESPACE} --type=merge \
+  -p 'spec: {strategy: {rollingUpdate: {maxSurge: 0, maxUnavailable: 1}}}'
 ```
 <!-- guide:deploy.rollout_strategy end -->
 
@@ -293,15 +288,13 @@ Then opt in:
 
 <!-- guide:deploy.optin start -->
 ```bash
-rc=0
-for pair in "${DEPLOYMENT_A}:${QUEUE_A}" "${DEPLOYMENT_B}:${QUEUE_B}"; do
-  deployment=${pair%%:*}; queue=${pair##*:}
-  kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
-    "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"kueue.x-k8s.io/queue-name\":\"${queue}\"}}}}}" \
-    || { echo "FAILED to opt ${deployment} in to ${queue}" >&2; rc=1; }
-  kubectl rollout status deployment/"${deployment}" -n ${NAMESPACE} --timeout=10m || rc=1
-done
-(exit ${rc})
+kubectl patch deployment ${DEPLOYMENT_A} -n ${NAMESPACE} --type=merge \
+  -p "spec: {template: {metadata: {labels: {kueue.x-k8s.io/queue-name: ${QUEUE_A}}}}}"
+kubectl rollout status deployment/${DEPLOYMENT_A} -n ${NAMESPACE} --timeout=10m
+
+kubectl patch deployment ${DEPLOYMENT_B} -n ${NAMESPACE} --type=merge \
+  -p "spec: {template: {metadata: {labels: {kueue.x-k8s.io/queue-name: ${QUEUE_B}}}}}"
+kubectl rollout status deployment/${DEPLOYMENT_B} -n ${NAMESPACE} --timeout=10m
 ```
 <!-- guide:deploy.optin end -->
 
@@ -309,6 +302,9 @@ This does change the pod template, so every model server restarts once, one
 replica at a time. Every replica the HPA creates from then on inherits the label
 and becomes its own Workload. Deployments without the label are untouched by
 Kueue.
+
+One patch and one rollout wait per model, written out: with a third model, copy
+the pair and point it at that Deployment and its `LocalQueue`.
 
 ## Step 4: Verify
 
@@ -319,18 +315,18 @@ borrowed, which is the whole point:
 
 <!-- guide:verify.tests.admission start -->
 ```bash
-rc=0
-for cq in ${CQ_A} ${CQ_B}; do
-  active=$(kubectl get clusterqueue "${cq}" \
-    -o jsonpath='{.status.conditions[?(@.type=="Active")].status}')
-  cohort=$(kubectl get clusterqueue "${cq}" -o jsonpath='{.spec.cohortName}')
-  echo "${cq}: Active=${active:-<none>} cohort=${cohort:-<none>}"
-  [ "${active}" = "True" ] || { echo "  ^ no Active condition: is the Kueue controller running?" >&2; rc=1; }
-  [ -n "${cohort}" ] || { echo "  ^ no cohort: floors cannot be lent or borrowed" >&2; rc=1; }
-done
-(exit ${rc})
+kubectl get clusterqueues -l ${QUOTA_LABEL} -o custom-columns='NAME:.metadata.name,ACTIVE:.status.conditions[?(@.type=="Active")].status,COHORT:.spec.cohortName'
+
+kubectl get clusterqueues -l ${QUOTA_LABEL} -o json | jq -e '
+  [.items[]
+   | select(any(.status.conditions[]?; .type == "Active" and .status == "True"))
+   | select((.spec.cohortName // "") != "")] | length == 2' > /dev/null \
+  || { echo "expected 2 Active ClusterQueues sharing a cohort - is the Kueue controller running?" >&2; false; }
 ```
 <!-- guide:verify.tests.admission end -->
+
+`length == 2` is the number of models this guide budgets for — raise it if you
+add a `ClusterQueue`.
 
 `ClusterQueue` status is the whole picture — admitted GPUs per model, how many
 of them are borrowed from the cohort, and how many workloads are waiting:
@@ -363,13 +359,11 @@ which resource the cohort could not satisfy:
 
 <!-- guide:verify.tests.gated start -->
 ```bash
-for w in $(kubectl get workloads -n ${NAMESPACE} -o json \
-  | jq -r '.items[] | select((.status.conditions // [])
-           | any(.type=="QuotaReserved" and .status!="True")) | .metadata.name'); do
-  kubectl get workload "$w" -n ${NAMESPACE} -o json \
-    | jq -r '"workload: \(.metadata.name)  queue: \(.spec.queueName)",
-             (.status.conditions[]? | "  \(.type)=\(.status) reason=\(.reason)\n    \(.message)")'
-done
+kubectl get workloads -n ${NAMESPACE} -o json | jq -r '
+  .items[]
+  | select(any(.status.conditions[]?; .type == "QuotaReserved" and .status != "True"))
+  | "workload: \(.metadata.name)  queue: \(.spec.queueName)",
+    (.status.conditions[]? | "  \(.type)=\(.status) reason=\(.reason)\n    \(.message)")'
 ```
 <!-- guide:verify.tests.gated end -->
 
@@ -482,14 +476,10 @@ The floors are the dial. Beyond them:
 
 <!-- guide:cleanup start -->
 ```bash
-rc=0
-for deployment in ${DEPLOYMENT_A} ${DEPLOYMENT_B}; do
-  kubectl patch deployment "${deployment}" -n ${NAMESPACE} --type=merge -p \
-    '{"spec":{"template":{"metadata":{"labels":{"kueue.x-k8s.io/queue-name":null}}}}}' \
-    || { echo "FAILED to remove the label from ${deployment}" >&2; rc=1; }
-  kubectl rollout status deployment/"${deployment}" -n ${NAMESPACE} --timeout=10m || rc=1
-done
-(exit ${rc})
+kubectl patch deployment ${DEPLOYMENT_A} ${DEPLOYMENT_B} -n ${NAMESPACE} --type=merge \
+  -p 'spec: {template: {metadata: {labels: {kueue.x-k8s.io/queue-name: null}}}}'
+kubectl rollout status deployment/${DEPLOYMENT_A} -n ${NAMESPACE} --timeout=10m
+kubectl rollout status deployment/${DEPLOYMENT_B} -n ${NAMESPACE} --timeout=10m
 
 kubectl delete -k ${QUOTA_ROOT}/base --ignore-not-found=true
 ```
