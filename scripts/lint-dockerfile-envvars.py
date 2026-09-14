@@ -25,6 +25,13 @@ def parse_script_requirements(script_path: Path) -> Set[str]:
             in_block = True
             continue
 
+        # Vars under an "Optional" heading aren't required by the Dockerfile
+        # (they're allowed to be unset at runtime), so stop collecting here
+        # rather than sweeping them into the required set below.
+        if '# Optional environment variables:' in line:
+            in_block = False
+            continue
+
         if in_block:
             if not line.strip().startswith('#'):
                 break
@@ -78,6 +85,18 @@ class DockerfileParser:
                     self.current_stage = 'default'
 
                 if self.current_stage not in self.stages:
+                    # A stage built FROM an earlier named stage inherits that
+                    # stage's ARG and ENV declarations. Confirmed empirically
+                    # with `docker build`: a stage-scoped ARG (declared after
+                    # that stage's own FROM) carries forward through
+                    # descendant stages without needing re-declaration — only
+                    # a *global* ARG declared before the first FROM needs a
+                    # bare `ARG NAME` to be re-imported into a stage, and
+                    # global ARGs are out of scope here since this parser
+                    # only starts tracking once self.current_stage is set.
+                    # base_stage is a literal match only; a templated ref
+                    # like `FROM base-${TARGETARCH}` won't match a known
+                    # stage name, so no inheritance is assumed there.
                     inherited = self.stages.get(base_stage, {}) if base_stage else {}
                     self.stages[self.current_stage] = {
                         'ARG': set(inherited.get('ARG', set())),

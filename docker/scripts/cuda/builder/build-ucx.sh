@@ -14,6 +14,7 @@ set -Eeux
 # - UCX_PREFIX: prefix dir that contains installation path
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - TARGETOS: OS type (ubuntu or rhel)
+# - MAX_JOBS: number of parallel jobs for the make build
 
 cd /tmp
 
