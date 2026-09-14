@@ -73,9 +73,10 @@ with heterogeneous parallelism across the two roles:
 | `--max-num-seqs` | 4 | 4 |
 
 Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler.
-Neither sets `--max-model-len`, since the model already declares its 204800-token context, and
-neither sets `--kv-cache-dtype`: the RBLN attention backend has no FP8 KV cache, and changing the
-dtype would move the bytes per block that `--num-gpu-blocks-override` was measured against.
+Neither sets `--max-model-len`, since the model already declares its 204800-token context.
+Neither sets `--kv-cache-dtype` either: the runtime accepts `fp8` here, but the
+`--num-gpu-blocks-override` counts below were measured at the backend default, and halving the
+bytes per block would leave them describing something else.
 KV transfer uses NIXL with `kv_buffer_device=rbln`.
 Expert parallelism is on for decode only: a pipeline-parallel prefill rank holds one stage, so
 there is no expert group to split.
