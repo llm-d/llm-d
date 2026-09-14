@@ -6,6 +6,9 @@ router:
       targetPort: 8081
 
   epp:
+    flags:
+      # The disaggregatedset-rollout-screener is Alpha stability.
+      allow-experimental-plugins: true
     pluginsConfigFile: "wide-ep-lws-config.yaml"
     pluginsCustomConfig:
       wide-ep-lws-config.yaml: |
