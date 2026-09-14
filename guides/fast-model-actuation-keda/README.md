@@ -361,3 +361,13 @@ kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
+
+## Benchmarking Reports
+
+Empirical benchmark reports measuring what FMA is worth under KEDA autoscaling. On
+identical hardware, each compares a **Baseline** of EPP + KEDA alone — no FMA, so
+every scale-up loads the model cold — against two FMA paths: **Warm** (new vLLM
+instance on a running launcher) and **Hot** (wake a sleeping vLLM).
+
+- [Qwen/Qwen3-14B on H100 and vLLM](./benchmark-results/qwen3-14b-h100/README.md) — queue-based autoscaling trigger
+- [Qwen/Qwen3-32B on H100 and vLLM](./benchmark-results/qwen3-32b-h100/README.md) — saturation-based and queue-based autoscaling triggers
