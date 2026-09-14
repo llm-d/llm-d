@@ -201,9 +201,17 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+          # The base probes the rank-0 port alone, which would mark the pod ready while
+          # the other three ranks are still starting and let the sidecar forward to them.
           readinessProbe:
+            httpGet: null
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'for p in 8200 8201 8202 8203; do curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${p}/v1/models" || exit 1; done'
             periodSeconds: 5
-            timeoutSeconds: 2
+            timeoutSeconds: 10
             failureThreshold: 3
       resourceClaims:
         - name: npu-decode-claim
