@@ -87,7 +87,7 @@ export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-pd"
 export NAMESPACE="llm-d-e-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export INFRA_PROVIDER="gke" # base | gke
+export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
@@ -101,7 +101,7 @@ export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export INFRA_PROVIDER="gke" # base | gke
+export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
@@ -179,6 +179,10 @@ helm install ${RELEASE_NAME} \
 ### 2. Deploy the Model Server
 
 Apply the Kustomize overlays for your chosen topology:
+
+Choose the overlay matching your infrastructure provider:
+- **GKE**: Deploys on GKE using Dynamic Resource Allocation (DRA) and DRANet (RoCE) as the default high-performance path. Ensure the cluster is configured accordingly (see [Cluster Pre-provisioning](../../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce)).
+- **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
