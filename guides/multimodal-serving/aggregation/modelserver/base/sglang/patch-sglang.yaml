@@ -18,6 +18,9 @@ spec:
             - "--mem-fraction-static=0.88"
             - "--max-running-requests=2048"
             - "--max-queued-requests=1024"
+            - "--attention-backend=fa3"
+            - "--mm-attention-backend=fa3"
+            - "--chunked-prefill-size=8192"
 
             # Uncomment for distributed tracing
             # - "--enable-trace"
@@ -30,6 +33,8 @@ spec:
                   key: HF_TOKEN
             - name: SGLANG_VLM_CACHE_SIZE_MB
               value: "20480"
+            - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+              value: "false"
             # Uncomment for distributed tracing env vars
             # - name: OTEL_SERVICE_NAME
             #   value: "sglang-decode"
@@ -56,7 +61,7 @@ spec:
           livenessProbe:
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 6
           readinessProbe:
             periodSeconds: 5
             timeoutSeconds: 2
