@@ -41,7 +41,7 @@ This guide includes configurations for the following accelerators:
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
 | Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
-| Iluvatar GPU        | `iluvatar/vllm/base` | Iluvatar BI-V150 (dual-die), community contributed; DeepSeek-V4-Flash on 4 boards / 8 CUDA devices (DP=8 + EP) |
+| Iluvatar GPU        | `iluvatar`         | Iluvatar BI-V150 (dual-die)                                     |
 | CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
