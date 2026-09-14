@@ -54,7 +54,7 @@ On AWS, NIXL uses [libfabric](https://ofiwg.github.io/libfabric/) as the transpo
 ### Choosing a Transport Backend
 
 | Environment | Backend | Rationale |
-|---|---|---|
+| --- | --- | --- |
 | On-premise InfiniBand / RoCE | UCX | Mature, battle-tested on HPC fabrics with dedicated, uncongested paths |
 | Cloud with RoCE (GKE, Azure, etc.) | UCCL | Software packet spraying avoids single-path congestion on shared fabric |
 | GKE with GPUDirect TCP-X | UCCL | Native support for Google's GPU-initiated TCP transport |
@@ -77,7 +77,10 @@ Enable NIXL-based KV Cache transfer via the `--kv-transfer-config` flag:
 
 ```bash
 vllm serve <model> \
-  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+  --kv-transfer-config '{"kv_connector":"NixlConnector",
+  "kv_role":"kv_both",
+  "kv_buffer_device":"cuda",
+  "kv_connector_extra_config":{"backends":["UCX"]}}'
 ```
 
 The `kv_role` is `kv_both` for both prefill and decode pods — each pod can both send and receive KV Cache.
@@ -90,7 +93,8 @@ For XPU devices where KV transfer happens via CPU memory, add:
 
 #### Backend Selection
 
-NIXL uses UCX backend by default. NIXL's transport backend can be configured using the `kv_connector_extra_config`:
+NIXL uses UCX backend by default. The GPU example above selects it explicitly
+using `kv_connector_extra_config`.
 
 To configure NIXL with UCCL backend:
 
@@ -107,7 +111,7 @@ vllm serve <model> \
 NIXL uses a side channel for metadata exchange between pods. Configure with:
 
 | Variable | Description | Default |
-|---|---|---|
+| --- | --- | --- |
 | `VLLM_NIXL_SIDE_CHANNEL_HOST` | Pod IP (use `status.podIP` fieldRef) | Required |
 | `VLLM_NIXL_SIDE_CHANNEL_PORT` | Metadata exchange port | `5557` |
 
@@ -116,13 +120,44 @@ NIXL uses a side channel for metadata exchange between pods. Configure with:
 UCX transport is configured via environment variables:
 
 | Variable | Description | Example |
-|---|---|---|
+| --- | --- | --- |
 | `UCX_TLS` | Transport layers (TLS) to use | `sm,cuda_ipc,cuda_copy,rc,tcp` |
 | `UCX_SOCKADDR_TLS_PRIORITY` | Priority for socket-based transport layers | `tcp` |
 | `UCX_PROTO_INFO` | Check transport selection | `y` |
 | `UCX_NET_DEVICES` | Network devices to use for transport | e.g. `mlx5_0:1, mlx5_1:1` |
 
 For RDMA-capable clusters, UCX will automatically use RDMA verbs when available. For TCP-only clusters (XPU), set `UCX_TLS=tcp`.
+
+#### Verify the Selected UCX Transport
+
+Enable UCX transport logging temporarily on both prefill and decode pods:
+
+```yaml
+- name: UCX_LOG_LEVEL
+  value: info
+- name: UCX_PROTO_INFO
+  value: "y"
+```
+
+Send a representative P/D request and inspect the UCX protocol table for the
+large GPU-memory operation. Confirm the selected data lane: `cuda_ipc/cuda`
+identifies CUDA IPC, while a lane such as `rc_mlx5` identifies RDMA. Backend
+initialization, an `intra-node` endpoint, or `cuda_ipc/cuda` appearing among
+the available endpoint lanes does not prove that the KV Cache payload used
+CUDA IPC.
+
+In a standard Kubernetes deployment, separate prefill and decode pods receive
+separate GPU allocations. Same-node placement therefore must not be assumed to
+enable CUDA IPC; same-node and cross-node payloads can both select RDMA. CUDA
+IPC requires both processes to have access to the participating peer GPUs, and
+`hostIPC` alone does not provide that access. See NVIDIA Dynamo's
+[Kubernetes disaggregated-communication guidance](https://docs.nvidia.com/dynamo/dev/knowledge-base/kubernetes/kubernetes-operator/disagg-communication)
+for the cross-pod GPU-isolation constraints and recommended RDMA configuration.
+
+The NIXL side channel uses the regular network for metadata exchange, so the
+presence of TCP in a log is not by itself evidence that KV Cache payloads use
+TCP. Disable `UCX_PROTO_INFO` after validation because its protocol tables are
+verbose.
 
 ### RDMA Resources and Capabilities
 
@@ -239,7 +274,7 @@ etcd --listen-client-urls http://0.0.0.0:2379 \
 
 From the prefill/decode pods, run:
 
-```
+```bash
 nixlbench --etcd_endpoints http://<ETCD_SERVER_IP>:2379 --backend <UCX/UCCL/LIBFABRIC> --op_type=READ --check-consistency --start_batch_size=100 --max_batch_size=100 --max-block-size=85899340
 ```
 

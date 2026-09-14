@@ -105,6 +105,13 @@ post-deploy-test: ## Run post deployment tests
 .PHONY: lint
 lint: ## Run lint
 
+.PHONY: verify
+verify: verify-guide-readmes ## Verify generated artifacts are current
+
+.PHONY: verify-guide-readmes
+verify-guide-readmes: ## Verify rendered guide READMEs are current
+	./scripts/guide.py render --recursive --check guides
+
 ##@ Build
 
 .PHONY: build

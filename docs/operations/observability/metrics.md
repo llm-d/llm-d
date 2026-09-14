@@ -60,6 +60,23 @@ prefill-podmonitor      5m
 | `vllm:prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod. Compare across pods to spot uneven load distribution |
 | `vllm:generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput. A drop signals degraded model performance |
 
+#### vLLM NIXL KV Transfer Metrics
+
+When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for the KV cache transfers between workers. See the [vLLM NixlConnector usage guide](https://docs.vllm.ai/en/latest/features/nixl_connector_usage/) for configuration details.
+
+| Metric | What it measures | Why it matters |
+|--------|------------------|----------------|
+| `vllm:nixl_xfer_time_seconds` (histogram) | Time from posting a transfer until the backend reports completion, including submission and data movement | High tail latency can indicate network congestion, large transfers, or backend delays |
+| `vllm:nixl_post_time_seconds` (histogram) | Synchronous time spent submitting a transfer to the backend | A high value with otherwise normal transfer time points to descriptor setup or submission overhead |
+| `vllm:nixl_bytes_transferred` (histogram) | Bytes moved per transfer observation | Shows transfer size and KV cache data volume |
+| `vllm:nixl_num_descriptors` (histogram) | Memory descriptor count per transfer observation | High counts can indicate fragmented or large KV cache allocations |
+| `vllm:nixl_num_failed_transfers` (counter) | Failed NIXL KV cache transfers | Transfer failures can prevent the consumer from using remote KV blocks |
+| `vllm:nixl_num_failed_notifications` (counter) | Failed transfer completion notifications | Notification failures can prevent a peer from learning that a transfer completed |
+| `vllm:nixl_num_kv_expired_reqs` (counter) | Requests whose KV blocks expired before the decoder read them; recorded on the prefill instance | Sustained increases can indicate that `kv_lease_duration` is too short for the workload or network |
+
+> [!NOTE]
+> With tensor parallelism, vLLM pools transfer observations from all TP ranks before exporting them. Histogram counts therefore represent rank-level transfer observations, not inference requests, and byte values do not represent the total size of one request across all ranks. These are aggregate Prometheus metrics and are not correlated with individual request or trace IDs.
+
 ### Key SGLang Metrics
 
 | Metric | What it measures | Why it matters |
@@ -209,6 +226,31 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 | `llm_d_epp_datalayer_poll_errors_total` | Data-source poll failures per source type | Signals failing telemetry scrapes from model servers |
 | `llm_d_epp_datalayer_extract_errors_total` | Extractor failures per source/extractor type | Signals parsing failures on scraped telemetry payloads |
 
+### Key Batch Gateway Metrics
+
+Only relevant if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md). These are the operationally useful series; the definitional source of truth for names, types, and labels is [`docs/guides/metrics.md`](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/metrics.md) in the component repo, which also documents the token, cancellation, and startup-recovery counters not listed here.
+
+Unlike the EPP and vLLM metrics above, these names carry no `llm_d_` prefix, so scope queries by `namespace` to avoid picking up unrelated workloads.
+
+| Metric | What it measures | Why it matters |
+|--------|-----------------|----------------|
+| `http_requests_total` | API server requests by method, path, and status | Baseline for API-side error rate — batch submission failures show up here, not in job metrics |
+| `http_request_duration_seconds` | API server request latency distribution | Submission and status-poll responsiveness |
+| `jobs_processed_total` | Jobs processed by `result` (`success`, `failed`, `skipped`, `re_enqueued`, `expired`) and `reason` | The primary outcome signal. `expired` means jobs aged out before running, which is a capacity problem rather than a failure |
+| `job_queue_wait_duration_seconds` | Time in the priority queue before pickup | Leading indicator of backlog; rises before end-to-end latency does |
+| `job_processing_duration_seconds` | End-to-end processing duration by `size_bucket` | Separates "large jobs are slow" from "everything is slow" |
+| `batch_job_e2e_latency_seconds` | Submission to terminal state, by `status` | What the user actually waits for, including queue time |
+| `active_workers` / `total_workers` | Active vs configured worker pool size | Their ratio is the saturation signal — sustained near 1.0 means the pool is the bottleneck |
+| `processor_inflight_requests` | In-flight inference requests during execution | Load the batch path is placing on the inference backends |
+| `batch_reconciler_errors_total` | GC reconciler cycle errors | Non-zero means orphaned jobs are not being recovered |
+| `batch_reconciler_orphans_recovered_total` | Orphans recovered by `action` | Sustained non-zero points at processor crashes upstream |
+| `file_storage_operations_total` | File storage operations by `operation`, `component`, and `status` | `status="exhausted"` means retries gave up — input or output data is inaccessible |
+
+> [!NOTE]
+> The Batch Gateway dashboards compute histogram quantiles by summing buckets across pods before applying `histogram_quantile`, which yields a fleet-wide approximate percentile rather than an exact one. This is acceptable because each job is processed by exactly one pod, but it can mask a single consistently-slow pod. Add `by (le, pod)` for a per-pod breakdown.
+
+For alerts built on these metrics, see [Alerting](./alerting.md#batch-gateway-batch-gatewayrules).
+
 ## Step 4: View Dashboards
 
 llm-d provides pre-built Grafana dashboards for common monitoring scenarios.
@@ -248,6 +290,9 @@ llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
 llm-d-performance-kv-cache                        1      30s
 llm-d-pd-coordinator-metrics                      1      30s
+llm-d-batch-gateway-apiserver                     1      30s
+llm-d-batch-gateway-processor                     1      30s
+llm-d-batch-gateway-gc                            1      30s
 ```
 
 Or import individual dashboard JSON files manually from `guides/recipes/observability/grafana/dashboards/`:
@@ -260,6 +305,11 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
 | `llm-d-pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
+| `llm-d-batch-gateway-apiserver.json` | Batch Gateway API server request rate, latency, and in-flight requests |
+| `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
+| `llm-d-batch-gateway-gc.json` | Batch Gateway GC reconciler cycles, orphan recovery, and errors |
+
+The three Batch Gateway dashboards are only useful if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md); each has a `namespace` variable to select the namespace it runs in.
 
 ## Step 5: Query Metrics
 

@@ -149,15 +149,15 @@ The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional compo
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
-| **Async Processor** | v0.9.0 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
+| **Async Processor** | v0.9.1 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
 
 ### Images
 
 | Image | Description | Version |
 |-------|-------------|---------|
-| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.9.0 |
+| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.9.1 |
 
-Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.9.0`.
+Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.9.1`.
 
 > [!NOTE]
 > The chart was renamed from `async-processor` to `llm-d-async` in v0.8.0, and chart versions now

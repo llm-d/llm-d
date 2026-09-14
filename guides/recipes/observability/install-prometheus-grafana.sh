@@ -108,12 +108,11 @@ setup_env() {
       log_error "Error, the context file \"$KUBERNETES_CONTEXT\", passed via command-line option, does not exist!"
       exit 1
     fi
-    KCMD="kubectl --kubeconfig $KUBERNETES_CONTEXT"
-    HCMD="helm --kubeconfig $KUBERNETES_CONTEXT"
-  else
-    KCMD="kubectl"
-    HCMD="helm"
+    export KUBECONFIG="$KUBERNETES_CONTEXT"
   fi
+
+  KCMD="kubectl"
+  HCMD="helm"
 
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     if [[ -z "$MONITORING_NAMESPACE" ]]; then
@@ -132,6 +131,16 @@ setup_env() {
 
 is_openshift() {
   if $KCMD get clusterversion &>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+is_autopilot() {
+  if $KCMD get ns gke-managed-system &>/dev/null; then
+    return 0
+  fi
+  if $KCMD get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null | grep -q '^gk3-'; then
     return 0
   fi
   return 1
@@ -162,6 +171,10 @@ check_servicemonitor_crd() {
 
 check_existing_node_exporter() {
   log_info "🔍 Checking for existing node-exporter installations..."
+  if is_autopilot; then
+    log_info "ℹ️ GKE Autopilot detected - node-exporter will be disabled (host namespaces restricted in Autopilot)"
+    return 0
+  fi
   # Shared clusters with existing monitoring commonly have pre-existing node-exporters,
   # and it's not necessary to have multiple of these running (they would conflict on port 9100)
   local existing_exporters=$($KCMD get pods --all-namespaces -l app=node-exporter -o name 2>/dev/null | wc -l)
@@ -409,6 +422,18 @@ install_prometheus_grafana() {
 
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     cat <<EOF > /tmp/prometheus-values.yaml
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
 grafana:
   adminPassword: admin
   service:
@@ -460,6 +485,18 @@ $(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; f
 EOF
   else
     cat <<EOF > /tmp/prometheus-values.yaml
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
 grafana:
   adminPassword: admin
   service:
