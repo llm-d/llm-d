@@ -79,6 +79,10 @@ spec:
               value: "1"
             - name: SAFETENSORS_FAST_GPU
               value: "1"
+            # The decode sidecar holds an idle upstream connection for about 90s while
+            # vLLM closes one after 5s, so a reused connection would reset the handoff.
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
             # Unreachable in practice: the startupProbe budget below is 7215s.
             - name: VLLM_ENGINE_READY_TIMEOUT_S
               value: "9600"
