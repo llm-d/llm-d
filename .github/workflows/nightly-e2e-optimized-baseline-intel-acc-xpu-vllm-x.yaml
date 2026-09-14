@@ -58,9 +58,9 @@ on:
         default: 'nightly'
         type: 'string'
       harness_resources:
-        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 2/8Gi on Intel XPU; matches intel-xpu overlay memoryLimit)'
         required: false
-        default: '32/64Gi'
+        default: '2/8Gi'
         type: 'string'
 
 #  push:
@@ -106,7 +106,7 @@ jobs:
 #      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
-      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
+      harness_resources: ${{ inputs.harness_resources || '2/8Gi' }}
     secrets: inherit
 
   update-badge:
