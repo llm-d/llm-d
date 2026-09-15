@@ -36,7 +36,7 @@ This is the experimental part of the architecture: the Coordinator is a candidat
 orchestrated:
 
 * **Modularity** — the pipeline is a plain list of named steps in the Coordinator's
-  `ConfigMap` (see [`coordinator/configmap.yaml`](coordinator/configmap.yaml)). Steps
+  `ConfigMap` (see [`coordinator/base/configmap.yaml`](coordinator/base/configmap.yaml)). Steps
   can be added, removed, or reordered by editing that list — no code changes, no
   rebuilding an image. The [PD-only note](#installation-instructions) below is a
   worked example: dropping the `replace-media-urls`, `render`, and `encode` steps is
@@ -87,7 +87,7 @@ topology choice:
 
 | Backend           | Directory                | Notes                                            |
 | ------------------ | ------------------------- | ------------------------------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base` and `coreweave` providers) |
+| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base`, `coreweave`, and `gke` providers) |
 
 > [!NOTE]
 > Encoder-cache transfer (`--ec-transfer-config`) is not yet in an official vLLM
@@ -158,15 +158,16 @@ topology choice:
 >   kubectl scale deployment/coord-disaggregation-nvidia-gpu-vllm-encode -n ${NAMESPACE} --replicas=0
 >   ```
 >
-> * Step 3: after deploying the Coordinator, apply
->   [`coordinator/patch-pd-only.yaml`](coordinator/patch-pd-only.yaml) to drop the
->   `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
+> * Step 3: after deploying the Coordinator (either overlay — this patch is
+>   provider-independent), apply
+>   [`coordinator/base/patch-pd-only.yaml`](coordinator/base/patch-pd-only.yaml) to drop
+>   the `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
 >   only `conditional-decode`, `prefill`, and `decode`), then restart the coordinator
 >   Deployment:
 >
 >   ```bash
 >   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
->       --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/patch-pd-only.yaml)"
+>       --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/base/patch-pd-only.yaml)"
 >   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
 >   ```
 >
@@ -179,8 +180,8 @@ Pick **one** of the two topologies from the [Overview](#overview) — single EPP
 both; they install into the same namespace and would conflict.
 
 Both topologies default to routing the Coordinator's own ingress
-(`coordinator/httproute.yaml`) and its outbound `gateway.address`
-([`coordinator/configmap.yaml`](coordinator/configmap.yaml)) through a real
+(`coordinator/base/httproute.yaml`) and its outbound `gateway.address`
+([`coordinator/base/configmap.yaml`](coordinator/base/configmap.yaml)) through a real
 Kubernetes Gateway. Deploy one first if your cluster doesn't already have one:
 
 > [!NOTE]
@@ -198,15 +199,7 @@ One llm-d Router release, EPP, and InferencePool cover all three roles.
 1. *Deploy the llm-d Router*:
 
 ```bash
-export PROVIDER_NAME=istio # other: na, agentgateway
-# agentgateway's generated Service takes the Gateway's own name, with no
-# -<provider> suffix (unlike istio/gke/na) -- https://agentgateway.dev/docs/kubernetes/latest/setup/gateway/
-if [ "${PROVIDER_NAME}" = agentgateway ]; then
-  export GATEWAY_SERVICE=llm-d-inference-gateway
-else
-  export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
-fi
-export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
+export PROVIDER_NAME=istio # other: gke, na, agentgateway
 export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
 export ROUTER_HTTPROUTE_FILE=router/httproute.yaml # for Cleanup
 helm install ${GUIDE_NAME} \
@@ -222,7 +215,7 @@ helm install ${GUIDE_NAME} \
    (`httpRoute.create: false` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml))
    because it would be an unconditional catch-all on `/`, colliding with the
    Coordinator's own route on the same Gateway. Instead, the two hand-authored
-   HTTPRoutes on this Gateway (`coordinator/httproute.yaml` and
+   HTTPRoutes on this Gateway (`coordinator/base/httproute.yaml` and
    [`router/httproute.yaml`](router/httproute.yaml)) split traffic three ways:
    * `/v1/completions`, `/v1/chat/completions`, `/inference/v1/generate` **without**
      `EPP-Profile` → the Coordinator (client-facing inference calls).
@@ -274,15 +267,7 @@ prefix-cache affinity to speak of, just queue/load balancing.
 1. *Deploy the llm-d Routers*:
 
 ```bash
-export PROVIDER_NAME=istio # other: na, agentgateway
-# agentgateway's generated Service takes the Gateway's own name, with no
-# -<provider> suffix (unlike istio/na) -- https://agentgateway.dev/docs/kubernetes/latest/setup/gateway/
-if [ "${PROVIDER_NAME}" = agentgateway ]; then
-  export GATEWAY_SERVICE=llm-d-inference-gateway
-else
-  export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
-fi
-export GATEWAY_ADDRESS="http://${GATEWAY_SERVICE}.${NAMESPACE}.svc:80"
+export PROVIDER_NAME=istio # other: gke, na, agentgateway
 export ROUTER_RELEASES="${GUIDE_NAME}-encode ${GUIDE_NAME}-prefill ${GUIDE_NAME}-decode" # for Cleanup
 export ROUTER_HTTPROUTE_FILE=router/httproute-3-epp.yaml # for Cleanup
 for ROLE in encode prefill decode; do
@@ -319,7 +304,7 @@ three role-specific model servers (encode, prefill, decode), each as a single
 replica:
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave
+export INFRA_PROVIDER=base # base | coreweave | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
@@ -336,14 +321,59 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 ### 3. Deploy the Coordinator
 
 Drives the `replace-media-urls → render → conditional-decode → encode → prefill →
-decode` pipeline. The ConfigMap references `${GATEWAY_ADDRESS}` (exported in step 1's
-Gateway mode block).
+decode` pipeline.
 
-Build with `kustomize` and pipe through `envsubst` before applying:
+First point the Coordinator at the Gateway. Every per-phase call it makes goes back
+out through that same Gateway, so `${GATEWAY_ADDRESS}` — referenced by
+[`coordinator/base/configmap.yaml`](coordinator/base/configmap.yaml) — has to be an
+address reachable from *inside* the cluster, and how you get one differs per
+provider. This is set here rather than in step 1 because on GKE the address doesn't
+exist until the Gateway has been reconciled (wait for `PROGRAMMED=True`, see
+[the GKE gateway guide](../../docs/infrastructure/gateway/gke.md#step-3-verify-the-gateway)):
 
 ```bash
-kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
+case "${PROVIDER_NAME}" in
+  # GKE's Gateway is a Google Cloud load balancer -- there is no in-cluster
+  # Service to target, so use the address the controller published on the
+  # Gateway's status (reachable from in-cluster for both GKE gateway classes).
+  gke)
+    export COORDINATOR_OVERLAY=gke
+    export GATEWAY_ADDRESS="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}'):80"
+    ;;
+  # agentgateway's generated Service takes the Gateway's own name, with no
+  # -<provider> suffix (unlike istio/na) -- https://agentgateway.dev/docs/kubernetes/latest/setup/gateway/
+  agentgateway)
+    export COORDINATOR_OVERLAY=base
+    export GATEWAY_ADDRESS="http://llm-d-inference-gateway.${NAMESPACE}.svc:80"
+    ;;
+  *)
+    export COORDINATOR_OVERLAY=base
+    export GATEWAY_ADDRESS="http://llm-d-inference-gateway-${PROVIDER_NAME}.${NAMESPACE}.svc:80"
+    ;;
+esac
+echo "GATEWAY_ADDRESS=${GATEWAY_ADDRESS}" # must be non-empty
 ```
+
+Then build the overlay for your Gateway provider with `kustomize` and pipe it
+through `envsubst` before applying:
+
+```bash
+kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
+```
+
+> [!NOTE]
+> The two overlays differ only in what the Gateway provider needs on the
+> Coordinator's own Service and HTTPRoute:
+>
+> * `base` — the plain manifests, with a 300s `timeouts.request` on
+>   [`coordinator/base/httproute.yaml`](coordinator/base/httproute.yaml).
+> * `gke` — adds a [`HealthCheckPolicy`](coordinator/gke/healthcheckpolicy.yaml)
+>   (GKE Gateway does not derive health checks from the pod's readiness/liveness
+>   probes; without it the load balancer probes `/`, gets a 404, marks the
+>   Coordinator unhealthy, and every request returns 503) and a
+>   [`GCPBackendPolicy`](coordinator/gke/gcpbackendpolicy.yaml) carrying the 300s
+>   timeout, which GKE takes there instead of from the HTTPRoute's unsupported
+>   `timeouts` field (dropped by the overlay).
 
 ### 4. (Optional) Deploy the multimedia downloader (caching proxy)
 
@@ -529,10 +559,11 @@ into a performance penalty.
 ## Cleanup
 
 Same commands regardless of topology — `${ROUTER_RELEASES}` and
-`${ROUTER_HTTPROUTE_FILE}` were exported in step 1. The Coordinator's resources are deleted directly rather
-than via `coordinator/kustomization.yaml`'s bundling (same reasoning as step 3's
-apply-side note) — `--ignore-not-found` makes that safe regardless of whether
-`coordinator/httproute.yaml` was ever applied:
+`${ROUTER_HTTPROUTE_FILE}` were exported in step 1, `${COORDINATOR_OVERLAY}` in
+step 3. The Coordinator is torn down by rebuilding the same overlay that created
+it, so provider-specific resources (the GKE `HealthCheckPolicy` and
+`GCPBackendPolicy`) go with it; `--ignore-not-found` keeps that safe if you never
+got as far as applying some of them:
 
 ```bash
 for RELEASE in $(echo ${ROUTER_RELEASES}); do
@@ -540,9 +571,7 @@ for RELEASE in $(echo ${ROUTER_RELEASES}); do
 done
 envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_FILE} | kubectl delete -n ${NAMESPACE} -f -
 
-kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/httproute.yaml
-kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/deployment.yaml
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/configmap.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```

@@ -35,5 +35,7 @@ spec:
       name: llm-d-coordinator
       port: 8080
       weight: 1
+    # Removed by the gke overlay (../gke/kustomization.yaml): GKE Gateway doesn't
+    # implement this field -- it uses a GCPBackendPolicy timeoutSec instead.
     timeouts:
       request: 300s

@@ -9,7 +9,7 @@
 # from configmap.yaml), so it needs envsubst -- --patch-file reads the file raw
 # and won't expand it. Apply after the normal coordinator deploy:
 #   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
-#       --patch="$(envsubst < coordinator/patch-pd-only.yaml)"
+#       --patch="$(envsubst < coordinator/base/patch-pd-only.yaml)"
 #   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
 apiVersion: v1
 kind: ConfigMap
