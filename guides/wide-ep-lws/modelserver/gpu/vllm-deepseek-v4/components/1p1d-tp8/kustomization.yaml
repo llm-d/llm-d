@@ -4,9 +4,10 @@ kind: Component
 # Decode uses pure tensor parallelism across 8 GPUs for minimum TPOT.
 patches:
   - target:
-      kind: LeaderWorkerSet
-      name: ".*-prefill"
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
     patch: |-
+      # Roles are ordered [prefill, decode] in the base DisaggregatedSet.
       - op: replace
-        path: /spec/replicas
+        path: /spec/roles/0/spec/replicas
         value: 1
