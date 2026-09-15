@@ -15,7 +15,6 @@ namePrefix: gke-pod-snapshots-nvidia-gpu-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
 
 labels:
   - pairs:

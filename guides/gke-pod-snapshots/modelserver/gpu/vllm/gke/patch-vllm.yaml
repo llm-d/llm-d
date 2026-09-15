@@ -1,12 +1,8 @@
 # The PodSnapshotStorageConfig uses tokenSource "podKSA", so the gVisor sandbox
-# authenticates to GCS as this KSA principal directly via Workload Identity
+# authenticates to GCS as the Pod's KSA directly via Workload Identity
 # Federation. No `iam.gke.io/gcp-service-account` annotation is needed -- the
-# bucket IAM binding targets the `principal://.../sa/<ksa>` subject instead.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: sa
----
+# bucket IAM binding targets the `principal://.../sa/<ksa>` subject instead, so
+# the ServiceAccount from recipes/modelserver/common/sa.yaml is used unmodified.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,19 +15,8 @@ spec:
   strategy:
     type: Recreate
   template:
-    metadata:
-      annotations:
-        # Opts into GKE Sandbox's fast-startup path, matching the reference Pod.
-        # Note: /proc/gvisor/checkpoint was writable without it, so this is not
-        # what exposes the file. Kept for parity.
-        cloud.google.com/gke-fast-pod-startup: "true"
     spec:
       runtimeClassName: gvisor
-      # recipes/modelserver/common/sa.yaml disables token automounting, which is
-      # right for model servers that never call a GCP API. This guide does: the
-      # PodSnapshotStorageConfig uses tokenSource "podKSA", so GKE reaches GCS as
-      # this Pod's KSA and needs its projected token.
-      automountServiceAccountToken: true
       nodeSelector:
         sandbox.gke.io/runtime: gvisor
       containers:
@@ -42,15 +27,28 @@ spec:
             - "Qwen/Qwen3-32B"
             - "--safetensors-load-strategy"
             - "eager"
-            # Required for engine.sleep(level=1) to reclaim VRAM at all: vLLM
-            # only routes weights through CuMemAllocator when sleep mode is on at
-            # engine construction. Without it, sleep succeeds but frees nothing.
+            # Sleep mode flips enable_cumem_allocator, which is what routes
+            # weights and KV cache through CuMemAllocator; without it
+            # engine.sleep() has nothing it can release. Measured on Qwen3-32B:
+            # sleep(level=1) moved 61.68 GiB of weights to host RAM and
+            # discarded 12.52 GiB of KV cache, keeping the cache out of the
+            # snapshot.
             - "--enable-sleep-mode"
+            # 0.95, not the more common 0.90. Measured on an 80GB H100: weights
+            # take 61.03 GiB and activations/non-torch overhead ~2.1 GiB, so
+            # 0.90 (a 71.6 GiB budget) leaves only 8.51 GiB for KV cache while
+            # the model's 40960-token max_model_len needs 10.0 GiB. vLLM then
+            # raises ValueError, EngineCore dies, and the pod crash-loops with
+            # only a generic "Engine core initialization failed" at the API
+            # server -- the real error is in the EngineCore child's output.
+            # 0.95 yields a 75.6 GiB budget and ~12.5 GiB of KV cache.
             - "--gpu-memory-utilization"
-            - "0.90"
-            # Disables CUDA graph capture, matching the reference Pod. Note:
-            # graphs were tested and are NOT the cause of checkpoint failures.
-            # Costs decode latency, so re-evaluate once snapshots succeed.
+            - "0.95"
+            # CUDA graphs do not fit alongside that KV cache. Dropping this flag
+            # lets capture claim ~1.22 GiB of private pools, GPU use peaks at
+            # 78.60 GiB of 79.18 GiB, and the sampler's 594 MiB warmup
+            # allocation OOMs -- EngineCore crash-loops before serving. Costs
+            # some decode latency; revisit only with a smaller max_model_len.
             - "--enforce-eager"
             - "--port"
             - "8000"
@@ -59,22 +57,21 @@ spec:
             # Snapshot configuration
             - name: PYTHONPATH
               value: "/workspace"
-            # Asks vLLM to keep the API server and engine core in one process so
-            # cuda-checkpoint need not cross a process boundary. Note: vLLM 0.25
-            # recognises this but still forks an "(EngineCore pid=NN)" child on
-            # the V1 path, so it has no effect today. Kept for parity.
-            - name: VLLM_ENABLE_V1_MULTIPROCESSING
-              value: "0"
             # Without this, vLLM's stdout is block-buffered and a slow cold start
             # is indistinguishable from a hang in kubectl logs.
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: SNAPSHOT_PROVIDER
               value: "gke_gvisor"
-            # Opts into the pre-checkpoint disk purge; unset means "do not
-            # purge". expanduser resolves this to /root/.cache/huggingface/hub,
-            # which is the container's writable layer -- not the /.cache volume
-            # mounted below, which vLLM uses for its compile cache.
+            # After sleep(level=1) the weights exist twice -- in host RAM and in
+            # the HuggingFace cache on disk -- and both would land in the
+            # snapshot. Setting this purges the disk copy before the checkpoint;
+            # unset means "do not purge". Leave it unset when weights are
+            # mounted rather than downloaded: there is no duplicate to drop, and
+            # the purge would delete shared data. expanduser resolves this to
+            # /root/.cache/huggingface/hub, the container's writable layer --
+            # not the /.cache volume mounted below, which vLLM uses for its
+            # compile cache.
             - name: MODEL_CACHE_DIR
               value: "~/.cache/huggingface/hub"
             - name: HF_TOKEN
@@ -82,29 +79,11 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # gVisor and NCCL compatibility settings, matching the reference Pod
-            # this guide was derived from. Several are provably inert at
-            # world_size=1 (vLLM picks its own rendezvous port over MASTER_*, and
-            # NCCL_P2P/SHM_DISABLE gate transports a single rank never uses), but
-            # are kept for parity until a passing snapshot exists to compare to.
+            # Pins the torch.distributed TCPStore to loopback. A store bound to
+            # the pod IP does not survive the gVisor checkpoint, so every
+            # restored pod logs a TCPStore 'Broken pipe' warning once per second.
             - name: VLLM_HOST_IP
               value: "127.0.0.1"
-            - name: MASTER_ADDR
-              value: "127.0.0.1"
-            - name: MASTER_PORT
-              value: "29500"
-            - name: NCCL_SOCKET_IFNAME
-              value: "lo"
-            - name: GLOO_SOCKET_IFNAME
-              value: "lo"
-            - name: NCCL_P2P_DISABLE
-              value: "1"
-            - name: NCCL_SHM_DISABLE
-              value: "1"
-            - name: TORCH_NCCL_ENABLE_MONITORING
-              value: "0"
-            - name: TORCH_NCCL_ASYNC_ERROR_HANDLING
-              value: "0"
           resources:
             limits:
               cpu: "16"

@@ -6,43 +6,43 @@ Deploying large language models (LLMs) on Kubernetes often incurs multi-minute c
 
 This guide demonstrates how to use **GKE Pod Snapshots** with **GKE Sandbox (gVisor)** to checkpoint and restore a **single-GPU** vLLM model server (e.g., an NVIDIA H100 80GB GPU serving `Qwen/Qwen3-32B`).
 
-### How It Works
-
 When launched with `python3 -m docker.scripts.snapshot.launcher`, the snapshot launcher orchestrates the checkpoint and restore lifecycle automatically:
 
-```mermaid
-flowchart LR
-    A["1. First Pod (Cold Start)<br/>Loads model, purges disk cache,<br/>creates Pod Snapshot in GCS"] --> B["2. Subsequent Pods (Fast Restore)<br/>Restores from GCS snapshot<br/>in seconds"]
-    B --> C["3. Serve Traffic<br/>Resumes GPU memory and<br/>serves inference requests"]
-```
-
-1. **First Pod (Cold Start & Snapshot Creation):** The initial replica loads the model weights (~64 GB for `Qwen/Qwen3-32B`), calls `engine.sleep(level=1)` to release physical GPU memory, purges the on-disk weight cache so the same bytes are not also captured from the container filesystem, and triggers a GKE Pod Snapshot uploaded to Google Cloud Storage (GCS).
+1. **First Pod (Cold Start & Snapshot Creation):** The initial replica loads the model weights (e.g. ~64 GB for `Qwen/Qwen3-32B`) and calls `engine.sleep(level=1)`, which releases physical GPU memory. It then purges the on-disk weight cache so the same bytes are not also captured from the container filesystem, and triggers a GKE Pod Snapshot uploaded to Google Cloud Storage (GCS).
 2. **Subsequent Pods (Fast Restoration):** When pods scale out or restart, GKE automatically restores the container from the GCS snapshot in seconds—bypassing model weight downloads and engine initialization.
 3. **Serve Traffic:** The restored pod immediately wakes up GPU memory and begins serving inference requests.
-
-> [!IMPORTANT]
-> **The snapshot is roughly the size of the model, not a few gigabytes.** `engine.sleep(level=1)` frees *device* memory by offloading weights to host RAM; it does not discard them. A whole-pod snapshot captures that host RAM, so the GCS artifact scales with the model's memory footprint rather than with the purged disk cache. Size the node's memory to hold the offloaded weights alongside the running process, and budget GCS storage and egress accordingly.
 
 ---
 
 ## Single-GPU Scope & Technical Caveats
 
-1. **Single-GPU / Single-Rank Scope:**
-   The snapshot launcher is designed for single-GPU / single-pod deployments (`nvidia.com/gpu: 1`). Multi-node / multi-rank distributed barrier coordination across pods during checkpointing is not supported.
-2. **Sleep Mode Must Be Enabled (`--enable-sleep-mode`):**
-   vLLM only routes weight allocations through `CuMemAllocator` when sleep mode is enabled at engine construction. Without this flag `engine.sleep(level=1)` still returns successfully but frees nothing, and the snapshot is taken with the GPU fully resident. This is a silent failure — confirm the sleep step reports a non-zero amount of freed GPU memory in the pod logs.
+1. **Single-Rank Scope (One GPU Per Pod):**
+   The launcher patches a single vLLM API server process, so each pod hosts exactly one rank (`nvidia.com/gpu: 1`, no tensor or data parallelism). Scaling out to multiple replicas is supported; pods snapshot and restore independently.
+2. **Sleep Mode (`--enable-sleep-mode`):**
+   Sleep mode is what makes vLLM route weight and KV cache allocations through `CuMemAllocator`. Without it `engine.sleep(level=1)` still returns successfully but frees nothing, so the checkpoint is taken with the GPU fully resident and the snapshot is correspondingly larger. Measured on Qwen3-32B, sleep moved 61.68 GiB of weights to host RAM and discarded 12.52 GiB of KV cache. Because the no-op is silent, confirm the pod logs report a non-zero `Sleep mode freed N GiB memory` before the checkpoint.
 3. **Eager Safetensors Loading (`--safetensors-load-strategy eager`):**
-   By default, `safetensors` uses `mmap` to memory-map weight files directly from disk. Because `MODEL_CACHE_DIR` is purged before the checkpoint is taken, memory-mapped file descriptors would become invalid. Passing `--safetensors-load-strategy eager` forces vLLM to copy weights directly into RAM so disk caches can be safely purged.
+   By default, `safetensors` uses `mmap` to memory-map weight files directly from disk. Because `MODEL_CACHE_DIR` is purged before the checkpoint is taken, those mappings would point at files that no longer exist. Passing `--safetensors-load-strategy eager` reads the weights into anonymous memory instead, which is what the snapshot captures.
 4. **Workload-Triggered Policy:**
-   The GKE `PodSnapshotPolicy` sets `spec.triggerConfig.type: workload` (with `postCheckpoint: resume`). If set to `manual`, GKE ignores container-initiated writes to `/proc/gvisor/checkpoint`.
+   The GKE `PodSnapshotPolicy` sets `spec.triggerConfig.type: workload` (with `postCheckpoint: resume`). If set to `manual`, the policy waits for a `PodSnapshotTrigger` resource instead, and the container's write to `/proc/gvisor/checkpoint` does nothing.
 5. **Restores Are Environment-Specific:**
-   GKE will only restore a snapshot onto a node matching the one that produced it — same machine series and CPU architecture, same GPU driver version, and same gVisor kernel version — and only for a pod whose distilled spec hash is unchanged. Upgrading a node pool or editing the container image, command, args, or environment variables invalidates existing snapshots, and the next pod silently cold-starts instead.
+   Upgrading a node pool, or editing the container image, command, or args, invalidates existing snapshots: the pod no longer matches, so it silently cold-starts and writes a new one. Environment variables are **not** part of the match — editing one leaves the snapshot valid, and a restored pod keeps the environment captured at checkpoint time rather than the one in its spec. Delete the `PodSnapshot` to force a fresh capture. See [How GKE Matches Pods to Snapshots](#how-gke-matches-pods-to-snapshots).
 6. **gVisor Localhost Isolation:**
-   Inside gVisor sandboxes, direct `kubectl port-forward pod/<pod-name>` does not route to `localhost` inside the sandbox due to network stack isolation. Connectivity should be tested via a Kubernetes `Service` or an in-cluster test pod.
+   Inside gVisor sandboxes, `kubectl port-forward pod/<pod-name>` reports a healthy tunnel and then fails on first request with `connection refused` — it dials `localhost` inside the sandbox's network namespace, which is not routed. Test connectivity via a Kubernetes `Service` or an in-cluster test pod.
 7. **Hierarchical Namespace GCS Buckets:**
-   GKE Pod Snapshots require a GCS bucket created with hierarchical namespace enabled (`--enable-hierarchical-namespace`).
+   The snapshot bucket must be created with `--enable-hierarchical-namespace`. Hierarchical namespace cannot be turned on after the fact, so an existing flat bucket cannot be reused.
 8. **Cloud Storage FUSE CSI Driver Is Unsupported:**
    Pods using the Cloud Storage FUSE CSI sidecar cannot be snapshotted. Model weights must be downloaded to the container filesystem, as this guide does, rather than mounted from a bucket.
+9. **Snapshots Are Model-Sized:**
+   `engine.sleep(level=1)` offloads weights to host RAM rather than discarding them, and a whole-pod snapshot captures that RAM — so the artifact is roughly the model's VRAM footprint, not a few gigabytes. Purging `MODEL_CACHE_DIR` only stops those bytes being captured twice. Size node memory for the offloaded weights alongside the running process, budget GCS storage accordingly, and expect the checkpoint freeze to scale with size — see [Benchmarking Reports](#benchmarking-reports).
+
+> [!WARNING]
+> **A snapshot is a memory image of the pod, so it contains every secret the process holds.**
+> `HF_TOKEN` is the obvious one — it is in the process environment when the checkpoint fires, so it
+> is written into `pages.img` and survives into every restored pod. Anything else the container has
+> in memory is captured the same way. Treat the snapshot bucket as exactly as sensitive as the pod
+> itself: restrict it to the workload's own principal as the IAM step below does, prefer short-lived
+> credentials for gated models, and remember that rotating a Kubernetes Secret does **not** change
+> the value baked into an existing snapshot.
 
 ---
 
@@ -60,24 +60,7 @@ These are **container** environment variables read by [`docker/scripts/snapshot`
 > [!NOTE]
 > `SNAPSHOT_PROVIDER` is fixed per overlay rather than templated, because it must agree with the manifests deployed alongside it — the `gke/` overlay applies `podsnapshot.gke.io` resources that only the `gke_gvisor` provider acts on. Support for an additional backend would be added as a sibling overlay directory.
 
-### gVisor & NCCL Compatibility Settings
-
-Inside gVisor sandboxes, certain hardware and kernel primitives (P2P GPU memory access, host-level POSIX shared memory, external network probing) are restricted. The deployment overlay injects the following environment variables, most of them carried over from the reference pod this guide was derived from:
-
-| Variable | Value | Purpose |
-| :--- | :---: | :--- |
-| `NCCL_P2P_DISABLE` | `1` | Disables GPU peer-to-peer communication, which is unsupported in gVisor. |
-| `NCCL_SHM_DISABLE` | `1` | Disables host POSIX shared memory transport for NCCL to avoid sandbox permission errors. |
-| `NCCL_SOCKET_IFNAME` | `lo` | Binds NCCL communication to the local loopback interface. |
-| `GLOO_SOCKET_IFNAME` | `lo` | Binds Gloo communication to the local loopback interface. |
-| `VLLM_HOST_IP` | `127.0.0.1` | Keeps vLLM from probing external interfaces to discover its own address. |
-| `MASTER_ADDR` / `MASTER_PORT` | `127.0.0.1` / `29500` | Torch distributed rendezvous address for the single rank. |
-| `TORCH_NCCL_ENABLE_MONITORING` | `0` | Asks PyTorch to skip its NCCL watchdog threads, which could otherwise fire while the sandbox is frozen. |
-| `TORCH_NCCL_ASYNC_ERROR_HANDLING` | `0` | Disables asynchronous error handling threads during checkpointing. |
-| `NCCL_TUNER_PLUGIN` / `NCCL_NET_PLUGIN` | `none` / `""` | Disables GKE's injected NCCL plugins, applied by the shared `disable-gke-nccl-tuner-patch` component as in the other GKE overlays. |
-
-> [!NOTE]
-> Several of these are inert in this single-GPU configuration and are kept only for parity with the known-good reference pod. At `world_size=1` vLLM selects its own rendezvous port rather than honoring `MASTER_PORT`, the `NCCL_P2P`/`SHM_DISABLE` flags gate transports a single rank never establishes, and the PyTorch NCCL watchdog threads were observed to start regardless of `TORCH_NCCL_ENABLE_MONITORING`. Revisit once a snapshot completes successfully and there is a passing baseline to compare against.
+The overlay also sets `VLLM_HOST_IP=127.0.0.1`, which pins the `torch.distributed` TCPStore to loopback; a store bound to the pod IP does not survive the checkpoint, and every restored pod then logs a `Broken pipe` warning once per second.
 
 ---
 
@@ -90,10 +73,10 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
 > [!NOTE]
 > Replace `<PROJECT_ID>`, `<REGION>`, `<ZONE>`, `<CLUSTER_NAME>`, `<NODE_POOL_NAME>`, `<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<DISK_SIZE>`, `<GCS_BUCKET>`, and `<NAMESPACE>` (default: `llm-d-gke-pod-snapshots`) below to match your target environment:
 >
-> - **GPU Machine Family & Accelerator (`<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`):** See [Choose a GPU machine type on GKE](https://cloud.google.com/kubernetes-engine/docs/concepts/gpus#gpu_machine_types) and [GPU availability by region and zone](https://cloud.google.com/compute/docs/gpus/gpu-regions-zones) (for example, `--machine-type=a3-highgpu-1g` with `--accelerator=type=nvidia-h100-80gb,count=1,gpu-driver-version=latest` for `Qwen/Qwen3-32B`).
-> - **Node Locations (`<ZONE>`):** GPU machine types are typically available in only a subset of a region's zones, and `--num-nodes` is applied *per zone* on a regional node pool. Pinning the pool to a single zone with `--node-locations` avoids failures in zones that lack the machine type and keeps this single-GPU guide at exactly one GPU node. Confirm your choice with `gcloud compute machine-types list --filter="name=<GPU_MACHINE_TYPE> AND zone~<REGION>" --format="value(zone)"`.
-> - **Boot Disk Size (`<DISK_SIZE>`):** The node's boot disk must accommodate the container image, temporary model weights downloaded to disk during cold start (before `MODEL_CACHE_DIR` is purged), and local snapshot staging files prior to GCS upload (for example, `200GB`). See [GKE Custom Boot Disks](https://cloud.google.com/kubernetes-engine/docs/how-to/custom-boot-disks) and [GKE Pod Snapshots node pool requirements](https://cloud.google.com/kubernetes-engine/docs/how-to/pod-snapshots#create-node-pool).
-> - **Default Node Pool:** The router's endpoint picker runs its EPP and Envoy sidecar containers in one pod, requesting **8 vCPU and 16 GiB in total**. GKE's default `e2-medium` pool cannot fit that, and the pod sits `Pending` forever with no error on the deploy command. The cluster below therefore requests a pool that can hold it.
+> - **GPU Machine Family & Accelerator (`<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`):** See [Choose a GPU machine type on GKE](https://cloud.google.com/kubernetes-engine/docs/concepts/gpus#gpu_machine_types) and [GPU availability by region and zone](https://cloud.google.com/compute/docs/gpus/gpu-regions-zones) — for example `--machine-type=a3-highgpu-1g` with `--accelerator=type=nvidia-h100-80gb,count=1,gpu-driver-version=latest`.
+> - **Node Locations (`<ZONE>`):** `--num-nodes` applies *per zone* on a regional node pool, so pinning to one zone with `--node-locations` keeps this single-GPU guide at exactly one GPU node — and avoids zones that lack your machine type.
+> - **Boot Disk Size (`<DISK_SIZE>`):** The boot disk holds the container image, the model weights downloaded during cold start, and local snapshot staging files before they are uploaded to GCS (for example, `200GB`). See [node pool requirements](https://cloud.google.com/kubernetes-engine/docs/how-to/pod-snapshots#create-node-pool).
+> - **Default Node Pool:** The cluster below uses `e2-standard-16` because the router's endpoint picker pod requests 8 vCPU and 16 GiB, which the default `e2-medium` cannot fit — the pod would sit `Pending` with no error.
 
 1. **Create a GKE Cluster with Pod Snapshots & Workload Identity:**
 
@@ -153,16 +136,6 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
      --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/gke-pod-snapshots-nvidia-gpu-vllm-sa" \
      --role="projects/<PROJECT_ID>/roles/podSnapshotGcsReadWriter"
    ```
-
-> [!IMPORTANT]
-> Omitting the `principal://` binding above is the most common cause of a failed
-> checkpoint. The symptom is unhelpful: the `PodSnapshot` reports
-> `runsc error: exit status 128` and the model server logs
-> `gVisor checkpoint returned unexpected status: b'e'`. The underlying error is
-> only visible in the sandbox log on the node
-> (`/var/log/runsc/runsc.log.*.boot.txt`):
-> `403 ... Permission 'storage.objects.create' denied on resource
-> '//storage.googleapis.com/.../pages.img'`.
 
 ### Checkout Repo & Setups
 
@@ -252,7 +225,7 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 ```
 <!-- guide:deploy.router_values end -->
 
-- **Option A: Standalone Router**
+- Install the router (standalone mode — the EPP and its Envoy sidecar run in one pod behind a `ClusterIP` Service, with no Kubernetes Gateway required):
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -264,7 +237,14 @@ helm install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-- **Option B: Gateway API Router**
+<details>
+<summary><b>Gateway Mode</b></summary>
+
+To route through a Kubernetes Gateway managed proxy instead of the standalone Envoy sidecar, do **not** install the standalone chart above. Instead:
+
+1. **Install the Gateway API CRDs and deploy a Gateway.** The [Prerequisites](#prerequisites) install only the Gateway API Inference Extension CRDs, which do not include `gateway.networking.k8s.io`. See [the gateway guides](../../docs/infrastructure/gateway) for both, and deploy a Gateway named `llm-d-inference-gateway`.
+
+2. **Install the router and its `HTTPRoute`:**
 
 <!-- guide:deploy.gateway start -->
 ```bash
@@ -278,6 +258,8 @@ helm install ${GUIDE_NAME} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.gateway end -->
+
+</details>
 
 ### 2. Deploy the Single-GPU Model Server & Snapshot Policies
 
@@ -297,8 +279,8 @@ kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
 
 With policy-based snapshotting (`PodSnapshotPolicy`), GKE transparently matches restored pods to the correct snapshot without needing hardcoded snapshot IDs:
 
-1. **Distilled Pod Spec Hash:** GKE computes a hash over runtime-critical pod fields (container image, commands, arguments, environment variables, and sandbox settings).
-2. **Node Compatibility Metadata:** GKE captures essential node metadata (node machine type, GPU accelerator type, and driver version).
+1. **Distilled Pod Spec Hash:** GKE computes a hash over runtime-critical pod fields (container image, commands, arguments, and sandbox settings). Environment variables are not included: changing one does not invalidate a snapshot, and the restored process keeps the environment it was captured with.
+2. **Node Compatibility Metadata:** GKE labels the snapshot with the node's machine family and type, GPU model, GPU driver version, and GKE node version.
 3. **Lookup & Restoration:** When a new replica is scheduled (or a pod is recreated), GKE matches the pod's distilled hash and node metadata to the most recent matching `PodSnapshot` in the cluster and restores directly from GCS.
 
 ---
@@ -312,6 +294,7 @@ Wait for the initial cold start to complete and check the `PodSnapshot` status:
 <!-- guide:verify.tests.snapshot start -->
 ```bash
 kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=2400s
+kubectl wait --for=condition=Ready podsnapshots --all -n ${NAMESPACE} --timeout=600s
 kubectl get podsnapshots -n ${NAMESPACE}
 ```
 <!-- guide:verify.tests.snapshot end -->
@@ -321,6 +304,14 @@ Status progression:
 1. `AwaitingCheckpoint`: GKE signaled gVisor to freeze the container runtime.
 2. `AllSnapshotsAvailable`: Snapshot files have been uploaded to GCS and are ready for restoration.
 
+> [!IMPORTANT]
+> **The pod appears hung for the entire upload, and that is normal.** It sits at `0/1 Running`
+> with its startup probe failing and no log output while gVisor freezes the sandbox — ~14 minutes
+> for `Qwen/Qwen3-32B` on an H100 (see [Benchmarking Reports](#benchmarking-reports)); raise
+> `--timeout` for substantially larger models. Bucket size is not a progress signal either:
+> `pages.img` is written in one step at the very end, so a flat bucket looks identical whether
+> the checkpoint is healthy or stuck. Wait for the `PodSnapshot` conditions.
+
 ### 2. Test Pod Restoration & Verify Restore Logs
 
 Delete the running pod so the Deployment schedules a replacement replica that restores directly from the snapshot:
@@ -329,25 +320,31 @@ Delete the running pod so the Deployment schedules a replacement replica that re
 ```bash
 kubectl delete pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}
 kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
+kubectl get events -n ${NAMESPACE} --field-selector reason=GKEPodSnapshotting --sort-by=.lastTimestamp
 kubectl logs -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --tail=20
 ```
 <!-- guide:verify.tests.restore end -->
 
-A restored pod wakes the engine instead of reloading weights, producing log lines of roughly this shape:
+GKE records the restore against the pod, which is the authoritative signal — it names the exact `PodSnapshot` that was used:
 
 ```text
-(APIServer pid=1) [vllm.snapshot.wrapper] INFO: Process restored from snapshot checkpoint. Resuming engine...
+LAST SEEN   TYPE     REASON               OBJECT                     MESSAGE
+58s         Normal   GKEPodSnapshotting   pod/<pod-name>             Successfully restored the pod from PodSnapshot <namespace>/<snapshot-id>
+```
+
+Events from earlier pods stay listed until they age out, so check the most recent row — that is why the command sorts by timestamp. Kubernetes retains events for one hour by default, so run this soon after the restore.
+
+The pod logs corroborate it: a restored pod wakes the engine instead of reloading weights.
+
+```text
 (APIServer pid=1) [vllm.snapshot.wrapper] INFO: Executing engine.wake_up() to restore VRAM...
 (EngineCore pid=NN) INFO: It took N seconds to wake up tags {'kv_cache', 'weights'}.
 (APIServer pid=1) INFO: Application startup complete.
 ```
 
-> [!NOTE]
-> The `Process restored from snapshot checkpoint` line is emitted unconditionally by the wrapper, including when the checkpoint failed, so it is not on its own evidence of a successful restore. The `wake up tags` line and the absence of weight-download output are the signals that the pod came back from a snapshot rather than cold-starting.
-
 ### 3. Verify Inference Endpoint
 
-- Resolve the router endpoint IP for **Standalone**:
+- Resolve the router endpoint IP. The standalone Service is a `ClusterIP`, so it is reachable only from inside the cluster — hence the in-cluster test pod below:
 
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
@@ -355,13 +352,16 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 ```
 <!-- guide:verify.endpoint.standalone end -->
 
-- Or resolve the router endpoint IP for **Gateway**:
+<details>
+<summary><b>Gateway Mode</b></summary>
 
 <!-- guide:verify.endpoint.gateway start -->
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
 <!-- guide:verify.endpoint.gateway end -->
+
+</details>
 
 - Send a test inference request:
 
@@ -380,7 +380,7 @@ kubectl run curl-test --rm -i --restart=Never \
 
 ## Cleanup
 
-Uninstall the router, delete all `PodSnapshot` resources (so GKE's snapshot controller deletes the binary files from GCS while the storage config still exists), remove the model server deployment, and delete the namespace:
+Uninstall the router, delete the `PodSnapshot` resources, remove the model server, and delete the namespace:
 
 <!-- guide:cleanup start -->
 ```bash
@@ -395,5 +395,18 @@ kubectl delete namespace ${NAMESPACE}
 ```
 <!-- guide:cleanup end -->
 
+This leaves the cluster, GPU node pool, and GCS bucket in place — delete them separately when you are finished, as the accelerator node pool bills for as long as it exists.
+
 > [!NOTE]
-> Deleting `PodSnapshot` custom resources before deleting `PodSnapshotStorageConfig` ensures GKE's snapshot controller can asynchronously delete the corresponding binary snapshot files from your GCS bucket. If `PodSnapshot` resources remain stuck in a `Terminating` state, ensure the GKE Service Agent (`service-<PROJECT_NUMBER>@container-engine-robot.iam.gserviceaccount.com`) has been granted `roles/storage.objectUser` on your GCS bucket as described in [Prerequisites](#prerequisites) (see [Grant Controller Permissions](https://cloud.google.com/kubernetes-engine/docs/how-to/pod-snapshots#grant-controller-permissions)).
+> The ordering matters: `PodSnapshot` resources must be deleted while `PodSnapshotStorageConfig` still exists, or the snapshot data is orphaned in GCS and keeps billing. If they hang in `Terminating`, check that the GKE Service Agent (`service-<PROJECT_NUMBER>@container-engine-robot.iam.gserviceaccount.com`) still holds `roles/storage.objectUser` on the bucket — see [Prerequisites](#prerequisites).
+
+---
+
+## Benchmarking Reports
+
+This guide is hardware-neutral. The report below measures one full cycle — cold start, checkpoint, and restore — on a single accelerator:
+
+- **[Qwen/Qwen3-32B on vLLM (1×H100 Snapshot & Restore)](./benchmark-results/vllm-qwen3-32b-h100.md)**: Compares cold start against restore-from-snapshot, and reports the throughput of the checkpoint and restore paths.
+
+> [!NOTE]
+> These reports are measured from pod lifecycle timings rather than with [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark), which drives request-level workloads. The metric this guide improves is startup latency; steady-state serving performance after a restore is unchanged from a normal vLLM deployment.
