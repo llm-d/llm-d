@@ -1,0 +1,32 @@
+# DRA resource claims: one Intel XPU for the encode pool, one for the generator
+# pool. Bump the generator `count` (and the stage config's tensor_parallel_size)
+# for the Wan2.2 A14B MoE variants; encode (UMT5 only) stays at 1.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: xpu-encode-claim
+  labels:
+    llm-d.ai/role: encode
+spec:
+  spec:
+    devices:
+      requests:
+        - name: intel
+          exactly:
+            deviceClassName: gpu.intel.com
+            count: 1
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: xpu-generator-claim
+  labels:
+    llm-d.ai/role: generator
+spec:
+  spec:
+    devices:
+      requests:
+        - name: intel
+          exactly:
+            deviceClassName: gpu.intel.com
+            count: 1
