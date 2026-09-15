@@ -19,7 +19,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: coordinator
-        image: ghcr.io/llm-d/llm-d-router-coordinator:nightly
+        image: ghcr.io/llm-d/llm-d-router-coordinator:main
         imagePullPolicy: IfNotPresent
         args:
         - --config
