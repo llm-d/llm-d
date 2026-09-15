@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["python", "-m", "atom.entrypoints.openai_server"]
+          args:
+            - "--model=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--server-port=8000"
+            - "--tensor-parallel-size=8"
+            - "--kv_cache_dtype=fp8"
+            - "--gpu-memory-utilization=0.9"
+            - "--enable_prefix_caching"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: AITER_LOG_LEVEL
+              value: "WARNING"
+          resources:
+            limits:
+              cpu: "64"
+              memory: 160Gi
+              amd.com/gpu: 8
+            requests:
+              cpu: "32"
+              memory: 128Gi
+              amd.com/gpu: 8
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+          startupProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 40Gi
