@@ -1,0 +1,3 @@
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+  value: Always
