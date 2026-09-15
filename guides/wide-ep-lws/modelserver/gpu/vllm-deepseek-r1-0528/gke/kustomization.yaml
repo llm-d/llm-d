@@ -175,3 +175,17 @@ patches:
           hostPath:
             path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-jit-cache/
             type: DirectoryOrCreate
+      # DeepEP v2 uses NCCL for inter-node expert communication. On GKE A3 Ultra
+      # nodes, force NCCL to use Google's gIB GPUDirect RDMA network backend.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NCCL_NET
+          value: "gIB"
+      # Mount GKE's host-provided gIB/NVIDIA libraries and source set_nccl_env.sh so
+      # NCCL can discover and initialize the A3 Ultra GPUDirect RDMA environment.
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: BASH_ENV
+          value: /usr/local/gib/scripts/set_nccl_env.sh
