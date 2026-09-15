@@ -38,6 +38,7 @@ spec:
             - "--disaggregation-mode=prefill"
             - "--disaggregation-transfer-backend=nixl"
             - "--tensor-parallel-size=4"
+            - "--page-size=64"
             - "--log-level=info"
             - "--enable-metrics"
             - "--uvicorn-access-log-exclude-prefixes=/metrics"
