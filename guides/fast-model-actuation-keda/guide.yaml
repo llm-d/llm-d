@@ -106,25 +106,47 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
-  # AND the server-requesting pods together.
+  # AND the server-requesting pods together, at 1 replica -- NOT 0. The queue metric
+  # KEDA scales on is not emitted until the EPP has a ready backend, so starting at 0
+  # leaves KEDA nothing to read. Step 6 scales this to 0 instead.
   modelserver:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
-  # KEDA scale-from-zero autoscaling of the requester Deployment. Apply the OCP
-  # KEDA overlay -- the ScaledObject, its TriggerAuthentication, and the shared
-  # metrics-reader ServiceAccount + token -- into ${NAMESPACE}, then confirm the
-  # ScaledObject reconciled Ready. KEDA then creates the HPA and owns the replica
-  # count, scaling fma-requester to 0 when the flow-control queue is empty and
-  # back up on the next queued request.
+  # KEDA scale-from-zero autoscaling of the requester Deployment. The OCP overlay
+  # carries the ScaledObject, its TriggerAuthentication, and the metrics-reader
+  # ServiceAccount + token. Once Ready, KEDA owns the replica count.
   keda:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
 
         kubectl wait --for=condition=Ready --timeout=120s \
-          scaledobject/fast-model-actuation-keda-queue -n ${NAMESPACE}
+          scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
+    # The EPP registers the flow-control series on the first request through it, so
+    # send a few (best-effort, in-cluster) to give KEDA a series to read.
+    - run: |
+        kubectl run keda-epp-warmup -n ${NAMESPACE} --rm -i --quiet \
+          --image=${CURL_TEST_IMAGE} --restart=Never \
+          --env="URL=http://${GUIDE_NAME}-epp/v1/completions" \
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c '
+            for i in 1 2 3; do
+              curl -sS --max-time 60 -o /dev/null -w "  warmup ${i}: HTTP %{http_code}\n" \
+                -X POST "${URL}" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"warmup\", \"max_tokens\": 1}" || true
+              sleep 2
+            done' || true
+
+    # Reaching 0 is what proves the metric pipeline works -- Ready only means KEDA
+    # accepted the trigger. Budget covers cooldownPeriod + the HPA's scaleDown
+    # stabilization window (30s each) plus polling slack.
+    - run: |
+        kubectl wait --for=jsonpath='{.spec.replicas}'=0 \
+          deployment/fma-requester -n ${NAMESPACE} --timeout=240s
+
+        kubectl get deployment/fma-requester -n ${NAMESPACE}
 
 verify:
   endpoint:
@@ -132,7 +154,12 @@ verify:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
     request:
-      # Baseline sanity check.
+      # Scale-from-zero check: the pool is at 0, so this request is the demand
+      # signal. EPP holds it in the flow-control queue while KEDA activates,
+      # scales 0->1, and FMA brings vLLM up, then serves it -- so one request
+      # with a long --max-time blocks through the whole transition. No retry loop.
+      # Warm start, not hot: nothing is sleeping yet on a fresh deploy, so the
+      # launcher creates a new instance. Hot start needs a prior scale-down.
       - run: |
           kubectl run curl-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
@@ -142,17 +169,15 @@ verify:
             --env="MODEL=${MODEL}" \
             -- /bin/sh -c '
               set -e
-              i=0
-              while [ $i -lt 12 ]; do
-                code=$(curl -s -o /tmp/b -w "%{http_code}" --max-time 90 \
-                  -X POST "http://${IP}/v1/completions" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}" || echo 000)
-                echo "attempt ${i}: HTTP ${code}"
-                if [ "${code}" = "200" ]; then cat /tmp/b; echo; jq -e ".choices[0].text | length > 0" /tmp/b >/dev/null; exit 0; fi
-                i=$((i+1)); sleep 15
-              done
-              echo "no 200 after retries"; cat /tmp/b 2>/dev/null || true; exit 1'
+              code=$(curl -sS -o /tmp/body -w "%{http_code}" --max-time 600 \
+                -X POST "http://${IP}/v1/completions" \
+                -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"The capital of France is,\", \"max_tokens\": 10}")
+              echo "HTTP ${code}"
+              jq . /tmp/body || cat /tmp/body
+              [ "${code}" = "200" ] || { echo "expected HTTP 200, got ${code}" >&2; exit 1; }
+              jq -e ".choices[0].text | length > 0" /tmp/body >/dev/null \
+                || { echo "no completion text in response" >&2; exit 1; }'
 
 benchmark:
   setup:
