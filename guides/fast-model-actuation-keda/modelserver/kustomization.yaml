@@ -19,9 +19,9 @@ patches:
             llm-d.ai/guide: "fast-model-actuation-keda"
   # Start at 1 replica, the ScaledObject floor at standup -- NOT 0. The EPP emits
   # llm_d_epp_flow_control_queue_size only once it has a ready backend endpoint.
-  # Otherwise the series does not exist, and KEDA queries an empty result: with
-  # ignoreNullValues defaulting to true it suppresses the error and serves its
-  # fallback, so the ScaledObject reports Ready=True while autoscaling is dead.
+  # Otherwise the series does not exist and KEDA's query returns empty, which the
+  # Prometheus scaler reads as 0 rather than an error (ignoreNullValues defaults to
+  # true), so the pool has no way to leave zero.
   #
   # KEDA scales this to 0 after cooldownPeriod once idle; the verification step
   # waits for that, then exercises scale-from-zero.

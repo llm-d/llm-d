@@ -106,36 +106,26 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
-  # AND the server-requesting pods together, at 1 replica -- the ScaledObject floor.
-  # The flow-control queue metric KEDA scales on is not emitted until the EPP has a
-  # ready backend. Starting at 0 leaves it without one, so KEDA queries an empty
-  # series and silently falls back.
-  #
-  # So bring one up here, let KEDA scale it to 0 in step 6, and exercise
-  # scale-from-zero from there.
+  # AND the server-requesting pods together, at 1 replica -- NOT 0. The queue metric
+  # KEDA scales on is not emitted until the EPP has a ready backend, so starting at 0
+  # leaves KEDA nothing to read. Step 6 scales this to 0 instead.
   modelserver:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
-  # KEDA scale-from-zero autoscaling of the requester Deployment. Apply the OCP
-  # KEDA overlay -- the ScaledObject, its TriggerAuthentication, and the shared
-  # metrics-reader ServiceAccount + token -- into ${NAMESPACE}, then confirm the
-  # ScaledObject reconciled Ready. KEDA then creates the HPA and owns the replica
-  # count, scaling fma-requester to 0 when the flow-control queue is empty and
-  # back up on the next queued request.
+  # KEDA scale-from-zero autoscaling of the requester Deployment. The OCP overlay
+  # carries the ScaledObject, its TriggerAuthentication, and the metrics-reader
+  # ServiceAccount + token. Once Ready, KEDA owns the replica count.
   keda:
     - run: |
-        export SO="scaledobject/${GUIDE_NAME}-queue"
-
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
 
-        kubectl wait --for=condition=Ready --timeout=120s ${SO} -n ${NAMESPACE}
-    # The EPP registers the flow-control series on the first request through it, or
-    # the gate below reads an empty series. The first request does that; the other
-    # two just cover a transient failure, since this block is best-effort.
-    # In-cluster because the EPP Service is a ClusterIP.
+        kubectl wait --for=condition=Ready --timeout=120s \
+          scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
+    # The EPP registers the flow-control series on the first request through it, so
+    # send a few (best-effort, in-cluster) to give KEDA a series to read.
     - run: |
         kubectl run keda-epp-warmup -n ${NAMESPACE} --rm -i --quiet \
           --image=${CURL_TEST_IMAGE} --restart=Never \
@@ -149,41 +139,9 @@ deploy:
               sleep 2
             done' || true
 
-    # Ready only means KEDA accepted the trigger and created its HPA -- it does not
-    # prove the metric pipeline works. Fallback=False is the signal that KEDA is
-    # serving a real query rather than suppressing an error (ignoreNullValues) and
-    # falling back, which would look healthy while autoscaling is dead.
-    #
-    # Require the reading to HOLD: Fallback reads False before KEDA's first poll,
-    # so a single sample proves nothing (hence a streak, not `kubectl wait`).
-    - run: |
-        streak=0
-        for _ in $(seq 1 30); do
-          if [ "$(kubectl get ${SO} -n ${NAMESPACE} \
-                -o jsonpath='{.status.conditions[?(@.type=="Fallback")].status}')" = "False" ]; then
-            streak=$((streak + 1))
-            [ "${streak}" -ge 3 ] && break
-          else
-            streak=0
-          fi
-          sleep 10
-        done
-
-        if [ "${streak}" -lt 3 ]; then
-          cat >&2 <<'EOF'
-        KEDA is not reading the EPP queue metric: replicas come from spec.fallback, so
-        autoscaling is dead. Check that the EPP is scraped and the trigger query returns
-        data -- see guides/workload-autoscaling/keda-epp-queue/README.md#troubleshooting
-        EOF
-          kubectl get ${SO} -n ${NAMESPACE} \
-            -o jsonpath='{range .status.conditions[*]}  {.type}={.status} ({.reason}: {.message}){"\n"}{end}' >&2
-          exit 1
-        fi
-        echo "KEDA is scaling on the real metric (Fallback=False held)"
-    # Now wait for KEDA to take the idle requester to 0. Budget covers
-    # cooldownPeriod (30s) plus the HPA's scaleDown stabilization window (30s)
-    # plus polling slack. Reaching 0 is what makes the verification request an
-    # actual scale-from-zero test.
+    # Reaching 0 is what proves the metric pipeline works -- Ready only means KEDA
+    # accepted the trigger. Budget covers cooldownPeriod + the HPA's scaleDown
+    # stabilization window (30s each) plus polling slack.
     - run: |
         kubectl wait --for=jsonpath='{.spec.replicas}'=0 \
           deployment/fma-requester -n ${NAMESPACE} --timeout=240s

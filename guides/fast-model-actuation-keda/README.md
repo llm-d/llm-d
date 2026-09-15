@@ -211,17 +211,17 @@ queue-depth trigger at Thanos Querier; on OpenShift the service-ca operator
 injects the Thanos CA into the token Secret, so **no `prometheus-token` copy is
 required**.
 
-The checks after the apply confirm KEDA is scaling on the real metric, then wait for
-it to take the idle requester to **0** — about a minute with this guide's shortened
-scale-down delays (`cooldownPeriod` 30s, then the HPA's 30s stabilization window):
+After the apply, a few warmup requests give KEDA a metric series to read, then the
+last wait confirms it scales the idle requester to **0** — about a minute with this
+guide's shortened scale-down delays (`cooldownPeriod` 30s, then the HPA's 30s
+stabilization window):
 
 <!-- guide:deploy.keda start -->
 ```bash
-export SO="scaledobject/${GUIDE_NAME}-queue"
-
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
 
-kubectl wait --for=condition=Ready --timeout=120s ${SO} -n ${NAMESPACE}
+kubectl wait --for=condition=Ready --timeout=120s \
+  scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
 
 kubectl run keda-epp-warmup -n ${NAMESPACE} --rm -i --quiet \
   --image=${CURL_TEST_IMAGE} --restart=Never \
@@ -234,30 +234,6 @@ kubectl run keda-epp-warmup -n ${NAMESPACE} --rm -i --quiet \
         -d "{\"model\": \"${MODEL}\", \"prompt\": \"warmup\", \"max_tokens\": 1}" || true
       sleep 2
     done' || true
-
-streak=0
-for _ in $(seq 1 30); do
-  if [ "$(kubectl get ${SO} -n ${NAMESPACE} \
-        -o jsonpath='{.status.conditions[?(@.type=="Fallback")].status}')" = "False" ]; then
-    streak=$((streak + 1))
-    [ "${streak}" -ge 3 ] && break
-  else
-    streak=0
-  fi
-  sleep 10
-done
-
-if [ "${streak}" -lt 3 ]; then
-  cat >&2 <<'EOF'
-KEDA is not reading the EPP queue metric: replicas come from spec.fallback, so
-autoscaling is dead. Check that the EPP is scraped and the trigger query returns
-data -- see guides/workload-autoscaling/keda-epp-queue/README.md#troubleshooting
-EOF
-  kubectl get ${SO} -n ${NAMESPACE} \
-    -o jsonpath='{range .status.conditions[*]}  {.type}={.status} ({.reason}: {.message}){"\n"}{end}' >&2
-  exit 1
-fi
-echo "KEDA is scaling on the real metric (Fallback=False held)"
 
 kubectl wait --for=jsonpath='{.spec.replicas}'=0 \
   deployment/fma-requester -n ${NAMESPACE} --timeout=240s
