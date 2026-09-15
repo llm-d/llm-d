@@ -3,7 +3,7 @@
 ## Overview
 
 This guide deploys [GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8) (753B MoE) on H200
-GPUs using P/D-disaggregated LeaderWorkerSets with NIXL for KV transfer. Prefill runs
+GPUs using a P/D-disaggregated DisaggregatedSet with NIXL for KV transfer. Prefill runs
 DEP8 (TP=1, DP=8) on 1 node; decode runs DEP16 (TP=1, DP=16) across 2 nodes (wide EP).
 DeepEP high-throughput all-to-all for prefill, low-latency for decode.
 
@@ -12,7 +12,7 @@ MTP speculative decoding is on by default (3 tokens).
 
 Tested on CoreWeave (CKS) with InfiniBand networking. This recipe reuses the
 [wide-ep-lws guide](../../../README.md) for the router/gateway and shared prerequisites
-(namespace, HF token secret, LeaderWorkerSet controller).
+(namespace, HF token secret, LeaderWorkerSet controller with DisaggregatedSet enabled).
 
 ## Default Configuration
 
@@ -64,7 +64,7 @@ to a deployment's `kustomization.yaml` under `components:`.
 | `offloading-cpu` | prefill only | CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
 
-K8s takes the last duplicate env var, so appended values override the base defaults.
+Component env entries merge by name, so their values replace the base defaults.
 
 ## Prerequisites
 
@@ -160,24 +160,21 @@ components:
   - ../../../../components/offloading-tiered
 patches:
   - target:
-      kind: LeaderWorkerSet
-      name: ".*-prefill"
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
     patch: |-
+      # Roles are ordered [prefill, decode] in the base DisaggregatedSet.
       - op: replace
-        path: /spec/replicas
+        path: /spec/roles/0/spec/replicas
         value: 1
       - op: replace
-        path: /spec/leaderWorkerTemplate/size
-        value: 1
-  - target:
-      kind: LeaderWorkerSet
-      name: ".*-decode"
-    patch: |-
-      - op: replace
-        path: /spec/replicas
+        path: /spec/roles/0/spec/leaderWorkerTemplate/size
         value: 1
       - op: replace
-        path: /spec/leaderWorkerTemplate/size
+        path: /spec/roles/1/spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/size
         value: 1
 ```
 
