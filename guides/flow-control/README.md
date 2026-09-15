@@ -65,6 +65,8 @@ By default, the EPP uses a `global-strict` policy. Because the system is **work-
 
 Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-hardware-backends). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
 
+The steps below default to NVIDIA GPU. See the "Intel XPU" details under [Deploy the Model Server](#2-deploy-the-model-server) for the one other backend with a documented, dynamically-rendered path today; other accelerators listed in the Optimized Baseline guide can be substituted the same way (swap the kustomize path in that step and, where the target overlay's model or replica count differs from the [Default Configuration](#default-configuration) table above, adjust the benchmarking/verification steps accordingly).
+
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
@@ -196,6 +198,21 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 <!-- guide:deploy.modelserver end -->
+
+<details>
+<summary><h4>Intel XPU</h4></summary>
+
+Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Arc Pro B60 per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-GPU-per-pod, so it does not carry the GPU path's 8-replica / TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above and the benchmarking/verification steps do not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead.
+
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+
+Cleanup uses the same substitution as [Cleanup](#cleanup) below, with `modelserver/xpu/vllm/` in place of `modelserver/gpu/vllm/${INFRA_PROVIDER}/` (no `INFRA_PROVIDER` split exists for this overlay).
+
+</details>
 
 ### 3. Enable monitoring (optional)
 
@@ -626,6 +643,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
 
 # INFRA_PROVIDER must match the value used at deploy time
+# (deployed Intel XPU instead? use modelserver/xpu/vllm/, no INFRA_PROVIDER, in the line below)
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f -
