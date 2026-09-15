@@ -119,6 +119,21 @@ runs it against two live pods and prints the recommended value.
 
 * NVIDIA GPU / vLLM. Measured on H200; any CUDA GPU with enough HBM for
   the model works.
+* Intel XPU / vLLM (`modelserver/xpu/vllm/base/`, TCP-only side channel):
+  a CI-sized functional check of the same P2P pull mechanism — 2
+  replicas (1 source + 1 receiver) of `Qwen/Qwen3-0.6B`, one Intel XPU
+  per pod, unmeasured. This does not reproduce the gpt-oss-120b
+  benchmark above; recalibrate `minCachedTokenDelta` for your own
+  model/transport rather than reusing the RDMA numbers below.
+  An RDMA overlay (mirroring `modelserver/gpu/vllm/rdma/`) is not
+  shipped yet: it hits the same upstream UCX `ze_copy`/DMA-BUF
+  data-correctness bug on Intel XPU that
+  [guides/modelexpress-p2p](../modelexpress-p2p/README.md)'s Intel XPU
+  variant documents (direct RDMA reads from device memory silently
+  return wrong bytes while still reporting success) — track
+  [openucx/ucx#11902](https://github.com/openucx/ucx/pull/11902) and
+  [#11903](https://github.com/openucx/ucx/pull/11903) upstream before
+  attempting it here.
 
 Every benchmark in this guide was measured with `rdma/ib` exposed to the
 model-server containers, and that is the recommended configuration. RDMA
@@ -331,22 +346,26 @@ the [Best Practices](#best-practices) render bullet.
 Apply the Kustomize overlay for your transport:
 
 ```bash
-export ACCELERATOR_TYPE=gpu   # options: gpu
+export ACCELERATOR_TYPE=gpu   # options: gpu, xpu
 export MODEL_SERVER=vllm      # options: vllm
-export TRANSPORT=rdma         # options: rdma (recommended), base
+export TRANSPORT=rdma         # options: rdma (recommended for gpu), base (only option for xpu)
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TRANSPORT}/
 ```
 
 16 replicas, TP=1, `--block-size=64`, KV events on, the offloading
 connector with a P2P tier on port 7777.
 
-* **`rdma`** adds an `rdma/ib` device and `IPC_LOCK` to every model
-  server. Every benchmark in this guide was measured on it, and it is
-  the recommended overlay.
+* **`rdma`** (GPU only) adds an `rdma/ib` device and `IPC_LOCK` to every
+  model server. Every benchmark in this guide was measured on it, and
+  it is the recommended overlay for GPU.
 * **`base`** is the same deployment without the IB device. NIXL/UCX
   falls back to TCP; the pull still works, but the crossover must be
   calibrated separately. See
   [Supported Hardware Backends](#supported-hardware-backends).
+  This is the **only** overlay shipped for Intel XPU today (2
+  replicas, `Qwen/Qwen3-0.6B`, CI-sized) — there is no `xpu/vllm/rdma`
+  yet; see [Supported Hardware Backends](#supported-hardware-backends)
+  for why.
 
 The `rdma/ib` resource name is what the measured clusters expose; yours
 may differ (`rdma/hca`, `nvidia.com/rdma`, ...). Check before applying,
