@@ -1,0 +1,249 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: wide-ep-lws-amd-gpu-vllm-deepseek-v3-prefill
+  labels:
+    llm-d.ai/model: DeepSeek-V3
+    llm-d.ai/role: prefill
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 2
+    workerTemplate:
+      metadata:
+        # No `k8s.v1.cni.cncf.io/networks` annotation here on purpose. The eight rail interfaces
+        # have to be attached, but a NetworkAttachmentDefinition name and namespace are objects
+        # that exist only on one cluster, so there is no portable value to write. Your provider
+        # overlay must attach one NAD per rail as net1..net8, matching `amd.com/vnic: 8`, with
+        # every rail reachable between all four nodes; one unreachable rail hangs the 16-rank
+        # group. See `amd-ci/patch-amd-ci-fabric.yaml` for a worked example and
+        # `kubectl get net-attach-def -A` for what your cluster publishes.
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: "wide-ep-lws"
+          llm-d.ai/accelerator-variant: "gpu"
+          llm-d.ai/accelerator-vendor: "amd"
+          llm-d.ai/model: DeepSeek-V3
+          llm-d.ai/role: prefill
+      spec:
+        serviceAccountName: deepseek-v3-moriio
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/guide: "wide-ep-lws"
+                    llm-d.ai/model: DeepSeek-V3
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 64Gi
+          - name: jit-cache
+            emptyDir: {}
+          - name: model-cache
+            persistentVolumeClaim:
+              claimName: model-pvc
+        containers:
+          - name: vllm
+            image: REPLACE_MODEL_SERVER_IMAGE
+            imagePullPolicy: IfNotPresent
+            securityContext:
+              # IPC_LOCK: MoRI pins memory for the RDMA symmetric heap.
+              capabilities:
+                add:
+                  - IPC_LOCK
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur https://github.com/llm-d/llm-d/issues/352
+                find /dev/shm -type f -delete
+
+                # RUN vLLM DeepSeek-V3 prefill (MoRI-EP high throughput)
+                START_RANK=$(( ${LWS_WORKER_INDEX} * DP_SIZE_LOCAL ))
+
+                # Benchmark CI reads the model name off the one bare continuation line: keep it off the exec line.
+                exec vllm serve \
+                  deepseek-ai/DeepSeek-V3 \
+                  --port 8000 \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                  --api-server-count 8 \
+                  --data-parallel-hybrid-lb \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local $DP_SIZE_LOCAL \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 29550 \
+                  --data-parallel-start-rank $START_RANK \
+                  --all2all-backend mori_high_throughput \
+                  --block-size 16 \
+                  --gpu-memory-utilization 0.58 \
+                  --max-num-batched-tokens 8192 \
+                  --max-model-len 32768 \
+                  --no-enable-prefix-caching \
+                  --compilation-config '{"cudagraph_mode":"PIECEWISE"}' \
+                  --kv-transfer-config '{"kv_connector":"MoRIIOConnector",
+                                          "kv_role":"kv_producer",
+                                          "kv_connector_extra_config":{"http_port":"8000",
+                                                                       "handshake_port":"6301",
+                                                                       "notify_port":"61005",
+                                                                       "read_mode":"false"}}'
+            env:
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: DP_SIZE_LOCAL
+                value: "8"
+              - name: TP_SIZE
+                value: "1"
+              - name: HF_HOME
+                value: /model-cache
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              # Must exceed the sidecar's 90 s idle timeout, or pooled connections are reset mid-request.
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "120"
+
+              # MoRI symmetric heap, 16 GiB. A function of the model and the EP width, not of the
+              # fabric: MoRI's own default is 4 GiB, which DeepSeek-V3 at EP16 overruns.
+              - name: MORI_SHMEM_HEAP_SIZE
+                value: "17179869184"
+              # Avoids a rocm-smi init race that segfaults a rank; costs bandwidth, not correctness.
+              - name: MORI_DISABLE_TOPO
+                value: "1"
+              # MORI_IB_GID_INDEX is deliberately unset: one global index across rails yields an all-zero source GID with no warning.
+              #
+              # The fabric-, NIC- and driver-specific MoRI settings are deliberately absent, because
+              # none of them has an honest portable default. Set them in your provider overlay
+              # (`amd-ci/patch-amd-ci-fabric.yaml` is a worked example):
+              #
+              #   MORI_RDMA_DEVICES      ibverbs device names, one per rail, in the same order on
+              #                          every pod (`ls /sys/class/infiniband`). Unset, MoRI uses
+              #                          every device ibv_get_device_list reports, which is already
+              #                          correct wherever the pod is scoped to exactly its rails.
+              #   MORI_RDMA_SL / _TC     RoCE QoS. Must match the switch: SL is the 802.1p priority
+              #                          and TC is the IP traffic class, i.e. DSCP << 2. Setting
+              #                          these without matching end-to-end PFC costs bandwidth.
+              #   MORI_ENABLE_DMABUF_REG Prefers dmabuf memory registration over ibv_reg_mr, which
+              #                          needs driver support; MoRI falls back either way.
+              #   MORI_ENABLE_HOST_PROXY Drives the NIC from a CPU proxy thread instead of IBGDA.
+              #                          Required only where the NIC firmware cannot do IBGDA.
+              #   MORI_ENABLE_RAIL_ONLY  Restricts cross-node QPs to the same rail, and
+              #   MORI_IO_RAIL_AFFINITY  pins the KV path to the sender's rail.
+              #
+              # Read this before deploying base/ as-is: without MORI_ENABLE_RAIL_ONLY, MoRI builds a
+              # full cross-node mesh. That is correct on a fully-connected fabric, but on a
+              # rail-isolated one the cross-rail QPs never reach RTR and init hangs. It is only
+              # valid where every rail is reachable between all nodes and ranks are node-major and
+              # contiguous, which is why base/ cannot assume it; set it on every pod of both roles,
+              # or none. MORI_ENABLE_HOST_PROXY is omitted on the same grounds -- it is a property of
+              # your NIC firmware, and note MoRI's JIT gates -DMORI_PROXY_ENABLED on a literal "1".
+
+              - name: VLLM_ENGINE_READY_TIMEOUT_S
+                value: "7200"
+              - name: VLLM_ROCM_USE_AITER
+                value: "1"
+              - name: VLLM_ROCM_USE_AITER_MOE
+                value: "1"
+              - name: VLLM_ROCM_USE_AITER_MLA
+                value: "1"
+              - name: VLLM_ROCM_USE_AITER_RMSNORM
+                value: "1"
+              # Deliberately off: AITER's tuned_gemm has no loadable gfx950 binary for large-M unquantized GEMMs.
+              - name: VLLM_ROCM_USE_AITER_LINEAR
+                value: "0"
+              # Deliberately off: Inductor's static launcher kills the engine on the first real request, not at startup.
+              - name: TORCHINDUCTOR_USE_STATIC_CUDA_LAUNCHER
+                value: "0"
+              # The base image sets 0, forcing ROCr's legacy InterceptQueue: it stages a 16384-entry AQL ring
+              # through a hardcoded 256-entry buffer, so a burst past 256 corrupts the heap and segfaults every
+              # rank. 1 is the upstream default; never set it empty, which aborts at HSA init. Fixed by
+              # ROCm/rocm-systems#4066.
+              - name: ROCPROFILER_QUEUE_INTERPOSITION
+                value: "1"
+              - name: HSA_ENABLE_SDMA
+                value: "1"
+              - name: HSA_FORCE_FINE_GRAIN_PCIE
+                value: "1"
+              # DP/EP coordination rides the pod network; the RDMA rails belong to MoRI and carry no IPv4.
+              - name: NCCL_IB_DISABLE
+                value: "1"
+              # Redundant but kept as a guard. Because the rail interfaces hold no IPv4 address,
+              # eth0 is the only candidate and RCCL and Gloo both select it unaided; pinning it
+              # stops a later IPv4-bearing secondary interface from silently capturing the
+              # collectives. eth0 is the primary interface name Multus leaves in place -- confirm
+              # with `ls /sys/class/net` if your CNI names it differently.
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_DEBUG
+                value: WARN
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+            ports:
+              - containerPort: 8000
+                name: modelserver
+                protocol: TCP
+              - containerPort: 29550
+                name: dp-rpc
+                protocol: TCP
+              - containerPort: 6301
+                name: mori-handshake
+                protocol: TCP
+              - containerPort: 61005
+                name: mori-notify
+                protocol: TCP
+            resources:
+              limits:
+                cpu: "160"
+                memory: 1200Gi
+                amd.com/gpu: "8"
+                # All eight, always: a partial request yields an arbitrary subset of rail planes.
+                amd.com/vnic: "8"
+              requests:
+                cpu: "160"
+                memory: 1200Gi
+                amd.com/gpu: "8"
+                amd.com/vnic: "8"
+            # 60 s + 240 x 30 s = 7260 s; the CI standup_timeout must not be tighter.
+            startupProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              initialDelaySeconds: 60
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 240
+            # LWS recreates the whole group on one liveness failure, costing a 2 h standup.
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 6
+            # /health, not /v1/models: the latter is a static route that answers even after the engine
+            # core dies, so a dead pod would stay a ready InferencePool endpoint and absorb traffic.
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 12
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: model-cache
+                mountPath: /model-cache
