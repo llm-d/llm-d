@@ -9,6 +9,7 @@ A modular container snapshot provider and vLLM lifespan wrapper that enables fas
 Deploying large language models (LLMs) on Kubernetes often incurs high cold-start latencies due to downloading weights, loading them into memory, allocating GPU VRAM, and compiling CUDA graphs.
 
 This package provides a drop-in launcher and snapshot provider that hooks into vLLM's FastAPI application lifespan to:
+
 1. Initialize the vLLM engine and compile CUDA graphs during container cold start.
 2. Put the vLLM engine to sleep (`engine.sleep(level=1)`) to release physical GPU VRAM while preserving virtual memory mappings.
 3. Purge cached model weight files from disk to minimize the checkpoint storage footprint.
@@ -16,7 +17,7 @@ This package provides a drop-in launcher and snapshot provider that hooks into v
 5. Restore the container and wake up the engine (`engine.wake_up()`) to re-allocate physical GPU VRAM upon restoration before binding HTTP ports and serving traffic.
 
 > [!NOTE]
-> This README is intended for developers maintaining and integrating this snapshot utility. A comprehensive user guide for deployment, cluster configuration, and end-to-end benchmark walkthroughs is upcoming in the [`/guides`](../../../guides) directory.
+> This README is intended for developers maintaining and integrating this snapshot utility. For a comprehensive user guide on single-GPU deployment, cluster configuration, and verification, see the [GKE Pod Snapshots User Guide](../../../guides/gke-pod-snapshots/README.md).
 
 ---
 
@@ -37,7 +38,7 @@ flowchart TD
 
 ## Package Layout & Components
 
-```
+```text
 docker/scripts/snapshot/
 ├── __init__.py           # Package exports (GKESnapshotProvider, patch_vllm_lifespan, get_snapshot_provider)
 ├── launcher.py           # CLI entrypoint wrapping vllm serve

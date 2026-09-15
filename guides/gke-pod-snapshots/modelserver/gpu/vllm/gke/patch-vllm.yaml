@@ -1,0 +1,147 @@
+# The PodSnapshotStorageConfig uses tokenSource "podKSA", so the gVisor sandbox
+# authenticates to GCS as the Pod's KSA directly via Workload Identity
+# Federation. No `iam.gke.io/gcp-service-account` annotation is needed -- the
+# bucket IAM binding targets the `principal://.../sa/<ksa>` subject instead, so
+# the ServiceAccount from recipes/modelserver/common/sa.yaml is used unmodified.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  # At replicas=1 on a single-GPU pool, the default RollingUpdate wants to
+  # schedule the new Pod before releasing the old one's GPU, so every rollout
+  # deadlocks. Recreate frees the GPU first.
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      runtimeClassName: gvisor
+      nodeSelector:
+        sandbox.gke.io/runtime: gvisor
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "docker.scripts.snapshot.launcher"]
+          args:
+            - "--model"
+            - "Qwen/Qwen3-32B"
+            - "--safetensors-load-strategy"
+            - "eager"
+            # Sleep mode flips enable_cumem_allocator, which is what routes
+            # weights and KV cache through CuMemAllocator; without it
+            # engine.sleep() has nothing it can release. Measured on Qwen3-32B:
+            # sleep(level=1) moved 61.68 GiB of weights to host RAM and
+            # discarded 12.52 GiB of KV cache, keeping the cache out of the
+            # snapshot.
+            - "--enable-sleep-mode"
+            # 0.95, not the more common 0.90. Measured on an 80GB H100: weights
+            # take 61.03 GiB and activations/non-torch overhead ~2.1 GiB, so
+            # 0.90 (a 71.6 GiB budget) leaves only 8.51 GiB for KV cache while
+            # the model's 40960-token max_model_len needs 10.0 GiB. vLLM then
+            # raises ValueError, EngineCore dies, and the pod crash-loops with
+            # only a generic "Engine core initialization failed" at the API
+            # server -- the real error is in the EngineCore child's output.
+            # 0.95 yields a 75.6 GiB budget and ~12.5 GiB of KV cache.
+            - "--gpu-memory-utilization"
+            - "0.95"
+            # CUDA graphs do not fit alongside that KV cache. Dropping this flag
+            # lets capture claim ~1.22 GiB of private pools, GPU use peaks at
+            # 78.60 GiB of 79.18 GiB, and the sampler's 594 MiB warmup
+            # allocation OOMs -- EngineCore crash-loops before serving. Costs
+            # some decode latency; revisit only with a smaller max_model_len.
+            - "--enforce-eager"
+            - "--port"
+            - "8000"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          env:
+            # Snapshot configuration
+            - name: PYTHONPATH
+              value: "/workspace"
+            # Without this, vLLM's stdout is block-buffered and a slow cold start
+            # is indistinguishable from a hang in kubectl logs.
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: SNAPSHOT_PROVIDER
+              value: "gke_gvisor"
+            # After sleep(level=1) the weights exist twice -- in host RAM and in
+            # the HuggingFace cache on disk -- and both would land in the
+            # snapshot. Setting this purges the disk copy before the checkpoint;
+            # unset means "do not purge". Leave it unset when weights are
+            # mounted rather than downloaded: there is no duplicate to drop, and
+            # the purge would delete shared data. expanduser resolves this to
+            # /root/.cache/huggingface/hub, the container's writable layer --
+            # not the /.cache volume mounted below, which vLLM uses for its
+            # compile cache.
+            - name: MODEL_CACHE_DIR
+              value: "~/.cache/huggingface/hub"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Pins the torch.distributed TCPStore to loopback. A store bound to
+            # the pod IP does not survive the gVisor checkpoint, so every
+            # restored pod logs a TCPStore 'Broken pipe' warning once per second.
+            - name: VLLM_HOST_IP
+              value: "127.0.0.1"
+          resources:
+            limits:
+              cpu: "16"
+              memory: 128Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "8"
+              memory: 96Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            # One mount per Python package level, matching the ConfigMaps
+            # generated in docker/scripts/snapshot. Nesting the second inside the
+            # first is what lets both use plain basenames as keys.
+            - mountPath: /workspace/docker/scripts/snapshot
+              name: snapshot-scripts
+              readOnly: true
+            - mountPath: /workspace/docker/scripts/snapshot/vllm
+              name: snapshot-scripts-vllm
+              readOnly: true
+          # The base recipe omits probe timings, leaving the Kubernetes defaults
+          # (3 x 10s = a 30s startup budget). A cold start has to download and
+          # load weights, so the container is killed long before it can serve.
+          # Values match the other model server guides.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: snapshot-scripts
+          configMap:
+            name: snapshot-scripts
+        - name: snapshot-scripts-vllm
+          configMap:
+            name: snapshot-scripts-vllm

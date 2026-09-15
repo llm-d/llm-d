@@ -1,0 +1,10 @@
+apiVersion: podsnapshot.gke.io/v1
+kind: PodSnapshotStorageConfig
+metadata:
+  name: pod-snapshot-storage-config
+spec:
+  snapshotStorageConfig:
+    gcs:
+      bucket: "GCS_BUCKET_PLACEHOLDER"
+      path: "/"
+      tokenSource: "podKSA"
