@@ -7,7 +7,7 @@ namePrefix: e-pd-disaggregation-nvidia-gpu-vllm-
 
 components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
-  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
 
 labels:
   - pairs:
@@ -21,3 +21,15 @@ labels:
 patches:
   - path: patch-encode.yaml
   - path: patch-decode.yaml
+  # VLLM_USE_V2_MODEL_RUNNER=1 for all vLLM instances: both instances (encode
+  # and PD decode) use the CPU EC connector, which fails at startup without the
+  # V2 model runner, see
+  # https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: VLLM_USE_V2_MODEL_RUNNER
+          value: "1"

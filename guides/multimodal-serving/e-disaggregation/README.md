@@ -87,7 +87,7 @@ export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-pd"
 export NAMESPACE="llm-d-e-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export INFRA_PROVIDER="gke" # base | gke
+export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
@@ -101,7 +101,7 @@ export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export INFRA_PROVIDER="gke" # base | gke
+export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
@@ -179,6 +179,10 @@ helm install ${RELEASE_NAME} \
 ### 2. Deploy the Model Server
 
 Apply the Kustomize overlays for your chosen topology:
+
+Choose the overlay matching your infrastructure provider:
+- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [Cluster Pre-provisioning](../../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma).
+- **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
@@ -298,6 +302,8 @@ Once the Encode Worker processes a multimodal item, the EC Connector handles the
 
 This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
+
+The vLLM E/PD and E/P/D profiles use the upstream vLLM nightly image (`docker.io/vllm/vllm-openai:nightly`), set `VLLM_USE_V2_MODEL_RUNNER=1` on each vLLM instance that uses the ECCPU Connector (all instances in E/PD, encode and prefill in E/P/D) because the [ECCPU Connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/) requires the V2 model runner, and configure it in P2P NIXL mode (`"ec_enable_nixl": true` and `ec_cpu_bytes`, the size of the shared CPU region).
 
 ### E/PD Request Flow
 

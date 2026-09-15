@@ -38,7 +38,11 @@ data:
             max_concurrent_downloads: 10
         - type: render
           params:
-            address: "http://localhost:8000"
+            # The render Service from ../render/, which fronts the prefill
+            # model server pods. The ".svc" suffix matches NO_PROXY in
+            # ../multimedia-downloader/patch-coordinator-ca.yaml, so render
+            # calls never go through the media proxy.
+            address: "http://coord-disaggregation-render.${NAMESPACE}.svc:8000"
             timeout: 30s
         - type: conditional-decode
         - type: encode

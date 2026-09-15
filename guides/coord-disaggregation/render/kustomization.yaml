@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Render Service for the Coordinator's `render` pipeline step. Pairs with the
+# render step `address` in ../coordinator/configmap.yaml.
+namePrefix: coord-disaggregation-
+
+resources:
+  - service.yaml
