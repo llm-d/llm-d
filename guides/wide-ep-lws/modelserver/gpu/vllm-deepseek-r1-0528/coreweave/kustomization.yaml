@@ -3,72 +3,75 @@ kind: Kustomization
 resources:
   - ../base
 
-# CoreWeave-specific configuration, expressed as JSON patches into the
-# DisaggregatedSet role pod templates: roles/0 is prefill, roles/1 is decode.
+# The schema teaches kustomize the DisaggregatedSet merge keys so the
+# strategic merge patch below matches roles, containers, volumes, and env
+# entries by name instead of array index.
+openapi:
+  path: disaggregatedset-schema.json
+
+# CoreWeave-specific configuration: provider hostPath cache volumes,
+# InfiniBand HCA selection, and RDMA device limits on both roles.
 patches:
-  - target:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
-      name: wide-ep-lws-nvidia-gpu-vllm
-    patch: |-
-      # We add the volume for different providers since the hostPath can be different.
-      - op: replace
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
-        value:
-          name: hf-cache
-          hostPath:
-            path: /mnt/local/hf-cache
-            type: DirectoryOrCreate
-      - op: replace
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
-        value:
-          name: jit-cache
-          hostPath:
-            path: /mnt/local/jit-cache
-            type: DirectoryOrCreate
-      - op: replace
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
-        value:
-          name: hf-cache
-          hostPath:
-            path: /mnt/local/hf-cache
-            type: DirectoryOrCreate
-      - op: replace
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
-        value:
-          name: jit-cache
-          hostPath:
-            path: /mnt/local/jit-cache
-            type: DirectoryOrCreate
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_IB_HCA
-          value: "ibp"
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NVSHMEM_HCA_PREFIX
-          value: "ibp"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_IB_HCA
-          value: "ibp"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NVSHMEM_HCA_PREFIX
-          value: "ibp"
-      # Add RDMA config.
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
+      metadata:
+        name: wide-ep-lws-nvidia-gpu-vllm
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: NCCL_IB_HCA
+                            value: "ibp"
+                          - name: NVSHMEM_HCA_PREFIX
+                            value: "ibp"
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+                    volumes:
+                      - name: hf-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/local/hf-cache
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/local/jit-cache
+                          type: DirectoryOrCreate
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: NCCL_IB_HCA
+                            value: "ibp"
+                          - name: NVSHMEM_HCA_PREFIX
+                            value: "ibp"
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+                    volumes:
+                      - name: hf-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/local/hf-cache
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/local/jit-cache
+                          type: DirectoryOrCreate
