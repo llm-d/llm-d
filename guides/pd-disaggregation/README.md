@@ -57,6 +57,61 @@ This guide includes configuration for the following accelerators:
 | MetaX GPU           | `modelserver/metax/vllm/`  | MetaX C500X, community contributed. Reduced 1P+1D / Qwen3-14B / TP=1 for compatibility checks. |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
+| Rebellions NPU      | `modelserver/npu/vllm/`  | Rebellions NPUs with RoCE via DRA, community contributed. See [Rebellions NPU Configuration](#rebellions-npu-configuration) |
+
+#### Rebellions NPU Configuration
+
+The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMaxAI/MiniMax-M2.7)
+with heterogeneous parallelism across the two roles:
+
+| Parameter | Prefill | Decode |
+| --- | --- | --- |
+| Parallelism | Pipeline, 4 stages | Data, 4 ranks, expert parallel on |
+| NPUs | 4 | 4 |
+| API servers per pod | 1 (port 8000) | 4 (ports 8200-8203, fronted by the sidecar on 8000-8003) |
+| `--num-gpu-blocks-override` | 200 | 50 |
+| `--max-num-seqs` | 4 | 4 |
+
+Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler.
+Neither sets `--max-model-len`, since the model already declares its 204800-token context.
+Neither sets `--kv-cache-dtype` either: the runtime accepts `fp8` here, but the
+`--num-gpu-blocks-override` counts below were measured at the backend default, and halving the
+bytes per block would leave them describing something else.
+KV transfer uses NIXL with `kv_buffer_device=rbln`.
+Expert parallelism is on for decode only: a pipeline-parallel prefill rank holds one stage, so
+there is no expert group to split.
+
+Because the decode role runs one API server per data-parallel rank, the EPP must be given every
+rank port. Layer [`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own
+values file when installing the router.
+
+**This path needs an endpoint picker that skips endpoints it cannot reach.** Those rank ports
+apply to the whole pool, which selects both roles, so the EPP can offer a prefill endpoint on a
+port a pipeline-parallel prefill never opens. The picker the router chart installs by default
+probes such an endpoint and leaves it out, and 40 requests through it all returned 200. Pinning
+the chart to `v0.10.0` instead pins the picker to the same release, and 30 of those 40 came back
+502 — the decode sidecar reporting a refused connection to the prefill. Earlier releases are
+untested here. Take the chart default unless you have measured otherwise.
+
+**NUMA alignment.** Each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over
+that VF. The claim constrains all five devices to one NUMA node on
+`resource.kubernetes.io/numaNode`, which both the NPU driver and dranet advertise. Without that
+constraint the scheduler may pair a NUMA-1 NPU with a NUMA-0 VF: the pods reach ready and the
+transfer is what fails, with `no usable data-plane RoCE NIC on numa=1`.
+
+Confirm the host can place four NPUs and a VF on a single NUMA node before deploying — the
+constraint requires all five devices in a role to agree, and a pod whose node cannot supply
+them stays Pending on `0/3 nodes are available: 1 cannot allocate all claims`.
+
+Neither the DRA allocation nor the NIXL transfer can be checked by a server dry-run against a
+cluster without these DeviceClasses. Both need a run on the real hardware.
+
+**Cluster prerequisites** beyond the [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html):
+
+* A network DRA driver publishing a `dranet` DeviceClass, so each role can claim a RoCE VF
+  alongside its NPUs. The claim requests the `rdma` profile; without an IPv4 on that VF the
+  NIXL side channel cannot bind.
+* Kubernetes 1.34 or later for the `resource.k8s.io/v1` DRA APIs.
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
