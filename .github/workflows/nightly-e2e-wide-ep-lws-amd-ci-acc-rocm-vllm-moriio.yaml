@@ -34,13 +34,12 @@ on:
       harness:
         description: 'Harness to be used during "run" operation ("inference-perf", "guidellm", "inferencemax", "vllm-benchmark", "nop")'
         required: false
-        default: 'inference-perf'
+        default: 'vllm-benchmark'
         type: 'string'
       workload:
         description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
         required: false
-        default: 'sanity_random.yaml'
-#        default: 'guide_wide-ep-lws_1.yaml'
+        default: 'guide_wide-ep-lws_1.yaml'
         type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
@@ -103,11 +102,10 @@ jobs:
       standup_timeout: '7260'
       dry_run: ${{ inputs.dry_run || 'false' }}
       verbose: ${{ inputs.verbose || 'false' }}
-      harness: ${{ inputs.harness || 'inference-perf' }}
-      workload: ${{ inputs.workload || 'sanity_random.yaml' }}
-#      workload: ${{ inputs.workload || 'guide_wide-ep-lws_1.yaml' }}
+      harness: ${{ inputs.harness || 'vllm-benchmark' }}
+      workload: ${{ inputs.workload || 'guide_wide-ep-lws_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
-      # Pinned: 'true' deletes the pre-provisioned model-pvc and the staged weights with it.
+      # Pinned: 'true' deletes model-pvc; teardown deletes `usage=model-cache` PVs regardless, so keep the PV unlabelled.
       deep_cleaning: 'false'
       # persistent_model stays unset: this lane caches weights via HF_HOME on model-pvc.
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
