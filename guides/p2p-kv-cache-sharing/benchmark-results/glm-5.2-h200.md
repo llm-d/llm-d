@@ -69,7 +69,7 @@ upstream-tier table above is the current calibration:
 ## Load spill and the pull's payoff (matched c32 benchmark)
 
 The system-level payoff measurement: a load-first prefill policy
-(`precise-prefix-cache-scorer` weight 1 + `queue-scorer` weight 3 +
+(`prefix-cache-scorer` weight 1 + `queue-scorer` weight 3 +
 `active-request-scorer` weight 1) with and without `p2p-source-producer`
 (`minCachedTokenDelta: 16384`) as the only difference. Under this policy
 the picker spills requests off the cache holder whenever queues build, so

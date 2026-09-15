@@ -55,7 +55,7 @@ router:
                 # `precise-prefix-cache-routing-` namePrefix + Service name `render`.
                 url: "http://precise-prefix-cache-routing-render:8000"
           - type: endpoint-notification-source
-          - type: precise-prefix-cache-producer # `precise-prefix-cache-scorer` is deprecated
+          - type: precise-prefix-cache-producer
             parameters:
               tokenProcessorConfig:
                 blockSizeTokens: 64
