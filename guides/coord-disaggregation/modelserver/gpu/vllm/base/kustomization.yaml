@@ -6,11 +6,10 @@ resources:
 
 namePrefix: coord-disaggregation-nvidia-gpu-vllm-
 
-# TODO: Remove override once upstream vLLM includes encode-disaggregation support in an official release.
-images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: ghcr.io/revit13/vllm-openai
-    newTag: 61e53561a
+# TODO: Switch to gpu-vllm/release once upstream vLLM includes
+# encode-disaggregation support in an official release.
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
 
 labels:
   - pairs:
@@ -24,3 +23,28 @@ labels:
 
 patches:
   - path: patch-decode.yaml
+  # VLLM_ENABLE_SCALE_OUT_ENDPOINTS=1 for all vLLM instances: "vllm serve"
+  # registers the scale-out endpoints (/inference/v1/generate and the /render
+  # and /derender endpoints) only when this is 1. The default is off, and only
+  # 0 or 1 are accepted, see https://github.com/vllm-project/vllm/pull/54579
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: VLLM_ENABLE_SCALE_OUT_ENDPOINTS
+          value: "1"
+  # VLLM_USE_V2_MODEL_RUNNER=1 for the instances that use the CPU EC connector
+  # (encode and prefill). The connector fails at startup without the V2 model
+  # runner, see https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+  # Decode has no EC connector and uses the vLLM default model runner.
+  - target:
+      kind: Deployment
+      labelSelector: llm-d.ai/role in (encode,prefill)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: VLLM_USE_V2_MODEL_RUNNER
+          value: "1"

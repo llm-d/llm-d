@@ -20,11 +20,15 @@ spec:
             - "--no-disable-hybrid-kv-cache-manager"
             - "--gpu-memory-utilization=0.75"
             - "--ec-transfer-config"
-            # num_ec_blocks (Default: 100,000) defines the capacity of the shared encoder
-            # cache for multimodal items. Increase this value for workloads with large or
-            # numerous images to prevent cache evictions and costly re-encodings that
-            # degrade system performance.
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"num_ec_blocks": 1000000}}'
+            # ec_enable_nixl turns on P2P NIXL transfers between instances.
+            # ec_cpu_bytes (mandatory, no default) is the size in bytes of the shared CPU
+            # mmap region that holds encoder outputs for multimodal items. Increase this
+            # value for workloads with large or numerous images to prevent cache evictions
+            # and costly re-encodings that degrade system performance.
+            # 40 GiB holds about 1,000,000 encoder tokens for Qwen3-VL-32B (40,960 bytes
+            # each). The value must fit in the /dev/shm volume.
+            # See https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"ec_enable_nixl": true, "ec_cpu_bytes": 42949672960}}'
           env:
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:

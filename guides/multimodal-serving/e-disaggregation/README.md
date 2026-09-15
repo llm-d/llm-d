@@ -303,6 +303,8 @@ Once the Encode Worker processes a multimodal item, the EC Connector handles the
 This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
 
+The vLLM E/PD and E/P/D profiles use the upstream vLLM nightly image (`docker.io/vllm/vllm-openai:nightly`), set `VLLM_USE_V2_MODEL_RUNNER=1` on each vLLM instance that uses the ECCPU Connector (all instances in E/PD, encode and prefill in E/P/D) because the [ECCPU Connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/) requires the V2 model runner, and configure it in P2P NIXL mode (`"ec_enable_nixl": true` and `ec_cpu_bytes`, the size of the shared CPU region).
+
 ### E/PD Request Flow
 
 ```
