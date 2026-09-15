@@ -1,8 +1,21 @@
 # Autoscaling Workloads with HPA and WVA Metrics
 
 > [!WARNING]
-> The VariantAutoscaling CRD has been deprecated in llm-d 0.8.0 in favor of
-HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. The VariantAutoscaling CRD will be removed in 0.9.0.
+> **The Workload Variant Autoscaler (WVA) is deprecated.** WVA is no longer
+> developed and receives no further releases. `v0.9.0` is the final version, and
+> the manifests in this guide are pinned to it — the controller overlays track
+> the upstream `release-0.9` branch and pin the controller image to
+> `ghcr.io/llm-d/llm-d-workload-variant-autoscaler:v0.9.0`. This guide is kept
+> for existing deployments only; it will not gain new features.
+>
+> New deployments should use a KEDA + EPP path instead — see
+> [Saturation-based Autoscaling](../keda-epp-saturation/README.md), the closest
+> replacement for WVA's saturation signal, or the other paths in the
+> [autoscaling overview](../README.md#paths).
+>
+> The VariantAutoscaling CRD was already deprecated in llm-d 0.8.0 in favor of
+> an HPA driven by the `wva_desired_replicas` external metric, which is the
+> approach this guide covers.
 
 The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 

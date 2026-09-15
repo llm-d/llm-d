@@ -1,5 +1,11 @@
 # Replica Rebalancing (Experimental)
 
+> [!WARNING]
+> **This feature is deprecated.** The replica rebalancer ships inside the
+> Workload Variant Autoscaler, which is [deprecated](../README.md) and receives
+> no further releases; `v0.9.0` is the final version. This guide is kept for
+> reference only.
+>
 > **⚠️ Experimental Feature:** This feature is a proof of concept and is **not production-ready**. Enable it only in test or development environments after understanding the risks. The controller logs a warning at startup when this feature is enabled.
 
 When multiple model deployments share a fixed single GPU quota within a namespace, individual HPAs scale independently and have no awareness of each other's GPU consumption. This can cause the namespace to be over-provisioned — one model's HPA raising its replica count while another is also scaling up, collectively exceeding the available GPU quota.
