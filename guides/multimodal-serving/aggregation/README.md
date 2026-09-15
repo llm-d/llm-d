@@ -1,6 +1,6 @@
 # Multimodal Optimized Baseline Guide
 
-This guide deploys the recommended [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for multimodal vLLM deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
+This guide deploys the recommended [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for multimodal vLLM/SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
 The multimodal-optimized-baseline routes with the same token-based stack as the [optimized-baseline](../../optimized-baseline) reference:
 
@@ -26,6 +26,7 @@ This guide includes configurations for the following accelerators and inference 
 | Backend            | Directory                  | Model                        | Notes                                      |
 | ------------------ | -------------------------- | ---------------------------- | ------------------------------------------ |
 | NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
+| NVIDIA GPU         | `modelserver/gpu/sglang/${INFRA_PROVIDER}/`  | `Qwen/Qwen3-VL-32B-Instruct` | SGLang backend (`INFRA_PROVIDER` options: `base`, `gke`)                              |
 | Intel XPU          | `modelserver/xpu/vllm/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60            |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `google/gemma-4-31B-it`      | Same hardware; <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |
@@ -54,6 +55,7 @@ This guide includes configurations for the following accelerators and inference 
    source ${REPO_ROOT}/guides/env.sh
    export GUIDE_NAME="aggregation"
    export NAMESPACE=llm-d-multimodal-aggregation
+   export MODEL_SERVER=vllm # options: vllm, sglang
    ```
 
 4. Install the Gateway API Inference Extension CRDs:
@@ -95,7 +97,7 @@ Deploy the llm-d Router in **Standalone Mode** overlaying router custom configur
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.${MODEL_SERVER}.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -103,7 +105,7 @@ helm install ${GUIDE_NAME} \
 > The `token-producer` estimate in the router values must match the model you deploy in step 2.
 > The shipped default estimates image tokens from resolution, which is correct for Qwen3-VL. If you
 > deploy `google/gemma-4-31B-it`, swap in the commented-out `estimate:` block in
-> [`router/aggregation.values.yaml`](router/aggregation.values.yaml) — Gemma 4 allocates a fixed token
+> [`router/aggregation.values.vllm.yaml`](router/aggregation.values.vllm.yaml) (or [`router/aggregation.values.sglang.yaml`](router/aggregation.values.sglang.yaml)) — Gemma 4 allocates a fixed token
 > budget per image, so the resolution-based estimator would mis-price every multimodal request and skew
 > routing with no error to signal it.
 
@@ -120,7 +122,7 @@ export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.${MODEL_SERVER}.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -131,11 +133,11 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
+Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM or SGLang):
 
 ```bash
-export INFRA_PROVIDER=gke # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+export INFRA_PROVIDER=gke # options: base, gke
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 
 <details>
@@ -247,7 +249,7 @@ To tear down and clean up all deployed resources:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/
 # For Intel XPU:
 # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/
 # For Google TPU v7:
@@ -294,6 +296,8 @@ llm-d holds **sub-second TTFT p90 across the entire ladder** (0.15–0.40 s) whi
 
 Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 
+#### vLLM
+
 | Rate | k8s Output | llm-d Output | k8s TTFT p50 | llm-d TTFT p50 | k8s TTFT p90 | llm-d TTFT p90 |
 |-----:|-----------:| -----------: | -----------: | -------------: | -----------: | -------------: |
 |    5 |   1,408    |    1,421     |    0.401     |     0.133      |    0.487     |     0.148      |
@@ -304,5 +308,17 @@ Output tokens/sec — higher is better; TTFT in seconds — lower is better.
 |   30 |   7,307    |    8,444     |    1.777     |     0.083      |    7.792     |     0.225      |
 |   35 |   7,272    |    9,782     |   11.060     |     0.153      |   21.192     |     0.350      |
 |   40 |   7,712    |   11,128     |   19.245     |     0.155      |   39.813     |     0.399      |
+
+#### SGLang
+
+| Rate | k8s Output | llm-d Output | k8s TTFT p50 | llm-d TTFT p50 | k8s TTFT p90 | llm-d TTFT p90 |
+|-----:|-----------:| -----------: | -----------: | -------------: | -----------: | -------------: |
+|    5 |      1,407 |        1,399 |        0.623 |          0.183 |        0.787 |          0.201 |
+|   10 |      2,792 |        2,806 |        0.629 |          0.172 |        1.094 |          0.207 |
+|   15 |      4,008 |        4,150 |        0.682 |          0.128 |        1.671 |          0.222 |
+|   20 |      5,311 |        5,552 |        1.163 |          0.128 |        2.811 |          0.214 |
+|   25 |      5,736 |        6,912 |        2.737 |          0.130 |       12.564 |          0.229 |
+|   30 |      6,001 |        8,276 |       12.817 |          0.144 |       25.982 |          0.375 |
+|   35 |      6,044 |        9,520 |       24.371 |          0.276 |       48.577 |          0.613 |
 
 </details>
