@@ -4,9 +4,10 @@ kind: Component
 # Each worker: TP=1, DP=8, EP=8 (DEP8).
 patches:
   - target:
-      kind: LeaderWorkerSet
-      name: ".*-prefill"
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
     patch: |-
+      # Roles are ordered [prefill, decode] in the base DisaggregatedSet.
       - op: replace
-        path: /spec/replicas
+        path: /spec/roles/0/spec/replicas
         value: 1
