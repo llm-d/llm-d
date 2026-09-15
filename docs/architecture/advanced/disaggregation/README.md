@@ -98,8 +98,31 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 * `decode` → decode-capable pods
 * `prefill-decode` → pods capable of both prefill and decode
 
-> [!NOTE]
-> It is possible to override the default labels by configuring the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the `prefill-filter` / `decode-filter`. TODO: provide an example of this.
+To use a different label key, replace the role-specific filters with named `label-selector-filter` plugins in the `prefill` and `decode` profiles. For example, this uses `serving.example.com/phase` instead of `llm-d.ai/role`:
+
+```yaml
+plugins:
+- name: custom-prefill-filter
+  type: label-selector-filter
+  parameters:
+    matchLabels:
+      serving.example.com/phase: prefill
+- name: custom-decode-filter
+  type: label-selector-filter
+  parameters:
+    matchLabels:
+      serving.example.com/phase: decode
+
+schedulingProfiles:
+- name: prefill
+  plugins:
+  - pluginRef: custom-prefill-filter
+- name: decode
+  plugins:
+  - pluginRef: custom-decode-filter
+```
+
+Apply the same labels to the model-server Pods. Keep the profile names `prefill` and `decode`; the `disagg-profile-handler` uses those names when it selects the profile.
 
 ### Routing Proxy Sidecar
 

@@ -61,7 +61,7 @@ topology choice:
   spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
   or `decode` — selected by the Coordinator's `EPP-Profile` header via the
   [header-profile-handler](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/scheduling/profilehandler/headerprofile/README.md)
-  plugin. Each profile filters the shared pool down to its own role with a by-label filter.
+  plugin. Each profile filters the shared pool down to its own role with a role filter.
 * **Or: 3 EPPs**, one per role, each with its own **InferencePool** scoped to that
   role's pods via `modelServers.matchLabels`. Each EPP runs a single `default`
   scheduling profile picked implicitly by the chart's `single-profile-handler`
