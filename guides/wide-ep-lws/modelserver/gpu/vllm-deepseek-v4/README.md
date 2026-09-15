@@ -1,13 +1,14 @@
 # DeepSeek-V4-Pro on GB200 (wide-EP)
 
 Deploys DeepSeek-V4-Pro with vLLM P/D disaggregation (NIXL) in a wide expert-parallel
-pattern on NVIDIA GB200 NVL72, using LeaderWorkerSets.
+pattern on NVIDIA GB200 NVL72, using a DisaggregatedSet.
 
 These manifests were tested on Oracle Cloud Infrastructure (OCI). Storage and DRA may need
 to be adapted to your environment.
 
 This recipe reuses the [wide-ep-lws guide](../../../README.md) for the router/gateway and
-shared prerequisites (namespace, HF token secret, LeaderWorkerSet controller). The notes
+shared prerequisites (namespace, HF token secret, LeaderWorkerSet controller with
+DisaggregatedSet enabled). The notes
 below cover only what is specific to this deployment.
 
 ## Prerequisites
