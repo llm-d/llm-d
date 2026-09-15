@@ -134,6 +134,19 @@ runs it against two live pods and prints the recommended value.
   [openucx/ucx#11902](https://github.com/openucx/ucx/pull/11902) and
   [#11903](https://github.com/openucx/ucx/pull/11903) upstream before
   attempting it here.
+  > [!WARNING]
+  > Verified on real Intel Arc Pro B60 hardware: DRA device allocation,
+  > pod startup, and engine-side `OffloadingConnector` + NIXL/UCX + P2P
+  > secondary-tier initialization all work cleanly. The end-to-end pull
+  > itself is **not yet verified** on this overlay's pinned image
+  > (`ghcr.io/llm-d/llm-d-xpu:v0.9.0`, vLLM 0.26.0): that vLLM version's
+  > `OffloadingConnector` only recognizes `max_offload_tokens` in
+  > `kv_transfer_params` and has no `remote_kv_source` handling, while
+  > the GPU overlay above pins `vllm/vllm-openai:v0.27.1`. Until the XPU
+  > image is rebuilt against a vLLM release that carries this feature
+  > (or the `xpu-vllm/nightly` component is validated as a substitute),
+  > treat this overlay as a boot/wiring check, not a proof that pulls
+  > happen on Intel XPU.
 
 Every benchmark in this guide was measured with `rdma/ib` exposed to the
 model-server containers, and that is the recommended configuration. RDMA
