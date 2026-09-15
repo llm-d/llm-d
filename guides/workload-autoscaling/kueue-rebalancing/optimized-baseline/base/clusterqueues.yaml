@@ -3,8 +3,8 @@
 #   nominalQuota  the model's guaranteed floor - it can always reclaim this much
 #   cohortName    the pool the floors are lent into and borrowed from
 #
-# The floors sum to the physical GPU count (5 + 5 = 10), replacing the
-# `requests.nvidia.com/gpu: "10"` ResourceQuota used by the replica rebalancer.
+# The floors sum to the physical GPU count (5 + 5 = 10), which is the entire GPU
+# budget for the namespace.
 #
 # ClusterQueues are cluster-scoped, so the names carry an `llm-d-` prefix: two
 # teams both reaching for `model-a-cq` on one cluster would collide.

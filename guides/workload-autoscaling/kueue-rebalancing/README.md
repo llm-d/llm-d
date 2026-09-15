@@ -5,11 +5,7 @@ independently and none of them knows what the others are consuming. Two models
 scaling up at the same time collectively ask for more GPUs than the budget
 holds.
 
-The [experimental replica rebalancer](../replica-rebalancing/README.md) solves
-this *above* the HPA: a control loop reads a `ResourceQuota` and patches
-`spec.maxReplicas` on annotated HPAs so the ceilings always sum to the budget.
-
-This guide solves it *below* the HPA with [Kueue](https://kueue.sigs.k8s.io/).
+This guide solves that *below* the HPA with [Kueue](https://kueue.sigs.k8s.io/).
 Every replica pod becomes its own Kueue `Workload`, and Kueue holds a pod at a
 scheduling gate until GPU quota is free for it. The HPA is never touched, so it
 needs no annotation and KEDA keeps sole ownership of the HPA it generates. Each
@@ -44,12 +40,10 @@ and preempts to take its floor back when demand returns.
    [KEDA + EPP Metrics](../keda-epp-queue/README.md) or
    [KEDA + WVA Metrics](../wva/README.md). Nothing in this guide changes that
    configuration.
-3. The [experimental replica rebalancer](../replica-rebalancing/README.md) is
-   uninstalled. It enforces the same GPU budget from the other side of the
-   HPA, so the two must never run together. This guide assumes it is absent,
-   along with the hard `requests.nvidia.com/gpu` `ResourceQuota` it reads — a
-   gated pod still counts against a `ResourceQuota`, so one left in place would
-   stop the ReplicaSet from creating the very pod Kueue is meant to queue.
+3. No hard `requests.nvidia.com/gpu` `ResourceQuota` on the namespace. A gated
+   pod still counts against a `ResourceQuota`, so one left in place would stop
+   the ReplicaSet from creating the very pod Kueue is meant to queue. Kueue's
+   `ClusterQueue` quotas replace it.
 4. Every model pod declares explicit GPU requests and limits. This is what Kueue
    accounts against quota, so a pod without them is admitted for free:
 
@@ -410,12 +404,12 @@ arithmetic. Re-check this if you switch a trigger to `Utilization`.
 
 ## Perceived Effects
 
-| Condition | Replica rebalancer | Kueue |
-| --- | --- | --- |
-| Demand rises, budget full | lowers `spec.maxReplicas` on the next loop | extra pods are created and gated |
-| Demand drops | raises `maxReplicas` back toward the manifest value | pods are deleted, quota is released within seconds |
-| One model idle | its unused GPUs raise the other's ceiling | the other ClusterQueue borrows above its own floor |
-| Idle model wakes up | waits for the next loop, no preemption | preempts a borrowed replica immediately |
+| Condition | Kueue |
+| --- | --- |
+| Demand rises, budget full | extra pods are created and gated |
+| Demand drops | pods are deleted, quota is released within seconds |
+| One model idle | the other ClusterQueue borrows above its own floor |
+| Idle model wakes up | preempts a borrowed replica immediately |
 
 ## Why Contention Settles on the Floors
 
@@ -432,9 +426,8 @@ settings produce that:
 
 So when both models want more than their floor at once, and the floors already
 sum to capacity, there is by definition nothing idle left to borrow: each model
-sits on its floor and the surplus stays gated. That is exactly the
-over-provisioning the replica rebalancer existed to prevent, except the surplus
-queues instead of the cluster being oversubscribed.
+sits on its floor and the surplus stays gated — the surplus queues instead of
+the cluster being oversubscribed.
 
 ## Tuning
 

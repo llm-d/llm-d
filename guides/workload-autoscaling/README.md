@@ -109,25 +109,14 @@ Full definitions for the model-server and EPP signals live in the [metric refere
 
 For alert rules covering the model-server and EPP signals, see [Alerting](../../docs/operations/observability/alerting.md).
 
-## Features
+## Kueue-Based Replica Rebalancing (Experimental)
 
-### Replica Rebalancing (Experimental)
-
-The [Replica Rebalancing guide](./replica-rebalancing/README.md) describes an
-experimental feature that adjusts the maximum replica counts of explicitly
-annotated HPAs when multiple models share a GPU budget. Integration with
-KEDA-generated HPAs requires annotation-propagation support and is not covered
-by the KEDA+EPP guide. The feature is a proof of concept and is not
-production-ready; use it only in test or development environments.
-
-### Kueue-Based Replica Rebalancing (Experimental)
-
-The [Kueue-Based Replica Rebalancing guide](./kueue-rebalancing/README.md)
-enforces the same shared GPU budget with [Kueue](https://kueue.sigs.k8s.io/)
-instead of a control loop over HPAs. Each model gets a `ClusterQueue` with a
-guaranteed GPU floor in a shared cohort, and replica pods are admitted only when
-quota is free — so an idle model's GPUs are lent to a busy one and reclaimed by
-preemption. Enforcement happens below the HPA, so KEDA-generated HPAs work
-unmodified, but over-budget demand shows up as `Pending` pods rather than a
-lowered `maxReplicas`. Do not run this alongside the experimental replica
-rebalancer.
+When several models share one GPU budget, their HPAs scale independently and
+none of them knows what the others are consuming. The [Kueue-Based Replica
+Rebalancing guide](./kueue-rebalancing/README.md) enforces that shared budget
+with [Kueue](https://kueue.sigs.k8s.io/). Each model gets a `ClusterQueue` with
+a guaranteed GPU floor in a shared cohort, and replica pods are admitted only
+when quota is free — so an idle model's GPUs are lent to a busy one and
+reclaimed by preemption. Enforcement happens below the HPA, so KEDA-generated
+HPAs work unmodified, but over-budget demand shows up as `Pending` pods rather
+than a lowered `maxReplicas`.
