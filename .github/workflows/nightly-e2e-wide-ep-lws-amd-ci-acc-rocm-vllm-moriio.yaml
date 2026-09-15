@@ -107,7 +107,7 @@ jobs:
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
 #      workload: ${{ inputs.workload || 'guide_wide-ep-lws_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
-      # Pinned: 'true' deletes the pre-provisioned model-pvc and the staged weights with it.
+      # Pinned: 'true' deletes model-pvc; teardown deletes `usage=model-cache` PVs regardless, so keep the PV unlabelled.
       deep_cleaning: 'false'
       # persistent_model stays unset: this lane caches weights via HF_HOME on model-pvc.
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
