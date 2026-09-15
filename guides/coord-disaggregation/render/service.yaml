@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/component: vllm-render
 spec:
   # Fronts the prefill model server pods from ../modelserver/ for the
-  # Coordinator's render step. They serve /v1/*/render because they set
-  # VLLM_ENABLE_SCALE_OUT_ENDPOINTS=1. Only Ready pods receive traffic.
+  # Coordinator's render step. They serve /v1/*/render because they run
+  # with --enable-scale-out. Only Ready pods receive traffic.
   #
   # Prefill only: render on decode slows token streaming, and encode has no
   # --max-model-len, so render there accepts prompts that prefill and decode

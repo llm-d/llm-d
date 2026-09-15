@@ -20,7 +20,9 @@ spec:
       containers:
       - name: coordinator
         image: ghcr.io/llm-d/llm-d-router-coordinator:main
-        imagePullPolicy: IfNotPresent
+        # The main tag moves with every merge to llm-d-router main, so pull it
+        # again instead of running an older image cached on the node.
+        imagePullPolicy: Always
         args:
         - --config
         - /etc/coordinator/coordinator.yaml

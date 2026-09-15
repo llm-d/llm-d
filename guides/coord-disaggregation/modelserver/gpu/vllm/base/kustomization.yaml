@@ -23,18 +23,17 @@ labels:
 
 patches:
   - path: patch-decode.yaml
-  # VLLM_ENABLE_SCALE_OUT_ENDPOINTS=1 for all vLLM instances: "vllm serve"
-  # registers the scale-out endpoints (/inference/v1/generate and the /render
-  # and /derender endpoints) only when this is 1. The default is off, and only
-  # 0 or 1 are accepted, see https://github.com/vllm-project/vllm/pull/54579
+  # --enable-scale-out for all vLLM instances: "vllm serve" registers the
+  # scale-out endpoints (/inference/v1/generate and the /render and /derender
+  # endpoints) only with this flag. It replaced VLLM_ENABLE_SCALE_OUT_ENDPOINTS,
+  # see https://github.com/vllm-project/vllm/pull/55176. vLLM builds from before
+  # 2026-09-14 do not know the flag and fail at startup.
   - target:
       kind: Deployment
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: VLLM_ENABLE_SCALE_OUT_ENDPOINTS
-          value: "1"
+        path: /spec/template/spec/containers/0/args/-
+        value: "--enable-scale-out"
   # VLLM_USE_V2_MODEL_RUNNER=1 for the instances that use the CPU EC connector
   # (encode and prefill). The connector fails at startup without the V2 model
   # runner, see https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
