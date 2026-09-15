@@ -55,6 +55,7 @@ This guide includes configurations for the following accelerators:
 | NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm/coreweave/` | CoreWeave deployment |
 | NVIDIA GPU (GB200) | `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
 | Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
+| AMD Instinct (vLLM) | `modelserver/amd/vllm-deepseek-v3/` | DeepSeek-V3 2P2D, MoRI-EP + MoRI-IO, `amd.com/vnic` RDMA, rail-only fabric. Requires the `router/amd.values.yaml` override and a pre-provisioned RWX `model-pvc` |
 
 > [!NOTE]
 > NVIDIA GPU backends that use DeepEP for inter-node EP require All-to-All RDMA
@@ -62,7 +63,10 @@ This guide includes configurations for the following accelerators:
 > on all other hosts. Networks restricted to communicating only between matching
 > NIC IDs (rail-only connectivity) will fail. The Intel XPU backend uses XCCL
 > and `allgather_reducescatter`; it does not use DeepEP, but still requires
-> full-mesh pod network connectivity between decode and prefill workers.
+> full-mesh pod network connectivity between decode and prefill workers. The AMD
+> Instinct backend uses MoRI-EP rather than DeepEP and is the one configuration
+> here that **does** run on a rail-only fabric, provided MoRI's rail-only
+> enforcement is enabled.
 
 ## Prerequisites
 
@@ -111,24 +115,18 @@ This guide includes configurations for the following accelerators:
 This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
 ```bash
+export ACCELERATOR=gpu # gpu | xpu | amd
+
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${ACCELERATOR}.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-For Intel XPU, add the XPU router override so EPP targets the single decode
-sidecar port exposed by the XPU manifests:
-
-```bash
-helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/xpu.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
+`ACCELERATOR` must match the model server you deploy below; it is not optional
+tuning. The XPU and AMD servers expose one router-addressable port, NVIDIA eight.
 
 <details>
 <summary><b>Gateway Mode</b></summary>
@@ -140,18 +138,17 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export ACCELERATOR=gpu # gpu | xpu | amd
+
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${ACCELERATOR}.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
-
-For Intel XPU, include
-`-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/xpu.values.yaml` after the
-`${GUIDE_NAME}.values.yaml` file.
 
 </details>
 
@@ -164,6 +161,11 @@ Choose one of the following deployment paths:
 Apply the Kustomize overlay for your specific backend:
 
 ```bash
+# Keep the NVIDIA line first. CI rewrites `modelserver/gpu/vllm` in every command
+# below to `modelserver/<accelerator>/<backend>` and runs the first match, so the
+# NVIDIA line is the one every lane actually executes (the AMD lane resolves it to
+# modelserver/amd/vllm-deepseek-v3/${INFRA_PROVIDER}). Moving a per-accelerator line
+# above it makes that literal path win instead, silently deploying base/ not amd-ci/.
 # NVIDIA GPU
 export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
@@ -171,6 +173,11 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 # Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+
+# AMD Instinct — read that recipe's README first: it needs a pre-provisioned
+# RWX `model-pvc` for the model cache, and `base/` carries no fabric configuration, so it
+# needs a provider overlay (copy `amd-ci/`) to attach the rails and set the MoRI RDMA vars.
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/amd/vllm-deepseek-v3/base
 ```
 
 #### Deploy using DisaggregatedSet
@@ -278,6 +285,8 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 # Intel XPU
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+# AMD Instinct
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/amd/vllm-deepseek-v3/base
 ```
 
 ## Benchmarking Results
