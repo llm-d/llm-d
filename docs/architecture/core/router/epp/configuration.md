@@ -181,9 +181,6 @@ requestHandler:
   - pluginRef: myParser
 ```
 
-> [!NOTE]
-> The top-level `parser` field (a single object) is deprecated in favor of the `requestHandler.parsers` list. If both are set, `requestHandler.parsers` is used. See [llm-d-router#1308](https://github.com/llm-d/llm-d-router/issues/1308).
-
 #### Admitters & Data Producers
 
 Admitters and Data Producers are specialized plugins that execute during the initial request processing phase:
@@ -297,9 +294,6 @@ flowControl:
   saturationDetector:
     pluginRef: utilization-detector # Default
 ```
-
-> [!NOTE]
-> The top-level `saturationDetector` field is deprecated in favor of `flowControl.saturationDetector`. If both are set, `flowControl.saturationDetector` is used. See [llm-d-router#1308](https://github.com/llm-d/llm-d-router/issues/1308).
 
 ##### Fields
 
