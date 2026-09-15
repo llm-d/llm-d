@@ -1,7 +1,18 @@
-# HPA/KEDA with WVA Metrics
+# Workload Variant Autoscaler (WVA) — Deprecated
 
 > [!WARNING]
-> **Deprecation Notice:** The `VariantAutoscaling` (VA) CRD-based approach described in this document is deprecated. The recommended path is the [HPA + WVA guide](../../../../guides/workload-autoscaling/wva/README.md), which configures HPA directly with WVA-published metrics without requiring the `VariantAutoscaling` CRD. If you are currently using VA objects, see the [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva) section below.
+> **Deprecated.** The Workload Variant Autoscaler is deprecated and is no longer
+> the recommended way to autoscale llm-d workloads. It is retained here as a
+> design reference for existing deployments; expect no new features, and plan a
+> migration.
+>
+> The recommended path is [KEDA with EPP Metrics](./keda-epp.md), deployed from
+> the [workload autoscaling guides](../../../../guides/workload-autoscaling/README.md).
+> See [Migrating off WVA](#migrating-off-wva) below.
+>
+> Within the deprecated path, the `VariantAutoscaling` (VA) CRD was itself
+> already superseded by HPA objects consuming WVA's `wva_desired_replicas`
+> metric — see [Migration from VA to HPA + WVA](#migration-from-va-to-hpa--wva).
 
 ## Functionality
 
@@ -424,13 +435,48 @@ Key controller flags:
 | `--leader-election-renew-deadline` | `50s` | Leader election renew deadline |
 | `--rest-client-timeout` | `60s` | Kubernetes API client timeout |
 
+## Migrating off WVA
+
+WVA is deprecated; the target is the [KEDA + EPP path](./keda-epp.md). There is
+no automated conversion, because the two designs express scaling intent
+differently: WVA computes one desired replica count per variant globally, while
+KEDA + EPP scales each Deployment against its own EPP signal.
+
+To migrate:
+
+1. Pick the signal that matches your workload from the
+   [signal table](./keda-epp.md#scaling-signals) — queue depth, pool saturation,
+   token backlog, or estimated latency — and follow the corresponding guide to
+   create a `ScaledObject` per model-server Deployment.
+2. Delete the WVA-managed HPAs (those carrying `llm-d.ai/managed: "true"`), or
+   the `VariantAutoscaling` objects if you are still on the VA flavor, *before*
+   the `ScaledObject` is created. KEDA generates its own HPA, and two HPAs
+   targeting one Deployment conflict.
+3. Uninstall the WVA controller, and Prometheus Adapter if it was installed for
+   WVA and nothing else uses it.
+
+What you lose in the move is cost-aware placement across variants — the choice
+to satisfy demand on cheaper hardware; see
+[Limitations](./keda-epp.md#limitations). If your deployment depends on that,
+stay on WVA for now and track the autoscaling guides for a replacement.
+
+Sharing a contended accelerator budget between pools does *not* need WVA: use
+[Kueue-based replica rebalancing](../../../../guides/workload-autoscaling/kueue-rebalancing/README.md),
+which gates replica pods against per-model quota floors below the HPA and so
+composes with any of the KEDA + EPP signals.
+
 ## Migration from VA to HPA + WVA
 
-The new [HPA + WVA](../../../../guides/workload-autoscaling/wva/README.md) approach replaces the `VariantAutoscaling` (VA) CRD with standard Kubernetes HPA objects that consume the `wva_desired_replicas` external metric published by WVA. This removes the need to manage VA resources and makes scaling intent visible through the standard `kubectl get hpa` surface.
+> [!NOTE]
+> This section is historical. It documents migration *within* the now-deprecated
+> WVA path, from the `VariantAutoscaling` CRD to WVA-published metrics. New
+> deployments should use [KEDA + EPP](./keda-epp.md) instead.
+
+The [HPA + WVA](../../../../guides/workload-autoscaling/wva/README.md) approach replaces the `VariantAutoscaling` (VA) CRD with standard Kubernetes HPA objects that consume the `wva_desired_replicas` external metric published by WVA. This removes the need to manage VA resources and makes scaling intent visible through the standard `kubectl get hpa` surface.
 
 ### Key Differences
 
-| | VA (Deprecated) | HPA + WVA (Recommended) |
+| | VA (Superseded) | HPA + WVA (Deprecated) |
 |---|---|---|
 | **Scaling object** | `VariantAutoscaling` CRD | Standard `HorizontalPodAutoscaler` |
 | **Scale target** | Managed by WVA via `scaleTargetRef` in VA spec | Managed by HPA via standard `scaleTargetRef` |
