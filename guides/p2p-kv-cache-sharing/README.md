@@ -126,19 +126,17 @@ runs it against two live pods and prints the recommended value.
   `minCachedTokenDelta` for your own model/transport rather than
   reusing the RDMA numbers below. `OffloadingConnector`'s P2P tier
   stages every transfer through its CPU-mmap-backed offload tier and
-  registers only that host memory with NIXL/UCX — device memory is
-  never touched directly — so this overlay is TCP-only and requests no
+  registers only that host memory with NIXL/UCX, never XPU device
+  memory directly, so this overlay is TCP-only and requests no
   RDMA/verbs device (the P2P `host`/`port` config above is a separate
   ZMQ control channel, not the NIXL data plane). An RDMA overlay
-  (mirroring `modelserver/gpu/vllm/rdma/`) simply hasn't been built and
-  validated on Intel XPU yet; nothing about this path blocks it. If
-  you're evaluating direct XPU-device RDMA elsewhere, note the open
-  upstream UCX `ze_copy` DMA-BUF-export bug tracked by
+  (mirroring `modelserver/gpu/vllm/rdma/`) is not yet available for
+  Intel XPU. For transports that register XPU device memory with NIXL
+  directly — e.g. [llm-d/llm-d#2461](https://github.com/llm-d/llm-d/pull/2461)'s
+  `modelexpress-p2p` Intel XPU variant — see the open upstream UCX
+  `ze_copy` DMA-BUF-export issue:
   [openucx/ucx#11902](https://github.com/openucx/ucx/pull/11902) and
-  [#11903](https://github.com/openucx/ucx/pull/11903), discussed in
-  [llm-d/llm-d#2461](https://github.com/llm-d/llm-d/pull/2461)'s Intel
-  XPU `modelexpress-p2p` variant — that guide's P2P weight transfer
-  registers device memory with NIXL directly, unlike this one.
+  [#11903](https://github.com/openucx/ucx/pull/11903).
   > [!WARNING]
   > `ghcr.io/llm-d/llm-d-xpu:v0.9.0` (vLLM 0.26.0, the `llm-d` component
   > used by every other guide's XPU overlay) has no `remote_kv_source`

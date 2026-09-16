@@ -55,10 +55,10 @@ spec:
                   fieldPath: status.podIP
             # TieringOffloadingSpec stages every P2P transfer through its
             # mmap-backed CPU primary tier, and NIXL registers that memory
-            # as DRAM — this overlay's UCX data plane never touches XPU
-            # device memory directly. Pin it to TCP anyway, matching the
-            # no-RDMA XPU precedent in ../../../../pd-disaggregation, since
-            # this overlay requests no RDMA/verbs device either.
+            # as DRAM: this overlay's UCX data plane never touches XPU
+            # device memory directly. It requests no RDMA/verbs device,
+            # matching the no-RDMA XPU precedent in
+            # ../../../../pd-disaggregation.
             - name: UCX_TLS
               value: "tcp"
             # NIXL and the P2P tier bind their side channels to the pod IP so
