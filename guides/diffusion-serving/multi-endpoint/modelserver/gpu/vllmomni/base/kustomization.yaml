@@ -1,18 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../../recipes/modelserver/base/single-host/default
+  - ../../../../../../recipes/modelserver/base/single-host/default
 
-namespace: llm-d-omni-serving
+namespace: llm-d-multi-endpoint-serving
 
-namePrefix: omni-serving-nvidia-gpu-vllm-omni-
+namePrefix: diffusion-serving-multi-nvidia-gpu-vllm-omni-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm-omni/release
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm-omni/release
 
 labels:
   - pairs:
-      llm-d.ai/guide: omni-serving
+      llm-d.ai/guide: diffusion-serving-multi-endpoint
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
       llm-d.ai/engine-type: vllm-omni

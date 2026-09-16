@@ -2,17 +2,14 @@
 
 This guide deploys a model that serves **one or more modality endpoints** behind the llm-d router, using Gateway API exact-path HTTPRoutes to direct each endpoint to the model's InferencePool.
 
-The routing setup is **modality-agnostic** — it supports any combination of endpoints that the model can serve. You deploy only the HTTPRoutes that match your model's capabilities:
+The other guides in this package ([text-to-speech](../text-to-speech/README.md), [text-to-image](../text-to-image/README.md), [image-to-image](../image-to-image/README.md)) each deploy a dedicated model for a single endpoint. This guide covers the **one model → multiple endpoints** pattern, where a single unified model generates multiple output types from one checkpoint.
 
-| Model | Engine | Endpoints | HTTPRoutes to deploy |
+| Model | Engine | Endpoints | Path matches to keep |
 |---|---|---|---|
-| **Qwen3-Omni** (default) | vLLM-Omni | `/v1/chat/completions`, `/v1/audio/speech`, `/v1/audio/transcriptions` | `omni-audio-speech`, `omni-audio-transcriptions` |
-| **Qwen3-TTS** | vLLM-Omni | `/v1/audio/speech` | `omni-audio-speech` |
-| **FLUX / Diffusion** | vLLM-Omni | `/v1/images/generations` | `omni-images-generations` |
-| **Future omni model** | vLLM-Omni | All of the above | All HTTPRoutes |
-
-> [!NOTE]
-> This guide differs from the single-endpoint [diffusion-serving guides](../diffusion-serving/) (text-to-speech, text-to-image, image-to-image), which each deploy a dedicated model for one endpoint. Here, a single model may handle **multiple** endpoints, and exact-path HTTPRoutes direct each modality to its InferencePool.
+| **Qwen3-Omni** (default) | vLLM-Omni | `/v1/chat/completions`, `/v1/audio/speech`, `/v1/audio/transcriptions` | `/v1/audio/speech`, `/v1/audio/transcriptions` |
+| **Qwen3-TTS** | vLLM-Omni | `/v1/audio/speech` | `/v1/audio/speech` |
+| **FLUX / Diffusion** | vLLM-Omni | `/v1/images/generations` | `/v1/images/generations` |
+| **Future omni model** | vLLM-Omni | All of the above | All path matches |
 
 > [!WARNING]
 > Multi-endpoint serving is **experimental**. The routing configuration is an early baseline, and the manifests may change in upcoming releases.
@@ -45,7 +42,7 @@ Client → Gateway → HTTPRoute (exact-path match) → model pool → model pod
   /v1/chat/completions             → catch-all  → model-pool  (or text pool)
 ```
 
-Each modality-specific endpoint gets an exact-path HTTPRoute pointing to the model's InferencePool. You only deploy routes for the endpoints your model actually supports. Shared endpoints like `/v1/chat/completions` fall through to the `PathPrefix: /` catch-all from the inference-gateway component.
+A single HTTPRoute with multiple exact-path match rules directs modality-specific endpoints to the model's InferencePool. You remove path matches for endpoints your model does not support. Shared endpoints like `/v1/chat/completions` fall through to the `PathPrefix: /` catch-all from the inference-gateway component.
 
 To add a text-only pool (e.g. Llama) alongside a multi-endpoint model, deploy a second InferencePool + EPP and point the catch-all at the text pool. Exact-path routes take precedence per Gateway API specification, so modality-specific requests continue to reach the correct pool.
 
@@ -61,13 +58,13 @@ The EPP uses the standard config (`queue-scorer` + `max-score-picker`, no filter
 | Replicas           | 1                                                              |
 | GPUs per replica   | Model-dependent (e.g. Qwen3-Omni requires 2)                  |
 | Accelerator        | NVIDIA GPU                                                     |
-| Endpoints served   | Depends on model — deploy HTTPRoutes only for endpoints the model supports |
+| Endpoints served   | Depends on model — keep only the HTTPRoute path matches for endpoints the model supports |
 
 ---
 
 ## Prerequisites
 
-1. Install the local client tooling using the [client setup guide](../../helpers/client-setup/README.md).
+1. Install the local client tooling using the [client setup guide](../../../helpers/client-setup/README.md).
 2. Clone and check out the llm-d repository:
 
    ```bash
@@ -80,8 +77,8 @@ The EPP uses the standard config (`queue-scorer` + `max-score-picker`, no filter
 
    ```bash
    source ${REPO_ROOT}/guides/env.sh
-   export GUIDE_NAME="omni-serving"
-   export NAMESPACE=llm-d-omni-serving
+   export GUIDE_NAME="multi-endpoint-serving"
+   export NAMESPACE=llm-d-multi-endpoint-serving
    export ENGINE=vllmomni
    export INFRA_PROVIDER=base  # base | gke
    ```
@@ -116,13 +113,13 @@ The EPP uses the standard config (`queue-scorer` + `max-score-picker`, no filter
 
 #### Standalone Mode
 
-Deploy the llm-d Router in **Standalone Mode** with the omni-serving router configuration:
+Deploy the llm-d Router in **Standalone Mode** with the multi-endpoint router configuration:
 
 ```bash
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/omni-serving/router/values.yaml \
+    -f ${REPO_ROOT}/guides/diffusion-serving/multi-endpoint/router/values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -131,7 +128,7 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy:
 
-1. Deploy a Kubernetes Gateway by following one of [the gateway guides](../../docs/infrastructure/gateway).
+1. Deploy a Kubernetes Gateway by following one of [the gateway guides](../../../docs/infrastructure/gateway).
 2. Deploy the llm-d router and an HTTPRoute:
 
 ```bash
@@ -139,7 +136,7 @@ export PROVIDER_NAME=gke  # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/omni-serving/router/values.yaml \
+    -f ${REPO_ROOT}/guides/diffusion-serving/multi-endpoint/router/values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -149,27 +146,16 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Apply Multimodal HTTPRoutes
 
-After deploying the router, apply the exact-path HTTPRoutes for the endpoints your model supports. The `httproutes/` directory includes routes for all supported modalities — **apply only the ones that match your model's capabilities**:
+After deploying the router, apply the HTTPRoute for the endpoints your model supports. The `httproutes.yaml` includes path matches for all supported modalities — **edit the file to remove path matches for endpoints your model does not support** before applying:
 
-| HTTPRoute file content | Endpoint | Use when model supports |
+| Path match | Endpoint | Use when model supports |
 |---|---|---|
-| `omni-audio-speech` | `/v1/audio/speech` | Text-to-speech (e.g. Qwen3-Omni, Qwen3-TTS) |
-| `omni-audio-transcriptions` | `/v1/audio/transcriptions` | Speech-to-text / ASR (e.g. Qwen3-Omni) |
-| `omni-images-generations` | `/v1/images/generations` | Image generation (e.g. FLUX, diffusion models) |
-
-**Apply all routes** (for a model that supports everything):
+| `/v1/audio/speech` | Text-to-speech | TTS (e.g. Qwen3-Omni, Qwen3-TTS) |
+| `/v1/audio/transcriptions` | Speech-to-text | ASR (e.g. Qwen3-Omni) |
+| `/v1/images/generations` | Image generation | Image gen (e.g. FLUX, diffusion models) |
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/omni-serving/httproutes/
-```
-
-**Or apply selectively** (e.g. Qwen3-Omni supports text + audio only):
-
-```bash
-# Extract only the audio routes from the multi-document YAML
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/omni-serving/httproutes/httproutes.yaml
-# Then delete the image route if not needed:
-kubectl delete httproute omni-images-generations -n ${NAMESPACE} --ignore-not-found
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/diffusion-serving/multi-endpoint/httproutes.yaml
 ```
 
 ### 3. Deploy the Model Server
@@ -177,7 +163,7 @@ kubectl delete httproute omni-images-generations -n ${NAMESPACE} --ignore-not-fo
 Apply the Kustomize overlay for the omni model:
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/omni-serving/modelserver/gpu/${ENGINE}/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/diffusion-serving/multi-endpoint/modelserver/gpu/${ENGINE}/${INFRA_PROVIDER}/
 ```
 
 ---
@@ -289,15 +275,15 @@ To add a text-only model alongside a multi-endpoint model, deploy a second Infer
 Exact-path routes take precedence over `PathPrefix` per Gateway API specification, so modality-specific requests always reach the correct pool regardless of the catch-all target.
 
 > [!NOTE]
-> If two different models serve the same endpoint path (e.g. two TTS models both on `/v1/audio/speech`), path-based routing alone cannot distinguish between them. In that case, deploy each model in its own namespace with a separate Gateway endpoint, following the pattern in the [diffusion-serving guides](../diffusion-serving/).
+> If two different models serve the same endpoint path (e.g. two TTS models both on `/v1/audio/speech`), path-based routing alone cannot distinguish between them. In that case, deploy each model in its own namespace with a separate Gateway endpoint, following the pattern in the single-endpoint guides ([text-to-speech](../text-to-speech/README.md), [text-to-image](../text-to-image/README.md), [image-to-image](../image-to-image/README.md)).
 
 ---
 
 ## Cleanup
 
 ```bash
-kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/omni-serving/httproutes/
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/diffusion-serving/multi-endpoint/httproutes.yaml
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/omni-serving/modelserver/gpu/${ENGINE}/${INFRA_PROVIDER}/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/diffusion-serving/multi-endpoint/modelserver/gpu/${ENGINE}/${INFRA_PROVIDER}/
 kubectl delete namespace ${NAMESPACE}
 ```

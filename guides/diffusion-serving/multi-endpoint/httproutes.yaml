@@ -1,0 +1,35 @@
+# Exact-path HTTPRoutes for multi-endpoint model serving.
+#
+# A single HTTPRoute with multiple path match rules directs modality-specific
+# endpoints to the model's InferencePool. Shared endpoints (e.g.
+# /v1/chat/completions) fall through to the catch-all PathPrefix route
+# deployed by the Helm chart.
+#
+# To serve only a subset of endpoints, remove the path matches your model
+# does not support.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: multi-endpoint-routes
+spec:
+  parentRefs:
+  - name: inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/audio/speech
+    - path:
+        type: Exact
+        value: /v1/audio/transcriptions
+    - path:
+        type: Exact
+        value: /v1/images/generations
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: multi-endpoint-serving
+      port: 8000
+    timeouts:
+      request: 600s
