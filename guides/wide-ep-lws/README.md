@@ -62,11 +62,18 @@ This guide includes configurations for the following accelerators:
 > NIC IDs (rail-only connectivity) will fail. The Intel XPU backend uses XCCL
 > and `allgather_reducescatter`; it does not use DeepEP, but still requires
 > full-mesh pod network connectivity between decode and prefill workers.
+>
+> See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+> for how the networking stack (NIXL/UCX, InfiniBand/RoCE) fits together and what
+> the cluster must provide, and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md)
+> for cross-node setup.
 
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
-* Have a cluster with RDMA-capable accelerator nodes. For GKE, see the
+* Have a cluster with RDMA-capable accelerator nodes. For the networking stack and
+  how to verify it, see [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+  and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md). For GKE, see the
   [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the
   [GKE overlay cluster prerequisites](modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md#cluster-prerequisites).
 * Checkout llm-d repo:
