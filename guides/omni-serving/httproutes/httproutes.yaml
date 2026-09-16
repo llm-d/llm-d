@@ -1,0 +1,69 @@
+# Exact-path HTTPRoutes for multi-endpoint model serving.
+#
+# Deploy only the routes that match your model's capabilities:
+#   - omni-audio-speech:          for models supporting /v1/audio/speech (TTS)
+#   - omni-audio-transcriptions:  for models supporting /v1/audio/transcriptions (ASR)
+#   - omni-images-generations:    for models supporting /v1/images/generations (image gen)
+#
+# Shared endpoints (e.g. /v1/chat/completions) fall through to
+# the catch-all PathPrefix route deployed by the Helm chart.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: omni-audio-speech
+spec:
+  parentRefs:
+  - name: inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/audio/speech
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: omni-serving
+      port: 8000
+    timeouts:
+      request: 300s
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: omni-audio-transcriptions
+spec:
+  parentRefs:
+  - name: inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/audio/transcriptions
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: omni-serving
+      port: 8000
+    timeouts:
+      request: 300s
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: omni-images-generations
+spec:
+  parentRefs:
+  - name: inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/images/generations
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: omni-serving
+      port: 8000
+    timeouts:
+      request: 600s

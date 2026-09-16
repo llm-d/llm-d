@@ -1,0 +1,25 @@
+router:
+  inferencePool:
+    failureMode: FailOpen
+
+  epp:
+    pluginsConfigFile: "omni.yaml"
+    pluginsCustomConfig:
+      omni.yaml: |
+        apiVersion: inference.networking.x-k8s.io/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - name: queueScorer
+          type: queue-scorer
+        - name: maxScore
+          type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queueScorer
+          - pluginRef: maxScore
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "omni-serving"
+    protocol: http
