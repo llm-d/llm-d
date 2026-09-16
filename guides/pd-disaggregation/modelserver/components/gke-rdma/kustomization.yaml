@@ -1,8 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-resources:
-  - gke-rdma-template.yaml
-
+# Forwards to the shared GKE RDMA component.
 components:
-  - ../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+  - ../../../../recipes/modelserver/components/gke-rdma

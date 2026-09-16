@@ -1,0 +1,79 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: batch-gateway-alerting-rules
+  labels:
+    app: batch-gateway-metrics
+spec:
+  groups:
+  # ---------------------------------------------------------------------------
+  # Batch Gateway processor and GC health
+  #
+  # Unlike epp-alerting-rules.yaml, every expression here carries a
+  # `namespace="batch-gateway"` matcher. The batch-gateway metric names
+  # (`jobs_processed_total`, `active_workers`, ...) are unprefixed and generic
+  # enough to collide with other workloads, so these rules must be scoped.
+  # Change the matcher if you deployed the guide with a different ${NAMESPACE}.
+  # ---------------------------------------------------------------------------
+  - name: batch-gateway.rules
+    rules:
+    - alert: BatchGatewayHighQueueWait
+      expr: |
+        histogram_quantile(
+          0.95,
+          sum(rate(job_queue_wait_duration_seconds_bucket{namespace="batch-gateway"}[5m])) by (le)
+        ) > 300
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Batch Gateway queue wait time is high"
+        description: "p95 queue wait time has been above 300 seconds for 15m."
+    - alert: BatchGatewayHighJobFailureRate
+      # clamp_min keeps this silent rather than dividing by zero when no jobs
+      # are being processed.
+      expr: |
+        sum(rate(jobs_processed_total{namespace="batch-gateway", result="failed"}[10m]))
+          / clamp_min(sum(rate(jobs_processed_total{namespace="batch-gateway"}[10m])), 0.001)
+          > 0.1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Batch Gateway job failure rate is high"
+        description: "Failed jobs have exceeded 10% of processed jobs for 10m (current {{ $value | humanizePercentage }})."
+    - alert: BatchGatewayExpiredJobsDetected
+      expr: |
+        sum(rate(jobs_processed_total{namespace="batch-gateway", result="expired"}[10m]))
+          / clamp_min(sum(rate(jobs_processed_total{namespace="batch-gateway"}[10m])), 0.001)
+          > 0.03
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Batch Gateway expired job rate is high"
+        description: "Expired jobs have exceeded 3% of processed jobs for 10m (current {{ $value | humanizePercentage }})."
+    - alert: BatchGatewayWorkersSaturated
+      expr: |
+        sum(active_workers{namespace="batch-gateway"})
+          / clamp_min(sum(total_workers{namespace="batch-gateway"}), 1)
+          > 0.9
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Batch Gateway workers are saturated"
+        description: "Worker utilization has been above 90% for 15m (current {{ $value | humanizePercentage }})."
+    - alert: BatchReconcilerErrors
+      # increase(), not rate(): the GC orphan reconciler runs on an interval
+      # (60m by default) so errors arrive at most once per cycle. The 65m window
+      # is that interval plus a scrape buffer — shorten it if you shortened the
+      # reconciler interval, or the alert will not see a full cycle.
+      expr: |
+        increase(batch_reconciler_errors_total{namespace="batch-gateway"}[65m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Batch reconciler is encountering errors"
+        description: "The GC orphan reconciler encountered errors in the last 65m."

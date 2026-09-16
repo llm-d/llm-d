@@ -49,11 +49,14 @@ if [ "${USE_SCCACHE}" = "true" ]; then
         return 0
     fi
 
+    aws_creds_status="NOT SET"
+    [ -n "${AWS_ACCESS_KEY_ID:-}" ] && aws_creds_status="set"
+
     echo "sccache successfully configured:"
     echo "  - Bucket: ${SCCACHE_BUCKET}"
     echo "  - Region: ${SCCACHE_REGION}"
     echo "  - Key prefix: ${SCCACHE_S3_KEY_PREFIX}"
     echo "  - Socket: ${SCCACHE_SERVER_UDS}"
-    echo "  - AWS credentials: $([ -n \"${AWS_ACCESS_KEY_ID:-}\" ] && echo 'set' || echo 'NOT SET')"
+    echo "  - AWS credentials: ${aws_creds_status}"
     /usr/local/bin/sccache --show-stats 2>&1 | head -5
 fi

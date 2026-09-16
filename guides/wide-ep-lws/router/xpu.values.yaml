@@ -1,4 +1,39 @@
 router:
+  epp:
+    # Same config as wide-ep-lws.values.yaml minus the
+    # disaggregatedset-rollout-screener: the XPU path deploys plain
+    # LeaderWorkerSets, and the screener drops endpoints without
+    # DisaggregatedSet revision labels.
+    pluginsCustomConfig:
+      wide-ep-lws-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+
   modelServers:
     targetPorts:
       - number: 8000

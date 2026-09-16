@@ -1,0 +1,114 @@
+#
+# 1P/1D, TP=8 variant of the moriio/amd-ci (4P/4D, TP=2) leaf.
+#
+# Only the fields that differ are set here; env, cpu/memory, probes, and volumes
+# are inherited from ../amd-ci via strategic-merge. Container/initContainer args
+# are matched by name (not index) and replaced wholesale, since args is a
+# primitive list with no merge key.
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # One AINIC per GPU: net1..net8 (was net1,net2 at TP=2).
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net4"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net5"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net6"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net7"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net8"}
+          ]
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            # Pollara cannot register more than 2GB of consecutive memory.
+            # Adjust KV cache size to have layers that fit in the allowed memory.
+            - "--kv-cache-memory-bytes=100000000000"
+            - "--kv-transfer-config"
+            # WRITE-mode producer. proxy_ip intentionally omitted (no ZMQ proxy);
+            # peer discovery is via the routing sidecar on the request path.
+            - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_producer","kv_connector_extra_config":{"http_port":"8000","handshake_port":"6301","notify_port":"61005"}}'
+          env:
+            # Merged by name into the env inherited from ../amd-ci.
+            - name: MORI_IO_RAIL_AFFINITY
+              value: "1"
+          resources:
+            limits:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+            requests:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net4"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net5"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net6"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net7"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net8"}
+          ]
+    spec:
+      initContainers:
+        # Routing-proxy sidecar --moriio-tp-size MUST match the vLLM TP.
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --kv-connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+            - --moriio-write-mode
+            - --moriio-tp-size=8
+            - --moriio-parallel-dispatch
+            - --moriio-local-pod-ip=$(POD_IP)
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            # Pollara cannot register more than 2GB of consecutive memory.
+            # Adjust KV cache size to have layers that fit in the allowed memory.
+            - "--kv-cache-memory-bytes=100000000000"
+            - "--kv-transfer-config"
+            # WRITE-mode consumer
+            - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"http_port":"8200","handshake_port":"6301","notify_port":"61005"}}'
+            - "--port=8200"
+          env:
+            # Merged by name into the env inherited from ../amd-ci.
+            - name: MORI_IO_RAIL_AFFINITY
+              value: "1"
+          resources:
+            limits:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"
+            requests:
+              amd.com/gpu: "8"
+              amd.com/vnic: "8"

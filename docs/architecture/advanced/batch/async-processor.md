@@ -68,7 +68,7 @@ The two supported global merge policies are:
 | Policy | Description |
 |--------|-------------|
 | `random-robin` | Default policy. Randomly picks messages from all queues configured for a each pool. |
-| `tier-priority` | Buckets requests into 6 strict priority lanes using routing tags (`(classification, tier)`). Within each bucket, it round-robins across different client channels and stamps the chosen priority header (`x-gateway-priority` by default). |
+| `tier-priority` | Buckets requests into 6 strict priority lanes using routing tags (`(classification, tier)`). Within each bucket, it round-robins across different client channels and stamps lane objectives (`x-llm-d-inference-objective`). |
 
 Because merging lanes are grouped and evaluated independently per worker pool, backpressure from one pool's merged channel only impacts its associated worker pool, maintaining multi-tenant isolation.
 

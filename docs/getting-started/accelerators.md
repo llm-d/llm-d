@@ -11,9 +11,11 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
+| Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
+| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
-| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>) |
+| Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>), Minho Park (@rebel-minhopark, <minho.park@rebellions.ai>) |
 
 ## Requirements
 
@@ -55,6 +57,8 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
 
+On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/dynamic-slicing/README.md).
+
 ## AMD ROCm
 
 AMD GPUs are supported via ROCm. The specific GPU models supported are determined by the inference container image. See the AMD device plugin or DRA driver below for cluster setup.
@@ -74,6 +78,69 @@ For P/D disaggregation with RDMA-accelerated KV-cache transfer on Intel XPU, the
 - UCX transport configured with `ib,rc,ze_copy`.
 
 The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
+
+## Iluvatar
+
+Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). Each board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board); with ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards and vLLM parallel sizes count CUDA devices (2 per board). The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The P/D overlay serves `Qwen/Qwen3-32B` on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode). The optimized-baseline overlay serves `deepseek-ai/DeepSeek-V4-Flash` on 4 boards / 8 CUDA devices (DP=8 + EP).
+
+**UCX transport (required for P/D):**
+
+`IluNixlConnector` transfers KV cache over NIXL/UCX with `kv_buffer_device=cuda` (KV stays in VRAM). UCX must be configured with CUDA-aware transports:
+
+```yaml
+- name: UCX_TLS
+  value: "cuda_copy,cuda_ipc,tcp,self,posix,sysv"
+- name: UCX_CUDA_IPC_ENABLE_SAME_PROCESS
+  value: "y"
+```
+
+Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
+
+## MetaX C500X
+
+MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
+
+## Rebellions NPU
+
+Rebellions NPUs are supported through `vllm-rbln`, an out-of-tree vLLM platform
+plugin that registers on the `vllm.platform_plugins` entry point, shipped in a publicly
+pullable container image. The optimized-baseline overlay (`modelserver/npu/vllm/`)
+serves `openai/gpt-oss-120b` on two replicas of one NPU each, so the router balances
+across two model servers.
+
+**Cluster prerequisites:**
+
+- [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html),
+  which installs the driver and the `npu.rebellions.ai` DRA DeviceClass
+- Kubernetes 1.34 with the `resource.k8s.io/v1` DRA APIs
+
+**Device allocation.** NPUs are requested through DRA, not an extended resource. One
+DeviceClass serves every Rebellions product, so a claim reaches a specific NPU only by
+filtering on `productName` in a CEL selector — see
+`resource-claim-template.yaml` in the overlay. Omitting the selector lets the claim bind to
+a different Rebellions product than the guide was measured on.
+
+**NUMA alignment.** This overlay claims one NPU and no NIC, so it sets no
+`resource.kubernetes.io/numaNode` match constraint — such a constraint needs two or more
+requests in one claim to bind together.
+
+**Prefix caching is off, so layer the NPU router values.** The runtime disables prefix
+caching for sliding-window models, and `openai/gpt-oss-120b` is one: enabling it reports
+0 hits over every query. The guide's default scheduling profile is prefix-cache aware, so
+apply [`router/npu.rbln.values.yaml`](../../guides/optimized-baseline/router/npu.rbln.values.yaml)
+after the guide's own values to fall back to the load scorer alone. Both the flag and that
+file go away once the runtime supports prefix caching here.
+
+**Set `MODEL` when running the guide's steps.** The overlay pins
+`openai/gpt-oss-120b`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
+`MODEL=openai/gpt-oss-120b` so the validation and benchmark steps address the served model.
+
+**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation/README.md),
+because the runtime does not support sleep and wake; LoRA adapters; and multimodal models,
+which on this runtime need a code path that cannot run alongside a KV connector.
+
+**Verification.** The maintainers listed above stand up the optimized-baseline overlay once
+per llm-d release tag against the release image and record the result.
 
 ## CPU Inferencing
 

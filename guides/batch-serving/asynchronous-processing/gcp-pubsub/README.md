@@ -64,10 +64,14 @@ Edit the `values.yaml` file with your specific GCP project and resources:
 
 ```yaml
 ap:
-  gcpPubSub:
-    projectId: "<your-project>"
-    requestSubscriberId: "projects/<your-project>/subscriptions/async-proc-requests-sub"
-    resultTopicId: "projects/<your-project>/topics/async-proc-results"
+  transport: "gcp-pubsub"
+  transportConfig:
+    project_id: "<your-project>"
+    result_topic_id: "projects/<your-project>/topics/async-proc-results"
+    topics:
+      - subscriber_id: "projects/<your-project>/subscriptions/async-proc-requests-sub"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://<igw-host>:80"
 ```
 
 For deployment instructions, please refer to the [main README](../README.md#installation).
@@ -76,13 +80,13 @@ For deployment instructions, please refer to the [main README](../README.md#inst
 
 1. **Publish a message**:
 
-   Requests are consumed as an `InternalRequest` envelope: a `request_kind` tag
-   (`pubsub` for Pub/Sub) wrapping the caller-visible request under `data`. Note
-   that `deadline` and `created` are Unix-seconds **numbers**, not strings — a
-   quoted `deadline` fails to decode.
+   Publish the request on its own — on Pub/Sub, unlike Redis, it is **not** wrapped
+   in an `InternalRequest` envelope. The consumer builds that itself from the Pub/Sub
+   message. Note that `deadline` and `created` are Unix-seconds **numbers**, not
+   strings — a quoted `deadline` fails to decode.
 
    ```bash
-   gcloud pubsub topics publish $REQUEST_TOPIC_NAME --message='{"request_kind":"pubsub","internal":{},"data":{"id":"testmsg","created":1700000000,"deadline":1999999999,"payload":{"model":"your-model","prompt":"Hi, good morning"}}}'
+   gcloud pubsub topics publish $REQUEST_TOPIC_NAME --message='{"id":"testmsg","created":1700000000,"deadline":1999999999,"payload":{"model":"your-model","prompt":"Hi, good morning"}}'
    ```
 
 2. **Pull from results subscription**:

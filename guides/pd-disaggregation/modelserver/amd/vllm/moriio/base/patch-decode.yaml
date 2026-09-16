@@ -35,8 +35,6 @@ spec:
               value: "/.aiter"
             - name: VLLM_CACHE_ROOT
               value: "/.cache"
-            - name: MORI_IB_GID_INDEX
-              value: "1"
             - name: MORI_IO_LOG_LEVEL
               value: "WARN"
             - name: MORI_APP_LOG_LEVEL
