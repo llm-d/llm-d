@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - compute-domain.yaml
+
+# The patch below matches roles, containers, and volumes by name via the
+# DisaggregatedSet schema the base declares. The common role spec is written
+# once under the prefill role (&oci-common) and reused for the decode role
+# (*oci-common).
+
+# OCI GB200 (BM.GPU.GB200.4) overlay: OCI-specific storage + MNNVL wiring.
+# 1. Model + JIT caches on the node's local NVMe (hostPath) instead of emptyDir.
+#    The ~850 GB model then persists per-node across pod restarts and is NOT counted
+#    against the pod's ephemeral-storage budget. /mnt/numa0 is the local NVMe path.
+# 2. Shrink the ephemeral-storage down to 128GB. The base asks for 1TB because it keeps
+#    the ~850 GB model in an emptyDir (which counts against ephemeral storage).
+#    Step #1 moved the model/caches to hostPath, so that emptyDir is gone and the
+#    pod only needs a small amount of scratch space.
+# 3. Join the GB200 cross-node NVLink (MNNVL) fabric via the ComputeDomain claim.
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-nvidia-gpu-vllm-deepseek-v4
+      spec:
+        roles:
+          - name: prefill
+            spec: &oci-common
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    resourceClaims:
+                      - name: compute-domain-channel
+                        resourceClaimTemplateName: wide-ep-compute-domain
+                    containers:
+                      - name: vllm
+                        resources:
+                          limits:
+                            ephemeral-storage: 128Gi
+                          requests:
+                            ephemeral-storage: 128Gi
+                          claims:
+                            - name: compute-domain-channel
+                    volumes:
+                      - name: hf-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/numa0/hf-cache
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/numa0/jit-cache
+                          type: DirectoryOrCreate
+          - name: decode
+            spec: *oci-common
