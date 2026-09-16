@@ -92,7 +92,7 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 | `vllm:kv_offload_cpu_cache_usage_perc` | Fraction of the CPU tier pinned by in-flight transfers (0.0 to 1.0) | This is not occupancy. Sustained values near 1.0 mean stores may be dropped |
 
 > [!NOTE]
-> Older dashboards may use `vllm:kv_offload_total_bytes`, `vllm:kv_offload_total_time`, and `vllm:kv_offload_size` with a `transfer_type` label (`GPU_to_CPU`, `CPU_to_GPU`). vLLM still emits them, but they are deprecated in favor of the series above.
+> Older dashboards may use `vllm:kv_offload_total_bytes_total`, `vllm:kv_offload_total_time_total`, and `vllm:kv_offload_size` with a `transfer_type` label (`GPU_to_CPU`, `CPU_to_GPU`). vLLM still emits them for `CPUOffloadingSpec` and its subclasses, which covers both the CPU RAM and filesystem paths, but they are deprecated in favor of the series above.
 
 ### Key SGLang Metrics
 
@@ -118,7 +118,7 @@ When HiCache is enabled (the SGLang path in the [tiered prefix cache guide](../.
 | `sglang_evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
 | `sglang_load_back_tokens_total` | Tokens loaded from host back to GPU | Confirms host tier blocks are being reused |
 | `sglang_load_back_duration_seconds` (histogram) | Time to load KV cache from host back to GPU | Slow load-back cuts into the TTFT gain from offloading |
-| `sglang_cached_tokens_total` | Cached prompt tokens by `cache_source` (`device`, `host`, `storage`) | Attributes prefix cache hits to each tier |
+| `sglang_cached_tokens_total` | Cached prompt tokens by `cache_source` (`device`, `host`, `storage_<backend>`, or `total` when unsplit) | Attributes prefix cache hits to each tier |
 
 ## Step 3: Enable EPP Metrics
 
