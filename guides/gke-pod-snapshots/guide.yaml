@@ -93,10 +93,7 @@ verify:
     # The pod only reports Ready once the cold start has finished AND the first
     # checkpoint has been written and the process resumed, so this wait covers:
     # weight download, model load, engine.sleep(), and the full snapshot upload
-    # to GCS. The upload is bandwidth-bound and the snapshot is roughly
-    # weights-sized, because engine.sleep(level=1) backs the weights up into host
-    # memory, which is then saved into pages.img. At an observed ~80 MB/s to GCS,
-    # budget several minutes per 10 GiB of model weights on top of the download.
+    # to GCS.
     #
     # Pod readiness alone is not proof of a snapshot: the wrapper catches a
     # failed trigger, wakes the engine and serves anyway, so a checkpoint that
@@ -109,11 +106,11 @@ verify:
           kubectl wait --for=condition=Ready podsnapshots --all -n ${NAMESPACE} --timeout=600s
           kubectl get podsnapshots -n ${NAMESPACE}
 
-    # Deleting the pod forces the Deployment to schedule a replacement that
-    # GKE restores from the snapshot — the shorter timeout is the assertion.
+    # Scaling out after PodSnapshot is Ready schedules a new replica that GKE
+    # restores directly from GCS.
     restore:
       - run: |
-          kubectl delete pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}
+          kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=2
           kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
           kubectl get events -n ${NAMESPACE} --field-selector reason=GKEPodSnapshotting --sort-by=.lastTimestamp
           kubectl logs -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --tail=20

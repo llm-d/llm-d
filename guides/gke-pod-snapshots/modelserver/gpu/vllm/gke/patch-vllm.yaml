@@ -8,12 +8,9 @@ kind: Deployment
 metadata:
   name: decode
 spec:
+  # Start with 1 replica to create the initial PodSnapshot in GCS; scale out to
+  # N replicas (or enable HPA/KEDA) once the PodSnapshot reaches Ready=True.
   replicas: 1
-  # At replicas=1 on a single-GPU pool, the default RollingUpdate wants to
-  # schedule the new Pod before releasing the old one's GPU, so every rollout
-  # deadlocks. Recreate frees the GPU first.
-  strategy:
-    type: Recreate
   template:
     spec:
       runtimeClassName: gvisor
@@ -27,29 +24,17 @@ spec:
             - "Qwen/Qwen3-32B"
             - "--safetensors-load-strategy"
             - "eager"
-            # Sleep mode flips enable_cumem_allocator, which is what routes
-            # weights and KV cache through CuMemAllocator; without it
-            # engine.sleep() has nothing it can release. Measured on Qwen3-32B:
-            # sleep(level=1) moved 61.68 GiB of weights to host RAM and
-            # discarded 12.52 GiB of KV cache, keeping the cache out of the
-            # snapshot.
+            # Sleep mode flips enable_cumem_allocator, which routes weights and
+            # KV cache through CuMemAllocator so engine.sleep(level=1) can
+            # offload weights to host RAM and discard the KV cache prior to
+            # checkpointing.
             - "--enable-sleep-mode"
-            # 0.95, not the more common 0.90. Measured on an 80GB H100: weights
-            # take 61.03 GiB and activations/non-torch overhead ~2.1 GiB, so
-            # 0.90 (a 71.6 GiB budget) leaves only 8.51 GiB for KV cache while
-            # the model's 40960-token max_model_len needs 10.0 GiB. vLLM then
-            # raises ValueError, EngineCore dies, and the pod crash-loops with
-            # only a generic "Engine core initialization failed" at the API
-            # server -- the real error is in the EngineCore child's output.
-            # 0.95 yields a 75.6 GiB budget and ~12.5 GiB of KV cache.
+            # Cap context so KV cache fits in the default 0.90 GPU memory budget
+            # and leaves headroom outside it for CUDA graph capture.
             - "--gpu-memory-utilization"
-            - "0.95"
-            # CUDA graphs do not fit alongside that KV cache. Dropping this flag
-            # lets capture claim ~1.22 GiB of private pools, GPU use peaks at
-            # 78.60 GiB of 79.18 GiB, and the sampler's 594 MiB warmup
-            # allocation OOMs -- EngineCore crash-loops before serving. Costs
-            # some decode latency; revisit only with a smaller max_model_len.
-            - "--enforce-eager"
+            - "0.90"
+            - "--max-model-len"
+            - "8192"
             - "--port"
             - "8000"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
@@ -114,12 +99,13 @@ spec:
           # The base recipe omits probe timings, leaving the Kubernetes defaults
           # (3 x 10s = a 30s startup budget). A cold start has to download and
           # load weights, so the container is killed long before it can serve.
-          # Values match the other model server guides.
+          # 1800 x 2s = 60m budget for cold start with at most 2s probe latency
+          # once snapshot restore and engine.wake_up() complete.
           startupProbe:
-            initialDelaySeconds: 15
-            periodSeconds: 30
+            initialDelaySeconds: 10
+            periodSeconds: 2
             timeoutSeconds: 5
-            failureThreshold: 120
+            failureThreshold: 1800
           livenessProbe:
             periodSeconds: 10
             timeoutSeconds: 5
