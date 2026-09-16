@@ -33,3 +33,6 @@ templates
 # incomplete — they require an overlay to be deployable.
 recipes/gateway/base
 workload-autoscaling/wva-config/base
+
+# Requires GKE-managed podsnapshot.gke.io/v1 CRDs not present on vanilla kind clusters
+gke-pod-snapshots

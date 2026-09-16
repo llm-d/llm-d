@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# DRAFT: shipping runtime code as a ConfigMap is provisional. Revisit this file
+# NOTE: shipping runtime code as a ConfigMap is provisional. Revisit this file
 # once we decide between committing to the ConfigMap approach and baking the
 # snapshot runtime into an image -- an image removes all of the below.
 #

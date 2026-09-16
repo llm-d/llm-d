@@ -9,7 +9,7 @@ The benchmark compares initial cold start (pod 1 creating the snapshot on node 1
 > resumes the initialized vLLM process and its captured CUDA graphs in GPU memory, steady-state serving
 > behavior is expected to match a standard deployment.
 
-**Reference configuration:** `a3-highgpu-1g` (1× NVIDIA H100 80GB HBM3, driver `580.126.20`),
+**Reference configuration:** `a3-highgpu-1g` (1× NVIDIA H100 80GB, driver `580.126.20`),
 GKE `v1.36.4-gke.1082000`, gVisor sandbox, Spot provisioning (`--spot`), GKE Image Streaming enabled (`--enable-image-streaming`);
 `Qwen/Qwen3-32B` on vLLM `v0.26.0` at `--gpu-memory-utilization 0.90` and `--max-model-len 8192` (CUDA graphs enabled).
 
@@ -62,8 +62,22 @@ Host page-locking — not PCIe bandwidth — dominates, which is why `level=1` (
 | Phase | Measured | Source / Notes |
 | :--- | ---: | :--- |
 | Node provisioning (`Pod created → Pod scheduled`) | varies (excluded) | GCE VM provisioning time (excluded to isolate pod restore latency) |
-| Pod scheduled → Pod restored (image mount + GCS snapshot stream) | **14.0s** | `PodScheduled=True` (container `startedAt` at `+6.0s`) → Pod condition `PodRestored=True` |
-| Pod restored → Pod `Ready` | **4.0s** | `PodRestored=True` (`Process restored from snapshot checkpoint`) → Pod condition `Ready=True` (includes `2.67s` `engine.wake_up()`) |
-| **Pod scheduled → Pod `Ready` (serving-ready)** | **18.0s** | `PodScheduled=True` → Pod condition `Ready=True` (`14.0s + 4.0s = 18.0s`; **15.4×** speedup vs `4m 38s`) |
+| Pod scheduled → container start (image mount, sandbox create) | 6.0s | `PodScheduled=True` → container `state.running.startedAt` |
+| Container start → process restored | **8.0s** | Container `startedAt` → Pod condition `PodRestored=True` |
+| Process restored → Pod `Ready` | **4.0s** | `PodRestored=True` → Pod condition `Ready=True` |
+| **Pod scheduled → Pod `Ready` (serving-ready)** | **18.0s** | `PodScheduled=True` → `Ready=True` (`6.0s + 8.0s + 4.0s = 18.0s`; **15.4×** speedup vs `4m 38s`) |
+
+**Container start → process restored** measures from the container's `state.running.startedAt` (kubelet has created and started
+the container and the gVisor sandbox is running) to the Pod condition `PodRestored=True`, which GKE sets after streaming the
+checkpoint from GCS and restoring the process image (`Process restored from snapshot checkpoint`). Excluding image mount
+isolates the snapshot restore itself.
+
+**Process restored → Pod `Ready`** measures from `PodRestored=True` to the Pod condition `Ready=True`, i.e. the readiness probe
+(`GET /v1/models` returning HTTP `200`) succeeds. It includes `engine.wake_up()` (`2.67s`), which copies weights from host RAM
+back into VRAM, so a pod reporting `Ready` is serving requests, not merely restored.
+
+These restores landed on nodes that already had the container image present. A restore onto a newly provisioned node adds image
+pull on top of the `6.0s` mount phase; the cold-start table above measured that pull at `1.8s` for this `8.91 GB` image with GKE
+Image Streaming enabled (`69s` without). A new-node restore was not measured end to end.
 
 </details>
