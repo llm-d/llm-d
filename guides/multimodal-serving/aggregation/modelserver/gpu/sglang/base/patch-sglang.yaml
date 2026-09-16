@@ -4,8 +4,6 @@ metadata:
   name: decode
 spec:
   replicas: 8
-  strategy:
-    type: Recreate
   template:
     spec:
       containers:
@@ -19,4 +17,3 @@ spec:
               cpu: '8'
               memory: 128Gi
               nvidia.com/gpu: 2
-

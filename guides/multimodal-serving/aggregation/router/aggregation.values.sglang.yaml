@@ -93,14 +93,13 @@ router:
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
-            # Measured for Qwen3-VL-32B-Instruct on H200 141 GB (TP=2) with
-            # guides/recipes/router/calibration (text prefill; vision-encoder
+            # SGLang-specific calibration for Qwen3-VL-32B-Instruct on H200 141 GB (TP=2)
+            # measured with guides/recipes/router/calibration (text prefill; vision-encoder
             # prefill is not exercised by the calibration workload).
             peakPrefillThroughput: 15884
-            # The workload's cacheable fraction caps at ~0.70 (the unique question
-            # is never a cache hit), so the plugin's 0.8 default can never engage
-            # affinity for multimodal prompts of this shape. Set the threshold
-            # below the maximum cacheable fraction of your traffic.
+            # SGLang-tuned affinity threshold: the workload's cacheable fraction caps at ~0.70
+            # (the unique question is never a cache hit), so the plugin's 0.8 default can never
+            # engage affinity for multimodal prompts of this shape.
             affinityThreshold: 0.4
             maxTTFTPenaltyMs: 36000
         - type: token-load-scorer
@@ -113,3 +112,4 @@ router:
   modelServers:
     matchLabels:
       llm-d.ai/guide: "multimodal-aggregation"
+      llm-d.ai/engine-type: "sglang"

@@ -25,8 +25,7 @@ This guide includes configurations for the following accelerators and inference 
 
 | Backend            | Directory                  | Model                        | Notes                                      |
 | ------------------ | -------------------------- | ---------------------------- | ------------------------------------------ |
-| NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
-| NVIDIA GPU         | `modelserver/gpu/sglang/${INFRA_PROVIDER}/`  | `Qwen/Qwen3-VL-32B-Instruct` | SGLang backend (`INFRA_PROVIDER` options: `base`, `gke`)                              |
+| NVIDIA GPU         | `modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/` | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`MODEL_SERVER` options: `vllm`, `sglang`; `INFRA_PROVIDER` options: `base`, `gke`) |
 | Intel XPU          | `modelserver/xpu/vllm/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60            |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `google/gemma-4-31B-it`      | Same hardware; <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |

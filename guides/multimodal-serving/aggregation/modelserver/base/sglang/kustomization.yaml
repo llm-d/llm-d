@@ -1,5 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
+labels:
+  - pairs:
+      llm-d.ai/engine-type: sglang
+    includeSelectors: true
+    includeTemplates: true
+
 patches:
   - path: patch-sglang.yaml
