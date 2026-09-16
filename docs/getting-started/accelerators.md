@@ -82,6 +82,13 @@ The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM bas
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
 
+## Biren 166M
+
+Biren 166M GPUs have community overlays with `hostNetwork` and hostPath device mounts (no in-tree device plugin yet):
+
+- [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, one `TP=4` replica of Qwen2.5-72B GPTQ-Int8.
+- [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
+
 ## Rebellions NPU
 
 Rebellions NPUs are supported through `vllm-rbln`, an out-of-tree vLLM platform

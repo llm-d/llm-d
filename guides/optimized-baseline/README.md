@@ -42,6 +42,8 @@ This guide includes configurations for the following accelerators:
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
 | Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
 | CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
+| MetaX GPU           | `metax`            | MetaX C500X, community contributed                              |
+| Biren GPU           | `biren`            | Biren 166M, community overlay. 1 replica / Qwen2.5-72B GPTQ-Int8 / TP=4, co-located P+D (no NIXL) |
 
 > [!NOTE]
 > "x86 with bf16 acceleration": AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`
@@ -83,7 +85,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```bash
 export MONITORING_VALUES=
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, npu, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, npu, cpu, metax, biren
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
 export MODEL=Qwen/Qwen3-32B
@@ -256,7 +258,7 @@ Apply the Kustomize overlays for your specific backend:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu or metax or biren:
 #
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
 #
@@ -277,7 +279,32 @@ For example to deploy other models:
 ```bash
 # NVIDIA GPU / vLLM — openai/gpt-oss-120b
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gpt-oss/
+
+# Biren 166M / vLLM — local Qwen2.5-72B GPTQ-Int8 as Qwen72B_INT8 (TP=4, 1 replica, co-located)
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/biren/vllm/
 ```
+
+</details>
+
+<details>
+<summary><h4>Deploying on Biren 166M</h4></summary>
+
+This overlay is a **1 replica** compatibility configuration: `TP=4` on four Biren 166M GPUs, serving local `/share/models/Qwen2.5-72B-Quant` as `Qwen72B_INT8`. Prefill and decode run in the same vLLM engine (no `NixlConnector`, no routing sidecar). The pod is pinned to `wz-server006` with `hostNetwork` and hostPath mounts for `/dev/biren` and `/share`.
+
+Prerequisites:
+
+* Kubernetes node `wz-server006` with `/dev/biren` and the model tree at `/share/models/Qwen2.5-72B-Quant`.
+* Containerd `RuntimeClass` `biren` (`handler: biren`) pointing at `/usr/local/birensupa/container-toolkit/biren-container-toolkit/bin/biren-container-runtime`.
+* Image `birensupa-smartinfer-vllm:26.08.25831-pd-ready` already imported (`imagePullPolicy` defaults to `IfNotPresent` for this tag).
+* No HuggingFace token is required; the model is a local `hostPath`.
+* Stop any host Docker or P/D overlay that already holds GPU 0–3 on that node before applying.
+
+```bash
+export ACCELERATOR_TYPE=biren
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/biren/vllm
+```
+
+Verify with Router `/v1/completions` against `Qwen72B_INT8`.
 
 </details>
 
@@ -504,7 +531,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # only when ACCELERATOR_TYPE=gpu:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu or metax or biren:
 #
 # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
 #

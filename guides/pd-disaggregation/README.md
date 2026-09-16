@@ -55,6 +55,7 @@ This guide includes configuration for the following accelerators:
 | Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [TPU Guide](./README.tpu.md#pd-on-dynamic-tpu-sub-slices-tpu7x) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
 | MetaX GPU           | `modelserver/metax/vllm/`  | MetaX C500X, community contributed. Reduced 1P+1D / Qwen3-14B / TP=1 for compatibility checks. |
+| Biren GPU           | `modelserver/biren/vllm/`  | Biren 166M, community overlay. 1P+1D / Qwen2.5-72B GPTQ-Int8 / TP=4, `NixlConnector` over RDMA (`UCX_TLS=rc_v`). |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
 
@@ -297,6 +298,28 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/m
 Re-measure `peakPrefillThroughput` in the router values for this model and card before performance work. An aggregated C500X / Qwen3-14B / TP=1 calibration was **5773** tok/s; the default `pd-disaggregation.values.yaml` figure is for gpt-oss-120b on NVIDIA and is not valid here.
 
 Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`. Verify P/D with Router `/v1/completions` or `/v1/chat/completions`, then confirm decode logs show an external prefix-cache hit / successful KV transfer rather than decode-only recompute.
+
+</details>
+
+<details>
+<summary><h4>Deploying on Biren 166M</h4></summary>
+
+This overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving local `/share/models/Qwen2.5-72B-Quant` as `Qwen72B_INT8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). Prefill is pinned to `wz-server006`, decode to `wz-server005`. Pods use `hostNetwork` plus hostPath mounts for `/dev/biren`, `/dev/infiniband`, and `/share` so UCX RDMA (`UCX_TLS=rc_v`) matches the Docker `--net host` path.
+
+Prerequisites:
+
+* Kubernetes nodes `wz-server006` (prefill) and `wz-server005` (decode) with `/dev/biren`, InfiniBand, and the model tree at `/share/models/Qwen2.5-72B-Quant`.
+* Containerd `RuntimeClass` `biren` (`handler: biren`) pointing at `/usr/local/birensupa/container-toolkit/biren-container-toolkit/bin/biren-container-runtime`. Without this, `libbesu.so.1` is not injected and vLLM fails to load the Biren plugin.
+* Image `birensupa-smartinfer-vllm:26.08.25831-pd-ready` already imported into each node's `k8s.io` containerd namespace (`imagePullPolicy: IfNotPresent`). That tag is a commit of the working `infer_vllm` container (nixl 0.7.1 + patched `nixl_connector.py`).
+* `LD_PRELOAD=/lib/x86_64-linux-gnu/libibverbs.so.1` so pip's `nixl-cu12` UCX uses the system libibverbs that can load `libzrdma-rdmav34.so`. The prefill/decode patches set this.
+* Stop any host Docker vLLM that already holds GPU 0–3 on those nodes before applying the overlay.
+* No HuggingFace token is required; the model is a local `hostPath`.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/biren/vllm/base
+```
+
+Verify with Router `/v1/completions` or `/v1/chat/completions` against `Qwen72B_INT8`. Confirm decode logs show an external KV transfer rather than decode-only recompute.
 
 </details>
 
