@@ -164,7 +164,7 @@ export NAMESPACE=llm-d-gke-pod-snapshots
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
-export GCS_BUCKET=GCS_BUCKET_PLACEHOLDER
+export GCS_BUCKET=gcs-bucket-placeholder
 export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```
 <!-- llm-d-cicd:skip end -->
@@ -266,7 +266,7 @@ Apply the Kustomize overlay to deploy the `PodSnapshotStorageConfig`, `PodSnapsh
 <!-- guide:deploy.modelserver start -->
 ```bash
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
-  | sed "s/GCS_BUCKET_PLACEHOLDER/${GCS_BUCKET}/g" \
+  | sed "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 <!-- guide:deploy.modelserver end -->

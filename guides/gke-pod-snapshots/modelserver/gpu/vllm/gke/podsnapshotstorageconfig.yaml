@@ -5,6 +5,8 @@ metadata:
 spec:
   snapshotStorageConfig:
     gcs:
-      bucket: "GCS_BUCKET_PLACEHOLDER"
+      # Lowercase so the un-substituted overlay passes PodSnapshotStorageConfig
+      # CRD schema validation (^[a-z0-9._-]+$) during CI server dry-run.
+      bucket: "gcs-bucket-placeholder"
       path: "/"
       tokenSource: "podKSA"

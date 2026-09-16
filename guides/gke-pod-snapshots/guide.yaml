@@ -10,8 +10,11 @@ env:
 
     # Supplied out-of-band. The `default:` is only the README placeholder — a
     # runner injects the real bucket and token, and the cicd:skip wrapper keeps
-    # these placeholders from shadowing the injected values.
-    GCS_BUCKET: {default: GCS_BUCKET_PLACEHOLDER, sensitive: true}
+    # these placeholders from shadowing the injected values. gcs-bucket-placeholder
+    # is lowercase (unlike HF_TOKEN_PLACEHOLDER) so the un-substituted kustomize
+    # overlay passes PodSnapshotStorageConfig CRD schema validation during CI
+    # server dry-run (GCS bucket names must match `^[a-z0-9._-]+$`).
+    GCS_BUCKET: {default: gcs-bucket-placeholder, sensitive: true}
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
     # SNAPSHOT_PROVIDER is deliberately absent. It is a *container* env var set
@@ -77,7 +80,7 @@ deploy:
   modelserver:
     - run: |
         kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
-          | sed "s/GCS_BUCKET_PLACEHOLDER/${GCS_BUCKET}/g" \
+          | sed "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
           | kubectl apply -n ${NAMESPACE} -f -
 
 verify:
