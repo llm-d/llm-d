@@ -29,7 +29,7 @@ The following steps occurs:
 
 ## Deploy
 
-See the [Wide Expert Parallelism guide](../../../guides/wide-ep-lws/README.md) for manifests and step-by-step deployment. The model servers are deployed as a [`DisaggregatedSet`](../../../guides/wide-ep-lws/README.md#2-deploy-the-model-server), which manages the prefill and decode roles as a single versioned unit.
+See the [Wide Expert Parallelism guide](../../../guides/wide-ep/README.md) for manifests and step-by-step deployment. The model servers are deployed as a [`DisaggregatedSet`](../../../guides/wide-ep/README.md#2-deploy-the-model-server), which manages the prefill and decode roles as a single versioned unit.
 
 ## Architecture
 

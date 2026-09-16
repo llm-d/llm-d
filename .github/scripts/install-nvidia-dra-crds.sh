@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install NVIDIA DRA driver CRDs for CI validation of wide-ep-lws OCI overlays.
+# Install NVIDIA DRA driver CRDs for CI validation of wide-ep OCI overlays.
 #
 # On real GB200/NVLink clusters these CRDs are installed by the NVIDIA DRA
 # driver. This script installs only the ComputeDomain CRD so kubectl dry-run

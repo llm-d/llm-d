@@ -96,7 +96,7 @@ GUIDES = [
     ("Optimized Baseline", "../guides/optimized-baseline/README.md", "optimized-baseline", None),
     ("Precise Prefix Cache Routing", "../guides/precise-prefix-cache-routing/README.md", ("precise-prefix-cache-routing", "precise-prefix-cache"), None),
     ("P/D Disaggregation", "../guides/pd-disaggregation/README.md", "pd-disaggregation", None),
-    ("Wide Expert Parallelism", "../guides/wide-ep-lws/README.md", "wide-ep-lws", None),
+    ("Wide Expert Parallelism", "../guides/wide-ep/README.md", "wide-ep", None),
     ("Tiered Prefix Cache (CPU Offloading)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "native"),
     ("Tiered Prefix Cache (LMCache)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "lmcache"),
     ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency-routing", None),
