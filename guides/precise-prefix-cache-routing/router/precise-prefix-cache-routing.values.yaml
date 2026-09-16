@@ -21,6 +21,17 @@
 ## in-flight state becomes shared across replicas.)
 
 router:
+  tokenizer:
+    enabled: true
+    # Required by llm-d-router chart v0 when tokenizer is enabled;
+    # must match the deployed model server and the token-producer modelName below.
+    # Short name matches --served-model-name on the vLLM pod; vLLM only responds
+    # to /v1/completions/render for the name it was started with.
+    modelName: Qwen3-32B
+    env:
+      - name: HF_HOME
+        value: /tmp/hf/hub
+
   epp:
     replicas: 1
     flags:
@@ -49,7 +60,7 @@ router:
               # `../render/` overlay the render call lands on the model servers
               # themselves, so a mismatch is rejected rather than silently
               # producing token IDs from the wrong tokenizer.
-              modelName: Qwen/Qwen3-32B
+              modelName: Qwen3-32B # Must match router.tokenizer.modelName above; short name matches --served-model-name on the vLLM pod
               vllm:
                 # Guide render Service (../render/), not a loopback sidecar.
                 # `precise-prefix-cache-routing-` namePrefix + Service name `render`.

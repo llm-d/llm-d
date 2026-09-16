@@ -18,13 +18,14 @@ spec:
           # this overlay for scoring.
           args:
             - "Qwen/Qwen3-0.6B"
+            - "--served-model-name=Qwen3-0.6B"
             - "--port=$(POD_PORT)"
             - "--dtype=float16"
             - "--disable-sliding-window"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen3-0.6B"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"

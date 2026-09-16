@@ -106,6 +106,7 @@ docker run -d --name vllm-0 --gpus '"device=0,1"' \
     --entrypoint vllm \
     "${VLLM_IMAGE}" \
     serve "${MODEL}" \
+    --served-model-name=Qwen3-32B \
     --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
     --tensor-parallel-size=2
 ```
@@ -135,12 +136,12 @@ endpoints:
     address: 10.0.0.10
     port: "8000"
     labels:
-      model: Qwen/Qwen3-32B
+      model: Qwen3-32B
   - name: vllm-1
     address: 10.0.0.11
     port: "8000"
     labels:
-      model: Qwen/Qwen3-32B
+      model: Qwen3-32B
 ```
 
 > [!IMPORTANT]
@@ -231,7 +232,7 @@ curl -s http://127.0.0.1:9090/metrics | head
 curl -s http://127.0.0.1:8081/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": "Qwen/Qwen3-32B",
+        "model": "Qwen3-32B",
         "prompt": "How are you today?"
     }'
 ```

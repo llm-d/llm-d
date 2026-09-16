@@ -11,6 +11,9 @@ spec:
   deployment:
     spec:
       template:
+        metadata:
+          labels:
+            llm-d.ai/inference-shared: "true"
         spec:
           securityContext:
             seccompProfile:

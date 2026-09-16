@@ -15,6 +15,7 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-0.6B"
+            - "--served-model-name=Qwen3-0.6B"
             - "--disable-uvicorn-access-log"
             - "--tensor-parallel-size=1"
             - "--block-size=64"

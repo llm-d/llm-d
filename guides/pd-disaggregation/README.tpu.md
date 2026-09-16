@@ -33,7 +33,7 @@ source ${REPO_ROOT}/guides/env.sh
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
-export MODEL_NAME="Qwen/Qwen3-32B"
+export MODEL_NAME="Qwen3-32B"
 export STACK_NAME="tpu-v6-qwen3-32b-pd"
 source ${REPO_ROOT}/guides/env.sh
 ```
@@ -46,7 +46,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GAIE_VERSION=v1.5.0
 export GUIDE_NAME="pd-disaggregation"
 export NAMESPACE="llm-d-pd-disaggregation"
-export MODEL_NAME="Qwen/Qwen3.5-397B-A17B-FP8"
+export MODEL_NAME="Qwen3.5-397B-A17B-FP8"
 export STACK_NAME="tpu-v7-qwen3-5-pd"
 source ${REPO_ROOT}/guides/env.sh
 ```
@@ -88,7 +88,7 @@ When sending your test request, ensure you use the correct TPU model name:
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-    "model": "Qwen/Qwen3-32B",
+    "model": "Qwen3-32B",
     "prompt": "How are you today?"
     }' | jq
 ```
@@ -100,7 +100,7 @@ curl -X POST http://${IP}/v1/completions \
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-    "model": "Qwen/Qwen3.5-397B-A17B-FP8",
+    "model": "Qwen3.5-397B-A17B-FP8",
     "prompt": "How are you today?"
     }' | jq
 ```

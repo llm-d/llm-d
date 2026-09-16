@@ -11,11 +11,12 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-32B"
+            - "--served-model-name=Qwen3-32B"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--tensor-parallel-size=2"
             - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen3-32B"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"

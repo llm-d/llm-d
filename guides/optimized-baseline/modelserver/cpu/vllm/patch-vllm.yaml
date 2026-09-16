@@ -11,6 +11,7 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "meta-llama/Llama-3.2-3B-Instruct"
+            - "--served-model-name=Llama-3.2-3B-Instruct"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--disable-hybrid-kv-cache-manager"
             - "--max_model_len=8192"

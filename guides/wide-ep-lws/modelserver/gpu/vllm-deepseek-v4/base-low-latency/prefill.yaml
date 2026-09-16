@@ -59,6 +59,7 @@ spec:
 
                 exec vllm serve \
                   deepseek-ai/DeepSeek-V4-Pro \
+                  --served-model-name DeepSeek-R1-0528 \
                   --port 8000 \
                   --tokenizer-mode deepseek_v4 \
                   --gpu-memory-utilization 0.95 \

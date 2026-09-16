@@ -12,6 +12,7 @@ spec:
         - name: modelserver
           args:
             - "Qwen/Qwen3-32B"
+            - "--served-model-name=Qwen3-32B"
             - "--max-model-len=9216"
             - "--tensor-parallel-size=8"
             - "--dtype=bfloat16"

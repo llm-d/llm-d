@@ -83,7 +83,7 @@ This guide includes configurations for the following accelerators:
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="wide-ep-lws"
   export NAMESPACE=llm-d-wide-ep
-  export MODEL=deepseek-ai/DeepSeek-R1-0528
+  export MODEL=DeepSeek-R1-0528
   ```
 
 * Install the Gateway API Inference Extension CRDs:
@@ -166,7 +166,7 @@ export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 
 # Intel XPU
-export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
+export MODEL=DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
 ```
 

@@ -52,6 +52,7 @@ spec:
     metadata:
       labels:
         app: otel-collector
+        llm-d.ai/inference-shared: "true"
     spec:
       securityContext:
         runAsNonRoot: true
