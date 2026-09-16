@@ -135,29 +135,18 @@ runs it against two live pods and prints the recommended value.
   [#11903](https://github.com/openucx/ucx/pull/11903) upstream before
   attempting it here.
   > [!WARNING]
-  > Verified on real Intel Arc Pro B60 hardware: DRA device allocation,
-  > pod startup, and engine-side `OffloadingConnector` + NIXL/UCX + P2P
-  > secondary-tier initialization all work cleanly. The end-to-end pull
-  > itself is **not verified on this overlay's pinned image**
-  > (`ghcr.io/llm-d/llm-d-xpu:v0.9.0`, vLLM 0.26.0): that vLLM version's
-  > `OffloadingConnector` only recognizes `max_offload_tokens` in
-  > `kv_transfer_params` and has no `remote_kv_source` handling, while
-  > the GPU overlay above pins `vllm/vllm-openai:v0.27.1`.
-  >
-  > A pull **was confirmed working** by swapping this overlay's image to
-  > `docker.io/vllm/vllm-openai-xpu:nightly` (vLLM 0.29.1rc1 at time of
-  > testing, which does carry `vllm/v1/kv_offload/tiering/p2p/`): a
-  > manual probe following the same recompute/pull method as
-  > `calibrate-min-cached-token-delta.sh` moved a full 4096-token prefix
-  > end-to-end between two pods (`vllm:external_prefix_cache_hits_total`
-  > incremented by exactly the prefix length, reproduced twice). Until
-  > `ghcr.io/llm-d/llm-d-xpu` is rebuilt against a vLLM release that
-  > carries this feature, point the
-  > `recipes/modelserver/components/images/xpu-vllm/` component at
-  > `nightly` (or an equivalent pinned tag once one exists) instead of
-  > `llm-d` to get a working pull on Intel XPU today; `nightly` tracks
-  > upstream vLLM `main` and is not a stable/reproducible tag, so treat
-  > this as a stopgap, not the long-term recommendation.
+  > `ghcr.io/llm-d/llm-d-xpu:v0.9.0` (vLLM 0.26.0, the `llm-d` component
+  > used by every other guide's XPU overlay) has no `remote_kv_source`
+  > handling in its `OffloadingConnector`, so the P2P pull this guide
+  > exists to demonstrate cannot work on it. This overlay therefore
+  > pins the `nightly` xpu-vllm component
+  > (`docker.io/vllm/vllm-openai-xpu:nightly`, vLLM main) instead —
+  > verified end-to-end on real Intel Arc Pro B60 hardware (a
+  > 4096-token prefix pulled with a 100% hit rate, reproduced twice).
+  > `nightly` is not a stable/reproducible tag; switch this overlay's
+  > component back to `llm-d` once `ghcr.io/llm-d/llm-d-xpu` is rebuilt
+  > against a vLLM release that carries
+  > `vllm/v1/kv_offload/tiering/p2p/`.
 
 Every benchmark in this guide was measured with `rdma/ib` exposed to the
 model-server containers, and that is the recommended configuration. RDMA
