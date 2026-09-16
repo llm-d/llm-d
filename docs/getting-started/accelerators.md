@@ -87,7 +87,7 @@ MetaX C500X GPUs are supported for community-contributed well-lit paths. The dev
 
 Biren 166M GPUs have community overlays with `hostNetwork` and hostPath device mounts (no in-tree device plugin yet):
 
-- [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, one `TP=4` replica of Qwen2.5-72B GPTQ-Int8.
+- [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, two `TP=8` replicas of Qwen3-32B.
 - [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
 
 ## Rebellions NPU

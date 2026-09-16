@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
     type: Recreate
   template:
@@ -20,14 +20,14 @@ spec:
             - vllm
             - serve
           args:
-            - /share/models/Qwen2.5-72B-Quant
+            - /share/models/Qwen3-32B
             - --host=0.0.0.0
             - --port=8000
-            - --served-model-name=Qwen72B_INT8
+            - --served-model-name=Qwen/Qwen3-32B
             - --distributed-executor-backend=mp
             - --block-size=128
             - --seed=1024
-            - --tensor-parallel-size=4
+            - --tensor-parallel-size=8
             - --dtype=bfloat16
             - --max-model-len=3072
             - --max-num-seqs=64
@@ -39,7 +39,7 @@ spec:
             - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
               value: "120"
             - name: SUPA_VISIBLE_DEVICES
-              value: "0,1,2,3"
+              value: "0,1,2,3,4,5,6,7"
             - name: VLLM_USE_V1
               value: "1"
             - name: VLLM_ENABLE_V1_MULTIPROCESSING

@@ -14,7 +14,7 @@ labels:
       llm-d.ai/guide: optimized-baseline
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: biren
-      llm-d.ai/model: Qwen72B_INT8
+      llm-d.ai/model: Qwen3-32B
     includeSelectors: true
     includeTemplates: true
 patches:
