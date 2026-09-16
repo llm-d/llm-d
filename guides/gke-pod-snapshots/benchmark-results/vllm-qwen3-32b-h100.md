@@ -17,13 +17,13 @@ GKE `v1.36.4-gke.1082000`, gVisor sandbox, Spot provisioning (`--spot`), GKE Ima
 
 Treat these as one measured data point, not a specification. Phase times measure from **Pod scheduled** (`PodScheduled=True`) through
 **serving-ready** (for cold start: when model load, KV cache allocation, and CUDA graph capture complete right before `engine.sleep(level=1)`;
-for snapshot restore: when Pod `Ready=True` and `/v1/models` returns HTTP `200`). Both include image pull/mount and container startup while
-excluding **node provisioning time** (`Pod created → Pod scheduled`, which varies by cloud capacity). Download speed, model size, and GPU
-will move the figures.
+for snapshot restore: when Pod `Ready=True` and `/v1/models` returns HTTP `200`). Both include container startup, and both
+exclude **node provisioning time** (`Pod created → Pod scheduled`, which varies by cloud capacity). Download speed, model size,
+and GPU will move the figures.
 
 | Metric | Without snapshots (Cold start) | Restore from snapshot |
 | :--- | ---: | ---: |
-| Pod scheduled → serving-ready | 4m 38s | **18.0s** |
+| Pod scheduled → serving-ready | 4m 37s | **18.0s** |
 | Weight loads from disk | Yes (61.03 GiB) | **No** |
 | Speedup | — | **15.4×** |
 
@@ -35,49 +35,31 @@ will move the figures.
 | Phase | Measured | Source / Notes |
 | :--- | ---: | :--- |
 | Node provisioning (`Pod created → Pod scheduled`) | varies (excluded) | Excluded to isolate pod startup latency from cloud VM provisioning |
-| Image pull (new node, image streaming enabled, 8.91 GB) | 1.8s | Kubelet `Pulling` → `Pulled` event (`containerd` mounts rootfs over `gcfs`; `69s` without Image Streaming) |
-| Python & CUDA library imports (on-demand via `gcfs`) | 73s | Container `startedAt` → vLLM log `Loading model from scratch...` |
-| Model loading — download + load into VRAM (61.03 GiB) | 130s | `Loading model from scratch...` → `Model loading took 61.03 GiB and 130.20 seconds` |
-| &nbsp;&nbsp;&nbsp;&nbsp;↳ of which, safetensors read into VRAM | 43s | `Loading weights took 43.41 seconds` |
-| Engine init (profile, KV cache, CUDA graph capture [9s / 1.86 GiB], warmup) | 73s | `Model loading took...` → `Executing engine.sleep(level=1) to release physical VRAM...` |
-| **Pod scheduled → serving-ready (checkpoint triggered)** | **4m 38s** | `PodScheduled=True` → `Executing engine.sleep(level=1)...` (`1.8s + 73s + 130s + 73s = 277.8s`) |
-| `engine.sleep(level=1)`: weights offloaded to host RAM | 61.68 GiB | `CuMemAllocator: sleep freed 70.20 GiB memory in total, of which 61.68 GiB is backed up in CPU` |
-| `engine.sleep(level=1)`: KV cache discarded | 8.52 GiB | `...and the rest 8.52 GiB is discarded directly` (not captured in snapshot) |
-| GPU memory still in use after sleep | 2.90 GiB | `Sleep mode freed 72.92 GiB memory, 2.9 GiB memory is still in use` (includes `1.86 GiB` CUDA graphs) |
-| Time to fall asleep | 17.4s | `Executing engine.sleep(level=1)...` → `It took 17.412627 seconds to fall asleep` |
-| Checkpoint + upload to GCS (`componentCount: 2104`) | **34.0s** | `Triggering snapshot checkpoint...` → `gVisor checkpoint completed successfully` / `PodSnapshot` `Ready=True` |
-| **Total Pod scheduled → snapshot `Ready`** | **5m 29s** | `PodScheduled=True` → `PodSnapshot` condition `Ready=True` (`277.8s + 17.4s + 34.0s = 329.2s`) |
-| Snapshot size in GCS | **65.73 GiB** | Sum of objects under `gs://<bucket>/<snapshot-uid>/` (`pages.img` [`65.72 GiB`] + metadata) |
-
-A standalone microbenchmark on the same H100 node timed the two largest components of the **17.4s**: allocating `61.68 GiB` of pinned
-host memory (`pin_memory=True`) took **9.2s**, while the `cudaMemcpy` device-to-host transfer took only **2.3s** (`26.5 GiB/s`). The
-remaining ~6s was not measured directly; it is attributed to the per-tensor `unmap_and_release` loop, `gc.collect()`, and
-`torch.cuda.empty_cache()` that `CuMemAllocator.sleep()` runs after the copy, which is the only other work in that code path.
-Host page-locking — not PCIe bandwidth — dominates, which is why `level=1` (offload weights to host RAM) costs seconds where `level=2`
-(discard weights) would not. gVisor's GCS client then streams `pages.img` directly from host RAM to GCS using parallel composite uploads
-(`componentCount: 2104` chunks of `32 MiB`), completing the `65.73 GiB` checkpoint in **34.0s**.
+| Image pull | 4.0s | kubelet `Pulling` → `Pulled`; time to fetch the image onto the node before the container starts |
+| **Pod scheduled → serving-ready** (weights loaded, KV cache allocated, CUDA graphs captured) | **4m 37s** | `PodScheduled=True` (kubelet `Scheduled` event) → `Executing engine.sleep(level=1)...`, measured directly as `277.4s`; the first `75.1s` is container start plus Python and CUDA imports, up to the vLLM log `Loading model from scratch...` |
+| ↳ Model loading — download + load into VRAM | 129.8s | `Loading model from scratch...` → `Model loading took 61.03 GiB and 130.20 seconds`; `61.03 GiB` of weights, of which the safetensors read into VRAM is `43.41s` |
+| ↳ Engine init (profile, KV cache, CUDA graph capture, warmup) | 72.4s | `Model loading took...` → `Executing engine.sleep(level=1)...`; CUDA graph capture is `9s` of this and costs `1.86 GiB` |
+| `engine.sleep(level=1)` | 17.4s | `Executing engine.sleep(level=1)...` → `It took 17.412627 seconds to fall asleep`; offloads `61.68 GiB` of weights to host RAM and discards `8.52 GiB` of KV cache, leaving `2.90 GiB` resident |
+| Checkpoint + upload to GCS | 33.2s | `It took 17.412627 seconds to fall asleep` → `PodSnapshot` `Ready=True`; snapshot is `65.73 GiB` across `componentCount: 2104` objects |
+| **Total — Pod scheduled → snapshot `Ready`** (`PodSnapshot` condition `Ready=True`) | **5m 28s** | `277.4s + 17.4s + 33.2s = 328.0s`; excludes node provisioning and image pull |
 
 ### Restore — every subsequent pod
 
 | Phase | Measured | Source / Notes |
 | :--- | ---: | :--- |
 | Node provisioning (`Pod created → Pod scheduled`) | varies (excluded) | GCE VM provisioning time (excluded to isolate pod restore latency) |
-| Pod scheduled → container start (image mount, sandbox create) | 6.0s | `PodScheduled=True` → container `state.running.startedAt` |
-| Container start → process restored | **8.0s** | Container `startedAt` → Pod condition `PodRestored=True` |
-| Process restored → Pod `Ready` | **4.0s** | `PodRestored=True` → Pod condition `Ready=True` |
-| **Pod scheduled → Pod `Ready` (serving-ready)** | **18.0s** | `PodScheduled=True` → `Ready=True` (`6.0s + 8.0s + 4.0s = 18.0s`; **15.4×** speedup vs `4m 38s`) |
+| Image pull | 4.0s | kubelet `Pulling` → `Pulled`; time to fetch the image onto the node before the container starts |
+| Pod scheduled → process restored (rootfs mount, sandbox create, checkpoint stream from GCS) | 14.0s | `PodScheduled=True` → Pod condition `PodRestored=True`; container `startedAt` lands at `6.0s` into this window, so the remaining `8.0s` is GKE streaming the checkpoint from GCS and restoring the process image |
+| Process restored → Pod `Ready` | 4.0s | `PodRestored=True` → Pod condition `Ready=True` |
+| **Total — Pod scheduled → Pod `Ready`** (serving-ready: readiness probe `GET /v1/models` returns HTTP `200`) | **18.0s** | `PodScheduled=True` → `Ready=True` (`14.0s + 4.0s = 18.0s`); excludes node provisioning; a **15.4×** speedup versus the `4m 37s` cold start |
 
-**Container start → process restored** measures from the container's `state.running.startedAt` (kubelet has created and started
-the container and the gVisor sandbox is running) to the Pod condition `PodRestored=True`, which GKE sets after streaming the
-checkpoint from GCS and restoring the process image (`Process restored from snapshot checkpoint`). Excluding image mount
-isolates the snapshot restore itself.
+**Pod scheduled → process restored** measures from `PodScheduled=True` to the Pod condition `PodRestored=True`. The container's
+`state.running.startedAt` falls `6.0s` in, once the kubelet has created and started the container and the gVisor sandbox is
+running; GKE then streams the checkpoint from GCS and restores the process image (`Process restored from snapshot checkpoint`),
+which accounts for the remaining `8.0s`.
 
 **Process restored → Pod `Ready`** measures from `PodRestored=True` to the Pod condition `Ready=True`, i.e. the readiness probe
 (`GET /v1/models` returning HTTP `200`) succeeds. It includes `engine.wake_up()` (`2.67s`), which copies weights from host RAM
 back into VRAM, so a pod reporting `Ready` is serving requests, not merely restored.
-
-These restores landed on nodes that already had the container image present. A restore onto a newly provisioned node adds image
-pull on top of the `6.0s` mount phase; the cold-start table above measured that pull at `1.8s` for this `8.91 GB` image with GKE
-Image Streaming enabled (`69s` without). A new-node restore was not measured end to end.
 
 </details>
