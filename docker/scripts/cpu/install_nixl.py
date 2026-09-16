@@ -89,8 +89,8 @@ def build_and_install_prerequisites(args):
         return
 
     print("\n--> No installed package or cached wheel found. Starting full build process...", flush=True)
-    print("\n--> Installing auditwheel...", flush=True)
-    run_command([sys.executable, '-m', 'pip', 'install', 'auditwheel'])
+    print("\n--> Installing auditwheel and patchelf...", flush=True)
+    run_command([sys.executable, '-m', 'pip', 'install', 'auditwheel', 'patchelf'])
     install_system_dependencies()
     ucx_install_path = os.path.abspath(UCX_INSTALL_DIR)
     print(f"--> Using wheel cache directory: {WHEELS_CACHE_HOME}", flush=True)

@@ -13,7 +13,11 @@
     "libaio": null,
     "libxcb":"libxcb1",
     "libxcb-devel":"libxcb1-dev",
-    "cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR}": "cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR}"
+    "cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR}": "cuda-cuobjdump-${CUDA_MAJOR}-${CUDA_MINOR}",
+    "librdmacm": "librdmacm1t64",
+    "libibverbs": "libibverbs1",
+    "libibumad": "libibumad3",
+    "libmlx5": "libmlx5-1"
   },
   "ubuntu_only": [
     "hwloc",

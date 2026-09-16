@@ -64,6 +64,11 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 | `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |
 | `registry.k8s.io/gateway-api-inference-extension/latency-prediction-server` | Optional sidecar for EPP, for predicted-latency scheduling | v1.5.0 |
 
+> [!IMPORTANT]
+> The EPP image was renamed from `ghcr.io/llm-d/llm-d-inference-scheduler`
+> in llm-d v0.8.0. The old package has been removed, so deployments must
+> update the image repository as well as the tag.
+
 > [!NOTE]
 > In a future release, the latency server images will be
 > released from the llm-d/llm-d-latency-predictor repo.
@@ -98,19 +103,18 @@ We recommend using the upstream images for most guides:
 
 In addition to the upstream images, llm-d also builds and releases vLLM images with features not yet merged into vLLM upstream such as:
 
-* EFA support for AWS HPC networking
 * GKE IB networking patches
 * DeepEP patches for GB200 support
 * RIXL support on AMD ROCm
 
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
-| `ghcr.io/llm-d/llm-d-cuda`       | `v0.9.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws`        | `v0.9.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`       | `v0.9.0` | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`        | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu-sglang` | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu`        | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-cuda`             | `v0.9.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-aws` (deprecated) | `v0.9.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm`             | `v0.9.0` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu`              | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu-sglang`       | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu`              | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
 
 ## 4. Well-Lit Path Guides
 
@@ -145,15 +149,15 @@ The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional compo
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
-| **Async Processor** | v0.9.0 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
+| **Async Processor** | v0.9.1 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
 
 ### Images
 
 | Image | Description | Version |
 |-------|-------------|---------|
-| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.9.0 |
+| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.9.1 |
 
-Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.9.0`.
+Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.9.1`.
 
 > [!NOTE]
 > The chart was renamed from `async-processor` to `llm-d-async` in v0.8.0, and chart versions now
@@ -167,7 +171,7 @@ Clients that publish requests or consume results can import the Go modules relea
 | Repository | Language | Description |
 |------------|----------|-------------|
 | [llm-d/llm-d](https://github.com/llm-d/llm-d) | — | Main repo: docs, Dockerfiles, guides, CI |
-| [llm-d/llm-d-inference-scheduler](https://github.com/llm-d/llm-d-inference-scheduler) | Go | EPP routing engine and P/D sidecar |
+| [llm-d/llm-d-router](https://github.com/llm-d/llm-d-router) | Go | EPP routing engine and P/D sidecar |
 | [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) | Python | XGBoost training and prediction server |
 | [llm-d/llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) | Go, Python, CPP | KV-cache block locality indexer, FS offloading |
 | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Go | SLO-aware workload autoscaler |

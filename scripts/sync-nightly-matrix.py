@@ -22,9 +22,9 @@ MATRIX_START = "<!-- NIGHTLY-MATRIX-START -->"
 MATRIX_END = "<!-- NIGHTLY-MATRIX-END -->"
 
 
-def badge(accelerator: str, filename: str, badge_name: str, engine: str) -> str:
-    label = mc.accel_engine_label(engine, accelerator)
-    badge_img = f"{mc.SHIELDS_ENDPOINT}/{badge_name}.json"
+def badge(accelerator: str, filename: str, badge_name: str, engine: str, connector: str) -> str:
+    label = mc.accel_engine_label(engine, accelerator, connector)
+    badge_img = mc.badge_endpoint(badge_name)
     link = f"{mc.BADGE_BASE}/{filename}"
     return f"[![{label}]({badge_img})]({link})"
 
@@ -39,8 +39,8 @@ def generate_table(workflows: dict) -> str:
 
         for provider in mc.PROVIDERS:
             badges = [
-                badge(acc, fn, bn, eng)
-                for acc, fn, bn, eng in mc.iter_provider_entries(
+                badge(acc, fn, bn, eng, conn)
+                for acc, fn, bn, eng, conn in mc.iter_provider_entries(
                     workflows, guide_slugs, provider, connector_filter
                 )
             ]

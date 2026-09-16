@@ -1,0 +1,92 @@
+# InferenceObjectives mapping llm-d-async tier-priority lanes to llm-d-router Flow Control priority bands.
+#
+# Lane -> Objective -> Priority:
+#   reserved-interactive -> priority 100
+#   reserved-async       -> priority 60
+#   reserved-batch       -> priority 30
+#   overflow-interactive -> priority 10
+#   overflow-async       -> priority 0
+#   overflow-batch       -> priority -10
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: reserved-interactive
+  namespace: NAMESPACE
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "interactive"
+    llm-d.ai/classification: "reserved"
+spec:
+  priority: 100
+  poolRef:
+    name: POOL_NAME
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: reserved-async
+  namespace: NAMESPACE
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "async"
+    llm-d.ai/classification: "reserved"
+spec:
+  priority: 60
+  poolRef:
+    name: POOL_NAME
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: reserved-batch
+  namespace: NAMESPACE
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "batch"
+    llm-d.ai/classification: "reserved"
+spec:
+  priority: 30
+  poolRef:
+    name: POOL_NAME
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: overflow-interactive
+  namespace: NAMESPACE
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "interactive"
+    llm-d.ai/classification: "overflow"
+spec:
+  priority: 10
+  poolRef:
+    name: POOL_NAME
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: overflow-async
+  namespace: NAMESPACE
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "async"
+    llm-d.ai/classification: "overflow"
+spec:
+  priority: 0
+  poolRef:
+    name: POOL_NAME
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: overflow-batch
+  namespace: NAMESPACE
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "batch"
+    llm-d.ai/classification: "overflow"
+spec:
+  priority: -10
+  poolRef:
+    name: POOL_NAME

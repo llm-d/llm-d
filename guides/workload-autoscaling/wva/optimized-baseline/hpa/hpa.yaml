@@ -8,7 +8,9 @@ metadata:
     llm-d.ai/guide: "optimized-baseline"
   annotations:
     llm-d.ai/managed: "true"
-    llm-d.ai/model-id: "Qwen3-32B"
+    # The served model name vLLM labels its metrics with — see the note in
+    # ../keda/base/wva-scaledobject.yaml.
+    llm-d.ai/model-id: "Qwen/Qwen3-32B"
     llm-d.ai/variant-cost: "30.0"
 spec:
   scaleTargetRef:

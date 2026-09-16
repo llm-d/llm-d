@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../workload-autoscaling/keda-epp-queue/optimized-baseline/base
+
+patches:
+  - target:
+      group: keda.sh
+      version: v1alpha1
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp
+    patch: |-
+      - op: remove
+        path: /metadata/namespace
+      - op: replace
+        path: /metadata/name
+        value: fast-model-actuation-keda-queue
+      - op: replace
+        path: /spec/scaleTargetRef/name
+        value: fma-requester
+      - op: replace
+        path: /spec/minReplicaCount
+        value: 0
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 2
+      - op: remove
+        path: /spec/advanced/horizontalPodAutoscalerConfig/name
+      - op: replace
+        path: /spec/triggers/0/metadata/query
+        value: |
+          sum(llm_d_epp_flow_control_queue_size{inference_pool="fast-model-actuation-keda"})
+      - op: remove
+        path: /spec/triggers/1
+  - target:
+      group: keda.sh
+      version: v1alpha1
+      kind: TriggerAuthentication
+      name: keda-prometheus-auth
+    patch: |-
+      - op: remove
+        path: /metadata/namespace

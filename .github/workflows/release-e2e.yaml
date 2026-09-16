@@ -1,0 +1,129 @@
+name: Release E2E (dispatch guide validation against a release branch)
+
+# The nightly e2e lanes test `main`, so the Release Testing matrix in
+# release/README.md needs those same lanes run against the release branch. This
+# workflow dispatches them with `matrix_type=<release branch>`, which makes
+# llm-d-infra's reusables check out that branch and write their badge to
+# badges/<badge_name>_<release branch>.json on gh-pages.
+#
+# Dispatch is manual and batched on purpose: the self-hosted clusters cannot take
+# 43 concurrent lanes. Render the matrix afterwards with release-matrix.yaml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'Release branch to validate, e.g. "release-0.9"'
+        required: true
+        type: string
+      lanes:
+        description: 'Glob over lane names (the part after "nightly-e2e-"), e.g. "optimized-baseline-*". Default: every lane'
+        required: false
+        default: '*'
+        type: string
+      dry_run:
+        description: 'List what would be dispatched without dispatching it'
+        required: false
+        default: 'true'
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate the release branch
+        env:
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: |
+          set -euo pipefail
+
+          # Reject anything that is not a release branch. "nightly" in particular
+          # would send release-branch results into the nightly badge files and
+          # corrupt the Nightly Testing matrix.
+          if [[ ! "$RELEASE_BRANCH" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::release_branch must look like 'release-0.9', got '$RELEASE_BRANCH'"
+            exit 1
+          fi
+
+          if ! git ls-remote --exit-code --heads \
+                 https://github.com/${{ github.repository }}.git "$RELEASE_BRANCH" >/dev/null; then
+            echo "::error::branch '$RELEASE_BRANCH' does not exist in ${{ github.repository }}"
+            exit 1
+          fi
+          echo "Validating guides from '$RELEASE_BRANCH'"
+
+      - name: Dispatch the lanes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          LANES: ${{ inputs.lanes }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Release E2E — \`$RELEASE_BRANCH\`"
+            echo
+            echo "Lane filter: \`$LANES\` &nbsp;·&nbsp; dry run: \`$DRY_RUN\`"
+            echo
+            echo "A lane's own nightly cron cancels an in-flight release run of that"
+            echo "lane (shared concurrency group). Avoid starting one within ~4h of"
+            echo "the time below."
+            echo
+            echo "| Lane | Own cron (UTC) | Dispatched |"
+            echo "|------|----------------|------------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          matched=0
+          dispatched=0
+
+          for path in .github/workflows/nightly-e2e-*.yaml; do
+            file="$(basename "$path")"
+            lane="${file#nightly-e2e-}"
+            lane="${lane%.yaml}"
+
+            # LANES is a glob pattern, so the right-hand side must stay unquoted.
+            # shellcheck disable=SC2053
+            [[ "$lane" == $LANES ]] || continue
+            matched=$((matched + 1))
+
+            cron="$(grep -m1 -E "^\s+- cron:" "$path" | sed -E "s/.*cron: *'([^']*)'.*/\1/" || true)"
+            [[ -n "$cron" ]] || cron='(none)'
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "| \`$lane\` | \`$cron\` | dry run |" >> "$GITHUB_STEP_SUMMARY"
+              echo "would dispatch: $file"
+              continue
+            fi
+
+            if gh workflow run "$file" --ref main --field "matrix_type=$RELEASE_BRANCH"; then
+              echo "| \`$lane\` | \`$cron\` | yes |" >> "$GITHUB_STEP_SUMMARY"
+              dispatched=$((dispatched + 1))
+            else
+              echo "| \`$lane\` | \`$cron\` | **failed** |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::could not dispatch $file"
+            fi
+
+            # Stagger so the API and the runner queue are not hit all at once.
+            sleep 5
+          done
+
+          if [[ "$matched" -eq 0 ]]; then
+            echo "::error::lane filter '$LANES' matched no workflow"
+            exit 1
+          fi
+
+          {
+            echo
+            echo "Matched **$matched** lane(s), dispatched **$dispatched**."
+            echo
+            echo "Once the badges exist, render the matrix with \`release-matrix.yaml\`."
+          } >> "$GITHUB_STEP_SUMMARY"

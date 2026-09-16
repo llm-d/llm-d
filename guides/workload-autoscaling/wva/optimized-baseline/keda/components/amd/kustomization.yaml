@@ -1,0 +1,57 @@
+# AMD ROCm variant of the WVA-driven ScaledObject.
+#
+# The base targets the NVIDIA model server Deployment
+# (`optimized-baseline-nvidia-gpu-vllm-decode`), while the AMD model server
+# overlay applies the namePrefix `optimized-baseline-rocm-vllm-` and so produces
+# `optimized-baseline-rocm-vllm-decode`. Retarget the ScaledObject and rename it
+# to match, then label the variant with the AMD accelerator so WVA's
+# cost/capacity optimization resolves the right hardware.
+#
+# `variant_name` in the trigger query is the ScaledObject's OWN name, so it has
+# to be renamed in lockstep with /metadata/name — miss it and the query returns
+# no series, KEDA falls back, and autoscaling silently does nothing.
+#
+# This is a Component rather than an overlay because the accelerator axis is
+# orthogonal to the platform axis: compose it onto either keda/k8s or keda/ocp.
+#
+#   resources:
+#     - guides/workload-autoscaling/wva/optimized-baseline/keda/k8s/
+#   components:
+#     - guides/workload-autoscaling/wva/optimized-baseline/keda/components/amd/
+#
+# Anything applied after this component — a namespace rewrite of the query, for
+# instance — must target the ScaledObject by its new name.
+#
+# `llm-d.ai/variant-cost` is left at the base's value on purpose: the optimizer
+# compares cost across variants of the same model, and this stack serves one.
+# Add a cost here when a second variant on different hardware joins it.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: optimized-baseline-rocm-vllm-decode-scaler
+      - op: replace
+        path: /metadata/labels/inference.optimization~1acceleratorName
+        value: "MI355X"
+      - op: replace
+        path: /metadata/labels/app
+        value: optimized-baseline-rocm-vllm-decode
+      - op: replace
+        path: /spec/scaleTargetRef/name
+        value: optimized-baseline-rocm-vllm-decode
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/name
+        value: wva-keda-hpa-optimized-baseline-rocm-vllm-decode
+      - op: replace
+        path: /spec/triggers/0/metadata/query
+        value: |
+          wva_desired_replicas{
+            variant_name="optimized-baseline-rocm-vllm-decode-scaler",
+            namespace="llm-d-optimized-baseline"
+          }
+    target:
+      kind: ScaledObject
+      name: optimized-baseline-nvidia-gpu-vllm-decode-scaler

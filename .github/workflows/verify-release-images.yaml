@@ -36,7 +36,6 @@ jobs:
           IMAGES=(
             "${{ env.REGISTRY }}/llm-d/llm-d-cuda:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-cuda-ubuntu:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-aws:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-rocm:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"

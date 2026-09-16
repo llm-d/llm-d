@@ -6,6 +6,8 @@
 export REPO_ROOT=${REPO_ROOT:-$(realpath "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)}
 
 ### Release Versions for grabbing CRDs
+# The *_URL variables are recomputed on every source; a *_URL value exported
+# beforehand is discarded. To pin a release, export the matching *_VERSION.
 export GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-latest}
 if [[ $GATEWAY_API_VERSION == "latest" ]]; then
   export GATEWAY_API_URL=releases/latest/download

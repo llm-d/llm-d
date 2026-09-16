@@ -20,11 +20,12 @@ Each path is a self-contained deployment using a specific offloading implementat
 | Path | Implementation | Tiers | Directory |
 | ---- | -------------- | ----- | --------- |
 | **vLLM native** | vLLM `OffloadingConnector` | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/vllm/native/` |
+| **AMD (ROCm)** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/amd/vllm/native/`, `modelserver/amd/vllm/lmcache-connector/` |
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
 | **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
 | **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
-| **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
-| **Intel XPU** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM | `modelserver/xpu/vllm/native/cpu/`, `modelserver/xpu/vllm/lmcache-connector/cpu/` |
+| **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/single-host/`, `modelserver/tpu/v7/vllm/native/cpu/single-host/`, `modelserver/tpu/v7/vllm/native/cpu/multi-host/` |
+| **Intel XPU** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM, CPU RAM + Filesystem | `modelserver/xpu/vllm/native/`, `modelserver/xpu/vllm/lmcache-connector/` |
 
 The tiers each path supports differ — see the table above. For example, the vLLM native path also extends to a shared filesystem via multi-tier offloading (`TieringOffloadingSpec`), spilling from CPU RAM to shared storage (HBM → CPU RAM → filesystem).
 
@@ -126,10 +127,12 @@ We recommend each model server's **native** offloading path: the `OffloadingConn
 #### Standalone Mode
 
 ```bash
+export HOST_TYPE=single-host # single-host | multi-host
+
 helm install tiered-prefix-cache \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/${HOST_TYPE}/tiered-prefix-cache-cpu.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -141,10 +144,12 @@ helm install tiered-prefix-cache \
 
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export HOST_TYPE=single-host # single-host | multi-host
+
 helm install tiered-prefix-cache \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/tiered-prefix-cache-cpu.values.yaml \
+    -f ${REPO_ROOT}/guides/tiered-prefix-cache/router/${HOST_TYPE}/tiered-prefix-cache-cpu.values.yaml \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -162,6 +167,17 @@ helm install tiered-prefix-cache \
 ### 2. Deploy the Model Server
 
 Deploy **one** of the paths below. Each `kubectl apply -k` targets an overlay directory. For the GPU paths, `INFRA_PROVIDER` selects a `base` overlay or a provider-specific one (for example `gke`); the TPU path does not use an infra-provider overlay.
+
+#### AMD (ROCm)
+
+Supports `native` (vLLM `OffloadingConnector`) and `lmcache-connector` connectors, each with a CPU RAM (`cpu`) or CPU RAM + Filesystem (`fs`) storage tier. The `fs` variant requires a ReadWriteMany PVC — see [Storage Backends](#storage-backends).
+
+```bash
+export CONNECTOR=native      # native | lmcache-connector
+export VARIANT=cpu           # cpu | fs
+export INFRA_PROVIDER=amd-ci # amd-ci | base
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/amd/vllm/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+```
 
 #### vLLM native — CPU RAM
 
@@ -254,9 +270,14 @@ kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mo
 
 #### TPU (Google TPU v6 / v7)
 
+> [!NOTE]
+> Multi-host TPU deployments require the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/multi-node.md) installed on the cluster.
+
 ```bash
-export TPU_VERSION=v7  # v6 | v7
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu/
+export TPU_VERSION=v7         # v6 | v7
+export HOST_TYPE=single-host  # single-host | multi-host
+
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu/${HOST_TYPE}/
 ```
 
 #### Intel XPU — vLLM native CPU RAM
@@ -273,12 +294,30 @@ To deploy the VRAM-only baseline (no CPU offloading) for comparison, apply the `
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/base/
 ```
 
-#### Intel XPU — LMCache CPU RAM
+#### Intel XPU — vLLM native CPU RAM + Filesystem
 
-This path uses the [LMCache](https://lmcache.ai) connector to offload prefix cache to CPU RAM on Intel XPU. It runs Qwen3-8B on a single XPU (`tensor-parallel-size=1`), with the CPU offload size set via `LMCACHE_MAX_LOCAL_CPU_SIZE` (GB).
+This path adds a shared filesystem tier to the native CPU offloading path. It requires a ReadWriteMany PVC mounted at `/mnt/files-storage`.
+
+First, provision the PVC as described in [Storage Backends](#storage-backends):
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/cpu/base/
+export STORAGE_CLASS="" # cluster default if empty; or e.g. "lustre" / "efs-sc"
+envsubst < ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+```
+
+Then deploy the model server:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/native/fs/base/
+```
+
+#### Intel XPU — LMCache
+
+This path uses the [LMCache](https://lmcache.ai) connector to offload prefix cache to CPU RAM or CPU RAM plus a filesystem tier on Intel XPU. It runs Qwen3-8B on a single XPU (`tensor-parallel-size=1`), with the CPU offload size set via `LMCACHE_MAX_LOCAL_CPU_SIZE` (GB). The filesystem variant requires the PVC described above.
+
+```bash
+export VARIANT=cpu # cpu | fs
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base/
 ```
 
 #### Storage Backends
@@ -402,17 +441,21 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/models
 **TPU path:**
 
 ```bash
-export TPU_VERSION=v7  # v6 | v7
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu --ignore-not-found
+export TPU_VERSION=v7         # v6 | v7
+export HOST_TYPE=single-host  # single-host | multi-host
+
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/${TPU_VERSION}/vllm/native/cpu/${HOST_TYPE} --ignore-not-found
 ```
 
 **Intel XPU path:**
 
 ```bash
-# native/cpu/base = offloading; base = HBM-only baseline
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/native/cpu/base --ignore-not-found
-# lmcache-connector/cpu/base = LMCache offloading
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/cpu/base --ignore-not-found
+export CONNECTOR=native # native | lmcache-connector
+export VARIANT=cpu      # cpu | fs
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/${CONNECTOR}/${VARIANT}/base --ignore-not-found
+
+# VRAM-only baseline
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/base --ignore-not-found
 ```
 
 ```bash
@@ -524,6 +567,7 @@ Empirical benchmark reports demonstrating the impact of multi-tier prefix-cache 
 * **[Qwen/Qwen3-32B on SGLang (16×H100 Lustre Offload)](./benchmark-results/sglang-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using SGLang HiCache native file backend.
 * **[openai/gpt-oss-120b on vLLM (16×H100 CPU Offload)](./benchmark-results/vllm-gpt-oss-120b-h100.md)**: Stage-by-stage throughput, latency, TPOT, and fleet cache hit rate breakdowns across 5–40 QPS.
 * **[Qwen/Qwen3-32B on vLLM (TPU v6e/v7 CPU Offload)](./benchmark-results/vllm-qwen3-32b-tpuv7.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on Google TPU architectures.
+* **[Qwen/Qwen3-Coder-480B-A35B-Instruct on vLLM (TPU v7 Multi-Host CPU Offload)](./benchmark-results/vllm-qwen3-coder-480b-a35b-tpuv7-multi-host.md)**: Headline throughput and latency effect of CPU RAM prefix offloading on multi-host TPU v7 architecture.
 * **[Qwen/Qwen3-32B on vLLM (16×H100 Lustre Offload)](./benchmark-results/vllm-qwen3-32b-h100-lustre.md)**: Benchmark comparisons for shared POSIX filesystem offloading using LMCache and llm-d filesystem connectors.
 * **[Qwen/Qwen3-32B on vLLM (Intel B60 XPU CPU Offload)](./benchmark-results/vllm-qwen3-32b-b60-xpu.md)**: TTFT, end-to-end latency, and throughput gains from CPU RAM offloading on 4 Intel B60 XPUs under high cache pressure.
 * **[Qwen/Qwen3-8B on vLLM (Intel B60 XPU CPU Offload)](./benchmark-results/vllm-qwen3-8b-b60-xpu.md)**: TTFT, end-to-end latency, and throughput gains from CPU RAM offloading on a single Intel B60 XPU under high cache pressure.

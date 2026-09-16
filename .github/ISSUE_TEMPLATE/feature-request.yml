@@ -21,6 +21,8 @@ body:
       description: Which area of llm-d does this feature relate to?
       options:
         - Optimized baseline
+        - Flow Control
+        - Inference Scheduling
         - Prefill/Decode Disaggregation
         - KV Cache / Prefix Caching
         - Wide Expert-Parallelism

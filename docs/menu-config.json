@@ -90,6 +90,7 @@
     "operations/serve-external-apis/kong": { "position": 2, "label": "Kong AI Gateway Integration" },
     "operations/router": { "position": 5, "label": "Router Operations" },
     "operations/async-processor": { "position": 6, "label": "Async Processor Operations" },
+    "operations/graceful-shutdown": { "position": 7, "label": "Graceful Shutdown & Draining" },
 
     "infrastructure/multi-node": { "position": 3, "label": "Kubernetes Multi-Node Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },

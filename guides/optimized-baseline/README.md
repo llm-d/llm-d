@@ -21,28 +21,33 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 
 ## Configuration
 
-| Parameter          | Default                                                 | Example                                                 |
-| ------------------ | ------------------------------------------------------- | --------------------------------------------------------- |
+| Parameter          | Default                                                 | Example                                                           |
+| ------------------ | ------------------------------------------------------- | ----------------------------------------------------------------- |
 | Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) | [openai/gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) |
-| Replicas           | 8                                                       | 16                                                        |
-| Tensor Parallelism | 2                                                       | 1                                                         |
-| GPUs per replica   | 2                                                       | 1                                                         |
-| Total GPUs         | 16                                                      | 16                                                        |
+| Replicas           | 8                                                       | 16                                                                |
+| Tensor Parallelism | 2                                                       | 1                                                                 |
+| GPUs per replica   | 2                                                       | 1                                                                 |
+| Total GPUs         | 16                                                      | 16                                                                |
 
 ### Supported Hardware Backends
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | Directory          | Notes                                      |
-| ------------------- | ------------------ | ------------------------------------------ |
+| Backend             | Directory          | Notes                                                           |
+| ------------------- | ------------------ | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
-| AMD GPU             | `amd`              | AMD GPU                                    |
-| Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+            |
-| Google TPU v6e      | `tpu/v6`           | GKE TPU                                    |
-| Google TPU v7       | `tpu/v7`           | GKE TPU                                    |
-| CPU                 | `cpu`              | x86 with bf16 acceleration — AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`. |
+| AMD GPU             | `amd`              | AMD GPU                                                         |
+| Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+                                 |
+| Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
+| Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
+| Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
+| Iluvatar GPU        | `iluvatar`         | Iluvatar BI-V150 (dual-die)                                     |
+| CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
+> "x86 with bf16 acceleration": AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`
+>
+>
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
 ## Prerequisites
@@ -79,7 +84,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```bash
 export MONITORING_VALUES=
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, npu, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
 export MODEL=Qwen3-32B
@@ -88,7 +93,6 @@ export BENCHMARK_REF=main
 export HARNESS=inference-perf
 export WORKLOAD=guide_optimized-baseline_1.yaml
 export GATEWAY_CLASS=epponly # options: epponly, gke, agentgateway, istio
-export ROUTER_CHART_VERSION=v0 # options are any semver llm-d-router release of v0 for latest
 ```
 <!-- guide:env.static end -->
 
@@ -107,7 +111,9 @@ source ${REPO_ROOT}/guides/env.sh
 > [!NOTE]
 > This file defines shared variables required by subsequent steps, including
 > `GAIE_VERSION`, `ROUTER_CHART_VERSION`, and the router chart reference for
-> the selected deployment mode.
+> the selected deployment mode. `env.sh` always sets `ROUTER_CHART_VERSION=v0`
+> (the floating release channel); to pin a specific llm-d-router chart release,
+> re-export the variable after sourcing.
 
 - Install the Gateway API Inference Extension CRDs:
 
@@ -147,16 +153,17 @@ kubectl create secret generic llm-d-hf-token \
 
 <!-- guide:deploy.router_values start -->
 ```bash
-export ROUTER_BASE_VALUES="-f ${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
 # only when MODEL_SERVER=vllm or sglang:
-export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
 # only when MODEL_SERVER=trtllm:
 #
 # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
 #
-# export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+# export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 ```
 <!-- guide:deploy.router_values end -->
 
@@ -171,13 +178,16 @@ export ROUTER_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 #
 # Uncomment the below to enable Prometheus monitoring on the llm-d router
 #
+# Unlike the ROUTER_*_VALUES paths above, this variable carries its own
+# -f flag: it is empty by default, so the helm commands expand it as-is.
+#
 # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- guide:deploy.monitoring_values end -->
 
 > [!NOTE]
 > When following the guide from top to bottom, we already have `export MONITORING_VALUES=""` by default. This means that `monitoring` is disabled by default.
-
+<!-- This text is completely invisible in the rendered view -->
 > [!WARNING]
 > Enabling monitoring here requires the monitoring stack to be installed first. The
 > `monitoring.values.yaml` file creates a `ServiceMonitor`, which needs the Prometheus
@@ -199,9 +209,9 @@ This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/
 # Assuming base-directory is the root of the llm-d repo
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
@@ -218,14 +228,16 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 
 > [!IMPORTANT]
 > Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
+>
+> Also set `PROVIDER_NAME` to the gateway provider you deployed in step 1 (e.g. `gke`, `istio`). The default, `none`, renders no provider-specific resources — on GKE that means no `HealthCheckPolicy`, so the Gateway marks the backends unhealthy and requests fail with 503s.
 
 <!-- guide:deploy.gateway start -->
 ```bash
 helm install ${GUIDE_NAME} \
   ${ROUTER_GATEWAY_CHART} \
-  ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
-  ${ROUTER_VALUES} \
+  -f ${ROUTER_VALUES} \
   --set provider.name=${PROVIDER_NAME} \
   --set httpRoute.create=true \
   --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -245,7 +257,7 @@ Apply the Kustomize overlays for your specific backend:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
 #
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
 #
@@ -328,6 +340,36 @@ The recipe (`calibrate.sh`) runs a short Kubernetes Job that measures true prefi
 - [`guides/recipes/router/calibration/README.md`](../recipes/router/calibration/README.md)
 
 For reference values across the (model, accelerator) combinations shipped under `guides/` — and which ones still need a calibration run — see the [**configuration matrix**](../recipes/router/calibration/configuration-matrix.md).
+
+## Optional: Enable flow control
+
+Flow control lets the router hold excess requests in the EPP instead of immediately dispatching them to already busy model servers. Pairing it with the `concurrency-detector` caps the number of in-flight requests sent to each endpoint. That cap limits simultaneous demand on the endpoint's KV cache, which can reduce cache pressure, request preemption, and KV-cache thrashing.
+
+[`concurrencyMode`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency#configuration) determines the metric used to throttle workload per backend: in-flight requests, estimated in-flight tokens, or both.
+
+To enable it, add the feature gate, detector plugin, and `flowControl` section to the `EndpointPickerConfig` embedded in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml):
+
+```yaml
+featureGates:
+- flowControl
+
+plugins:
+# Keep the existing optimized-baseline plugins here.
+- type: concurrency-detector
+  parameters:
+    maxConcurrency: 8 # Example only; tune this for each endpoint's performance and latency constraints.
+    concurrencyMode: requests
+    headroom: 0.0
+
+flowControl:
+  maxBytes: "10Gi"
+  maxRequests: "1k"
+  defaultRequestTTL: "60s"
+  saturationDetector:
+    pluginRef: concurrency-detector
+```
+
+`maxConcurrency` applies to one model-server endpoint, not the whole pool. A lower value keeps more work in the EPP and reduces pressure on the model server, but setting it too low can leave the accelerator idle. A higher value keeps the engine fed, but setting it too high can increase local queueing and KV-cache pressure. Size `maxBytes` and `maxRequests` for the EPP's available memory and expected request bodies. See [Production Tuning: Deriving `maxConcurrency`](../flow-control/tuning.md) for the measurement procedure and detector trade-offs.
 
 ## Verification
 
@@ -463,7 +505,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # only when ACCELERATOR_TYPE=gpu:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or cpu:
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
 #
 # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
 #

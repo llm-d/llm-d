@@ -18,7 +18,6 @@ router:
         # token-producer stays in the pipeline — the scorer needs per-request token
         # counts, and image inputs have no text length to read. Encode is unchanged.
         plugins:
-        - type: disagg-headers-handler
         - type: always-disagg-multimodal-decider
         - type: disagg-profile-handler
           parameters:

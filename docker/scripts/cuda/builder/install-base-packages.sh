@@ -43,25 +43,15 @@ elif [ "$TARGETOS" = "rhel" ]; then
     mapfile -t INSTALL_PKGS < <(load_layered_packages rhel "builder-packages.json" "cuda")
     install_packages rhel "${INSTALL_PKGS[@]}"
 
-    # if using efa, we already installed hwloc as part of base RPMs
-    if [ "${ENABLE_EFA}" != "true" ]; then
-        # Install entitlement RPMs using rpm directly with --nodeps
-        # The system glibc already provides all required symbols (verified: GLIBC_2.2.5 through 2.34)
-        # but dnf fails to recognize this when installing from local RPM files
-        if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/base/*.rpm
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/devel/*.rpm
-        elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/base/*.rpm
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/devel/*.rpm
-        fi
-    else
-        # EFA case, install just devel, base required as EFA dep
-        if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/devel/*.rpm
-        elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
-            rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/devel/*.rpm
-        fi
+    # Install entitlement RPMs using rpm directly with --nodeps
+    # The system glibc already provides all required symbols (verified: GLIBC_2.2.5 through 2.34)
+    # but dnf fails to recognize this when installing from local RPM files
+    if [ "${TARGETPLATFORM}" = "linux/amd64" ]; then
+        rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/base/*.rpm
+        rpm -ivh --nodeps /tmp/packages/rpms/builder/amd64/devel/*.rpm
+    elif [ "${TARGETPLATFORM}" = "linux/arm64" ]; then
+        rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/base/*.rpm
+        rpm -ivh --nodeps /tmp/packages/rpms/builder/arm64/devel/*.rpm
     fi
 
     cleanup_packages rhel

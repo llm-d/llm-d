@@ -44,7 +44,6 @@ agentgateway can be used as the sidecar proxy in place of Envoy. In this mode ag
 helm install <release-name> \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
   --set router.proxy.proxyType=agentgateway \
@@ -95,6 +94,14 @@ helm upgrade <release-name> \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```
+
+> [!NOTE]
+> `helm upgrade` does not inherit the previous release's values. Re-supply every `-f` and
+> `--set` the original install used, or the upgrade reverts them to chart defaults. For an
+> agentgateway release that means adding
+> `-f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml` and the
+> `router.proxy.proxyType`, `router.inferencePool.create` and
+> `router.epp.flags.secure-serving` flags to the command above.
 
 If your cluster already has the Prometheus Operator CRDs installed, you can also add
 `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the initial

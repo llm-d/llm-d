@@ -3,11 +3,7 @@ set -Eeux
 
 # purpose: builds NIXL from source, gated by `BUILD_NIXL_FROM_SOURCE`
 #
-# Optional environment variables:
-# - ENABLE_EFA: Enable EFA support in NIXL (true/false, default: false)
-: "${ENABLE_EFA:=false}"
 # Required environment variables (from Dockerfile ENV):
-# - EFA_PREFIX: Path to EFA installation (used if ENABLE_EFA=true)
 # Required environment variables:
 # - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
 # - NIXL_REPO: Git repo to use for NIXL
@@ -35,17 +31,10 @@ fi
 git clone "${NIXL_REPO}" nixl && cd nixl
 git checkout -q "${NIXL_VERSION}"
 
-# Enable EFA only for RHEL builds (Ubuntu EFA packages require 22.04+; gated on TARGETOS=rhel for now)
-EFA_FLAG=""
-if [ "${ENABLE_EFA}" = "true" ] && [ "$TARGETOS" = "rhel" ]; then
-    EFA_FLAG="-Dlibfabric_path=${EFA_PREFIX}"
-fi
-
 meson setup build \
     --prefix="${NIXL_PREFIX}" \
     -Dbuildtype=release \
     -Ducx_path="${UCX_PREFIX}" \
-    ${EFA_FLAG:+"$EFA_FLAG"} \
     -Dinstall_headers=true
 
 cd build

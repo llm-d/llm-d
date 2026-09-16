@@ -1,8 +1,13 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fma-launcher
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: fma-launcher-pod-reader
+  name: fma-launcher-pod-state-writer
 rules:
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "patch"]

@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../fast-model-actuation/modelserver
+
+patches:
+  - target:
+      kind: InferenceServerConfig
+      name: fma-isc
+    patch: |-
+      apiVersion: fma.llm-d.ai/v1alpha1
+      kind: InferenceServerConfig
+      metadata:
+        name: fma-isc
+      spec:
+        modelServerConfig:
+          labels:
+            llm-d.ai/guide: "fast-model-actuation-keda"
+  - target:
+      kind: Deployment
+      name: fma-requester
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fma-requester
+        labels:
+          llm-d.ai/guide: fast-model-actuation-keda
+      spec:
+        replicas: 1
+        template:
+          metadata:
+            labels:
+              llm-d.ai/guide: fast-model-actuation-keda
