@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          image: REPLACE_ROUTING_SIDECAR_IMAGE
+          imagePullPolicy: IfNotPresent
+          # ATOM P/D connector: injects data_parallel_rank into the request body
+          # for both prefill and decode legs, matching ATOM's DP routing convention.
+          # kv_transfer_params are passed through unchanged (ATOM-to-ATOM compatible).
+          args:
+            - --port=8000
+            - --model-server-port=8200
+            - --kv-connector=atom
+            - --atom-dp-size=1
+            - --zap-log-level=1
+            - --secure-proxy=false
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
