@@ -127,10 +127,11 @@ runs it against two live pods and prints the recommended value.
   model/transport rather than reusing the RDMA numbers below.
   An RDMA overlay (mirroring `modelserver/gpu/vllm/rdma/`) is not
   shipped yet: it hits the same upstream UCX `ze_copy`/DMA-BUF
-  data-correctness bug on Intel XPU that
-  [guides/modelexpress-p2p](../modelexpress-p2p/README.md)'s Intel XPU
-  variant documents (direct RDMA reads from device memory silently
-  return wrong bytes while still reporting success) — track
+  data-correctness bug on Intel XPU documented by
+  [llm-d/llm-d#2461](https://github.com/llm-d/llm-d/pull/2461) (the
+  `guides/modelexpress-p2p` Intel XPU variant, not yet merged) — direct
+  RDMA reads from device memory silently return wrong bytes while
+  still reporting success. Track
   [openucx/ucx#11902](https://github.com/openucx/ucx/pull/11902) and
   [#11903](https://github.com/openucx/ucx/pull/11903) upstream before
   attempting it here.
@@ -341,6 +342,15 @@ helm upgrade -i ${GUIDE_NAME} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
+> [!NOTE]
+> `${GUIDE_NAME}.values.yaml` hard-codes `modelName: openai/gpt-oss-120b`
+> for the `token-producer` plugin, matching the GPU/RDMA path below. If
+> you're deploying the Intel XPU overlay in step 3 instead, edit that
+> `modelName` to `Qwen/Qwen3-0.6B` before running this command — the
+> render Service and every verification/calibration command in this
+> guide route through the same value, so leaving it unchanged sends
+> render requests for a model the XPU pods never load.
+
 #### Deploy the Render (Tokenizer) Service
 
 The EPP `token-producer` tokenizes prompts by calling vLLM's
@@ -366,7 +376,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/$
 ```
 
 16 replicas, TP=1, `--block-size=64`, KV events on, the offloading
-connector with a P2P tier on port 7777.
+connector with a P2P tier on port 7777 — for the GPU overlay. The Intel
+XPU overlay is 2 replicas of `Qwen/Qwen3-0.6B` instead; see
+[Supported Hardware Backends](#supported-hardware-backends).
 
 * **`rdma`** (GPU only) adds an `rdma/ib` device and `IPC_LOCK` to every
   model server. Every benchmark in this guide was measured on it, and

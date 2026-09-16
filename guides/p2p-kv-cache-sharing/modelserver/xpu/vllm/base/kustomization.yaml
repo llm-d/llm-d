@@ -6,8 +6,8 @@ kind: Kustomization
 # base. TCP-only side channel — see the README's Supported Hardware
 # Backends section for why the RDMA overlay used by
 # ../../gpu/vllm/rdma is not mirrored here yet (blocked on an upstream UCX
-# ze_copy/DMA-BUF data-correctness bug on Intel XPU, tracked alongside
-# guides/modelexpress-p2p's Intel XPU variant).
+# ze_copy/DMA-BUF data-correctness bug on Intel XPU, tracked in
+# llm-d/llm-d#2461).
 
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default

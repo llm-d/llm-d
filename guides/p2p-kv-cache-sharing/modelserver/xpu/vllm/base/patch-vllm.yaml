@@ -21,6 +21,9 @@ spec:
           # Clear any stale offload-tier mmaps left by a previous pod on the
           # node before starting, then exec vLLM.
           command: ["sh", "-c", "rm -f /dev/shm/vllm_offload_*.mmap 2>/dev/null; exec vllm serve \"$@\"", "sh"]
+          # Router `modelName` must be changed to match (see the README's
+          # step 2 note) — the guide's router values default to
+          # openai/gpt-oss-120b for the GPU/RDMA path.
           args:
             - Qwen/Qwen3-0.6B
             - --port=8200
@@ -50,6 +53,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            # This overlay is TCP-only (see the README's Supported Hardware
+            # Backends section on the UCX ze_copy/DMA-BUF bug); without this,
+            # UCX can still select a device-memory transport on Intel XPU
+            # even with no RDMA device attached. Same pin used by the XPU
+            # NixlConnector overlay in ../../../../pd-disaggregation.
+            - name: UCX_TLS
+              value: "tcp"
             # NIXL and the P2P tier bind their side channels to the pod IP so
             # peers can reach them (defaults are localhost).
             - name: VLLM_P2P_SIDE_CHANNEL_HOST
