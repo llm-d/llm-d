@@ -304,16 +304,14 @@ Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat
 <details>
 <summary><h4>Deploying on Biren 166M</h4></summary>
 
-This overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving local `/share/models/Qwen2.5-72B-Quant` as `Qwen72B_INT8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). Prefill is pinned to `wz-server006`, decode to `wz-server005`. Pods use `hostNetwork` plus hostPath mounts for `/dev/biren`, `/dev/infiniband`, and `/share` so UCX RDMA (`UCX_TLS=rc_v`) matches the Docker `--net host` path.
+This overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving local `/share/models/Qwen2.5-72B-Quant` as `Qwen72B_INT8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). 
 
 Prerequisites:
 
-* Kubernetes nodes `wz-server006` (prefill) and `wz-server005` (decode) with `/dev/biren`, InfiniBand, and the model tree at `/share/models/Qwen2.5-72B-Quant`.
-* Containerd `RuntimeClass` `biren` (`handler: biren`) pointing at `/usr/local/birensupa/container-toolkit/biren-container-toolkit/bin/biren-container-runtime`. Without this, `libbesu.so.1` is not injected and vLLM fails to load the Biren plugin.
-* Image `birensupa-smartinfer-vllm:26.08.25831-pd-ready` already imported into each node's `k8s.io` containerd namespace (`imagePullPolicy: IfNotPresent`). That tag is a commit of the working `infer_vllm` container (nixl 0.7.1 + patched `nixl_connector.py`).
-* `LD_PRELOAD=/lib/x86_64-linux-gnu/libibverbs.so.1` so pip's `nixl-cu12` UCX uses the system libibverbs that can load `libzrdma-rdmav34.so`. The prefill/decode patches set this.
-* Stop any host Docker vLLM that already holds GPU 0–3 on those nodes before applying the overlay.
-* No HuggingFace token is required; the model is a local `hostPath`.
+* Kubernetes nodes with `/dev/biren`.
+* Infiniband enabled.
+* Containerd `RuntimeClass` `biren` (`handler: biren`) 
+* Image with vLLM and nixl, compatible with BR166M.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/biren/vllm/base
