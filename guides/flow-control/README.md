@@ -202,9 +202,11 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 <details>
 <summary><h4>Intel XPU</h4></summary>
 
-Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Arc Pro B60 per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-GPU-per-pod, so it does not carry the GPU path's 8-replica / TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above and the benchmarking/verification steps do not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead.
+Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Arc Pro B60 per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-GPU-per-pod, so it does not carry the GPU path's 8-replica / TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead. Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
 
 ```bash
+export MODEL_NAME="Qwen/Qwen3-0.6B"
+
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
