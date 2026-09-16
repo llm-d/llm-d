@@ -3,11 +3,11 @@ kind: Kustomization
 
 # Two aggregated Qwen3-0.6B model servers (1 source + 1 receiver) with the
 # OffloadingConnector P2P tier, layered on the shared recipes/ modelserver
-# base. TCP-only side channel — see the README's Supported Hardware
-# Backends section for why the RDMA overlay used by
-# ../../gpu/vllm/rdma is not mirrored here yet (blocked on an upstream UCX
-# ze_copy/DMA-BUF data-correctness bug on Intel XPU, tracked in
-# llm-d/llm-d#2461).
+# base. NIXL/UCX only ever moves the CPU-mmap-backed offload tier (never
+# XPU device memory directly, see patch-vllm.yaml), so this overlay pins
+# UCX to TCP and has no RDMA/verbs device. An RDMA overlay (mirroring
+# ../../gpu/vllm/rdma) isn't shipped yet, simply because it hasn't been
+# built and validated on Intel XPU hardware.
 
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default

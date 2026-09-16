@@ -53,11 +53,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            # This overlay is TCP-only (see the README's Supported Hardware
-            # Backends section on the UCX ze_copy/DMA-BUF bug); without this,
-            # UCX can still select a device-memory transport on Intel XPU
-            # even with no RDMA device attached. Same pin used by the XPU
-            # NixlConnector overlay in ../../../../pd-disaggregation.
+            # TieringOffloadingSpec stages every P2P transfer through its
+            # mmap-backed CPU primary tier, and NIXL registers that memory
+            # as DRAM — this overlay's UCX data plane never touches XPU
+            # device memory directly. Pin it to TCP anyway, matching the
+            # no-RDMA XPU precedent in ../../../../pd-disaggregation, since
+            # this overlay requests no RDMA/verbs device either.
             - name: UCX_TLS
               value: "tcp"
             # NIXL and the P2P tier bind their side channels to the pod IP so
