@@ -80,7 +80,7 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`slo-headroom-tier-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/sloheadroomtier)**: Filters endpoints based on SLO headroom tiers to ensure quality of service.
 * **[`label-selector-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Keeps endpoints that matches a configured label selector.
 * **[`prefill-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `prefill`, `encode-prefill`, `prefill-decode`, or `encode-prefill-decode` roles.
-* **[`decode-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `decode`, `prefill-decode`, or `encode-prefill-decode` roles.
+* **[`decode-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `decode`, `prefill-decode`, or `encode-prefill-decode` roles, and passes through endpoints without an `llm-d.ai/role` label. The former `both` role is removed; use `prefill-decode` instead.
 * **[`encode-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `encode`, `encode-prefill`, or `encode-prefill-decode` roles.
 
 ### Scorers

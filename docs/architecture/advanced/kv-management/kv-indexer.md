@@ -113,7 +113,7 @@ This role is implemented by the `token-producer` plugin. It does not access the 
 The plugin uses the tokenizer-free `estimate` backend by default. For precise routing, select the exact-tokenization `vllm` backend with `modelName` and `vllm.url`. It calls vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`, deployed either as a sidecar in the EPP pod (loopback) or as a dedicated render Service shared across EPP replicas.
 
 > [!NOTE]
-> The earlier gRPC-over-UDS tokenizer sidecar (the `udsTokenizerConfig` backend) is **deprecated** and will be removed in a future release. Existing configs keep working but emit a deprecation warning at startup; migrate to the `vllm` HTTP backend.
+> The earlier gRPC-over-UDS tokenizer backend, configured with `udsTokenizerConfig`, has been **removed**. Current `token-producer` decoding rejects this field as unknown, so EPP configurations that still include it fail to start. Use the `estimate` backend or the `vllm` HTTP backend with `modelName` and `vllm.url`.
 
 ### Precise Prefix Cache Producer
 
