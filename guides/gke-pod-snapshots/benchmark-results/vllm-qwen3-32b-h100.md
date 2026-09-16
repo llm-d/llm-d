@@ -49,9 +49,10 @@ will move the figures.
 | **Total Pod scheduled → snapshot `Ready`** | **5m 29s** | `PodScheduled=True` → `PodSnapshot` condition `Ready=True` (`277.8s + 17.4s + 34.0s = 329.2s`) |
 | Snapshot size in GCS | **65.73 GiB** | Sum of objects under `gs://<bucket>/<snapshot-uid>/` (`pages.img` [`65.72 GiB`] + metadata) |
 
-A standalone microbenchmark on the same H100 node isolates where the **17.4s** goes: allocating `61.68 GiB` of pinned host memory
-(`pin_memory=True`) took **9.2s**, while the `cudaMemcpy` device-to-host transfer took only **2.3s** (`26.5 GiB/s`). The remaining ~6s is the
-per-tensor `unmap_and_release` loop, `gc.collect()`, and `torch.cuda.empty_cache()` that `CuMemAllocator.sleep()` performs after the copy.
+A standalone microbenchmark on the same H100 node timed the two largest components of the **17.4s**: allocating `61.68 GiB` of pinned
+host memory (`pin_memory=True`) took **9.2s**, while the `cudaMemcpy` device-to-host transfer took only **2.3s** (`26.5 GiB/s`). The
+remaining ~6s was not measured directly; it is attributed to the per-tensor `unmap_and_release` loop, `gc.collect()`, and
+`torch.cuda.empty_cache()` that `CuMemAllocator.sleep()` runs after the copy, which is the only other work in that code path.
 Host page-locking — not PCIe bandwidth — dominates, which is why `level=1` (offload weights to host RAM) costs seconds where `level=2`
 (discard weights) would not. gVisor's GCS client then streams `pages.img` directly from host RAM to GCS using parallel composite uploads
 (`componentCount: 2104` chunks of `32 MiB`), completing the `65.73 GiB` checkpoint in **34.0s**.

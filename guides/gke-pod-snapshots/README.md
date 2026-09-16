@@ -19,7 +19,7 @@ When launched with `python3 -m docker.scripts.snapshot.launcher`, the snapshot l
 1. **Single-GPU Scope & Snapshot Warmup (`replicas: 1` → `N`):**
    This guide targets single-GPU pods (`nvidia.com/gpu: 1`, `TP=1`, `DP=1`). Once a `PodSnapshot` is `Ready` in GCS, you can set any number of `replicas` in your Deployment (or use HPA/KEDA) and all pods will restore in seconds. When creating a snapshot for the **first** time (or after changing flags/images), start with `replicas: 1` until the `PodSnapshot` reaches `Ready=True` before scaling out—otherwise pods scheduled before the snapshot completes will cold-start.
 2. **Sleep Mode (`--enable-sleep-mode`):**
-   Required so `engine.sleep(level=1)` can offload weights to host RAM and discard the KV cache before checkpointing. If `--enable-sleep-mode` is omitted, `engine.sleep()` silently no-ops without an error—verify the cold-start logs report a non-zero `Sleep mode freed N GiB memory`.
+   Recommended, not required. It lets `engine.sleep(level=1)` offload weights from GPU VRAM to host RAM and discard the KV cache before checkpointing. Snapshot and restore also succeed without it—GKE captures resident VRAM directly—but enabling it measured faster end to end (shorter checkpoint upload, smaller snapshot, faster restore). If omitted, `engine.sleep()` silently no-ops rather than erroring, so verify the cold-start logs report a non-zero `Sleep mode freed N GiB memory`.
 3. **Eager Safetensors Loading (`--safetensors-load-strategy eager`):**
    Required when purging `MODEL_CACHE_DIR` before checkpointing, as default `mmap` loading leaves file-backed mappings to deleted weight files that fail or bloat the gVisor snapshot.
 4. **Workload-Triggered Policy:**
@@ -119,11 +119,14 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
      --member="serviceAccount:service-${PROJECT_NUMBER}@container-engine-robot.iam.gserviceaccount.com" \
      --role="roles/storage.objectUser"
 
-   # Grant the workload's Kubernetes Service Account (KSA) direct read/write access via Workload Identity Federation
+   # Grant the workload's Kubernetes Service Account (KSA) direct read/write access via Workload Identity Federation.
+   # storage.buckets.get is required for parallel composite uploads: the GCS client reads bucket metadata to
+   # decide whether it may upload in parallel chunks. Without it the checkpoint falls back to a single stream,
+   # which is dramatically slower. Do not trim it when narrowing this role.
    gcloud iam roles create podSnapshotGcsReadWriter \
      --project="<PROJECT_ID>" \
      --title="Pod Snapshot GCS Read/Writer" \
-     --permissions="storage.buckets.get,storage.objects.get,storage.objects.create,storage.objects.delete,storage.folders.create"
+     --permissions="storage.buckets.get,storage.objects.get,storage.objects.list,storage.objects.create,storage.objects.delete,storage.folders.create"
 
    gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
      --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/gke-pod-snapshots-nvidia-gpu-vllm-sa" \
@@ -134,6 +137,7 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
 
 - **GKE Image Streaming (`--enable-image-streaming`):** Enabling Image Streaming on both the cluster and GPU node pool (with container images hosted in Artifact Registry) streams container layers on demand when scaling out to new nodes, avoiding upfront full image downloads before snapshot restore begins.
 - **GCS Bucket Configuration:** Co-locate the GCS bucket in the same region (`--location=<REGION>`), enable hierarchical namespace (`--enable-hierarchical-namespace`), set `--soft-delete-duration=0`, and avoid CMEK encryption overhead so gVisor can stream checkpoint memory pages using parallel composite uploads.
+- **IAM Permissions (`storage.buckets.get`):** Parallel composite uploads depend on the workload's custom role including `storage.buckets.get`, which lets the GCS client inspect bucket metadata before choosing an upload strategy. If the role is narrowed and this permission is dropped, the checkpoint still succeeds but silently falls back to a single-stream upload — confirm `componentCount` on the uploaded `pages.img` is greater than `1`.
 
 ### Checkout Repo & Setups
 
