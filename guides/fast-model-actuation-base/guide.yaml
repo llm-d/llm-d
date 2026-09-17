@@ -1,12 +1,12 @@
-name: fast-model-actuation
+name: fast-model-actuation-base
 
 env:
   static:
     BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
-    GUIDE_NAME: fast-model-actuation
-    NAMESPACE:  llm-d-fast-model-actuation
+    GUIDE_NAME: fast-model-actuation-base
+    NAMESPACE:  llm-d-fast-model-actuation-base
 
     # FMA controller/CRD/image version. Bump alongside the pinned image tags in
     # modelserver/launcherconfig.yaml and requester/deployment.yaml on upgrade.

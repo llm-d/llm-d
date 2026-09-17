@@ -75,7 +75,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: nightly-e2e-fast-model-actuation-ibm
+  group: nightly-e2e-fast-model-actuation-base-ibm
   cancel-in-progress: true
 
 jobs:
@@ -84,19 +84,19 @@ jobs:
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
-      standup_scenario: ${{ inputs.standup_scenario || 'fast-model-actuation' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'fast-model-actuation-base' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'base' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-fast-model-actuation-ibm-gpu' }}
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-fast-model-actuation-base-ibm-gpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-ibm' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-ibm' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
       bucket_provider: ${{ inputs.bucket_provider || 'gcs' }}
-      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/fast-model-actuation' }}
+      bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/fast-model-actuation-base' }}
       gateway_class: ${{ inputs.gateway_class || 'epponly' }}
       monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
       dry_run: ${{ inputs.dry_run || 'false' }}
@@ -113,7 +113,7 @@ jobs:
     if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: fast-model-actuation-ocp
+      badge_name: fast-model-actuation-base-ocp
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}

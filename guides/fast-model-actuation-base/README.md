@@ -1,6 +1,6 @@
 # Fast Model Actuation
 
-[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml)
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-base-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-base-ibm-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -55,8 +55,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 ```bash
 export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export GUIDE_NAME=fast-model-actuation
-export NAMESPACE=llm-d-fast-model-actuation
+export GUIDE_NAME=fast-model-actuation-base
+export NAMESPACE=llm-d-fast-model-actuation-base
 export FMA_VERSION=0.6.5
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B

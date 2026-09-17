@@ -4,7 +4,7 @@
 
 ## Overview
 
-This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation/README.md) with **scale-from-zero autoscaling via KEDA**. A KEDA `ScaledObject` scales the FMA `server-requesting` Deployment on Endpoint Picker (EPP) flow-control metrics — all the way down to **zero** when the pool is idle, and back up on the first queued request. Each requesting pod reserves a GPU and drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**; scaling to zero releases the GPU and puts the vLLM to sleep. (See the [FMA guide](../fast-model-actuation/README.md#overview) for what hot and warm start mean.)
+This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation-base/README.md) with **scale-from-zero autoscaling via KEDA**. A KEDA `ScaledObject` scales the FMA `server-requesting` Deployment on Endpoint Picker (EPP) flow-control metrics — all the way down to **zero** when the pool is idle, and back up on the first queued request. Each requesting pod reserves a GPU and drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**; scaling to zero releases the GPU and puts the vLLM to sleep. (See the [FMA guide](../fast-model-actuation-base/README.md#overview) for what hot and warm start mean.)
 
 ## Configuration
 
@@ -98,7 +98,7 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 <!-- guide:prerequisites.namespace end -->
 
 > [!NOTE]
-> **Fast Model Actuation** — This guide reuses the base [Fast Model Actuation guide](../fast-model-actuation/README.md)'s manifests (`LauncherConfig`, `LauncherPopulationPolicy`, `InferenceServerConfig` and server-requesting `Deployment`) as a kustomize base and stands up its own FMA controllers. You do not need to deploy it separately.
+> **Fast Model Actuation** — This guide reuses the base [Fast Model Actuation guide](../fast-model-actuation-base/README.md)'s manifests (`LauncherConfig`, `LauncherPopulationPolicy`, `InferenceServerConfig` and server-requesting `Deployment`) as a kustomize base and stands up its own FMA controllers. You do not need to deploy it separately.
 
 ## Installation Instructions
 
@@ -124,13 +124,13 @@ The FMA controllers need cluster-level access to list nodes (for the launcher-po
 ```bash
 # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator.
 # Reused verbatim from the base guide (identical RBAC).
-kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml
+kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml
 
 # ServiceAccount + Role (namespaced): the launcher pods run as the
 # fma-launcher ServiceAccount so the state-change-reflector sidecar can
 # patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
 # annotation). Reused verbatim from the base guide.
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml
 
 # RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
 # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
@@ -190,7 +190,7 @@ helm install ${GUIDE_NAME} \
 
 Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` — **together with** the server-requesting `fma-requester` Deployment in a single `kubectl apply -k modelserver/`.
 
-This creates 1 [server-requesting pod](../fast-model-actuation/README.md#overview), which reserves a GPU, and the FMA controllers bind it to a [launcher pod](../fast-model-actuation/README.md#overview) — the launcher is what actually runs the vLLM instance. KEDA takes over the replica count in [step 6](#6-enable-scale-from-zero-autoscaling-keda).
+This creates 1 [server-requesting pod](../fast-model-actuation-base/README.md#overview), which reserves a GPU, and the FMA controllers bind it to a [launcher pod](../fast-model-actuation-base/README.md#overview) — the launcher is what actually runs the vLLM instance. KEDA takes over the replica count in [step 6](#6-enable-scale-from-zero-autoscaling-keda).
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -295,7 +295,7 @@ kubectl get deployment/fma-requester -n ${NAMESPACE} -w
 <!-- llm-d-cicd:skip end -->
 
 > [!NOTE]
-> This scale-up should trigger a [hot start](../fast-model-actuation/README.md#overview) — the fast path, waking the vLLM instance that step 6 put to sleep. For a `Qwen/Qwen3-32B` it takes 4.0 s mean pod startup against 85.3 s for a warm start ([benchmark results](./benchmark-results/qwen3-32b-h100/README.md#queue-based-autoscaling)). Which path you get depends on GPU assignment; see [wake latency](../fast-model-actuation/README.md#3-demonstrate-sleepwake) in the FMA guide.
+> This scale-up should trigger a [hot start](../fast-model-actuation-base/README.md#overview) — the fast path, waking the vLLM instance that step 6 put to sleep. For a `Qwen/Qwen3-32B` it takes 4.0 s mean pod startup against 85.3 s for a warm start ([benchmark results](./benchmark-results/qwen3-32b-h100/README.md#queue-based-autoscaling)). Which path you get depends on GPU assignment; see [wake latency](../fast-model-actuation-base/README.md#3-demonstrate-sleepwake) in the FMA guide.
 
 ## Benchmarking
 
@@ -364,7 +364,7 @@ helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml --ignore-not-found=true
 
 kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
 
@@ -372,7 +372,7 @@ kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAM
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
-kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml --ignore-not-found=true
+kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml --ignore-not-found=true
 
 kubectl delete namespace ${NAMESPACE}
 

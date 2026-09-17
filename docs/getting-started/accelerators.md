@@ -135,7 +135,7 @@ file go away once the runtime supports prefix caching here.
 `openai/gpt-oss-120b`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
 `MODEL=openai/gpt-oss-120b` so the validation and benchmark steps address the served model.
 
-**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation/README.md),
+**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation-base/README.md),
 because the runtime does not support sleep and wake; LoRA adapters; and multimodal models,
 which on this runtime need a code path that cannot run alongside a KV connector.
 

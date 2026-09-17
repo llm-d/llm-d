@@ -9,7 +9,7 @@ Fast Model Actuation (FMA) attacks vLLM startup time with two complementary tech
 
 ## Deploy
 
-See the [fast model actuation guide](../../../guides/fast-model-actuation) for manifests and step-by-step deployment.
+See the [fast model actuation guide](../../../guides/fast-model-actuation-base) for manifests and step-by-step deployment.
 
 For **autoscaled** FMA — see the [fast model actuation + KEDA autoscaling guide](../../../guides/fast-model-actuation-keda), where KEDA scales the requester pool on EPP flow-control saturation metrics and each scale-up drives an FMA hot-wake (resident sleeping instance) or warm-create (new instance on an existing launcher).
 
