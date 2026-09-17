@@ -1,12 +1,12 @@
-name: gke-pod-snapshots
+name: pod-snapshot
 
 env:
   static:
     BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
-    GUIDE_NAME: gke-pod-snapshots
-    NAMESPACE: llm-d-gke-pod-snapshots
+    GUIDE_NAME: pod-snapshot
+    NAMESPACE: llm-d-pod-snapshot
 
     # Supplied out-of-band. The `default:` is only the README placeholder — a
     # runner injects the real bucket and token, and the cicd:skip wrapper keeps
