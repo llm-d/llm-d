@@ -161,16 +161,17 @@ For Intel XPU, include
 Apply the Kustomize overlay for your specific backend.
 
 <!--
-NOTE: keep the Intel XPU block ahead of the NVIDIA GPU block (and each
-backend in its own fenced code block) below. llm-d-benchmark's CI parser
-picks the first `kubectl apply -k .../modelserver/...` command whose
-resolved path contains the requested backend, and its accelerator
-rewrite is a plain substring replace of `modelserver/gpu/vllm`. Because
-`modelserver/gpu/vllm-deepseek-r1-0528` starts with that same substring,
-a GPU command appearing first gets mis-rewritten into a bogus
-`modelserver/xpu/vllm-deepseek-r1-0528` path and shadows the real Intel
-XPU command. Ordering XPU first avoids that false match. See
-https://github.com/llm-d/llm-d-benchmark/issues/1928 for the upstream parser fix.
+NOTE: keep the Intel XPU block ahead of the NVIDIA GPU block below.
+Based on a reading (not a confirmed reproduction) of llm-d-benchmark's
+CI parser, it appears to pick the first `kubectl apply -n ${NAMESPACE}
+-k .../modelserver/...` command whose resolved path contains the
+requested backend, using an accelerator rewrite that does a plain
+substring replace of `modelserver/gpu/vllm`. Since
+`modelserver/gpu/vllm-deepseek-r1-0528` starts with that same
+substring, a GPU command appearing first may get rewritten into a
+bogus `modelserver/xpu/vllm-deepseek-r1-0528` path that shadows the
+real Intel XPU command. Ordering XPU first is intended to avoid that;
+please re-verify against the parser source if you touch this section.
 -->
 
 **Intel XPU:**
