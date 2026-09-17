@@ -3,7 +3,12 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-rocm
-    newTag: v0.9.0
+    # Pinned to v0.8.1: v0.9.0 installs the NIXL Python package as `nixl_rocm`,
+    # but vLLM on ROCm imports it as `rixl` (vllm/distributed/nixl_utils.py), so
+    # NixlConnector raises "NIXL is not available" and the pod crash-loops.
+    # v0.8.1 ships `rixl`. Bump again once docker/Dockerfile.rocm builds the
+    # wheel under the `rixl` name.
+    newTag: v0.8.1
 
 patches:
   - target:
