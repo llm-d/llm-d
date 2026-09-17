@@ -45,6 +45,7 @@ git clone "${DEEPEP_REPO}" deepep
 cd deepep
 git fetch origin "${DEEPEP_VERSION}" # Workaround for claytons floating commit
 git checkout -q "${DEEPEP_VERSION}"
+git submodule update --init --recursive
 # Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition)
 BACKUP_CXXFLAGS="${CXXFLAGS-}"
 export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
