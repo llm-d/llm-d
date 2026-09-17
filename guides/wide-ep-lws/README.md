@@ -158,16 +158,35 @@ For Intel XPU, include
 
 ### 2. Deploy the Model Server
 
-The NVIDIA GPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together. Apply the Kustomize overlay for your specific backend:
+Apply the Kustomize overlay for your specific backend.
+
+<!--
+NOTE: keep the Intel XPU block ahead of the NVIDIA GPU block (and each
+backend in its own fenced code block) below. llm-d-benchmark's CI parser
+picks the first `kubectl apply -k .../modelserver/...` command whose
+resolved path contains the requested backend, and its accelerator
+rewrite is a plain substring replace of `modelserver/gpu/vllm`. Because
+`modelserver/gpu/vllm-deepseek-r1-0528` starts with that same substring,
+a GPU command appearing first gets mis-rewritten into a bogus
+`modelserver/xpu/vllm-deepseek-r1-0528` path and shadows the real Intel
+XPU command. Ordering XPU first avoids that false match. See
+https://github.com/llm-d/llm-d-benchmark/issues/1928 for the upstream parser fix.
+-->
+
+**Intel XPU:**
 
 ```bash
-# NVIDIA GPU
-export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
-
-# Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+```
+
+**NVIDIA GPU:**
+
+The NVIDIA GPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together.
+
+```bash
+export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable Monitoring
@@ -252,10 +271,10 @@ To remove the deployed components:
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # If you enabled monitoring (Step 3), remove the monitoring overlay first.
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-# NVIDIA GPU
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 # Intel XPU
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+# NVIDIA GPU
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 ```
 
 ## Benchmarking Results
