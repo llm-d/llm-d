@@ -338,6 +338,8 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/t
 
 In the [Verification](#verification) and [Benchmarking](#benchmarking) sections, replace `openai/gpt-oss-120b` with `${MODEL_NAME}` in the completion request body and in the `llmdbenchmark --model` flag.
 
+Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again. The TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
+
 > [!NOTE]
 > The shared router values (`router/pd-disaggregation.values.yaml`) set `peakPrefillThroughput: 33821`, calibrated for gpt-oss-120b on 8 TP=1 H200 prefill workers. This value gates the `prefix-cache-affinity-filter`; re-measure it for the TPU model and topology with `guides/recipes/router/calibration/calibrate.sh` before performance work.
 

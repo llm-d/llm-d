@@ -23,6 +23,10 @@ spec:
             # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
             - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
               value: "120"
+            # Node-local HuggingFace cache shared across pods and restarts, matching the
+            # GKE GPU overlays (modelserver/gpu/vllm/gke/base).
+            - name: HF_HOME
+              value: /root/.cache/huggingface
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -42,6 +46,8 @@ spec:
               name: torch-compile-cache
             - mountPath: /.config
               name: metrics-volume
+            - mountPath: /root/.cache/huggingface
+              name: huggingface-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -64,3 +70,7 @@ spec:
           emptyDir: {}
         - name: metrics-volume
           emptyDir: {}
+        - name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate

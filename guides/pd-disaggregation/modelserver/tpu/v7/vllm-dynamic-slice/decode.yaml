@@ -101,6 +101,9 @@ spec:
                 value: "1"
               - name: VLLM_MLA_DISABLE
                 value: "1"
+              # Node-local HuggingFace cache shared across pods and restarts.
+              - name: HF_HOME
+                value: /root/.cache/huggingface
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -155,6 +158,8 @@ spec:
                 name: torch-compile-cache
               - mountPath: /.config
                 name: metrics-volume
+              - mountPath: /root/.cache/huggingface
+                name: huggingface-cache
         volumes:
           - name: shm
             emptyDir:
@@ -164,3 +169,7 @@ spec:
             emptyDir: {}
           - name: metrics-volume
             emptyDir: {}
+          - name: huggingface-cache
+            hostPath:
+              path: /var/cache/huggingface
+              type: DirectoryOrCreate
