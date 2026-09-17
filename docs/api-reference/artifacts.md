@@ -96,7 +96,7 @@ We recommend using the upstream images for most guides:
 | **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.26.0`     |
 | **vLLM ROCM Omni**   | `docker.io/vllm/vllm-omni-rocm`    | `v0.24.1`     |
 | **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.26.0`     |
-| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.16`   |
+| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.19`   |
 | **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc23`   |
 
 ### Custom Images
