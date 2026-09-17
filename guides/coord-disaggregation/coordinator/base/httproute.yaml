@@ -10,14 +10,14 @@ spec:
   rules:
   # Exact-path matches, no header condition: these are the client-facing inference
   # paths. The coordinator's own internal EPP-Profile-tagged calls reuse these same
-  # paths, but router/httproute.yaml matches them at the same (exact) path
+  # paths, but router/httproute/base/httproute.yaml matches them at the same (exact) path
   # specificity plus a header condition, which takes precedence over this
   # header-less rule whenever EPP-Profile is present -- see the comment there.
   # Anything else without EPP-Profile (not one of these 3 paths) falls to
-  # router/httproute.yaml's catch-all instead, not to the Coordinator.
+  # router/httproute/base/httproute.yaml's catch-all instead, not to the Coordinator.
   #
   # SECURITY NOTE: a client that forges its own EPP-Profile header bypasses the
-  # Coordinator entirely, matching router/httproute.yaml's rule directly instead of
+  # Coordinator entirely, matching router/httproute/base/httproute.yaml's rule directly instead of
   # this one -- see the SECURITY NOTE there. This split is a routing convenience, not
   # a trust/auth boundary.
   - matches:

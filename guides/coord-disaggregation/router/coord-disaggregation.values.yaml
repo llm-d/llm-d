@@ -15,7 +15,7 @@
 # to this router/EPP instead of through the Coordinator. The single combined
 # router needs to match EPP-Profile being encode OR prefill OR decode, which the
 # chart's headerMatches (a single exact-match map) can't express, so we
-# disable it here and hand-author router/httproute.yaml instead (see there
+# disable it here and hand-author router/httproute/base/httproute.yaml instead (see there
 # for the OR'd header matches).
 httpRoute:
   create: false

@@ -9,7 +9,7 @@ data:
       listen_addr: ":8080"
       read_timeout: 30s
       # Matches the Gateway/HTTPRoute request timeout (coordinator/httproute.yaml,
-      # router/httproute.yaml: both 300s) -- otherwise the coordinator could
+      # router/httproute/base/httproute.yaml: both 300s) -- otherwise the coordinator could
       # truncate a slow encode-prefill-decode response before the Gateway's own
       # timeout even kicks in.
       write_timeout: 300s

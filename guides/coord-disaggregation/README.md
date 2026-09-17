@@ -201,7 +201,7 @@ One llm-d Router release, EPP, and InferencePool cover all three roles.
 ```bash
 export PROVIDER_NAME=istio # other: gke, na, agentgateway
 export ROUTER_RELEASES=${GUIDE_NAME} # Helm release name(s), for Cleanup
-export ROUTER_HTTPROUTE_FILE=router/httproute.yaml # for Cleanup
+export ROUTER_HTTPROUTE_OVERLAY=router/httproute/base # router/httproute/gke for PROVIDER_NAME=gke; used below and for Cleanup
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -216,7 +216,8 @@ helm install ${GUIDE_NAME} \
    because it would be an unconditional catch-all on `/`, colliding with the
    Coordinator's own route on the same Gateway. Instead, the two hand-authored
    HTTPRoutes on this Gateway (`coordinator/base/httproute.yaml` and
-   [`router/httproute.yaml`](router/httproute.yaml)) split traffic three ways:
+   [`router/httproute/base/httproute.yaml`](router/httproute/base/httproute.yaml))
+   split traffic three ways:
    * `/v1/completions`, `/v1/chat/completions`, `/inference/v1/generate` **without**
      `EPP-Profile` → the Coordinator (client-facing inference calls).
    * The same three paths **with** `EPP-Profile` → this router's EPP (the Coordinator's
@@ -240,8 +241,17 @@ helm install ${GUIDE_NAME} \
 > ingress-level header strip (e.g. an Istio `EnvoyFilter`) first.
 
 ```bash
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute.yaml | kubectl apply -n ${NAMESPACE} -f -
+kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
+
+> [!NOTE]
+> The two overlays differ the same way as the Coordinator's (step 3):
+>
+> * `base` — the plain HTTPRoute, with a 300s `timeouts.request`.
+> * `gke` — drops the HTTPRoute's `timeouts` field (GKE Gateway does not implement
+>   it) and instead adds a
+>   [`GCPBackendPolicy`](router/httproute/gke/gcpbackendpolicy.yaml) on the shared
+>   InferencePool carrying the same 300s timeout, which is where GKE takes it from.
 
 <details>
 <summary><h4>3 separate EPPs (one per role)</h4></summary>
@@ -269,7 +279,7 @@ prefix-cache affinity to speak of, just queue/load balancing.
 ```bash
 export PROVIDER_NAME=istio # other: gke, na, agentgateway
 export ROUTER_RELEASES="${GUIDE_NAME}-encode ${GUIDE_NAME}-prefill ${GUIDE_NAME}-decode" # for Cleanup
-export ROUTER_HTTPROUTE_FILE=router/httproute-3-epp.yaml # for Cleanup
+export ROUTER_HTTPROUTE_OVERLAY=router/httproute-3-epp/base # router/httproute-3-epp/gke for PROVIDER_NAME=gke; used below and for Cleanup
 for ROLE in encode prefill decode; do
   helm install ${GUIDE_NAME}-${ROLE} \
       ${ROUTER_GATEWAY_CHART} \
@@ -284,16 +294,21 @@ done
 1. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
    `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
    the same specificity-tie reason — see the comment in
-   [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml)), but instead of one
-   shared backend, [`router/httproute-3-epp.yaml`](router/httproute-3-epp.yaml) routes
-   each `EPP-Profile` value to its own role's InferencePool (`${GUIDE_NAME}-encode`,
-   `${GUIDE_NAME}-prefill`, `${GUIDE_NAME}-decode` — the InferencePool name matches the
-   Helm release name). The same [!WARNING] about `EPP-Profile` not being a trust
-   boundary applies here too.
+   [`router/httproute-3-epp/base/httproute.yaml`](router/httproute-3-epp/base/httproute.yaml)),
+   but instead of one shared backend, that HTTPRoute routes each `EPP-Profile` value
+   to its own role's InferencePool (`${GUIDE_NAME}-encode`, `${GUIDE_NAME}-prefill`,
+   `${GUIDE_NAME}-decode` — the InferencePool name matches the Helm release name). The
+   same [!WARNING] about `EPP-Profile` not being a trust boundary applies here too.
 
 ```bash
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute-3-epp.yaml | kubectl apply -n ${NAMESPACE} -f -
+kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
+
+> [!NOTE]
+> Same `base`/`gke` overlay split as the single-EPP variant's HTTPRoute, except the
+> `gke` overlay adds one
+> [`GCPBackendPolicy`](router/httproute-3-epp/gke/gcpbackendpolicy.yaml) per role
+> InferencePool (three in total) rather than a single shared one.
 
 </details>
 
@@ -559,17 +574,17 @@ into a performance penalty.
 ## Cleanup
 
 Same commands regardless of topology — `${ROUTER_RELEASES}` and
-`${ROUTER_HTTPROUTE_FILE}` were exported in step 1, `${COORDINATOR_OVERLAY}` in
-step 3. The Coordinator is torn down by rebuilding the same overlay that created
-it, so provider-specific resources (the GKE `HealthCheckPolicy` and
-`GCPBackendPolicy`) go with it; `--ignore-not-found` keeps that safe if you never
-got as far as applying some of them:
+`${ROUTER_HTTPROUTE_OVERLAY}` were exported in step 1, `${COORDINATOR_OVERLAY}`
+in step 3. The router HTTPRoute and the Coordinator are torn down by rebuilding
+the same overlay that created them, so provider-specific resources (the GKE
+`HealthCheckPolicy` and `GCPBackendPolicy`s) go with them; `--ignore-not-found`
+keeps that safe if you never got as far as applying some of them:
 
 ```bash
 for RELEASE in $(echo ${ROUTER_RELEASES}); do
   helm uninstall ${RELEASE} -n ${NAMESPACE}
 done
-envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_FILE} | kubectl delete -n ${NAMESPACE} -f -
+kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 

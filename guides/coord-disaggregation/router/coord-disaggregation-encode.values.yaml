@@ -9,7 +9,7 @@
 ## encode pod) -- same reasoning as the decode profile: encode has no prefix-cache
 ## affinity to speak of, just queue/load balancing.
 
-# See router/httproute-3-epp.yaml for why this guide hand-authors the HTTPRoute
+# See router/httproute-3-epp/base/httproute.yaml for why this guide hand-authors the HTTPRoute
 # instead of using the chart's own (same reason as the single-EPP variant: it
 # needs Exact path matches to tie in specificity with the Coordinator's own
 # Exact-path HTTPRoute).

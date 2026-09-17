@@ -103,5 +103,8 @@ spec:
     - path:
         type: PathPrefix
         value: /
+    # Removed by the gke overlay (../gke/kustomization.yaml): GKE Gateway doesn't
+    # implement this field -- it uses a GCPBackendPolicy timeoutSec on the
+    # InferencePool instead.
     timeouts:
       request: 300s
