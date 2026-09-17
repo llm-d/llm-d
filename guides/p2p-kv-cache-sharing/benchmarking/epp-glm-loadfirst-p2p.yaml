@@ -39,7 +39,6 @@ plugins:
       podDiscoveryConfig:
         socketPort: 5557
 - type: prefix-cache-scorer
-  name: prefix-cache-scorer
   parameters:
     prefixMatchInfoProducerName: precise-prefix-cache-producer
 - type: p2p-source-producer
