@@ -1,0 +1,65 @@
+# Fabric, NIC and driver settings for the amd-ci cluster. base/ deliberately carries none of
+# these: see the block comment in base/prefill.yaml for what each one does and why it has no
+# portable default. Appended rather than index-patched so base/ can reorder its env freely.
+
+# Eight rails, one NAD per rail, matching amd.com/vnic: 8. base/ sets no annotations at all,
+# so this adds the whole map.
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/metadata/annotations
+  value:
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net4"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net5"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net6"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net7"},
+        {"name":"amd-host-device-nad","namespace":"default","interface":"net8"}
+      ]
+
+# MORI_RDMA_DEVICES is deliberately unset: this cluster exposes only the pod's own eight
+# rails as /dev/infiniband/uverbs1..8, so ibv_get_device_list already returns exactly those
+# eight in rail order and MoRI's auto-discovery matches an explicit list.
+
+# RoCE QoS as configured on this fabric: 802.1p priority 3, DSCP 26 (TC = DSCP << 2 = 104).
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+  value:
+    name: MORI_RDMA_SL
+    value: "3"
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+  value:
+    name: MORI_RDMA_TC
+    value: "104"
+
+# Literal "1", not "true": MoRI's JIT gates -DMORI_PROXY_ENABLED on a string compare.
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+  value:
+    name: MORI_ENABLE_HOST_PROXY
+    value: "1"
+
+# This fabric is rail-isolated: without rail-only the cross-rail QPs never reach RTR and init
+# hangs. Set for both roles, every pod.
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+  value:
+    name: MORI_ENABLE_RAIL_ONLY
+    value: "1"
+
+# Prefer dmabuf registration; avoids the ibv_reg_mr warnings when peermem is not loaded.
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+  value:
+    name: MORI_ENABLE_DMABUF_REG
+    value: "1"
+
+# Rail affinity for the KV path only; not a substitute for MORI_ENABLE_RAIL_ONLY.
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+  value:
+    name: MORI_IO_RAIL_AFFINITY
+    value: "1"
