@@ -1,12 +1,11 @@
 #!/bin/bash
 set -Eeux
 
-# builds and installs NVSHMEM from source with coreweave patch
+# builds and installs NVSHMEM from source with RoCE ah_attr patch
 #
 # Optional environment variables:
 # Required environment variables (from Dockerfile ENV):
 # Required environment variables:
-# - TARGETOS: OS type (ubuntu or rhel)
 # - CUDA_MAJOR: CUDA major version (e.g., 12)
 # - CUDA_HOME: The path to your Cuda Runtime
 # - NVSHMEM_USE_GIT: whether to use NVSHMEM git repo or nvidia developer source download (true/false) - defaults to true
@@ -36,18 +35,13 @@ else
     cd nvshmem_src
 fi
 
-# No need for CKS patches if running on EKS only
-if [ "$TARGETOS" = "ubuntu" ]; then
-    # Prior to NVSHMEM_VERSION 3.4.5 we have to carry a set of patches for device renaming.
-    # For more info, see: https://github.com/NVIDIA/nvshmem/releases/tag/v3.4.5-0, specifically regarding NVSHMEM_HCA_PREFIX
-    for i in /tmp/patches/cks_nvshmem"${NVSHMEM_VERSION}".patch /tmp/patches/nvshmem_zero_ibv_ah_attr_"${NVSHMEM_VERSION}".patch; do
-        if [[ -f $i ]]; then
-            echo "Applying patch: $i"
-            git apply $i
-        else
-            echo "Unable to find patch matching nvshmem version ${NVSHMEM_VERSION}: $i"
-        fi
-    done
+# Zero ibv_ah_attr to avoid "Unable to create ah" on RoCE devices
+NVSHMEM_PATCH=/tmp/patches/nvshmem_zero_ibv_ah_attr_"${NVSHMEM_VERSION}".patch
+if [[ -f $NVSHMEM_PATCH ]]; then
+    echo "Applying patch: $NVSHMEM_PATCH"
+    git apply "$NVSHMEM_PATCH"
+else
+    echo "Unable to find patch matching nvshmem version ${NVSHMEM_VERSION}: $NVSHMEM_PATCH"
 fi
 
 # Configure our build directory such that targets for specific nvshmem4py bindings exist
