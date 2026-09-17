@@ -7,7 +7,6 @@ set -Eeux
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - GDRCOPY_REPO: git repo to build GDRCopy from
 # - GDRCOPY_VERSION: git ref to build GDRCopy from
-# - GDRCOPY_PREFIX: location to install GDR Copy to
 # Optional environment variables:
 # - TARGETPLATFORM: platform target (linux/arm64 or linux/amd64)
 # - TARGETOS: OS type (ubuntu or rhel)
