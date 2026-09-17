@@ -1,0 +1,4 @@
+# DeepEPv2 (GIN backend) requires NCCL >= 2.30.4 at both compile and runtime.
+# torch pins an older NCCL, so override it (matches vllm-project/vllm docker/Dockerfile).
+nvidia-nccl-cu12==2.30.7
+nvidia-nccl-cu13==2.30.7
