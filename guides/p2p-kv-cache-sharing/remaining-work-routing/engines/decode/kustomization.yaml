@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nilig-agentx-slo
+resources:
+- ../base/decode
+patches:
+- target:
+    group: leaderworkerset.x-k8s.io
+    version: v1
+    kind: LeaderWorkerSet
+    name: glm-5-2-decode
+  patch: |-
+    - op: add
+      path: /metadata/labels/llm-d.ai~1benchmark
+      value: p2p-cache-routing-glm
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1benchmark
+      value: p2p-cache-routing-glm
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
+      value:
+        nvidia.com/gpu.product: NVIDIA-H200
+    - op: add
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity/nodeAffinity
+      value:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+              - g134dfa
+              - g13bc90
+              - gf2a19e
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/3/value
+      value: "68719476736"
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/startupProbe/failureThreshold
+      value: 720
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/startupProbe/periodSeconds
+      value: 10
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/31/value
+      value: /var/cache/vllm/vllm
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/image
+      value: quay.io/niliguy/vllm-openai:nightly-6f91edf9-pr50302@sha256:58daa6bf5b15d1885a8af2129f744e8731e1a175f131b27cd18162ed31a583a1
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+      value: IfNotPresent
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/initContainers/0/image
+      value: quay.io/niliguy/llm-d-router-disagg-sidecar:kv-source-endpoint-92e5de82@sha256:7925ea231aac48b4b3e46fe736d8c70b304466226f5270c034e260dae7017b65
+    - op: replace
+      path: /spec/leaderWorkerTemplate/workerTemplate/spec/initContainers/0/imagePullPolicy
+      value: IfNotPresent
+- target:
+    group: leaderworkerset.x-k8s.io
+    version: v1
+    kind: LeaderWorkerSet
+    name: glm-5-2-decode
+  path: decode-runtime.json

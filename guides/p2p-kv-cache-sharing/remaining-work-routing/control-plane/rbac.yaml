@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: glm-cache-route-epp
+  namespace: nilig-agentx-slo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: glm-cache-route-epp
+  namespace: nilig-agentx-slo
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - inference.networking.x-k8s.io
+  - llm-d.ai
+  resources:
+  - inferenceobjectives
+  - inferencemodelrewrites
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["inference.networking.k8s.io"]
+  resources: ["inferencepools"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: glm-cache-route-epp
+  namespace: nilig-agentx-slo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: glm-cache-route-epp
+subjects:
+- kind: ServiceAccount
+  name: glm-cache-route-epp
+  namespace: nilig-agentx-slo
