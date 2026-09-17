@@ -7,6 +7,11 @@ data:
     log_level: 2
     server:
       listen_addr: ":8080"
+      # The coordinator image serves this listener over TLS by default
+      # (llm-d-router#2805); keep it plaintext -- every caller in this guide
+      # (kubelet probes, the Gateway's backendRef, the GKE HealthCheckPolicy)
+      # speaks plain HTTP to it.
+      secure_coordinator: false
       read_timeout: 30s
       # Matches the Gateway/HTTPRoute request timeout (coordinator/httproute.yaml,
       # router/httproute/base/httproute.yaml: both 300s) -- otherwise the coordinator could
