@@ -45,7 +45,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── tpu-vllm
 │   ├── nightly
-│   └── release
+│   ├── release
+│   └── release-v0.26.0
 └── xpu-vllm
     ├── llm-d
     ├── nightly

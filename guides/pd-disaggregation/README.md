@@ -336,6 +336,9 @@ Then apply the overlay:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/${TPU_VARIANT}/vllm
 ```
 
+> [!NOTE]
+> The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
+
 In the [Verification](#verification) and [Benchmarking](#benchmarking) sections, replace `openai/gpt-oss-120b` with `${MODEL_NAME}` in the completion request body and in the `llmdbenchmark --model` flag.
 
 Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again. The TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
