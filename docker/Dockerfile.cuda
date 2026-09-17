@@ -37,8 +37,9 @@ ARG NVSHMEM_BUILD_FROM_SOURCE=true
 ARG NVSHMEM_CUDA_ARCHITECTURES="90a;100"
 
 # Kernels
-ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
-ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
+# Matches DEEPEP_COMMIT_HASH in vllm-project/vllm tools/ep_kernels/install_python_libraries.sh (on main)
+ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
+ARG DEEPEP_VERSION="d4f41e4e93602a15e95f55f6ee8df8f1aaa0e4bb"
 
 ARG FLASHINFER_VERSION="0.6.18.post1"
 
@@ -84,6 +85,7 @@ RUN mkdir -p /wheels
 # Create UV constraint files
 COPY docker/build-constraints.txt /tmp/build-constraints.txt
 COPY docker/constraints.txt /tmp/constraints.txt
+COPY docker/overrides.txt /tmp/overrides.txt
 COPY patches/ /tmp/patches/
 
 ENV LANG="C.UTF-8" \
@@ -97,6 +99,7 @@ ENV LANG="C.UTF-8" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_BUILD_CONSTRAINT="/tmp/build-constraints.txt" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
+    UV_OVERRIDE="/tmp/overrides.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     CUDA_HOME="/usr/local/cuda"
 
@@ -238,6 +241,7 @@ ARG USE_SCCACHE
 ARG MAX_JOBS=3
 
 COPY docker/constraints.txt /tmp/constraints.txt
+COPY docker/overrides.txt /tmp/overrides.txt
 
 ENV LANG="C.UTF-8" \
     MAX_JOBS="${MAX_JOBS}" \
@@ -245,6 +249,7 @@ ENV LANG="C.UTF-8" \
     PYTHON_VERSION="${PYTHON_VERSION}" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
+    UV_OVERRIDE="/tmp/overrides.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
     CUDA_HOME="/usr/local/cuda"
