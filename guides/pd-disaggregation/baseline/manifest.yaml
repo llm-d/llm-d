@@ -22,7 +22,6 @@ spec:
           args:
             - "openai/gpt-oss-120b"
             - "--served-model-name=gpt-oss-120b"
-            - "--gpu-memory-utilization=0.90"
           ports:
             - name: http
               containerPort: 8000
