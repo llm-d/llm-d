@@ -11,7 +11,6 @@ set -Eeu
 # - VLLM_PRECOMPILED_WHEEL_COMMIT: commit SHA for precompiled wheel lookup (defaults to VLLM_COMMIT_SHA)
 # - CUDA_MAJOR: The major CUDA version
 # - CUDA_MINOR: The minor CUDA version
-# - BUILD_NIXL_FROM_SOURCE: if nixl should be installed by vLLM or has been built from source in the builder stages
 # - FLASHINFER_VERSION: flashinfer package version to install
 #
 # Optional environment variables:
@@ -43,11 +42,6 @@ INSTALL_PACKAGES=(
   flashinfer-python=="${FLASHINFER_VERSION}"
   /tmp/wheels/*.whl
 )
-if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
-  INSTALL_PACKAGES+=(nixl-cu12)
-  INSTALL_PACKAGES+=(nixl-cu13)
-  INSTALL_PACKAGES+=(nixl)
-fi
 
 # clone vllm repository
 git clone "${VLLM_REPO}" /opt/vllm-source
@@ -170,11 +164,9 @@ if [[ "${NVSHMEM_BUILD_FROM_SOURCE-}" == "true" ]] ; then
   uv pip uninstall nvidia-nvshmem-cu${CUDA_MAJOR}
 fi
 
-# Force-reinstall the matching CUDA wheel so the correct nixl_ep_cpp.so is installed.
-# Without this, the wrong CUDA variant's nixl_ep_cpp.so may be active (e.g., cu12 on cu13).
-if [ "${BUILD_NIXL_FROM_SOURCE}" = "false" ]; then
-  uv pip install --force-reinstall --no-deps nixl-cu${CUDA_MAJOR}
-fi
+# Install nixl and only the matching CUDA variant, without deps, so the nixl meta
+# package does not pull in other CUDA variants (e.g., cu12's nixl_ep_cpp.so on cu13).
+uv pip install --no-deps nixl nixl-cu${CUDA_MAJOR}
 
 # cleanup
 rm -rf /tmp/wheels
