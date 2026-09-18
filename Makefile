@@ -210,7 +210,7 @@ install-docker: check-container-tool ## Install app using $(CONTAINER_TOOL)
 uninstall-docker: check-container-tool ## Uninstall app from $(CONTAINER_TOOL)
 	@echo "Stopping and removing container in $(CONTAINER_TOOL)..."
 	-$(CONTAINER_TOOL) stop $(PROJECT_NAME)-container && $(CONTAINER_TOOL) rm $(PROJECT_NAME)-container
-@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
+	@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(PROJECT_NAME)"
 
 ### Kubernetes Targets (kubectl)
 
