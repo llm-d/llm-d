@@ -17,6 +17,35 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /root/.cache/huggingface
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+      # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
+      # Node-local HuggingFace cache shared across pods and restarts
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate
   - target:
       kind: Deployment
       name: prefill
@@ -27,3 +56,32 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /root/.cache/huggingface
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+      # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
+      # Node-local HuggingFace cache shared across pods and restarts
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate
