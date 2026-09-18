@@ -30,30 +30,18 @@ ARG TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX"
 ARG GDRCOPY_REPO="https://github.com/NVIDIA/gdrcopy.git"
 ARG GDRCOPY_VERSION="v2.6"
 
-ARG UCX_REPO="https://github.com/openucx/ucx.git"
-ARG UCX_VERSION="v1.22.0"
-
-ARG UCCL_REPO="https://github.com/uccl-project/uccl.git"
-ARG UCCL_VERSION="v0.1.1"
-
 ARG NVSHMEM_USE_GIT="true"
 ARG NVSHMEM_REPO="https://github.com/NVIDIA/nvshmem.git"
 ARG NVSHMEM_VERSION="v3.5.21-0"
 ARG NVSHMEM_BUILD_FROM_SOURCE=true
 ARG NVSHMEM_CUDA_ARCHITECTURES="90a;100"
 
-ARG BUILD_NIXL_FROM_SOURCE="false"
-ARG NIXL_REPO="https://github.com/ai-dynamo/nixl.git"
-ARG NIXL_VERSION="v1.3.2"
-
 # Kernels
-ARG DEEPEP_REPO="https://github.com/neuralmagic/DeepEP"
-ARG DEEPEP_VERSION="38d21b7f9bb6f3b102b1819d09439686eaa87ce8"
+# Matches DEEPEP_COMMIT_HASH in vllm-project/vllm tools/ep_kernels/install_python_libraries.sh (on main)
+ARG DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP"
+ARG DEEPEP_VERSION="d4f41e4e93602a15e95f55f6ee8df8f1aaa0e4bb"
 
-ARG DEEPGEMM_REPO="https://github.com/deepseek-ai/DeepGEMM"
-ARG DEEPGEMM_VERSION="477618cd51baffca09c4b0b87e97c03fe827ef03"
-
-ARG FLASHINFER_VERSION="0.6.14"
+ARG FLASHINFER_VERSION="0.6.18.post1"
 
 # vLLM build settings - provided via build args from docker/common-versions file
 # Override here for platform-specific testing or via build args
@@ -97,6 +85,7 @@ RUN mkdir -p /wheels
 # Create UV constraint files
 COPY docker/build-constraints.txt /tmp/build-constraints.txt
 COPY docker/constraints.txt /tmp/constraints.txt
+COPY docker/overrides.txt /tmp/overrides.txt
 COPY patches/ /tmp/patches/
 
 ENV LANG="C.UTF-8" \
@@ -110,6 +99,7 @@ ENV LANG="C.UTF-8" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_BUILD_CONSTRAINT="/tmp/build-constraints.txt" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
+    UV_OVERRIDE="/tmp/overrides.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     CUDA_HOME="/usr/local/cuda"
 
@@ -143,28 +133,21 @@ RUN export UV_INSTALL_DIR=/usr/local/bin && \
     uv pip install --no-cache -U wheel meson-python ninja pybind11 build setuptools setuptools-scm
 
 # Set up build environment paths
-ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
-    UCX_PREFIX="/opt/ucx" \
-    UCCL_PREFIX="/opt/uccl" \
-    NIXL_PREFIX="/opt/nixl"
+ENV NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}"
 
 # CUDA 13.0 moved CCCL (libcudacxx) headers to include/cccl/ subdirectory
 ENV PATH="${NVSHMEM_DIR}/bin:${VIRTUAL_ENV}/bin:${PATH}" \
     LIBRARY_PATH="\
-${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
-${UCCL_PREFIX}/lib:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 ${CUDA_HOME}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}" \
     CPATH="${NVSHMEM_DIR}/include:\
-${UCCL_PREFIX}/include:\
 ${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:\
 /usr/local/include:\
 /usr/include:\
 ${CPATH}" \
     PKG_CONFIG_PATH="\
-${UCX_PREFIX}/lib/pkgconfig:${UCX_PREFIX}/lib64/pkgconfig:\
 /usr/local/lib/pkgconfig:\
 /usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/aarch64-linux-gnu/pkgconfig:\
 /usr/lib64/pkgconfig:/usr/lib/pkgconfig:\
@@ -182,24 +165,6 @@ RUN --mount=type=cache,target=/var/cache/git \
     --mount=type=secret,id=aws_secret_access_key \
     /tmp/build-gdrcopy.sh && \
     rm -f /tmp/build-gdrcopy.sh
-
-# Build UCX
-ARG UCX_REPO
-ARG UCX_VERSION
-COPY docker/scripts/cuda/builder/build-ucx.sh /tmp/build-ucx.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    /tmp/build-ucx.sh && \
-    rm -f /tmp/build-ucx.sh
-
-# Build UCCL
-ARG UCCL_REPO
-ARG UCCL_VERSION
-COPY docker/scripts/common/build-uccl.sh /tmp/build-uccl.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    /tmp/build-uccl.sh && \
-    rm -f /tmp/build-uccl.sh
 
 # Build NVSHMEM from source
 ARG NVSHMEM_USE_GIT
@@ -228,20 +193,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     pytest \
     "patchelf>=0.11.0"
 
-### Decide to build NIXL from source.
-# If set to false, NIXL will be installed as a dependency of vLLM in the `install-vllm.sh` script,
-# and the `build-nixl.sh` script will be a NoOp.
-ARG BUILD_NIXL_FROM_SOURCE
-ARG NIXL_REPO
-ARG NIXL_VERSION
-COPY docker/scripts/cuda/builder/build-nixl.sh /tmp/build-nixl.sh
-RUN --mount=type=cache,target=/var/cache/git \
-    --mount=type=secret,id=aws_access_key_id \
-    --mount=type=secret,id=aws_secret_access_key \
-    mkdir -p "${NIXL_PREFIX}" && \
-    /tmp/build-nixl.sh && \
-    rm -f /tmp/build-nixl.sh
-
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf && \
     ldconfig
@@ -255,8 +206,6 @@ WORKDIR /workspace/vllm
 # Build compiled packages as wheels (only ones that need build tools)
 ARG DEEPEP_REPO
 ARG DEEPEP_VERSION
-ARG DEEPGEMM_REPO
-ARG DEEPGEMM_VERSION
 COPY docker/scripts/cuda/builder/build-compiled-wheels.sh /tmp/build-compiled-wheels.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=secret,id=aws_access_key_id \
@@ -284,7 +233,6 @@ ARG PYTHON_VERSION
 
 ARG NVSHMEM_VERSION
 ARG NVSHMEM_BUILD_FROM_SOURCE
-ARG BUILD_NIXL_FROM_SOURCE
 ARG FLASHINFER_VERSION
 ARG TORCH_CUDA_ARCH_LIST
 ARG USE_SCCACHE
@@ -293,6 +241,7 @@ ARG USE_SCCACHE
 ARG MAX_JOBS=3
 
 COPY docker/constraints.txt /tmp/constraints.txt
+COPY docker/overrides.txt /tmp/overrides.txt
 
 ENV LANG="C.UTF-8" \
     MAX_JOBS="${MAX_JOBS}" \
@@ -300,10 +249,9 @@ ENV LANG="C.UTF-8" \
     PYTHON_VERSION="${PYTHON_VERSION}" \
     UV_TORCH_BACKEND="${UV_TORCH_BACKEND:-cu${CUDA_MAJOR}${CUDA_MINOR}}" \
     UV_CONSTRAINT="/tmp/constraints.txt" \
+    UV_OVERRIDE="/tmp/overrides.txt" \
     VIRTUAL_ENV="/opt/vllm" \
     NVSHMEM_DIR="/opt/nvshmem-${NVSHMEM_VERSION}" \
-    UCX_PREFIX="/opt/ucx" \
-    UCCL_PREFIX="/opt/uccl" \
     CUDA_HOME="/usr/local/cuda"
 
 # NVSHMEM may be from source (default) or pip
@@ -313,12 +261,9 @@ ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /opt/vllm/lib64/python${PYTHON_VERSION}/site-packages/torch/lib:\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:\
-${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
-${UCCL_PREFIX}/lib:\
 /usr/local/lib:/usr/local/lib64:\
 /usr/lib/x86_64-linux-gnu:/usr/lib/aarch64-linux-gnu:\
 ${LD_LIBRARY_PATH}" \
-    PATH="${UCX_PREFIX}/bin:${PATH}" \
     CPATH="${CUDA_HOME}/include:${CUDA_HOME}/include/cccl:${CPATH}" \
     TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" \
     FLASHINFER_VERSION=${FLASHINFER_VERSION} \
@@ -327,7 +272,6 @@ ${LD_LIBRARY_PATH}" \
     LIBRARY_PATH="\
 /usr/local/nvidia/lib:/usr/local/nvidia/lib64:\
 ${CUDA_HOME}/lib64:\
-${UCX_PREFIX}/lib:${UCX_PREFIX}/lib64:\
 ${NVSHMEM_DIR}/lib:${NVSHMEM_DIR}/lib64:\
 /usr/local/lib:/usr/local/lib64:\
 ${LIBRARY_PATH}"
@@ -356,12 +300,6 @@ RUN if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
     mkdir -p "${LIBDIR}"
 COPY --from=builder /tmp/gdrcopy_libs /tmp/
 
-# Copy UCX libraries from builder
-COPY --from=builder /opt/ucx /opt/ucx
-
-# Copy UCCL libraries from builder
-COPY --from=builder /opt/uccl /opt/uccl
-
 RUN if [ -d /tmp/gdrcopy_libs ]; then \
         if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
             if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
@@ -377,23 +315,6 @@ RUN if [ -d /tmp/gdrcopy_libs ]; then \
 
 # Copy NVSHMEM from builder (populated only when NVSHMEM_BUILD_FROM_SOURCE=true)
 COPY --from=builder /opt/nvshmem-${NVSHMEM_VERSION}/ /opt/nvshmem-${NVSHMEM_VERSION}/
-
-COPY --from=builder /opt/nixl /opt/nixl
-RUN if [ -d /opt/nixl/include ]; then \
-        cp -a /opt/nixl/include/nixl* /usr/local/include/ || true; \
-    fi; \
-    if [ -d /opt/nixl/lib ]; then \
-        if [ "${TARGETOS:-rhel}" = "ubuntu" ]; then \
-            if [ "${TARGETPLATFORM:-linux/amd64}" = "linux/arm64" ]; then \
-                cp -a /opt/nixl/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu/ || true; \
-            else \
-                cp -a /opt/nixl/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu/ || true; \
-            fi; \
-        else \
-            cp -a /opt/nixl/lib64/ /usr/lib64/ || true; \
-        fi; \
-    fi; \
-    rm -rf /opt/nixl
 
 # Rebuild dynamic linker cache for libraries copied from the builder stage
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && \
@@ -453,7 +374,7 @@ ARG SUPPRESS_PYTHON_OUTPUT
 COPY scripts/warn-vllm-precompiled.sh /opt/
 
 # Install cuda-python, nvshmem python bindings, xet
-# Install all compiled wheels (DeepEP, DeepGEMM, LMCache, nixl)
+# Install compiled wheels (DeepEP) and nixl (pip wheels, which bundle their own UCX)
 # Installs vllm source. Supports three install modes:
     # 1) install vllm from source totally editably - dev option, supports fork and commit swapping
     # 3) install vllm from source with pulling precompiled binaries (shared libraries) from the vllm wheels index - less flexible dev option, may or may not work swapping shas but faster than full editable

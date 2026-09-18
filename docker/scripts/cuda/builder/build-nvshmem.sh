@@ -14,7 +14,6 @@ set -Eeux
 # - NVSHMEM_VERSION: NVSHMEM version to build (e.g., 3.3.20, or git ref if NVSHMEM_USE_GIT=true)
 # - NVSHMEM_DIR: NVSHMEM installation directory
 # - NVSHMEM_CUDA_ARCHITECTURES: CUDA architectures to build for
-# - UCX_PREFIX: Path to UCX installation
 # - VIRTUAL_ENV: Path to the virtual environment from which python will be pulled
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - PYTHON_VERSION: Python version (e.g., 3.12)
@@ -70,8 +69,7 @@ cmake -S . -B build -G Ninja \
     -DNVSHMEM_IBRC_SUPPORT=1 \
     -DNVSHMEM_IBGDA_SUPPORT=1 \
     -DNVSHMEM_IBDEVX_SUPPORT=1 \
-    -DNVSHMEM_UCX_SUPPORT=1 \
-    -DUCX_HOME="${UCX_PREFIX}" \
+    -DNVSHMEM_UCX_SUPPORT=0 \
     -DNVSHMEM_SHMEM_SUPPORT=0 \
     -DNVSHMEM_USE_GDRCOPY=1 \
     -DGDRCOPY_HOME="/usr/local" \

@@ -1,7 +1,8 @@
 #!/bin/bash
 set -Eeux
 
-# builds compiled extension wheels (DeepEP, DeepGEMM)
+# builds compiled extension wheels (DeepEP)
+# note: DeepGEMM is vendored in vLLM (vllm/third_party/deep_gemm) and not built here
 #
 # Required environment variables:
 # - VIRTUAL_ENV: path to Python virtual environment
@@ -9,8 +10,6 @@ set -Eeux
 # - CUDA_HOME: CUDA installation directory
 # - DEEPEP_REPO: DeepEP repository URL
 # - DEEPEP_VERSION: DeepEP version tag
-# - DEEPGEMM_REPO: DeepGEMM repository URL
-# - DEEPGEMM_VERSION: DeepGEMM version tag
 # - USE_SCCACHE: whether to use sccache (true/false)
 # - TARGETPLATFORM: Docker buildx platform (e.g., linux/amd64, linux/arm64)
 # - NVSHMEM_BUILD_FROM_SOURCE: if true, use source-built NVSHMEM; if false, install from pip
@@ -46,6 +45,7 @@ git clone "${DEEPEP_REPO}" deepep
 cd deepep
 git fetch origin "${DEEPEP_VERSION}" # Workaround for claytons floating commit
 git checkout -q "${DEEPEP_VERSION}"
+git submodule update --init --recursive
 # Force NVSHMEM IBGDA constant to be extern in host-compiled TUs (prevents duplicate definition)
 BACKUP_CXXFLAGS="${CXXFLAGS-}"
 export CXXFLAGS="${CXXFLAGS:-} -D__NVSHMEM_NUMBA_SUPPORT__"
@@ -58,15 +58,6 @@ if [ -n "${BACKUP_CXXFLAGS+x}" ]; then
 else
   unset CXXFLAGS
 fi
-
-# build DeepGEMM wheel
-git clone "${DEEPGEMM_REPO}" deepgemm
-cd deepgemm
-git checkout -q "${DEEPGEMM_VERSION}"
-git submodule update --init --recursive
-uv build --wheel --no-build-isolation --out-dir /wheels
-cd ..
-rm -rf deepgemm
 
 if [ "${USE_SCCACHE}" = "true" ]; then
   echo "=== Compiled wheels build complete - sccache stats ==="
