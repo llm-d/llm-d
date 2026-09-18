@@ -37,12 +37,13 @@ This guide includes configurations for the following accelerators:
 | ------------------- | ------------------ | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
 | AMD GPU             | `amd`              | AMD GPU                                                         |
-| Moore Threads GPU   | `mthreads`         | MTT S5000, single-node community validation                     |
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+                                 |
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
 | Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
 | Iluvatar GPU        | `iluvatar`         | Iluvatar BI-V150 (dual-die)                                     |
+| Moore Threads GPU (vLLM)   | `mthreads/vllm`    | MTT S5000, Qwen3-32B TP=8 single-node community validation      |
+| Moore Threads GPU (SGLang) | `mthreads/sglang`  | MTT S5000, colocated SGLang DeepSeek-V4-Flash (no PD)            |
 | CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
@@ -51,7 +52,7 @@ This guide includes configurations for the following accelerators:
 >
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
 
-The MThreads overlay is a single-replica TP validation profile: one
+The MThreads **vLLM** overlay is a single-replica TP validation profile: one
 `Qwen/Qwen3-32B` vLLM server, tensor parallelism 8, and eight
 `mthreads.com/gpu` resources in the pod. It uses the standalone Router/EPP
 path and the `llm-d-hf-token` Secret for model download. Set `ACCELERATOR_TYPE=mthreads`,
@@ -59,6 +60,10 @@ path and the `llm-d-hf-token` Secret for model download. Set `ACCELERATOR_TYPE=m
 deployment commands. The MThreads profile is not covered by the default H100 calibration
 value; measure `peakPrefillThroughput` on the target model and hardware before
 performance tuning.
+
+The MThreads **SGLang** overlay colocates prefill and decode for
+`DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
+[Deploying on Moore Threads S5000 (SGLang, colocated, no PD)](#deploying-on-moore-threads-s5000-sglang-colocated-no-pd).
 
 ## Prerequisites
 
@@ -94,7 +99,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```bash
 export MONITORING_VALUES=
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, npu, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, npu, cpu, mthreads
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke
 export MODEL=Qwen/Qwen3-32B
@@ -267,7 +272,7 @@ Apply the Kustomize overlays for your specific backend:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu or mthreads:
 #
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
 #
@@ -515,7 +520,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # only when ACCELERATOR_TYPE=gpu:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
+# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu or mthreads:
 #
 # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
 #
