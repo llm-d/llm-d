@@ -70,7 +70,7 @@ on:
         description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
         required: false
         default: 'sanity_random.yaml'
-#        default: 'guide_wide-ep-lws_1.yaml'
+#        default: 'guide_wide-ep_1.yaml'
         type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'

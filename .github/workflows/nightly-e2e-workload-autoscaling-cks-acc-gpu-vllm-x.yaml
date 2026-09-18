@@ -9,7 +9,7 @@ name: Nightly - Workload Autoscaling E2E (CKS GPU)
 
 on:
   schedule:
-    - cron: '30 7 * * *'  # 07:30 UTC daily (staggered from wide-ep-lws CKS at 07:00)
+    - cron: '30 7 * * *'  # 07:30 UTC daily (staggered from wide-ep CKS at 07:00)
   workflow_dispatch:
     inputs:
       image_tag:
@@ -69,7 +69,7 @@ on:
         description: 'Workload profile to be used during "run" operation (check list under "workload/profiles")'
         required: false
         default: 'sanity_random.yaml'
-#        default: 'guide_wide-ep-lws_1.yaml'
+#        default: 'guide_wide-ep_1.yaml'
         type: 'string'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
