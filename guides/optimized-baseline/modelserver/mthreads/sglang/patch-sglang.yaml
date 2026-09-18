@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  progressDeadlineSeconds: 7200
+  template:
+    spec:
+      runtimeClassName: mthreads
+      hostIPC: true
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: modelserver
+          # IB HCA list and dist-init IP are node-local; everything else is static
+          # like the other optimized-baseline overlays.
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              HOST_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')
+              HOST_IP=${HOST_IP:-$(hostname -I | awk '{print $1}')}
+              IB_DEVS=()
+              for dev in /sys/class/infiniband/*; do
+                [[ -e "$dev" ]] || continue
+                ibdev=$(basename "$dev")
+                for port in "$dev"/ports/*; do
+                  rate=$(cat "$port/rate" 2>/dev/null || true)
+                  if [[ "$rate" == *"200 Gb"* || "$rate" == *"400 Gb"* ]]; then
+                    IB_DEVS+=("$ibdev")
+                    break
+                  fi
+                done
+              done
+              if ((${#IB_DEVS[@]})); then
+                export MCCL_IB_HCA=$(printf "%s\n" "${IB_DEVS[@]}" | sort -V | uniq | paste -sd, -)
+              fi
+              exec python -m sglang.launch_server \
+                --trust-remote-code \
+                --model-path /data/models/DeepSeek-V4-Flash-0731-FP8-mt \
+                --tp 8 \
+                --ep 8 \
+                --mem-fraction-static 0.85 \
+                --swa-full-tokens-ratio 0.2 \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --chunked-prefill-size 40960 \
+                --max-prefill-tokens 65536 \
+                --watchdog-timeout 6000 \
+                --moe-a2a-backend deepep \
+                --deepep-mode normal \
+                --deepep-config '{"normal_dispatch":{"num_sms":60,"num_max_nvl_chunked_send_tokens":26},"normal_combine":{"num_sms":60,"num_max_nvl_chunked_send_tokens":16}}' \
+                --reasoning-parser deepseek-v4 \
+                --tool-call-parser deepseekv4 \
+                --enable-metrics \
+                --dist-init-addr "${HOST_IP}:29500" \
+                --log-level info \
+                --log-requests \
+                --log-requests-level 2
+          env:
+            - name: MTHREADS_VISIBLE_DEVICES
+              value: all
+            - name: MTHREADS_DRIVER_CAPABILITIES
+              value: all
+            - name: SGLANG_DSV4_FP4_EXPERTS
+              value: "0"
+            - name: SGLANG_OPT_USE_FUSED_HASH_TOPK
+              value: "1"
+            - name: SGLANG_OPT_USE_JIT_KERNEL_FUSED_TOPK
+              value: "1"
+            - name: SGLANG_JIT_DEEPGEMM_PRECOMPILE
+              value: "0"
+            - name: SGLANG_DSV4_MUSA_MOE_EXPERIMENTAL
+              value: "1"
+            - name: SGLANG_OPT_USE_JIT_INDEXER_METADATA
+              value: "1"
+            - name: SGLANG_OPT_USE_JIT_NORM
+              value: "0"
+            - name: SGLANG_OPT_FLASHMLA_SPARSE_PREFILL
+              value: "0"
+            - name: SGLANG_DEEP_GEMM_BLOCK_M
+              value: "256"
+            - name: SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK
+              value: "1024"
+            - name: SGLANG_OPT_USE_TILELANG_MHC_PRE
+              value: "1"
+            - name: SGLANG_OPT_MHC_PRE_BACKEND
+              value: auto
+            - name: SGLANG_OPT_DEEPGEMM_HC_PRENORM
+              value: "1"
+            - name: SGLANG_OPT_DEEPGEMM_HC_PRENORM_SPLIT_K
+              value: "32"
+            - name: SGLANG_OPT_MHC_PRE_BIG_FUSE_THREADS
+              value: "0"
+            - name: SGLANG_OPT_MHC_PRE_BIG_FUSE_HIDDEN_BLOCK
+              value: "0"
+            - name: SGLANG_OPT_MHC_PRE_BIG_FUSE_PASS_CONFIG
+              value: auto
+            - name: SGLANG_OPT_MHC_PRENORM_BACKEND
+              value: deepgemm
+            - name: SGLANG_OPT_MHC_PRENORM_SPLIT_K
+              value: "32"
+            - name: SGLANG_OPT_MHC_PRENORM_TILELANG_IMPL
+              value: auto
+            - name: SGLANG_OPT_USE_TILELANG_MHC_POST
+              value: "1"
+            - name: SGLANG_OPT_MHC_POST_THREADS
+              value: "0"
+            - name: SGLANG_OPT_MHC_POST_HIDDEN_BLOCK
+              value: "0"
+            - name: SGLANG_OPT_MHC_POST_PASS_CONFIG
+              value: auto
+            - name: SGLANG_OPT_MHC_POST_LAYOUT
+              value: auto
+            - name: SGLANG_OPT_MHC_POST_DIRECT_STORE
+              value: "0"
+            - name: SGLANG_OPT_BF16_FP32_GEMM_ALGO
+              value: deep_gemm
+            - name: SGLANG_OPT_HC_HEAD_TILELANG
+              value: "1"
+            - name: SGLANG_DEEPSEEK_V4_MUSA_ENABLE_JIT_TOPK512
+              value: "1"
+            - name: SGLANG_OPT_DSV4_MUSA_TILELANG_ROPE
+              value: "0"
+            - name: SGLANG_OPT_DSV4_MUSA_FUSED_ROPE_HADAMARD
+              value: "1"
+            - name: SGLANG_OPT_DSV4_MUSA_FUSED_NSA_ROPE_HADAMARD
+              value: "1"
+            - name: SGLANG_OPT_DSV4_MUSA_TILELANG_WO_A
+              value: "0"
+            - name: SGLANG_OPT_USE_TILEKERNELS_FP8_QUANT
+              value: "1"
+            - name: SGLANG_OPT_USE_TILEKERNELS_SWIGLU_QUANT
+              value: "1"
+            - name: SGLANG_DSV4_COMPRESS_STATE_DTYPE
+              value: bf16
+            - name: SGLANG_OPT_USE_ONLINE_COMPRESS
+              value: "1"
+            - name: SGLANG_OPT_USE_COMPRESSOR_V2_MUSA
+              value: "1"
+            - name: SGLANG_HEALTH_CHECK_TIMEOUT
+              value: "1200"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - IPC_LOCK
+            seccompProfile:
+              type: Unconfined
+          resources:
+            requests:
+              cpu: "32"
+              memory: 128Gi
+              mthreads.com/gpu: "8"
+            limits:
+              cpu: "64"
+              memory: 256Gi
+              mthreads.com/gpu: "8"
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: model-data
+              mountPath: /data
+            - name: infiniband
+              mountPath: /dev/infiniband
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: model-data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: infiniband
+          hostPath:
+            path: /dev/infiniband
+            type: DirectoryOrCreate

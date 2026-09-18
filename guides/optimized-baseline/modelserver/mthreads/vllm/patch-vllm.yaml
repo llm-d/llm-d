@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: modelserver
+          imagePullPolicy: IfNotPresent
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-32B
+            - --served-model-name=Qwen/Qwen3-32B
+            - --host=0.0.0.0
+            - --port=8000
+            - --tensor-parallel-size=8
+            - --dtype=bfloat16
+            - --enforce-eager
+            - --max-model-len=2048
+            - --max-num-seqs=16
+            - --max-num-batched-tokens=2048
+            - --gpu-memory-utilization=0.5
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+          ports:
+            - name: modelserver
+              containerPort: 8000
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            requests:
+              cpu: "16"
+              memory: 128Gi
+              mthreads.com/gpu: "8"
+            limits:
+              memory: 256Gi
+              mthreads.com/gpu: "8"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 180
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+          # MUSA TP=8 can temporarily stop answering /health during long
+          # collective work. Readiness removes the endpoint from EPP without
+          # killing the distributed engine; process failures still restart the
+          # container normally.
+          livenessProbe: null
+          securityContext:
+            capabilities:
+              add: [IPC_LOCK]
+            seccompProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
