@@ -251,9 +251,9 @@ Unlike the EPP and vLLM metrics above, these names carry no `llm_d_` prefix, so 
 
 For alerts built on these metrics, see [Alerting](./alerting.md#batch-gateway-batch-gatewayrules).
 
-## Step 4: Inference Cost Metrics (OpenCost)
+## Step 4: Enable Inference Cost Metrics 
 
-When [inference cost tracking](../../../guides/recipes/observability/inferencecost/README.md) is installed, OpenCost publishes three Prometheus gauges under the `llm_` prefix. These metrics join Kubernetes allocation costs with vLLM token throughput to produce per-model cost attribution that neither system can produce alone.
+Install [inference cost tracking](../../../guides/recipes/observability/inferencecost/README.md) to generate OpenCost metrics and three special Prometheus gauges under the `llm_` prefix. These metrics join Kubernetes allocation costs with vLLM token throughput to produce per-model cost attribution that neither system can produce alone.
 
 | Metric | Labels | What it measures | Why it matters |
 |--------|--------|-----------------|----------------|

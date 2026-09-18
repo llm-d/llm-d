@@ -28,7 +28,7 @@ OpenCost's inference cost module joins two data sources:
 - **vLLM Prometheus metrics** — token counts and latency, labeled by `model_name` and `namespace`
 - **Kubernetes allocation costs** — CPU, GPU, and RAM costs, grouped by the `llm-d.ai/model` pod label
 
-The join key is `model_name:namespace`. llm-d guides set `--served-model-name=<short-name>` on every `vllm serve` invocation so that the `model_name` label in vLLM metrics matches the `llm-d.ai/model` pod label exactly (e.g. `Qwen3-32B`, not `Qwen/Qwen3-32B`).
+The join key is `model_name:namespace`.
 
 The following Prometheus metrics are produced by OpenCost after install:
 
@@ -231,7 +231,7 @@ kube-state-metrics:
 
 ### Model name consistency
 
-vLLM reports the model name it was started with as the `model_name` label in Prometheus metrics. All llm-d guides set `--served-model-name=<short-name>` (e.g. `--served-model-name=Qwen3-32B`) so that this label matches the `llm-d.ai/model` pod label value exactly. If you add a custom model server, ensure its `--served-model-name` matches its `llm-d.ai/model` label — the installer's config check (step 4 above) will catch any mismatch.
+vLLM reports the model name it was started with as the `model_name` label in Prometheus metrics. `--served-model-name=<short-name>` (e.g. `--served-model-name=Qwen3-32B`) must be set on every `vllm serve` invocation so that this label matches the `llm-d.ai/model` pod label value exactly. Make sure `--served-model-name` matches its `llm-d.ai/model` label — the installer's config check (step 4 above) will catch any mismatch.
 
 ## File layout
 
