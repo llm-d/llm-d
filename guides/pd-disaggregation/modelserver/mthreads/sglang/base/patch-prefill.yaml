@@ -1,0 +1,234 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  progressDeadlineSeconds: 7200
+  template:
+    spec:
+      runtimeClassName: mthreads
+      terminationGracePeriodSeconds: 120
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: llm-d.ai/role
+                    operator: In
+                    values:
+                      - prefill
+                      - decode
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: modelserver
+          # IB HCA list and dist-init IP are node-local; GPU/IB come from
+          # device plugins (mthreads.com/gpu + rdma/ib), not privileged.
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              HOST_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')
+              HOST_IP=${HOST_IP:-$(hostname -I | awk '{print $1}')}
+              IB_DEVS=()
+              for dev in /sys/class/infiniband/*; do
+                [[ -e "$dev" ]] || continue
+                ibdev=$(basename "$dev")
+                for port in "$dev"/ports/*; do
+                  rate=$(cat "$port/rate" 2>/dev/null || true)
+                  if [[ "$rate" == *"200 Gb"* || "$rate" == *"400 Gb"* ]]; then
+                    IB_DEVS+=("$ibdev")
+                    break
+                  fi
+                done
+              done
+              if ((${#IB_DEVS[@]} == 0)); then
+                echo "ERROR: no 200/400Gb InfiniBand HCA in /sys/class/infiniband; request rdma/ib from the IB device plugin" >&2
+                exit 1
+              fi
+              export MCCL_IB_HCA=$(printf "%s\n" "${IB_DEVS[@]}" | sort -V | uniq | paste -sd, -)
+              exec python -m sglang.launch_server \
+                --trust-remote-code \
+                --model-path /data/models/DeepSeek-V4-Flash-0731-FP8-mt \
+                --tp 8 \
+                --ep 8 \
+                --mem-fraction-static 0.78 \
+                --swa-full-tokens-ratio 0.2 \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --chunked-prefill-size 40960 \
+                --max-prefill-tokens 65536 \
+                --disable-overlap-schedule \
+                --watchdog-timeout 6000 \
+                --disable-cuda-graph \
+                --enable-nsa-prefill-context-parallel \
+                --nsa-prefill-cp-mode round-robin-split \
+                --moe-a2a-backend deepep \
+                --deepep-mode normal \
+                --deepep-config '{"normal_dispatch":{"num_sms":60,"num_max_nvl_chunked_send_tokens":26},"normal_combine":{"num_sms":60,"num_max_nvl_chunked_send_tokens":16}}' \
+                --disaggregation-mode prefill \
+                --disaggregation-transfer-backend mooncake \
+                --disaggregation-bootstrap-port 8998 \
+                --disaggregation-ib-device "${MCCL_IB_HCA}" \
+                --reasoning-parser deepseek-v4 \
+                --tool-call-parser deepseekv4 \
+                --enable-metrics \
+                --dist-init-addr "${HOST_IP}:29500" \
+                --log-level info \
+                --log-requests \
+                --log-requests-level 2
+          env:
+            - name: MTHREADS_VISIBLE_DEVICES
+              value: all
+            - name: MTHREADS_DRIVER_CAPABILITIES
+              value: all
+            - name: SGLANG_DSV4_FP4_EXPERTS
+              value: "0"
+            - name: SGLANG_OPT_USE_FUSED_HASH_TOPK
+              value: "1"
+            - name: SGLANG_OPT_USE_JIT_KERNEL_FUSED_TOPK
+              value: "1"
+            - name: SGLANG_JIT_DEEPGEMM_PRECOMPILE
+              value: "0"
+            - name: SGLANG_DSV4_MUSA_MOE_EXPERIMENTAL
+              value: "1"
+            - name: SGLANG_OPT_USE_JIT_INDEXER_METADATA
+              value: "1"
+            - name: SGLANG_OPT_USE_JIT_NORM
+              value: "0"
+            - name: SGLANG_OPT_FLASHMLA_SPARSE_PREFILL
+              value: "0"
+            - name: SGLANG_DEEP_GEMM_BLOCK_M
+              value: "256"
+            - name: SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK
+              value: "1024"
+            - name: SGLANG_OPT_USE_TILELANG_MHC_PRE
+              value: "1"
+            - name: SGLANG_OPT_MHC_PRE_BACKEND
+              value: auto
+            - name: SGLANG_OPT_DEEPGEMM_HC_PRENORM
+              value: "1"
+            - name: SGLANG_OPT_DEEPGEMM_HC_PRENORM_SPLIT_K
+              value: "32"
+            - name: SGLANG_OPT_MHC_PRE_BIG_FUSE_THREADS
+              value: "0"
+            - name: SGLANG_OPT_MHC_PRE_BIG_FUSE_HIDDEN_BLOCK
+              value: "0"
+            - name: SGLANG_OPT_MHC_PRE_BIG_FUSE_PASS_CONFIG
+              value: auto
+            - name: SGLANG_OPT_MHC_PRENORM_BACKEND
+              value: deepgemm
+            - name: SGLANG_OPT_MHC_PRENORM_SPLIT_K
+              value: "32"
+            - name: SGLANG_OPT_MHC_PRENORM_TILELANG_IMPL
+              value: auto
+            - name: SGLANG_OPT_USE_TILELANG_MHC_POST
+              value: "1"
+            - name: SGLANG_OPT_MHC_POST_THREADS
+              value: "0"
+            - name: SGLANG_OPT_MHC_POST_HIDDEN_BLOCK
+              value: "0"
+            - name: SGLANG_OPT_MHC_POST_PASS_CONFIG
+              value: auto
+            - name: SGLANG_OPT_MHC_POST_LAYOUT
+              value: auto
+            - name: SGLANG_OPT_MHC_POST_DIRECT_STORE
+              value: "0"
+            - name: SGLANG_OPT_BF16_FP32_GEMM_ALGO
+              value: deep_gemm
+            - name: SGLANG_OPT_HC_HEAD_TILELANG
+              value: "1"
+            - name: SGLANG_DEEPSEEK_V4_MUSA_ENABLE_JIT_TOPK512
+              value: "1"
+            - name: SGLANG_OPT_DSV4_MUSA_TILELANG_ROPE
+              value: "0"
+            - name: SGLANG_OPT_DSV4_MUSA_FUSED_ROPE_HADAMARD
+              value: "1"
+            - name: SGLANG_OPT_DSV4_MUSA_FUSED_NSA_ROPE_HADAMARD
+              value: "1"
+            - name: SGLANG_OPT_DSV4_MUSA_TILELANG_WO_A
+              value: "0"
+            - name: SGLANG_OPT_USE_TILEKERNELS_FP8_QUANT
+              value: "1"
+            - name: SGLANG_OPT_USE_TILEKERNELS_SWIGLU_QUANT
+              value: "1"
+            - name: SGLANG_PREP_IN_CUDA_GRAPH
+              value: "0"
+            - name: SGLANG_DSV4_EAGLE_DRAFT_EXTEND_CUDA_GRAPH
+              value: "0"
+            - name: SGLANG_DSV4_HC_HEAD_TP
+              value: "0"
+            - name: SGLANG_DISAGGREGATION_QUEUE_SIZE
+              value: "32"
+            - name: SGLANG_DISAGGREGATION_THREAD_POOL_SIZE
+              value: "64"
+            - name: SGLANG_DSV4_COMPRESS_STATE_DTYPE
+              value: bf16
+            - name: SGLANG_OPT_USE_ONLINE_COMPRESS
+              value: "1"
+            - name: SGLANG_OPT_USE_COMPRESSOR_V2_MUSA
+              value: "1"
+            - name: SGLANG_DISAGGREGATION_ALL_CP_RANKS_TRANSFER
+              value: "1"
+            - name: SGLANG_HEALTH_CHECK_TIMEOUT
+              value: "1200"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          ports:
+            - name: bootstrap
+              containerPort: 8998
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+            seccompProfile:
+              type: Unconfined
+          resources:
+            requests:
+              cpu: "32"
+              memory: 128Gi
+              mthreads.com/gpu: "8"
+              rdma/ib: "8"
+            limits:
+              cpu: "64"
+              memory: 256Gi
+              mthreads.com/gpu: "8"
+              rdma/ib: "8"
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+            - name: model-data
+              mountPath: /data
+            - name: metrics-volume
+              mountPath: /.config
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: model-data
+          hostPath:
+            path: /data
+            type: Directory
+        - name: metrics-volume
+          emptyDir: {}

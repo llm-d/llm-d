@@ -55,7 +55,8 @@ This guide includes configuration for the following accelerators:
 | Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [TPU Guide](./README.tpu.md#pd-on-dynamic-tpu-sub-slices-tpu7x) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
 | MetaX GPU           | `modelserver/metax/vllm/`  | MetaX C500X, community contributed. Reduced 1P+1D / Qwen3-14B / TP=1 for compatibility checks. |
-| Moore Threads GPU   | `modelserver/mthreads/vllm/`  | MTT S5000, Qwen3-32B, 1P TP=4 + 1D TP=4 compatibility overlay using Mooncake TCP/MUSA transport. |
+| Moore Threads GPU (vLLM) | `modelserver/mthreads/vllm/`  | MTT S5000, Qwen3-32B, 1P TP=4 + 1D TP=4 compatibility overlay using Mooncake TCP/MUSA transport. |
+| Moore Threads GPU (SGLang) | `modelserver/mthreads/sglang/` | MTT S5000, 1P+1D TP=8, Mooncake KV, community contributed |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
 | Iluvatar GPU        | `modelserver/iluvatar/vllm/base/` | Iluvatar BI-V150 (dual-die), community contributed; Qwen3-32B on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode); vendor-fork `IluNixlConnector` with `kv_buffer_device=cuda` |
@@ -68,13 +69,14 @@ This guide includes configuration for the following accelerators:
 P/D disaggregation requires a KV transfer backend to move KV cache blocks from prefill workers to decode workers. The transfer backend is configured via vLLM's `--kv-transfer-config` flag.
 
 > [!NOTE]
-> The following table represents vLLM's KVTransfer compatibility. SGLang also supports these KVTransfer backends but its implementation will look different and is coming soon.
+> The following table is primarily vLLM's KVTransfer compatibility. SGLang uses engine flags (`--disaggregation-transfer-backend`) rather than vLLM `--kv-transfer-config`; the Moore Threads SGLang overlay is the SGLang Mooncake example, and the Moore Threads vLLM overlay uses vLLM `MooncakeConnector`.
 
 | Connector | Overlay | Transport | Notes |
 | --------- | ------- | --------- | ----- |
 | NixlConnector | `base`, `coreweave`, `gke` | UCX (RDMA / TCP) | Default. Supports heterogeneous TP across P/D. |
 | MooncakeConnector | `cks-mooncake` | RDMA via Mooncake Transfer Engine | Requires same TP on prefill and decode. CKS with InfiniBand. |
 | MooncakeConnector | `mthreads/vllm` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires same TP on prefill and decode. |
+| SGLang mooncake | `mthreads/sglang` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
 
 The `base` overlay uses NixlConnector and works on most clusters. Alternative overlays swap the connector and add infrastructure-specific configuration (e.g., RDMA device requests).
 
@@ -281,7 +283,7 @@ SGLang-specific notes:
 >
 > * Disaggregation lives in the llm-d Router (EPP) and is engine-agnostic, so SGLang P/D composes with the same prefix-cache-aware and load-aware routing as vLLM.
 > * SGLang P/D is **validated each release** on NVIDIA GPU but is not yet part of the nightly E2E CI that covers the vLLM path (the badges above).
-> * The SGLang P/D overlays are **NVIDIA GPU only** today; the AMD overlay (`modelserver/amd/vllm/`), MetaX overlay (`modelserver/metax/vllm/`), and MThreads overlay (`modelserver/mthreads/vllm/`) provide vLLM P/D only.
+> * SGLang P/D overlays exist for NVIDIA GPU (`modelserver/gpu/sglang/`) and Moore Threads S5000 (`modelserver/mthreads/sglang/`); the AMD overlay (`modelserver/amd/vllm/`), MetaX overlay (`modelserver/metax/vllm/`), and MThreads vLLM overlay (`modelserver/mthreads/vllm/`) provide vLLM P/D only.
 > * On the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts. See the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md).
 
 <details>
@@ -309,13 +311,36 @@ Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat
 </details>
 
 <details>
-<summary><b>Deploying on Moore Threads MTT S5000</b></summary>
+<summary><h4>Deploying on Moore Threads MTT S5000</h4></summary>
 
-The MThreads overlay is a single-node compatibility topology for **Qwen3-32B**:
-one Prefill Deployment with `TP=4` and one Decode Deployment with `TP=4`.
-Each Deployment requests four `mthreads.com/gpu` devices, so the topology
-consumes all eight GPUs on an MTT S5000 node. Both workers pull
-`Qwen/Qwen3-32B` from Hugging Face using the `llm-d-hf-token` Secret.
+Both overlays request `mthreads.com/gpu`. Choose SGLang or vLLM to match the image and topology.
+
+#### SGLang P/D
+
+**1 Prefill + 1 Decode**, each `TP=8` (prefill also `EP=8`), serving `DeepSeek-V4-Flash-0731-FP8-mt` with `--disaggregation-transfer-backend mooncake`. It needs **two** 8-GPU nodes. For a single 8-GPU node, use the [optimized-baseline colocated overlay](../optimized-baseline/README.md).
+
+Prerequisites:
+
+* Moore Threads GPU Operator / device plugin exposing `mthreads.com/gpu`, plus RuntimeClass `mthreads`.
+* InfiniBand device plugin exposing `rdma/ib` (edit the resource name in the patches if yours differs, e.g. `rdma/hca` or `rdma/roce_gdr`). `mt_peermem` is a **node** module for GPUDirect RDMA; load it on the node, do not request it as a Pod resource.
+* Image `registry.mthreads.com/devtech/sglang-dsv4:1.0` (air-gapped sites can retag).
+* Pods get `IPC_LOCK` and Unconfined seccomp so Mooncake can pin memory. They are not privileged.
+* Prefill↔Decode reachability on HTTP 8000/8200 and Mooncake bootstrap TCP **8998**, plus RDMA between the injected IB devices.
+
+The routing sidecar sets `bootstrap_host` to the InferencePool **Pod IP**. Mooncake then uses that address to pick the RDMA path (QP RTR). Requesting `rdma/ib`, or bind-mounting `/dev/infiniband`, is not enough if the RoCE GID is not on that IP — the transfer fails with `Failed to modify QP to RTR` / `No such device`. Give the Pod an IP on the RoCE NIC (Multus / SR-IOV, same idea as [CKS Mooncake](#supported-kv-transfer-backends): devices must be usable *inside* the pod netns). `hostNetwork` is a cluster-level fallback so `podIP` equals the node IP; do not bake it into this overlay.
+
+```bash
+export ACCELERATOR_TYPE=mthreads
+export MODEL_SERVER=sglang
+export MODEL=/data/models/DeepSeek-V4-Flash-0731-FP8-mt/
+
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/mthreads/sglang/base
+```
+
+#### vLLM P/D
+
+Single-node compatibility topology for **Qwen3-32B**: one Prefill Deployment with `TP=4` and one Decode Deployment with `TP=4`. Each Deployment requests four `mthreads.com/gpu` devices, so the topology consumes all eight GPUs on an MTT S5000 node. Both workers pull `Qwen/Qwen3-32B` from Hugging Face using the `llm-d-hf-token` Secret.
 
 Prerequisites:
 
@@ -330,8 +355,6 @@ Prerequisites:
   `8998`, in addition to the Prefill and Decode HTTP ports (`8000` and `8200`).
   The transfer-engine data-plane RPC ports are allocated dynamically by
   Mooncake.
-
-Render and apply the modelserver overlay:
 
 ```bash
 export REPO_ROOT=$(realpath "$(git rev-parse --show-toplevel)")
@@ -350,7 +373,7 @@ completion request. This values file is sufficient for a functional smoke test,
 but its `peakPrefillThroughput: 33821` is an NVIDIA H200 reference value. Do
 not use it for MTT S5000 performance claims; first measure the MThreads
 Qwen3-32B TP=4 Prefill path with the calibration recipe and override the value.
-The MThreads overlay configures:
+The vLLM overlay configures:
 
 * Prefill: `MooncakeConnector`, `kv_role=kv_producer`,
   `mooncake_protocol=tcp`.
@@ -367,7 +390,7 @@ response alone is not sufficient:
 inspect the vLLM logs for `Using MUSA transport`, Mooncake bootstrap startup,
 and successful KV-transfer metrics.
 
-Treat this as a compatibility smoke test until a clean multi-hour soak and
+Treat the vLLM path as a compatibility smoke test until a clean multi-hour soak and
 hardware-specific calibration have been completed.
 
 </details>
@@ -552,6 +575,19 @@ If you deployed the SGLang overlay, delete that path instead of the vLLM one:
 
 ```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
+```
+
+</details>
+
+<details>
+<summary><h4>Cleanup for Moore Threads</h4></summary>
+
+```bash
+# SGLang
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/mthreads/sglang/base
+
+# vLLM
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/mthreads/vllm
 ```
 
 </details>
