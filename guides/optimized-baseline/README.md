@@ -37,6 +37,7 @@ This guide includes configurations for the following accelerators:
 | ------------------- | ------------------ | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
 | AMD GPU             | `amd`              | AMD GPU                                                         |
+| Moore Threads GPU   | `mthreads`         | MTT S5000, single-node community validation                     |
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+                                 |
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
@@ -49,6 +50,15 @@ This guide includes configurations for the following accelerators:
 >
 >
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
+
+The MThreads overlay is a single-replica TP validation profile: one
+`Qwen/Qwen3-32B` vLLM server, tensor parallelism 8, and eight
+`mthreads.com/gpu` resources in the pod. It uses the standalone Router/EPP
+path and the `llm-d-hf-token` Secret for model download. Set `ACCELERATOR_TYPE=mthreads`,
+`MODEL_SERVER=vllm`, and keep `MODEL=Qwen/Qwen3-32B` when following the
+deployment commands. The MThreads profile is not covered by the default H100 calibration
+value; measure `peakPrefillThroughput` on the target model and hardware before
+performance tuning.
 
 ## Prerequisites
 

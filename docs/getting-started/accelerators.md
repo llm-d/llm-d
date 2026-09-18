@@ -14,6 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
+| Moore Threads | MTT S5000 GPU | Jingzhi Xue (@gingerXue, <jingzhi.xue@mthreads.com>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>), Minho Park (@rebel-minhopark, <minho.park@rebellions.ai>) |
 
@@ -99,6 +100,15 @@ Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefi
 ## MetaX C500X
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
+
+## Moore Threads MTT S5000
+
+Moore Threads MTT S5000 GPUs are supported for community-contributed well-lit
+paths. The device plugin must expose `mthreads.com/gpu`. The optimized-baseline
+path uses the MThreads vLLM image; P/D disaggregation uses vLLM
+`MooncakeConnector` over TCP/MUSA. See the [P/D Disaggregation
+guide](../../guides/pd-disaggregation/README.md) and the MThreads overlays
+(`modelserver/mthreads/vllm/`).
 
 ## Rebellions NPU
 
