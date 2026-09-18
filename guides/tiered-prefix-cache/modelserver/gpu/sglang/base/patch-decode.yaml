@@ -14,9 +14,8 @@ spec:
             - "--host=0.0.0.0"
             - "--port=8000"
             - "--tensor-parallel-size=2"
-            # KV-block granularity. Must match the router scorer's
-            # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
-            # --page-size, where vLLM uses --block-size.
+            # Matches the router scorer's tokenProcessorConfig.blockSizeTokens
+            # (default 64); SGLang uses --page-size (vLLM uses --block-size).
             - "--page-size=64"
             - "--enable-metrics"
           env:
@@ -32,11 +31,11 @@ spec:
             limits:
               nvidia.com/gpu: "2"
               cpu: "16"
-              memory: 400Gi
+              memory: 512Gi
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
-              memory: 200Gi
+              memory: 400Gi
           volumeMounts:
             - mountPath: /.config
               name: metrics-volume
