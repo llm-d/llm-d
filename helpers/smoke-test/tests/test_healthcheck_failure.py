@@ -39,3 +39,7 @@ def test_unhealthy_endpoint_sets_failure_exit_code():
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Status:    UNHEALTHY" in result.stdout
     assert "failed" in result.stdout
+    # The summary table must report the status the endpoint actually returned.
+    # 000 is the sentinel for "nothing answered", so reporting it for a 503
+    # reads as unreachable rather than erroring.
+    assert "/v1/models       HTTP 503" in result.stdout, result.stdout
