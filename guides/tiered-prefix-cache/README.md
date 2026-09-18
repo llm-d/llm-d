@@ -343,6 +343,34 @@ The connector does not evict data from the shared tier. Capacity is managed by t
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 
+### 4. Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate tiered prefix caching. This section covers what is specific to this path. Metric definitions are in the [metric reference](../../docs/operations/observability/metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
+
+Offloading only pays off when blocks evicted from HBM are loaded back later instead of recomputed. Two views need to agree: the EPP keeps a separate prefix index per tier (`gpu-prefix-cache-producer` and `cpu-prefix-cache-producer` in this guide's router values), and the model server reports what it actually stored and loaded. Most problems show up as a gap between the two.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for tiered prefix cache | Where to look |
+|--------|----------------------------------------|---------------|
+| Offload tier hit rate (`vllm:external_prefix_cache_hits_total` / `vllm:external_prefix_cache_queries_total`) | Prompt tokens found in CPU RAM or the filesystem tier at scheduling time, so they are loaded instead of recomputed. Read it next to the HBM hit rate (`vllm:prefix_cache_hits_total`): under cache pressure the HBM rate drops and this one should pick up the difference | [PromQL → Tiered Prefix Cache](../../docs/operations/observability/promql.md#tiered-prefix-cache) |
+| Store and load volume (`vllm:kv_offload_store_bytes_total`, `vllm:kv_offload_load_bytes_total`) | Steady stores with almost no loads means evicted blocks are written but never reused, so the tier costs memory and copy time without saving any prefill | [PromQL → Tiered Prefix Cache](../../docs/operations/observability/promql.md#tiered-prefix-cache) |
+| Load speed (`vllm:kv_offload_load_bytes_total` / `vllm:kv_offload_load_time_total`) | A load has to finish faster than the prefill it replaces. This covers the copy from CPU RAM to the GPU only; on the filesystem path, reading blocks from storage into CPU RAM happens first and is not included | [PromQL → Tiered Prefix Cache](../../docs/operations/observability/promql.md#tiered-prefix-cache) |
+| Store allocation failures (`vllm:kv_offload_allocation_failure_total`) | Stores that could not get CPU blocks because too little of the CPU tier was free or evictable. Those chunks are not offloaded, and the model server logs `cannot store chunks` | [Metrics → vLLM KV Offloading](../../docs/operations/observability/metrics.md#vllm-kv-offloading-metrics) |
+| EPP prefix index by tier (`llm_d_epp_prefix_indexer_size`, `llm_d_epp_prefix_indexer_hit_ratio`, split by `plugin_name`) | What the router believes each tier holds. The size gauge is the total across pods, so a full CPU index reads about pods × `lruCapacityPerServer` | [PromQL → Tiered Prefix Cache](../../docs/operations/observability/promql.md#tiered-prefix-cache) |
+| TTFT (`vllm:time_to_first_token_seconds`) | The user-facing payoff of this path. Compare against an HBM-only run at the same load before attributing a change to offloading | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+
+> vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand. `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang_hicache_host_used_tokens` / `sglang_hicache_host_total_tokens`) and attributes hits by tier with `sglang_cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
+
+#### Common failure modes
+
+* **Offload tier hit rate near zero while the HBM hit rate falls**: blocks are not reaching the offload tier, or they are evicted from it before reuse. If `vllm:kv_offload_store_bytes_total` is flat, confirm the pod started with `OffloadingConnector` in `--kv-transfer-config`. If stores are steady but loads stay near zero, either the workload rarely repeats prefixes or the CPU tier is too small for the working set. For the second case, raise `cpu_bytes_to_use`, keeping it within the pod's memory limit.
+* **EPP CPU index hit ratio well above what the model server reports**: the CPU index records the same prefixes as the GPU index with a larger capacity, so its hit ratio should roughly track HBM plus offload hits. If it runs well above that, the router is steering requests toward blocks the model servers no longer hold. The likely cause is `lruCapacityPerServer` on `cpu-prefix-cache-producer` being larger than what `cpu_bytes_to_use` actually fits, so lower it. The single-host value in this guide is sized for Qwen3-32B and the multi-host value for Qwen3-Coder-480B; recompute it for other models.
+* **TTFT worse than the HBM-only baseline**: loads are slower than recomputing. Check load speed, and on filesystem paths check read throughput on the storage backend.
+* **Steady store allocation failures**: the CPU tier has no free or evictable blocks when a store is prepared, usually because too many blocks are held by in-flight transfers under high concurrency. `vllm:kv_offload_cpu_cache_usage_perc` staying near 1.0 confirms it. Increase `cpu_bytes_to_use`.
+
+The bundled [alerting rules](../../docs/operations/observability/alerting.md) do not cover offloading yet.
+
 ---
 
 ## Verification
@@ -416,7 +444,7 @@ kubectl exec -n ${NAMESPACE} ${POD} -- find /mnt/files-storage/kv-cache -maxdept
 Expected output: `du -sh` shows hundreds of MB to several GB, and `find` lists a path like
 `/mnt/files-storage/<model>_<hash>_r0/<block-config>/<tp-config>/...` (vLLM native) or `/mnt/files-storage/kv-cache/<model>-xxx.pt` (LMCache).
 
-If you have monitoring set up, confirm via `vllm:kv_offload_total_bytes` (vLLM native) or `lmcache:local_storage_usage` (LMCache) in the metrics explorer.
+If you have monitoring set up, confirm via `vllm:kv_offload_store_bytes_total` (vLLM native) or `lmcache:local_storage_usage` (LMCache) in the metrics explorer.
 
 ---
 
