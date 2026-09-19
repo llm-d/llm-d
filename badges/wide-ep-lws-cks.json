@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM GPU",
-  "message": "prereqs-error",
-  "color": "black"
+  "message": "guide-error",
+  "color": "red"
 }
