@@ -170,7 +170,9 @@ cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
   - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
   - run: |
-      # INFRA_PROVIDER must match the value used at deploy time
+      # INFRA_PROVIDER must match the value used at deploy time.
+      # If you deployed on Intel XPU instead, replace the line below with
+      # modelserver/xpu/vllm/ (no INFRA_PROVIDER for that overlay).
       kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
         | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
         | kubectl delete -n ${NAMESPACE} -f -

@@ -99,7 +99,7 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 * `prefill-decode` → pods capable of both prefill and decode
 
 > [!NOTE]
-> It is possible to override the default labels by configuring the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the `prefill-filter` / `decode-filter`. TODO: provide an example of this.
+> To use a different label key, replace the role-specific filters with named `label-selector-filter` plugins in the `prefill` and `decode` profiles. Apply the same labels to the model-server Pods and keep the profile names `prefill` and `decode`; the `disagg-profile-handler` uses those names when it selects the profile.
 
 ### Routing Proxy Sidecar
 

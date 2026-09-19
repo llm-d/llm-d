@@ -9,6 +9,14 @@ Diffusion models generate media such as images, audio, and video by iterative de
 
 ## Guide Index
 
+### Single-Endpoint Guides
+
+Each guide deploys a dedicated model serving a single generation endpoint:
+
 * **[Text-to-Image Guide](./text-to-image/README.md)**: Generate images from text prompts over the OpenAI-compatible `POST /v1/images/generations` endpoint, serving on vLLM-Omni or SGLang.
 * **[Image-to-Image Guide](./image-to-image/README.md)**: Edit an uploaded image over the OpenAI-compatible `POST /v1/images/edits` endpoint, which carries `multipart/form-data`, serving on vLLM-Omni or SGLang.
 * **[Text-to-Speech Guide](./text-to-speech/README.md)**: Generate speech from text over the OpenAI-compatible `POST /v1/audio/speech` endpoint, which returns binary audio or streamed audio chunks, serving on vLLM-Omni.
+
+### Multi-Endpoint Guide
+
+* **[Multi-Endpoint Guide](./multi-endpoint/README.md)**: Deploy a single unified model (e.g. Qwen3-Omni) that serves **multiple modality endpoints** from one checkpoint — text, audio, and images — using exact-path HTTPRoutes to direct each endpoint to the model's InferencePool.

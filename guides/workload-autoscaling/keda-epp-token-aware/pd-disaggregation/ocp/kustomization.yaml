@@ -1,0 +1,89 @@
+# OpenShift overlay for token-aware autoscaling on the P/D-disaggregated topology.
+#
+# On OpenShift, metrics live in Thanos Querier, whose :9091 endpoint rejects
+# unauthenticated queries with a 401 — and KEDA suppresses that error and silently
+# serves `fallback` replicas, so an unauthenticated trigger looks healthy while
+# autoscaling does nothing. This overlay makes the token-aware path work on
+# OpenShift by:
+#   - pointing both roles' triggers at Thanos Querier and enabling bearer auth, and
+#   - provisioning a dedicated ServiceAccount (keda-epp-metrics-reader) granted
+#     cluster-monitoring-view, then repointing the TriggerAuthentication at that
+#     SA's token Secret. On OpenShift the service-ca operator injects
+#     `service-ca.crt` (the CA that signs Thanos's serving cert) into the token
+#     Secret automatically — so the guide's manual prometheus-token copy step is
+#     not needed on OpenShift.
+#
+# The decode trigger reads vllm:kv_cache_usage_perc, which reaches Thanos only if
+# the model servers are scraped by user-workload monitoring — apply the P/D
+# monitoring component (recipes/modelserver/components/monitoring-pd) before
+# relying on it.
+#
+# Build:  kubectl kustomize ocp
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Default namespace for the guide; override per deployment. The namespace
+# transformer also rewrites the base ScaledObjects'/TriggerAuthentication namespace
+# and the ServiceAccount subject in the ClusterRoleBinding, keeping them aligned.
+# NOTE: the PromQL label selectors inside the trigger queries are opaque strings
+# the transformer cannot reach — edit them, and the peakPrefillThroughput divisor,
+# to match your EPP pool/namespace and calibrated token rate.
+namespace: llm-d-pd-disaggregation
+
+resources:
+  - ../base
+
+# Shared OCP metrics-reader auth (SA + ClusterRoleBinding + token Secret).
+components:
+  - ../../../../recipes/autoscaling/metrics-reader
+
+patches:
+  # Repoint the TriggerAuthentication from the manually-copied prometheus-token
+  # Secret to the auto-provisioned ServiceAccount token Secret. On OpenShift its
+  # `service-ca.crt` is the CA that signs the Thanos serving cert (the base's
+  # ca.crt is the bundled-Prometheus CA and does not verify Thanos).
+  - patch: |-
+      - op: replace
+        path: /spec/secretTargetRef
+        value:
+          - parameter: bearerToken
+            name: keda-epp-metrics-reader-token
+            key: token
+          - parameter: ca
+            name: keda-epp-metrics-reader-token
+            key: service-ca.crt
+    target:
+      kind: TriggerAuthentication
+      name: prometheus-auth
+  # Point the prefill trigger at Thanos Querier and enable bearer authentication.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+    target:
+      kind: ScaledObject
+      name: pd-disaggregation-nvidia-gpu-vllm-prefill-token-aware
+  # Same for the decode trigger.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+    target:
+      kind: ScaledObject
+      name: pd-disaggregation-nvidia-gpu-vllm-decode-token-aware
+  # The ClusterRoleBinding from the metrics-reader component is cluster-scoped, so
+  # its name must be unique per namespace or two deployments of this guide (or of
+  # keda-epp-saturation / keda-epp-queue, which share the recipe) collide on it.
+  - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: keda-epp-metrics-reader-monitoring-view-llm-d-pd-disaggregation
+    target:
+      kind: ClusterRoleBinding
+      name: keda-epp-metrics-reader-monitoring-view

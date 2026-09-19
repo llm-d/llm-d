@@ -10,6 +10,9 @@ set -Eeux
 #
 # Optional environment variables:
 # - UCCL_DEVICE: device target (default: cuda). Options: cuda, rocm
+# - TARGETOS: build target OS (default: rhel). Options: rhel, ubuntu
+# - VIRTUAL_ENV: path to an active Python virtualenv, if any (set by the
+#   Python environment, not by callers of this script)
 
 UCCL_DEVICE="${UCCL_DEVICE:-cuda}"
 

@@ -71,8 +71,9 @@
     "architecture/advanced/kv-management/prefix-cache-aware-routing": { "position": 1 },
     "architecture/advanced/kv-management/kv-indexer": { "position": 2 },
     "architecture/advanced/kv-management/kv-offloader": { "position": 3 },
-    "architecture/advanced/autoscaling/hpa-wva": { "position": 1 },
-    "architecture/advanced/autoscaling/hpa-epp": { "position": 2, "label": "EndPoint Picker HPA/KEDA Integration" },
+    "architecture/advanced/autoscaling/keda-epp": { "position": 1, "label": "KEDA + EPP Metrics" },
+    "architecture/advanced/autoscaling/slo-aware-keda": { "position": 2, "label": "SLO-Aware Autoscaling" },
+    "architecture/advanced/autoscaling/wva": { "position": 3, "label": "Workload Variant Autoscaler (Deprecated)" },
     "architecture/advanced/batch/batch-gateway": { "position": 1 },
     "architecture/advanced/batch/async-processor": { "position": 2 },
 

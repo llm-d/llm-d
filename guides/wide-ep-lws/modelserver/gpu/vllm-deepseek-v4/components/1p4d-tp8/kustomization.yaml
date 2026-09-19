@@ -4,16 +4,13 @@ kind: Component
 # Scaled low-latency: multiple independent TP=8 decode workers handle higher concurrency.
 patches:
   - target:
-      kind: LeaderWorkerSet
-      name: ".*-prefill"
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
     patch: |-
+      # Roles are ordered [prefill, decode] in the base DisaggregatedSet.
       - op: replace
-        path: /spec/replicas
+        path: /spec/roles/0/spec/replicas
         value: 1
-  - target:
-      kind: LeaderWorkerSet
-      name: ".*-decode"
-    patch: |-
       - op: replace
-        path: /spec/replicas
+        path: /spec/roles/1/spec/replicas
         value: 4

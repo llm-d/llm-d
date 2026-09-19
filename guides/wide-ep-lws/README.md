@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. This guide includes both `LeaderWorkerSet` and `DisaggregatedSet` deployment paths. It has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. The NVIDIA GPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together; the Intel XPU configuration uses plain `LeaderWorkerSet`. It has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -50,10 +50,9 @@ This guide includes configurations for the following accelerators:
 
 | Backend | Directory | Notes |
 | --- | --- | --- |
-| NVIDIA GPU (GKE) | `modelserver/gpu/vllm/gke/` | GKE deployment (H200) |
-| NVIDIA GPU (GKE A4) | `modelserver/gpu/vllm/topology-aware/gke-a4/` | GKE deployment (B200) |
-| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm/coreweave/` | CoreWeave deployment |
-| NVIDIA GPU (GB200) | `modelserver/gpu/vllm/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
+| NVIDIA GPU (GKE) | `modelserver/gpu/vllm-deepseek-r1-0528/gke/` | GKE deployment (H200) |
+| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm-deepseek-r1-0528/coreweave/` | CoreWeave deployment |
+| NVIDIA GPU (GB200) | `modelserver/gpu/vllm-deepseek-r1-0528/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
 | Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
 
 > [!NOTE]
@@ -63,10 +62,20 @@ This guide includes configurations for the following accelerators:
 > NIC IDs (rail-only connectivity) will fail. The Intel XPU backend uses XCCL
 > and `allgather_reducescatter`; it does not use DeepEP, but still requires
 > full-mesh pod network connectivity between decode and prefill workers.
+>
+> See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+> for how the networking stack (NIXL/UCX, InfiniBand/RoCE) fits together and what
+> the cluster must provide, and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md)
+> for cross-node setup.
 
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Have a cluster with RDMA-capable accelerator nodes. For the networking stack and
+  how to verify it, see [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+  and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md). For GKE, see the
+  [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the
+  [GKE overlay cluster prerequisites](modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md#cluster-prerequisites).
 * Checkout llm-d repo:
 
   ```bash
@@ -91,8 +100,7 @@ This guide includes configurations for the following accelerators:
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/).
-* To use the `DisaggregatedSet` path, install LWS `v0.9.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` CRD, validating webhook, and RBAC used by the NVIDIA GPU path.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * Create a target namespace for the installation:
 
@@ -157,28 +165,36 @@ For Intel XPU, include
 
 ### 2. Deploy the Model Server
 
-Choose one of the following deployment paths:
+Apply the Kustomize overlay for your specific backend.
 
-#### Deploy using LeaderWorkerSet
+<!--
+NOTE: keep the Intel XPU block ahead of the NVIDIA GPU block below.
+Based on a reading (not a confirmed reproduction) of llm-d-benchmark's
+CI parser, it appears to pick the first `kubectl apply -n ${NAMESPACE}
+-k .../modelserver/...` command whose resolved path contains the
+requested backend, using an accelerator rewrite that does a plain
+substring replace of `modelserver/gpu/vllm`. Since
+`modelserver/gpu/vllm-deepseek-r1-0528` starts with that same
+substring, a GPU command appearing first may get rewritten into a
+bogus `modelserver/xpu/vllm-deepseek-r1-0528` path that shadows the
+real Intel XPU command. Ordering XPU first is intended to avoid that;
+please re-verify against the parser source if you touch this section.
+-->
 
-Apply the Kustomize overlay for your specific backend:
+**Intel XPU:**
 
 ```bash
-# NVIDIA GPU
-export INFRA_PROVIDER=gke # options: gke, coreweave, dgx-cloud-gb200
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
-
-# Intel XPU
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
 ```
 
-#### Deploy using DisaggregatedSet
+**NVIDIA GPU:**
 
-Apply the `DisaggregatedSet` overlay:
+The NVIDIA GPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/disaggregatedset
+export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 ```
 
 ### 3. (Optional) Enable Monitoring
@@ -193,17 +209,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-```
-
-### 4. (Optional) Topology Aware Scheduling (TAS)
-
-For information on how to use topology aware scheduling using Kueue, see [LWS + TAS user guide](https://lws.sigs.k8s.io/docs/examples/tas/). To deploy the guide with TAS enabled, use the following command:
-
-```bash
-# H200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke
-# B200 on GKE
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/topology-aware/gke-a4
 ```
 
 ## Verification
@@ -274,10 +279,10 @@ To remove the deployed components:
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # If you enabled monitoring (Step 3), remove the monitoring overlay first.
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-# NVIDIA GPU
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 # Intel XPU
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+# NVIDIA GPU
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 ```
 
 ## Benchmarking Results
