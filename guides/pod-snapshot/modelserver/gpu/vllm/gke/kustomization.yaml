@@ -11,7 +11,7 @@ resources:
   # Generates the snapshot-scripts ConfigMaps from the runtime sources.
   - ../../../../../../docker/scripts/snapshot
 
-namePrefix: gke-pod-snapshots-nvidia-gpu-vllm-
+namePrefix: pod-snapshot-nvidia-gpu-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
@@ -19,7 +19,7 @@ components:
 labels:
   - pairs:
       llm-d.ai/model: Qwen3-32B
-      llm-d.ai/guide: gke-pod-snapshots
+      llm-d.ai/guide: pod-snapshot
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
     includeSelectors: true

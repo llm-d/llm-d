@@ -312,9 +312,9 @@ def test_nightly_crds_use_env_sh_release_urls(flow_control):
     assert "releases/download/${GAIE_VERSION}" not in out
 
 
-def test_gke_pod_snapshots_uses_env_sh_release_url():
-    snapshots = guide.Guide.load(GUIDES_DIR / "gke-pod-snapshots")
-    out = snapshots.emit(["env", "prerequisites.gaie"])
+def test_pod_snapshot_uses_env_sh_release_url():
+    snapshot = guide.Guide.load(GUIDES_DIR / "pod-snapshot")
+    out = snapshot.emit(["env", "prerequisites.gaie"])
     assert "gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml" in out
     assert "releases/download/${GAIE_VERSION}" not in out
 

@@ -37,7 +37,7 @@ We are also working on a **platform-agnostic implementation based on [CRIU](http
 6. **Snapshot Matching & `env` Changes:**
    Changing the container `image`, `command`, `args`, or node/driver version automatically invalidates existing snapshots and triggers a fresh cold start. However, container `env` variables are **not** hashed—if you edit an `env` variable, you must manually run `kubectl delete podsnapshots --all -n <namespace>` to force a new snapshot, or restored pods will keep the old environment captured at checkpoint time. See [How GKE Matches Pods to Snapshots](#how-gke-matches-pods-to-snapshots).
 7. **gVisor Localhost Isolation (`kubectl port-forward`):**
-   `kubectl port-forward pod/<vllm-pod>` fails with `connection refused` because `kubelet` dials `127.0.0.1` in the host CNI namespace rather than inside gVisor's user-space network stack. To test from your local machine, port-forward to the router service (`kubectl port-forward service/gke-pod-snapshots-epp 8080:80`) or use an in-cluster test pod.
+   `kubectl port-forward pod/<vllm-pod>` fails with `connection refused` because `kubelet` dials `127.0.0.1` in the host CNI namespace rather than inside gVisor's user-space network stack. To test from your local machine, port-forward to the router service (`kubectl port-forward service/pod-snapshot-epp 8080:80`) or use an in-cluster test pod.
 8. **Hierarchical Namespace GCS Buckets:**
    The snapshot bucket must be created with `--enable-hierarchical-namespace`. Hierarchical namespace cannot be turned on after the fact, so an existing flat bucket cannot be reused.
 9. **Cloud Storage FUSE CSI Driver Is Unsupported:**
@@ -71,7 +71,7 @@ These are **container** environment variables set on the pod by the `gke/` deplo
 Before running this guide, make sure your GKE cluster, GPU node pool, and GCS storage bucket are configured.
 
 > [!NOTE]
-> Replace `<PROJECT_ID>`, `<REGION>`, `<ZONE>`, `<CLUSTER_NAME>`, `<NODE_POOL_NAME>`, `<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<GPU_COUNT>`, `<MAX_NODES>`, `<DISK_SIZE>`, `<GCS_BUCKET>`, and `<NAMESPACE>` (default: `llm-d-gke-pod-snapshots`) below:
+> Replace `<PROJECT_ID>`, `<REGION>`, `<ZONE>`, `<CLUSTER_NAME>`, `<NODE_POOL_NAME>`, `<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<GPU_COUNT>`, `<MAX_NODES>`, `<DISK_SIZE>`, `<GCS_BUCKET>`, and `<NAMESPACE>` (default: `llm-d-pod-snapshot`) below:
 >
 > - **GPU Machine & Accelerator (`<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<GPU_COUNT>`):** e.g., `--machine-type=a3-highgpu-1g` with `--accelerator=type=nvidia-h100-80gb,count=1,gpu-driver-version=latest`. See [supported GPU machine types](https://cloud.google.com/kubernetes-engine/docs/concepts/gpus#gpu_machine_types) and [zone availability](https://cloud.google.com/compute/docs/gpus/gpu-regions-zones).
 > - **Capacity & Provisioning (`--spot` / `--flex-start`):** Depending on regional GPU availability and quota for some machine types, add `--spot` or `--flex-start` to the node pool creation command if standard on-demand capacity is unavailable.
@@ -139,7 +139,7 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
      --permissions="storage.buckets.get,storage.objects.get,storage.objects.list,storage.objects.create,storage.objects.delete,storage.folders.create"
 
    gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
-     --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/gke-pod-snapshots-nvidia-gpu-vllm-sa" \
+     --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/pod-snapshot-nvidia-gpu-vllm-sa" \
      --role="projects/<PROJECT_ID>/roles/podSnapshotGcsReadWriter"
    ```
 
@@ -169,8 +169,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 ```bash
 export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export GUIDE_NAME=gke-pod-snapshots
-export NAMESPACE=llm-d-gke-pod-snapshots
+export GUIDE_NAME=pod-snapshot
+export NAMESPACE=llm-d-pod-snapshot
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
