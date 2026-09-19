@@ -29,7 +29,6 @@ This directory contains Kustomize Components that define the **default container
 │   ├── aws-efa
 │   │   ├── llm-d
 │   │   └── release
-│   ├── ec-connector
 │   ├── llm-d
 │   │   └── release
 │   ├── nightly
@@ -56,7 +55,7 @@ This directory contains Kustomize Components that define the **default container
 
 ### Why are there both `llm-d` and `vllm` images?
 
-llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d originally supported only vLLM, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today, for example the `ec-connector` work is still open in vLLM at the time of documenting this. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
+llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d originally supported only vLLM, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today, see the known gaps documented below. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
 
 #### Known gap - NVSHMEM on RoCE networking
 
