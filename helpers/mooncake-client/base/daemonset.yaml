@@ -5,6 +5,12 @@ metadata:
 spec:
   template:
     spec:
+      ## To target some subset of CPU nodes instead of every node in the cluster,
+      ## simply labe your CPU nodes with the following kubectl command:
+      ## `kubectl label node cpu-node-{1,2,3,4} llm-d.ai/cpu-offloading-node=true`
+      ## and then uncomment the yaml `nodeSelector` below:
+      # nodeSelector:
+      #   llm-d.ai/cpu-offloading-node: "true"
       containers:
         - name: mooncake-client
           image: mooncake-client
