@@ -1,0 +1,62 @@
+# Generator pod (Stage 1, model_stage=dit) — HEADLESS stage worker. Loads the
+# DiT transformer + VAE (~13.5 GiB for Wan2.1-1.3B), consumes the encode stage's
+# prompt embeddings, runs the denoise loop + VAE decode. Claims 1 Intel XPU.
+#
+# Native vLLM-Omni distributed mode (NOT Dynamo): --headless --stage-id 1 makes
+# this a stage worker that registers to the encode pod's Omni master via the
+# omni-master Service (ZMQ). No HTTP server here; no etcd / NATS / Dynamo.
+#
+# This is the throughput-dominant pool — scale `replicas` independently of
+# encode (and add XPUs / tensor_parallel_size in the stage config for the
+# Wan2.2 A14B MoE variants).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: generator
+  labels:
+    llm-d.ai/role: generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wan-eg-generator
+  template:
+    metadata:
+      labels:
+        app: wan-eg-generator
+        llm-d.ai/role: generator
+    spec:
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              # --stage-id 1 --headless => owns the DiT stage, registers to the
+              # master (encode Pod) over the omni-master Service ZMQ port.
+              exec vllm serve "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" --omni \
+                --stage-configs-path /etc/wan/wan2_2_epd.yaml \
+                --stage-id 1 \
+                --headless \
+                --omni-master-address omni-master \
+                --omni-master-port 8092 \
+                --vae-use-tiling \
+                --enforce-eager
+          resources:
+            limits:
+              cpu: "16"
+              memory: 64Gi
+            requests:
+              cpu: "16"
+              memory: 64Gi
+            claims:
+              - name: xpu-generator-claim
+      resourceClaims:
+        - name: xpu-generator-claim
+          resourceClaimTemplateName: xpu-generator-claim
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
