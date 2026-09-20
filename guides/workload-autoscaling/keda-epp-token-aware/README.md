@@ -60,7 +60,7 @@ For details on these metrics, see:
 
 `llm_d_epp_inflight_tokens` is a `GaugeVec` whose series were historically **not pruned when an endpoint was removed**, so a scaled-down pod left a series frozen at its last non-zero value and `sum()` could never fall back — the fleet would scale up but not down. That was [llm-d-router#2529](https://github.com/llm-d/llm-d-router/issues/2529), **fixed by [llm-d-router#2577](https://github.com/llm-d/llm-d-router/pull/2577)**, and the plain `sum()` queries in this guide rely on that fix.
 
-The fix is on `main` — which is what `ROUTER_EPP_VERSION` defaults to — but it merged after `v0.10.0`, so it is **not in a tagged release yet**. If you pin `ROUTER_EPP_VERSION` to `v0.10.0` or earlier and see prefill scale up but never back down, either move to `main` or intersect the numerator against a metric that *is* rebuilt from live endpoints each scrape, which filters the stale series out:
+The fix is on `main`, the Router Helm chart's default EPP image tag, but it merged after `v0.10.0`, so it is **not in a tagged release yet**. If you set `router.epp.image.tag` to `v0.10.0` or earlier and see prefill scale up but never back down, either move to `main` or intersect the numerator against a metric that *is* rebuilt from live endpoints each scrape, which filters the stale series out:
 
 ```promql
     label_replace(llm_d_epp_inflight_tokens{...}, "target_pod", "$1", "endpoint_name", "(.+)")
