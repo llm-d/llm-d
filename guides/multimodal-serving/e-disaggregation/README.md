@@ -278,6 +278,28 @@ curl -sS -f -X POST http://${IP}/v1/chat/completions \
     }' | jq .
 ```
 
+### 3. Confirm the EC Transfer (vLLM profiles)
+
+A successful multimodal response does not show that the encoder output came from the Encode Worker, because a consumer that receives no encoder output encodes the media locally. The ECCPU Connector logs the transfer at `DEBUG` level only, so set the log level on the consumer (the decode pods in E/PD, the prefill pods in E/P/D):
+
+```bash
+export EC_CONSUMER_ROLE=decode # use "prefill" for the E/P/D profile
+kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL=DEBUG -n ${NAMESPACE}
+kubectl rollout status deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -n ${NAMESPACE}
+```
+
+Send the multimodal request from step 2 again, then search the consumer logs:
+
+```bash
+kubectl logs -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver -n ${NAMESPACE} --tail=-1 | grep "EC consumer: NIXL xfer complete"
+```
+
+One line for each transferred multimodal item shows that the transfer works. If there is no such line, make sure that the image contains the P2P NIXL mode (see [EC Connector](#ec-connector)). Remove the variable when you are done:
+
+```bash
+kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL- -n ${NAMESPACE}
+```
+
 ## Cleanup
 
 To remove the deployed components:
@@ -304,6 +326,9 @@ This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer m
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
 
 The vLLM E/PD and E/P/D profiles use the upstream vLLM nightly image (`docker.io/vllm/vllm-openai:nightly`), set `VLLM_USE_V2_MODEL_RUNNER=1` on each vLLM instance that uses the ECCPU Connector (all instances in E/PD, encode and prefill in E/P/D) because the [ECCPU Connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/) requires the V2 model runner, and configure it in P2P NIXL mode (`"ec_enable_nixl": true` and `ec_cpu_bytes`, the size of the shared CPU region).
+
+> [!IMPORTANT]
+> The P2P NIXL mode requires a vLLM build that contains [vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941). At the time of writing, only the nightly image contains it. vLLM `v0.29.0` and earlier releases accept `"ec_enable_nixl": true` but do not read it: the pods start and requests succeed, but no encoder output is transferred and the consumer encodes the media again. No error is reported. To confirm that the transfer occurs, see [Confirm the EC Transfer](#3-confirm-the-ec-transfer-vllm-profiles).
 
 ### E/PD Request Flow
 

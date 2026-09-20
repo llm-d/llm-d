@@ -90,16 +90,24 @@ topology choice:
 | NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base`, `coreweave`, and `gke` providers) |
 
 > [!NOTE]
-> Encoder-cache transfer (`--ec-transfer-config`) is not yet in an official vLLM
-> release, so the model server manifests use the upstream vLLM nightly image
+> Encoder-cache transfer between instances (the P2P NIXL mode of `--ec-transfer-config`,
+> [vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941)) is not yet
+> in an official vLLM release, so the model server manifests use the upstream vLLM
+> nightly image
 > (`docker.io/vllm/vllm-openai:nightly`), the same one the E/PD and E/P/D profiles
 > of the [Encode Disaggregation guide](../multimodal-serving/e-disaggregation/README.md)
 > use. The encode and prefill model servers set `VLLM_USE_V2_MODEL_RUNNER=1`,
 > which the
 > [CPU EC connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/)
 > requires, and use its P2P NIXL mode (`ec_enable_nixl`, `ec_cpu_bytes`). Replace the
-> nightly image with an official vLLM release once encoder-cache transfer lands
-> upstream.
+> nightly image with an official vLLM release once a release contains that change.
+>
+> vLLM `v0.29.0` and earlier releases accept `"ec_enable_nixl": true` but do not read it:
+> the pods start and requests succeed, but no encoder output is transferred and the
+> prefill model server encodes the media again. No error is reported. To confirm that the
+> transfer occurs, follow
+> [Confirm the EC Transfer](../multimodal-serving/e-disaggregation/README.md#3-confirm-the-ec-transfer-vllm-profiles)
+> with `EC_CONSUMER_ROLE=prefill`.
 
 ## Prerequisites
 
