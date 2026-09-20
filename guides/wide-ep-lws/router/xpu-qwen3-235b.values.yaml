@@ -1,0 +1,26 @@
+router:
+  epp:
+    # The XPU deployment is aggregated: every endpoint handles both
+    # prefill and decode, so use one default scheduling profile.
+    pluginsCustomConfig:
+      wide-ep-lws-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+
+  modelServers:
+    targetPorts:
+      - number: 8200
+    matchLabels:
+      llm-d.ai/guide: "wide-ep-lws"
+      llm-d.ai/accelerator-variant: "xpu"
+      llm-d.ai/accelerator-vendor: "intel"
