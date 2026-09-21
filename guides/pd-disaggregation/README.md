@@ -14,10 +14,11 @@ This guide deploys `openai/gpt-oss-120b` with prefill-decode disaggregation, imp
 * 8 TP=1 Prefill Instances
 * 2 TP=4 Decode Instances
 
-This guide also has two alternate variants:
+This guide also has alternate variants:
 
 * **[Google TPU](./README.tpu.md)** — the same P/D pattern on GKE TPU (v6e & v7x).
 * **[DisaggregatedSet](./README.ds.md)** — the same deployment managed as a single LWS `DisaggregatedSet` resource, with coordinated P/D rollouts, `slices` for replicating the whole topology into independent copies, and per-domain placement policy.
+* **[P/D Multi Tier KV Cache](./README.multi-tier.md)** — NIXL P/D with CPU KV-cache retention beyond HBM capacity.
 
 ### P/D Best Practices
 
