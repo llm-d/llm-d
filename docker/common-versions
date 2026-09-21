@@ -2,8 +2,8 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/LucasWilkinson/vllm.git
-VLLM_COMMIT_SHA=94c7827517a2c71f4d8325b60b7d9632846b85de # vllm-project/vllm#57575 (lwilkinson/flashmla-prefill-workspace) head
+VLLM_REPO=https://github.com/neuralmagic/vllm.git
+VLLM_COMMIT_SHA=177eceb4d836fc3fe9ca69a9193285272edd6e02 # vllm-project/vllm#57841 (fix-skipped-waiting-hol-deadlock) head
 
 # ============================================================================
 # Cuda specific configs
@@ -16,7 +16,7 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the compiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=71fc70d3ae1df53300a23ec69f6d97b7207a109f # merge-base of vllm-project/vllm#57575 with main (PR is Python-only)
+VLLM_PRECOMPILED_WHEEL_COMMIT=7ddd461a284d2c318410f29110f1604028b961ee # latest main ancestor of vllm-project/vllm#57841 with a published wheel (PR is Python-only)
 
 
 
