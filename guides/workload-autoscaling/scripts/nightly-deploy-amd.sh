@@ -80,10 +80,9 @@ echo "==> Ensuring namespace ${NAMESPACE} exists"
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 # Nightly-only model server tweak: the guide ships 8 replicas, the nightly runs 2.
-# The AMD base already mounts writable Triton and torch-compile caches, so unlike
-# the CKS nightly nothing else needs patching in.
+# The AMD base already mounts writable Triton and torch-compile caches, so the
+# generated overlay only needs to adjust the replica count.
 echo "==> Deploying the AMD model server"
-yq '.spec.replicas=2' -i "${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/base/patch-vllm.yaml"
 # The base ships no PodMonitor, so nothing scrapes vLLM and WVA's saturation engine finds
 # neither kv-cache utilization nor queue depth — it then emits a desired count equal to the
 # current one and the nightly passes without autoscaling ever being exercised. Layer the
@@ -98,6 +97,14 @@ resources:
   - ${MODELSERVER_REL}/guides/optimized-baseline/modelserver/amd/vllm/base
 components:
   - ${MODELSERVER_REL}/guides/recipes/modelserver/components/monitoring
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        replicas: 2
 EOF
 kubectl apply -k "${MODELSERVER_DIR}" -n "${NAMESPACE}"
 
