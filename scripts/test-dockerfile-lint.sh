@@ -30,7 +30,7 @@ cp /tmp/test-script.sh /tmp/test-scripts/
 
 echo ""
 echo "Test 1: Dockerfile missing required variable (should FAIL)"
-if ./scripts/lint-dockerfile-envvars.py /tmp/test-Dockerfile /tmp/test-scripts 2>&1; then
+if ./scripts/lint-dockerfile-envvars.py /tmp/test-scripts /tmp/test-Dockerfile 2>&1; then
     echo "✗ Test failed: should have detected missing TEST_VAR2"
     exit 1
 else
@@ -49,7 +49,7 @@ EOF
 
 echo ""
 echo "Test 2: Dockerfile with all required variables (should PASS)"
-if ./scripts/lint-dockerfile-envvars.py /tmp/test-Dockerfile-fixed /tmp/test-scripts 2>&1; then
+if ./scripts/lint-dockerfile-envvars.py /tmp/test-scripts /tmp/test-Dockerfile-fixed 2>&1; then
     echo "✓ Test passed: all variables declared"
 else
     echo "✗ Test failed: should have passed with all variables declared"
