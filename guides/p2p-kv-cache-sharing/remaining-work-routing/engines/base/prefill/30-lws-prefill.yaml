@@ -1,0 +1,334 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  labels:
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+    llm-d.ai/guide: wide-ep-lws
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/role: prefill
+  name: glm-5-2-prefill
+  namespace: nilig-agentx-slo
+spec:
+  leaderWorkerTemplate:
+    restartPolicy: RecreateGroupOnPodRestart
+    size: 1
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/accelerator-variant: gpu
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/guide: wide-ep-lws
+          llm-d.ai/inference-serving: 'true'
+          llm-d.ai/model: GLM-5.2-FP8
+          llm-d.ai/role: prefill
+      spec:
+        affinity:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/model: GLM-5.2-FP8
+                    llm-d.ai/role: prefill
+                topologyKey: backend.coreweave.cloud/leafgroup-name
+              weight: 100
+        containers:
+        - args:
+          - "find /dev/shm -type f -delete\n\n#################\n# RUN vLLM GLM-5.2-FP8\
+            \ prefill worker\n#################\n\nGPU_MEM_UTIL=${PREFILL_GPU_MEM_UTIL:-$([\
+            \ \"${LWS_GROUP_SIZE:-1}\" -gt 1 ] && echo 0.88 || echo 0.92)}\n\nMTP_ARGS=\"\
+            \"\nif [ \"${ENABLE_MTP:-1}\" = \"1\" ]; then\n  MTP_ARGS=\"--speculative-config\
+            \ {\\\"method\\\":\\\"mtp\\\",\\\"num_speculative_tokens\\\":${MTP_NUM_TOKENS:-3}}\"\
+            \nfi\n\nSTART_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))\nKV_EVENTS_BASE=$((5557\
+            \ - START_RANK))\nKV_EVENTS_ARGS=\"--kv-events-config {\\\"enable_kv_cache_events\\\
+            \":true,\\\"publisher\\\":\\\"zmq\\\",\\\"endpoint\\\":\\\"tcp://*:${KV_EVENTS_BASE}\\\
+            \",\\\"topic\\\":\\\"kv@${POD_IP}:8000@zai-org/GLM-5.2-FP8\\\"}\"\n\n\
+            case \"${OFFLOADING_MODE:-off}\" in\n  cpu)\n    KV_TRANSFER_CONFIG='{\"\
+            kv_connector\":\"MultiConnector\",\n                          \"kv_role\"\
+            :\"kv_both\",\n                          \"kv_load_failure_policy\":\"\
+            fail\",\n                          \"kv_connector_extra_config\":{\n \
+            \                           \"connectors\":[\n                       \
+            \       {\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_both\"},\n\
+            \                              {\"kv_connector\":\"OffloadingConnector\"\
+            ,\"kv_role\":\"kv_both\",\n                               \"kv_connector_extra_config\"\
+            :{\n                                 \"cpu_bytes_to_use\":'\"${KV_OFFLOAD_CPU_BYTES:-107374182400}\"\
+            ',\n                                 \"eviction_policy\":\"lru\"\n   \
+            \                         }}]}}'\n    ;;\n  tiered)\n    KV_TRANSFER_CONFIG='{\"\
+            kv_connector\":\"MultiConnector\",\n                          \"kv_role\"\
+            :\"kv_both\",\n                          \"kv_load_failure_policy\":\"\
+            fail\",\n                          \"kv_connector_extra_config\":{\n \
+            \                           \"connectors\":[\n                       \
+            \       {\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_both\"},\n\
+            \                              {\"kv_connector\":\"OffloadingConnector\"\
+            ,\"kv_role\":\"kv_both\",\n                               \"kv_connector_extra_config\"\
+            :{\n                                 \"spec_name\":\"TieringOffloadingSpec\"\
+            ,\n                                 \"cpu_bytes_to_use\":'\"${KV_OFFLOAD_CPU_BYTES:-107374182400}\"\
+            ',\n                                 \"eviction_policy\":\"lru\",\n  \
+            \                               \"secondary_tiers\":[{\"type\":\"fs\"\
+            ,\"root_dir\":\"/mnt/nvme-cache\",\n                                 \
+            \  \"n_read_threads\":16,\"n_write_threads\":16}]\n                  \
+            \          }}]}}'\n    ;;\n  p2p-tiered)\n    P2P_BASE=$((7777 - START_RANK))\n\
+            \    KV_TRANSFER_CONFIG='{\"kv_connector\":\"MultiConnector\",\n     \
+            \                     \"kv_role\":\"kv_both\",\n                     \
+            \     \"kv_load_failure_policy\":\"fail\",\n                         \
+            \ \"kv_connector_extra_config\":{\n                            \"connectors\"\
+            :[\n                              {\"kv_connector\":\"NixlConnector\"\
+            ,\"kv_role\":\"kv_both\"},\n                              {\"kv_connector\"\
+            :\"OffloadingConnector\",\"kv_role\":\"kv_both\",\n                  \
+            \             \"kv_connector_extra_config\":{\n                      \
+            \           \"spec_name\":\"TieringOffloadingSpec\",\n               \
+            \                  \"cpu_bytes_to_use\":'\"${KV_OFFLOAD_CPU_BYTES:-107374182400}\"\
+            ',\n                                 \"eviction_policy\":\"lru\",\n  \
+            \                               \"offload_prompt_only\":false,\n     \
+            \                            \"secondary_tiers\":[{\"type\":\"p2p\",\"\
+            host\":\"'\"${POD_IP}\"'\",\"port\":'\"${P2P_BASE}\"'}]\n            \
+            \                }}]}}'\n    ;;\n  *)\n    KV_TRANSFER_CONFIG='{\"kv_connector\"\
+            :\"NixlConnector\",\n                          \"kv_role\":\"kv_both\"\
+            ,\n                          \"kv_load_failure_policy\":\"fail\"}'\n \
+            \   ;;\nesac\n\nexec vllm serve $MTP_ARGS --kv-cache-dtype fp8 \\\n  zai-org/GLM-5.2-FP8\
+            \ \\\n  --port 8000 \\\n  --trust-remote-code \\\n  --gpu-memory-utilization\
+            \ $GPU_MEM_UTIL \\\n  --max-model-len ${MAX_MODEL_LEN:-120000} \\\n  --disable-access-log-for-endpoints=/health,/metrics\
+            \ \\\n  --data-parallel-multi-port-external-lb \\\n  --data-parallel-supervisor-port=8208\
+            \ \\\n  --enable-expert-parallel \\\n  --tensor-parallel-size $TP_SIZE\
+            \ \\\n  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \\\n\
+            \  --data-parallel-size-local $DP_SIZE_LOCAL \\\n  --data-parallel-address\
+            \ ${LWS_LEADER_ADDRESS} \\\n  --data-parallel-rpc-port 5555 \\\n  --max-num-batched-tokens\
+            \ 2048 \\\n  --data-parallel-start-rank $START_RANK \\\n  --block-size\
+            \ 64 \\\n  $KV_EVENTS_ARGS \\\n  --kv_transfer_config \"$KV_TRANSFER_CONFIG\"\
+            \ \\\n  --moe-backend deep_gemm \\\n  --all2all-backend deepep_high_throughput"
+          command:
+          - /bin/bash
+          - -c
+          env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: PYTHONHASHSEED
+            value: '0'
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: HF_TOKEN
+                name: llm-d-hf-token
+          - name: HF_HOME
+            value: /mnt/hf-cache
+          - name: PREFILL_GPU_MEM_UTIL
+            value: '0.935'
+          - name: MAX_MODEL_LEN
+            value: '120000'
+          - name: OFFLOADING_MODE
+            value: p2p-tiered
+          - name: KV_OFFLOAD_CPU_BYTES
+            value: '107374182400'
+          - name: ENABLE_MTP
+            value: '1'
+          - name: MTP_NUM_TOKENS
+            value: '3'
+          - name: VLLM_USE_V2_MODEL_RUNNER
+            value: '0'
+          - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+            value: '1'
+          - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+            value: '1'
+          - name: DP_SIZE_LOCAL
+            value: '8'
+          - name: TP_SIZE
+            value: '1'
+          - name: TRITON_LIBCUDA_PATH
+            value: /usr/lib64
+          - name: VLLM_SKIP_P2P_CHECK
+            value: '1'
+          - name: VLLM_USE_DEEP_GEMM
+            value: '1'
+          - name: NVIDIA_GDRCOPY
+            value: enabled
+          - name: NVSHMEM_REMOTE_TRANSPORT
+            value: ibgda
+          - name: NVSHMEM_IB_ENABLE_IBGDA
+            value: 'true'
+          - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+            value: eth0
+          - name: GLOO_SOCKET_IFNAME
+            value: eth0
+          - name: NCCL_SOCKET_IFNAME
+            value: eth0
+          - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+            value: '120'
+          - name: VLLM_LOGGING_LEVEL
+            value: INFO
+          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: VLLM_P2P_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: CUDA_CACHE_PATH
+            value: /var/cache/vllm/cuda
+          - name: CCACHE_DIR
+            value: /var/cache/vllm/ccache
+          - name: VLLM_CACHE_ROOT
+            value: /var/cache/vllm/vllm
+          - name: FLASHINFER_WORKSPACE_BASE
+            value: /var/cache/vllm/flashinfer
+          - name: NCCL_IB_HCA
+            value: ibp
+          - name: NVSHMEM_HCA_PREFIX
+            value: ibp
+          image: quay.io/niliguy/vllm-openai:nightly-6f91edf9-pr50302
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: supervisor
+            periodSeconds: 30
+            timeoutSeconds: 5
+          name: vllm
+          ports:
+          - containerPort: 8000
+            name: dp0
+            protocol: TCP
+          - containerPort: 8001
+            name: dp1
+            protocol: TCP
+          - containerPort: 8002
+            name: dp2
+            protocol: TCP
+          - containerPort: 8003
+            name: dp3
+            protocol: TCP
+          - containerPort: 8004
+            name: dp4
+            protocol: TCP
+          - containerPort: 8005
+            name: dp5
+            protocol: TCP
+          - containerPort: 8006
+            name: dp6
+            protocol: TCP
+          - containerPort: 8007
+            name: dp7
+            protocol: TCP
+          - containerPort: 8208
+            name: supervisor
+            protocol: TCP
+          - containerPort: 5600
+            name: nixl
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: supervisor
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: '64'
+              ephemeral-storage: 1Ti
+              memory: 1500Gi
+              nvidia.com/gpu: '8'
+              rdma/ib: '8'
+            requests:
+              cpu: '64'
+              ephemeral-storage: 1Ti
+              memory: 1500Gi
+              nvidia.com/gpu: '8'
+              rdma/ib: '8'
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RAWIO
+            runAsGroup: 0
+            runAsUser: 0
+          startupProbe:
+            failureThreshold: 2700
+            httpGet:
+              path: /health
+              port: supervisor
+            initialDelaySeconds: 0
+            periodSeconds: 1
+            timeoutSeconds: 5
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /var/cache/vllm
+            name: jit-cache
+          - mountPath: /mnt/hf-cache
+            name: hf-cache
+          - mountPath: /mnt/nvme-cache
+            name: nvme-cache
+        - args:
+          - --collector.disable-defaults
+          - --collector.infiniband
+          - --collector.netstat
+          - --collector.netstat.fields=(.*Retrans.*|.*Timeout.*|.*LossProbe.*|.*FastRetrans.*|.*SackRecovery.*|.*Estab.*|.*Segs.*|.*Drops.*|.*Overflow.*|.*MemoryPressure.*|.*AutoCork.*|.*DSACK.*|.*Reorder.*|.*OFO.*|.*DelayedACK.*)
+          - --collector.pressure
+          - --collector.schedstat
+          - --collector.cpu
+          - --path.sysfs=/host/sys
+          - --path.procfs=/host/proc
+          image: quay.io/prometheus/node-exporter:v1.9.0
+          imagePullPolicy: IfNotPresent
+          name: node-exporter
+          ports:
+          - containerPort: 9100
+            name: node-metrics
+            protocol: TCP
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          volumeMounts:
+          - mountPath: /host/sys
+            name: sys
+            readOnly: true
+          - mountPath: /host/proc
+            name: proc
+            readOnly: true
+        serviceAccountName: glm-5-2
+        volumes:
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 1500Gi
+          name: dshm
+        - hostPath:
+            path: /mnt/local/hf-cache
+            type: DirectoryOrCreate
+          name: hf-cache
+        - hostPath:
+            path: /mnt/local/jit-cache
+            type: DirectoryOrCreate
+          name: jit-cache
+        - hostPath:
+            path: /sys
+            type: Directory
+          name: sys
+        - hostPath:
+            path: /proc
+            type: Directory
+          name: proc
+        - hostPath:
+            path: /mnt/local/kv-cache
+            type: DirectoryOrCreate
+          name: nvme-cache
+  networkConfig:
+    subdomainPolicy: Shared
+  replicas: 1
+  rolloutStrategy:
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 1
+      partition: 0
+    type: RollingUpdate
+  startupPolicy: LeaderCreated
