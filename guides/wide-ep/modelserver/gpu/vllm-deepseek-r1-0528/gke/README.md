@@ -12,8 +12,13 @@ This overlay configures GKE-specific settings for DP-aware WideEP scheduling on 
 | Topology affinity | Prefers same GCE topology block/subblock for prefill and decode pods. |
 | `DEEP_EP_DEVICE_TO_HCA_MAPPING` | Maps GPUs to NICs for efficient NVSHMEM NIC selection. |
 | `NVSHMEM_DISABLED_GDRCOPY` | Recommended on GKE. |
+| `UCX_IB_ROCE_REACHABILITY_MODE` | RDMA NICs sit on separate subnets. Lets UCX reach RoCE v2 GIDs across them. |
 | Host volumes | GKE-specific hostPath for model and JIT caches. |
 | `NCCL_TUNER_PLUGIN` / `NCCL_NET_PLUGIN` | Disables GKE's built-in NCCL tuner and net plugin. |
+
+## Hybrid Models
+
+Models with Mamba layers (for example GLM-5.3-Flash) need `VLLM_SSM_CONV_STATE_LAYOUT=DS` on both roles for NIXL to transfer the conv state.
 
 ## Cluster Prerequisites
 

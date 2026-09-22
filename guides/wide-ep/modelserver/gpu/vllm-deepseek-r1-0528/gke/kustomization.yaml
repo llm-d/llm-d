@@ -122,6 +122,8 @@ patches:
                           # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
                           - name: NVSHMEM_DISABLED_GDRCOPY
                             value: "true"
+                          - name: UCX_IB_ROCE_REACHABILITY_MODE
+                            value: "all"
                     # We add the volume for different providers since the
                     # hostPath can be different.
                     volumes:
