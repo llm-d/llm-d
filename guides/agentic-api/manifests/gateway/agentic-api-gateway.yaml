@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-api
+  labels:
+    app: agentic-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentic-api
+  template:
+    metadata:
+      labels:
+        app: agentic-api
+    spec:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: present
+          effect: NoSchedule
+      # Maps `epp.gateway.internal` to the GKE Gateway IP (${GATEWAY_IP}).
+      # When `--llm-api-base` is set to `http://epp.gateway.internal`, agentic-api
+      # sends `Host: epp.gateway.internal` on every upstream request to the GKE Gateway,
+      # matching `HTTPRoute/wide-ep-internal-inference-route` (`hostnames: ["epp.gateway.internal"]`)
+      # and routing directly to `InferencePool/wide-ep`.
+      hostAliases:
+        - ip: "${GATEWAY_IP}"
+          hostnames:
+            - epp.gateway.internal
+      containers:
+        - name: agentic-api
+          image: vllm/agentic-api:v0.8.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --llm-api-base
+            - http://epp.gateway.internal
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-api-postgres
+                  key: database-url
+            - name: RUST_LOG
+              value: "agentic_server=info,agentic_core=info"
+          ports:
+            - name: http
+              containerPort: 9000
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentic-api
+  labels:
+    app: agentic-api
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  selector:
+    app: agentic-api
+  ports:
+    - name: http
+      port: 9000
+      targetPort: http
