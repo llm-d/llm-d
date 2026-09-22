@@ -8,7 +8,7 @@ namePrefix: e-p-d-disaggregation-nvidia-gpu-vllm-
 
 components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
-  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
 
 labels:
   - pairs:
@@ -22,3 +22,16 @@ labels:
 patches:
   - path: patch-prefill.yaml
   - path: patch-decode.yaml
+  # VLLM_USE_V2_MODEL_RUNNER=1 for the instances that use the CPU EC connector
+  # (encode and prefill). The connector fails at startup without the V2 model
+  # runner, see https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+  # Decode has no EC connector and uses the vLLM default model runner.
+  - target:
+      kind: Deployment
+      labelSelector: llm-d.ai/role in (encode,prefill)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: VLLM_USE_V2_MODEL_RUNNER
+          value: "1"

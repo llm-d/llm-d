@@ -90,12 +90,24 @@ topology choice:
 | NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base`, `coreweave`, and `gke` providers) |
 
 > [!NOTE]
-> Encoder-cache transfer (`--ec-transfer-config`) is not yet in an official vLLM
-> release, so the model server manifests pin a dev build
-> (`ghcr.io/revit13/vllm-openai`) — the same one the
-> [Encode Disaggregation guide](../multimodal-serving/e-disaggregation/README.md)
-> uses. Replace the proprietary build with an official vLLM image once encoder-cache
-> transfer lands upstream.
+> Encoder-cache transfer between instances (the P2P NIXL mode of `--ec-transfer-config`,
+> [vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941)) is not yet
+> in an official vLLM release, so the model server manifests use the upstream vLLM
+> nightly image
+> (`docker.io/vllm/vllm-openai:nightly`), the same one the E/PD and E/P/D profiles
+> of the [Encode Disaggregation guide](../multimodal-serving/e-disaggregation/README.md)
+> use. The encode and prefill model servers set `VLLM_USE_V2_MODEL_RUNNER=1`,
+> which the
+> [CPU EC connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/)
+> requires, and use its P2P NIXL mode (`ec_enable_nixl`, `ec_cpu_bytes`). Replace the
+> nightly image with an official vLLM release once a release contains that change.
+>
+> vLLM `v0.29.0` and earlier releases accept `"ec_enable_nixl": true` but do not read it:
+> the pods start and requests succeed, but no encoder output is transferred and the
+> prefill model server encodes the media again. No error is reported. To confirm that the
+> transfer occurs, follow
+> [Confirm the EC Transfer](../multimodal-serving/e-disaggregation/README.md#3-confirm-the-ec-transfer-vllm-profiles)
+> with `EC_CONSUMER_ROLE=prefill`.
 
 ## Prerequisites
 
@@ -323,15 +335,25 @@ export INFRA_PROVIDER=base # base | coreweave | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 
+Then deploy the render Service. The Coordinator's `render` step (step 3) sends its
+requests to this Service. The Service owns no pods: it fronts the prefill model
+servers, which serve vLLM's `/v1/*/render` endpoints, so render capacity grows with
+the prefill replicas. See [`render/service.yaml`](render/service.yaml) for why it
+selects the prefill pods.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+```
+
 > [!NOTE]
-> Each model server pod (and the Coordinator's render container, deployed next) pulls
+> Each model server pod pulls
 > its own copy of the model from the HuggingFace Hub independently — there's no shared
 > model cache between them, matching the default convention used by other guides in
 > this repo (e.g. [P/D Disaggregation](../pd-disaggregation/README.md)). Expect the
 > first cold start to take a while on every pod, not just one; if that's a problem in
 > your cluster (slow/metered egress, many replicas), add an RWX-backed
-> `PersistentVolumeClaim` mounted at a shared `HF_HOME` path across these manifests and
-> the Coordinator's `vllm-render` container instead.
+> `PersistentVolumeClaim` mounted at a shared `HF_HOME` path across these manifests
+> instead.
 
 ### 3. Deploy the Coordinator
 
@@ -588,6 +610,7 @@ kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ |
 
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 
+kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 

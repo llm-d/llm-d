@@ -27,7 +27,15 @@ spec:
             - "--enforce-eager"
             - "--no-enable-prefix-caching"
             - "--ec-transfer-config"
-            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer"}'
+            # ec_enable_nixl turns on P2P NIXL transfers between instances.
+            # ec_cpu_bytes (mandatory, no default) is the size in bytes of the shared CPU
+            # mmap region that holds encoder outputs for multimodal items. Increase this
+            # value for workloads with large or numerous images to prevent cache evictions
+            # and costly re-encodings that degrade system performance.
+            # 4 GiB holds about 100,000 encoder tokens for Qwen3-VL-32B (40,960 bytes
+            # each). The value must fit in the /dev/shm volume.
+            # See https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+            - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"ec_enable_nixl": true, "ec_cpu_bytes": 4294967296}}'
           env:
             - name: MODEL_NAME
               value: "Qwen/Qwen3-VL-32B-Instruct"
@@ -43,9 +51,6 @@ spec:
                   name: llm-d-hf-token
                   key: HF_TOKEN
                   optional: true
-            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
-            - name: USER
-              value: llm-d
           ports:
             - name: modelserver
               containerPort: 8000

@@ -20,7 +20,9 @@ spec:
       containers:
       - name: coordinator
         image: ghcr.io/llm-d/llm-d-router-coordinator:main
-        imagePullPolicy: IfNotPresent
+        # The main tag moves with every merge to llm-d-router main, so pull it
+        # again instead of running an older image cached on the node.
+        imagePullPolicy: Always
         args:
         - --config
         - /etc/coordinator/coordinator.yaml
@@ -54,72 +56,10 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/coordinator
-      # Runs the pipeline's "render" step (multimodal input normalization) as a
-      # local CPU vLLM instance the coordinator container talks to over localhost.
-      - name: vllm-render
-        image: vllm/vllm-openai-cpu:v0.26.0
-        imagePullPolicy: IfNotPresent
-        # "vllm launch render" runs only the preprocessing/postprocessing HTTP layer
-        # (no GPU/engine warmup, no encoder-cache profiling) -- "vllm serve" boots
-        # the full inference engine, which for this model hangs for 10+ minutes on
-        # a CPU-backend warmup pass profiling a synthetic max-resolution image,
-        # blowing well past the startup probe below.
-        command: ["vllm", "launch", "render"]
-        args: ["$(MODEL_NAME)", "--port=8000"]
-        env:
-        - name: MODEL_NAME
-          value: "Qwen/Qwen3-VL-32B-Instruct"
-        - name: HF_TOKEN
-          valueFrom:
-            secretKeyRef:
-              key: HF_TOKEN
-              name: llm-d-hf-token
-              optional: true
-        resources:
-          requests:
-            cpu: "2"
-            memory: 8Gi
-          limits:
-            cpu: "4"
-            memory: 16Gi
-        ports:
-        - name: render-http
-          containerPort: 8000
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 2
-          periodSeconds: 1
-          failureThreshold: 600
-          timeoutSeconds: 1
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          periodSeconds: 10
-          failureThreshold: 5
-          timeoutSeconds: 1
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          periodSeconds: 5
-          failureThreshold: 1
-          timeoutSeconds: 1
-        volumeMounts:
-        - name: torch-compile-cache
-          mountPath: /.cache
-        - name: vllm-config
-          mountPath: /.config
       volumes:
       - name: config
         configMap:
           name: llm-d-coordinator-config
-      - name: torch-compile-cache
-        emptyDir: {}
-      - name: vllm-config
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
