@@ -13,6 +13,7 @@ KV page size = block_size × (num_kv_heads / TP) × head_dim × 2 × dtype_bytes
 ```
 
 **Example — Qwen3-32B at TP=2 (vLLM default block_size=16, bfloat16):**
+
 ```
 = 16 × (8 / 2) × 128 × 2 × 2 = 32,768 bytes = 32 KiB
 ```

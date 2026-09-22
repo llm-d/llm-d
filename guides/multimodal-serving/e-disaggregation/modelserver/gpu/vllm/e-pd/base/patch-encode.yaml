@@ -17,7 +17,6 @@ spec:
       serviceAccountName: sa
       containers:
         - name: modelserver
-          image: REPLACE_MODEL_SERVER_IMAGE
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-VL-32B-Instruct"
