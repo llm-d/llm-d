@@ -129,7 +129,7 @@ spec:
                                               "kv_load_failure_policy":"fail",
                                               "kv_connector_extra_config":{
                                                 "connectors":[
-                                                  {"kv_connector":"NixlConnector","kv_role":"kv_both"},
+                                                  {"kv_connector":"NixlConnector","kv_role":"kv_producer"},
                                                   {"kv_connector":"OffloadingConnector","kv_role":"kv_both",
                                                    "kv_connector_extra_config":{
                                                      "spec_name":"TieringOffloadingSpec",

@@ -15,7 +15,7 @@ spec:
             - "--tensor-parallel-size=4"
             - "--block-size=128"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer"}'
             # No --attention-backend pin: vLLM 0.26+ rejects ROCM_ATTN with a KV connector
             # and selects a compatible backend on its own.
             - "--max-model-len=32000"
