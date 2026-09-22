@@ -8,6 +8,7 @@ ND = "ND"        # Azure VM SKU prefix (e.g., Standard_ND96asr_v4)
 ahd = "ahd"      # SVG arrowhead marker id in diagram HTML
 mis = "mis"      # intentional hyphenated compounds (mis-gate, mis-price)
 retuned = "retuned"   # re-tuning (adjusting tuning parameters, e.g. maxConcurrency)
+aimd = "aimd"    # Additive Increase Multiplicative Decrease (congestion control)
 
 [default.extend-identifiers]
 OFO = "OFO"      # TCP OutOfOrder netstat counter (used in a metrics regex)

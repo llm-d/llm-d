@@ -280,7 +280,7 @@ slack in the budget instead.
 
 Then opt in:
 
-<!-- guide:deploy.optin start -->
+<!-- guide:deploy.opt-in start -->
 ```bash
 kubectl patch deployment ${DEPLOYMENT_A} -n ${NAMESPACE} --type=merge \
   -p "spec: {template: {metadata: {labels: {kueue.x-k8s.io/queue-name: ${QUEUE_A}}}}}"
@@ -290,7 +290,7 @@ kubectl patch deployment ${DEPLOYMENT_B} -n ${NAMESPACE} --type=merge \
   -p "spec: {template: {metadata: {labels: {kueue.x-k8s.io/queue-name: ${QUEUE_B}}}}}"
 kubectl rollout status deployment/${DEPLOYMENT_B} -n ${NAMESPACE} --timeout=10m
 ```
-<!-- guide:deploy.optin end -->
+<!-- guide:deploy.opt-in end -->
 
 This does change the pod template, so every model server restarts once, one
 replica at a time. Every replica the HPA creates from then on inherits the label
