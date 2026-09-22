@@ -1,0 +1,147 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: llm-d-inference-gateway
+spec:
+  gatewayClassName: gke-l7-regional-external-managed
+  listeners:
+    - name: default
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: wide-ep
+spec:
+  targetRef:
+    group: inference.networking.k8s.io
+    kind: InferencePool
+    name: wide-ep
+  default:
+    timeoutSec: 300
+    logging:
+      enabled: true
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: wide-ep
+spec:
+  targetRef:
+    group: inference.networking.k8s.io
+    kind: InferencePool
+    name: wide-ep
+  default:
+    timeoutSec: 2
+    checkIntervalSec: 2
+    config:
+      type: HTTP
+      httpHealthCheck:
+        requestPath: /health
+        port: 8000
+---
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: agentic-api
+spec:
+  targetRef:
+    group: ""
+    kind: Service
+    name: agentic-api
+  default:
+    timeoutSec: 300
+    logging:
+      enabled: true
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: agentic-api
+spec:
+  targetRef:
+    group: ""
+    kind: Service
+    name: agentic-api
+  default:
+    timeoutSec: 2
+    checkIntervalSec: 5
+    config:
+      type: HTTP
+      httpHealthCheck:
+        requestPath: /health
+        port: 9000
+---
+# Internal HTTPRoute for inference requests emitted by agentic-api.
+# When agentic-api is configured with `--llm-api-base http://epp.gateway.internal`
+# (mapped to the GKE Gateway IP via hostAliases), reqwest sends `Host: epp.gateway.internal`
+# on every upstream request. In Gateway API, a matching `hostnames` route has higher
+# precedence than a wildcard route and routes directly to InferencePool/wide-ep without
+# touching the `Authorization` header.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wide-ep-internal-inference-route
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  hostnames:
+    - "epp.gateway.internal"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: wide-ep
+---
+# External HTTPRoute for client traffic arriving at the GKE Gateway IP.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wide-ep-agentic-gateway-route
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  rules:
+    # External client requests to stateful agentic endpoints and /v1/models
+    # (which returns the Codex model catalog when ?client_version=... is passed)
+    # route to agentic-api first.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/responses
+        - path:
+            type: PathPrefix
+            value: /v1/conversations
+        - path:
+            type: PathPrefix
+            value: /v1/messages
+        - path:
+            type: PathPrefix
+            value: /v1/models
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: agentic-api
+          port: 9000
+    # Default route (/v1/chat/completions, /v1/completions, /health)
+    # routes directly to the llm-d InferencePool (EPP).
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: wide-ep
