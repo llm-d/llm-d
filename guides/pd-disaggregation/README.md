@@ -55,6 +55,7 @@ This guide includes configuration for the following accelerators:
 | Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [TPU Guide](./README.tpu.md#pd-on-dynamic-tpu-sub-slices-tpu7x) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
 | MetaX GPU           | `modelserver/metax/vllm/`  | MetaX C500X, community contributed. Reduced 1P+1D / Qwen3-14B / TP=1 for compatibility checks. |
+| Biren GPU           | `modelserver/biren/vllm/`  | Biren 166M, community overlay. 1P+1D / Qwen2.5-72B GPTQ-Int8 / TP=4, `NixlConnector` over RDMA (`UCX_TLS=rc_v`). |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
 | Iluvatar GPU        | `modelserver/iluvatar/vllm/base/` | Iluvatar BI-V150 (dual-die), community contributed; Qwen3-32B on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode); vendor-fork `IluNixlConnector` with `kv_buffer_device=cuda` |
@@ -303,6 +304,26 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/m
 Re-measure `peakPrefillThroughput` in the router values for this model and card before performance work. An aggregated C500X / Qwen3-14B / TP=1 calibration was **5773** tok/s; the default `pd-disaggregation.values.yaml` figure is for gpt-oss-120b on NVIDIA and is not valid here.
 
 Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`. Verify P/D with Router `/v1/completions` or `/v1/chat/completions`, then confirm decode logs show an external prefix-cache hit / successful KV transfer rather than decode-only recompute.
+
+</details>
+
+<details>
+<summary><h4>Deploying on Biren 166M</h4></summary>
+
+This overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving local `/share/models/Qwen2.5-72B-Quant` as `Qwen72B_INT8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). 
+
+Prerequisites:
+
+* Kubernetes nodes with `/dev/biren`.
+* Infiniband enabled.
+* Containerd `RuntimeClass` `biren` (`handler: biren`) 
+* Image with vLLM and nixl, compatible with BR166M.
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/biren/vllm/base
+```
+
+Verify with Router `/v1/completions` or `/v1/chat/completions` against `Qwen72B_INT8`. Confirm decode logs show an external KV transfer rather than decode-only recompute.
 
 </details>
 
