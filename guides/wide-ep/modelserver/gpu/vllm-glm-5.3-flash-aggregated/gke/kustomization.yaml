@@ -1,0 +1,101 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+  - gke-rdma-nic-template.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+
+patches:
+  - target:
+      kind: LeaderWorkerSet
+      name: wide-ep-nvidia-gpu-vllm-glm-5-3-flash
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/affinity
+        value:
+          podAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 2
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      llm-d.ai/role: decode
+                  matchLabelKeys:
+                    - component
+                  topologyKey: cloud.google.com/gce-topology-block
+              - weight: 1
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      llm-d.ai/role: decode
+                  matchLabelKeys:
+                    - component
+                  topologyKey: cloud.google.com/gce-topology-subblock
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: sandbox.gke.io/runtime
+            operator: Exists
+            effect: NoSchedule
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+        value:
+          - name: gke-rdma-claim-0
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-1
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-2
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-3
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-4
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-5
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-6
+            resourceClaimTemplateName: gke-rdma-nic-template
+          - name: gke-rdma-claim-7
+            resourceClaimTemplateName: gke-rdma-nic-template
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/securityContext/privileged
+        value: true
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+        value:
+          - name: gke-rdma-claim-0
+          - name: gke-rdma-claim-1
+          - name: gke-rdma-claim-2
+          - name: gke-rdma-claim-3
+          - name: gke-rdma-claim-4
+          - name: gke-rdma-claim-5
+          - name: gke-rdma-claim-6
+          - name: gke-rdma-claim-7
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: DEEP_EP_DEVICE_TO_HCA_MAPPING
+          value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: NVSHMEM_DISABLED_GDRCOPY
+          value: "true"
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+        value:
+          name: hf-cache
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-hf-cache/
+            type: DirectoryOrCreate
+      - op: replace
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/2
+        value:
+          name: jit-cache
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-jit-cache/
+            type: DirectoryOrCreate

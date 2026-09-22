@@ -12,17 +12,17 @@ Whereas the default [disaggregated Wide-EP guide](README.md) requires **32 GPUs*
 2. **No NIXL KV-transfer or routing sidecar:** Each vLLM worker processes both chunked prefill and decode locally and exposes ports `8000`–`8007` (`rank0`–`rank7`) directly to the `llm-d` Endpoint Picker (`EPP`).
 3. **Single-profile EPP routing (`router/wide-ep-aggregated.values.yaml`):** Routes requests across all 16 DP ranks (`targetPorts: 8000..8007`) using `prefix-cache-scorer`, `queue-scorer`, and `active-request-scorer` without `always-disagg-pd-decider`.
 
-## Default Configuration
+## Default Configurations
 
-| Parameter | Value |
-| --- | --- |
-| Model | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) |
-| Workload Topology | Aggregated (Unified Prefill + Decode) |
-| Data Parallelism (`DP`) | 16 (8 ranks per node × 2 nodes) |
-| Expert Parallelism (`EP`) | 16 (`--enable-expert-parallel`) |
-| Tensor Parallelism (`TP`) | 1 |
-| All2All Backend | `deepep_low_latency` (`--enable-dbo`) |
-| Total GPUs | **16** (2 × 8-GPU B200 or H200 nodes) |
+| Parameter | DeepSeek-R1-0528 (`vllm-deepseek-r1-0528-aggregated`) | GLM-5.3-Flash (`vllm-glm-5.3-flash-aggregated`) |
+| --- | --- | --- |
+| Model | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) (671B / 37B active) | [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) (320B / 18B active) |
+| Workload Topology | Aggregated (Unified Prefill + Decode) | Aggregated (Unified Prefill + Decode) |
+| Data Parallelism (`DP`) | 16 (8 ranks per node × 2 nodes) | 16 (8 ranks per node × 2 nodes) |
+| Expert Parallelism (`EP`) | 16 (256 routed experts = 16/GPU) | 16 (288 routed experts = 18/GPU) |
+| Tensor Parallelism (`TP`) | 1 | 1 |
+| All2All Backend | `deepep_low_latency` (`--enable-dbo`) | `deepep_low_latency` |
+| Total GPUs | **16** (2 × 8-GPU B200 or H200 nodes) | **16** (2 × 8-GPU B200 or H200 nodes) |
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ Whereas the default [disaggregated Wide-EP guide](README.md) requires **32 GPUs*
   source ${REPO_ROOT}/guides/env.sh
   export GUIDE_NAME="wide-ep"
   export NAMESPACE="llm-d-wide-ep"
-  export MODEL="deepseek-ai/DeepSeek-R1-0528"
+  export MODEL="deepseek-ai/DeepSeek-R1-0528" # or "zai-org/GLM-5.3-Flash"
   ```
 * Install the Gateway API Inference Extension CRDs:
   ```bash
@@ -85,12 +85,24 @@ helm upgrade --install ${GUIDE_NAME} \
 
 ### 2. Deploy the Aggregated Model Server
 
-Apply the Kustomize overlay for your infrastructure provider (`gke` or `base`):
+Apply the Kustomize overlay for your chosen model and infrastructure provider (`gke` or `base`):
+
+**Option A: DeepSeek-R1-0528 (`deepseek-ai/DeepSeek-R1-0528`):**
 
 ```bash
 export INFRA_PROVIDER=gke # options: base, gke
+export MODEL=deepseek-ai/DeepSeek-R1-0528
 kubectl apply -n ${NAMESPACE} \
     -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528-aggregated/${INFRA_PROVIDER}
+```
+
+**Option B: GLM-5.3-Flash (`zai-org/GLM-5.3-Flash`):**
+
+```bash
+export INFRA_PROVIDER=gke # options: base, gke
+export MODEL=zai-org/GLM-5.3-Flash
+kubectl apply -n ${NAMESPACE} \
+    -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-glm-5.3-flash-aggregated/${INFRA_PROVIDER}
 ```
 
 Wait for both `LeaderWorkerSet` pods (`wide-ep-nvidia-gpu-vllm-decode-0` and `wide-ep-nvidia-gpu-vllm-decode-0-1`) to reach `1/1 Running`:
