@@ -33,13 +33,7 @@ spec:
               mountPath: /shared-config
       containers:
         - name: modelserver
-          # Resolve the per-pod Mooncake settings, then hand off to the server. This runs
-          # in the main container rather than an initContainer because MC_GID_INDEX has to
-          # be an env var of the server process, and an initContainer cannot set one. It
-          # also means both values are recomputed on every container restart, which matters
-          # because GID index numbering is not stable over time -- see
-          # configmap-render-config.yaml. The wrapper runs before the server loads any
-          # weights, so a misconfigured fabric still fails within seconds.
+          
           command:
             - /bin/sh
             - -c
