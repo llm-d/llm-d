@@ -25,7 +25,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
 | AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO |
-| Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
+| Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 6 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 (1 pod) + decode TP2 w/ 2-pod cross-node EP · NIXL · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -39,7 +39,10 @@ This guide includes configurations for the following accelerator and model serve
 
 The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerSet` pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
-**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill and decode each run TP2 with expert parallelism on 4 XPUs in total, with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
+**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill runs as independent single-pod TP2 replicas (not a cross-node EP group), and decode runs TP2 with expert parallelism sharded **across pods/nodes** within the decode `LeaderWorkerSet` group (`leaderWorkerTemplate.size: 2`, one leader + one headless worker, one DP/EP rank per pod), 6 XPUs total by default (decode: 2 pods × 2 XPUs, prefill: 1 pod × 2 XPUs), with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
+
+> [!NOTE]
+> `size: 2` runs a real 2-pod, cross-node DP+EP group for decode; increase it to match your target EP world size / node count. EPLB (expert-parallel load balancing) is **not** enabled/validated on this path yet; bringing EPLB support to Intel XPU is left as follow-up work.
 
 ## Prerequisites
 
@@ -55,6 +58,8 @@ The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerS
 - For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
+
+- For Intel XPU on clusters with restricted/firewalled egress: if pods hang during startup on Hugging Face Hub revision checks (silent TCP timeouts rather than immediate connection errors), pre-seed the model into a `hf-cache` volume and set `HF_HUB_OFFLINE=1`/`TRANSFORMERS_OFFLINE=1` on the `vllm` container as a workaround; this is not required by default (the manifests use an empty, on-demand download cache).
 
 - (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 

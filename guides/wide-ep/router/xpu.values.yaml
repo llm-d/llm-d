@@ -41,3 +41,8 @@ router:
       llm-d.ai/guide: "wide-ep"
       llm-d.ai/accelerator-variant: "xpu"
       llm-d.ai/accelerator-vendor: "intel"
+      # Only the leader (worker-index 0) runs the routing-proxy sidecar and
+      # listens on 8000; headless workers share every other label but not
+      # this one. LWS does not propagate a role label to pods, so
+      # worker-index is the only reliable way to select just the leader.
+      leaderworkerset.sigs.k8s.io/worker-index: "0"

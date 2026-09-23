@@ -30,7 +30,7 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base`"
+      notes: "6 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 (1 pod) + decode TP2 w/ 2-pod cross-node EP · NIXL · `INFRA_PROVIDER`: `base`"
       model: deepseek-ai/DeepSeek-V2-Lite-Chat
       providers:
         - {name: base, label: "Kubernetes (base)"}

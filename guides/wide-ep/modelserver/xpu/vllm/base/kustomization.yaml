@@ -34,6 +34,14 @@ labels:
         kind: LeaderWorkerSet
         path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
         create: true
+      # create: false (default): decode.yaml's leaderTemplate already has its
+      # own metadata.labels to merge into; prefill.yaml has no leaderTemplate
+      # at all, and create: true here would fabricate an empty, spec-less
+      # one that breaks its deployment.
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/leaderTemplate/metadata/labels
       - group: monitoring.coreos.com
         version: v1
         kind: PodMonitor

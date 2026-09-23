@@ -6,7 +6,17 @@ metadata:
     llm-d.ai/model: DeepSeek-V2-Lite-Chat
     llm-d.ai/role: prefill
 spec:
+  # Prefill scales via independent replicas (size stays 1), not a
+  # cross-pod EP group like decode; a true wide-EP prefill group is
+  # unvalidated and out of scope here.
   replicas: 1
+  # maxSurge: 0 avoids needing spare XPUs for a rolling update (mirrors the
+  # GPU DisaggregatedSet base).
+  rolloutStrategy:
+    type: RollingUpdate
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 1
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
@@ -24,6 +34,16 @@ spec:
           fsGroup: 107
           supplementalGroups:
             - 107
+        affinity:
+          # Spread prefill replicas across hosts for real cross-node
+          # capacity.
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/guide: wide-ep
+                    llm-d.ai/role: prefill
         resourceClaims:
           - name: xpu-prefill-claim
             resourceClaimTemplateName: xpu-prefill-claim
