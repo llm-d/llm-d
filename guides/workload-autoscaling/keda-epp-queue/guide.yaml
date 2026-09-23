@@ -47,18 +47,6 @@ prerequisites:
         kubectl get servicemonitor -n ${NAMESPACE}
 
 deploy:
-  # Generic Kubernetes only: copy the bundled Prometheus CA into the workload
-  # namespace as the keda-prometheus-auth Secret. On OpenShift the ocp overlay's
-  # ServiceAccount token already carries service-ca.crt, so this step is skipped.
-  prometheus_auth:
-    - when: { ENV: [existing] }
-      run: |
-        kubectl create secret generic keda-prometheus-auth \
-          --namespace ${NAMESPACE} \
-          --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
-            -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
-          --dry-run=client -o yaml | kubectl apply -f -
-
   # Begin at one replica so a 1-to-N scale-up is observable.
   prepare:
     - run: |
@@ -66,7 +54,7 @@ deploy:
         kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 
   # Apply the ScaledObject overlay for the platform. Generic Kubernetes (bundled
-  # kube-prometheus-stack, CA-only auth):
+  # kube-prometheus-stack over plain in-cluster HTTP, no client auth):
   apply_k8s:
     - when: { ENV: [existing] }
       run: kubectl apply -k ${OVERLAY_ROOT}/k8s
@@ -136,5 +124,3 @@ cleanup:
     run: kubectl delete -k ${OVERLAY_ROOT}/k8s --ignore-not-found=true
   - when: { ENV: [ocp] }
     run: kubectl delete -k ${OVERLAY_ROOT}/ocp --ignore-not-found=true
-  - when: { ENV: [existing] }
-    run: kubectl delete secret keda-prometheus-auth -n ${NAMESPACE} --ignore-not-found=true

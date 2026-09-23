@@ -23,7 +23,7 @@ For details on these metrics, see:
 
 Before proceeding, ensure you have:
 
-1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../README.md#prerequisites) and [Prometheus Setup Guide](../../../docs/operations/observability/setup.md). This includes KEDA installation.
+1. **Monitoring stack with Prometheus** — See [autoscaling prerequisites](../README.md#prerequisites) and [Prometheus Setup Guide](../../../docs/operations/observability/setup.md). This includes KEDA installation. On generic Kubernetes, KEDA reaches the bundled kube-prometheus-stack over plain in-cluster HTTP (do not enable TLS on it for this path). On OpenShift, the `ocp` overlay uses the Thanos Querier HTTPS endpoint with bearer auth.
 
 2. **EPP flow control enabled** — The `llm_d_epp_flow_control_pool_saturation` metric requires the EPP flow control feature gate to be enabled in your Endpoint Picker configuration. This guide includes an `epp-endpoint-picker-config.yaml` that enables flow control and registers the optimized-baseline plugins. See [EPP Flow Control](../../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
 
@@ -55,34 +55,9 @@ source ${REPO_ROOT}/guides/env.sh
 
 ## Configure
 
-### 1. Create TriggerAuthentication Secret (generic Kubernetes only)
+### Apply the EPP Config and KEDA ScaledObject
 
-> On **OpenShift**, skip this step — the `ocp` overlay provisions a dedicated
-> ServiceAccount and token Secret automatically (see [OpenShift](#openshift) below).
-
-For the bundled kube-prometheus-stack on generic Kubernetes, KEDA needs a bearer token and CA certificate to authenticate with Prometheus. Extract these from the Prometheus ServiceAccount's auto-generated token secret and create a new `prometheus-token` secret in the workload namespace:
-
-<!-- guide:deploy.prometheus_auth start -->
-```bash
-# only when ENV=existing:
-SERVICEACCOUNT_SECRET=$(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}')
-TOKEN=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
-CA_CRT=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}' | base64 -d)
-kubectl create secret generic prometheus-token \
-  --from-literal=token="${TOKEN}" \
-  --from-literal=ca.crt="${CA_CRT}" \
-  --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
-```
-<!-- guide:deploy.prometheus_auth end -->
-
-This creates a secret named `prometheus-token` containing:
-
-- `token`: bearer token for Prometheus authentication
-- `ca.crt`: CA certificate for TLS verification
-
-### 2. Apply EPP Config, KEDA ScaledObject, and TriggerAuthentication
-
-On generic Kubernetes with the bundled kube-prometheus-stack, apply the `k8s` overlay:
+On generic Kubernetes, KEDA scrapes the bundled kube-prometheus-stack over plain in-cluster HTTP with no client authentication, so there is no auth secret to create — apply the `k8s` overlay directly:
 
 <!-- guide:deploy.apply_k8s start -->
 ```bash
@@ -113,7 +88,7 @@ Before applying, edit the manifests to match your deployment:
 
 #### OpenShift
 
-On OpenShift, apply the `ocp` overlay (skip Configure Step 1 — this overlay handles authentication for you):
+On OpenShift, apply the `ocp` overlay — it handles authentication for you (the generic-k8s HTTP path does not apply here):
 
 ```bash
 kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-saturation/optimized-baseline/ocp -n ${NAMESPACE}
@@ -122,7 +97,7 @@ kubectl apply -k ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-saturation/op
 The overlay:
 
 - Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091` and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a 401, and KEDA silently serves `fallback` replicas when a trigger errors, so unauthenticated autoscaling looks healthy while doing nothing.
-- Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the `cluster-monitoring-view` ClusterRole, and repoints the `TriggerAuthentication` at that SA's token Secret. On OpenShift the service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving certificate) into the token Secret automatically, so no `prometheus-token` copy is required.
+- Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the `cluster-monitoring-view` ClusterRole, and adds a `prometheus-auth` `TriggerAuthentication` pointing at that SA's token Secret. On OpenShift the service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving certificate) into the token Secret automatically, so no manual CA copy is required.
 
 When deploying this guide to multiple namespaces on a shared cluster, give the `keda-epp-metrics-reader-monitoring-view` ClusterRoleBinding a namespace-unique name so the bindings do not collide.
 
@@ -160,8 +135,5 @@ kubectl delete -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE} --ignore-not-found=true
 
 # only when ENV=ocp:
 kubectl delete -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE} --ignore-not-found=true
-
-# only when ENV=existing:
-kubectl delete secret prometheus-token -n ${NAMESPACE} --ignore-not-found=true
 ```
 <!-- guide:cleanup end -->

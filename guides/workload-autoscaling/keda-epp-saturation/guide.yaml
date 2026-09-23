@@ -22,24 +22,9 @@ env:
   source: ["${REPO_ROOT}/guides/env.sh"]
 
 deploy:
-  # Generic Kubernetes only: KEDA needs a bearer token + CA to reach the bundled
-  # kube-prometheus-stack over HTTPS. Extract them from the Prometheus
-  # ServiceAccount's token Secret and create the prometheus-token Secret in the
-  # workload namespace. On OpenShift the ocp overlay provisions its own SA token,
-  # so this step is skipped.
-  prometheus_auth:
-    - when: { ENV: [existing] }
-      run: |
-        SERVICEACCOUNT_SECRET=$(kubectl get serviceaccount prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.secrets[0].name}')
-        TOKEN=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
-        CA_CRT=$(kubectl get secret ${SERVICEACCOUNT_SECRET} -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}' | base64 -d)
-        kubectl create secret generic prometheus-token \
-          --from-literal=token="${TOKEN}" \
-          --from-literal=ca.crt="${CA_CRT}" \
-          --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
-
-  # Apply the EPP config, ScaledObject, and TriggerAuthentication overlay for the
-  # platform. Generic Kubernetes (bundled kube-prometheus-stack):
+  # Apply the ScaledObject overlay for the platform. Generic Kubernetes talks to
+  # the bundled kube-prometheus-stack over plain in-cluster HTTP with no client
+  # auth, so there is no auth secret to create — just apply the k8s overlay:
   apply_k8s:
     - when: { ENV: [existing] }
       run: kubectl apply -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE}
@@ -65,5 +50,3 @@ cleanup:
     run: kubectl delete -k ${OVERLAY_ROOT}/k8s -n ${NAMESPACE} --ignore-not-found=true
   - when: { ENV: [ocp] }
     run: kubectl delete -k ${OVERLAY_ROOT}/ocp -n ${NAMESPACE} --ignore-not-found=true
-  - when: { ENV: [existing] }
-    run: kubectl delete secret prometheus-token -n ${NAMESPACE} --ignore-not-found=true
