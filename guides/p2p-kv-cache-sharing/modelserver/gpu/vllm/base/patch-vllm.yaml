@@ -32,8 +32,14 @@ spec:
             # (decode-phase) blocks too, which peers can then pull. Size
             # cpu_bytes_to_use at least as large as the per-pod GPU KV cache
             # (below /dev/shm; this is 88 GiB).
+            # self_describing_kv_events:true makes CPU-tier store events carry
+            # their tokens and parent hash. Without it the router can only
+            # attribute a CPU-tier block through the mapping it learned from the
+            # same block's GPU-tier store; under churn the GPU removal can land
+            # first, and the CPU copy - the block a peer would pull - never
+            # enters the index.
             - --kv-transfer-config
-            - '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":94489280512,"offload_prompt_only":false,"secondary_tiers":[{"type":"p2p","host":"$(POD_IP)","port":7777}]}}'
+            - '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":94489280512,"offload_prompt_only":false,"self_describing_kv_events":true,"secondary_tiers":[{"type":"p2p","host":"$(POD_IP)","port":7777}]}}'
             # KV events feed the router's precise prefix index (per-pod ZMQ PUB).
             - --kv-events-config
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@openai/gpt-oss-120b"}'
