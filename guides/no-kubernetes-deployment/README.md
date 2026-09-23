@@ -168,6 +168,7 @@ docker run -d --name epp --network host \
     --grpc-health-port=9003 \
     --metrics-port=9090 \
     --secure-serving=false \
+    --health-checking=true \
     --v=2
 ```
 
@@ -186,6 +187,7 @@ make build-epp                # produces bin/epp via the project's builder conta
     --grpc-health-port=9003 \
     --metrics-port=9090 \
     --secure-serving=false \
+    --health-checking=true \
     --v=2
 ```
 
@@ -195,6 +197,14 @@ persistence; the command above runs in the foreground.
 `--pool-name` and `--pool-namespace` are not Kubernetes references in
 file-discovery mode; they are only used as labels in the EPP's metrics
 and log lines.
+
+`--health-checking=true` registers the gRPC health service on the
+ext-proc port (`9002`), which is where the
+[Envoy config](./router/envoy/envoy.yaml) health-checks the EPP. Without
+it, Envoy marks the EPP unhealthy and only reaches it through
+[panic routing](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/panic_threshold).
+`--grpc-health-port` (`9003`) serves the liveness and readiness checks
+for your process manager.
 
 `--network host` (Option A) lets Envoy reach the EPP on `127.0.0.1:9002`
 and the EPP scrape vLLM's `/metrics` on the host loopback. Drop it and
@@ -224,6 +234,9 @@ optimized-baseline guide's Envoy sidecar arguments.
 curl -s http://127.0.0.1:19000/ready
 curl -s http://127.0.0.1:19000/clusters | grep -E '^(ext_proc|original_destination_cluster)'
 
+# Envoy's health check of the EPP: expect "healthy"
+curl -s http://127.0.0.1:19000/clusters | grep '^ext_proc.*health_flags'
+
 # EPP
 curl -s http://127.0.0.1:9090/metrics | head
 
@@ -249,6 +262,8 @@ curl -s http://127.0.0.1:8081/v1/completions \
 - Verify EPP is healthy: `curl http://127.0.0.1:9090/metrics`.
 - Confirm `endpoints.yaml` lists literal IPv4 addresses (hostnames are not resolved).
 - Verify the Envoy → EPP cluster: `curl http://127.0.0.1:19000/clusters | grep ext_proc`.
+  `health_flags::/failed_active_hc` means the EPP was started without
+  `--health-checking=true`.
 
 ### vLLM worker unreachable
 
