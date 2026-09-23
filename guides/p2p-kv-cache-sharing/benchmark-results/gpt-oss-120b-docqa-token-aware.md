@@ -43,14 +43,36 @@ TPOT excludes the first token.
 | affinity (shipped default) | yes | 36 | 2.75 | 528 / 14,054 | 7.9 / 139.4 | 5.0 / 75.3 |
 | affinity (shipped default) | no | 0 | 2.66 | 637 / 14,624 | 8.1 / 110.5 | 5.7 / 74.7 |
 
-* Token-aware + P2P serves 42% more than load-aware + P2P and 2.2x the
-  shipped affinity default, with half of affinity's TTFT p90.
+* In this single run token-aware + P2P serves 42% more than load-aware +
+  P2P and 2.2x the shipped affinity default, with half of affinity's TTFT
+  p90. Four runs each of the token-aware and load-aware arms follow.
 * Affinity's median TTFT and TPOT are the lowest because most requests land
   on lightly used pods; its tail sits on owner pods that queue, and those
   runs take twice as long to serve the same requests. The pull barely fires
   under affinity (36 pulls) and does not change that.
 * Load-aware placement depends on the pull on this workload: +55% served
   throughput with it.
+
+## Load-aware vs token-aware placement, four runs each
+
+Seeds 37, 101, 102 and 103 for every arm; the same seed across arms within a
+seed, empty caches before every run. Means of the four runs.
+
+| Placement | Pull | Served req/s | TTFT p50 / p90 s | TPOT p90 ms | Request latency p50 s | Pulls per run |
+| --- | --- | --- | --- | --- | --- | --- |
+| token-aware | yes | **6.28** | **0.67 / 7.06** | **33.8** | **5.55** | 89 |
+| token-aware | no | 5.46 | 0.90 / 7.18 | 39.8 | 7.55 | 0 |
+| load-aware | yes | 4.43 | 2.98 / 9.17 | 49.4 | 8.69 | 344 |
+| load-aware | no | 2.80 | 3.56 / 8.33 | 92.8 | 13.90 | 0 |
+
+* Token-aware placement is the larger effect: without the pull it already
+  beats load-aware placement with the pull on every metric above.
+* The pull helps both placements on throughput, TPOT and median latency.
+  Under load-aware placement it raises TTFT p90 (9.17 s against 8.33 s, in
+  all four runs): load-aware placement ignores the cache, so it pulls on
+  most requests, and pulls queued behind slow TCP transfers land in the
+  tail. Under token-aware placement the pull fires a quarter as often and
+  TTFT p90 does not rise.
 
 ## Token-aware placement: the pull's own margin
 
@@ -75,6 +97,5 @@ turn, a cold 48K-token prefill that no pull can serve, so it barely moves.
 
 * One model on one 8-pod fleet over TCP. With RDMA the transfer is about 4x
   faster per token, so the pull's margin should be larger.
-* The three-placement table is one run per arm. The gaps between placements
-  are large next to the run-to-run spread measured on the token-aware arms
-  (TTFT p90 within about 5%), but have not been repeated.
+* The affinity arms are one run each; the token-aware and load-aware arms
+  are four runs each.

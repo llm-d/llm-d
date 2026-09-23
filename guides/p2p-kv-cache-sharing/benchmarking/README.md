@@ -38,7 +38,7 @@ llmdbenchmark \
 ```
 
 Run the profile once per routing arm, switching only the EPP
-configuration between runs. The three arm configs used for the gpt-oss
+configuration between runs. The arm configs used for the gpt-oss
 tables ship next to this file:
 
 * [`epp-affinity.yaml`](epp-affinity.yaml) - precise prefix-cache
@@ -47,6 +47,10 @@ tables ship next to this file:
   (the recompute control).
 * [`epp-load-p2p.yaml`](epp-load-p2p.yaml) - load-balanced placement +
   the pull (`minCachedTokenDelta: 2048`, from the crossover below).
+* [`epp-tokenaware.yaml`](epp-tokenaware.yaml) - token-aware placement
+  (in-flight uncached tokens on the precise index), no pull.
+* [`epp-tokenaware-p2p.yaml`](epp-tokenaware-p2p.yaml) - token-aware
+  placement + the pull.
 
 The wide-EP testbed (`GLM-5.2-FP8`, 753B) ships three arm sets:
 
@@ -333,14 +337,15 @@ not credited to the pull.
 
 On this scenario `epp-load-p2p` beats the affinity arms, and
 `epp-tokenaware-p2p` beats both: on the profile scaled to 8 pods it
-served 6.0 req/s against 4.3 for `epp-load-p2p` and 2.75 for
-`epp-affinity-p2p`
+served 6.3 req/s against 4.4 for `epp-load-p2p` (four runs each) and
+2.75 for `epp-affinity-p2p`
 ([report](../benchmark-results/gpt-oss-120b-docqa-token-aware.md)). On
 [the uniform pool](#uniform-shared-prefix-pool-three-routing-arms)
 affinity stays ahead of load-aware placement; token-aware placement has
 not been measured there. The guide ships `epp-affinity-p2p` as the safer
-general-purpose default; reach for `epp-load-p2p` when your workload
-looks like this one.
+general-purpose default; reach for `epp-tokenaware-p2p` when your
+workload looks like this one, with `epp-load-p2p` as the simpler
+fallback that needs no token-aware plugins.
 
 ## Wide-EP testbed (GLM-5.2-FP8)
 

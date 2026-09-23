@@ -83,9 +83,9 @@ What the pull is worth depends on the placement in front of it:
   each pod already caches, and pulls the prefix when that pod lacks it.
   A prefix owner is preferred until it is loaded; after that the request
   spills and pulls. On the document Q&A profile scaled to 8 pods it
-  served 6.0 req/s against 4.3 for load-aware + P2P and 2.75 for
-  affinity + P2P, with TTFT p90 7.2 s against 8.9 s and 14.1 s
-  ([report](benchmark-results/gpt-oss-120b-docqa-token-aware.md)).
+  served 6.3 req/s against 4.4 for load-aware + P2P (four runs each)
+  and 2.75 for affinity + P2P, with TTFT p90 7.1 s against 9.2 s and
+  14.1 s ([report](benchmark-results/gpt-oss-120b-docqa-token-aware.md)).
 * **P/D + P2P** addresses KV no placement decision could have made
   local (see the multi-turn bullet above).
 
