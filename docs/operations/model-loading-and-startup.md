@@ -45,7 +45,10 @@ volumes:
       type: DirectoryOrCreate
 ```
 
-This reuses downloads on one node, but not across nodes or after node replacement. Choose a path that fits the node disk layout and cluster security policy; see the [GKE provider guide](../infrastructure/providers/gke/README.md#mitigating-hugging-face-model-download-rate-limiting).
+This reuses downloads on one node, but not across nodes or after node replacement.
+
+> [!NOTE]
+> `/var/cache/huggingface` is an example host path. Choose a directory that fits the node's disk allocation and storage policies and complies with the cluster's security policy.
 
 ### PVC Cache
 
@@ -95,7 +98,11 @@ With an empty cache, the first startup still compiles and populates it; later co
 
 The guide also covers [checkpoint pre-staging](../../guides/modelexpress-p2p/measuring-storage-paths.md#1-prewarm-the-checkpoint-onto-nfs-once) (ordinary files, not an `HF_HOME` cache), [compilation-cache distribution via P2P transfer or a shared RWX PVC](../../guides/modelexpress-p2p/compile-cache.md), and storage-backed alternatives to P2P using [fastsafetensors on NFS or local NVMe](../../guides/modelexpress-p2p/measuring-storage-paths.md); follow each path's prerequisites.
 
-For other startup optimizations, see [FMA sleep/wake](../../guides/fast-model-actuation-base/README.md) for process reuse and [Pod snapshots (single-GPU, GKE)](../../guides/pod-snapshot/README.md) for restoration; follow each guide's prerequisites.
+For process reuse, see [FMA sleep/wake](../../guides/fast-model-actuation-base/README.md) and follow the guide's prerequisites.
+
+### Pod Snapshots
+
+[Pod snapshots](../../guides/pod-snapshot/README.md) capture a model server's initialized state so subsequent Pods can restore it instead of repeating model downloads and engine initialization. The linked guide covers single-GPU vLLM on GKE using GKE Pod Snapshots, GKE Sandbox (gVisor), and Google Cloud Storage. Follow the guide's prerequisites and wait for the first snapshot to be ready before scaling out.
 
 ## When Hugging Face Access Is Limited
 
@@ -111,9 +118,32 @@ Check model-server startup logs to confirm loading completed. After changing the
 
 Compare cold starts, warm-cache restarts, and scale-outs with fixed model revision, image, hardware, and parallelism. Record weight-loading, compilation, and total time to all target Pods Ready, noting cache state and whether downloads or pre-staging are timed. Keep compilation settings fixed when comparing [storage paths](../../guides/modelexpress-p2p/measuring-storage-paths.md).
 
-These failures have appeared in llm-d issue reports:
+### Hugging Face Rate Limiting
 
-| Symptom | Recovery |
-| --- | --- |
-| [Insufficient cache space](https://github.com/llm-d/llm-d/issues/857) | Confirm that downloads use the intended mount. Ensure the cache volume has enough space for the full checkpoint and temporary download files. |
-| [Read-only file system while Hugging Face writes its cache](https://github.com/llm-d-incubation/llm-d-modelservice/issues/243) | Keep a complete preloaded checkpoint read-only, but provide a separate writable mount for a download cache. |
+During large-scale rollouts or scale-outs, concurrent model weight downloads across Pods (including prefill and decode replicas) can trigger Hugging Face rate limiting (HTTP 429) and delay startup. Reuse [model caches](#model-caches-and-internal-registries) or pre-stage model files to reduce concurrent downloads; longer request timeouts do not remove rate limits.
+
+### Hub Request Timeouts
+
+If Hub requests time out, adjust the [Hub timeout settings](https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables) in `modelserver.env`: `HF_HUB_DOWNLOAD_TIMEOUT` controls file-download response timeouts, and `HF_HUB_ETAG_TIMEOUT` controls metadata request timeouts. Both values are in seconds. Adjust the example values below for your network conditions:
+
+```yaml
+- name: HF_HUB_DOWNLOAD_TIMEOUT
+  value: "60"
+- name: HF_HUB_ETAG_TIMEOUT
+  value: "60"
+```
+
+### Xet Download Failures
+
+For failures specific to the `hf-xet` download backend, try `HF_HUB_DISABLE_XET=1` while diagnosing the problem. Do not disable Xet by default or treat it as a rate-limit workaround.
+
+### Container Restarts During Startup
+
+Check Pod events and startup logs to confirm that failed startup probes, rather than a process crash, are causing restarts. If initialization is still progressing, size `startupProbe.failureThreshold * startupProbe.periodSeconds` to cover the measured worst-case cold startup, including downloads, weight loading, compilation, and engine initialization, with a margin.
+
+Preserve the existing probe handler when adjusting these fields. This avoids premature container restarts; it does not accelerate startup. See the [probe configuration guide](readiness-probes.md#recommended-probe-configuration) for a complete example.
+
+### Cache Storage Errors
+
+* [Insufficient cache space](https://github.com/llm-d/llm-d/issues/857): Confirm that downloads use the intended mount. Ensure the cache volume has enough space for the full checkpoint and temporary download files.
+* [Read-only file system while Hugging Face writes its cache](https://github.com/llm-d-incubation/llm-d-modelservice/issues/243): Keep a complete preloaded checkpoint read-only, but provide a separate writable mount for a download cache.
