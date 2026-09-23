@@ -331,9 +331,14 @@ timeouts as placement collapses onto one pod. Precise + P2P versus
 precise alone reads +17% throughput warm - inside run-to-run spread, so
 not credited to the pull.
 
-On this scenario alone `epp-load-p2p` is the better arm; on
-[the uniform pool](#uniform-shared-prefix-pool-three-routing-arms) the
-result reverses. The guide ships `epp-affinity-p2p` as the safer
+On this scenario `epp-load-p2p` beats the affinity arms, and
+`epp-tokenaware-p2p` beats both: on the profile scaled to 8 pods it
+served 6.0 req/s against 4.3 for `epp-load-p2p` and 2.75 for
+`epp-affinity-p2p`
+([report](../benchmark-results/gpt-oss-120b-docqa-token-aware.md)). On
+[the uniform pool](#uniform-shared-prefix-pool-three-routing-arms)
+affinity stays ahead of load-aware placement; token-aware placement has
+not been measured there. The guide ships `epp-affinity-p2p` as the safer
 general-purpose default; reach for `epp-load-p2p` when your workload
 looks like this one.
 
