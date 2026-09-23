@@ -7,9 +7,22 @@ metadata:
     llm-d.ai/role: decode
 spec:
   replicas: 1
+  # maxSurge: 0 avoids needing spare XPUs for a rolling update (mirrors the
+  # GPU DisaggregatedSet base).
+  rolloutStrategy:
+    type: RollingUpdate
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 1
   leaderWorkerTemplate:
-    size: 1
-    workerTemplate:
+    # size: 2 is the smallest group that exercises real cross-pod EP (1
+    # leader + workers, one DP rank per pod); raise to match your target EP
+    # world size / node count.
+    size: 2
+    # DP_SIZE_LOCAL=1 means one full API-server rank (the leader) plus
+    # headless engine-only ranks (workers) joining via the DP supervisor -
+    # hence the separate leaderTemplate/workerTemplate split below.
+    leaderTemplate:
       metadata:
         labels:
           llm-d.ai/inference-serving: "true"
@@ -24,6 +37,15 @@ spec:
           fsGroup: 107
           supplementalGroups:
             - 107
+        affinity:
+          # Spread leader/workers across hosts for real cross-node placement.
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/guide: wide-ep
+                    llm-d.ai/role: decode
         resourceClaims:
           - name: xpu-decode-claim
             resourceClaimTemplateName: xpu-decode-claim
@@ -72,6 +94,9 @@ spec:
               - |-
                 find /dev/shm -type f -delete
 
+                # LWS leader = LWS_WORKER_INDEX 0, i.e. START_RANK=0.
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
                 exec vllm serve \
                   deepseek-ai/DeepSeek-V2-Lite-Chat \
                   --host 0.0.0.0 \
@@ -84,6 +109,12 @@ spec:
                   --max-model-len ${MAX_MODEL_LEN} \
                   --tensor-parallel-size ${TP_SIZE} \
                   --enable-expert-parallel \
+                  --data-parallel-supervisor-port 8008 \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local ${DP_SIZE_LOCAL} \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank ${START_RANK} \
                   --all2all-backend allgather_reducescatter \
                   --kv-transfer-config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
@@ -119,6 +150,8 @@ spec:
                 value: llm-d
               - name: TP_SIZE
                 value: "2"
+              - name: DP_SIZE_LOCAL
+                value: "1" # 1 DP rank per pod; leaderWorkerTemplate.size is the cross-node DP/EP axis
               - name: MAX_MODEL_LEN
                 value: "512"
               - name: GPU_MEMORY_UTILIZATION
@@ -132,6 +165,9 @@ spec:
             ports:
               - containerPort: 8200
                 name: modelserver
+                protocol: TCP
+              - containerPort: 8008
+                name: supervisor
                 protocol: TCP
               - containerPort: 5600
                 name: nixl
@@ -155,6 +191,169 @@ spec:
               httpGet:
                 path: /v1/models
                 port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 6
+            resources:
+              limits:
+                cpu: "16"
+                memory: 128Gi
+              requests:
+                cpu: "16"
+                memory: 128Gi
+              claims:
+                - name: xpu-decode-claim
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /var/cache/huggingface
+              - name: vllm-cache
+                mountPath: /var/cache/vllm
+    workerTemplate:
+      # Headless: engine-only, no HTTP API or sidecar; probes use process
+      # checks instead of HTTP.
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/guide: wide-ep
+          llm-d.ai/accelerator-variant: xpu
+          llm-d.ai/accelerator-vendor: intel
+          llm-d.ai/model: DeepSeek-V2-Lite-Chat
+          llm-d.ai/role: decode
+      spec:
+        serviceAccountName: sa
+        securityContext:
+          fsGroup: 107
+          supplementalGroups:
+            - 107
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/guide: wide-ep
+                    llm-d.ai/role: decode
+        resourceClaims:
+          - name: xpu-decode-claim
+            resourceClaimTemplateName: xpu-decode-claim
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 16Gi
+          - name: hf-cache
+            emptyDir: {}
+          - name: vllm-cache
+            emptyDir: {}
+        containers:
+          - name: vllm
+            image: REPLACE_MODEL_SERVER_IMAGE
+            imagePullPolicy: Always
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+              runAsGroup: 0
+              runAsUser: 0
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                exec vllm serve \
+                  deepseek-ai/DeepSeek-V2-Lite-Chat \
+                  --host 0.0.0.0 \
+                  --port 8200 \
+                  --headless \
+                  --trust-remote-code \
+                  --dtype float16 \
+                  --block-size 64 \
+                  --enforce-eager \
+                  --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} \
+                  --max-model-len ${MAX_MODEL_LEN} \
+                  --tensor-parallel-size ${TP_SIZE} \
+                  --enable-expert-parallel \
+                  --data-parallel-supervisor-port 8008 \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local ${DP_SIZE_LOCAL} \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank ${START_RANK} \
+                  --all2all-backend allgather_reducescatter \
+                  --kv-transfer-config '{"kv_connector":"NixlConnector",
+                                          "kv_role":"kv_both",
+                                          "kv_buffer_device":"xpu"}' \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+                value: "5600"
+              - name: VLLM_USE_V1
+                value: "1"
+              - name: VLLM_WORKER_MULTIPROC_METHOD
+                value: spawn
+              - name: VLLM_ENABLE_V1_MULTIPROCESSING
+                value: "1"
+              - name: VLLM_MULTIPROC_EXECUTE_MODEL_TIMEOUT_S
+                value: "1200"
+              - name: TORCH_LLM_ALLREDUCE
+                value: "1"
+              - name: UCX_TLS
+                value: tcp,ze_copy
+              - name: UCX_MEMTYPE_CACHE
+                value: "0"
+              - name: USER
+                value: llm-d
+              - name: TP_SIZE
+                value: "2"
+              - name: DP_SIZE_LOCAL
+                value: "1"
+              - name: MAX_MODEL_LEN
+                value: "512"
+              - name: GPU_MEMORY_UTILIZATION
+                value: "0.8"
+              - name: VLLM_LOGGING_LEVEL
+                value: INFO
+              - name: HF_HUB_CACHE
+                value: /var/cache/huggingface
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm
+            ports:
+              - containerPort: 5600
+                name: nixl
+                protocol: TCP
+            # [v]llm avoids self-matching this probe's own "pgrep -f ..."
+            # command line, which would otherwise always report success.
+            startupProbe:
+              exec:
+                command: ["bash", "-c", "pgrep -f '[v]llm serve' > /dev/null"]
+              initialDelaySeconds: 30
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 120
+            livenessProbe:
+              exec:
+                command: ["bash", "-c", "pgrep -f '[v]llm serve' > /dev/null"]
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 20
+            readinessProbe:
+              exec:
+                command: ["bash", "-c", "pgrep -f '[v]llm serve' > /dev/null"]
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 6
