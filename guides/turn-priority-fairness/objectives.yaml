@@ -1,0 +1,12 @@
+# Without this, traffic stays at priority 0 and turn-priority never runs.
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: agentic-sessions
+  labels:
+    llm-d.ai/guide: "turn-priority-fairness"
+    llm-d.ai/inference-serving: "true"
+spec:
+  priority: -1
+  poolRef:
+    name: turn-priority-fairness
