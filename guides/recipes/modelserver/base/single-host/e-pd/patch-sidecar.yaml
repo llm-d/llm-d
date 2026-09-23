@@ -11,7 +11,7 @@ spec:
             - --port=8000
             - --ec-connector=ec-nixl
             - --zap-log-level=1
-            - --secure-proxy=false
+            - --secure-serving=false
           image: REPLACE_ROUTING_SIDECAR_IMAGE
           imagePullPolicy: Always
           ports:

@@ -18,7 +18,7 @@ The gRPC API is currently token-out only for `Generate`: responses carry token I
 Parsers are configured via the `requestHandler.parsers` section of the EndpointPickerConfig. Instantiate the parser plugin in `plugins`, then reference it by name:
 
 ```yaml
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
 - name: maxScore

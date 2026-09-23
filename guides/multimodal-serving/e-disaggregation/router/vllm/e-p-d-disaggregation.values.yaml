@@ -9,7 +9,7 @@ router:
     pluginsConfigFile: "e-p-d-config.yaml"
     pluginsCustomConfig:
       e-p-d-config.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         # Token-based routing, matching the optimized-baseline reference stack.
         # Prefill is token-load-aware: prefix-cache-affinity-filter selects the

@@ -3,7 +3,7 @@
 # fed by the same precise index, minCachedTokenDelta 16384 (the measured
 # crossover for this model - see benchmark-results/glm-5.2-h200.md).
 # Service endpoints (token-producer url) are the testbed's; adjust for your deployment.
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
 - type: always-disagg-pd-decider
