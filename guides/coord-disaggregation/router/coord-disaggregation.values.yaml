@@ -57,7 +57,7 @@ router:
       # this guide's Qwen3-VL-32B-Instruct/TP=1 model servers). Recalibrate for your
       # hardware with guides/recipes/router/calibration/calibrate.sh.
       coordinator-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: encode-filter
