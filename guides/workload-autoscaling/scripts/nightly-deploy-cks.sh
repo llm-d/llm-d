@@ -130,6 +130,8 @@ if ! kubectl wait deployment/wva-controller-manager \
     kubectl describe "${pod}" -n "${NAMESPACE}" >&2 || true
     echo "--- kubectl logs ${pod} ---" >&2
     kubectl logs "${pod}" -n "${NAMESPACE}" --all-containers --tail=200 >&2 || true
+    echo "--- kubectl logs --previous ${pod} (prior container instance, if any) ---" >&2
+    kubectl logs "${pod}" -n "${NAMESPACE}" --all-containers --previous --tail=200 >&2 || true
   done
   exit 1
 fi
