@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 # Control arm: load-balanced placement WITHOUT the pull. Every cross-pod
 # request recomputes its prefix - this arm isolates the pull's

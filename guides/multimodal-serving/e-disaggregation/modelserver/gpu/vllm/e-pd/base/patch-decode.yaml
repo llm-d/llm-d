@@ -14,7 +14,7 @@ spec:
             - --kv-connector=nixlv2
             - --ec-connector=ec-nixl
             - --zap-log-level=1
-            - --secure-proxy=false
+            - --secure-serving=false
           ports:
             - containerPort: 8000
               name: sidecar

@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 # P2P arm: load-balanced placement + the pull. The p2p-source-producer
 # emits the KV cache source header when a peer out-caches the scheduled

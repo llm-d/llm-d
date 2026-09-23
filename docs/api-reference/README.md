@@ -16,7 +16,7 @@ These schemas define the internal configuration for project components and are t
 
 | Schema | API Group | Version | Description |
 | --- | --- | --- | --- |
-| [EndpointPickerConfig](endpointpickerconfig.md) | `llm-d.ai` | `v1alpha1` | Defines the internal configuration for the **Endpoint Picker (EPP)**, including plugins and request scheduling profiles. |
+| [EndpointPickerConfig](endpointpickerconfig.md) | `llm-d.ai` | `v1` | Defines the internal configuration for the **Endpoint Picker (EPP)**, including plugins and request scheduling profiles. |
 
 ## Recognized HTTP Headers
 

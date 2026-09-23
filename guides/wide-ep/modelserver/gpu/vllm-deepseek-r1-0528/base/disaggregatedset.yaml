@@ -257,7 +257,7 @@ spec:
               - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1
-              - --secure-proxy=false
+              - --secure-serving=false
               - --enable-prefiller-sampling
               image: REPLACE_ROUTING_SIDECAR_IMAGE
               imagePullPolicy: Always

@@ -195,10 +195,8 @@ spec:
 This snippet from the `EndpointPickerConfig` shows how the Flow Control layer is configured to handle these bands.
 
 ```yaml
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
-metadata:
-  name: default-config
 featureGates:
 - flowControl
 plugins:

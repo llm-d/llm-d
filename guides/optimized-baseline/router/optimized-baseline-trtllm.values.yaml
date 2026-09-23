@@ -16,7 +16,7 @@ router:
     pluginsConfigFile: "optimized-baseline-plugins.yaml"
     pluginsCustomConfig:
       optimized-baseline-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: queue-scorer
