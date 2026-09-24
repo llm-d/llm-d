@@ -74,6 +74,9 @@ kubectl rollout restart -n ${NAMESPACE} deployment/${GUIDE_NAME}-epp
 | --- | --- |
 | `calibrate.sh` | orchestration: runs the Job, extracts and prints the value |
 | `calibration-peak-throughput.yaml` | the measurement Job + its Python script (ConfigMap) |
+| `calibrate-min-cached-token-delta.sh` | measures the pull-versus-recompute crossover (`minCachedTokenDelta`) |
+| `calibration-min-cached-token-delta.yaml` | the crossover Job + its Python script (ConfigMap) |
+| `fit-cost-model.py` | fits the `p2p-source-producer` `costModel` constants from the crossover table and a loaded run |
 
 ## Calibrating `minCachedTokenDelta`
 
@@ -113,3 +116,74 @@ endpoints — so the script talks to pod IPs (`ENGINE_PORT`, default `8200`).
 Prerequisites: the OffloadingConnector P2P tier on the pods,
 `PYTHONHASHSEED` pinned fleet-wide, and the same transport you will deploy
 on. Lengths must be multiples of the vLLM block size.
+
+## Calibrating the `costModel`
+
+The `p2p-source-producer` also accepts an optional `costModel` block that
+replaces the fixed `minCachedTokenDelta` rule with a per-request comparison of
+the TTFT a pull saves against what it costs. A pull is taken when
+
+```text
+delta*(P - T) + fleetWeight*R(d)*delta*P > F + busy(s)*S + busy(d)*Q
+```
+
+where `delta` is the extra cached tokens on the source, `R(d)` is the running
+request count on the computing pod, and `busy(x)` is 1 when that pod's waiting
+queue is at or above `busyQueueThreshold`.
+[`fit-cost-model.py`](fit-cost-model.py) fits every constant except
+`fleetWeight`, which weighs the prefill saved for other requests on the pod
+against the requesting user's latency and is set by hand.
+
+| constant | measured from |
+| --- | --- |
+| `prefillMicrosecondsPerToken` (P) | idle recompute slope |
+| `transferMicrosecondsPerToken` (T) | idle pull slope |
+| `transferFixedMs` (F) | loaded run: fixed extra TTFT of a pulled request |
+| `sourceWaitMs` (S) | loaded run: extra TTFT of a pull from a busy source |
+| `requeueMs` (Q) | loaded run: extra TTFT of a pull onto a busy computing pod |
+
+It needs Python 3 only (no packages) and a router build whose
+`p2p-source-producer` logs one `"p2p decision"` line per request at the
+default log level.
+
+1. **Idle rates (P, T).** Save the output of
+   `calibrate-min-cached-token-delta.sh` (above). The script fits a line
+   through the recompute and pull columns of its table.
+2. **Loaded run (F, S, Q).** Deploy the router without a `costModel` block so
+   the fixed-delta rule takes every candidate pull, then run the guide's
+   benchmark at the concurrency you intend to serve. Set
+   `report.request_lifecycle.per_request: true` in the inference-perf config
+   and capture the decision lines for the length of the run:
+
+   ```bash
+   kubectl logs -f -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp -c epp --since=1s \
+     | grep '"p2p decision"' > epp-decisions.log
+   ```
+
+   Each request in `per_request_lifecycle_metrics.json` is joined to its
+   decision by request id (the vLLM completion id `cmpl-<id>` is the router
+   request id). Two to four runs pooled give steadier values.
+3. **Fit.**
+
+   ```bash
+   ./fit-cost-model.py \
+     --crossover crossover.log \
+     --per-request run1/per_request_lifecycle_metrics.json \
+     --per-request run2/per_request_lifecycle_metrics.json \
+     --epp-log epp-decisions.log \
+     --busy-queue-threshold 1
+   ```
+
+   The `costModel` block goes to stdout and the diagnostics to stderr. The
+   script exits with an error when T is not below P (the pull cannot win on
+   that transport). It bootstraps the requests for 80% intervals on F, S and
+   Q and warns when an interval is wider than 250 ms; treat a warned value as
+   uncalibrated.
+
+F, S and Q can only be separated when the loaded run pulls prefixes of
+varied size under both idle and busy queues. A workload whose pulls are all
+the same size confounds F with T. On gpt-oss-120b/H200 over TCP, the
+document-Q&A benchmark (every pull a whole 48K-token document) gave P 33.4
+and T 15.6 us/token, but 80% intervals of 709 to 1209 ms for F, -229 to
+288 ms for S and -6 to 508 ms for Q. A shared-prefix or multi-turn workload
+with prefixes from about 2K to 64K tokens is a better calibration run.
