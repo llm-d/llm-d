@@ -1,11 +1,18 @@
-# KEDA ScaledObject for direct EPP queue-based autoscaling.
+# KEDA ScaledObject for KEDA + EPP autoscaling (trigger-agnostic base).
 #
-# Generic Kubernetes: this ScaledObject scrapes the bundled kube-prometheus-stack
-# over plain in-cluster HTTP with no client auth. Do NOT enable TLS on the bundled
-# Prometheus for this path — KEDA's prometheus scaler ignores a TriggerAuthentication
-# CA unless authModes is also set, so a CA-only "verify the serving cert" trigger
-# silently fails. The ocp overlay switches to the Thanos Querier HTTPS endpoint and
-# adds authModes:bearer + a metrics-reader TriggerAuthentication.
+# This base carries only the shared running-requests trigger and the HPA
+# behavior. The scaling SIGNAL is added by a kustomize component, which INSERTS
+# its trigger at index 0 (so the signal is triggers[0], running-requests[1]):
+#   components/trigger-queue        -> EPP flow-control queue size
+#   components/trigger-saturation   -> EPP pool saturation
+#
+# Generic Kubernetes: triggers scrape the bundled kube-prometheus-stack over
+# plain in-cluster HTTP with no client auth. Do NOT enable TLS on the bundled
+# Prometheus for this path - KEDA's prometheus scaler ignores a
+# TriggerAuthentication CA unless authModes is also set, so a CA-only trigger
+# silently fails (see PR #2571). The ocp-auth component switches triggers to the
+# Thanos Querier HTTPS endpoint and adds authModes:bearer + a metrics-reader
+# TriggerAuthentication.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -40,16 +47,6 @@ spec:
               value: 100
               periodSeconds: 15
   triggers:
-    - type: prometheus
-      name: epp-queue-size
-      metricType: AverageValue
-      metadata:
-        # Generic k8s bundled kube-prometheus-stack over plain in-cluster HTTP;
-        # replace when the Prometheus service, protocol, or auth setup differs.
-        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
-        query: >-
-          sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
-        threshold: "1"
     - type: prometheus
       name: epp-running-requests
       metricType: AverageValue

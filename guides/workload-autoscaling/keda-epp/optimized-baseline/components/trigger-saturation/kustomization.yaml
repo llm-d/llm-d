@@ -1,0 +1,26 @@
+# Inserts the EPP pool-saturation trigger at index 0 of the base ScaledObject
+# (so the built triggers list is [pool-saturation, epp-running-requests], the
+# signal first) and restores the saturation guide's higher replica cap (10).
+# inference_pool is the InferencePool name (the EPP's --pool-name), which for
+# optimized-baseline is the Helm release name.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp
+    patch: |-
+      - op: add
+        path: /spec/triggers/0
+        value:
+          type: prometheus
+          name: pool-saturation
+          metricType: AverageValue
+          metadata:
+            serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+            query: >-
+              max(llm_d_epp_flow_control_pool_saturation{inference_pool="optimized-baseline",namespace="llm-d-optimized-baseline"})
+            threshold: "0.7"
+      - op: replace
+        path: /spec/maxReplicaCount
+        value: 10

@@ -1,0 +1,35 @@
+# OpenShift auth for the KEDA + EPP guide. Adds the keda-prometheus-auth
+# TriggerAuthentication and repoints BOTH triggers at Thanos Querier over HTTPS
+# with authModes:bearer. MUST be listed AFTER the trigger component in each OCP
+# leaf so that trigger index [1] exists when these patches run. The metrics-reader
+# SA/CRB/token Secret is added by the leaf (not here) to keep this component's
+# relative paths simple.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - triggerauthentication.yaml
+patches:
+  - target:
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp
+    patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+      - op: add
+        path: /spec/triggers/0/authenticationRef
+        value:
+          name: keda-prometheus-auth
+      - op: replace
+        path: /spec/triggers/1/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/1/metadata/authModes
+        value: "bearer"
+      - op: add
+        path: /spec/triggers/1/authenticationRef
+        value:
+          name: keda-prometheus-auth

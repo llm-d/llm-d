@@ -1,9 +1,0 @@
-# Generic Kubernetes overlay for the KEDA + EPP saturation autoscaling guide.
-# The base ScaledObject scrapes the bundled kube-prometheus-stack over plain
-# in-cluster HTTP with no client auth (no TriggerAuthentication, no CA), so this
-# is a passthrough. Apply this for non-OpenShift clusters; use ../ocp on OpenShift.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../base

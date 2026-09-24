@@ -5,7 +5,7 @@ KEDA queries Prometheus directly for two signals — one EPP-emitted, one vLLM-e
 > [!WARNING]
 > This guide is experimental and subject to change. The metrics, configurations, and APIs may evolve as the feature matures. Use in development and test environments only.
 
-**Why tokens.** An 8192-token prompt is 16× the prefill work of a 512-token one, and a request counter rates them the same. Queue depth and running-request signals ([keda-epp-queue](../keda-epp-queue/README.md), [keda-epp-saturation](../keda-epp-saturation/README.md)) therefore hold well when prompt sizes are homogeneous and drift when they are not: the same request rate can be a third of a replica or three replicas of prefill work. This path closes that gap by counting the tokens themselves.
+**Why tokens.** An 8192-token prompt is 16× the prefill work of a 512-token one, and a request counter rates them the same. Queue depth and running-request signals (the [keda-epp](../keda-epp/README.md) guide's queue and saturation overlays) therefore hold well when prompt sizes are homogeneous and drift when they are not: the same request rate can be a third of a replica or three replicas of prefill work. This path closes that gap by counting the tokens themselves.
 
 ## How it works
 
@@ -300,7 +300,7 @@ The overlay:
 
 - Points every trigger at `thanos-querier.openshift-monitoring.svc.cluster.local:9091` and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a 401, and KEDA silently serves `fallback` replicas when a trigger errors, so unauthenticated autoscaling looks healthy while doing nothing.
 - Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the `cluster-monitoring-view` ClusterRole, and repoints the `TriggerAuthentication` at that SA's token Secret. On OpenShift the service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving certificate) into the token Secret automatically, so no `prometheus-token` copy is required.
-- Renames the `cluster-monitoring-view` ClusterRoleBinding per namespace. The binding is cluster-scoped and the recipe is shared with `keda-epp-queue` and `keda-epp-saturation`, so a fixed name would collide across namespaces or guides. If you deploy to a namespace other than the overlay's default, update that patch too.
+- Renames the `cluster-monitoring-view` ClusterRoleBinding per namespace. The binding is cluster-scoped and the recipe is shared with the `keda-epp` guide's overlays, so a fixed name would collide across namespaces or guides. If you deploy to a namespace other than the overlay's default, update that patch too.
 
 ## Verify
 

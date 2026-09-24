@@ -37,7 +37,7 @@ and preempts to take its floor back when demand returns.
    the second model. With a single model server there is nothing to rebalance —
    one ClusterQueue would own the whole budget.
 2. An autoscaler per pool — either
-   [KEDA + EPP Metrics](../keda-epp-queue/README.md) or
+   [KEDA + EPP Metrics](../keda-epp/README.md) or
    [KEDA + WVA Metrics](../wva/README.md). Nothing in this guide changes that
    configuration.
 3. No hard `requests.nvidia.com/gpu` `ResourceQuota` on the namespace. A gated

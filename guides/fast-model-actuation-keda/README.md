@@ -206,7 +206,7 @@ Apply the KEDA layer — the `ScaledObject`, its `TriggerAuthentication`, and th
 metrics-reader ServiceAccount + token — from the `ocp` overlay, then wait for the
 `ScaledObject` to reconcile `Ready`. KEDA then creates the HPA and owns the
 requester's replica count from here on. The overlay follows the
-[`keda-epp-queue`](../workload-autoscaling/keda-epp-queue) guide, pointing the
+[`keda-epp`](../workload-autoscaling/keda-epp) guide, pointing the
 queue-depth trigger at Thanos Querier; on OpenShift the service-ca operator
 injects the Thanos CA into the token Secret, so **no `prometheus-token` copy is
 required**.

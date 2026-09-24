@@ -24,12 +24,12 @@ metric reported below is defined in [Metric Definitions](#metric-definitions).
 
 
 These three passes use the autoscaling setup from
-[keda-epp-queue][queue-guide] — KEDA polling the EPP
+[keda-epp][queue-guide] — KEDA polling the EPP
 `llm_d_epp_flow_control_queue_size` and `llm_d_epp_request_running` gauges, EPP
 `flowControl` feature gate on, the optimized-baseline scheduler plugins, and a
 KEDA-generated HPA on the scale target.
 
-[queue-guide]: ../../../workload-autoscaling/keda-epp-queue/README.md
+[queue-guide]: ../../../workload-autoscaling/keda-epp/README.md
 
 ## Shared Prefix Heavy (Long)
 
@@ -43,7 +43,7 @@ scale-up ramp, so the run covers steady-state serving and not just actuation.
 
 ### Configuration
 
-The [keda-epp-queue][queue-guide] configuration, with `maxReplicaCount` lowered
+The [keda-epp][queue-guide] configuration, with `maxReplicaCount` lowered
 to 6. Thresholds, polling interval, trigger queries, metric source, and plugin
 set are the guide's defaults.
 

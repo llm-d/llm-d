@@ -73,7 +73,7 @@ patches:
       name: optimized-baseline-nvidia-gpu-vllm-token-aware
   # The ClusterRoleBinding from the metrics-reader component is cluster-scoped, so
   # its name must be unique per namespace or two deployments of this guide (or of
-  # keda-epp-saturation / keda-epp-queue, which share the recipe) collide on it.
+  # the keda-epp guide's overlays, which share the recipe) collide on it.
   - patch: |-
       - op: replace
         path: /metadata/name
