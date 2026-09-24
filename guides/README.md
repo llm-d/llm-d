@@ -21,7 +21,7 @@ We currently offer the following:
 ## Serving Large Models
 
 * [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
-* [Wide Expert-Parallelism](./wide-ep-lws/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
+* [Wide Expert-Parallelism](./wide-ep/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
 
 ## Operational Excellence
 
@@ -29,7 +29,7 @@ We currently offer the following:
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
 * [Fast Model Actuation](./fast-model-actuation-base/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
 * [Fast Model Actuation + KEDA Autoscaling](./fast-model-actuation-keda/README.md) - saturation-based KEDA autoscaling on top of Fast Model Actuation: scale the GPU-reserving requester Deployment on EPP flow-control metrics, bringing vLLM instances online via hot start (wake a sleeping instance) or warm start (new instance on an existing launcher).
-* [Pod Snapshots](./gke-pod-snapshots/README.md) - checkpoint and restore single-GPU vLLM model servers to eliminate cold-start model download and initialization latencies, currently implemented on GKE with GKE Sandbox (gVisor) and GCS snapshots.
+* [Pod Snapshots](./pod-snapshot/README.md) - checkpoint and restore single-GPU vLLM model servers to eliminate cold-start model download and initialization latencies, currently implemented on GKE with GKE Sandbox (gVisor) and GCS snapshots.
 
 ## Workloads
 

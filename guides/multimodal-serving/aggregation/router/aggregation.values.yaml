@@ -1,4 +1,4 @@
-## multimodal-aggregation guide overrides for the llm-d router.
+## aggregation guide overrides for the llm-d router.
 ## Layer on top of: recipes/router/base.values.yaml
 
 router:
@@ -9,9 +9,9 @@ router:
       targetPort: 8081
 
   epp:
-    pluginsConfigFile: "multimodal-aggregation-plugins.yaml"
+    pluginsConfigFile: "aggregation-plugins.yaml"
     pluginsCustomConfig:
-      multimodal-aggregation-plugins.yaml: |
+      aggregation-plugins.yaml: |
         apiVersion: llm-d.ai/v1alpha1
         kind: EndpointPickerConfig
         # Token-based routing, matching the aggregation reference stack:
@@ -120,4 +120,4 @@ router:
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: "multimodal-aggregation"
+      llm-d.ai/guide: "aggregation"

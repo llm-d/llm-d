@@ -1,0 +1,29 @@
+# Unlike the other guides, this overlay has no `../base` sibling to build on.
+# Every resource here is GKE-specific -- podsnapshot.gke.io CRs, runtimeClassName
+# gvisor -- so a `base/` would be a base that only builds on GKE. The layers are
+# collapsed into this one overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+  - podsnapshotstorageconfig.yaml
+  - podsnapshotpolicy.yaml
+  # Generates the snapshot-scripts ConfigMaps from the runtime sources.
+  - ../../../../../../docker/scripts/snapshot
+
+namePrefix: pod-snapshot-nvidia-gpu-vllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/guide: pod-snapshot
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-vllm.yaml

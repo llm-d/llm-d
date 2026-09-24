@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Emit per-rank KV-cache events for the precise prefix-cache router variant
+# (see ../../../../../README.precise-prefix-cache-routing.md). The block
+# size and PYTHONHASHSEED must be identical on every engine pod, and the block
+# size must match the router's tokenProcessorConfig.blockSizeTokens.
+
+# The patch below matches roles, containers, and env entries by name via
+# the DisaggregatedSet schema the base declares. The common env additions
+# are written once under the prefill role (&kv-events-common) and reused
+# for the decode role (*kv-events-common).
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-nvidia-gpu-vllm-glm-5-2
+      spec:
+        roles:
+          - name: prefill
+            spec: &kv-events-common
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: ENABLE_KV_EVENTS
+                            value: "1"
+                          - name: KV_BLOCK_SIZE
+                            value: "64"
+                          - name: PYTHONHASHSEED
+                            value: "0"
+          - name: decode
+            spec: *kv-events-common

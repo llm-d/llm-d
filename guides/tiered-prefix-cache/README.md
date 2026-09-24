@@ -1,6 +1,7 @@
 # Tiered Prefix Cache
 
 [![E2E (GKE GPU Native)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml)
+[![E2E (GKE GPU SGLang)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml)
 [![E2E (GKE GPU LMcache)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml)
 [![E2E (GKE TPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml)
@@ -218,6 +219,8 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 ```
 
 #### SGLang HiCache — CPU RAM and Filesystem (Lustre)
+
+SGLang HiCache supports a CPU RAM tier (`cpu`) and a CPU RAM plus filesystem tier (`fs`). For the filesystem tier, first provision the PVC as shown in the [vLLM native filesystem path](#vllm-native--cpu-ram--filesystem).
 
 ```bash
 export VARIANT=cpu          # cpu | fs

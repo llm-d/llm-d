@@ -53,7 +53,7 @@ This guide includes configurations for the following accelerators and inference 
    ```bash
    source ${REPO_ROOT}/guides/env.sh
    export GUIDE_NAME="aggregation"
-   export NAMESPACE=llm-d-multimodal-aggregation
+   export NAMESPACE=llm-d-aggregation
    ```
 
 4. Install the Gateway API Inference Extension CRDs:

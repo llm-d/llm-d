@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# OCI GB200, DeepSeek-V4, 1P(DEP8) + 4D(TP=8) scaled low-latency -> 10 nodes / 40 GPUs.
+resources:
+  - ../../base-low-latency
+  - compute-domain.yaml
+components:
+  - ../../components/1p4d-tp8
+
+# The patch below matches roles, containers, and volumes by name via the
+# DisaggregatedSet schema the base declares. The common role spec is written
+# once under the prefill role (&oci-common) and reused for the decode role
+# (*oci-common).
+# OCI: hostPath for model/JIT caches, shrink ephemeral-storage, add ComputeDomain
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-nvidia-gpu-vllm-deepseek-v4
+      spec:
+        roles:
+          - name: prefill
+            spec: &oci-common
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    resourceClaims:
+                      - name: compute-domain-channel
+                        resourceClaimTemplateName: wide-ep-compute-domain
+                    containers:
+                      - name: vllm
+                        resources:
+                          limits:
+                            ephemeral-storage: 128Gi
+                          requests:
+                            ephemeral-storage: 128Gi
+                          claims:
+                            - name: compute-domain-channel
+                    volumes:
+                      - name: hf-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/numa0/hf-cache
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/numa0/jit-cache
+                          type: DirectoryOrCreate
+          - name: decode
+            spec: *oci-common
