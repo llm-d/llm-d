@@ -60,6 +60,10 @@ The request flow works as follows:
 * Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 * Decode instances processes the decodes, executing the forward passes with DP/EP. DeepEP executes the cross-node dispatch/combine collectives
 
+## Observability
+
+Attention is data parallel, so each DP rank is a separate engine with its own KV cache and its own metrics endpoint, and an aggregate number hides a single saturated rank. The [wide expert parallelism guide's Observability & Troubleshooting section](../../../guides/wide-ep/README.md#4-observability--troubleshooting) covers the per-rank signals, the balance between the prefill and decode roles, and the KV transfer checks for this path, backed by the shared [PromQL](../../operations/observability/promql.md#wide-expert-parallelism) and [metric](../../operations/observability/metrics.md) references.
+
 ## Further Reading
 
 See:

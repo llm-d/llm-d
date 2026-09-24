@@ -108,6 +108,23 @@ Queries for the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/
 
 NIXL histogram observations are pooled across tensor-parallel ranks. Their counts and average sizes describe rank-level transfer observations, not inference requests or whole-request KV cache sizes.
 
+### Wide Expert Parallelism
+
+Queries for the [wide expert parallelism guide](../../../guides/wide-ep/README.md). That guide's monitoring overlay scrapes every DP rank as its own target, so `endpoint` carries the rank port name (`rank0` to `rank7`) and `job` carries `<namespace>/prefill` or `<namespace>/decode`.
+
+| Metric Need | PromQL Query |
+| ----------- | ------------ |
+| **Active requests per DP rank** | `sum by(pod, endpoint) (vllm:num_requests_running)` |
+| **KV cache utilization per DP rank** | `avg by(pod, endpoint) (vllm:kv_cache_usage_perc)` |
+| **Rank spread within a role** | `max by(job) (vllm:num_requests_running) - min by(job) (vllm:num_requests_running)` |
+| **Requests scheduled per rank port** | `sum by(port) (rate(llm_d_epp_scheduler_attempts_total{status="success"}[5m]))` |
+| **Active requests by role** | `sum by(job) (vllm:num_requests_running)` |
+| **KV cache utilization by role** | `avg by(job) (vllm:kv_cache_usage_perc)` |
+| **DisaggregatedSet revision gating share** | `llm_d_epp_disaggregatedset_revision_gating_share` |
+| **Strict header selections with no match in 5m** | `sum(increase(llm_d_epp_disaggregatedset_strict_header_no_match_total[5m]))` |
+
+For KV transfer between the prefill and decode roles, use the NIXL queries in [Prefill/Decode Disaggregation](#prefilldecode-disaggregation).
+
 ### Flow Control
 
 Requires the `flowControl` feature gate enabled on the EPP.
