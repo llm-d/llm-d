@@ -7,4 +7,3 @@ kind: Kustomization
 # patching that ConfigMap — see Configure step 2 of README.epp-keda-saturation.md.
 resources:
   - scaledobject.yaml
-  - triggerauthentication.yaml

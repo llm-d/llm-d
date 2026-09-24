@@ -35,9 +35,13 @@ spec:
     name: pool-saturation
     metricType: AverageValue
     metadata:
-      serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
-      # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
-      # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
+      serverAddress: "http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+      # Generic k8s with the bundled llm-d Prometheus stack: plain in-cluster HTTP,
+      # no client auth. Do NOT enable TLS on the bundled Prometheus for this path —
+      # KEDA's prometheus scaler ignores a TriggerAuthentication CA unless authModes
+      # is also set, so a CA-only "verify the serving cert" trigger silently fails.
+      # For OpenShift: use overlays/ocp, which patches this to the Thanos Querier
+      # HTTPS endpoint and adds authModes:bearer + a metrics-reader TriggerAuthentication.
       # For other Prometheus deployments: replace with your endpoint.
       # inference_pool is the InferencePool name (the EPP's --pool-name), which
       # for the optimized-baseline guide is the Helm release name.
@@ -48,15 +52,13 @@ spec:
       threshold: "0.7"
       activationThreshold: "0"
       unsafeSsl: "false"
-    authenticationRef:
-      name: prometheus-auth
   - type: prometheus
     name: running-requests
     metricType: AverageValue
     metadata:
-      serverAddress: "https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
-      # For generic k8s with bundled llm-d Prometheus stack (installed via observability setup guide).
-      # For OpenShift: use overlays/ocp which automatically patches this to thanos-querier.
+      serverAddress: "http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090"
+      # Generic k8s: plain in-cluster HTTP (see the pool-saturation trigger above).
+      # For OpenShift: overlays/ocp patches this to the Thanos Querier HTTPS endpoint.
       # For other Prometheus deployments: replace with your endpoint.
       # llm_d_epp_request_running is only created once the EPP has handled a
       # request: before any traffic this query returns an empty result, which
@@ -68,5 +70,3 @@ spec:
       threshold: "16"
       activationThreshold: "0"
       unsafeSsl: "false"
-    authenticationRef:
-      name: prometheus-auth

@@ -138,52 +138,46 @@ selectors without checking the live series.
 The metrics may remain at zero until requests are sent. If a series is absent,
 check the Prometheus target first rather than treating absence as zero.
 
-## Configure Prometheus Authentication
+## Configure Prometheus Access
 
-KEDA reads authentication Secrets from the `ScaledObject` namespace. If your
-Prometheus endpoint uses HTTP or requires a bearer token, mTLS, basic
-authentication, or cloud workload identity, update each trigger's
-`serverAddress` and replace or extend the `TriggerAuthentication` using the
+KEDA reads authentication Secrets from the `ScaledObject` namespace. On generic
+Kubernetes the checked-in `ScaledObject` reaches the bundled kube-prometheus-stack
+over plain in-cluster HTTP with no client authentication, so there is no Secret to
+create. If your Prometheus endpoint requires a bearer token, mTLS, basic
+authentication, or cloud workload identity, update each trigger's `serverAddress`
+and add a `TriggerAuthentication` using the
 [KEDA Prometheus authentication documentation](https://keda.sh/docs/2.20/scalers/prometheus/#authentication-parameters).
-The HTTPS and CA settings in the checked-in example are specific to the
-TLS-enabled bundled kube-prometheus-stack. Do not disable TLS verification to
-adapt the example.
+
+> [!IMPORTANT]
+> KEDA's prometheus scaler ignores a `TriggerAuthentication` CA unless the trigger
+> also sets `authModes`. A "CA-only" trigger (a CA parameter but no `authModes`)
+> silently falls back to the system trust store and fails serving-cert
+> verification with `x509: certificate signed by unknown authority`. That is why
+> this guide does not enable TLS on the bundled Prometheus for the generic-k8s
+> path — it uses plain in-cluster HTTP. The OpenShift path sets `authModes: bearer`,
+> so its CA is honored.
 
 ### Platform notes
 
-The Prometheus endpoint, KEDA operator namespace, TLS settings, and
-authentication method depend on the platform. Update `KEDA_NAMESPACE`, each
-trigger's `serverAddress`, and any `TriggerAuthentication` before applying the
-example.
+The Prometheus endpoint, KEDA operator namespace, and authentication method depend
+on the platform. Update `KEDA_NAMESPACE`, each trigger's `serverAddress`, and any
+`TriggerAuthentication` before applying the example.
 
 #### Bundled llm-d observability stack
 
-The checked-in `ScaledObject` is written for the TLS-enabled bundled Prometheus
-installation documented in the
-[observability setup guide](../../../docs/operations/observability/setup.md). It
-uses the bundled Prometheus service address and a CA copied into the workload
-namespace.
+The checked-in `ScaledObject` targets the bundled Prometheus installation
+documented in the
+[observability setup guide](../../../docs/operations/observability/setup.md),
+reached over plain in-cluster HTTP at its service address — nothing to configure
+and no Secret to create.
 
-To open its Prometheus query UI, keep this command running in a terminal and
-open `https://localhost:9090`:
+To open its Prometheus query UI, keep this command running in a terminal and open
+`http://localhost:9090`:
 
 ```bash
 kubectl port-forward -n ${MONITORING_NAMESPACE} \
   service/llmd-kube-prometheus-stack-prometheus 9090:9090
 ```
-
-Copy the bundled Prometheus CA into the workload namespace:
-
-<!-- guide:deploy.prometheus_auth start -->
-```bash
-# only when ENV=existing:
-kubectl create secret generic keda-prometheus-auth \
-  --namespace ${NAMESPACE} \
-  --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
-    -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-<!-- guide:deploy.prometheus_auth end -->
 
 #### OpenShift
 
@@ -197,11 +191,10 @@ configures this for you — apply it instead of `k8s`:
   401, and KEDA silently serves `fallback` replicas when a trigger errors, so
   unauthenticated autoscaling looks healthy while doing nothing.
 - Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the
-  `cluster-monitoring-view` ClusterRole, and repoints the `TriggerAuthentication`
-  at that SA's token Secret. On OpenShift the service-ca operator injects
-  `service-ca.crt` (the CA that signs Thanos's serving certificate) into the
-  token Secret automatically, so **no CA copy is required** (skip the
-  `keda-prometheus-auth` Secret step above).
+  `cluster-monitoring-view` ClusterRole, and adds a `keda-prometheus-auth`
+  `TriggerAuthentication` pointing at that SA's token Secret. On OpenShift the
+  service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving
+  certificate) into the token Secret automatically, so **no CA copy is required**.
 
 Before applying, edit the PromQL label selectors in the triggers to match your
 EPP service, namespace, and model (the namespace transformer cannot rewrite the
@@ -276,7 +269,7 @@ kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout
 <!-- guide:deploy.prepare end -->
 
 Apply the overlay for your platform. On a generic Kubernetes cluster with the
-bundled kube-prometheus-stack (after copying the CA above), use `k8s`:
+bundled kube-prometheus-stack (plain in-cluster HTTP, no auth secret), use `k8s`:
 
 <!-- guide:deploy.apply_k8s start -->
 ```bash
@@ -390,8 +383,10 @@ kubectl logs -n ${KEDA_NAMESPACE} \
   -l app.kubernetes.io/name=keda-operator --all-containers
 ```
 
-Common causes are an unreachable `serverAddress`, an untrusted Prometheus CA,
-missing authentication, or a PromQL query that returns more than one element.
+Common causes are an unreachable `serverAddress`, missing authentication (on
+platforms that require it), a `TriggerAuthentication` CA that KEDA drops because
+the trigger sets no `authModes`, or a PromQL query that returns more than one
+element.
 
 ### Generated HPA shows unknown metrics
 
@@ -452,9 +447,6 @@ kubectl delete -k ${OVERLAY_ROOT}/k8s --ignore-not-found=true
 
 # only when ENV=ocp:
 kubectl delete -k ${OVERLAY_ROOT}/ocp --ignore-not-found=true
-
-# only when ENV=existing:
-kubectl delete secret keda-prometheus-auth -n ${NAMESPACE} --ignore-not-found=true
 ```
 <!-- guide:cleanup end -->
 

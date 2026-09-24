@@ -1,17 +1,11 @@
-# Copy the Prometheus CA into this namespace as the keda-prometheus-auth Secret
-# before applying this file. Extend the TriggerAuthentication for bearer, mTLS,
-# basic, or workload-identity authentication when required by your environment.
-apiVersion: keda.sh/v1alpha1
-kind: TriggerAuthentication
-metadata:
-  name: keda-prometheus-auth
-  namespace: llm-d-optimized-baseline
-spec:
-  secretTargetRef:
-    - parameter: ca
-      name: keda-prometheus-auth
-      key: ca.crt
----
+# KEDA ScaledObject for direct EPP queue-based autoscaling.
+#
+# Generic Kubernetes: this ScaledObject scrapes the bundled kube-prometheus-stack
+# over plain in-cluster HTTP with no client auth. Do NOT enable TLS on the bundled
+# Prometheus for this path — KEDA's prometheus scaler ignores a TriggerAuthentication
+# CA unless authModes is also set, so a CA-only "verify the serving cert" trigger
+# silently fails. The ocp overlay switches to the Thanos Querier HTTPS endpoint and
+# adds authModes:bearer + a metrics-reader TriggerAuthentication.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -50,23 +44,19 @@ spec:
       name: epp-queue-size
       metricType: AverageValue
       metadata:
-        # TLS-enabled bundled kube-prometheus-stack example; replace when the
-        # Prometheus service, protocol, or authentication setup differs.
-        serverAddress: https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        # Generic k8s bundled kube-prometheus-stack over plain in-cluster HTTP;
+        # replace when the Prometheus service, protocol, or auth setup differs.
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
         query: >-
           sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
         threshold: "1"
-      authenticationRef:
-        name: keda-prometheus-auth
     - type: prometheus
       name: epp-running-requests
       metricType: AverageValue
       metadata:
-        # TLS-enabled bundled kube-prometheus-stack example; replace when the
-        # Prometheus service, protocol, or authentication setup differs.
-        serverAddress: https://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        # Generic k8s bundled kube-prometheus-stack over plain in-cluster HTTP;
+        # replace when the Prometheus service, protocol, or auth setup differs.
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
         query: >-
           sum(llm_d_epp_request_running{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
         threshold: "16"
-      authenticationRef:
-        name: keda-prometheus-auth
