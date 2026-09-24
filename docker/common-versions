@@ -2,8 +2,8 @@
 # vLLM Version Configuration
 # ============================================================================
 # Used by CUDA and CPU platforms
-VLLM_REPO=https://github.com/LucasWilkinson/vllm.git
-VLLM_COMMIT_SHA=cc6cf840ace7e5272091f3d8d5812f19fba9f0cc # vllm-project/vllm#57075 (pcp-dp) head
+VLLM_REPO=https://github.com/robertgshaw2-redhat/vllm.git
+VLLM_COMMIT_SHA=6930aa2c8f07993cec40353d539d076adb6e32e7 # robertgshaw2-redhat/vllm#27 (cb-branch) head
 
 # ============================================================================
 # Cuda specific configs
@@ -16,7 +16,7 @@ VLLM_PREBUILT=0                # 0=editable install, 1=use full prebuilt wheel
 VLLM_USE_PRECOMPILED=1         # 1=use precompiled binaries either from VLLM_COMMIT_SHA or VLLM_PRECOMPILED_WHEEL_COMMIT, 0=compile from source
 # If building vLLM from a precompiled commit in the vLLM wheel index (only commits off main),
 # which commit to use as the base for the compiled bits.
-VLLM_PRECOMPILED_WHEEL_COMMIT=f69cc7c178d5bd47cd9bc5cf4c2f41530b878aae # main commit with a published wheel; no csrc changes between it and the PR merge-base (b715699d)
+VLLM_PRECOMPILED_WHEEL_COMMIT=f69cc7c178d5bd47cd9bc5cf4c2f41530b878aae # main commit with a published wheel; no csrc changes between it and the cb-branch merge-base (e6dc16cebd)
 
 
 
