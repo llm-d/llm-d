@@ -66,8 +66,8 @@ on:
 #    branches:
 #      - main
 
-#  schedule:
-#    - cron: '0 4 * * *'  # 04:00 UTC daily (staggered)
+  schedule:
+    - cron: '0 4 * * *'  # 04:00 UTC daily (staggered)
 
 permissions:
   contents: write
