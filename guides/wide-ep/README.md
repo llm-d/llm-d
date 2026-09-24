@@ -8,7 +8,7 @@
 
 ## Overview
 
-This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes, with vLLM prefill/decode (P/D) disaggregation and DP-aware routing by the llm-d Router. The NVIDIA GPU and AMD configurations deploy a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit; the Intel XPU configuration uses two plain `LeaderWorkerSet`s.
+This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes, with vLLM prefill/decode (P/D) disaggregation and DP-aware routing by the llm-d Router. Every accelerator configuration deploys a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit.
 
 The default deployment serves `deepseek-ai/DeepSeek-R1-0528` on 32 NVIDIA H200 GPUs: a prefill and a decode role, each one DP16/EP group across two nodes, with DeepEP for the expert all-to-all and NIXL for the KV transfer over RDMA. Every DP rank runs its own API server port, and the router's `InferencePool` targets all of them, so the router picks a DP rank, not just a pod.
 
@@ -25,7 +25,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
 | AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO |
-| Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 6 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 (1 pod) + decode TP2 w/ 2-pod cross-node EP · NIXL · `INFRA_PROVIDER`: `base` |
+| Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 6 XPUs via DRA · `DisaggregatedSet`: prefill TP2 (1 pod) + decode TP2 w/ 2-pod cross-node EP · NIXL · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -39,7 +39,7 @@ This guide includes configurations for the following accelerator and model serve
 
 The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerSet` pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
-**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill runs as independent single-pod TP2 replicas (not a cross-node EP group), and decode runs TP2 with expert parallelism sharded **across pods/nodes** within the decode `LeaderWorkerSet` group (`leaderWorkerTemplate.size: 2`, one leader + one headless worker, one DP/EP rank per pod), 6 XPUs total by default (decode: 2 pods × 2 XPUs, prefill: 1 pod × 2 XPUs), with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
+**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill runs as an independent single-pod TP2 replica (not a cross-node EP group), and decode runs TP2 with expert parallelism sharded **across pods/nodes** within the decode role's `leaderWorkerTemplate` (`size: 2`, one leader + one headless worker, one DP/EP rank per pod), 6 XPUs total by default (decode: 2 pods × 2 XPUs, prefill: 1 pod × 2 XPUs), with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
 
 > [!NOTE]
 > `size: 2` runs a real 2-pod, cross-node DP+EP group for decode; increase it to match your target EP world size / node count. EPLB (expert-parallel load balancing) is **not** enabled/validated on this path yet; bringing EPLB support to Intel XPU is left as follow-up work.
@@ -53,7 +53,7 @@ The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerS
 > [!IMPORTANT]
 > The NVIDIA GPU and AMD configurations use an RDMA all-to-all backend (DeepEP, MoRI) for inter-node EP and require all-to-all RDMA connectivity: every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail. The Intel XPU configuration uses XCCL and `allgather_reducescatter`; it does not use DeepEP, but still requires full-mesh pod network connectivity between decode and prefill workers.
 
-- Deploy the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC used by the NVIDIA GPU and AMD configurations.
+- Deploy the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC used by every accelerator configuration.
 
 - For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 
