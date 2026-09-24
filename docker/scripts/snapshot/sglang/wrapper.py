@@ -18,19 +18,6 @@ import os
 import sys
 from typing import Optional
 
-from sglang.srt.entrypoints import http_server
-from sglang.srt.entrypoints.http_server import (
-    ServerStatus,
-    _execute_server_warmup,
-    _freeze_gc_after_server_warmup,
-    _wait_weights_ready,
-    get_exec,
-    get_model,
-    get_observability,
-    get_serving,
-    kill_process_tree,
-)
-
 from ..providers import (
     GKESnapshotProvider,
     get_snapshot_provider,
@@ -48,6 +35,19 @@ def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider
         snapshot_provider: Snapshot provider instance. Defaults to the provider configured
             by the SNAPSHOT_PROVIDER environment variable (or None if unset/disabled).
     """
+    from sglang.srt.entrypoints import http_server
+    from sglang.srt.entrypoints.http_server import (
+        ServerStatus,
+        _execute_server_warmup,
+        _freeze_gc_after_server_warmup,
+        _wait_weights_ready,
+        get_exec,
+        get_model,
+        get_observability,
+        get_serving,
+        kill_process_tree,
+    )
+
     if snapshot_provider is None:
         # Get the configured snapshot provider, if any
         snapshot_provider = get_snapshot_provider()
