@@ -1,6 +1,6 @@
 # Single DisaggregatedSet managing prefill and decode roles, with the decode
 # role running pure TP=8 for lowest latency.
-# Requires LWS v0.10.0+ with the DisaggregatedSet CRD and controller installed.
+# Requires LWS v0.11.0+ with the DisaggregatedSet CRD and controller installed.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
