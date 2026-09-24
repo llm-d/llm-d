@@ -23,7 +23,6 @@ name: /test-nightly Slash Command
 #   /test-nightly *-ocp
 #   /test-nightly optimized-baseline-*
 #   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
-#   /test-nightly wva-*
 #   /test-nightly build-image
 #   /test-nightly build-image platforms=cuda
 #
