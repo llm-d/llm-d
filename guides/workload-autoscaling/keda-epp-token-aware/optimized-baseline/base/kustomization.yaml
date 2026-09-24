@@ -3,7 +3,7 @@ kind: Kustomization
 # EPP configuration is deliberately absent here, for two reasons.
 #
 # First, EndpointPickerConfig is the EPP binary's config schema (group
-# llm-d.ai/v1alpha1), not a Kubernetes API type — there is no CRD to apply it
+# llm-d.ai/v1), not a Kubernetes API type — there is no CRD to apply it
 # against. It is a key inside the <release>-epp ConfigMap.
 #
 # Second, this guide needs no EPP change at all: the optimized-baseline guide's

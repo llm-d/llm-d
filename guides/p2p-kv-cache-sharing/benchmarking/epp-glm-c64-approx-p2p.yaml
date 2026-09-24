@@ -1,5 +1,5 @@
 # C64 single-factor P2P arm: calibrated approximate routing with P2P.
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
   - type: always-disagg-pd-decider

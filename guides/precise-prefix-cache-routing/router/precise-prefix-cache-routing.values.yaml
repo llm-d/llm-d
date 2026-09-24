@@ -40,7 +40,7 @@ router:
     pluginsConfigFile: "precise-prefix-cache-routing-plugins.yaml"
     pluginsCustomConfig:
       precise-prefix-cache-routing-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
           - type: token-producer

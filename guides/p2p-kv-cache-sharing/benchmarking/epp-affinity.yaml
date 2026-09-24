@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 # Reference arm: precise prefix-cache routing exactly as the
 # precise-prefix-cache-routing guide ships it. Requests follow the cache.

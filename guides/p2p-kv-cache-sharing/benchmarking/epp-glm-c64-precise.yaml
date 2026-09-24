@@ -2,7 +2,7 @@
 # podCacheSize 128 covers 64 rank-tier holders with headroom in the 2P2D cell.
 # glm-5-2-render is the testbed Service over the prefill vLLM APIs; there is no
 # separate renderer Deployment.
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
   - type: always-disagg-pd-decider

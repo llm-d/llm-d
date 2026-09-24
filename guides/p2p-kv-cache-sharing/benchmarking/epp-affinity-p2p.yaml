@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 # Recommended arm: precise prefix-cache routing exactly as the
 # precise-prefix-cache-routing guide ships it, plus the p2p-source-producer.
