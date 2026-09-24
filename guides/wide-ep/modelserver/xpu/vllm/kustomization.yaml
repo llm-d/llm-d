@@ -1,9 +1,10 @@
+# Single DisaggregatedSet managing prefill and decode roles.
+# Requires LWS v0.10.0+ with the DisaggregatedSet CRD and controller installed.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../../recipes/modelserver/common
-  - decode.yaml
-  - prefill.yaml
+  - disaggregatedset.yaml
   - resource-claim-templates.yaml
 
 components:
@@ -17,38 +18,8 @@ labels:
       llm-d.ai/accelerator-variant: xpu
       llm-d.ai/accelerator-vendor: intel
       llm-d.ai/engine-type: vllm
-    includeSelectors: true
-    includeTemplates: true
     fields:
       - version: v1
         kind: ServiceAccount
         path: metadata/labels
-        create: true
-      - group: leaderworkerset.x-k8s.io
-        version: v1
-        kind: LeaderWorkerSet
-        path: metadata/labels
-        create: true
-      - group: leaderworkerset.x-k8s.io
-        version: v1
-        kind: LeaderWorkerSet
-        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
-        create: true
-      # create: false (default): decode.yaml's leaderTemplate already has its
-      # own metadata.labels to merge into; prefill.yaml has no leaderTemplate
-      # at all, and create: true here would fabricate an empty, spec-less
-      # one that breaks its deployment.
-      - group: leaderworkerset.x-k8s.io
-        version: v1
-        kind: LeaderWorkerSet
-        path: spec/leaderWorkerTemplate/leaderTemplate/metadata/labels
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: spec/selector/matchLabels
         create: true

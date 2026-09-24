@@ -1,9 +1,7 @@
 router:
   epp:
     # Same config as wide-ep.values.yaml minus the
-    # disaggregatedset-rollout-screener: the XPU path deploys plain
-    # LeaderWorkerSets, and the screener drops endpoints without
-    # DisaggregatedSet revision labels.
+    # disaggregatedset-rollout-screener, which is not enabled for XPU.
     pluginsCustomConfig:
       wide-ep-config.yaml: |
         apiVersion: llm-d.ai/v1alpha1

@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. The NVIDIA GPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together; the Intel XPU configuration uses plain `LeaderWorkerSet`. It has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. Both the NVIDIA GPU and Intel XPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together. It has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -109,7 +109,7 @@ This guide includes configurations for the following accelerators:
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` CRD, validating webhook, and RBAC used by the NVIDIA GPU path.
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` CRD, validating webhook, and RBAC used by both the NVIDIA GPU and Intel XPU paths.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 * For Intel XPU on clusters with restricted/firewalled egress: if pods hang
   during startup on Hugging Face Hub revision checks (silent TCP timeouts
@@ -197,6 +197,8 @@ please re-verify against the parser source if you touch this section.
 -->
 
 **Intel XPU:**
+
+The Intel XPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together.
 
 ```bash
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
