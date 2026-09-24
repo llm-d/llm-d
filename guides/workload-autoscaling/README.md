@@ -1,6 +1,5 @@
 # Workload Autoscaling
 
-[![WVA E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml)
 [![KEDA+EPP Queue E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml)
 
 > [!WARNING]
