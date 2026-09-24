@@ -71,6 +71,25 @@ adds instance, model, and topology filters.
 | **EPP prefix indexer size** | `llm_d_epp_prefix_indexer_size` |
 | **EPP prefix hit ratio P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
 
+### Tiered Prefix Cache
+
+Queries for the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md). The `vllm:kv_offload_*` series come from vLLM's native `OffloadingConnector`.
+
+| Metric Need | PromQL Query |
+| ----------- | ------------ |
+| **Offload tier hit rate** | `sum(rate(vllm:external_prefix_cache_hits_total[5m])) / sum(rate(vllm:external_prefix_cache_queries_total[5m]))` |
+| **Offload store rate per pod (MiB/sec)** | `sum by(pod) (rate(vllm:kv_offload_store_bytes_total[5m])) / 1048576` |
+| **Offload load rate per pod (MiB/sec)** | `sum by(pod) (rate(vllm:kv_offload_load_bytes_total[5m])) / 1048576` |
+| **Offload load speed per pod (MiB per second of load time)** | `sum by(pod) (rate(vllm:kv_offload_load_bytes_total[5m])) / sum by(pod) (rate(vllm:kv_offload_load_time_total[5m])) / 1048576` |
+| **Offload store allocation failures in 5m** | `sum by(pod) (increase(vllm:kv_offload_allocation_failure_total[5m]))` |
+| **EPP prefix index size by tier** | `sum by(plugin_name) (llm_d_epp_prefix_indexer_size)` |
+| **EPP prefix hit ratio P90 by tier** | `histogram_quantile(0.90, sum by(le, plugin_name) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
+| **Host tier usage (SGLang HiCache)** | `sum by(pod) (sglang_hicache_host_used_tokens) / sum by(pod) (sglang_hicache_host_total_tokens)` |
+| **Share of prompt tokens served from host tier (SGLang HiCache)** | `sum(rate(sglang_cached_tokens_total{cache_source="host"}[5m])) / sum(rate(sglang_prompt_tokens_total[5m]))` |
+| **Retrieve hit rate (LMCache)** | `avg by(pod) (lmcache:retrieve_hit_rate)` |
+
+`vllm:external_prefix_cache_hits_total` counts tokens the connector reports as available at scheduling time, before the load completes. `vllm:kv_offload_load_bytes_total` counts bytes actually loaded back to the GPU.
+
 ### Prefill/Decode Disaggregation
 
 | Metric Need | PromQL Query |
