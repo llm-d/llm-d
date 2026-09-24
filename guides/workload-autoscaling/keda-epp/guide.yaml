@@ -1,37 +1,44 @@
-name: keda-epp-queue
+name: keda-epp
 
 env:
   static:
     BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
-    NAMESPACE:            llm-d-optimized-baseline
+    NAMESPACE: llm-d-optimized-baseline
     MONITORING_NAMESPACE: llm-d-monitoring
-    KEDA_NAMESPACE:       keda
+    KEDA_NAMESPACE: keda
 
-    MODEL: { default: "Qwen/Qwen3-32B" }
+    MODEL: {default: "Qwen/Qwen3-32B"}
 
     # Deployment the ScaledObject targets, and the KEDA-managed objects it creates.
-    TARGET_DEPLOYMENT: { default: "optimized-baseline-nvidia-gpu-vllm-decode" }
-    SCALEDOBJECT_NAME: { default: "optimized-baseline-keda-epp" }
-    HPA_NAME:          { default: "keda-hpa-optimized-baseline" }
+    TARGET_DEPLOYMENT: {default: "optimized-baseline-nvidia-gpu-vllm-decode"}
+    SCALEDOBJECT_NAME: {default: "optimized-baseline-keda-epp"}
+    HPA_NAME: {default: "keda-hpa-optimized-baseline"}
+
+    # Scaling signal. `queue` = EPP flow-control queue size (default, mature).
+    # `saturation` = EPP pool saturation (alternative, experimental - no nightly
+    # coverage yet). Rendered as an annotation only; it selects which leaf overlay
+    # the deploy step names, it does not gate execution.
+    TRIGGER: {default: queue, values: [queue, saturation]}
 
     # Target platform. `existing` = generic Kubernetes with the bundled
-    # kube-prometheus-stack (the `k8s` overlay). `ocp` = OpenShift with Thanos
-    # Querier (the `ocp` overlay, which reuses recipes/autoscaling/metrics-reader).
-    # Rendered as an annotation only — it does not gate execution.
-    ENV: { default: existing, values: [existing, ocp] }
+    # kube-prometheus-stack over plain in-cluster HTTP. `ocp` = OpenShift with
+    # Thanos Querier (reuses recipes/autoscaling/metrics-reader). Rendered as an
+    # annotation only - it does not gate execution.
+    ENV: {default: existing, values: [existing, ocp]}
 
-    # Autoscaling overlays for this guide (Model A: <strategy>/<topology>).
-    OVERLAY_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline
+    # Autoscaling overlays for this guide (leaf = <platform>-<trigger>).
+    OVERLAY_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline
 
   source: ["${REPO_ROOT}/guides/env.sh"]
 
 prerequisites:
   # Prereq: complete the optimized-baseline guide (incl. enabling monitoring) and
   # install KEDA. Then upgrade the router with the KEDA+EPP overlay, which turns on
-  # EPP Flow Control while keeping the monitoring feature values (EPP metrics port
-  # and its ServiceMonitor) enabled.
+  # EPP Flow Control (both the queue-size and pool-saturation signals come from the
+  # flow-control subsystem) while keeping the monitoring feature values (EPP metrics
+  # port and its ServiceMonitor) enabled.
   router:
     - run: |
         helm upgrade optimized-baseline \
@@ -53,15 +60,21 @@ deploy:
         kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
         kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 
-  # Apply the ScaledObject overlay for the platform. Generic Kubernetes (bundled
-  # kube-prometheus-stack over plain in-cluster HTTP, no client auth):
-  apply_k8s:
-    - when: { ENV: [existing] }
-      run: kubectl apply -k ${OVERLAY_ROOT}/k8s
-  # OpenShift (Thanos Querier + the shared recipes/autoscaling/metrics-reader auth):
-  apply_ocp:
-    - when: { ENV: [ocp] }
-      run: kubectl apply -k ${OVERLAY_ROOT}/ocp
+  # Apply the leaf overlay for the chosen TRIGGER x ENV. Generic Kubernetes uses
+  # the bundled kube-prometheus-stack over plain in-cluster HTTP with no client
+  # auth; OpenShift uses Thanos Querier + the shared metrics-reader recipe.
+  apply_k8s_queue:
+    - when: {TRIGGER: [queue], ENV: [existing]}
+      run: kubectl apply -k ${OVERLAY_ROOT}/k8s-queue
+  apply_k8s_saturation:
+    - when: {TRIGGER: [saturation], ENV: [existing]}
+      run: kubectl apply -k ${OVERLAY_ROOT}/k8s-saturation
+  apply_ocp_queue:
+    - when: {TRIGGER: [queue], ENV: [ocp]}
+      run: kubectl apply -k ${OVERLAY_ROOT}/ocp-queue
+  apply_ocp_saturation:
+    - when: {TRIGGER: [saturation], ENV: [ocp]}
+      run: kubectl apply -k ${OVERLAY_ROOT}/ocp-saturation
 
 verify:
   # ScaledObject Ready=True confirms the scaler config is valid; KEDA then creates
@@ -82,7 +95,7 @@ verify:
     #   baseline desiredReplicas == min -> burst -> desiredReplicas > min (up)
     #                                   -> drain -> desiredReplicas == min (down)
     # We assert the autoscaler DECISION (hpa .status.desiredReplicas), NOT that the
-    # new pod becomes Ready — on a contended GPU cluster the 2nd replica may stay
+    # new pod becomes Ready - on a contended GPU cluster the 2nd replica may stay
     # Pending. desiredReplicas>min transitively proves the whole chain worked: EPP
     # emits the metric -> Prometheus/Thanos -> KEDA reads it over threshold -> HPA
     # raises the target. Ported from .github/scripts/e2e/e2e-validate-scale-event.sh.
@@ -107,20 +120,32 @@ verify:
             "seq 1 ${SCALE_TOTAL} | xargs -I{} -P ${SCALE_CONCURRENCY} curl -sS --max-time 300 -o /dev/null -X POST http://${HOST}/v1/completions -H 'content-type: application/json' --data-binary @/tmp/payload.json" >/dev/null 2>&1 &
           BURST=$!
           up=false; end=$((SECONDS + SCALE_UP_TIMEOUT))
-          while [ $SECONDS -lt $end ]; do d=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null); if [ -n "$d" ] && [ "$d" -gt "$MIN" ]; then echo "  scale-up decision: desiredReplicas=$d"; up=true; break; fi; sleep 5; done
+          while [ $SECONDS -lt $end ]; do
+            d=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null)
+            if [ -n "$d" ] && [ "$d" -gt "$MIN" ]; then echo "  scale-up decision: desiredReplicas=$d"; up=true; break; fi
+            sleep 5
+          done
           kill $BURST 2>/dev/null || true
           kubectl delete pod -n ${NAMESPACE} $POD --ignore-not-found --wait=false >/dev/null 2>&1 || true
           $up || { echo "no scale-up within ${SCALE_UP_TIMEOUT}s (raise SCALE_CONCURRENCY / SCALE_MAX_TOKENS, or check the trigger)"; exit 1; }
           echo "-- load stopped; waiting up to ${SCALE_DOWN_TIMEOUT}s for scale-down (matches the 300s scaleDown window) --"
           down=false; end=$((SECONDS + SCALE_DOWN_TIMEOUT))
-          while [ $SECONDS -lt $end ]; do d=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null); if [ -n "$d" ] && [ "$d" -le "$MIN" ]; then echo "  scale-down decision: desiredReplicas=$d"; down=true; break; fi; sleep 5; done
+          while [ $SECONDS -lt $end ]; do
+            d=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null)
+            if [ -n "$d" ] && [ "$d" -le "$MIN" ]; then echo "  scale-down decision: desiredReplicas=$d"; down=true; break; fi
+            sleep 5
+          done
           $down || { echo "no scale-down within ${SCALE_DOWN_TIMEOUT}s (check scaleDown stabilization/cooldown)"; exit 1; }
           echo "Scale-event verified: min ${MIN} -> >${MIN} -> ${MIN} (decision asserted; 2nd-pod readiness intentionally not required)"
 
 cleanup:
   # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
   # the target Deployment or reset its replica count.
-  - when: { ENV: [existing] }
-    run: kubectl delete -k ${OVERLAY_ROOT}/k8s --ignore-not-found=true
-  - when: { ENV: [ocp] }
-    run: kubectl delete -k ${OVERLAY_ROOT}/ocp --ignore-not-found=true
+  - when: {TRIGGER: [queue], ENV: [existing]}
+    run: kubectl delete -k ${OVERLAY_ROOT}/k8s-queue --ignore-not-found=true
+  - when: {TRIGGER: [saturation], ENV: [existing]}
+    run: kubectl delete -k ${OVERLAY_ROOT}/k8s-saturation --ignore-not-found=true
+  - when: {TRIGGER: [queue], ENV: [ocp]}
+    run: kubectl delete -k ${OVERLAY_ROOT}/ocp-queue --ignore-not-found=true
+  - when: {TRIGGER: [saturation], ENV: [ocp]}
+    run: kubectl delete -k ${OVERLAY_ROOT}/ocp-saturation --ignore-not-found=true

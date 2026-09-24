@@ -74,8 +74,8 @@ paths is which EPP metrics the triggers read and how thresholds are derived.
 
 | Signal | EPP metrics | Threshold is | Guide |
 |---|---|---|---|
-| **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp-queue](../../../../guides/workload-autoscaling/keda-epp-queue/README.md) |
-| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp-saturation](../../../../guides/workload-autoscaling/keda-epp-saturation/README.md) |
+| **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp (queue signal)](../../../../guides/workload-autoscaling/keda-epp/README.md) |
+| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../../guides/workload-autoscaling/keda-epp/README.md#choosing-a-scaling-signal) |
 | **Token backlog** | `llm_d_epp_inflight_tokens`, per-pod KV cache occupancy | Seconds of prefill queue wait, derived from a share of the TTFT SLO and a calibrated `peakPrefillThroughput` | [keda-epp-token-aware](../../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
 | **Estimated latency** | EPP predicted/actual TTFT and TPOT histograms | Latency ÷ SLO, with a hysteresis band | [slo-aware](../../../../guides/workload-autoscaling/slo-aware/README.md) |
 

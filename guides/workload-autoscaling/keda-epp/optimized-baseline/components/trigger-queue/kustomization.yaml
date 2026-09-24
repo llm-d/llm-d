@@ -1,0 +1,21 @@
+# Inserts the EPP flow-control queue-size trigger at index 0 of the base
+# ScaledObject, so the built triggers list is [epp-queue-size, epp-running-requests]
+# (the signal first, matching the standalone queue guide's order).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp
+    patch: |-
+      - op: add
+        path: /spec/triggers/0
+        value:
+          type: prometheus
+          name: epp-queue-size
+          metricType: AverageValue
+          metadata:
+            serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+            query: >-
+              sum(llm_d_epp_flow_control_queue_size{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
+            threshold: "1"

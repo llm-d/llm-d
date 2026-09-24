@@ -1,0 +1,16 @@
+# OpenShift + queue signal. The namespace transformer rewrites the base
+# ScaledObject, the TriggerAuthentication, and the metrics-reader SA subject.
+# Component order matters: trigger-queue inserts the signal trigger BEFORE
+# ocp-auth patches both triggers.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: llm-d-optimized-baseline
+
+resources:
+  - ../base
+
+components:
+  - ../components/trigger-queue
+  - ../components/ocp-auth
+  - ../../../../recipes/autoscaling/metrics-reader
