@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "label": "VLLM ROCM MORI WIDE-EP",
+  "message": "dry-run",
+  "color": "blue"
+}
