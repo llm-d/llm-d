@@ -18,7 +18,7 @@ env:
     PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
-    INFRA_PROVIDER: {default: base, values: [base, gke]}
+    INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
 
     MODEL: {default: "Qwen/Qwen3-32B"}
 
@@ -108,6 +108,11 @@ deploy:
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
+    - when: {ACCELERATOR_TYPE: [amd], MODEL_SERVER: [vllm]}
+      run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
     - when: {ACCELERATOR_TYPE: *non_gpu}
       run: |
         #
@@ -162,6 +167,8 @@ benchmark:
 cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
   - when: {ACCELERATOR_TYPE: [gpu]}
+    run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  - when: {ACCELERATOR_TYPE: [amd], MODEL_SERVER: [vllm]}
     run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   - when: {ACCELERATOR_TYPE: *non_gpu}
     run: |
