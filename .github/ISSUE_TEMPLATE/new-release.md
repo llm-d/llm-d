@@ -125,26 +125,51 @@ This document defines the process for releasing llm-d.
 
 The nightly e2e lanes test `main`, so a [Release Testing
 matrix](../../release/README.md#release-testing) that reflects the release branch
-needs those lanes dispatched against it explicitly. Neither step below is triggered
-by the tag.
+needs those lanes dispatched against it explicitly. None of the steps below are
+triggered by the tag.
 
-1. Dry run the dispatcher to review the lane list and each lane's cron window:
+`release-e2e.yaml` has two independent switches. `list_only` decides whether it
+dispatches anything at all; `dry_run` is the value every lane it dispatches runs
+with, so `dry_run=true` exercises a lane against the release branch without standing
+up a stack. Pass `dry_run` explicitly even when it is `false`: three lanes
+(`pd-disaggregation-ibm`, `wide-ep-ibm`, `workload-autoscaling-keda-epp-ibm`) default
+their own `dry_run` to `true` and would otherwise publish `dry-run` badges from a run
+meant to be real.
+
+1. Review the lane list and each lane's cron window, dispatching nothing:
 
    ```shell
    gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
      --field release_branch=release-${MAJOR}.${MINOR} \
      --field lanes='*' \
-     --field dry_run=true
+     --field list_only=true
    ```
 
-1. Dispatch the lanes, in batches. A lane's own nightly cron cancels an in-flight
-   release run of that lane, so avoid starting one within ~4h of the cron time shown
-   in the dry-run summary:
+1. Optionally, dry run a batch of lanes against the release branch. Each lane checks
+   out `release-${MAJOR}.${MINOR}` and resolves its guide without deploying
+   anything — a cheap check that the branch is ready (guide `BRANCH` values updated,
+   pinned versions resolvable) before spending cluster time:
 
    ```shell
    gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
      --field release_branch=release-${MAJOR}.${MINOR} \
      --field lanes='optimized-baseline-*' \
+     --field list_only=false \
+     --field dry_run=true
+   ```
+
+   These lanes publish `dry-run` badges, which overwrite any real result already
+   recorded for this release. Do this before the real dispatch below, never after.
+
+1. Dispatch the lanes for real, in batches. A lane's own nightly cron cancels an
+   in-flight release run of that lane, so avoid starting one within ~4h of the cron
+   time shown in the listing summary:
+
+   ```shell
+   gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
+     --field release_branch=release-${MAJOR}.${MINOR} \
+     --field lanes='optimized-baseline-*' \
+     --field list_only=false \
      --field dry_run=false
    ```
 
@@ -160,11 +185,14 @@ by the tag.
 
    Two lanes share a badge name, so expect 42 names for 43 lanes.
 
-1. Re-dispatch any lane that failed for infrastructure reasons:
+1. Re-dispatch any lane that failed for infrastructure reasons. This goes straight
+   to the lane rather than through the dispatcher, so `dry_run=false` has to be
+   passed here as well:
 
    ```shell
    gh workflow run <lane>.yaml --repo llm-d/llm-d --ref main \
-     --field matrix_type=release-${MAJOR}.${MINOR}
+     --field matrix_type=release-${MAJOR}.${MINOR} \
+     --field dry_run=false
    ```
 
 1. Render the matrix into `release/README.md` on `main`.
