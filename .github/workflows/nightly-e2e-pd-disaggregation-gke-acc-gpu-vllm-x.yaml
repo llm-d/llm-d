@@ -62,6 +62,16 @@ on:
         required: false
         default: '32/64Gi'
         type: 'string'
+      cluster_name:
+        description: 'GKE cluster name'
+        required: false
+        default: 'llm-d-e2e-us-east5-2'
+        type: 'string'
+      cluster_zone:
+        description: 'GKE cluster zone or region'
+        required: false
+        default: 'us-east5'
+        type: 'string'
 
 #  push:
 #    branches:
