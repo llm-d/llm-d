@@ -1,0 +1,109 @@
+name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)
+
+# Nightly regression test for the queue-based KEDA + EPP autoscaling path
+# (guides/workload-autoscaling/keda-epp/README.md) on the AMD ROCm CI cluster.
+# ROCm sibling of nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      # decode_pods, prefill_pods, harness and workload are accepted only because
+      # /test-nightly passes them to every non-WVA nightly. This lane ignores them.
+      decode_pods:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      harness:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'inference-perf'
+      workload:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'sanity_random.yaml'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'true'
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      llm_d_ref:
+        description: 'llm-d ref to test, e.g. "refs/pull/1234/merge" to run against an unmerged PR (empty tests the ref this workflow runs from)'
+        required: false
+        default: ''
+        type: 'string'
+
+permissions:
+  contents: write
+  actions: read
+  packages: write
+
+concurrency:
+  group: nightly-e2e-keda-epp-queue-amd-rocm
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-amd.yaml@main
+    with:
+      guide_name: workload-autoscaling
+      namespace: llm-d-nightly-keda-epp-rocm
+      # The AMD reusable takes a ref rather than matrix_type, so a release run's
+      # branch is passed through here. An explicit llm_d_ref wins.
+      llm_d_ref: ${{ inputs.llm_d_ref || ((inputs.matrix_type != '' && inputs.matrix_type != 'nightly') && inputs.matrix_type || '') }}
+      # <ROUTER_RELEASE>-epp from nightly-deploy-amd-keda-epp.sh
+      gateway_host: 'keda-epp-rocm-epp'
+      e2e_validate_args: '--extra-validate scale-event'
+      custom_deploy_script: |
+        bash guides/workload-autoscaling/scripts/nightly-deploy-amd-keda-epp.sh
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '40m'
+      pod_readiness_delay: 180
+      allow_gpu_preemption: false
+      skip_cleanup: ${{ inputs.cleanup == 'false' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: keda-epp-queue-rocm
+      badge_label: "VLLM ROCm Queue"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

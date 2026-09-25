@@ -81,6 +81,7 @@ on:
       - "Nightly - Wide EP LWS E2E (GKE GPU)"
       - "Nightly - Wide EP LWS E2E (Intel XPU)"
       - "Nightly - Wide EP LWS E2E (OCP GPU)"
+      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)"
       - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
       # SLACK-WORKFLOWS-END
 
