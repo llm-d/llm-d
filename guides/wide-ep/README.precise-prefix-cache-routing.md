@@ -33,7 +33,7 @@ networking on CoreWeave.
 * Checkout the llm-d repository:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
+  export branch="release-0.10" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 

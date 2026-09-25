@@ -50,7 +50,7 @@ together they name the overlay you apply:
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.10
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING_NAMESPACE=llm-d-monitoring
