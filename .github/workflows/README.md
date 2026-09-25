@@ -40,7 +40,10 @@ workflow files:
      `matrix_type=release-<major>.<minor>`. That input makes the reusables check out
      the release branch and write their badge to
      `badges/<badge_name>_release-<major>.<minor>.json` instead of the unsuffixed
-     nightly file, so the two matrices never overwrite each other.
+     nightly file, so the two matrices never overwrite each other. `list_only`
+     reviews the matched lanes without dispatching them, and `dry_run` is forwarded
+     to every lane that is dispatched, so a batch can be exercised against the
+     release branch without standing up a stack.
   2. [`release-matrix.yaml`](release-matrix.yaml) then runs
      `scripts/sync-release-matrix.py` to render that release's section and open a PR
      against `main`.
