@@ -36,7 +36,7 @@ This guide includes configurations for the following accelerators:
 | Backend             | Directory          | Notes                                                           |
 | ------------------- | ------------------ | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
-| AMD GPU             | `amd`              | vLLM (`INFRA_PROVIDER` options: `base`, `amd-ci`)                |
+| AMD GPU             | `amd`              | vLLM and SGLang (`INFRA_PROVIDER` options: `base`, `amd-ci`)     |
 | Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+                                 |
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
@@ -259,7 +259,7 @@ Apply the Kustomize overlays for your specific backend:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
-# only when ACCELERATOR_TYPE=amd and MODEL_SERVER=vllm:
+# only when ACCELERATOR_TYPE=amd and MODEL_SERVER=vllm or sglang:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
@@ -511,7 +511,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 # only when ACCELERATOR_TYPE=gpu:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
-# only when ACCELERATOR_TYPE=amd and MODEL_SERVER=vllm:
+# only when ACCELERATOR_TYPE=amd and MODEL_SERVER=vllm or sglang:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
 # only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
