@@ -121,7 +121,7 @@ Requires the `flowControl` feature gate enabled on the EPP.
 
 ## Notes
 
-**Metric name prefixes:** Current deployments use `llm_d_epp_*`. Older deployments may use `llm_d_inference_scheduler_*`, `inference_objective_*`, `inference_pool_*`, or `inference_extension_*` — update accordingly if panels show "No data".
+**Metric name prefix:** llm-d 0.10 / llm-d-router 0.11.0 removed the old EPP metric names. Use `llm_d_epp_*`; if a query returns no data, verify the installed router version and required feature gate.
 
 **Histograms:** Always include `by(le)` when using `histogram_quantile()`:
 
