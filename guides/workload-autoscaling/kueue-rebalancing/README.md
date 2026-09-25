@@ -61,7 +61,7 @@ Set the guide environment variables:
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-0.10
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
 export KUEUE_NAMESPACE=kueue-system
