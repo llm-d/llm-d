@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. The NVIDIA GPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together; the Intel XPU configuration uses plain `LeaderWorkerSet`. It has been validated on:
+This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. Both the NVIDIA GPU and Intel XPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together. It has been validated on:
 
 * a 32xH200 cluster with InfiniBand networking
 * a 32xH200 cluster on GKE with RoCE networking
@@ -38,11 +38,20 @@ The Intel XPU configuration uses the validated DeepSeek-V2-Lite shape:
 | Model | [DeepSeek-V2-Lite-Chat](https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite-Chat) |
 | Prefill Tensor Parallelism | 2 |
 | Decode Tensor Parallelism | 2 |
-| Total XPUs | 4 |
-| Expert Parallelism | enabled |
+| Decode cross-node EP group size (`leaderWorkerTemplate.size`) | 2 |
+| Prefill replicas (independent, not a cross-node EP group) | 1 |
+| Total XPUs (default) | 6 (decode: 2 pods x 2 XPUs, prefill: 1 pod x 2 XPUs) |
+| Expert Parallelism | enabled, sharded **across pods/nodes** within the decode LWS group (1 leader + N-1 headless workers, one DP/EP rank per pod); prefill scales only via independent single-pod replicas, not a cross-node EP group |
 | All2All backend | `allgather_reducescatter` |
 | KV transfer | NIXL with `kv_buffer_device=xpu` |
 | UCX transport | `tcp,ze_copy` for the validated non-RDMA configuration |
+
+> [!NOTE]
+> `size: 2` runs a real 2-pod, cross-node DP+EP group for decode; increase
+> it to match your target EP world size / node count.
+>
+> EPLB (expert-parallel load balancing) is **not** enabled/validated on this
+> path yet. Bringing EPLB support to Intel XPU is left as follow-up work.
 
 ### Tested Hardware Backends
 
@@ -100,8 +109,14 @@ This guide includes configurations for the following accelerators:
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
-* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` CRD, validating webhook, and RBAC used by the NVIDIA GPU path.
+* You have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.10.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` CRD, validating webhook, and RBAC used by both the NVIDIA GPU and Intel XPU paths.
 * For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
+* For Intel XPU on clusters with restricted/firewalled egress: if pods hang
+  during startup on Hugging Face Hub revision checks (silent TCP timeouts
+  rather than immediate connection errors), pre-seed the model into a
+  `hf-cache` volume and set `HF_HUB_OFFLINE=1`/`TRANSFORMERS_OFFLINE=1` on the
+  `vllm` container as a workaround; this is not required by default (the
+  manifests use an empty, on-demand download cache).
 * Create a target namespace for the installation:
 
   ```bash
@@ -182,6 +197,8 @@ please re-verify against the parser source if you touch this section.
 -->
 
 **Intel XPU:**
+
+The Intel XPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together.
 
 ```bash
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
