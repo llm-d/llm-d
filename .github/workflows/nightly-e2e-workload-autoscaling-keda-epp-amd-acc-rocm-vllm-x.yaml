@@ -5,6 +5,8 @@ name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)
 # ROCm sibling of nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml.
 
 on:
+  schedule:
+    - cron: '0 18 * * *'  # 18:00 UTC daily (clear of the other ROCm nightlies)
   workflow_dispatch:
     inputs:
       # decode_pods, prefill_pods, harness and workload are accepted only because
