@@ -106,22 +106,26 @@ assert_common() { # yaml-file
   fi
 }
 
-assert_linked() { # yaml-file namespace
-  local y="$1" ns="$2"
+assert_linked() { # yaml-file namespace [jaeger-ui-url]
+  local y="$1" ns="$2" ui="${3:-http://localhost:16686}"
   check "jaeger datasource present" "1" "$(yq e "[$JAEGER_DS] | length" "$y")"
   check "jaeger url uses detected namespace" \
     "http://jaeger-collector.${ns}.svc.cluster.local:16686" "$(yq e "$JAEGER_DS | .url" "$y")"
   # The link is what turns the trace_id label from text into a click.
   check "exemplar link targets the jaeger datasource" "jaeger" \
-    "$(yq e "[$PROM_DS.jsonData.exemplarTraceIdDestinations[]? | select(.name==\"trace_id\") | .datasourceUid] | .[0] // \"none\"" "$y")"
+    "$(yq e "[$PROM_DS.jsonData.exemplarTraceIdDestinations[]? | select(.name==\"trace_id\" and .datasourceUid != null) | .datasourceUid] | .[0] // \"none\"" "$y")"
   check "link uid matches the jaeger datasource uid" "jaeger" "$(yq e "$JAEGER_DS | .uid" "$y")"
+  # The datasource link shows "No data" with Jaeger, so the URL link is the
+  # working one. A single "$" gets expanded away by Grafana's provisioning.
+  check "exemplar url link opens the trace in the jaeger ui" "${ui}/trace/\$\${__value.raw}" \
+    "$(yq e "[$PROM_DS.jsonData.exemplarTraceIdDestinations[]? | select(.name==\"trace_id\" and .url != null) | .url] | .[0] // \"none\"" "$y")"
 }
 
 assert_unlinked() { # yaml-file
   local y="$1"
   check "no jaeger datasource" "0" "$(yq e "[$JAEGER_DS] | length" "$y")"
-  check "no exemplar link" "none" \
-    "$(yq e "[$PROM_DS.jsonData.exemplarTraceIdDestinations[]? | .datasourceUid] | .[0] // \"none\"" "$y")"
+  check "no exemplar link" "0" \
+    "$(yq e "[$PROM_DS.jsonData.exemplarTraceIdDestinations[]?] | length" "$y")"
 }
 
 write_stubs
@@ -150,6 +154,12 @@ echo "explicit TRACING_NAMESPACE override"
 JAEGER_NS="observability" TRACING_NAMESPACE="observability" render override && {
   assert_common "$WORK/override.yaml"
   assert_linked "$WORK/override.yaml" observability
+}
+
+echo "explicit JAEGER_UI_URL override"
+JAEGER_NS="tracing" JAEGER_UI_URL="https://jaeger.example.com" render ui-override && {
+  assert_common "$WORK/ui-override.yaml"
+  assert_linked "$WORK/ui-override.yaml" tracing "https://jaeger.example.com"
 }
 
 echo "TRACING_NAMESPACE points at a namespace with no jaeger"

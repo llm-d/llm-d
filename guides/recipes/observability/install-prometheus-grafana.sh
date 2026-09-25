@@ -37,6 +37,8 @@ Environment Variables:
   MONITORING_NAMESPACE        Override default monitoring namespace
   TRACING_NAMESPACE           Namespace of the Jaeger install to link exemplars to
                               (auto-detected when unset)
+  JAEGER_UI_URL               Jaeger UI address the exemplar link opens in the browser
+                              (default: http://localhost:16686, the documented port-forward)
 
 Examples:
   $(basename "$0")                              # Install central monitoring in llm-d-monitoring (watches all namespaces)
@@ -440,6 +442,10 @@ install_prometheus_grafana() {
   #   3. The Prometheus datasource needs exemplarTraceIdDestinations to turn the
   #      trace_id label into a link into that traces datasource.
   # Tracing is an optional add-on, so 2 and 3 are wired only when Jaeger is found.
+  #
+  # Grafana's datasource link sends a TraceQL (Tempo) query that Jaeger answers
+  # with "No data", so a URL link to the Jaeger UI goes first. "$$" stops
+  # Grafana's provisioning from expanding ${__value.raw} to an empty string.
   JAEGER_NAMESPACE="$(detect_jaeger)"
   PROMETHEUS_JSONDATA=""
   JAEGER_DATASOURCE=""
@@ -451,6 +457,9 @@ install_prometheus_grafana() {
   if [[ -n "$JAEGER_NAMESPACE" ]]; then
     log_info "🔗 Found Jaeger in ${JAEGER_NAMESPACE}, linking exemplars to traces"
     PROMETHEUS_JSONDATA="${PROMETHEUS_JSONDATA:+${PROMETHEUS_JSONDATA}\n}          exemplarTraceIdDestinations:
+            - name: trace_id
+              url: \"${JAEGER_UI_URL:-http://localhost:16686}/trace/\$\${__value.raw}\"
+              urlDisplayLabel: Open in Jaeger UI
             - name: trace_id
               datasourceUid: jaeger"
     JAEGER_DATASOURCE="      - name: Jaeger
