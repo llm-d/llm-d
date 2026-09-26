@@ -1,0 +1,59 @@
+## Layer on top of: recipes/router/base.values.yaml
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+    # No metrics entry here: the chart always exposes http-metrics:9090 on the
+    # EPP Service, so declaring it again produces a duplicate-port conflict
+    # that fails the install.
+  epp:
+    flags:
+      allow-experimental-plugins: true
+    pluginsConfigFile: "turn-priority-plugins.yaml"
+    pluginsCustomConfig:
+      turn-priority-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        plugins:
+        - type: program-aware-fairness
+          parameters:
+            strategy: turn-priority
+        # Only needed when clients send no explicit fairness ID.
+        - type: agent-identity
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: concurrency-detector
+          parameters:
+            # Re-derive per fleet: see ../../flow-control/tuning.md
+            maxConcurrency: 32
+
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+
+        flowControl:
+          enableEviction: true
+          saturationDetector:
+            pluginRef: concurrency-detector
+          priorityBands:
+          # Below zero for batch requests. This traffic is shed first when the pool is full.
+          - priority: -1
+            defaultRequestTTL: "9000s"
+            fairnessPolicyRef: program-aware-fairness
+          # Normal traffic, on the default fairness policy.
+          - priority: 0
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "turn-priority-fairness"
