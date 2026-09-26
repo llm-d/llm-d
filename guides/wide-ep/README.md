@@ -255,6 +255,10 @@ curl -X POST http://${IP}/v1/completions \
     }" | jq
 ```
 
+## Aggregated (Non-P/D) Mode on 2 Nodes (16 GPUs)
+
+To deploy Wide Expert Parallelism (`DP=16, EP=16, TP=1`) without P/D disaggregation on a smaller **2 × 8-GPU node (16 B200/H200 GPUs)** footprint, follow the [Wide Expert Parallelism (Aggregated / Non-P/D Mode)](README.aggregated.md) variant.
+
 ## Precise prefix-cache routing
 
 For KV-event-backed prefix routing with multi-port DP model servers (useful for active-active HA routing),
