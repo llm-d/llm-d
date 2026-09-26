@@ -308,7 +308,7 @@ jobs:
           fi
 
   release-sglang-xpu-llm-d:
-    runs-on: xpu
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

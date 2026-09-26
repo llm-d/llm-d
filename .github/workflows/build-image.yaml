@@ -267,7 +267,7 @@ jobs:
     if: ${{ needs.detect-changes.outputs.xpu == 'true' }}
     strategy:
       fail-fast: false
-    runs-on: xpu
+    runs-on: vllm-runner
     steps:
       - name: Set target registry
         run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
@@ -369,7 +369,7 @@ jobs:
   xpu-sglang-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.sglang-xpu == 'true' }}
-    runs-on: xpu
+    runs-on: vllm-runner
     steps:
       - name: Set target registry
         run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
