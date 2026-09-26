@@ -116,6 +116,8 @@ install() {
   log_info "Components should export OTLP traces to:"
   echo "  http://otel-collector.${NAMESPACE}.svc.cluster.local:4317"
   echo "  (or simply http://otel-collector:4317 from the same namespace)"
+  echo ""
+  log_info "To link Grafana's latency exemplars to these traces, re-run install-prometheus-grafana.sh."
 }
 
 uninstall() {
