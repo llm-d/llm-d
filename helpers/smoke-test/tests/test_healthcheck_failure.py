@@ -82,6 +82,10 @@ def test_unhealthy_endpoint_sets_failure_exit_code():
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Status:    UNHEALTHY" in result.stdout
     assert "failed" in result.stdout
+    # 000 is the sentinel for "nothing answered", so reporting it for a 503 read
+    # as unreachable in the summary table while the failure list below it showed
+    # the true code.
+    assert "/v1/models       HTTP 503" in result.stdout
 
 
 def test_auto_fallback_rebuilds_chat_payload():
