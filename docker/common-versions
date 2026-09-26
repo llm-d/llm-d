@@ -19,4 +19,5 @@ SGLANG_XPU_REF=0bcd822377da7b5718e674eaf9c870d349424dd1
 
 # Matches the sgl-kernel-xpu revision used by the validated Dynamo XPU image.
 SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
-SGLANG_XPU_KERNEL_REF=8c328fee250fcef4169c912cb7bbd13c1f637d5c
+# SGLANG_XPU_KERNEL_REF=8c328fee250fcef4169c912cb7bbd13c1f637d5c
+SGLANG_XPU_KERNEL_REF=5b33313d231f10ec061ccbabdcaea51354dc5acd # maps to new v2.0 release
