@@ -162,7 +162,7 @@ install-docker: check-container-tool ## Install app using $(CONTAINER_TOOL)
 uninstall-docker: check-container-tool ## Uninstall app from $(CONTAINER_TOOL)
 	@echo "Stopping and removing container in $(CONTAINER_TOOL)..."
 	-$(CONTAINER_TOOL) stop $(IMAGE_REGISTRY_REPO)-container && $(CONTAINER_TOOL) rm $(IMAGE_REGISTRY_REPO)-container
-@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
+	@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
 
 ### Kubernetes Targets (kubectl)
 
