@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+  - data-nic-claim-template.yaml
+  - select-data-nic.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                command:
+                  - /xpu-data-nic/select-xpu-data-nic.sh
+                resources:
+                  claims:
+                    - name: intel-xpu
+                    - name: xpu-data-nic
+                volumeMounts:
+                  - name: xpu-data-nic-selector
+                    mountPath: /xpu-data-nic
+                    readOnly: true
+                  - name: xpu-dri-by-path
+                    mountPath: /dev/dri/by-path
+            resourceClaims:
+              - name: intel-xpu
+                resourceClaimTemplateName: intel-xpu-claim
+              - name: xpu-data-nic
+                resourceClaimTemplateName: modelexpress-p2p-intel-xpu-vllm-xpu-data-nic
+            volumes:
+              - name: xpu-data-nic-selector
+                configMap:
+                  name: modelexpress-p2p-intel-xpu-vllm-xpu-data-nic-selector
+                  defaultMode: 0555
+              - name: xpu-dri-by-path
+                emptyDir: {}

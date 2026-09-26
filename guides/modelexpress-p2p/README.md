@@ -2,7 +2,10 @@
 
 ## Overview
 
-This guide adds [NVIDIA ModelExpress](https://github.com/ai-dynamo/modelexpress) to the [Optimized Baseline](../optimized-baseline/README.md) deployment. It moves cold-start weight loading off disk and onto **GPU-to-GPU NIXL/RDMA**. One pod in the inference pool loads weights from HuggingFace. Every other pod gets the same weights directly from that pod's HBM over the RDMA fabric, and none of them touch disk.
+This guide adds [NVIDIA ModelExpress](https://github.com/ai-dynamo/modelexpress) to the [Optimized Baseline](../optimized-baseline/README.md) deployment. The default NVIDIA configuration moves cold-start weight loading off disk and onto **GPU-to-GPU NIXL/RDMA**. One pod in the inference pool loads weights from HuggingFace. Every other pod gets the same weights directly from that pod's HBM over the RDMA fabric, and none of them touch disk.
+
+An [Intel XPU variant](./README.xpu.md) is also available. It uses ModelExpress with host-staged
+TCP and Level Zero copies instead of GPU-direct RDMA.
 
 A central-coordinator ModelExpress server (it runs with the `kubernetes` metadata backend) brokers the metadata exchange. It tracks which pods are READY sources for which `mx_source_id`, and gives target pods the NIXL agent and tensor-manifest endpoints they need to start an RDMA pull. The server itself never touches weight bytes.
 
@@ -55,6 +58,9 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 | Image | Shared GPU vLLM image + ModelExpress client baked in (build it yourself, see [Image](#image-building-a-modelexpress-enabled-model-server-image)) |
 | MX backend | `kubernetes` (CRDs, no Redis) |
 | Weight transport | NIXL/RDMA, GPU HBM -> GPU HBM |
+
+The table above describes the default NVIDIA deployment. See [Intel XPU
+ModelExpress](./README.xpu.md) for the Qwen3-0.6B, Intel GPU DRA, and `tcp,ze_copy` configuration.
 
 ## Prerequisites
 
@@ -427,6 +433,8 @@ These are environment-specific observations, not official NVIDIA benchmark resul
 
 ## Going Further
 
+* [Running ModelExpress on Intel XPU](./README.xpu.md): deploy the Qwen3-0.6B, Intel GPU DRA, and
+  `tcp,ze_copy` configuration.
 * [Measuring storage-backed loading paths](./measuring-storage-paths.md): time fastsafetensors from NFS and local NVMe against P2P in your own cluster.
 * [Reusing JIT compile caches across pods](./compile-cache.md): once weight transfer is sub-second, cut the `torch.compile` cost with P2P artifact transfer (0.5.0+, measured 20.1 s → 3.4 s) or a shared RWX PVC.
 * [Locking down the metadata broker](./security.md): Istio mTLS plus an AuthorizationPolicy for shared clusters.

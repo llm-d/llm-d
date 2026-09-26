@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: modelexpress-p2p-intel-xpu-vllm-xpu-data-nic-selector
+data:
+  select-xpu-data-nic.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    found_render_device=false
+    for render_device in /dev/dri/renderD*; do
+      [[ -e ${render_device} ]] || continue
+      render_name=${render_device##*/}
+      pci_device=$(basename "$(readlink -f "/sys/class/drm/${render_name}/device")")
+      ln -sfn "../${render_name}" "/dev/dri/by-path/pci-${pci_device}-render"
+      found_render_device=true
+    done
+    if [[ ${found_render_device} != true ]]; then
+      echo "no allocated XPU render device found" >&2
+      exit 1
+    fi
+
+    best_iface=
+    best_speed=0
+    for speed_file in /sys/class/net/*/speed; do
+      iface=${speed_file%/speed}
+      iface=${iface##*/}
+      [[ ${iface} == lo ]] && continue
+      [[ $(<"/sys/class/net/${iface}/operstate") == up ]] || continue
+      speed=$(<"${speed_file}")
+      if ((speed > best_speed)); then
+        best_iface=${iface}
+        best_speed=${speed}
+      fi
+    done
+
+    if [[ -z ${best_iface} ]]; then
+      echo "no UP data interface with a reported link speed" >&2
+      exit 1
+    fi
+
+    export UCX_NET_DEVICES=${best_iface}
+    echo "Selected UCX TCP interface ${UCX_NET_DEVICES} (${best_speed} Mb/s)"
+    exec vllm serve "$@"
