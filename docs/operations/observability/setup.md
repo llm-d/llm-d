@@ -170,7 +170,7 @@ Available dashboards:
 | `llm-d-tpu-overview` | GKE TPU exporter health and hardware metrics; requires the [TPU recipe](../../../guides/recipes/observability/tpu/) |
 | `llm-d-failure-saturation-dashboard` | Key failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
-| `llm-d-performance-kv-cache` | KV cache utilization and performance |
+| `llm-d-performance-kv-cache` | KV cache utilization and performance, plus offload tier signals for tiered prefix caching |
 | `llm-d-pd-coordinator-metrics` | Prefill/decode disaggregation metrics |
 | `llm-d-inference-gateway` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
 
