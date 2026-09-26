@@ -13,7 +13,7 @@ components:
 labels:
   - pairs:
       llm-d.ai/guide: precise-prefix-cache-routing
-      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/model: Qwen3-32B
       llm-d.ai/accelerator-variant: xpu
       llm-d.ai/accelerator-vendor: intel
     includeSelectors: true
