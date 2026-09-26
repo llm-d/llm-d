@@ -8,7 +8,7 @@ images:
     newName: ghcr.io/rbln-sw/rbln-serve
     newTag: 0.11.3a1
 
-# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11+
+# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11-2.13
 # This image pins vLLM 0.24.0 on torch 2.11.0, so it is in range.
 patches:
   - target:
@@ -16,6 +16,27 @@ patches:
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: USER
+          value: llm-d
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
         value:
           name: USER
           value: llm-d

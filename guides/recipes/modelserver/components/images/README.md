@@ -27,11 +27,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── gpu-vllm
 │   ├── aws-efa
-│   │   ├── llm-d
 │   │   └── release
 │   ├── ec-connector
-│   ├── llm-d
-│   │   └── release
 │   ├── nightly
 │   └── release
 ├── gpu-vllm-omni

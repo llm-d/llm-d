@@ -1,21 +1,22 @@
 # ============================================================================
 # vLLM Version Configuration
 # ============================================================================
-# Used by CUDA and CPU platforms
+# Used by CPU platforms
 VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=568afb3a13806beb53bb2e6bd518269357b237c0 # v0.26.0 release
+VLLM_COMMIT_SHA=ced6857afa0ea7b2e3f0846a62e1394e90f15607 # v0.30.0 release
 
 # Used by XPU: official prebuilt vLLM XPU image from Docker Hub.
 # The XPU image is a thin pass-through over this base; switch tags here to upgrade.
-# Official vLLM v0.26.0 release image.
-VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
+# Official vLLM v0.30.0 release image.
+VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.30.0
 
 # ============================================================================
 # SGLang XPU Version Configuration
 # ============================================================================
 # GitHub owner/repo and pinned revision used for the SGLang XPU source checkout.
 SGLANG_XPU_REPOSITORY=sgl-project/sglang
-SGLANG_XPU_REF=1af01674938f68266d5f8a0e5635ea1434af7801
+SGLANG_XPU_REF=0bcd822377da7b5718e674eaf9c870d349424dd1
+
 # Matches the sgl-kernel-xpu revision used by the validated Dynamo XPU image.
 SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
 SGLANG_XPU_KERNEL_REF=8c328fee250fcef4169c912cb7bbd13c1f637d5c
