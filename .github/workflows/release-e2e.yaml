@@ -7,7 +7,7 @@ name: Release E2E (dispatch guide validation against a release branch)
 # badges/<badge_name>_<release branch>.json on gh-pages.
 #
 # Dispatch is manual and batched on purpose: the self-hosted clusters cannot take
-# 43 concurrent lanes. Render the matrix afterwards with release-matrix.yaml.
+# 50 concurrent lanes. Render the matrix afterwards with release-matrix.yaml.
 #
 # `list_only` reviews what the lane filter matches without dispatching anything.
 # `dry_run` is forwarded to every lane that is dispatched: "true" exercises the lane
@@ -15,6 +15,12 @@ name: Release E2E (dispatch guide validation against a release branch)
 # "dry-run"), "false" runs it for real. Forwarding it explicitly also pins the three
 # lanes whose own `dry_run` default is "true", which would otherwise publish
 # "dry-run" badges from a run meant to be real.
+#
+# Every dispatch first seeds a "never run" placeholder badge for each cell of the
+# matrix that does not have one yet. Shields has no default-if-missing, so a cell
+# whose endpoint file is absent renders "custom badge: resource not found" — a
+# freshly cut release branch would otherwise be a table of broken images. Seeding
+# is create-if-absent, so it never touches a real result and repeating it is free.
 
 on:
   workflow_dispatch:
@@ -39,18 +45,18 @@ on:
         default: 'false'
         type: string
 
+# Least privilege by default; the jobs below elevate what they need.
 permissions:
   contents: read
-  actions: write
 
 jobs:
-  dispatch:
+  # Validation is its own job because the next one writes to gh-pages: a bad
+  # release_branch has to be rejected before anything is written, and the
+  # repository guard here skips both later jobs on forks.
+  validate:
     if: github.repository == 'llm-d/llm-d'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
       - name: Validate the inputs
         env:
           RELEASE_BRANCH: ${{ inputs.release_branch }}
@@ -86,6 +92,46 @@ jobs:
             exit 1
           fi
           echo "Validating guides from '$RELEASE_BRANCH'"
+
+  seed-badges:
+    needs: [validate]
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      # Runs before the lanes so the matrix is readable from the first dispatch,
+      # including a list-only one. Create-if-absent, and always the full badge set
+      # rather than the `lanes` subset — seeding only the matched lanes would leave
+      # every other cell rendering "resource not found".
+      - name: Seed placeholder badges
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: python scripts/seed-release-badges.py --matrix-type "$RELEASE_BRANCH"
+
+  dispatch:
+    needs: [seed-badges]
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Dispatch the lanes
         env:
@@ -158,7 +204,8 @@ jobs:
             echo
             if [[ "$LIST_ONLY" == "true" ]]; then
               echo "Nothing was dispatched. Re-run with \`list_only=false\` to dispatch"
-              echo "the lanes above."
+              echo "the lanes above. Any cell that had no badge was still seeded with"
+              echo "\`never run\` (see the previous job), so the matrix renders."
             elif [[ "$DRY_RUN" == "true" ]]; then
               echo "> [!WARNING]"
               echo "> Dispatched with \`dry_run=true\`, so these lanes publish"
@@ -166,6 +213,7 @@ jobs:
               echo "> for \`$RELEASE_BRANCH\`. Re-dispatch with \`dry_run=false\` for"
               echo "> results the matrix can report."
             else
-              echo "Once the badges exist, render the matrix with \`release-matrix.yaml\`."
+              echo "Render the matrix with \`release-matrix.yaml\` once these lanes"
+              echo "finish; until then their cells still read \`never run\`."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

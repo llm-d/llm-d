@@ -32,16 +32,23 @@ SHIELDS_ENDPOINT = "https://img.shields.io/endpoint?url=https://llm-d.github.io/
 NIGHTLY_MATRIX_TYPE = "nightly"
 
 
-def badge_endpoint(badge_name: str, matrix_type: str = NIGHTLY_MATRIX_TYPE) -> str:
-    """Shields endpoint URL for a badge, suffixed by matrix_type.
+def badge_file_name(badge_name: str, matrix_type: str = NIGHTLY_MATRIX_TYPE) -> str:
+    """Name of a badge's endpoint file on gh-pages, suffixed by matrix_type.
 
     ``nightly`` carries no suffix, so its badge files keep the names they have
     always had. This mirrors reusable-update-badge.yaml in llm-d-infra, which
     only appends ``_{matrix_type}`` when matrix_type is set and not "nightly" —
-    the two must agree or the matrices point at files nobody writes.
+    the two must agree or the matrices point at files nobody writes. Everything
+    that names a badge file goes through here so there is only one copy of the
+    rule to keep in agreement.
     """
     suffix = "" if matrix_type in ("", NIGHTLY_MATRIX_TYPE) else f"_{matrix_type}"
-    return f"{SHIELDS_ENDPOINT}/{badge_name}{suffix}.json"
+    return f"{badge_name}{suffix}.json"
+
+
+def badge_endpoint(badge_name: str, matrix_type: str = NIGHTLY_MATRIX_TYPE) -> str:
+    """Shields endpoint URL for a badge, suffixed by matrix_type."""
+    return f"{SHIELDS_ENDPOINT}/{badge_file_name(badge_name, matrix_type)}"
 
 # ---------------------------------------------------------------------------
 # Table structure
@@ -127,6 +134,21 @@ def _extract_badge_name(path: Path) -> str | None:
     return m.group(1) if m else None
 
 
+def _extract_badge_label(path: Path) -> str | None:
+    """Extract the badge_label value from a workflow YAML file.
+
+    Unlike badge_name, badge_label is quoted and contains spaces and hyphens
+    ("VLLM ROCM MORI WIDE-EP", "VLLM GPU Queue"), so it cannot reuse the
+    non-whitespace pattern that badge_name uses. The quotes are optional to match YAML, and the value is what
+    reusable-update-badge.yaml writes into the endpoint file's "label" field --
+    a placeholder has to reuse it verbatim or the cell's label would change the
+    first time a real run replaced the placeholder.
+    """
+    content = path.read_text(encoding="utf-8")
+    m = re.search(r'^\s*badge_label:\s*"?([^"\n]+?)"?\s*$', content, re.MULTILINE)
+    return m.group(1) if m else None
+
+
 def _parse_workflow_stem(stem: str) -> tuple[str, str, str, str, str, str] | None:
     """Parse a workflow stem into its components.
 
@@ -205,6 +227,30 @@ def iter_provider_entries(workflows, guide_slugs, provider, connector_filter):
         for key, entries in workflows.items():
             if key[0] in guide_slugs and key[1] == provider:
                 yield from entries
+
+
+def matrix_badge_labels() -> dict[str, str]:
+    """Map badge_name -> badge_label for every cell the matrices render.
+
+    Walks the same GUIDES x PROVIDERS grid as the two sync scripts, so this is
+    the authoritative answer to "which badges does the table point at". A shields
+    endpoint has no default-if-missing -- a cell whose file does not exist renders
+    "custom badge: resource not found" -- so seed-release-badges.py uses this to
+    place a "never run" file for every cell before any lane has run.
+    """
+    workflows = discover_workflows()
+    labels: dict[str, str] = {}
+
+    for _display_name, _guide_path, guide_slugs, connector_filter in GUIDES:
+        for provider in PROVIDERS:
+            for _acc, filename, badge_name, _eng, _conn in iter_provider_entries(
+                workflows, guide_slugs, provider, connector_filter
+            ):
+                label = _extract_badge_label(WORKFLOWS_DIR / filename)
+                if label is not None:
+                    labels[badge_name] = label
+
+    return labels
 
 
 # ---------------------------------------------------------------------------

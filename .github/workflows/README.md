@@ -43,7 +43,11 @@ workflow files:
      nightly file, so the two matrices never overwrite each other. `list_only`
      reviews the matched lanes without dispatching them, and `dry_run` is forwarded
      to every lane that is dispatched, so a batch can be exercised against the
-     release branch without standing up a stack.
+     release branch without standing up a stack. Before dispatching, it runs
+     `scripts/seed-release-badges.py` to place a grey `never run` badge on any cell
+     that has none — a shields.io endpoint has no default-if-missing, so an absent
+     file renders `custom badge: resource not found`. Seeding is create-if-absent and
+     covers the whole matrix rather than the `lanes` subset.
   2. [`release-matrix.yaml`](release-matrix.yaml) then runs
      `scripts/sync-release-matrix.py` to render that release's section and open a PR
      against `main`.

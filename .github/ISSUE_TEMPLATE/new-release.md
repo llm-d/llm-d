@@ -136,7 +136,14 @@ up a stack. Pass `dry_run` explicitly even when it is `false`: three lanes
 their own `dry_run` to `true` and would otherwise publish `dry-run` badges from a run
 meant to be real.
 
-1. Review the lane list and each lane's cron window, dispatching nothing:
+Every dispatch, including a `list_only=true` one, first seeds a grey `never run`
+badge for any matrix cell that does not have one yet. A shields.io endpoint has no
+default-if-missing, so without this a cell whose lane has not run renders `custom
+badge: resource not found`. Seeding never overwrites an existing badge, so "still
+`never run`" is the reliable way to ask which lanes are outstanding.
+
+1. Review the lane list and each lane's cron window, dispatching nothing. This also
+   seeds the placeholder badges, so the matrix renders from here on:
 
    ```shell
    gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
@@ -173,17 +180,26 @@ meant to be real.
      --field dry_run=false
    ```
 
-1. Wait for the lanes to publish their badges, and list the ones still missing:
+1. Wait for the lanes to publish their badges, and list the ones still outstanding.
+   Because every cell was seeded, a lane that has not run is one whose badge still
+   reads `never run` — absence no longer distinguishes them:
 
    ```shell
-   grep -h 'badge_name:' .github/workflows/nightly-e2e-*.yaml \
-     | awk '{print $2}' | sort -u > /tmp/expected.txt
-   gh api repos/llm-d/llm-d/contents/badges?ref=gh-pages --jq '.[].name' \
-     | sed -n "s/_release-${MAJOR}\.${MINOR}\.json\$//p" | sort -u > /tmp/got.txt
-   comm -23 /tmp/expected.txt /tmp/got.txt
+   for badge in $(grep -h 'badge_name:' .github/workflows/nightly-e2e-*.yaml \
+                    | awk '{print $2}' | sort -u); do
+     file="badges/${badge}_release-${MAJOR}.${MINOR}.json"
+     message=$(gh api "repos/llm-d/llm-d/contents/${file}?ref=gh-pages" \
+                 --jq '(.content | @base64d | fromjson).message' 2>/dev/null) \
+       || message='MISSING (no badge file)'
+     [[ "$message" == "passing" ]] || printf '%-45s %s\n' "$badge" "$message"
+   done
    ```
 
-   Two lanes share a badge name, so expect 42 names for 43 lanes.
+   This prints every cell that is not green, with why: `never run` for a lane nobody
+   has dispatched, `dry-run` for one only exercised without a stack, a failure
+   category for one that ran and failed, and `MISSING` for a badge the seeder did not
+   create (which means the matrix has a broken cell — check the `seed-badges` job).
+   There are 50 lanes and 50 distinct badge names, one per matrix cell.
 
 1. Re-dispatch any lane that failed for infrastructure reasons. This goes straight
    to the lane rather than through the dispatcher, so `dry_run=false` has to be
