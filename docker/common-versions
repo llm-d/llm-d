@@ -15,10 +15,9 @@ VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.30.0
 # ============================================================================
 # GitHub owner/repo and pinned revision used for the SGLang XPU source checkout.
 SGLANG_XPU_REPOSITORY=sgl-project/sglang
-SGLANG_XPU_REF=0bcd822377da7b5718e674eaf9c870d349424dd1
+SGLANG_XPU_REF=94602c9c2b7cbdb8efd5c52802dac6a1c180089e # v0.5.20 release
 
-# SGLang v0.5.20 pins the prebuilt sglang-kernel-xpu v0.2.0 wheel in
-# python/pyproject_xpu.toml; use that upstream dependency without overriding it 
-# (commented values below).
+# SGLang v0.5.20 defaults to its prebuilt sglang-kernel-xpu v0.2.0 wheel.
+# Optional source override: set BOTH values, or leave both unset/empty.
 # SGLANG_XPU_KERNEL_REPO=https://github.com/sgl-project/sgl-kernel-xpu.git
-# SGLANG_XPU_KERNEL_REF=5b33313d231f10ec061ccbabdcaea51354dc5acd # maps to new v2.0 release
+# SGLANG_XPU_KERNEL_REF=5b33313d231f10ec061ccbabdcaea51354dc5acd # v0.2.0
