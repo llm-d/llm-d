@@ -89,15 +89,15 @@ We recommend using the upstream images for most guides:
 
 | Engine        | Image             | Tag       |
 |---------------|-------------------|-----------|
-| **vLLM**             | `docker.io/vllm/vllm-openai`            | `v0.26.0`     |
+| **vLLM**             | `docker.io/vllm/vllm-openai`            | `v0.30.0`     |
 | **vLLM Omni**        | `docker.io/vllm/vllm-omni`              | `v0.26.0`     |
-| **vLLM TPU**         | `docker.io/vllm/vllm-tpu`               | `v0.26.0`     |
-| **vLLM XPU**         | `docker.io/vllm/vllm-openai-xpu`        | `v0.26.0`     |
-| **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.26.0`     |
+| **vLLM TPU**         | `docker.io/vllm/vllm-tpu`               | `v0.29.0`     |
+| **vLLM XPU**         | `docker.io/vllm/vllm-openai-xpu`        | `v0.30.0`     |
+| **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.30.0`     |
 | **vLLM ROCM Omni**   | `docker.io/vllm/vllm-omni-rocm`         | `v0.24.1`     |
-| **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.26.0`     |
-| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.19`   |
-| **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc23`   |
+| **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.30.0`     |
+| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.20`   |
+| **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc28`   |
 
 ### Custom Images
 
