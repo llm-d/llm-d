@@ -33,7 +33,7 @@ Each slice can be rolled, recovered, or (with placement policy) pinned to an acc
 This variant requires the LWS controller manager with the DisaggregatedSet API. The fields used here (`slices`, `placementPolicy`, and per-role `scaling`) were added in `v0.10.0` (see the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/#disaggregatedset) for the current release and options):
 
 ```bash
-export LWS_CHART_VERSION=0.10.0
+export LWS_CHART_VERSION=0.11.0
 helm install lws oci://registry.k8s.io/lws/charts/lws \
   --version=${LWS_CHART_VERSION} \
   --namespace lws-system \
