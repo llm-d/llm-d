@@ -138,6 +138,9 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
+For the aggregated Qwen overlay, use
+`router/xpu-qwen3-235b.values.yaml` instead of `router/xpu.values.yaml`.
+
 <details>
 <summary><b>Gateway Mode</b></summary>
 
@@ -186,6 +189,13 @@ please re-verify against the parser source if you touch this section.
 ```bash
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+```
+
+For aggregated Qwen3-235B serving:
+
+```bash
+export MODEL=Qwen/Qwen3-235B-A22B
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm-qwen3-235b/base
 ```
 
 **NVIDIA GPU:**
