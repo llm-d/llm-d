@@ -42,6 +42,7 @@ channels:
   "#sig-autoscaling":
     - nightly-e2e-workload-autoscaling-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml
     - nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml
 
   # Routing/scheduling guides: precise prefix cache, predicted latency,
