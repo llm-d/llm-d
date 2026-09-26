@@ -128,8 +128,10 @@ patches:
                             value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
                           # This is recommended on gke.
                           # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
-                          - name: NVSHMEM_DISABLED_GDRCOPY
+                          - name: NVSHMEM_DISABLE_GDRCOPY
                             value: "true"
+                          - name: UCX_IB_ROCE_REACHABILITY_MODE
+                            value: "all"
                     # We add the volume for different providers since the
                     # hostPath can be different.
                     volumes:
