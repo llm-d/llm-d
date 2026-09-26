@@ -1,4 +1,4 @@
-## fast-model-actuation guide overrides for the llm-d router.
+## fast-model-actuation-base guide overrides for the llm-d router.
 ## Layer on top of: recipes/router/base.values.yaml
 
 router:
@@ -29,5 +29,5 @@ router:
     # Selects bound launchers only; requesters carry the guide label but never serve :8000.
     # Keep llm-d.ai/model in sync with inferenceserverconfig.yaml.
     matchLabels:
-      llm-d.ai/guide: "fast-model-actuation"
+      llm-d.ai/guide: "fast-model-actuation-base"
       llm-d.ai/model: "qwen3-0.6b"

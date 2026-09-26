@@ -50,7 +50,7 @@ The routing decision combines precise cache knowledge with token-based load bala
 > The router runs as a **single replica** by default: the `token-load-scorer`'s in-flight token accounting is local to each EPP process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index itself is HA-safe (each replica converges independently via pod-discovery), so active-active HA (`--set router.epp.replicas=2`) can return if shared in-flight state lands upstream.
 
 For wide-EP LWS deployments (multi-port DP model servers), use the
-[`wide-ep-lws` precise routing variant](../wide-ep-lws/README.precise-prefix-cache-routing.md)
+[`wide-ep` precise routing variant](../wide-ep/README.precise-prefix-cache-routing.md)
 instead of the manifests here.
 
 ## Prerequisites

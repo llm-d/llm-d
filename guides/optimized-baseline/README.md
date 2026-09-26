@@ -249,6 +249,8 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
+
 Apply the Kustomize overlays for your specific backend:
 
 <!-- guide:deploy.modelserver start -->

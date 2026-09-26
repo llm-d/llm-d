@@ -11,7 +11,7 @@ resources:
 namePrefix: pd-disaggregation-tpu-slice-vllm-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../recipes/modelserver/components/images/tpu-vllm/release-v0.26.0
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:

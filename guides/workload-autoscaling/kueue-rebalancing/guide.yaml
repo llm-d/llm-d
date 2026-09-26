@@ -106,7 +106,7 @@ deploy:
   #
   # One patch and one rollout wait per model, written out: with a third model,
   # copy the pair and point it at that Deployment and its LocalQueue.
-  optin:
+  opt-in:
     - run: |
         kubectl patch deployment ${DEPLOYMENT_A} -n ${NAMESPACE} --type=merge \
           -p "spec: {template: {metadata: {labels: {kueue.x-k8s.io/queue-name: ${QUEUE_A}}}}}"

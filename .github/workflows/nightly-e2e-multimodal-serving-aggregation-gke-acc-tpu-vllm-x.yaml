@@ -76,8 +76,8 @@ on:
 #    branches:
 #      - main
 
-#  schedule:
-#    - cron: '0 6 * * *'  # 06:00 UTC daily (staggered)
+  schedule:
+    - cron: '0 6 * * *'  # 06:00 UTC daily (staggered)
 
 permissions:
   contents: write
@@ -94,6 +94,7 @@ jobs:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
       standup_scenario: ${{ inputs.standup_scenario || 'multimodal-serving/aggregation' }}
+      standup_timeout: "4800"
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'tpu/v7' }}

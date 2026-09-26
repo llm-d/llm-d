@@ -1,0 +1,110 @@
+---
+# Slack channel routing for nightly workflow result notifications.
+#
+# This file is the single source of truth. Two consumers read it:
+#
+#   1. scripts/sync-slack-channels.py generates the `workflows:` list in
+#      .github/workflows/notify-slack-nightly.yaml from these entries.
+#      That list is a GENERATED artifact -- never edit it by hand.
+#   2. .github/scripts/notify-slack-nightly.py resolves the destination channel
+#      at runtime from the workflow's FILE NAME.
+#
+# Entries are keyed by file name rather than by the workflow's display `name:`
+# because the file name is the stable identifier -- it is already baked into
+# badge_name, release/README.md, /test-nightly and the consolidate-status-*
+# workflows. A renamed display name can only stop the trigger from firing
+# (which CI catches); it can never misroute a message to the wrong channel.
+#
+# After editing this file, regenerate the trigger list:
+#
+#     python scripts/sync-slack-channels.py --fix
+#
+# The `sync-slack-channels` pre-commit hook verifies both directions on every
+# PR: that the generated list is in sync, and that every nightly workflow is
+# accounted for below (either routed or explicitly skipped).
+
+# Runtime safety net only, not a routing decision. Used when a run arrives for a
+# workflow absent from `channels` -- for example mid-rename, or when a workflow
+# is deleted while the generated trigger list still references it. The intended
+# place to catch an unrouted workflow is the pre-commit hook, because an unmapped
+# workflow is also absent from the trigger and therefore never fires at all:
+# the symptom is missing messages, which is invisible by construction.
+fallback_channel: "#llm-d-ci-alerts"
+
+channels:
+  "#sig-pd-disaggregation":
+    - nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-x.yaml
+    - nightly-e2e-pd-disaggregation-cks-acc-gpu-vllm-x.yaml
+    - nightly-e2e-pd-disaggregation-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml
+    - nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml
+
+  "#sig-autoscaling":
+    - nightly-e2e-workload-autoscaling-cks-acc-gpu-vllm-x.yaml
+    - nightly-e2e-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml
+
+  # Routing/scheduling guides: precise prefix cache, predicted latency,
+  # optimized baseline and flow control.
+  "#sig-router":
+    - nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
+    - nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
+    - nightly-e2e-optimized-baseline-gke-acc-gpu-trtllm-x.yaml
+    - nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
+    - nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-gke-acc-tpu-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml
+    - nightly-e2e-predicted-latency-routing-cks-acc-gpu-vllm-x.yaml
+    - nightly-e2e-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml
+
+  # KV cache offloading: tiered prefix cache and wide expert parallelism.
+  "#sig-kv-disaggregation":
+    - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml
+    - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml
+    - nightly-e2e-wide-ep-lws-cks-acc-gpu-vllm-x.yaml
+    - nightly-e2e-wide-ep-lws-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-wide-ep-lws-ibm-acc-gpu-vllm-x.yaml
+
+  # Engine-based split: the SGLang backend goes to the SGLang collaboration
+  # channel regardless of which guide it exercises.
+  "#sglang-collab":
+    - nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml
+    - nightly-e2e-pd-disaggregation-gke-acc-gpu-sglang-x.yaml
+
+  # Accelerator-based split: everything running on Intel XPU goes to the Intel
+  # channel regardless of which guide it exercises.
+  "#llm-d-intel":
+    - nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml
+    - nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml
+    - nightly-e2e-wide-ep-lws-intel-acc-xpu-vllm-x.yaml
+
+  "#fast-model-actuation":
+    - nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml
+
+# Nightly workflows deliberately NOT notified. Every entry needs a reason:
+# that requirement is what keeps "nobody got around to mapping it" from passing
+# as "we decided not to notify it".
+skip:
+  nightly-build-image.yaml: >-
+    Shared infrastructure, owned by no single SIG. A failure here surfaces as a
+    cascading failure of the guide nightlies that follow it, and those are
+    notified.
+  nightly-e2e-multimodal-serving-aggregation-gke-acc-gpu-vllm-x.yaml: >-
+    No SIG owner assigned yet, and its schedule is commented out, so it only
+    ever runs via workflow_dispatch and would never notify anyway.
+  nightly-e2e-multimodal-serving-aggregation-gke-acc-tpu-vllm-x.yaml: >-
+    No SIG owner assigned yet; schedule commented out. See the GKE GPU variant.
+  nightly-e2e-multimodal-serving-e-disaggregation-gke-acc-gpu-vllm-x.yaml: >-
+    No SIG owner assigned yet; schedule commented out. See the GKE GPU variant.

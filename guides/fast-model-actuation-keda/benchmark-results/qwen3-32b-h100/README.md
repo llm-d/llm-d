@@ -26,12 +26,12 @@ metric reported below is defined in [Metric Definitions](#metric-definitions).
 ## Saturation-Based Autoscaling
 
 These three passes use the autoscaling setup from
-[keda-epp-saturation][guide] — KEDA polling the EPP
+[keda-epp][guide] — KEDA polling the EPP
 `llm_d_epp_flow_control_pool_saturation` and `llm_d_epp_request_running` gauges,
 EPP `flowControl` feature gate on, the optimized-baseline scheduler plugins, and
 a KEDA-generated HPA on the scale target.
 
-[guide]: ../../../workload-autoscaling/keda-epp-saturation/README.md
+[guide]: ../../../workload-autoscaling/keda-epp/README.md
 
 > 4,256 input tokens (4,000-token shared prefix + 256-token question) · 256
 > output tokens · 2 client workers, constant arrival — 0.5 RPS for 120 s then
@@ -39,7 +39,7 @@ a KEDA-generated HPA on the scale target.
 
 ### Configuration
 
-The [keda-epp-saturation][guide] configuration, with `maxReplicaCount` lowered
+The [keda-epp][guide] configuration, with `maxReplicaCount` lowered
 to 6 and HPA scale-up/scale-down policies added. Thresholds, polling interval,
 trigger queries, metric source, and plugin set are the guide's defaults.
 
@@ -96,15 +96,15 @@ failures, warm 19.3.
 
 ## Queue-Based Autoscaling
 
-The same three passes under the [keda-epp-queue][queue-guide] setup, which
+The same three passes under the [keda-epp][queue-guide] setup, which
 scales on EPP queue depth (`llm_d_epp_flow_control_queue_size`) rather than pool
 saturation, with running requests as the second trigger.
 
-[queue-guide]: ../../../workload-autoscaling/keda-epp-queue/README.md
+[queue-guide]: ../../../workload-autoscaling/keda-epp/README.md
 
 ### Configuration
 
-The [keda-epp-queue][queue-guide] configuration, with `maxReplicaCount` lowered
+The [keda-epp][queue-guide] configuration, with `maxReplicaCount` lowered
 to 6. Thresholds, polling interval, trigger queries, metric source, and plugin
 set are the guide's defaults. Model and workload are unchanged from the
 saturation section.

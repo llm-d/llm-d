@@ -66,9 +66,8 @@ on:
 #    branches:
 #      - main
 
-  # Scheduled execution temporarily disabled.
-  # schedule:
-  #   - cron: '0 3 * * *'  # 03:00 UTC daily
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC daily
 
 permissions:
   contents: write

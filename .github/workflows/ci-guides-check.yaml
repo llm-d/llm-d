@@ -3,7 +3,7 @@ name: CI Guides Check
 # Guides on the guide.yaml method render their README bash fences from the
 # YAML (see guides/templates/README.md). The job fails when a README is stale
 # relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`) and
-# runs the guide.py unit tests.
+# runs the unit tests under scripts/tests/.
 
 on:
   pull_request:
@@ -12,6 +12,8 @@ on:
       - .github/workflows/ci-guides-check.yaml
       - guides/**
       - scripts/guide.py
+      - scripts/matrix_common.py
+      - scripts/seed-release-badges.py
       - scripts/tests/**
   workflow_dispatch:
 
