@@ -78,13 +78,23 @@ What the pull is worth depends on the placement in front of it:
   47-48. On the uniform shared-prefix pool the ordering flips: affinity
   stays ahead (p50 0.48 s vs 0.73 s at 30 req/s) because nothing
   contends and a local hit is free.
+* **Token-aware + P2P** places each request on the pod with the fewest
+  prompt tokens still to prefill, counting what the precise index says
+  each pod already caches, and pulls the prefix when that pod lacks it.
+  A prefix owner is preferred until it is loaded; after that the request
+  spills and pulls. On the document Q&A profile scaled to 8 pods it
+  served 6.3 req/s against 4.4 for load-aware + P2P (four runs each)
+  and 2.75 for affinity + P2P, with TTFT p90 7.1 s against 9.2 s and
+  14.1 s ([report](benchmark-results/gpt-oss-120b-docqa-token-aware.md)).
 * **P/D + P2P** addresses KV no placement decision could have made
   local (see the multi-turn bullet above).
 
 The guide ships affinity + P2P as the general-purpose default. Reach
-for load-aware + P2P when your workload
-looks like many concurrent sessions pinned to owner pods, and re-measure
-both arms on your own workload before assuming either generalizes.
+for token-aware + P2P when your workload looks like many concurrent
+sessions pinned to owner pods; on the document Q&A profile it measured
+ahead of load-aware + P2P, which remains the simpler alternative.
+Re-measure the arms on your own workload before assuming any of them
+generalizes.
 Measured tables:
 [benchmark-results/gpt-oss-120b-h200.md](benchmark-results/gpt-oss-120b-h200.md).
 
@@ -92,7 +102,7 @@ Measured tables:
 
 ### Router scheduling configurations
 
-Four EPP scheduling configurations ship with the guide (under
+Six EPP scheduling configurations ship with the guide (under
 [benchmarking/](benchmarking/)). The recommended deployment is
 `epp-affinity-p2p.yaml`; the others are the comparison arms the guide's
 measurements use:
@@ -101,8 +111,10 @@ measurements use:
 | --- | --- | --- |
 | [`epp-affinity-p2p.yaml`](benchmarking/epp-affinity-p2p.yaml) | precise prefix-cache affinity | `p2p-source-producer`, `minCachedTokenDelta: 2048` (recommended - see the placement rule above) |
 | [`epp-load-p2p.yaml`](benchmarking/epp-load-p2p.yaml) | load-balanced | `p2p-source-producer` (for high-concurrency, session-ownership-bound workloads) |
+| [`epp-tokenaware-p2p.yaml`](benchmarking/epp-tokenaware-p2p.yaml) | token-aware (in-flight uncached tokens on the precise index) | `p2p-source-producer` (measured best on document Q&A) |
 | [`epp-affinity.yaml`](benchmarking/epp-affinity.yaml) | precise prefix-cache affinity | none (baseline) |
 | [`epp-load.yaml`](benchmarking/epp-load.yaml) | load-balanced | none (recompute control) |
+| [`epp-tokenaware.yaml`](benchmarking/epp-tokenaware.yaml) | token-aware | none (recompute control) |
 
 `minCachedTokenDelta` is the minimum lead, in cached prefix tokens, a
 peer must hold over the scheduled pod before a pull is requested. Set it
@@ -113,7 +125,10 @@ hardware- and transport-specific, so re-measure it when any of those
 change, on a warmed pod pair (the first pull between two peers pays a
 one-time session-establishment cost). The measurement is automated:
 [guides/recipes/router/calibration/calibrate-min-cached-token-delta.sh](../recipes/router/calibration/calibrate-min-cached-token-delta.sh)
-runs it against two live pods and prints the recommended value.
+runs it against two live pods and prints the recommended value. On
+H200 with the pull over TCP (no RDMA device in the pod) it also returns
+2,048: the pull won at every tested length, 52 ms against 85 ms at 2,048
+tokens and 533 ms against 1,102 ms at 32,768.
 
 ### Supported Hardware Backends
 
@@ -192,6 +207,13 @@ your own transport.
   InferencePool endpoint; a mismatched port leaves the index empty, so
   no pull ever fires. This bites when adapting the manifest to a
   different port layout, not the shipped one.
+* `self_describing_kv_events: true` in the offloading connector's
+  `kv_connector_extra_config` (the shipped manifest sets it). Without
+  it, CPU-tier store events carry no tokens or parent hash, and the
+  router can attribute a CPU-tier block only through the mapping it
+  learned from that block's GPU-tier store. Under churn the GPU-tier
+  removal can arrive first, and the CPU copy, which is the block a peer
+  would pull, never enters the index.
 * Matched TP between peers that serve each other. The peer session
   fingerprint embeds the parallel layout, so a TP-mismatched pair
   rejects the session and requests silently recompute. Hetero-TP works
@@ -658,6 +680,9 @@ Benchmark reports comparing the routing arms under identical hardware:
 * **[openai/gpt-oss-120b on vLLM (H200, aggregated)](./benchmark-results/gpt-oss-120b-h200.md)**:
   pull-versus-recompute crossover, shared-prefix pools, and the document
   Q&A headline.
+* **[openai/gpt-oss-120b, document Q&A with token-aware placement (H200, TCP)](./benchmark-results/gpt-oss-120b-docqa-token-aware.md)**:
+  the guide's document Q&A profile on 8 pods across token-aware,
+  load-aware and affinity placement, each with and without the pull.
 * **[Qwen/Qwen3-30B-A3B-Thinking on vLLM (H200, P/D agentic)](./benchmark-results/qwen3-30b-h200-pd-agentic.md)**:
   prefill pulling decode's generated session history - 6.3x median TTFT
   and +50% throughput against plain NIXL P/D.
