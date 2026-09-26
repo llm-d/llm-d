@@ -38,7 +38,7 @@ Both engines run the same checkpoint, so they are comparable under one router co
 2. Clone and check out the llm-d repository:
 
    ```bash
-   export branch="main" # branch, tag, or commit hash
+   export branch="release-0.10" # branch, tag, or commit hash
    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
    ```

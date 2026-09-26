@@ -35,7 +35,7 @@ Qwen3-TTS-12Hz-1.7B-CustomVoice is a ~1.7B autoregressive talker plus a 12Hz cod
 2. Clone and check out the llm-d repository:
 
    ```bash
-   export branch="main" # branch, tag, or commit hash
+   export branch="release-0.10" # branch, tag, or commit hash
    git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
    export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
    ```
