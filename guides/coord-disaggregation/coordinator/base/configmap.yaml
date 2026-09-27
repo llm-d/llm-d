@@ -8,11 +8,12 @@ data:
     server:
       listen_addr: ":8080"
       # The coordinator image serves this listener over TLS by default
-      # (llm-d-router#2805, key renamed to secure_serving in llm-d-router#2908);
-      # keep it plaintext -- every caller in this guide
+      # (llm-d-router#2805); keep it plaintext -- every caller in this guide
       # (kubelet probes, the Gateway's backendRef, the GKE HealthCheckPolicy)
       # speaks plain HTTP to it.
-      secure_serving: false
+      # TODO: Rename to secure_serving with the first release after v0.11.0.
+      # llm-d-router#2908 renamed the key, and v0.11.0 does not contain it.
+      secure_coordinator: false
       read_timeout: 30s
       # Matches the Gateway/HTTPRoute request timeout (coordinator/httproute.yaml,
       # router/httproute/base/httproute.yaml: both 300s) -- otherwise the coordinator could
