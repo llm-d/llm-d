@@ -1,0 +1,30 @@
+# The hub's endpoint list: one entry per cluster. Render with envsubst
+# (Step 3 of the guide sets CLUSTER_A_IP and CLUSTER_B_IP).
+#
+# `address` is where the hub forwards requests: the cluster router's Service
+# (its Envoy listens on port 80). It MUST be an IP. The hub's Envoy forwards via
+# an ORIGINAL_DST cluster that parses the chosen endpoint as IP:port, so a DNS
+# name here makes every request fail with 503 "no healthy upstream".
+#
+# `metricsAddress`/`metricsPort` is where the hub reads that cluster's load: the
+# cluster EPP's /metrics on port 9090. In this guide it is the same Service as
+# `address`, because the router chart serves both ports from one Service.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mc-hub-clusters
+data:
+  clusters.yaml: |
+    endpoints:
+      - name: cluster-a
+        address: "${CLUSTER_A_IP}"
+        port: "80"
+        labels:
+          metricsAddress: "${CLUSTER_A_IP}"
+          metricsPort: "9090"
+      - name: cluster-b
+        address: "${CLUSTER_B_IP}"
+        port: "80"
+        labels:
+          metricsAddress: "${CLUSTER_B_IP}"
+          metricsPort: "9090"

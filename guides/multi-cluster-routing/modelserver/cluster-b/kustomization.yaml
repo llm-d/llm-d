@@ -1,0 +1,11 @@
+# Cluster B's model servers: the Optimized Baseline model server with
+# 3 replica(s). Setting the count here, at apply time, matters: the base
+# defaults to 8 replicas of 2 GPUs each, which a later scale-down would request
+# first.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../optimized-baseline/modelserver/gpu/vllm/base
+replicas:
+  - name: optimized-baseline-nvidia-gpu-vllm-decode
+    count: 3
