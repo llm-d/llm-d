@@ -132,7 +132,7 @@ One-time, needs Slack workspace admin plus repo admin:
 4. **Invite the bot to `#llm-d-ci-alerts`**: `/invite @llm-d-ci` (let Slack's autocomplete resolve the handle). For a private channel, a member has to do this from inside it. Forgetting this makes the posting step fail with `not_in_channel`.
 5. Add the token as the `SLACK_BOT_TOKEN` repository secret (*Settings → Secrets and variables → Actions*).
 
-The [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml) file lists every login in `guides/**/OWNERS`. Fill in each Slack member ID; add new guide owners there as they are added. Slack member IDs look like `U012ABCDEF`; GitHub logins alone do not create Slack mentions.
+The [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml) file lists every login in `guides/**/OWNERS`. Fill in each Slack member ID, and comment out owners without a Slack account; add new guide owners there as they are added. Only listed owners with a blank ID produce a warning. Slack member IDs look like `U012ABCDEF`; GitHub logins alone do not create Slack mentions.
 
 ## Adding a new guide
 

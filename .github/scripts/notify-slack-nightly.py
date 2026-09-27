@@ -44,6 +44,8 @@ BADGE_JOB_PREFIX = "update-badge"
 
 FAILED_CONCLUSIONS = ("failure", "timed_out")
 UNSTABLE_CONCLUSIONS = ("neutral", "stale", "action_required")
+STARTUP_FAILURE_CONCLUSIONS = ("startup_failure",)
+BADGE_FAILED_CONCLUSIONS = FAILED_CONCLUSIONS + UNSTABLE_CONCLUSIONS + STARTUP_FAILURE_CONCLUSIONS
 
 # Outcomes worth a message. The notify workflow also filters on the run-level
 # conclusion so it can skip spinning up a runner, but this is the authoritative
@@ -114,7 +116,7 @@ def nightly_outcome(jobs: list[dict], run_conclusion: str | None = None) -> tupl
     """
     test_jobs = [job for job in jobs if not is_badge_job(job.get("name", ""))]
     badge_failed = any(
-        job.get("conclusion") in FAILED_CONCLUSIONS + UNSTABLE_CONCLUSIONS
+        job.get("conclusion") in BADGE_FAILED_CONCLUSIONS
         for job in jobs
         if is_badge_job(job.get("name", ""))
     )
@@ -203,7 +205,12 @@ def resolve_channel(mapping: dict, workflow_file: str) -> tuple[str | None, bool
     return mapping.get("fallback_channel"), True
 
 
-def resolve_owner_mentions(workflow_file: str) -> list[str]:
+def emit_warning(message: str, *, json_output: bool = False) -> None:
+    """Keep diagnostics off stdout when the caller requests JSON output."""
+    print(message, file=sys.stderr if json_output else sys.stdout)
+
+
+def resolve_owner_mentions(workflow_file: str, *, json_output: bool = False) -> list[str]:
     """Return Slack mentions for the guide owners of a nightly workflow."""
     workflow_path = REPO_ROOT / ".github" / "workflows" / workflow_file
     if not workflow_path.is_file():
@@ -247,16 +254,18 @@ def resolve_owner_mentions(workflow_file: str) -> list[str]:
         for login in logins
         if isinstance(slack_ids.get(login), str) and re.fullmatch(r"[UW][A-Z0-9]+", slack_ids[login])
     }
+    # Logins absent from the mapping have no Slack account and are skipped.
     missing = sorted(
         login
         for login in logins
-        if not isinstance(slack_ids.get(login), str)
-        or not re.fullmatch(r"[UW][A-Z0-9]+", slack_ids[login])
+        if login in slack_ids
+        and not (isinstance(slack_ids[login], str) and re.fullmatch(r"[UW][A-Z0-9]+", slack_ids[login]))
     )
     if missing:
-        print(
+        emit_warning(
             f"::warning::No Slack user ID mapping for guide owners: {', '.join(missing)}. "
-            f"Add them to {OWNER_IDS_PATH.relative_to(REPO_ROOT)}."
+            f"Add them to {OWNER_IDS_PATH.relative_to(REPO_ROOT)}.",
+            json_output=json_output,
         )
     return sorted(mentions)
 
@@ -385,7 +394,7 @@ def main() -> int:
 
     workflow_file = Path(run.get("path", "")).name
     if run.get("event") != "schedule":
-        print(f"{workflow_file} run {args.run_id} was not scheduled; nothing worth notifying.")
+        emit_warning(f"{workflow_file} run {args.run_id} was not scheduled; nothing worth notifying.", json_output=args.json)
         if args.github_output:
             write_github_output("", "")
         return 0
@@ -393,7 +402,7 @@ def main() -> int:
     outcome, failing_job, badge_failed = nightly_outcome(jobs, run.get("conclusion"))
 
     if outcome not in NOTIFIABLE_OUTCOMES and not badge_failed:
-        print(f"{workflow_file} run {args.run_id} concluded {outcome!r}; nothing worth notifying.")
+        emit_warning(f"{workflow_file} run {args.run_id} concluded {outcome!r}; nothing worth notifying.", json_output=args.json)
         if args.github_output:
             write_github_output("", "")
         return 0
@@ -402,18 +411,23 @@ def main() -> int:
     channel, is_fallback = (args.channel, False) if args.channel else resolve_channel(mapping, workflow_file)
 
     if channel is None:
-        print(f"{workflow_file} is listed as not notified in {MAPPING_PATH.name}; nothing to send.")
+        emit_warning(f"{workflow_file} is listed as not notified in {MAPPING_PATH.name}; nothing to send.", json_output=args.json)
         if args.github_output:
             write_github_output("", "")
         return 0
 
     if is_fallback:
-        print(
+        emit_warning(
             f"::warning::{workflow_file} has no Slack channel assigned; "
-            f"falling back to {channel}. Add it to .github/slack-channels.yaml."
+            f"falling back to {channel}. Add it to .github/slack-channels.yaml.",
+            json_output=args.json,
         )
 
-    owner_mentions = resolve_owner_mentions(workflow_file) if outcome in NOTIFIABLE_OUTCOMES else []
+    owner_mentions = (
+        resolve_owner_mentions(workflow_file, json_output=args.json)
+        if outcome in NOTIFIABLE_OUTCOMES
+        else []
+    )
     text = build_message(args.repo, run, outcome, failing_job, badge_failed, owner_mentions)
     if is_fallback:
         text = f":grey_question:  _unrouted workflow_ `{workflow_file}`\n{text}"
