@@ -84,15 +84,15 @@ This document describes the release process for llm-d. The release dates should 
 - **GitHub issue:** A clearly described issue linked to the milestone, with acceptance criteria.
 - **Production-ready example:** The feature must include a realistic, production-ready example (e.g., a guide under `guides/`). Toy examples or placeholder demonstrations are not acceptable.
 - **Proposal (if applicable):** Features involving public APIs, new components, or cross-SIG changes must have an approved [project
-  proposal](proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](CONTRIBUTING.md).
-- **Test coverage:** Appropriate unit, integration, or e2e test coverage as defined in the [testing requirements](CONTRIBUTING.md#testing-requirements).
+  proposal](../proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](../CONTRIBUTING.md).
+- **Test coverage:** Appropriate unit, integration, or e2e test coverage as defined in the [testing requirements](../CONTRIBUTING.md#testing-requirements).
 
 #### Coordination
 
   Feature tracking is coordinated through:
 
 - **Weekly project standup:** Overall release progress is reviewed every Wednesday at 12:30 PM ET (see the [public calendar](https://red.ht/llm-d-public-calendar)).
-- **SIG meetings:** Each [SIG](SIGS.md) reviews the status of their features during their regular meetings.
+- **SIG meetings:** Each [SIG](../SIGS.md) reviews the status of their features during their regular meetings.
 - **Slack:** Day-to-day coordination happens in the [#llm-d-dev](https://llm-d.slack.com/archives/C08SH9K8JGK) Slack channel and relevant SIG channels.
 
   > [!NOTE]
