@@ -2,7 +2,7 @@
 """Build the Slack message for a finished nightly run.
 
 Usage:
-  # Render without posting -- works locally against any real run.
+  # Render without posting -- works locally against any scheduled run.
   GH_TOKEN=$(gh auth token) python .github/scripts/notify-slack-nightly.py \
       --repo llm-d/llm-d --run-id 32211600170 --dry-run
 
@@ -23,6 +23,7 @@ because file names are stable while display names are not. See
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -35,12 +36,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MAPPING_PATH = REPO_ROOT / ".github" / "slack-channels.yaml"
 
 API_ROOT = "https://api.github.com"
+OWNER_IDS_PATH = REPO_ROOT / ".github" / "slack-owner-ids.yaml"
 
 # Jobs that publish the gh-pages badge rather than exercise the guide. They run
 # with `if: always()`, so they are present even when the test failed.
 BADGE_JOB_PREFIX = "update-badge"
 
 FAILED_CONCLUSIONS = ("failure", "timed_out")
+UNSTABLE_CONCLUSIONS = ("neutral", "stale", "action_required")
 
 # Outcomes worth a message. The notify workflow also filters on the run-level
 # conclusion so it can skip spinning up a runner, but this is the authoritative
@@ -50,7 +53,7 @@ FAILED_CONCLUSIONS = ("failure", "timed_out")
 # "cancelled" is the common exclusion: every nightly sets cancel-in-progress, so
 # dispatching one while a run is in flight cancels that run, which is not news.
 # "skipped" means no job actually exercised the guide.
-NOTIFIABLE_OUTCOMES = ("success", "failure", "timed_out")
+NOTIFIABLE_OUTCOMES = ("failure", "timed_out", "unstable")
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +100,7 @@ def is_badge_job(name: str) -> bool:
     return name == BADGE_JOB_PREFIX or name.startswith(f"{BADGE_JOB_PREFIX} / ")
 
 
-def nightly_outcome(jobs: list[dict]) -> tuple[str, str | None, bool]:
+def nightly_outcome(jobs: list[dict], run_conclusion: str | None = None) -> tuple[str, str | None, bool]:
     """Separate the guide's result from the badge job's result.
 
     The run-level conclusion cannot be used directly: update-badge runs with
@@ -107,11 +110,13 @@ def nightly_outcome(jobs: list[dict]) -> tuple[str, str | None, bool]:
     people stop trusting an alert channel.
 
     Returns (outcome, failing_job_name, badge_failed) where outcome is one of
-    "success", "failure", "timed_out" or "cancelled".
+    "success", "failure", "timed_out", "unstable", "cancelled" or "skipped".
     """
     test_jobs = [job for job in jobs if not is_badge_job(job.get("name", ""))]
     badge_failed = any(
-        job.get("conclusion") in FAILED_CONCLUSIONS for job in jobs if is_badge_job(job.get("name", ""))
+        job.get("conclusion") in FAILED_CONCLUSIONS + UNSTABLE_CONCLUSIONS
+        for job in jobs
+        if is_badge_job(job.get("name", ""))
     )
 
     # Report the first failure in job order, which is the one that actually
@@ -119,6 +124,10 @@ def nightly_outcome(jobs: list[dict]) -> tuple[str, str | None, bool]:
     for job in test_jobs:
         if job.get("conclusion") in FAILED_CONCLUSIONS:
             return job["conclusion"], job.get("name"), badge_failed
+
+    for job in test_jobs:
+        if job.get("conclusion") in UNSTABLE_CONCLUSIONS:
+            return "unstable", job.get("name"), badge_failed
 
     if any(job.get("conclusion") == "cancelled" for job in test_jobs):
         return "cancelled", None, badge_failed
@@ -128,6 +137,18 @@ def nightly_outcome(jobs: list[dict]) -> tuple[str, str | None, bool]:
     # reporting a badge failure as a guide failure, just in the other direction.
     if test_jobs and all(job.get("conclusion") == "skipped" for job in test_jobs):
         return "skipped", None, badge_failed
+
+    # Keep an update-badge failure separate from the guide result. It is still
+    # sent to the central alert channel, but should not page guide owners.
+    if badge_failed and all(job.get("conclusion") in ("success", "skipped") for job in test_jobs):
+        return "success", None, badge_failed
+
+    if run_conclusion in FAILED_CONCLUSIONS:
+        return run_conclusion, None, badge_failed
+    if run_conclusion == "startup_failure":
+        return "failure", None, badge_failed
+    if run_conclusion in UNSTABLE_CONCLUSIONS:
+        return "unstable", None, badge_failed
 
     return "success", None, badge_failed
 
@@ -168,11 +189,9 @@ def resolve_channel(mapping: dict, workflow_file: str) -> tuple[str | None, bool
     A file listed under `skip` returns (None, False): not notifying it is a
     recorded decision, not a gap.
 
-    Anything else unknown falls back rather than failing. A red notification job
-    would be a second alert channel nobody watches, and it muddies "did the
-    nightly fail, or did the notifier fail?". The place an unrouted workflow is
-    meant to be caught is scripts/sync-slack-channels.py --check, in the PR that
-    adds it.
+    Anything else unknown falls back to the central alert channel and is marked
+    as unrouted in the message. scripts/sync-slack-channels.py --check catches
+    known missing routes in the PR that adds a workflow.
     """
     if workflow_file in (mapping.get("skip") or {}):
         return None, False
@@ -182,6 +201,64 @@ def resolve_channel(mapping: dict, workflow_file: str) -> tuple[str | None, bool
             return channel, False
 
     return mapping.get("fallback_channel"), True
+
+
+def resolve_owner_mentions(workflow_file: str) -> list[str]:
+    """Return Slack mentions for the guide owners of a nightly workflow."""
+    workflow_path = REPO_ROOT / ".github" / "workflows" / workflow_file
+    if not workflow_path.is_file():
+        return []
+
+    scenario = None
+    for line in workflow_path.read_text(encoding="utf-8").splitlines():
+        if re.match(r"^\s*standup_scenario:", line):
+            match = re.search(r"\|\|\s*['\"]([^'\"]+)['\"]", line)
+            if match:
+                scenario = match.group(1)
+                break
+        if re.match(r"^\s*guide_name:", line):
+            match = re.match(r"^\s*guide_name:\s*['\"]?([^'\"\s]+)", line)
+            if match:
+                scenario = match.group(1)
+                break
+    if not scenario:
+        return []
+
+    owners_path = REPO_ROOT / "guides" / scenario / "OWNERS"
+    if not owners_path.is_file():
+        return []
+    with owners_path.open(encoding="utf-8") as fh:
+        owners = yaml.safe_load(fh) or {}
+
+    try:
+        with OWNER_IDS_PATH.open(encoding="utf-8") as fh:
+            slack_ids = yaml.safe_load(fh) or {}
+    except FileNotFoundError:
+        slack_ids = {}
+
+    slack_ids = {str(login).lower(): user_id for login, user_id in slack_ids.items()}
+    logins = {
+        str(login).lower()
+        for role in ("approvers", "reviewers")
+        for login in (owners.get(role) or [])
+    }
+    mentions = {
+        f"<@{slack_ids[login]}>"
+        for login in logins
+        if isinstance(slack_ids.get(login), str) and re.fullmatch(r"[UW][A-Z0-9]+", slack_ids[login])
+    }
+    missing = sorted(
+        login
+        for login in logins
+        if not isinstance(slack_ids.get(login), str)
+        or not re.fullmatch(r"[UW][A-Z0-9]+", slack_ids[login])
+    )
+    if missing:
+        print(
+            f"::warning::No Slack user ID mapping for guide owners: {', '.join(missing)}. "
+            f"Add them to {OWNER_IDS_PATH.relative_to(REPO_ROOT)}."
+        )
+    return sorted(mentions)
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +271,14 @@ def escape_mrkdwn(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def build_message(repo: str, run: dict, outcome: str, failing_job: str | None, badge_failed: bool) -> str:
+def build_message(
+    repo: str,
+    run: dict,
+    outcome: str,
+    failing_job: str | None,
+    badge_failed: bool,
+    owner_mentions: list[str],
+) -> str:
     name = escape_mrkdwn(run.get("name") or "Unknown workflow")
     url = run.get("html_url", "")
     number = run.get("run_number", "?")
@@ -209,6 +293,8 @@ def build_message(repo: str, run: dict, outcome: str, failing_job: str | None, b
         headline = f":hourglass_flowing_sand:  *{name}*  ·  timed out after {duration}  ·  `{sha}`"
     elif outcome == "failure":
         headline = f":red_circle:  *{name}*  ·  failed after {duration}  ·  `{sha}`"
+    elif outcome == "unstable":
+        headline = f":large_orange_circle:  *{name}*  ·  unstable after {duration}  ·  `{sha}`"
     elif outcome != "success":
         # Defensive: main() filters these out, so reaching here means a new
         # conclusion appeared and must not be painted green.
@@ -222,13 +308,20 @@ def build_message(repo: str, run: dict, outcome: str, failing_job: str | None, b
     if attempt > 1:
         headline += f"  (attempt {attempt})"
 
-    if outcome in FAILED_CONCLUSIONS:
+    if outcome in NOTIFIABLE_OUTCOMES:
         detail = []
         if failing_job:
-            detail.append(f"failed in `{escape_mrkdwn(failing_job)}`")
+            state = {
+                "timed_out": "timed out in",
+                "unstable": "unstable in",
+            }.get(outcome, "failed in")
+            detail.append(f"{state} `{escape_mrkdwn(failing_job)}`")
         detail.append(f"<{url}|run #{number}>")
         detail.append(f"<{matrix_url}|matrix>")
-        return headline + "\n" + "  ·  ".join(detail)
+        message = headline + "\n" + "  ·  ".join(detail)
+        if owner_mentions:
+            message += "\nOwners: " + " ".join(owner_mentions)
+        return message
 
     return f"{headline}  ·  <{url}|run #{number}>"
 
@@ -291,9 +384,15 @@ def main() -> int:
     jobs = fetch_jobs(args.repo, args.run_id, token)
 
     workflow_file = Path(run.get("path", "")).name
-    outcome, failing_job, badge_failed = nightly_outcome(jobs)
+    if run.get("event") != "schedule":
+        print(f"{workflow_file} run {args.run_id} was not scheduled; nothing worth notifying.")
+        if args.github_output:
+            write_github_output("", "")
+        return 0
 
-    if outcome not in NOTIFIABLE_OUTCOMES:
+    outcome, failing_job, badge_failed = nightly_outcome(jobs, run.get("conclusion"))
+
+    if outcome not in NOTIFIABLE_OUTCOMES and not badge_failed:
         print(f"{workflow_file} run {args.run_id} concluded {outcome!r}; nothing worth notifying.")
         if args.github_output:
             write_github_output("", "")
@@ -314,7 +413,8 @@ def main() -> int:
             f"falling back to {channel}. Add it to .github/slack-channels.yaml."
         )
 
-    text = build_message(args.repo, run, outcome, failing_job, badge_failed)
+    owner_mentions = resolve_owner_mentions(workflow_file) if outcome in NOTIFIABLE_OUTCOMES else []
+    text = build_message(args.repo, run, outcome, failing_job, badge_failed, owner_mentions)
     if is_fallback:
         text = f":grey_question:  _unrouted workflow_ `{workflow_file}`\n{text}"
 
