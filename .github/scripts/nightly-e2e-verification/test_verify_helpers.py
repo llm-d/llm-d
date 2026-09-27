@@ -91,8 +91,14 @@ class TestFindResultsDirs(unittest.TestCase):
         return exp
 
     def test_empty_workspace_returns_none(self):
-        with patch("sys.stderr", io.StringIO()):
-            self.assertIsNone(v.find_results_dirs("", "ns"))
+        with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()):
+            old_cwd = os.getcwd()
+            os.chdir(td)
+            try:
+                self._make_run(Path("."), "user-1", "exp", "ns")
+                self.assertIsNone(v.find_results_dirs("", "ns"))
+            finally:
+                os.chdir(old_cwd)
 
     def test_empty_namespace_returns_none(self):
         with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()):
@@ -193,6 +199,12 @@ class TestGetVllmVersion(unittest.TestCase):
         self.assertEqual(v.get_vllm_version("ns", "pod"), (0, 24, 0))
 
     @patch("verify_helpers.kubectl")
+    def test_normalizes_abbreviated_rc_version(self, mock_kubectl):
+        # vLLM may omit the patch component when reporting a release candidate.
+        mock_kubectl.return_value = "0.24rc1"
+        self.assertEqual(v.get_vllm_version("ns", "pod"), (0, 24, 0))
+
+    @patch("verify_helpers.kubectl")
     def test_stops_at_non_digit_segment(self, mock_kubectl):
         # First non-digit-led segment stops the parse entirely.
         mock_kubectl.return_value = "0.24.dev0"
@@ -268,6 +280,44 @@ class TestMetricsSummary(unittest.TestCase):
             (p / "metrics_summary.json").write_text("not-json{")
             self.assertIsNone(v.MetricsSummary.load(Path(td)))
 
+    def test_load_non_object_json(self):
+        with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()) as stderr:
+            p = Path(td) / "metrics" / "processed"
+            p.mkdir(parents=True)
+            (p / "metrics_summary.json").write_text("[]")
+            self.assertIsNone(v.MetricsSummary.load(Path(td)))
+            self.assertIn("JSON object", stderr.getvalue())
+
+    def test_load_invalid_aggregated_schema(self):
+        with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()) as stderr:
+            p = Path(td) / "metrics" / "processed"
+            p.mkdir(parents=True)
+            (p / "metrics_summary.json").write_text(
+                json.dumps({"_aggregated": []})
+            )
+            self.assertIsNone(v.MetricsSummary.load(Path(td)))
+            self.assertIn("_aggregated", stderr.getvalue())
+
+    def test_load_invalid_metric_stats_schema(self):
+        with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()) as stderr:
+            p = Path(td) / "metrics" / "processed"
+            p.mkdir(parents=True)
+            (p / "metrics_summary.json").write_text(json.dumps({
+                "_aggregated": {"metrics": {"m1": []}},
+            }))
+            self.assertIsNone(v.MetricsSummary.load(Path(td)))
+            self.assertIn("metric statistics", stderr.getvalue())
+
+    def test_load_invalid_pod_metrics_schema(self):
+        with TemporaryDirectory() as td, patch("sys.stderr", io.StringIO()) as stderr:
+            p = Path(td) / "metrics" / "processed"
+            p.mkdir(parents=True)
+            (p / "metrics_summary.json").write_text(json.dumps({
+                "pod-a": {"metrics": []},
+            }))
+            self.assertIsNone(v.MetricsSummary.load(Path(td)))
+            self.assertIn("pod-a", stderr.getvalue())
+
     def test_load_happy(self):
         with TemporaryDirectory() as td:
             p = Path(td) / "metrics" / "processed"
@@ -310,6 +360,14 @@ class TestCheckAggregated(unittest.TestCase):
         self.assertFalse(c.passed)
         self.assertIn("missing", c.detail)
 
+    def test_invalid_value_returns_failure(self):
+        ms = v.MetricsSummary({
+            "_aggregated": {"metrics": {"m1": {"p99": "not-a-number"}}},
+        })
+        c = ms.check_aggregated("m1", "p99", "<=", 2.0)
+        self.assertFalse(c.passed)
+        self.assertIn("not numeric", c.detail)
+
 
 class TestCheckPerPod(unittest.TestCase):
     def _ms(self):
@@ -342,6 +400,14 @@ class TestCheckPerPod(unittest.TestCase):
     def test_name_includes_reducer(self):
         c = self._ms().check_per_pod("m1", "max", ">", 0.0)
         self.assertIn("max", c.name)
+
+    def test_invalid_value_returns_failure(self):
+        ms = v.MetricsSummary({
+            "pod-a": {"metrics": {"m1": {"max": "not-a-number"}}},
+        })
+        c = ms.check_per_pod("m1", "max", ">", 0.0)
+        self.assertFalse(c.passed)
+        self.assertIn("not numeric", c.detail)
 
 
 class TestPrintChecksTable(unittest.TestCase):

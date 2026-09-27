@@ -1,0 +1,33 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  inferencePool:
+    failureMode: FailOpen
+
+  epp:
+    pluginsConfigFile: "t2i.yaml"
+    pluginsCustomConfig:
+      t2i.yaml: |
+        apiVersion: inference.networking.x-k8s.io/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - name: activeRequest
+          type: active-request-scorer
+        - name: maxScore
+          type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: activeRequest
+          - pluginRef: maxScore
+        dataLayer:
+          injectDefaults: false
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "diffusion-serving-t2i"
+    protocol: http

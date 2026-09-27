@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+STUB_COMMAND=oc exec "$(dirname "$0")/cluster-command" "$@"

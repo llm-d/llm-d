@@ -195,6 +195,47 @@ OUTPUT_FILE_ID=$(curl -s \
 curl http://localhost:8000/v1/files/${OUTPUT_FILE_ID}/content > results.jsonl
 ```
 
+## Enable Monitoring
+
+Optional. Requires Prometheus and Grafana — see [Observability Setup](../../../docs/operations/observability/setup.md).
+
+1. Enable metrics scraping in the chart, so Prometheus discovers the three components:
+
+   ```bash
+   helm upgrade batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
+     -n ${NAMESPACE} --reuse-values \
+     --set processor.podMonitor.enabled=true \
+     --set gc.podMonitor.enabled=true \
+     --set apiserver.serviceMonitor.enabled=true
+   ```
+
+   > [!NOTE]
+   > This step still uses the component chart's own `PodMonitor`/`ServiceMonitor` templates. Per [llm-d#1983](https://github.com/llm-d/llm-d/issues/1983) these scrape manifests should eventually live in this repo as standalone recipes; the target path is still being settled, so this guide uses the chart flags in the meantime. The alerts and dashboards below are already served from this repo.
+
+2. Apply the alerting rules:
+
+   ```bash
+   kubectl apply -n ${NAMESPACE} -f ../../recipes/observability/alerts/batch-gateway-alerting-rules.yaml
+   ```
+
+   These are scoped to `namespace="batch-gateway"`. If you changed `${NAMESPACE}`, edit the matchers first — see [Alerting](../../../docs/operations/observability/alerting.md#batch-gateway-batch-gatewayrules).
+
+3. Load the dashboards:
+
+   ```bash
+   ../../recipes/observability/load-llm-d-dashboards.sh
+   ```
+
+   This loads every llm-d dashboard, including `llm-d-batch-gateway-apiserver`, `-processor`, and `-gc`. Select your namespace with each dashboard's `namespace` variable.
+
+4. Verify:
+
+   ```bash
+   kubectl get podmonitors,servicemonitors,prometheusrules -n ${NAMESPACE}
+   ```
+
+For what the metrics mean and how to query them, see the [Batch Gateway metric reference](../../../docs/operations/observability/metrics.md#key-batch-gateway-metrics).
+
 ## Cleanup
 
 ```bash

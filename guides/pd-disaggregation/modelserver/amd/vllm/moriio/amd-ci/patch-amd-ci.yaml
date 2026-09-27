@@ -31,6 +31,8 @@ spec:
             # Prefer DMABUF on this cluster (optional, but avoids warnings when peermem is not available)
             - name: MORI_ENABLE_DMABUF_REG
               value: "1"
+            - name: MORI_IB_GID_INDEX
+              value: "1"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -59,4 +61,6 @@ spec:
           env:
             # Prefer DMABUF on this cluster (optional, but avoids warnings when peermem is not available)
             - name: MORI_ENABLE_DMABUF_REG
+              value: "1"
+            - name: MORI_IB_GID_INDEX
               value: "1"

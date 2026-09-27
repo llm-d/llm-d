@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base
+
+images:
+  - name: docker.io/vllm/vllm-openai-rocm
+    newName: ghcr.io/vcave/lmcache/vllm-pr-51681-lmcache-v0.5.3
+    newTag: r0.1
+
+labels:
+  - pairs:
+      llm-d.ai/guide: tiered-prefix-cache
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml

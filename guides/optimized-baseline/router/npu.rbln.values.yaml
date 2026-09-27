@@ -1,0 +1,30 @@
+# Rebellions NPU overrides for optimized-baseline.values.yaml. Apply after it;
+# everything not named here is inherited. Named for the RBLN runtime rather than
+# for NPUs in general, since the limitation below is that runtime's.
+#
+# The NPU path serves gpt-oss-120b with prefix caching off, so the scheduling
+# profile drops the prefix-cache-affinity-filter and keeps the load scorer.
+# Leaving the filter in place would make the router treat endpoints as
+# cache-warm and pin requests to them while the model servers reuse nothing,
+# trading load balance for an affinity that does not exist. Remove this file
+# once the RBLN runtime supports prefix caching for sliding-window models and
+# the overlay drops --no-enable-prefix-caching.
+router:
+  epp:
+    pluginsCustomConfig:
+      optimized-baseline-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: inflight-load-producer
+        - type: token-load-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: token-load-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "optimized-baseline"
+      llm-d.ai/accelerator-variant: "npu"
+      llm-d.ai/accelerator-vendor: "rebellions"

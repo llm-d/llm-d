@@ -1,25 +1,34 @@
 #!/usr/bin/env python3
-"""Validate or regenerate the release testing matrix in release/README.md.
+"""Regenerate a release's section of the release testing matrix in release/README.md.
 
-Unlike the nightly matrix (a live mirror of main), the release matrix is a
-*frozen snapshot* captured at release time: each cell renders a static shields
-badge baked from the badge status read at the moment a ``v*`` tag was pushed.
-The block is prefixed with a caption linking the release tag.
+Unlike the nightly matrix (a live mirror of main), the release matrix reports e2e
+runs made *against a release branch*. Those runs are dispatched with
+``matrix_type=<release branch>``, which makes llm-d-infra's reusables check out
+that branch and write their badge to ``badges/{badge_name}_{matrix_type}.json``.
+Each cell here is a live shields endpoint pointing at that per-release file, so a
+re-run of a lane updates the table on its own — no re-render needed.
+
+The block is organised as one section per release *series* (``release-0.9``), each
+delimited by its own sentinel pair inside the RELEASE-MATRIX container. A series
+that already has a section is regenerated in place; a new series is inserted at
+the top. Older sections are never touched: they are frozen records, and not
+regenerating them is what keeps them stable as the guide and workflow set drift
+on main.
 
 Usage:
-  python scripts/sync-release-matrix.py --fix --version v0.8.1 --status-file status.json
-  python scripts/sync-release-matrix.py --check --version v0.8.1 --status-file status.json
+  python scripts/sync-release-matrix.py --version v0.9.0            # preview
+  python scripts/sync-release-matrix.py --version v0.9.0 --fix      # write
+  python scripts/sync-release-matrix.py --version v0.9.0 --branch release-0.9 --fix
 
-The status file is a JSON object mapping ``badge_name`` -> ``{"message", "color"}``,
-typically produced by the release-matrix workflow after reading the live badges.
-The workflow discovery and guide/provider configuration are shared with the
-nightly matrix; see scripts/matrix_common.py.
+There is deliberately no ``--check`` mode: the older sections are snapshots, so
+comparing them against main's current guide list would fail spuriously. The
+workflow discovery and guide/provider configuration are shared with the nightly
+matrix; see scripts/matrix_common.py.
 """
 
 import argparse
-import json
+import re
 import sys
-from pathlib import Path
 
 import matrix_common as mc
 
@@ -30,36 +39,45 @@ import matrix_common as mc
 MATRIX_START = "<!-- RELEASE-MATRIX-START -->"
 MATRIX_END = "<!-- RELEASE-MATRIX-END -->"
 
-RELEASE_TAG_URL = "https://github.com/llm-d/llm-d/releases/tag"
+RELEASE_TAG_URL = f"{mc.REPO_URL}/releases/tag"
+BRANCH_URL = f"{mc.REPO_URL}/tree"
 
-# Fallback shown when a badge has no captured status (e.g. endpoint unavailable).
-DEFAULT_MESSAGE = "not run"
-DEFAULT_COLOR = "lightgrey"
+VERSION_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:-.+)?$")
 
-
-def _shields_escape(text: str) -> str:
-    """Escape a value for a shields.io static badge path segment.
-
-    Dashes become ``--``, underscores ``__``, and spaces ``_``.
-    """
-    return text.replace("-", "--").replace("_", "__").replace(" ", "_")
+# Matches any per-series section, so we can tell "no sections yet" from
+# "sections exist, ours is not among them".
+SECTION_RE = re.compile(r"<!-- RELEASE-MATRIX-(\S+?)-START -->")
 
 
-def static_badge(accelerator: str, filename: str, status: dict, engine: str) -> str:
-    # Label by engine + accelerator (e.g. "vLLM GPU", "SGLang GPU", "TRTLLM GPU")
-    # via the shared helper, so multiple same-accelerator engines in one cell stay
-    # distinguishable and match the nightly matrix labels exactly.
-    label = mc.accel_engine_label(engine, accelerator)
-    message = status.get("message") or DEFAULT_MESSAGE
-    color = status.get("color") or DEFAULT_COLOR
-    segment = f"{_shields_escape(label)}-{_shields_escape(message)}-{_shields_escape(color)}"
-    badge_img = f"https://img.shields.io/badge/{segment}"
+def series_markers(series: str) -> tuple[str, str]:
+    return (
+        f"<!-- RELEASE-MATRIX-{series}-START -->",
+        f"<!-- RELEASE-MATRIX-{series}-END -->",
+    )
+
+
+def derive_series(version: str) -> str:
+    """v0.9.0 -> release-0.9 ; v0.10.1-rc.1 -> release-0.10."""
+    m = VERSION_RE.match(version)
+    if m is None:
+        raise ValueError(
+            f"version {version!r} is not of the form vMAJOR.MINOR.PATCH[-suffix]"
+        )
+    return f"release-{m.group(1)}.{m.group(2)}"
+
+
+def badge(accelerator: str, filename: str, badge_name: str, engine: str, connector: str, series: str) -> str:
+    label = mc.accel_engine_label(engine, accelerator, connector)
+    badge_img = mc.badge_endpoint(badge_name, series)
     link = f"{mc.BADGE_BASE}/{filename}"
     return f"[![{label}]({badge_img})]({link})"
 
 
-def generate_body(workflows: dict, version: str, statuses: dict) -> str:
-    caption = f"**Release snapshot:** [`{version}`]({RELEASE_TAG_URL}/{version})"
+def generate_section(workflows: dict, version: str, series: str) -> str:
+    heading = (
+        f"### [`{version}`]({RELEASE_TAG_URL}/{version})"
+        f" — branch [`{series}`]({BRANCH_URL}/{series})"
+    )
 
     header = "| Guide | " + " | ".join(mc.PROVIDER_LABELS[p] for p in mc.PROVIDERS) + " |"
     separator = "|-------|" + "|".join("-----" for _ in mc.PROVIDERS) + "|"
@@ -70,8 +88,8 @@ def generate_body(workflows: dict, version: str, statuses: dict) -> str:
 
         for provider in mc.PROVIDERS:
             badges = [
-                static_badge(acc, fn, statuses.get(bn, {}), eng)
-                for acc, fn, bn, eng in mc.iter_provider_entries(
+                badge(acc, fn, bn, eng, conn, series)
+                for acc, fn, bn, eng, conn in mc.iter_provider_entries(
                     workflows, guide_slugs, provider, connector_filter
                 )
             ]
@@ -79,13 +97,30 @@ def generate_body(workflows: dict, version: str, statuses: dict) -> str:
 
         lines.append("| " + " | ".join(cells) + " |")
 
+    start, end = series_markers(series)
     table = "\n".join(lines)
-    return f"{caption}\n\n{table}"
+    return f"{start}\n{heading}\n\n{table}\n{end}"
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+def splice_section(container_body: str, section: str, series: str) -> str:
+    """Put ``section`` into ``container_body``, leaving other sections untouched.
+
+    Three cases:
+      * this series already has a section -> replace it in place
+      * other series have sections        -> insert this one at the top
+      * no sections at all               -> the body is a placeholder, replace it
+    """
+    start, end = series_markers(series)
+
+    if mc.extract_matrix(container_body, start, end) is not None:
+        return mc.replace_matrix(
+            container_body, section[len(start) + 1 : -(len(end) + 1)], start, end
+        )
+
+    if SECTION_RE.search(container_body):
+        return f"{section}\n\n{container_body.strip()}"
+
+    return section
 
 
 def main() -> int:
@@ -93,63 +128,54 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--version", required=True, help="release tag, e.g. v0.8.1 or v0.9.0-rc1")
     parser.add_argument(
-        "--status-file",
+        "--version",
         required=True,
-        help="JSON mapping badge_name -> {message, color}",
+        help="release tag, e.g. v0.9.0 or v0.9.0-rc.1",
     )
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--check", action="store_true", default=True, help="fail if matrix is out of sync (default)")
-    group.add_argument("--fix", action="store_true", help="regenerate the matrix in release/README.md")
+    parser.add_argument(
+        "--branch",
+        help="release branch / series (default: derived from --version, e.g. release-0.9)",
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="write release/README.md (default: print the section to stdout)",
+    )
     args = parser.parse_args()
 
     try:
-        statuses = json.loads(Path(args.status_file).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        print(f"ERROR: could not read status file {args.status_file}: {exc}", file=sys.stderr)
+        series = args.branch or derive_series(args.version)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
-    content = mc.read_readme()
-    current = mc.extract_matrix(content, MATRIX_START, MATRIX_END)
+    workflows = mc.discover_workflows()
+    section = generate_section(workflows, args.version, series)
 
-    if current is None:
+    if not args.fix:
+        print(section)
+        return 0
+
+    content = mc.read_readme()
+    container = mc.extract_matrix(content, MATRIX_START, MATRIX_END)
+    if container is None:
         print(
             f"ERROR: sentinel comments not found in {mc.README_PATH}.\n"
-            f"Add '{MATRIX_START}' and '{MATRIX_END}' around the table.",
+            f"Add '{MATRIX_START}' and '{MATRIX_END}' around the release matrix.",
             file=sys.stderr,
         )
         return 1
 
-    workflows = mc.discover_workflows()
-    expected = generate_body(workflows, args.version, statuses)
-
-    if current.strip() == expected.strip():
-        print("Release matrix is up to date.")
+    updated_container = splice_section(container, section, series)
+    if updated_container.strip() == container.strip():
+        print(f"Release matrix for {series} is already up to date.")
         return 0
 
-    if args.fix:
-        updated = mc.replace_matrix(content, expected, MATRIX_START, MATRIX_END)
-        mc.README_PATH.write_text(updated, encoding="utf-8")
-        print(f"Updated release matrix in {mc.README_PATH} for {args.version}")
-        return 0
-
-    import difflib
-
-    diff = difflib.unified_diff(
-        current.splitlines(keepends=True),
-        expected.splitlines(keepends=True),
-        fromfile="release/README.md (current)",
-        tofile="release/README.md (expected)",
-    )
-    print("ERROR: release matrix in release/README.md is out of sync.", file=sys.stderr)
-    print(
-        "Run: python scripts/sync-release-matrix.py --fix "
-        f"--version {args.version} --status-file {args.status_file}",
-        file=sys.stderr,
-    )
-    sys.stderr.writelines(diff)
-    return 1
+    updated = mc.replace_matrix(content, updated_container, MATRIX_START, MATRIX_END)
+    mc.README_PATH.write_text(updated, encoding="utf-8")
+    print(f"Updated {series} section of the release matrix for {args.version}")
+    return 0
 
 
 if __name__ == "__main__":

@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# EPP configuration is deliberately absent here, for two reasons.
+#
+# First, EndpointPickerConfig is the EPP binary's config schema (group
+# llm-d.ai/v1alpha1), not a Kubernetes API type — there is no CRD to apply it
+# against. It is a key inside the <release>-epp ConfigMap.
+#
+# Second, this guide needs no EPP change at all: the optimized-baseline guide's
+# router values already register `inflight-load-producer` (which publishes the
+# prefill trigger's metric) and `prefix-cache-affinity-filter` (which carries
+# peakPrefillThroughput). The only EPP-side work is setting that parameter to
+# YOUR calibrated value — see Prerequisites in the README.
+resources:
+  - scaledobject.yaml
+  - triggerauthentication.yaml

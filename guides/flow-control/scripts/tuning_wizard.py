@@ -101,6 +101,49 @@ def calculate_lookahead_buffer(active_batch: int, max_num_batched_tokens: int, i
     buffer_size = math.ceil(max_num_batched_tokens / effective_isl)
     return max(1, min(buffer_size, max_allowed_buffer))
 
+
+def validate_parameters(args, run_compute: bool, run_memory: bool) -> None:
+    """Reject values that are non-physical or unsafe for the capacity model."""
+    def require_finite(name: str, value: float) -> None:
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite.")
+
+    if run_compute:
+        require_finite("Throughput", args.throughput)
+        require_finite("Latency", args.latency_sec)
+        if args.throughput <= 0 or args.latency_sec <= 0:
+            raise ValueError("Throughput and latency must be greater than zero.")
+
+    if args.max_num_batched_tokens <= 0:
+        raise ValueError("Max batched tokens must be greater than zero.")
+
+    if not run_memory:
+        return
+
+    for name, value in (
+        ("ISL mean", args.isl_mean),
+        ("ISL standard deviation", args.isl_std),
+        ("OSL mean", args.osl_mean),
+        ("OSL standard deviation", args.osl_std),
+        ("Z-score", args.z_score),
+        ("Paged-attention efficiency", args.paged_attention_efficiency),
+        ("Correlation coefficient", args.correlation_coefficient),
+    ):
+        require_finite(name, value)
+
+    if args.gpu_blocks <= 0 or args.block_size <= 0:
+        raise ValueError("GPU blocks and block size must be greater than zero.")
+    if min(args.isl_mean, args.isl_std, args.osl_mean, args.osl_std) < 0:
+        raise ValueError("Sequence-length means and standard deviations cannot be negative.")
+    if args.shared_prefix < 0:
+        raise ValueError("Shared prefix cannot be negative.")
+    if args.z_score < 0:
+        raise ValueError("Z-score cannot be negative.")
+    if not 0 < args.paged_attention_efficiency <= 1:
+        raise ValueError("Paged-attention efficiency must be in the range (0, 1].")
+    if not -1 <= args.correlation_coefficient <= 1:
+        raise ValueError("Correlation coefficient must be in the range [-1, 1].")
+
 # ==========================================
 # Main Execution / Runtime Loop
 # ==========================================
@@ -183,6 +226,11 @@ def main():
 
     if not run_compute and not run_memory:
         sys.exit("\nError: You must provide arguments for Compute, Memory, or both.")
+
+    try:
+        validate_parameters(args, run_compute, run_memory)
+    except ValueError as e:
+        sys.exit(f"\nError: {e}")
 
     compute_limit, memory_limit, marginal_isl, cv = None, None, None, 0.0
 

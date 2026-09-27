@@ -22,8 +22,33 @@ README_PATH = REPO_ROOT / "release" / "README.md"
 # Badge sources
 # ---------------------------------------------------------------------------
 
-BADGE_BASE = "https://github.com/llm-d/llm-d/actions/workflows"
+REPO_URL = "https://github.com/llm-d/llm-d"
+BADGE_BASE = f"{REPO_URL}/actions/workflows"
 SHIELDS_ENDPOINT = "https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges"
+
+# The matrix a run feeds. "nightly" is the live mirror of main; anything else is a
+# release branch name (e.g. "release-0.9"), which is also what the e2e workflows
+# check out.
+NIGHTLY_MATRIX_TYPE = "nightly"
+
+
+def badge_file_name(badge_name: str, matrix_type: str = NIGHTLY_MATRIX_TYPE) -> str:
+    """Name of a badge's endpoint file on gh-pages, suffixed by matrix_type.
+
+    ``nightly`` carries no suffix, so its badge files keep the names they have
+    always had. This mirrors reusable-update-badge.yaml in llm-d-infra, which
+    only appends ``_{matrix_type}`` when matrix_type is set and not "nightly" —
+    the two must agree or the matrices point at files nobody writes. Everything
+    that names a badge file goes through here so there is only one copy of the
+    rule to keep in agreement.
+    """
+    suffix = "" if matrix_type in ("", NIGHTLY_MATRIX_TYPE) else f"_{matrix_type}"
+    return f"{badge_name}{suffix}.json"
+
+
+def badge_endpoint(badge_name: str, matrix_type: str = NIGHTLY_MATRIX_TYPE) -> str:
+    """Shields endpoint URL for a badge, suffixed by matrix_type."""
+    return f"{SHIELDS_ENDPOINT}/{badge_file_name(badge_name, matrix_type)}"
 
 # ---------------------------------------------------------------------------
 # Table structure
@@ -45,17 +70,31 @@ ENGINE_LABELS = {
     "trtllm": "TRTLLM",
 }
 
+# Connectors that need to appear in the badge label because engine+accelerator
+# alone does not tell two lanes in the same cell apart (the ROCm P/D lanes are
+# both vLLM on ROCm and differ only by transport). Deliberately an allow-list:
+# connectors like "native"/"lmcache" already get their own GUIDES row, so adding
+# them here would change labels that are correct today.
+CONNECTOR_LABELS = {
+    "moriio": "MORI",
+    "nixl": "NIXL",
+}
 
-def accel_engine_label(engine: str, accelerator: str) -> str:
-    """Render a badge label like "vLLM GPU" / "SGLang GPU" / "TRTLLM GPU".
+
+def accel_engine_label(engine: str, accelerator: str, connector: str = "") -> str:
+    """Render a badge label like "vLLM GPU" / "SGLang GPU" / "vLLM ROCm NIXL".
 
     Combining the engine with the accelerator keeps multiple same-accelerator
     engines within one cell distinguishable, and is shared so the nightly and
-    release matrices label badges identically.
+    release matrices label badges identically. The connector is appended only for
+    the values in CONNECTOR_LABELS, where engine+accelerator would otherwise
+    collide.
     """
     engine_label = ENGINE_LABELS.get(engine, engine.upper())
     accelerator_label = ACCELERATOR_LABELS.get(accelerator, accelerator.upper())
-    return f"{engine_label} {accelerator_label}"
+    label = f"{engine_label} {accelerator_label}"
+    connector_label = CONNECTOR_LABELS.get(connector)
+    return f"{label} {connector_label}" if connector_label else label
 
 # (display_name, guide_path, workflow_slugs, connector_filter)
 # workflow_slugs: a string or tuple of strings to match parsed guide slugs.
@@ -64,13 +103,16 @@ GUIDES = [
     ("Optimized Baseline", "../guides/optimized-baseline/README.md", "optimized-baseline", None),
     ("Precise Prefix Cache Routing", "../guides/precise-prefix-cache-routing/README.md", ("precise-prefix-cache-routing", "precise-prefix-cache"), None),
     ("P/D Disaggregation", "../guides/pd-disaggregation/README.md", "pd-disaggregation", None),
-    ("Wide Expert Parallelism", "../guides/wide-ep-lws/README.md", "wide-ep-lws", None),
+    ("Wide Expert Parallelism", "../guides/wide-ep/README.md", "wide-ep", None),
     ("Tiered Prefix Cache (CPU Offloading)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "native"),
     ("Tiered Prefix Cache (LMCache)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "lmcache"),
     ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency-routing", None),
     ("Flow Control", "../guides/flow-control/README.md", "flow-control", None),
-    ("Workload Autoscaling (WVA)", "../guides/workload-autoscaling/README.md", "workload-autoscaling", None),
-    ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation/README.md", "fast-model-actuation", None),
+    ("Workload Autoscaling (KEDA + EPP Queue)", "../guides/workload-autoscaling/keda-epp-queue/README.md", "workload-autoscaling-keda-epp", None),
+    ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation-base/README.md", "fast-model-actuation-base", None),
+    ("Multimodal Serving (Aggregation)", "../guides/multimodal-serving/aggregation/README.md", "multimodal-serving-aggregation", None),
+    ("Multimodal Serving (E-Disaggregation)", "../guides/multimodal-serving/e-disaggregation/README.md", "multimodal-serving-e-disaggregation", None),
+    ("Fast Model Actuation + KEDA Autoscaling", "../guides/fast-model-actuation-keda/README.md", "fast-model-actuation-keda", None),
 ]
 
 # ---------------------------------------------------------------------------
@@ -89,6 +131,21 @@ def _extract_badge_name(path: Path) -> str | None:
     """Extract the badge_name value from a workflow YAML file."""
     content = path.read_text(encoding="utf-8")
     m = re.search(r"badge_name:\s*(\S+)", content)
+    return m.group(1) if m else None
+
+
+def _extract_badge_label(path: Path) -> str | None:
+    """Extract the badge_label value from a workflow YAML file.
+
+    Unlike badge_name, badge_label is quoted and contains spaces and hyphens
+    ("VLLM ROCM MORI WIDE-EP", "VLLM GPU Queue"), so it cannot reuse the
+    non-whitespace pattern that badge_name uses. The quotes are optional to match YAML, and the value is what
+    reusable-update-badge.yaml writes into the endpoint file's "label" field --
+    a placeholder has to reuse it verbatim or the cell's label would change the
+    first time a real run replaced the placeholder.
+    """
+    content = path.read_text(encoding="utf-8")
+    m = re.search(r'^\s*badge_label:\s*"?([^"\n]+?)"?\s*$', content, re.MULTILINE)
     return m.group(1) if m else None
 
 
@@ -122,9 +179,9 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str,
 
     Returns:
         dict keyed by (guide_slug, provider, connector) -> sorted list of
-        (accelerator, filename, badge_name, engine) tuples.
+        (accelerator, filename, badge_name, engine, connector) tuples.
     """
-    result: dict[tuple[str, str, str], list[tuple[str, str, str, str]]] = {}
+    result: dict[tuple[str, str, str], list[tuple[str, str, str, str, str]]] = {}
 
     for path in sorted(WORKFLOWS_DIR.glob(f"{WORKFLOW_PREFIX}*.yaml")):
         filename = path.name
@@ -140,9 +197,12 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str,
 
         guide_slug, provider, _offload_dest, accelerator, engine, connector = parsed
         key = (guide_slug, provider, connector)
-        # engine is appended last so the existing (accelerator, filename) sort
-        # order — and thus badge order within a cell — is unaffected.
-        result.setdefault(key, []).append((accelerator, filename, badge_name, engine))
+        # engine and connector are appended last so the existing
+        # (accelerator, filename) sort order — and thus badge order within a
+        # cell — is unaffected.
+        result.setdefault(key, []).append(
+            (accelerator, filename, badge_name, engine, connector)
+        )
 
     for entries in result.values():
         entries.sort()
@@ -151,7 +211,7 @@ def discover_workflows() -> dict[tuple[str, str, str], list[tuple[str, str, str,
 
 
 def iter_provider_entries(workflows, guide_slugs, provider, connector_filter):
-    """Yield (accelerator, filename, badge_name, engine) for a guide/provider cell.
+    """Yield (accelerator, filename, badge_name, engine, connector) per cell.
 
     Encapsulates the connector-filter matching so both matrices resolve cells
     identically.
@@ -167,6 +227,30 @@ def iter_provider_entries(workflows, guide_slugs, provider, connector_filter):
         for key, entries in workflows.items():
             if key[0] in guide_slugs and key[1] == provider:
                 yield from entries
+
+
+def matrix_badge_labels() -> dict[str, str]:
+    """Map badge_name -> badge_label for every cell the matrices render.
+
+    Walks the same GUIDES x PROVIDERS grid as the two sync scripts, so this is
+    the authoritative answer to "which badges does the table point at". A shields
+    endpoint has no default-if-missing -- a cell whose file does not exist renders
+    "custom badge: resource not found" -- so seed-release-badges.py uses this to
+    place a "never run" file for every cell before any lane has run.
+    """
+    workflows = discover_workflows()
+    labels: dict[str, str] = {}
+
+    for _display_name, _guide_path, guide_slugs, connector_filter in GUIDES:
+        for provider in PROVIDERS:
+            for _acc, filename, badge_name, _eng, _conn in iter_provider_entries(
+                workflows, guide_slugs, provider, connector_filter
+            ):
+                label = _extract_badge_label(WORKFLOWS_DIR / filename)
+                if label is not None:
+                    labels[badge_name] = label
+
+    return labels
 
 
 # ---------------------------------------------------------------------------

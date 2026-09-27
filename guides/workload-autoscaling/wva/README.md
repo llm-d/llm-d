@@ -1,8 +1,21 @@
 # Autoscaling Workloads with HPA and WVA Metrics
 
 > [!WARNING]
-> The VariantAutoscaling CRD has been deprecated in llm-d 0.8.0 in favor of
-HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. The VariantAutoscaling CRD will be removed in 0.9.0.
+> **The Workload Variant Autoscaler (WVA) is deprecated.** WVA is no longer
+> developed and receives no further releases. `v0.9.0` is the final version, and
+> the manifests in this guide are pinned to it — the controller overlays track
+> the upstream `release-0.9` branch and pin the controller image to
+> `ghcr.io/llm-d/llm-d-workload-variant-autoscaler:v0.9.0`. This guide is kept
+> for existing deployments only; it will not gain new features.
+>
+> New deployments should use a KEDA + EPP path instead — see the
+> [KEDA + EPP Metrics guide](../keda-epp/README.md) and its saturation signal
+> overlay, the closest replacement for WVA's saturation signal, or the other
+> paths in the [autoscaling overview](../README.md#paths).
+>
+> The VariantAutoscaling CRD was already deprecated in llm-d 0.8.0 in favor of
+> an HPA driven by the `wva_desired_replicas` external metric, which is the
+> approach this guide covers.
 
 The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
@@ -176,6 +189,8 @@ The manifests follow the same `${PLATFORM}` split as the WVA install above:
 
 - [`keda/base`](optimized-baseline/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
 - [`keda/ocp`](optimized-baseline/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
+
+The ScaledObject in `keda/base` is named and labelled for the NVIDIA model server. On AMD, layer the [`keda/components/amd`](optimized-baseline/keda/components/amd/kustomization.yaml) component onto your overlay to retarget it at the ROCm model server and MI355X.
 
 Before applying, update `serverAddress` and the `namespace` in the trigger query to match your cluster.
 

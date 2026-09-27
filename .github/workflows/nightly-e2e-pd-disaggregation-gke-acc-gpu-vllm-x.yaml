@@ -52,6 +52,26 @@ on:
         required: false
         default: 'true'
         type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
+      cluster_name:
+        description: 'GKE cluster name'
+        required: false
+        default: 'llm-d-e2e-us-east5-2'
+        type: 'string'
+      cluster_zone:
+        description: 'GKE cluster zone or region'
+        required: false
+        default: 'us-east5'
+        type: 'string'
 
 #  push:
 #    branches:
@@ -82,8 +102,8 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'gke/base' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-gke-gpu' }}
-      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
-      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-east5-2' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-east5' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -97,6 +117,8 @@ jobs:
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
 #      workload: ${{ inputs.workload || 'guide_pd-disaggregation_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit
 
   update-badge:
@@ -109,3 +131,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

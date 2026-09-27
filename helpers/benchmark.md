@@ -1,6 +1,6 @@
 # Benchmarking llm-d Guides
 
-This helper is the **single source of truth** for benchmarking a deployed llm-d stack. Individual guides (`optimized-baseline`, `pd-disaggregation`, `precise-prefix-cache-routing`, `wide-ep-lws`, `workload-autoscaling`, etc.) reference this doc for concepts, installation, configuration, and troubleshooting — and provide only the specific `llmdbenchmark` command tailored to their topology.
+This helper is the **single source of truth** for benchmarking a deployed llm-d stack. Individual guides (`optimized-baseline`, `pd-disaggregation`, `precise-prefix-cache-routing`, `wide-ep`, `workload-autoscaling`, etc.) reference this doc for concepts, installation, configuration, and troubleshooting — and provide only the specific `llmdbenchmark` command tailored to their topology.
 
 If you arrived here from a guide and just want the short command, skip to [Quick start](#quick-start). If you're here to understand what's actually happening, read top-to-bottom.
 
@@ -135,7 +135,7 @@ Below is subset of available harnesses and workloads that are supported today - 
 
 | Harness | Profile directory | Profiles shipped |
 |---|---|---|
-| `inference-perf` | [`workload/profiles/inference-perf/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/inference-perf) | `shared_prefix_synthetic.yaml` (short smoke run), `shared_prefix_synthetic_short.yaml`, `shared_prefix_multi_turn_chat.yaml`, `guide_optimized-baseline_1.yaml` (reproduces the optimized-baseline report ladder), `guide_pd-disaggregation_1.yaml`, `guide_pd-disaggregation_2.yaml`, `guide_precise-prefix-cache-routing_1.yaml`, `guide_tiered-prefix-cache_1.yaml`, `guide_wide-ep-lws_1.yaml`, `chatbot_synthetic.yaml`, `chatbot_sharegpt.yaml`, `code_completion_synthetic.yaml`, `summarization_synthetic.yaml`, `agentic_code_generation.yaml`, `otel_traces.yaml`, `random_concurrent.yaml`, `sanity_random.yaml` |
+| `inference-perf` | [`workload/profiles/inference-perf/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/inference-perf) | `shared_prefix_synthetic.yaml` (short smoke run), `shared_prefix_synthetic_short.yaml`, `shared_prefix_multi_turn_chat.yaml`, `guide_optimized-baseline_1.yaml` (reproduces the optimized-baseline report ladder), `guide_pd-disaggregation_1.yaml`, `guide_pd-disaggregation_2.yaml`, `guide_precise-prefix-cache-routing_1.yaml`, `guide_tiered-prefix-cache_1.yaml`, `guide_wide-ep_1.yaml`, `chatbot_synthetic.yaml`, `chatbot_sharegpt.yaml`, `code_completion_synthetic.yaml`, `summarization_synthetic.yaml`, `agentic_code_generation.yaml`, `otel_traces.yaml`, `random_concurrent.yaml`, `sanity_random.yaml` |
 | `guidellm` | [`workload/profiles/guidellm/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/guidellm) | `shared_prefix_synthetic.yaml`, `chatbot_synthetic.yaml`, `summarization_synthetic.yaml`, `guide_optimized-baseline_1.yaml`, `guide_precise-prefix-cache-routing_1.yaml`, `guide_workload-autoscaling_1.yaml`, `sanity_concurrent.yaml`, `sanity_random.yaml` |
 | `vllm-benchmark` | [`workload/profiles/vllm-benchmark/`](https://github.com/llm-d/llm-d-benchmark/tree/main/workload/profiles/vllm-benchmark) | `fixed_dataset.yaml`, `random_concurrent.yaml`, `sharegpt.yaml`, `sonnet_concurrent.yaml`, `sanity_random.yaml` |
 

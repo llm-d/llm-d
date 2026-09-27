@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--dtype=bfloat16"
+            - "--block-size=64"
+            - "--tensor-parallel-size=4"
+            - "--gpu-memory-utilization=0.85"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":107374182400,"block_size":256,"secondary_tiers":[{"type":"fs","root_dir":"/mnt/files-storage","n_read_threads":16,"n_write_threads":16}]}}'
+            - "--max-num-seq=128"
+            - "--uvicorn-log-level=warning"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: '8'
+              memory: 140Gi
+            requests:
+              cpu: '8'
+              memory: 140Gi
+            claims:
+              - name: intel-decode-claim
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

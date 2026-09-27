@@ -71,8 +71,9 @@
     "architecture/advanced/kv-management/prefix-cache-aware-routing": { "position": 1 },
     "architecture/advanced/kv-management/kv-indexer": { "position": 2 },
     "architecture/advanced/kv-management/kv-offloader": { "position": 3 },
-    "architecture/advanced/autoscaling/hpa-wva": { "position": 1 },
-    "architecture/advanced/autoscaling/hpa-epp": { "position": 2, "label": "EndPoint Picker HPA/KEDA Integration" },
+    "architecture/advanced/autoscaling/keda-epp": { "position": 1, "label": "KEDA + EPP Metrics" },
+    "architecture/advanced/autoscaling/slo-aware-keda": { "position": 2, "label": "SLO-Aware Autoscaling" },
+    "architecture/advanced/autoscaling/wva": { "position": 3, "label": "Workload Variant Autoscaler (Deprecated)" },
     "architecture/advanced/batch/batch-gateway": { "position": 1 },
     "architecture/advanced/batch/async-processor": { "position": 2 },
 
@@ -90,6 +91,8 @@
     "operations/serve-external-apis/kong": { "position": 2, "label": "Kong AI Gateway Integration" },
     "operations/router": { "position": 5, "label": "Router Operations" },
     "operations/async-processor": { "position": 6, "label": "Async Processor Operations" },
+    "operations/graceful-shutdown": { "position": 7, "label": "Graceful Shutdown & Draining" },
+    "operations/model-loading-and-startup": { "position": 8, "label": "Model Loading and Startup Acceleration" },
 
     "infrastructure/multi-node": { "position": 3, "label": "Kubernetes Multi-Node Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },

@@ -8,6 +8,10 @@ asymmetry in the design exists. For the deployable manifests, tunables, and
 benchmark results, use the guide; read this when you want to understand or
 modify the loop itself.
 
+This is a specialization of the [KEDA + EPP design](./keda-epp.md): the same
+pipeline and the same KEDA-owned HPA, with latency rather than queue depth as
+the signal.
+
 Five steps, evaluated continuously. Steps 1–2 are the parts you deploy
 (recording rules + formula); 3–4 are standard HPA/Kubernetes mechanics that
 shape the response; 5 is why it converges.

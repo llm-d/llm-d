@@ -57,10 +57,9 @@ See [Batch Inference](advanced/batch/README.md) for details on the batch inferen
 
 ### Autoscaling
 
-llm-d supports proactive, SLO-aware autoscaling through two complementary approaches:
+llm-d supports proactive, SLO-aware autoscaling driven by metrics exported by the EPP. KEDA's Prometheus scaler reads those signals — queue depth, pool saturation, token backlog, or estimated latency against an SLO — and creates and owns the HPA that scales model server replicas. No custom controller or Prometheus Adapter is required.
 
-- **HPA/KEDA**: Standard Kubernetes-native scaling using metrics exported by the EPP (like queue depth).
-- **Workload Variant Autoscaler (WVA)**: Globally optimized scaling that minimizes cost by placing replicas across different variants or across inference pools while meeting latency targets.
+The Workload Variant Autoscaler (WVA), which globally optimized replica placement across variants and inference pools, is deprecated.
 
 See [Autoscaling](advanced/autoscaling/README.md) for complete details.
 

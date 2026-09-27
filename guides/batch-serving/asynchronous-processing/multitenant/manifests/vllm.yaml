@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: llm-d-async
+  labels:
+    app: vllm-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-1
+  template:
+    metadata:
+      labels:
+        app: vllm-1
+        model: qwen3-8b
+        inference_pool: llm-d-router
+    spec:
+      containers:
+      - name: vllm-server
+        image: vllm/vllm-openai:v0.19.1
+        command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+        args:
+        - --model
+        - Qwen/Qwen3-8B
+        - --tensor-parallel-size
+        - "1"
+        - --gpu-memory-utilization
+        - "0.95"
+        - --max-model-len
+        - "4000"
+        env:
+        - name: VLLM_PORT
+          value: "8000"
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-secret
+              key: token
+        ports:
+        - name: modelserver
+          containerPort: 8000
+          protocol: TCP
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "7"
+            memory: "20Gi"
+            nvidia.com/gpu: "1"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: modelserver
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 540
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: modelserver
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: modelserver
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory

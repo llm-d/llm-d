@@ -1,0 +1,13 @@
+nameReference:
+  - kind: ServiceAccount
+    fieldSpecs:
+      - path: spec/leaderWorkerTemplate/leaderTemplate/spec/serviceAccountName
+        kind: LeaderWorkerSet
+      - path: spec/leaderWorkerTemplate/workerTemplate/spec/serviceAccountName
+        kind: LeaderWorkerSet
+  - kind: ResourceClaimTemplate
+    fieldSpecs:
+      - path: spec/leaderWorkerTemplate/leaderTemplate/spec/resourceClaims/resourceClaimTemplateName
+        kind: LeaderWorkerSet
+      - path: spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims/resourceClaimTemplateName
+        kind: LeaderWorkerSet

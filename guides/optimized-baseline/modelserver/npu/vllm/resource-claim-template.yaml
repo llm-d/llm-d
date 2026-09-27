@@ -1,0 +1,19 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: npu-claim-template-decode
+  labels:
+    llm-d.ai/role: decode
+spec:
+  spec:
+    devices:
+      requests:
+        - name: rebel
+          exactly:
+            count: 1
+            deviceClassName: npu.rebellions.ai
+            # One DeviceClass serves every Rebellions product, so a claim reaches a
+            # specific NPU only by filtering here. productName carries no domain prefix.
+            selectors:
+              - cel:
+                  expression: device.attributes["npu.rebellions.ai"].productName.startsWith("RBLN-CR")

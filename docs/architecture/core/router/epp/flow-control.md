@@ -211,10 +211,10 @@ plugins:
     headroom: 0.0
 # ... other plugins ...
 
-saturationDetector:
-  pluginRef: concurrency-detector
-
 flowControl:
+  saturationDetector:
+    pluginRef: concurrency-detector
+
   maxBytes: "10Gi"
   maxRequests: "1k"
   defaultRequestTTL: "60s"
