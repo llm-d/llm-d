@@ -31,3 +31,7 @@ Operational best practices, high availability scaling modes, standalone proxy ar
 ### [Async Processor Operations](async-processor.md)
 
 Throughput modeling, concurrency sizing (backed by a measured sweep), container resource sizing, and horizontal scaling for the Async Processor batch-dispatch agent.
+
+### [Deployment Planning](planner.md)
+
+Sizing an llm-d deployment with llm-d-planner: model, accelerator, tensor parallelism, and replica count recommendations from your workload and SLOs, plus generated deployment manifests.

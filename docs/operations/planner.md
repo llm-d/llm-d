@@ -1,5 +1,8 @@
 # Planning an llm-d Deployment
 
+> [!WARNING]
+> llm-d-planner is **experimental** and lives in [llm-d-incubation](https://github.com/llm-d-incubation). Its recommendations, CLI, and APIs may change in upcoming releases. Treat its output as a starting point, and validate any configuration it recommends by benchmarking on your own cluster.
+
 [llm-d-planner](https://github.com/llm-d-incubation/llm-d-planner) helps you narrow down a particular `llm-d` configuration needed to support your usage requirements by using a data driven, AI infused methodology.
 
 You provide the `planner` with key details for your workload and it searches benchmark data for the model and accelerator combinations that can meet them. The `planner` will then generate deployment artifacts and manifests for the option you choose.
@@ -176,7 +179,7 @@ Quality scores come from public evaluations instead of from your cluster: human 
 
 ## Deploying onto llm-d
 
-Left alone, the Planner writes a vLLM deployment. To target the stack these guides deploy, choose the llm-d option through the "llm-d (inference stack)" radio on the Deployment tab, `"stack": "llm-d"` on `POST /api/v1/generate-deployment`, or `stack="llm-d"` in the library. What comes out is a kustomize overlay over this repo's [model server recipe](../guides/recipes/modelserver/base/single-host/default) together with Helm values for the scheduler:
+Left alone, the Planner writes a vLLM deployment. To target the stack these guides deploy, choose the llm-d option through the "llm-d (inference stack)" radio on the Deployment tab, `"stack": "llm-d"` on `POST /api/v1/generate-deployment`, or `stack="llm-d"` in the library. What comes out is a kustomize overlay over this repo's [model server recipe](../../guides/recipes/modelserver/base/single-host/default) together with Helm values for the scheduler:
 
 ```text
 generated_configs/<deployment-id>/
@@ -200,20 +203,20 @@ helm install <deployment-id> \
     -n ${NAMESPACE}
 ```
 
-Once it is running, [`helpers/smoke-test/`](./smoke-test/README.md) confirms the endpoint is serving and [`helpers/benchmark.md`](./benchmark.md) tells you how it behaves under load.
+Once it is running, [`helpers/smoke-test/`](../../helpers/smoke-test/README.md) confirms the endpoint is serving and [`helpers/benchmark.md`](../../helpers/benchmark.md) tells you how it behaves under load.
 
 > [!IMPORTANT]
 > Treat the generated manifests as a starting point rather than a substitute for a well-lit path.
 >
-> In practice you will get further by deploying whichever guide matches your topology, such as [Optimized Baseline](../guides/optimized-baseline/README.md) or [Prefill/Decode Disaggregation](../guides/pd-disaggregation/README.md), and carrying the Planner's model, parallelism, and replica numbers into it.
+> In practice you will get further by deploying whichever guide matches your topology, such as [Optimized Baseline](../../guides/optimized-baseline/README.md) or [Prefill/Decode Disaggregation](../../guides/pd-disaggregation/README.md), and carrying the Planner's model, parallelism, and replica numbers into it.
 
 ## Bringing your own benchmark data
 
-A recommendation is only as good as the benchmark data behind it, and the bundled data will not cover every combination of accelerator, model, and traffic profile that matters to you. Once you have a stack deployed, run the workload you care about with [`helpers/benchmark.md`](./benchmark.md) and load the results back into the Planner. The `make db-load-*` targets append to the database, the UI uploads them from its Configuration tab, and `POST /api/v1/db/upload-benchmarks` does the same over REST. From then on, recommendations for that combination rest on measurements from your own cluster.
+A recommendation is only as good as the benchmark data behind it, and the bundled data will not cover every combination of accelerator, model, and traffic profile that matters to you. Once you have a stack deployed, run the workload you care about with [`helpers/benchmark.md`](../../helpers/benchmark.md) and load the results back into the Planner. The `make db-load-*` targets append to the database, the UI uploads them from its Configuration tab, and `POST /api/v1/db/upload-benchmarks` does the same over REST. From then on, recommendations for that combination rest on measurements from your own cluster.
 
 ## Good to know
 
-Gated models need a token. The Capacity Planner reads model configuration directly from HuggingFace, so sizing a Llama model means exporting `HF_TOKEN` into the environment the backend runs in. It is the same token the guides use for the `llm-d-hf-token` Secret, described in [`helpers/hf-token.md`](./hf-token.md), and the backend always reads it from its own environment rather than from the request.
+Gated models need a token. The Capacity Planner reads model configuration directly from HuggingFace, so sizing a Llama model means exporting `HF_TOKEN` into the environment the backend runs in. It is the same token the guides use for the `llm-d-hf-token` Secret, described in [`helpers/hf-token.md`](../../helpers/hf-token.md), and the backend always reads it from its own environment rather than from the request.
 
 The backend binds port 8000, which is also the port the guides use when port-forwarding to the gateway, so stop one before you start the other.
 
