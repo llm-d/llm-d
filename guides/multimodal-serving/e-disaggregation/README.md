@@ -325,10 +325,10 @@ Once the Encode Worker processes a multimodal item, the EC Connector handles the
 This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
 
-The vLLM E/PD and E/P/D profiles use the upstream vLLM nightly image (`docker.io/vllm/vllm-openai:nightly`), set `VLLM_USE_V2_MODEL_RUNNER=1` on each vLLM instance that uses the ECCPU Connector (all instances in E/PD, encode and prefill in E/P/D) because the [ECCPU Connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/) requires the V2 model runner, and configure it in P2P NIXL mode (`"ec_enable_nixl": true` and `ec_cpu_bytes`, the size of the shared CPU region).
+The vLLM E/PD and E/P/D profiles use the upstream vLLM `v0.30.0` image (`docker.io/vllm/vllm-openai:v0.30.0`), set `VLLM_USE_V2_MODEL_RUNNER=1` on each vLLM instance that uses the ECCPU Connector (all instances in E/PD, encode and prefill in E/P/D) because the [ECCPU Connector](https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/) requires the V2 model runner, and configure it in P2P NIXL mode (`"ec_enable_nixl": true` and `ec_cpu_bytes`, the size of the shared CPU region).
 
 > [!IMPORTANT]
-> The P2P NIXL mode requires a vLLM build that contains [vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941). At the time of writing, only the nightly image contains it. vLLM `v0.29.0` and earlier releases accept `"ec_enable_nixl": true` but do not read it: the pods start and requests succeed, but no encoder output is transferred and the consumer encodes the media again. No error is reported. To confirm that the transfer occurs, see [Confirm the EC Transfer](#3-confirm-the-ec-transfer-vllm-profiles).
+> The P2P NIXL mode requires vLLM `v0.30.0` or later ([vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941)). Earlier releases silently ignore `"ec_enable_nixl": true`: requests succeed, but the consumer encodes the media again. See [Confirm the EC Transfer](#3-confirm-the-ec-transfer-vllm-profiles).
 
 ### E/PD Request Flow
 

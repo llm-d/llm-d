@@ -39,7 +39,7 @@ spec:
             # and costly re-encodings that degrade system performance.
             # 40 GiB holds about 1,000,000 encoder tokens for Qwen3-VL-32B (40,960 bytes
             # each). The value must fit in the /dev/shm volume.
-            # See https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+            # See https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/
             - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"ec_enable_nixl": true, "ec_cpu_bytes": 42949672960}}'
           env:
             - name: VLLM_EC_SIDE_CHANNEL_HOST

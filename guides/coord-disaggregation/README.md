@@ -91,16 +91,16 @@ topology choice:
 
 > [!NOTE]
 > Encoder-cache transfer between instances (the P2P NIXL mode of `--ec-transfer-config`,
-> [vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941)) is not yet
-> in an official vLLM release, so the model server manifests use the upstream vLLM
-> nightly image
-> (`docker.io/vllm/vllm-openai:nightly`), the same one the E/PD and E/P/D profiles
+> [vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941)) and the
+> `--enable-scale-out` flag
+> ([vllm-project/vllm#55176](https://github.com/vllm-project/vllm/pull/55176)) require
+> vLLM `v0.30.0` or later, so the model server manifests use the upstream vLLM `v0.30.0`
+> image (`docker.io/vllm/vllm-openai:v0.30.0`), the same one the E/PD and E/P/D profiles
 > of the [Encode Disaggregation guide](../multimodal-serving/e-disaggregation/README.md)
 > use. The encode and prefill model servers set `VLLM_USE_V2_MODEL_RUNNER=1`,
 > which the
-> [CPU EC connector](https://docs.vllm.ai/en/latest/features/ec_cpu_connector/)
-> requires, and use its P2P NIXL mode (`ec_enable_nixl`, `ec_cpu_bytes`). Replace the
-> nightly image with an official vLLM release once a release contains that change.
+> [CPU EC connector](https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/)
+> requires, and use its P2P NIXL mode (`ec_enable_nixl`, `ec_cpu_bytes`).
 >
 > vLLM `v0.29.0` and earlier releases accept `"ec_enable_nixl": true` but do not read it:
 > the pods start and requests succeed, but no encoder output is transferred and the

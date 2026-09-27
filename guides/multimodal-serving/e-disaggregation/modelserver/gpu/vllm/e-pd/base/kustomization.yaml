@@ -7,7 +7,13 @@ namePrefix: e-pd-disaggregation-nvidia-gpu-vllm-
 
 components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
-  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/release
+
+# TODO(#2595): Remove this override once gpu-vllm/release is bumped to v0.30.0.
+# vLLM v0.30.0 is the first release with the ECCPU Connector P2P NIXL mode (vllm-project/vllm#47941).
+images:
+  - name: docker.io/vllm/vllm-openai
+    newTag: v0.30.0
 
 labels:
   - pairs:
@@ -24,7 +30,7 @@ patches:
   # VLLM_USE_V2_MODEL_RUNNER=1 for all vLLM instances: both instances (encode
   # and PD decode) use the CPU EC connector, which fails at startup without the
   # V2 model runner, see
-  # https://docs.vllm.ai/en/latest/features/ec_cpu_connector/
+  # https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/
   - target:
       kind: Deployment
     patch: |-
