@@ -60,7 +60,7 @@ See [`env.sh`](./env.sh) for the full list of variables it provides (Helm chart 
 
 ### Default Container Images
 
-Default model server and sidecar images are defined as [Kustomize Components](./recipes/modelserver/components/images/README.md) under `recipes/modelserver/components/images/`. Guides include the relevant component instead of hardcoding image versions:
+Default model server, sidecar, and coordinator images are defined as [Kustomize Components](./recipes/modelserver/components/images/README.md) under `recipes/modelserver/components/images/`. Guides include the relevant component instead of hardcoding image versions:
 
 ```yaml
 components:
@@ -83,6 +83,8 @@ The following components provide a `nightly` variant (run from `recipes/modelser
 $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$/{print p; print $0}'
 .
 ├── amd-vllm
+│   ├── nightly
+├── coordinator
 │   ├── nightly
 ├── gpu-sglang
 │   ├── nightly

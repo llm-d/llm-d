@@ -16,6 +16,9 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── amd-vllm-omni
 │   └── release
+├── coordinator
+│   ├── nightly
+│   └── release
 ├── cpu-vllm
 │   ├── llm-d
 │   ├── nightly
@@ -67,7 +70,7 @@ components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
 ```
 
-The component replaces the `REPLACE_MODEL_SERVER_IMAGE` placeholder (or `REPLACE_ROUTING_SIDECAR_IMAGE` for the sidecar) with the default image.
+The component replaces the `REPLACE_MODEL_SERVER_IMAGE` placeholder (`REPLACE_ROUTING_SIDECAR_IMAGE` for the sidecar, `REPLACE_COORDINATOR_IMAGE` for the coordinator) with the default image.
 
 ## Overriding
 
