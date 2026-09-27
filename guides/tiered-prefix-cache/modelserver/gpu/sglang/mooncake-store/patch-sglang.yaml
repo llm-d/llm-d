@@ -6,50 +6,31 @@ spec:
   template:
     metadata:
       annotations:
-        # RDMA-capable secondary interfaces via Multus, so the pod's own netns has a
-        # real netdev+GID for RoCE (the rdma/roce_gdr device plugin alone only exposes
-        # ibverbs char devices, not a netdev inside the pod). 2 interfaces to match
-        # --tensor-parallel-size=2.
+        # Dedicated SR-IOV VF on the p1 RDMA pool, one per pod -- avoids the
+        # rdma/roce_gdr shared-pool ambiguity (that resource grants verbs access
+        # to any of p0-p15/q0/q1 on the node, not a specific device) and the
+        # macvlan fan-out's node-local-vs-cross-node GID guessing.
         k8s.v1.cni.cncf.io/networks: |
           [
-            {"name":"multi-nic-inference","namespace":"amit","interface":"net1"},
-            {"name":"multi-nic-inference","namespace":"amit","interface":"net2"}
+            {"name":"amit-p1-rdma","namespace":"amit","interface":"net1"}
           ]
     spec:
-      # Discover the Multus/RDMA interfaces after the pod network namespace has
-      # been created and generate the per-interface policy-routing commands.
-      # The modelserver sources the generated file below before starting SGLang.
-      initContainers:
-        - name: preprocess
-          image: ghcr.io/llm-d/llm-d-benchmark:nightly
-          imagePullPolicy: Always
-          command:
-            - set_llmdbench_environment.py
-            - -e
-            - /shared-config/llmdbench_env.sh
-            - -i
-          volumeMounts:
-            - name: shared-config
-              mountPath: /shared-config
       containers:
         - name: modelserver
-          
+
           command:
             - /bin/sh
             - -c
             - |
-              . /shared-config/llmdbench_env.sh || exit 1
               python3 /scripts/render_config.py || exit 1
-              set -a
-              . /etc/mooncake/mooncake.env
-              set +a
+              . /etc/mooncake/mooncake.env || exit 1
               exec python3 -m sglang.launch_server "$@"
             - --
           args:
             - "--model-path=Qwen/Qwen3-32B"
             - "--host=0.0.0.0"
             - "--port=8000"
-            - "--tensor-parallel-size=2"
+            - "--tensor-parallel-size=1"
             # KV-block granularity. Must match the router scorer's
             # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
             # --page-size, where vLLM uses --block-size.
@@ -77,62 +58,42 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # Disk tier tuning. SGLang forwards only enable_ssd_offload/ssd_offload_path from
-            # the JSON config; everything below is read straight from the environment by the
-            # Mooncake C++ library (mooncake-store/src/storage_backend.cpp).
+            # Read straight from env by Mooncake's C++ lib (storage_backend.cpp), not the JSON.
             - name: MOONCAKE_OFFLOAD_STORAGE_BACKEND_DESCRIPTOR
               value: bucket_storage_backend
-            # Cap the backend at the volume size. Left unset it sizes itself from statvfs on
-            # the mount, which for an emptyDir reports the whole node disk ("Bucket backend
-            # max_total_size not set; using 90% of disk capacity: 1727017242624 bytes") -- it
-            # would then overrun the emptyDir sizeLimit and the kubelet would evict the pod
-            # rather than Mooncake reclaiming cache entries.
-            # Note this is the bucket backend's knob; MOONCAKE_OFFLOAD_TOTAL_SIZE_LIMIT_BYTES
-            # belongs to file_per_key_storage_backend and is ignored here.
+            # Left unset, sizes itself from the mount's statvfs (whole node disk for an
+            # emptyDir) and overruns the volume before Mooncake ever evicts.
             - name: MOONCAKE_OFFLOAD_BUCKET_MAX_TOTAL_SIZE
               value: "429496729600" # 400Gi, matching the mooncake-offload volume
-            # Only "fifo" and "lru" are recognised; anything else falls through to "none",
-            # i.e. no eviction at all, which turns the cap above into a write-failure cliff.
+            # Anything other than "fifo"/"lru" falls through to no eviction at all.
             - name: MOONCAKE_OFFLOAD_BUCKET_EVICTION_POLICY
               value: "lru"
-          securityContext:
-            capabilities:
-              add:
-                - NET_ADMIN
-            runAsGroup: 0
-            runAsUser: 0
           resources:
             limits:
               nvidia.com/gpu: "2"
               cpu: "16"
               memory: 400Gi
-              rdma/roce_gdr: "1"
+              openshift.io/p1_sriov_nodepolicy: "1"
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
               memory: 200Gi
-              rdma/roce_gdr: "1"
+              openshift.io/p1_sriov_nodepolicy: "1"
           volumeMounts:
-            - mountPath: /shared-config
-              name: shared-config
             - mountPath: /scripts
               name: mooncake-render-script
               readOnly: true
             - mountPath: /etc/mooncake-template
               name: mooncake-config-template
               readOnly: true
-            # Writable: the wrapper renders mooncake_config.json and mooncake.env here.
             - mountPath: /etc/mooncake
               name: mooncake-config
             - mountPath: /.cache
               name: cache-volume
-            # The disk this pod contributes to the Mooncake pool. Must match
-            # ssd_offload_path in configmap.yaml and the master's root_fs_dir.
+            # Must match ssd_offload_path in configmap.yaml and the master's root_fs_dir.
             - mountPath: /data/mooncake-offload
               name: mooncake-offload
       volumes:
-        - name: shared-config
-          emptyDir: {}
         - name: mooncake-render-script
           configMap:
             name: mooncake-render-config
@@ -143,9 +104,7 @@ spec:
           emptyDir: {}
         - name: cache-volume
           emptyDir: {}
-        # Node-local disk contributed to the Mooncake pool. Ephemeral by design: it survives
-        # container restarts but is wiped when the pod is deleted or rescheduled, so the L3
-        # tier cold-starts on every rollout.
+        # Ephemeral: survives restarts but wiped on reschedule, so L3 cold-starts each rollout.
         - name: mooncake-offload
           emptyDir:
             sizeLimit: 400Gi
