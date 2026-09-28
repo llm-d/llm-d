@@ -101,10 +101,12 @@ verify:
     # raises the target. Ported from .github/scripts/e2e/e2e-validate-scale-event.sh.
     scale_event:
       - run: |
-          # Burst/timeout knobs (override via env). SCALE_DOWN_TIMEOUT matches the
-          # ScaledObject's 300s scaleDown stabilization window; the nightly lowers
-          # that window and can override this shorter.
-          : "${SCALE_CONCURRENCY:=30}" "${SCALE_TOTAL:=400}" "${SCALE_MAX_TOKENS:=512}" "${SCALE_UP_TIMEOUT:=120}" "${SCALE_DOWN_TIMEOUT:=360}"
+          # Burst/timeout knobs (override via env). SCALE_UP_TIMEOUT and
+          # SCALE_DOWN_TIMEOUT both match the ScaledObject's 300s scaleUp/scaleDown
+          # stabilization windows (a full window can elapse before the HPA acts on
+          # a decision); the nightly lowers those windows in its overlay and can
+          # override these shorter.
+          : "${SCALE_CONCURRENCY:=30}" "${SCALE_TOTAL:=400}" "${SCALE_MAX_TOKENS:=512}" "${SCALE_UP_TIMEOUT:=360}" "${SCALE_DOWN_TIMEOUT:=360}"
           MIN=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.minReplicas}' 2>/dev/null); MIN=${MIN:-1}
           HOST=$(kubectl get service optimized-baseline-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}'):80
           POD=curl-scale-$$
