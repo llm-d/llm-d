@@ -325,13 +325,16 @@ can see:
   ceiling sits close to the running-request threshold, so running requests rarely
   trip scale-up on their own. Treat the running-request trigger as a keep-warm and
   anti-flap floor rather than the driver.
-- **Flow control off.** When the pool saturates, sheddable (negative-priority)
-  requests are rejected with HTTP 429 and everything else passes straight to the
-  model servers. Nothing buffers at the gateway, so
-  `llm_d_epp_flow_control_queue_size` stays near zero and is not a useful scale
-  signal. Drive scaling from `llm_d_epp_request_running` (the direct concurrency
-  signal in this mode) or from the pool-saturation gauge instead, and lower those
-  thresholds to compensate for the queue signal you no longer have.
+- **Flow control off.** This guide enables flow control, so this case applies only
+  if you turn it off. Both signals this guide scales on -
+  `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_pool_saturation` -
+  are exposed *only* when the `flowControl` feature gate is on. With it off the
+  series are not emitted at all, so neither trigger resolves
+  and KEDA reports the metric as unavailable. When the pool saturates in this mode,
+  sheddable (negative-priority) requests are rejected with HTTP 429 and everything
+  else passes straight to the model servers. Scale on a signal that does not depend
+  on flow control instead: `llm_d_epp_request_running` (the EPP running-request
+  count, still emitted) or the vLLM-native `vllm:num_requests_waiting`.
 
 Confirm which mode you are in before tuning:
 
