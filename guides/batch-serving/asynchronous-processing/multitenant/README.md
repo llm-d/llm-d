@@ -184,7 +184,7 @@ kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/vllm.yaml
 ```
 
 > [!TIP]
-> **Prometheus and Grafana:** If you do not already have Prometheus running, deploy the standard stack using the central [Observability Setup Guide](../../../docs/operations/observability/setup.md) (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
+> **Prometheus and Grafana:** If you do not already have Prometheus running, deploy the standard stack using the central [Observability Setup Guide](../../../../docs/operations/observability/setup.md) (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
 
 ### 2. Configure llm-d-router and Apply InferenceObjectives
 
@@ -534,7 +534,7 @@ kubectl run curl-prom --rm -i --restart=Never -n ${NAMESPACE} --image=curlimages
 ## Observability
 
 Self-hosted Prometheus + Grafana works on any cluster and the gates query it in **real time**; it is
-the path for the Redis backend. You can leverage the centralized [Observability Setup Guide](../../../docs/operations/observability/setup.md)
+the path for the Redis backend. You can leverage the centralized [Observability Setup Guide](../../../../docs/operations/observability/setup.md)
 to install the standard Prometheus and Grafana stack:
 
 ```bash

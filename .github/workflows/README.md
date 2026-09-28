@@ -1,6 +1,6 @@
 # Nightly Benchmark Regression tests
 
-Each one of the [guides](../guides) in `llm-d` (also known as "well-lit paths", undergoes a nightly test cycle. This test aims to check not only the basic functionality of a given guide, but in addition to it, track performance regressions by running a "representative" (as defined by the "guide owners", e.g., [optimized-baseline](../guides/optimized-baseline/OWNERS)) workload against it.
+Each one of the [guides](../../guides) in `llm-d` (also known as "well-lit paths", undergoes a nightly test cycle. This test aims to check not only the basic functionality of a given guide, but in addition to it, track performance regressions by running a "representative" (as defined by the "guide owners", e.g., [optimized-baseline](../../guides/optimized-baseline/OWNERS)) workload against it.
 
 ## Components
 
@@ -8,7 +8,7 @@ The main component of this arrangement are the following.
 
 1. Clusters: several members of the `llm-d` project have contributed generously with signifcant computational and human resources to allow for the nightly benchmark testing to take place: AMD, Coreweave, Google, IBM, Intel. Each one of these clusters house a (GitHub) "Actions Runner Controller" (ARC) which will be tasked with executing a particular guide with a combination of parameters.
 2. Automation: the `llm-d` stack on each guide, described via a combination of `Kubernetes` manifests patched with `kustomize` files, it stood up by our benchmark tooling [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark).
-This tool can automatically parse a guide's README (e.g., [optimized-baseline](../guides/optimized-baseline/README.md)) and automatically execute the commands described there. Furthermore, it is `llm-d-benchmark`'s responsibility, once a new stack is fully stood up, to test for its basically functionality (i.e., does it respond to a small set of inference queries?) and then proceed to executed the representative workload defined by the guide owner.
+This tool can automatically parse a guide's README (e.g., [optimized-baseline](../../guides/optimized-baseline/README.md)) and automatically execute the commands described there. Furthermore, it is `llm-d-benchmark`'s responsibility, once a new stack is fully stood up, to test for its basically functionality (i.e., does it respond to a small set of inference queries?) and then proceed to executed the representative workload defined by the guide owner.
 The list of templates for the workloads can be located at the [`workloads`](https://github.com/llm-d/llm-d-benchmark) directory, in the format `<harness name>/guide_<guide name>_<sequential number>.yaml.in` (the "sequential number" allows for multiple representative workloads for each guide).
 3. Jobs: while, for technical reasons (e.g., lack of hardware resources), not every guide is stood up against each cluster, the job names on this directory are normalized following the convention `<workflow>-<guide>-<provider>-<offload destination>-<accelerator>-<inference engine>-<cache connector>.yaml`. Each component of a job name can assume the following values:
    * `<workflow>`: kept as `nightly-e2e` for historical reasons
@@ -22,7 +22,7 @@ The list of templates for the workloads can be located at the [`workloads`](http
 
 The result of each run is displayed on "status badges" on the [release matrix](https://github.com/llm-d/llm-d/blob/main/release/README.md). This matrix presents results in a color-code format specified at [this workflow](https://github.com/llm-d/llm-d-infra/blob/main/.github/workflows/reusable-update-badge.yaml).
 
-Given the fact that, due to the complex nature of `llm-d` stack standup across multiple cluster from different providers can result in **transient** errors not directly related to a particular guide (i.e., not related to `llm-d`), each individual guide has its own set of status badges on its README (e.g, look at the top of [optimized-baseline](../guides/optimized-baseline/README.md)), according to the following rule: a guide is considered to be "passing" (i.e., `green`) if there was at least ONE job which managed to successfully stand it up in the past 5 days.
+Given the fact that, due to the complex nature of `llm-d` stack standup across multiple cluster from different providers can result in **transient** errors not directly related to a particular guide (i.e., not related to `llm-d`), each individual guide has its own set of status badges on its README (e.g, look at the top of [optimized-baseline](../../guides/optimized-baseline/README.md)), according to the following rule: a guide is considered to be "passing" (i.e., `green`) if there was at least ONE job which managed to successfully stand it up in the past 5 days.
 
 While the aforementioned [release matrix](https://github.com/llm-d/llm-d/blob/main/release/README.md) is of interest for mantainers and developers, all users/deployers/customers are encouraged to focus on the status presented at the top of guide's README.
 
