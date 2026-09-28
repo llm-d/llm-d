@@ -19,8 +19,8 @@ spec:
             # remote_host / remote_notify_port / remote_dp_rank /
             # remote_handshake_port / "tx"-prefixed transfer_id tuple
             - --moriio-write-mode
-            # MUST match the vLLM settings
-            - --moriio-tp-size=2
+            # MUST match the vLLM settings; aligned with `amd-ci-1p1d-tp8`
+            - --moriio-tp-size=8
             # Concurrent prefill/decode dispatch: fire both legs in
             # parallel goroutines so decode block-allocation overlaps
             # with prefill compute. Off-by-default in the sidecar;
