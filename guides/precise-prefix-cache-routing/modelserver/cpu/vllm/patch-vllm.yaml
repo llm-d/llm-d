@@ -15,6 +15,8 @@ spec:
           # to match `meta-llama/Llama-3.2-3B-Instruct`.
           args:
             - "meta-llama/Llama-3.2-3B-Instruct"
+            # vLLM 0.30 requires this to serve /v1/*/render for token-producer.
+            - "--enable-scale-out"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--disable-hybrid-kv-cache-manager"
             - "--max_model_len=8192"

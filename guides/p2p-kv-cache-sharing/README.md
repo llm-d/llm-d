@@ -143,7 +143,9 @@ runs it against two live pods and prints the recommended value.
   > `OffloadingConnector` carries the P2P tier
   > (`vllm/v1/kv_offload/tiering/p2p/`). Earlier `llm-d-xpu` images
   > (v0.9.0 and before, vLLM 0.26.0) lack `remote_kv_source` handling and
-  > cannot perform the P2P pull.
+  > cannot perform the P2P pull. On vLLM 0.30.0, `vllm serve` also needs
+  > `--enable-scale-out` to expose `/v1/*/render` for the router's
+  > `token-producer`; the XPU overlay sets this flag.
 
 Every benchmark in this guide was measured with `rdma/ib` exposed to the
 model-server containers, and that is the recommended configuration. RDMA
@@ -249,8 +251,8 @@ your own transport.
     ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
     [vllm#47987](https://github.com/vllm-project/vllm/pull/47987)).
 * The render Service (`render/`) fronts the model servers themselves:
-  vLLM serves `/v1/*/render` natively, so render capacity scales with
-  the serving fleet
+  the modelserver overlays expose vLLM's `/v1/*/render`, so render
+  capacity scales with the serving fleet
   ([llm-d#2188](https://github.com/llm-d/llm-d/pull/2188)). The Service
   targets the vLLM port directly; the pods' port 8000 belongs to the
   routing-proxy sidecar, which does not serve `/render`. When serving
