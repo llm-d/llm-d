@@ -22,7 +22,7 @@ else
   export GAIE_URL=releases/download/${GAIE_VERSION}
 fi
 # Controls which release of llm-d/llm-router to grab CRDs from. Used in flowcontrol guide
-export ROUTER_RELEASE_VERSION=${ROUTER_RELEASE_VERSION:-v0.11.0-rc.2}
+export ROUTER_RELEASE_VERSION=${ROUTER_RELEASE_VERSION:-v0.11.0}
 if [[ $ROUTER_RELEASE_VERSION == "latest" ]]; then
   export ROUTER_RELEASE_URL=releases/latest/download
 else
@@ -30,10 +30,10 @@ else
 fi
 
 ### Chart versions and OCI coordinates for router chart
-export ROUTER_CHART_VERSION=${ROUTER_CHART_VERSION:-v0.11.0-rc.2}
+export ROUTER_CHART_VERSION=${ROUTER_CHART_VERSION:-v0.11.0}
 export ROUTER_STANDALONE_CHART=${ROUTER_STANDALONE_CHART:-oci://ghcr.io/llm-d/charts/llm-d-router-standalone}
 export ROUTER_GATEWAY_CHART=${ROUTER_GATEWAY_CHART:-oci://ghcr.io/llm-d/charts/llm-d-router-gateway}
 
 ### Container Image coordinates and tag for router chart
-export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-v0.11.0-rc.2}
+export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-v0.11.0}
 export ROUTER_EPP_IMAGE=${ROUTER_EPP_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker}
