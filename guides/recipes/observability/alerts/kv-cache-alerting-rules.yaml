@@ -1,0 +1,156 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kv-cache-alerting-rules
+  labels:
+    app: kv-cache-metrics
+spec:
+  # These rules cover the precise prefix-cache pipeline embedded in the EPP
+  # (precise-prefix-cache-producer + token-producer). The llm_d_epp_kv_cache_*
+  # series are opt-in: set indexerConfig.kvBlockIndexConfig.enableMetrics: true
+  # on the precise-prefix-cache-producer, or KVCacheIndexMetricsAbsent fires and
+  # every other rule here stays silent.
+  groups:
+    # ---------------------------------------------------------------------------
+    # KV-block index
+    # ---------------------------------------------------------------------------
+    - name: kv-cache.index
+      rules:
+        - alert: KVCacheIndexMetricsAbsent
+          # The index registers its series at startup, so absence means the
+          # producer is not configured, enableMetrics is off, or the EPP is not
+          # being scraped. Only apply this file where precise routing is deployed.
+          expr: absent(llm_d_epp_kv_cache_index_lookup_requests_total)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No KV-cache index metrics are being scraped"
+            description: "llm_d_epp_kv_cache_index_lookup_requests_total has been absent for 10m. Check that the precise-prefix-cache-producer sets indexerConfig.kvBlockIndexConfig.enableMetrics: true and that the EPP is scraped."
+        - alert: KVCacheIndexNotAdmitting
+          # The EPP is looking blocks up but nothing is being written to the index,
+          # so every lookup misses. Usually the KV-events stream is broken: model
+          # servers are not publishing, or the EPP cannot reach their ZMQ sockets.
+          expr: |
+            sum(rate(llm_d_epp_kv_cache_index_lookup_requests_total[15m])) > 0
+              unless sum(rate(llm_d_epp_kv_cache_index_admissions_total[15m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KV-cache index is receiving lookups but no admissions"
+            description: "The EPP has served index lookups for 15m with zero block admissions. The KV-events stream is likely broken, so precise prefix routing is running on an empty index."
+        - alert: KVCachePrefixHitRateLow
+          # Share of prompt tokens the precise producer predicted the chosen
+          # endpoint already holds. This is a true 0-1 ratio; the index counters
+          # are not (lookup_hits_total counts blocks, lookup_requests_total calls).
+          # Workloads without shared prefixes legitimately sit near 0 - raise the
+          # threshold or drop this alert for them. The rate floor avoids flapping
+          # on idle pools.
+          expr: |
+            (
+              sum(rate(llm_d_epp_prefix_predicted_cached_tokens_sum{plugin_type="precise-prefix-cache-producer"}[15m]))
+                / sum(rate(llm_d_epp_prefix_prompt_tokens_sum{plugin_type="precise-prefix-cache-producer"}[15m]))
+            ) < 0.10
+              and sum(rate(llm_d_epp_prefix_prompt_tokens_count{plugin_type="precise-prefix-cache-producer"}[15m])) > 0.1
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Predicted KV-cache prefix hit rate below 10%"
+            description: "The precise prefix producer predicted {{ $value | humanizePercentage }} of prompt tokens as cached over the last 15m. A stale index or a broken KV-events stream is the usual cause if this workload normally reuses prefixes."
+        - alert: KVCacheIndexHighLookupLatency
+          # In-memory index lookups are sub-millisecond; a P99 this high points at
+          # lock contention or a slow remote index backend.
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket[5m])))
+              > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KV-cache index lookup P99 above 50ms"
+            description: "P99 index lookup latency has been above 50ms for 10m (current {{ $value | humanizeDuration }}). Lookups run on the request path, so this adds directly to scheduling latency."
+        - alert: KVCacheIndexEvictionSpike
+          # Evictions well above the trailing hour's rate, e.g. model servers
+          # repeatedly restarting or resetting their cache (AllBlocksCleared
+          # invalidates every block a pod held). The baseline is offset by 15m so a
+          # sustained spike does not immediately raise its own baseline; it needs
+          # 75m of history before it can fire. A single short burst (one pod reset)
+          # clears within the 5m window and does not alert. The floor keeps
+          # near-idle pools from alerting on small absolute changes.
+          expr: |
+            sum(rate(llm_d_epp_kv_cache_index_evictions_total[5m]))
+              > 3 * sum(rate(llm_d_epp_kv_cache_index_evictions_total[1h] offset 15m))
+              and sum(rate(llm_d_epp_kv_cache_index_evictions_total[5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KV-cache index evictions spiked above 3x the hourly baseline"
+            description: "Index evictions are running at {{ $value | humanize }} blocks/s, more than 3x the previous hour. Check for model server restarts or cache resets; prefix hit rate will drop until the index refills."
+
+    # ---------------------------------------------------------------------------
+    # KV-events stream and tokenization
+    # ---------------------------------------------------------------------------
+    - name: kv-cache.events
+      rules:
+        - alert: KVCacheEventsSubscriberReconnecting
+          # A reconnection is only counted after a subscriber session fails, so a
+          # sustained rate means the EPP keeps losing that pod's event stream.
+          expr: sum by (pod_identifier) (rate(llm_d_epp_kv_cache_events_subscriber_reconnections_total[10m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KV-events subscriber for {{ $labels.pod_identifier }} keeps reconnecting"
+            description: "The ZMQ subscriber for {{ $labels.pod_identifier }} has been reconnecting for 15m. Blocks cached on that pod are missing from the index."
+        - alert: KVCacheEventsZMQErrors
+          # operation is one of bind, connect, subscribe, recv or a replay-* step.
+          expr: sum by (pod_identifier, operation) (rate(llm_d_epp_kv_cache_events_zmq_errors_total[10m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ZMQ {{ $labels.operation }} errors for {{ $labels.pod_identifier }}"
+            description: "llm_d_epp_kv_cache_events_zmq_errors_total{operation=\"{{ $labels.operation }}\"} has been increasing for {{ $labels.pod_identifier }} for 15m. The KV-events stream from that pod is incomplete."
+        - alert: KVCacheEventsStalled
+          # A subscriber that has received events before has gone quiet while the
+          # EPP is still routing traffic. A pod that stops receiving requests also
+          # goes quiet, so treat this as a prompt to check that pod's stream.
+          expr: |
+            sum by (pod_identifier) (rate(llm_d_epp_kv_cache_events_messages_received_total[15m])) == 0
+              and on () sum(rate(llm_d_epp_kv_cache_index_lookup_requests_total[15m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No KV events from {{ $labels.pod_identifier }} for 15m"
+            description: "The EPP has received no KV events from {{ $labels.pod_identifier }} for 15m while still serving lookups. The index entries for that pod are going stale."
+        - alert: KVCacheEventsPoolBacklog
+          # Messages queued across all event-pool workers. A sustained backlog means
+          # the workers cannot keep up with event volume and the index lags behind
+          # the model servers. Raise kvEventsConfig.concurrency if this fires.
+          expr: llm_d_epp_kv_cache_events_pool_queue_depth > 1000
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KV-events pool backlog above 1000 messages"
+            description: "The KV-events processing pool has held more than 1000 queued messages for 15m (current {{ $value | humanize }}). The index is lagging behind the model servers."
+        - alert: KVCacheTokenizationSlow
+          # token-producer tokenizes each prompt (via the render service) before the
+          # index lookup. llm_d_epp_plugin_duration_seconds tops out at a 100ms
+          # bucket, so this alerts on the share of calls slower than that rather
+          # than on a quantile, which would be capped at 100ms.
+          expr: |
+            (
+              1 - sum(rate(llm_d_epp_plugin_duration_seconds_bucket{plugin_type="token-producer",le="0.1"}[5m]))
+                / sum(rate(llm_d_epp_plugin_duration_seconds_count{plugin_type="token-producer"}[5m]))
+            ) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "More than 5% of tokenizations take over 100ms"
+            description: "{{ $value | humanizePercentage }} of token-producer calls have taken over 100ms for 10m. Check the render service's latency and capacity; tokenization runs on the request path."
