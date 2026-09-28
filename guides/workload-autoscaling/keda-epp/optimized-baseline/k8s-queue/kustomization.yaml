@@ -1,0 +1,9 @@
+# Generic Kubernetes + queue signal. Base is plain in-cluster HTTP (no auth);
+# the trigger-queue component inserts the queue-size trigger. Apply on
+# non-OpenShift clusters; use ocp-queue on OpenShift.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+components:
+  - ../components/trigger-queue

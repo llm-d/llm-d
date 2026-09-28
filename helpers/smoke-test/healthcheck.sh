@@ -234,6 +234,38 @@ post_inference() {
   echo "${http_code}|${latency_ms}|${path}|${body}"
 }
 
+# Build the payload required by the selected OpenAI-compatible endpoint.
+build_inference_payload() {
+  local path="$1"
+
+  if [[ "$HAS_JQ" == "true" ]]; then
+    if [[ "$path" == "/v1/chat/completions" ]]; then
+      jq -n \
+        --arg model "$MODEL_ID" \
+        --arg content "$PROMPT" \
+        --argjson max_tokens "$MAX_TOKENS" \
+        '{model: $model, messages: [{role:"user", content:$content}], max_tokens: $max_tokens}'
+    else
+      jq -n \
+        --arg model "$MODEL_ID" \
+        --arg prompt "$PROMPT" \
+        --argjson max_tokens "$MAX_TOKENS" \
+        '{model: $model, prompt: $prompt, max_tokens: $max_tokens}'
+    fi
+  else
+    # Minimal JSON without jq
+    local esc_prompt
+    esc_prompt="$(json_escape "$PROMPT")"
+    if [[ "$path" == "/v1/chat/completions" ]]; then
+      printf '{"model":"%s","messages":[{"role":"user","content":"%s"}],"max_tokens":%s}\n' \
+        "$MODEL_ID" "$esc_prompt" "$MAX_TOKENS"
+    else
+      printf '{"model":"%s","prompt":"%s","max_tokens":%s}\n' \
+        "$MODEL_ID" "$esc_prompt" "$MAX_TOKENS"
+    fi
+  fi
+}
+
 # ── Check 3: Inference (/v1/completions and/or /v1/chat/completions) ─────────
 check_inference() {
   if [[ -z "$MODEL_ID" && "$HAS_JQ" != "true" ]]; then
@@ -250,31 +282,7 @@ check_inference() {
     used_path="/v1/completions"
   fi
 
-  # Build payload
-  if [[ "$HAS_JQ" == "true" ]]; then
-    if [[ "$used_path" == "/v1/chat/completions" ]]; then
-      payload=$(jq -n \
-        --arg model "$MODEL_ID" \
-        --arg content "$PROMPT" \
-        --argjson max_tokens "$MAX_TOKENS" \
-        '{model: $model, messages: [{role:"user", content:$content}], max_tokens: $max_tokens}')
-    else
-      payload=$(jq -n \
-        --arg model "$MODEL_ID" \
-        --arg prompt "$PROMPT" \
-        --argjson max_tokens "$MAX_TOKENS" \
-        '{model: $model, prompt: $prompt, max_tokens: $max_tokens}')
-    fi
-  else
-    # Minimal JSON without jq
-    local esc_prompt
-    esc_prompt="$(json_escape "$PROMPT")"
-    if [[ "$used_path" == "/v1/chat/completions" ]]; then
-      payload="{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"$esc_prompt\"}],\"max_tokens\":$MAX_TOKENS}"
-    else
-      payload="{\"model\":\"$MODEL_ID\",\"prompt\":\"$esc_prompt\",\"max_tokens\":$MAX_TOKENS}"
-    fi
-  fi
+  payload="$(build_inference_payload "$used_path")"
 
   local result http_code latency_ms path body
   result="$(post_inference "$used_path" "$payload")"
@@ -290,6 +298,7 @@ check_inference() {
       used_path="/v1/completions"
     fi
 
+    payload="$(build_inference_payload "$used_path")"
     result="$(post_inference "$used_path" "$payload")"
     http_code="${result%%|*}"; result="${result#*|}"
     latency_ms="${result%%|*}"; result="${result#*|}"

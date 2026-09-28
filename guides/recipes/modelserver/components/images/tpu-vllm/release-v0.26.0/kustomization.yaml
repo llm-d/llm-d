@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Pinned previous release for overlays that use TPUConnectorHMA
+# (tpu_inference.distributed.tpu_connector_hma). In vllm-tpu v0.27.0 through
+# v0.29.0 the vLLM scheduler reads connector._kv_transfer_config
+# (KVConnectorBase_V1.requires_kv_delivery), but the bundled TPUConnectorHMA
+# does not run the base-class initializer, so EngineCore fails at startup with
+# AttributeError: 'TPUConnectorHMA' object has no attribute '_kv_transfer_config'.
+# Fixed upstream by vllm-project/tpu-inference#3566 (2026-09-12); switch the
+# HMA overlays back to ../release once a vllm-tpu release includes that fix.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/vllm/vllm-tpu
+    newTag: v0.26.0

@@ -69,6 +69,20 @@ repos:
         files: ^(release/README\.md|\.github/workflows/nightly-e2e-.*)$
         pass_filenames: false
 
+  # slack channel mapping sync
+  - repo: local
+    hooks:
+      - id: sync-slack-channels
+        name: sync slack channel mapping
+        language: python
+        entry: python scripts/sync-slack-channels.py --check
+        # Also triggers on nightly-* workflows because renaming one changes the
+        # generated workflow_run trigger, and on notify-slack-nightly.yaml itself
+        # to catch hand-edits of that generated list.
+        files: ^(\.github/slack-channels\.yaml|\.github/workflows/(nightly-.*|notify-slack-nightly)\.yaml)$
+        pass_filenames: false
+        additional_dependencies: [pyyaml]
+
   # yaml linting
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.37.1

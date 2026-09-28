@@ -92,6 +92,7 @@
     "operations/router": { "position": 5, "label": "Router Operations" },
     "operations/async-processor": { "position": 6, "label": "Async Processor Operations" },
     "operations/graceful-shutdown": { "position": 7, "label": "Graceful Shutdown & Draining" },
+    "operations/model-loading-and-startup": { "position": 8, "label": "Model Loading and Startup Acceleration" },
 
     "infrastructure/multi-node": { "position": 3, "label": "Kubernetes Multi-Node Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },

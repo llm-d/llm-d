@@ -1,0 +1,57 @@
+alertmanager:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false
+
+prometheus-node-exporter:
+  service:
+    port: 9113
+    targetPort: 9113
+
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[llm-d.ai/model,llm-d.ai/inference-shared,llm-d.ai/inference-serving,llm-d.ai/role,llm-d.ai/managed]
+    - nodes=[llm-d.ai/accelerator-vendor,llm-d.ai/accelerator-variant]
+
+extraScrapeConfigs: |
+  - job_name: 'opencost'
+    honor_labels: true
+    scrape_interval: 1m
+    static_configs:
+      - targets:
+          - 'opencost-llm-d-cost-test.llm-d-cost-test.svc.cluster.local:9003'
+
+  - job_name: 'kube-state-metrics'
+    honor_labels: true
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'llm-d-test-prom-kube-state-metrics.llm-d-cost-test.svc.cluster.local:8080'
+
+  - job_name: 'vllm-inference'
+    honor_labels: true
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    kubernetes_sd_configs:
+    - role: pod
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_label_llm_d_ai_model]
+      action: keep
+      regex: .+
+    - source_labels: [__meta_kubernetes_namespace]
+      target_label: namespace
+      action: replace
+    - source_labels: [__meta_kubernetes_pod_name]
+      target_label: pod
+      action: replace
+    - source_labels: [__meta_kubernetes_pod_node_name]
+      target_label: node
+      action: replace
+    - source_labels: [__address__]
+      target_label: __address__
+      regex: ([^:]+)(?::\d+)?
+      replacement: $1:8000
+    - target_label: __metrics_path__
+      replacement: /metrics

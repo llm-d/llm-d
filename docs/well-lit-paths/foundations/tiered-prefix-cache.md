@@ -92,6 +92,10 @@ The connector does not evict data from the shared tier -- capacity is managed by
   </picture>
 </p>
 
+## Observability
+
+Offloading only helps when blocks evicted from HBM are loaded back instead of recomputed, so the signals that matter are the offload tier hit rate, store and load volume, and whether the EPP's CPU prefix index matches what the model servers actually hold. The [tiered prefix cache guide's Observability & Troubleshooting section](../../../guides/tiered-prefix-cache/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes, backed by the shared [PromQL](../../operations/observability/promql.md#tiered-prefix-cache) and [metric](../../operations/observability/metrics.md#vllm-kv-offloading-metrics) references.
+
 ## Further Reading
 
 - [Tiered Prefix Cache guide](../../../guides/tiered-prefix-cache) — manifests and step-by-step deployment.

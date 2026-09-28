@@ -19,7 +19,7 @@ spec:
             - "--tensor-parallel-size=1"
             - "--block-size=64"
             - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cpu"}'
+            - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer", "kv_buffer_device":"cpu"}'
             - "--max-model-len=32000"
           env:
             - name: UCX_TLS

@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Disable MTP speculative decoding on both roles.
+
+# The patch below matches the ENABLE_MTP env entry by name via the
+# DisaggregatedSet schema the base declares. The common env override is
+# written once under the prefill role (&no-mtp-common) and reused for the
+# decode role (*no-mtp-common).
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-nvidia-gpu-vllm-glm-5-2
+      spec:
+        roles:
+          - name: prefill
+            spec: &no-mtp-common
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: ENABLE_MTP
+                            value: "0"
+          - name: decode
+            spec: *no-mtp-common
