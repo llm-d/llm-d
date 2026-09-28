@@ -12,7 +12,7 @@ spec:
         # macvlan fan-out's node-local-vs-cross-node GID guessing.
         k8s.v1.cni.cncf.io/networks: |
           [
-            {"name":"amit-p1-rdma","namespace":"amit","interface":"net1"}
+            {"name":"${NAMESPACE}-rdma","namespace":"${NAMESPACE}","interface":"net1"}
           ]
     spec:
       containers:
@@ -73,12 +73,12 @@ spec:
               nvidia.com/gpu: "2"
               cpu: "16"
               memory: 400Gi
-              openshift.io/p1_sriov_nodepolicy: "1"
+              openshift.io/${SRIOV_RESOURCE_NAME}: "1"
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
               memory: 200Gi
-              openshift.io/p1_sriov_nodepolicy: "1"
+              openshift.io/${SRIOV_RESOURCE_NAME}: "1"
           volumeMounts:
             - mountPath: /scripts
               name: mooncake-render-script

@@ -23,6 +23,7 @@ Each path is a self-contained deployment using a specific offloading implementat
 | **LMCache** | [LMCache](https://lmcache.ai) connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/lmcache-connector/` |
 | **MooncakeStore** | MooncakeStore connector | CPU RAM, Filesystem | `modelserver/gpu/vllm/mooncake-store/` |
 | **SGLang HiCache** | SGLang native HiCache | CPU RAM, CPU RAM + Filesystem | `modelserver/gpu/sglang/native/cpu/`, `modelserver/gpu/sglang/native/fs/` |
+| **SGLang HiCache (MooncakeStore, RoCE/SR-IOV)** | MooncakeStore connector over RDMA | CPU RAM + Filesystem (SSD offload) | `modelserver/gpu/sglang/mooncake-store/` |
 | **TPU** | vLLM TPU KVCache connector | CPU RAM | `modelserver/tpu/v6/vllm/native/cpu/`, `modelserver/tpu/v7/vllm/native/cpu/` |
 | **Intel XPU** | vLLM `OffloadingConnector`, [LMCache](https://lmcache.ai) connector | CPU RAM | `modelserver/xpu/vllm/native/cpu/`, `modelserver/xpu/vllm/lmcache-connector/cpu/` |
 
@@ -251,6 +252,44 @@ Then deploy the Mooncake Client. The Client allocates CPU DRAM and SSD resources
 ```bash
 kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
 ```
+
+#### MooncakeStore - SGLang (RoCE/SR-IOV)
+
+SGLang's HiCache can also back onto MooncakeStore, using an RDMA (RoCE)
+transport instead of the CPU-only paths above. This requires the [Mooncake
+Master](../../helpers/mooncake-master-store/) metadata service and a
+dedicated [SR-IOV RDMA network](../../helpers/sriov-network/) so each decode
+pod gets its own RDMA-capable VF instead of sharing a NIC pool.
+
+**Prerequisites:**
+
+```bash
+# Metadata service
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+```
+
+Then follow [helpers/sriov-network/README.md](../../helpers/sriov-network/README.md) to create
+the namespaced RDMA network `${NAMESPACE}-rdma` — it covers the
+`SriovNetworkNodePolicy` prerequisite, picking `SRIOV_RESOURCE_NAME` and
+`SRIOV_IPAM_RANGE` for your cluster, and how a pod ends up consuming the VF it
+creates.
+
+**Deploy the model server:**
+
+The Deployment's Multus annotation and SR-IOV resource request are also
+namespace-templated, so this variant needs its kustomize output piped through
+`envsubst` before applying (every other path here can go straight through
+`kubectl apply -k`):
+
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/mooncake-store | \
+  envsubst | kubectl apply -n ${NAMESPACE} -f -
+```
+
+Each pod matches its attached VF to the right RDMA device itself at startup —
+`configmap-render-config.yaml` walks the PCI address the VF's netdev sits on
+and finds the `/sys/class/infiniband` entry on that same PCI function, so
+there's no manual IP/GID setup per namespace.
 
 #### TPU (Google TPU v6 / v7)
 

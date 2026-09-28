@@ -1,0 +1,22 @@
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetwork
+metadata:
+  name: ${NAMESPACE}-rdma
+  namespace: openshift-sriov-network-operator
+spec:
+  resourceName: ${SRIOV_RESOURCE_NAME}
+  networkNamespace: ${NAMESPACE}
+  # A /24 (or smaller) slice that nothing else on the fabric is already handing
+  # out -- see the "picking SRIOV_IPAM_RANGE" note in ./README.md.
+  ipam: |
+    {
+      "type": "whereabouts",
+      "range": "${SRIOV_IPAM_RANGE}"
+    }
+  # No "rdma" metaPlugin: it requires the node's RDMA subsystem in netns
+  # "exclusive" mode, but a cluster running "shared" mode (required by
+  # shared-pool RDMA device plugins used elsewhere) can't use it. Plain VF
+  # passthrough still gives the pod a dedicated netdev/MAC/IP; the consuming
+  # guide's render step matches that VF to its RDMA device via PCI address
+  # (sysfs), not by IP/GID guessing.
+  logLevel: info
