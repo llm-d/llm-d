@@ -18,7 +18,7 @@ and never modifies scheduling or serving behavior.
 
 ```bash
 helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
-  --version 1.5.0 \
+  --version 1.5.1 \
   --namespace k8s-aibom-system --create-namespace
 ```
 
