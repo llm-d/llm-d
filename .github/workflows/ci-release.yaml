@@ -308,7 +308,7 @@ jobs:
           fi
 
   release-sglang-xpu-llm-d:
-    runs-on: xpu
+    runs-on: vllm-runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -322,8 +322,8 @@ jobs:
           source docker/common-versions
           echo "repository=${SGLANG_XPU_REPOSITORY}" >> $GITHUB_OUTPUT
           echo "ref=${SGLANG_XPU_REF}" >> $GITHUB_OUTPUT
-          echo "kernel_repo=${SGLANG_XPU_KERNEL_REPO}" >> $GITHUB_OUTPUT
-          echo "kernel_ref=${SGLANG_XPU_KERNEL_REF}" >> $GITHUB_OUTPUT
+          echo "kernel_repo=${SGLANG_XPU_KERNEL_REPO:-}" >> $GITHUB_OUTPUT
+          echo "kernel_ref=${SGLANG_XPU_KERNEL_REF:-}" >> $GITHUB_OUTPUT
 
       - name: Checkout SGLang source
         uses: actions/checkout@v7
@@ -334,7 +334,7 @@ jobs:
           allow-unsafe-pr-checkout: true
           persist-credentials: false
 
-      - name: Pin SGLang and XPU kernel revisions
+      - name: Pin SGLang source revision
         run: git -C .cache/sglang-src apply "$GITHUB_WORKSPACE/patches/sglang_xpu_source_pins.patch"
 
       - name: Resolve source revisions
@@ -380,8 +380,8 @@ jobs:
             io.llm-d.sglang.repository=${{ steps.source.outputs.sglang_repo }}
             io.llm-d.sglang.ref=${{ steps.common-versions.outputs.ref }}
             io.llm-d.sglang.revision=${{ steps.source.outputs.sglang_sha }}
-            io.llm-d.sglang-xpu-kernel.repository=${{ steps.common-versions.outputs.kernel_repo }}
-            io.llm-d.sglang-xpu-kernel.revision=${{ steps.common-versions.outputs.kernel_ref }}
+            ${{ steps.common-versions.outputs.kernel_repo != '' && format('io.llm-d.sglang-xpu-kernel.repository={0}', steps.common-versions.outputs.kernel_repo) || '' }}
+            ${{ steps.common-versions.outputs.kernel_ref != '' && format('io.llm-d.sglang-xpu-kernel.revision={0}', steps.common-versions.outputs.kernel_ref) || '' }}
           github-token: ${{ secrets.GHCR_TOKEN }}
         env:
           DOCKER_BUILDKIT: "1"
@@ -394,8 +394,6 @@ jobs:
           SGLANG_REPOSITORY: ${{ steps.source.outputs.sglang_repo }}
           SGLANG_REF: ${{ steps.common-versions.outputs.ref }}
           SGLANG_SHA: ${{ steps.source.outputs.sglang_sha }}
-          SGLANG_XPU_KERNEL_REPOSITORY: ${{ steps.common-versions.outputs.kernel_repo }}
-          SGLANG_XPU_KERNEL_REF: ${{ steps.common-versions.outputs.kernel_ref }}
         run: |
           {
             echo "## SGLang XPU image"
@@ -404,8 +402,6 @@ jobs:
             echo "- SGLang repository: \`${SGLANG_REPOSITORY}\`"
             echo "- Requested ref: \`${SGLANG_REF}\`"
             echo "- Resolved revision: \`${SGLANG_SHA}\`"
-            echo "- XPU kernel repository: \`${SGLANG_XPU_KERNEL_REPOSITORY}\`"
-            echo "- XPU kernel revision: \`${SGLANG_XPU_KERNEL_REF}\`"
           } >> $GITHUB_STEP_SUMMARY
 
       - name: Run Trivy vulnerability scanner
