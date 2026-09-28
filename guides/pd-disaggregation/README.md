@@ -14,10 +14,11 @@ This guide deploys `openai/gpt-oss-120b` with prefill-decode disaggregation, imp
 * 8 TP=1 Prefill Instances
 * 2 TP=4 Decode Instances
 
-This guide also has two alternate variants:
+This guide also has an alternate variant:
 
-* **[Google TPU](./README.tpu.md)** — the same P/D pattern on GKE TPU (v6e & v7x).
 * **[DisaggregatedSet](./README.ds.md)** — the same deployment managed as a single LWS `DisaggregatedSet` resource, with coordinated P/D rollouts, `slices` for replicating the whole topology into independent copies, and per-domain placement policy.
+
+The same P/D pattern on GKE TPU (v6e and TPU7x) is covered by the [TPU](#tpu) model server section below.
 
 ### P/D Best Practices
 
@@ -51,13 +52,14 @@ This guide includes configuration for the following accelerators:
 | NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/`    | vLLM, tested nightly on GKE (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)) |
 | NVIDIA GPU (vLLM + DisaggregatedSet) | `modelserver/gpu/vllm-ds/` | Manages the whole P/D topology as one LWS `DisaggregatedSet` with `slices`, see [DisaggregatedSet Guide](./README.ds.md) |
 | NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang, validated each release                           |
-| Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & v7x), see [TPU Guide](./README.tpu.md) |
-| Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [TPU Guide](./README.tpu.md#pd-on-dynamic-tpu-sub-slices-tpu7x) |
+| Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & TPU7x), tested nightly on GKE (v6e), see [TPU](#tpu) |
+| Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [Dynamic sub-slices](#dynamic-sub-slices-tpu7x) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
 | MetaX GPU           | `modelserver/metax/vllm/`  | MetaX C500X, community contributed. Reduced 1P+1D / Qwen3-14B / TP=1 for compatibility checks. |
 | Biren GPU           | `modelserver/biren/vllm/`  | Biren 166M, community overlay. 1P+1D / Qwen2.5-72B GPTQ-Int8 / TP=4, `NixlConnector` over RDMA (`UCX_TLS=rc_v`). |
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
+| Iluvatar GPU        | `modelserver/iluvatar/vllm/base/` | Iluvatar BI-V150 (dual-die), community contributed; Qwen3-32B on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode); vendor-fork `IluNixlConnector` with `kv_buffer_device=cuda` |
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -75,6 +77,11 @@ P/D disaggregation requires a KV transfer backend to move KV cache blocks from p
 | MooncakeConnector | `cks-mooncake` | RDMA via Mooncake Transfer Engine | Requires same TP on prefill and decode. CKS with InfiniBand. |
 
 The `base` overlay uses NixlConnector and works on most clusters. Alternative overlays swap the connector and add infrastructure-specific configuration (e.g., RDMA device requests).
+
+> [!NOTE]
+> **Iluvatar fork (`IluNixlConnector`)**: The `iluvatar` overlay uses Iluvatar's fork of vLLM's `NixlConnector` — `IluNixlConnector` — with `kv_buffer_device=cuda` (KV stays in VRAM). It requires CUDA-aware UCX transports (`UCX_TLS=cuda_copy,cuda_ipc,tcp,self,posix,sysv` plus `UCX_CUDA_IPC_ENABLE_SAME_PROCESS=y`); without them UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
+>
+> Each BI-V150 board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board). With the default ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards; vLLM `--tensor-parallel-size` counts CUDA devices (2 per board). The overlay requests 2 boards per role (4 CUDA devices, TP=4) and expands `IX_VISIBLE_DEVICES` from `ixsmi`. Decode sets `VLLM_ENFORCE_CUDA_GRAPH=1` so `--compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}'` is not overridden to eager. Prefill keeps `max-model-len` / `block-size` aligned with decode and does not enable `FULL_DECODE_ONLY`.
 
 <details>
 <summary><b>MooncakeConnector details</b></summary>
@@ -144,7 +151,7 @@ GPU DRA is not yet fully managed by GKE and requires manual node label configura
 > [!IMPORTANT]
 > The current recipe targets the **GKE A3/A4** platform. The **DRANet** (network DRA) setup requires support for both **Hairpin** (direct loopback transfer on the same node) and **Cross-rail** (inter-node multi-rail transfers) routing to ensure proper KV cache exchange between Prefill and Decode nodes.
 
-To create the cluster, node pool, and install the required GPU DRA / network DRA drivers, follow the step-by-step instructions in the [GKE Infrastructure Guide](../../docs/infra-providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
+To create the cluster, node pool, and install the required GPU DRA / network DRA drivers, follow the step-by-step instructions in the [GKE Infrastructure Guide](../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
 
 ### Checkout Repo & Setups
 
@@ -320,6 +327,61 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/b
 Verify with Router `/v1/completions` or `/v1/chat/completions` against `Qwen72B_INT8`. Confirm decode logs show an external KV transfer rather than decode-only recompute.
 
 </details>
+
+#### TPU
+
+The TPU overlays deploy 1 prefill + 1 decode replica, each `TP=8`, using the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`. The [GKE cluster pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce) step (GPU DRA / DRANet) does not apply; complete the remaining [Prerequisites](#prerequisites) and [router deployment](#1-deploy-the-llm-d-router) as written.
+
+Node pool requirements:
+
+* **TPU v6e**: nodes with `2x4` topology (`tpu-v6e-slice`, 8 chips per node, 1 core per chip). Each prefill and decode pod requests all 8 chips (`google.com/tpu: 8`). Serves `Qwen/Qwen3-32B`.
+* **TPU7x**: nodes with `2x2x1` topology (`tpu7x`, 4 chips per node, 2 cores per chip). Each prefill and decode pod requests 4 chips (`google.com/tpu: 4`). Serves `Qwen/Qwen3.5-397B-A17B-FP8`.
+
+Select the TPU generation and override the model name set in the prerequisites:
+
+```bash
+# TPU v6e
+export TPU_VARIANT=v6
+export MODEL_NAME="Qwen/Qwen3-32B"
+```
+
+```bash
+# TPU7x
+export TPU_VARIANT=v7
+export MODEL_NAME="Qwen/Qwen3.5-397B-A17B-FP8"
+```
+
+Then apply the overlay:
+
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/${TPU_VARIANT}/vllm
+```
+
+> [!NOTE]
+> The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
+
+In the [Verification](#verification) and [Benchmarking](#benchmarking) sections, replace `openai/gpt-oss-120b` with `${MODEL_NAME}` in the completion request body and in the `llmdbenchmark --model` flag.
+
+Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again. The TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
+
+> [!NOTE]
+> The shared router values (`router/pd-disaggregation.values.yaml`) set `peakPrefillThroughput: 33821`, calibrated for gpt-oss-120b on 8 TP=1 H200 prefill workers. This value gates the `prefix-cache-affinity-filter`; re-measure it for the TPU model and topology with `guides/recipes/router/calibration/calibrate.sh` before performance work.
+
+##### Dynamic sub-slices (TPU7x)
+
+The `modelserver/tpu/v7/vllm-dynamic-slice/` overlay deploys `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` (`TP=8` per `2x2x1` sub-slice) with prefill and decode as `LeaderWorkerSet` groups. Kueue Topology-Aware Scheduling places each replica on a sub-slice that [GKE dynamic slicing](../../docs/infrastructure/providers/gke/dynamic-slicing/README.md) forms on demand from pre-provisioned `4x4x4` sub-blocks, instead of a statically provisioned `2x2x1` node pool.
+
+Cluster preparation, the cluster-scoped Kueue resources, the per-pod workload requirements, and the mapping from slice shape to LWS `size` and maximum TP are documented in that provider page. After those prerequisites are in place and the router is deployed, create the `LocalQueue` in the guide namespace and apply the overlay:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-dynamic-slice/
+```
+
+Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/README.md).
+
+> [!NOTE]
+> The dynamic-slice variant is not in the nightly e2e matrix: an end-to-end run requires one full TPU7x `4x4x4` sub-block (64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.
 
 ### 3. Enable Monitoring (optional)
 
@@ -501,6 +563,23 @@ If you deployed the SGLang overlay, delete that path instead of the vLLM one:
 
 ```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
+```
+
+</details>
+
+<details>
+<summary><h4>Cleanup for TPU</h4></summary>
+
+If you deployed a TPU overlay, delete that path instead of the GPU one:
+
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/${TPU_VARIANT}/vllm
+```
+
+For the dynamic sub-slice variant, delete the overlay (the `LeaderWorkerSet` resources) before removing any node pools so that Kueue releases the `Slice` resources it created:
+
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-dynamic-slice/
 ```
 
 </details>

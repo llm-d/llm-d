@@ -171,7 +171,7 @@ Container Start
 
 ### Wide Endpoint Deployment
 
-Example from `guides/wide-ep-lws/manifests/modelserver/base/decode.yaml`:
+Example from `guides/wide-ep/manifests/modelserver/base/decode.yaml`:
 
 ```yaml
 apiVersion: v1

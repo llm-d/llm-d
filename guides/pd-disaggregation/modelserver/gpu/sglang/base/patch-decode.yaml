@@ -16,6 +16,9 @@ spec:
             - "--disaggregation-mode=decode"
             - "--disaggregation-transfer-backend=nixl"
             - "--tensor-parallel-size=2"
+            # Align KV-block granularity with EPP's approx-prefix-cache-producer (64-token
+            # blocks) to prevent under-counting prefix hits, and align with other SGLang guides.
+            - "--page-size=64"
             - "--log-level=info"
             - "--enable-metrics"
             - "--uvicorn-access-log-exclude-prefixes=/metrics"

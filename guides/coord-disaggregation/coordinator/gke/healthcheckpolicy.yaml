@@ -1,0 +1,24 @@
+# GKE Gateway is a Google Cloud load balancer, not an in-cluster proxy: it does
+# NOT derive health checks from the pod's readiness/liveness probes the way an
+# Ingress does. Without this policy the load balancer health-checks the default
+# "/" on the Service port, the coordinator answers 404 (only /healthz and /readyz
+# exist -- see ../base/deployment.yaml), the backend is marked unhealthy, and
+# every request through the Gateway fails with a 503.
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: llm-d-coordinator-hcp
+spec:
+  default:
+    checkIntervalSec: 2
+    # Must be <= checkIntervalSec.
+    timeoutSec: 2
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080
+        requestPath: /healthz
+  targetRef:
+    group: ""
+    kind: Service
+    name: llm-d-coordinator

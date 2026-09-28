@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the queue-based KEDA + EPP autoscaling path (keda-epp-queue/README.md) on
+# Deploy the queue-based KEDA + EPP autoscaling path (keda-epp/README.md) on
 # OpenShift in a single namespace. Same code path for CI nightly runs and local
 # development.
 #
@@ -77,9 +77,9 @@ kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply
 kubectl label namespace "${NAMESPACE}" openshift.io/user-monitoring=true --overwrite
 
 echo "==> Installing EPP router via Helm (release: ${ROUTER_RELEASE})"
-# Values are layered: base -> optimized-baseline -> monitoring -> keda-epp-queue.
+# Values are layered: base -> optimized-baseline -> monitoring -> keda-epp.
 #   monitoring.values.yaml     enables the router's Prometheus ServiceMonitor.
-#   keda-epp-queue router.values.yaml enables the flowControl feature gate — the
+#   keda-epp router.values.yaml enables the flowControl feature gate — the
 #     source of llm_d_epp_flow_control_queue_size — plus the queue-scoring EPP
 #     plugins. Without these two the queue metric is never emitted or scraped.
 helm install "${ROUTER_RELEASE}" \
@@ -87,7 +87,7 @@ helm install "${ROUTER_RELEASE}" \
   -f "${REPO_ROOT}/guides/recipes/router/base.values.yaml" \
   -f "${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml" \
   -f "${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml" \
-  -f "${REPO_ROOT}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline/router.values.yaml" \
+  -f "${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline/router.values.yaml" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}"
 
 # Discover the EPP Service name the chart created (release-derived; release
@@ -148,7 +148,7 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/keda-epp-queue/optimized-baseline/ocp/
+  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/ocp-queue/
 patches:
   # The namespace/service/model_name live inside opaque PromQL strings that the
   # kustomize namespace transformer cannot reach — rewrite both trigger queries

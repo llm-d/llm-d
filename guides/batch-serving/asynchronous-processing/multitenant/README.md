@@ -91,7 +91,7 @@ When llm-d Router operates in standard baseline mode (without the `flowControl` 
 - **Pass-Through Scheduling:** The router does not maintain priority band queues or tenant fairness buffers.
 - **Immediate Rejection of Sheddable Requests:** When the pool is saturated, **"sheddable" requests (those with negative priority, `priority < 0`) are immediately rejected with HTTP 429 (Too Many Requests)**. All other requests pass directly to the model servers and are scheduled via baseline routing plugins (such as `prefix-cache-scorer` and `queue-scorer`).
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
-- **Saturation Telemetry:** The router still exposes real-time pool saturation metrics (`inference_extension_flow_control_pool_saturation` or vLLM metrics).
+- **Saturation Telemetry:** The router still exposes real-time pool saturation metrics (`llm_d_epp_flow_control_pool_saturation` or vLLM metrics).
 - **Upstream Priority & Backpressure in `llm-d-async`:** Priority enforcement shifts entirely **upstream to the Async Processor**:
   - The `tier-priority` merge policy ensures that all `reserved` requests are dequeued and dispatched before `overflow` traffic, and higher tiers dispatch before lower tiers.
   - When downstream saturation is detected via Prometheus, the worker pool gate (`wait-on-refuse` or `tier-priority-admission`) intervenes directly in `llm-d-async` by parking workers in-memory (`ActionWait`), refusing messages (`ActionRefuse`), or dropping them (`ActionDrop`).
@@ -132,7 +132,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
-  export ASYNC_VERSION=v0.9.1          # llm-d-async release (supports lane_objectives & tier-priority)
+  export ASYNC_VERSION=v0.10.0         # llm-d-async release (supports lane_objectives & tier-priority)
 
   # InferencePool names (saturation-gate scope) and served model names (go in payload.model).
   # In this single-router demo, both logical model pools point to the deployed llm-d-router instance:
@@ -507,17 +507,17 @@ helm upgrade llm-d-async \
 ```
 </details>
 
-The inner `prometheus-saturation` gate queries the Prometheus server (`${PROM_URL}`) for the metric `inference_extension_flow_control_pool_saturation` exported by llm-d Router's EPP `/metrics` endpoint.
+The inner `prometheus-saturation` gate queries the Prometheus server (`${PROM_URL}`) for the metric `llm_d_epp_flow_control_pool_saturation` exported by llm-d Router's EPP `/metrics` endpoint.
 
 > [!IMPORTANT]
-> **Router Metrics Scraping:** `values/router/flow-control.yaml` configures `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `inference_extension_flow_control_pool_saturation` (and `llm_d_epp_flow_control_pool_saturation`). Without these metrics in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
+> **Router Metrics Scraping:** `values/router/flow-control.yaml` configures `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `llm_d_epp_flow_control_pool_saturation`. Without this metric in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
 
 Verify that the metric is being scraped and that the gate evaluates metrics live:
 
 ```bash
 # 1. Verify Prometheus has scraped the saturation metric from llm-d-router:
 curl -s localhost:9090/api/v1/query --data-urlencode \
-    "query=inference_extension_flow_control_pool_saturation{inference_pool=\"${POOL_A}\"}"
+    "query=llm_d_epp_flow_control_pool_saturation{inference_pool=\"${POOL_A}\"}"
 
 # 2. Verify the gate initialized with the inner prometheus-saturation source:
 kubectl logs -n ${NAMESPACE} deploy/llm-d-async | grep -i "tier-priority-admission"
@@ -606,7 +606,7 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
   model A is independent of its capacity on model B.
 - **Saturation gate.** The Scenario C overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate (Scenario D) instead expects the EPP metric
-  `inference_extension_flow_control_pool_saturation`.
+  `llm_d_epp_flow_control_pool_saturation`.
 - **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
   saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
   running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see

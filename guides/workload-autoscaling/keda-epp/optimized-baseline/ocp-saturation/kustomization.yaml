@@ -1,0 +1,13 @@
+# OpenShift + saturation signal. See ocp-queue for the ordering rationale.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: llm-d-optimized-baseline
+
+resources:
+  - ../base
+
+components:
+  - ../components/trigger-saturation
+  - ../components/ocp-auth
+  - ../../../../recipes/autoscaling/metrics-reader

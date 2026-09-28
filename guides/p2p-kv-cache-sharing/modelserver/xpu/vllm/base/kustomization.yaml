@@ -1,0 +1,60 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Two aggregated Qwen3-0.6B model servers (1 source + 1 receiver) with the
+# OffloadingConnector P2P tier, layered on the shared recipes/ modelserver
+# base. NIXL/UCX only ever moves the CPU-mmap-backed offload tier, never
+# XPU device memory directly (see patch-vllm.yaml), so this overlay pins
+# UCX to TCP and requests no RDMA/verbs device. An RDMA overlay (mirroring
+# ../../gpu/vllm/rdma) is not yet available for Intel XPU.
+
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+  - resource-claim-template.yaml
+
+namePrefix: p2p-kv-cache-sharing-xpu-vllm-
+
+# Pinned to the `nightly` xpu-vllm image (vLLM main, not a stable tag) rather
+# than the default `llm-d` component (ghcr.io/llm-d/llm-d-xpu:v0.9.0, vLLM
+# 0.26.0). v0.26.0's OffloadingConnector has no remote_kv_source handling, so
+# the P2P pull this guide exists to demonstrate cannot work on it. Switch
+# this back to `llm-d` once ghcr.io/llm-d/llm-d-xpu is rebuilt against a vLLM
+# release that carries vllm/v1/kv_offload/tiering/p2p/ — see the README's
+# Supported Hardware Backends section.
+components:
+  - ../../../../../recipes/modelserver/components/images/xpu-vllm/nightly
+
+# The sidecar container is added by patch-sidecar.yaml at this level, after
+# the recipes/ images components would run, so its image is resolved here
+# rather than by recipes/modelserver/components/images/routing-sidecar (see
+# the GPU overlay's kustomization.yaml for the same note).
+images:
+  - name: REPLACE_ROUTING_SIDECAR_IMAGE
+    newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
+    newTag: main
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/guide: p2p-kv-cache-sharing
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  # Engine port 8200 behind the sidecar, matching the GPU overlay's port
+  # layout (the sidecar listens on 8000).
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8200
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode
+  - path: patch-vllm.yaml

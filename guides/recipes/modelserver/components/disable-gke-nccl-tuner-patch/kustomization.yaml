@@ -10,11 +10,6 @@ patches:
         value:
           name: NCCL_TUNER_PLUGIN
           value: "none"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: NCCL_NET_PLUGIN
-          value: ""
   - target:
       kind: LeaderWorkerSet
     patch: |-
@@ -23,8 +18,3 @@ patches:
         value:
           name: NCCL_TUNER_PLUGIN
           value: "none"
-      - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: NCCL_NET_PLUGIN
-          value: ""

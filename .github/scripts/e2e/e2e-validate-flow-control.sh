@@ -196,17 +196,57 @@ SAT=llm_d_epp_flow_control_pool_saturation
 QD=llm_d_epp_flow_control_request_queue_duration_seconds
 
 # Run one band's burst; FlowKey = (fairness id, objective-derived priority).
+# Store per-request headers (.headers), body (.body), stderr (.err), and status
+# code (.status) inside /tmp/burst-${priority}/ on the curl pod so failed
+# requests can be inspected on CI failure.
 fire_band() {
   local objective="$1" priority="$2" tenant="$3"
   kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "
-    seq 1 ${BURST} | xargs -I{} -P ${BURST} \
-      curl -sS --max-time 180 -o /dev/null -w '%{http_code}\n' \
-        -X POST 'http://${SVC_HOST}/v1/completions' \
-        -H 'content-type: application/json' \
-        -H 'x-llm-d-inference-fairness-id: ${tenant}' \
-        -H 'x-llm-d-inference-objective: ${objective}' \
-        --data-binary @/tmp/payload.json
+    rm -rf '/tmp/burst-${priority}' && mkdir -p '/tmp/burst-${priority}'
+    seq 1 ${BURST} | xargs -I{} -P ${BURST} sh -c '
+      idx=\$1
+      code=\$(curl -sS --max-time 180 \
+        -D \"/tmp/burst-${priority}/\${idx}.headers\" \
+        -o \"/tmp/burst-${priority}/\${idx}.body\" \
+        -w \"%{http_code}\" \
+        -X POST \"http://${SVC_HOST}/v1/completions\" \
+        -H \"content-type: application/json\" \
+        -H \"x-llm-d-inference-fairness-id: ${tenant}\" \
+        -H \"x-llm-d-inference-objective: ${objective}\" \
+        --data-binary @/tmp/payload.json 2>\"/tmp/burst-${priority}/\${idx}.err\") || true
+      echo \"\${code:-000}\" > \"/tmp/burst-${priority}/\${idx}.status\"
+      echo \"\${code:-000}\"
+    ' _ {}
   " >"/tmp/burst-${priority}.log" 2>&1
+}
+
+dump_failed_requests() {
+  local pri="$1"
+  echo "── Failure details for priority=${pri} ──" >&2
+  kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "
+    for f in /tmp/burst-${pri}/*.status; do
+      [ -e \"\$f\" ] || continue
+      idx=\$(basename \"\$f\" .status)
+      code=\$(cat \"\$f\")
+      case \"\$code\" in
+        2[0-9][0-9]) continue ;;
+      esac
+      echo \"=== Request #\${idx} (HTTP \${code}) ===\"
+      if [ -s \"/tmp/burst-${pri}/\${idx}.err\" ]; then
+        echo \"--- curl stderr ---\"
+        cat \"/tmp/burst-${pri}/\${idx}.err\"
+      fi
+      if [ -s \"/tmp/burst-${pri}/\${idx}.headers\" ]; then
+        echo \"--- response headers ---\"
+        cat \"/tmp/burst-${pri}/\${idx}.headers\"
+      fi
+      if [ -s \"/tmp/burst-${pri}/\${idx}.body\" ]; then
+        echo \"--- response body ---\"
+        cat \"/tmp/burst-${pri}/\${idx}.body\"
+        echo
+      fi
+    done
+  " >&2 || true
 }
 
 # ── Mixed-contention burst: all three bands at once ─────────────────────────
@@ -261,12 +301,14 @@ for band in "100:$PID_PREMIUM" "0:$PID_STANDARD" "-10:$PID_BEST"; do
     ' "/tmp/burst-${pri}.log"; then
       echo "Error: burst priority=${pri} did not return ${BURST} successful HTTP responses." >&2
       cat "/tmp/burst-${pri}.log" >&2
+      dump_failed_requests "$pri"
       burst_failed=true
     fi
   else
     burst_exit=$?
     echo "Error: burst priority=${pri} failed (exit ${burst_exit}); kubectl/curl output:" >&2
     cat "/tmp/burst-${pri}.log" >&2
+    dump_failed_requests "$pri"
     burst_failed=true
   fi
 done

@@ -1,7 +1,7 @@
 # Shared OpenShift auth bundle for KEDA -> Thanos Querier: a dedicated
 # metrics-reader ServiceAccount + its cluster-monitoring-view ClusterRoleBinding
 # + token Secret. Included as a kustomize Component by the OCP overlays of the
-# KEDA + EPP autoscaling guides (keda-epp-queue, keda-epp-saturation), each of
+# KEDA + EPP autoscaling guides (the keda-epp guide's overlays), each of
 # which keeps its own ScaledObject + TriggerAuthentication and repoints the
 # TriggerAuth at keda-epp-metrics-reader-token.
 #

@@ -17,7 +17,7 @@ export NAMESPACE=<your-llm-d-namespace>
 |-----------|--------------|-------------------|
 | **vLLM** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans |
 | **Routing proxy** (P/D sidecar) | Kustomize: container env vars | KV transfer coordination |
-| **EPP** | Helm: GAIE `inferenceExtension.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
+| **EPP** | Helm: llm-d Router `router.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
 
 All components export traces via OTLP gRPC to an OpenTelemetry Collector, which filters noise (e.g., `/metrics` scraping spans), batches traces, and forwards them to a backend like Jaeger.
 
@@ -88,11 +88,11 @@ env:
 
 ## Step 3: Enable Tracing on EPP
 
-Add the tracing configuration to your GAIE values:
+Add the tracing configuration to your llm-d Router values:
 
 ```yaml
-# In your gaie-*/values.yaml
-inferenceExtension:
+# In your router values file
+router:
   tracing:
     enabled: true
     otelExporterEndpoint: "http://otel-collector:4317"

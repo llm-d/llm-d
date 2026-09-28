@@ -17,7 +17,9 @@ spec:
       serviceAccountName: sa
       containers:
         - name: modelserver
-          image: REPLACE_MODEL_SERVER_IMAGE
+          # image is inherited from the base encode deployment; the images
+          # component transformer runs before this patch, so setting it here
+          # would clobber the substituted image with the placeholder.
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-VL-32B-Instruct"

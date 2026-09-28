@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # 2 replicas (1 source + 1 receiver) for a CI-sized functional check of
+  # the P2P pull path on Intel XPU. Every pod is both a puller and a
+  # source: it serves its own requests and answers peer pulls from its CPU
+  # tier, same as the GPU overlay — just fewer replicas and a much smaller
+  # model, since this validates the mechanism rather than reproducing the
+  # GPU benchmark's scale.
+  replicas: 2
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      containers:
+        - name: modelserver
+          # Clear any stale offload-tier mmaps left by a previous pod on the
+          # node before starting, then exec vLLM.
+          command: ["sh", "-c", "rm -f /dev/shm/vllm_offload_*.mmap 2>/dev/null; exec vllm serve \"$@\"", "sh"]
+          # Router `modelName` must be changed to match (see the README's
+          # step 2 note) — the guide's router values default to
+          # openai/gpt-oss-120b for the GPU/RDMA path.
+          args:
+            - Qwen/Qwen3-0.6B
+            - --port=8200
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            # The offloading config below omits `block_size`, so it defaults to
+            # this engine block size. Keep it identical across all P2P peers.
+            # It does not need to match the router's
+            # tokenProcessorConfig.blockSize.
+            - --block-size=64
+            - --max-model-len=16384
+            # CI-sized CPU tier: cpu_bytes_to_use (4 GiB) is far above the
+            # per-pod GPU KV cache this small model needs, just like the GPU
+            # overlay sizes cpu_bytes_to_use above its own GPU cache. See
+            # the `shm` volume below (>= cpu_bytes_to_use).
+            - --kv-transfer-config
+            - '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":4294967296,"offload_prompt_only":false,"secondary_tiers":[{"type":"p2p","host":"$(POD_IP)","port":7777}]}}'
+            # KV events feed the router's precise prefix index (per-pod ZMQ PUB).
+            - --kv-events-config
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # TieringOffloadingSpec stages every P2P transfer through its
+            # mmap-backed CPU primary tier, and NIXL registers that memory
+            # as DRAM: this overlay's UCX data plane never touches XPU
+            # device memory directly. It requests no RDMA/verbs device,
+            # matching the no-RDMA XPU precedent in
+            # ../../../../pd-disaggregation.
+            - name: UCX_TLS
+              value: "tcp"
+            # NIXL and the P2P tier bind their side channels to the pod IP so
+            # peers can reach them (defaults are localhost).
+            - name: VLLM_P2P_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # vLLM seeds KV block hashes per process; all peers MUST share the
+            # same value or no block hash ever matches across pods and every
+            # lookup misses.
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+            # Used in the kv-events topic so pods are identified by their
+            # inference endpoint; matches the sidecar proxy port.
+            - name: POD_PORT
+              value: "8000"
+            - name: DO_NOT_TRACK
+              value: "1"
+          ports:
+            - name: p2p
+              containerPort: 7777
+              protocol: TCP
+            - name: kv-events
+              containerPort: 5556
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "4"
+              # Above cpu_bytes_to_use (the CPU tier is an shm mmap) plus model
+              # and runtime headroom for Qwen3-0.6B.
+              memory: 16Gi
+            requests:
+              cpu: "4"
+              memory: 16Gi
+            claims:
+              - name: intel-decode-claim
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      volumes:
+        # The CPU offload tier is an shm mmap; size >= cpu_bytes_to_use.
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 6Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
