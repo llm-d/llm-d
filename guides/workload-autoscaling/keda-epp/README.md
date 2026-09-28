@@ -243,23 +243,31 @@ is covered in [Flow control on vs. off](#flow-control-on-vs-off) below. For the
 subsystem itself, see
 [EPP Flow Control](../../../docs/architecture/core/router/epp/flow-control.md).
 
+> [!NOTE]
+> This guide is validated with vLLM model servers. The flow-control signals are
+> emitted by the EPP and are engine-agnostic, but the default thresholds are tuned
+> for vLLM; validate them before relying on the guide with another engine.
+
 ### Saturation detector
 
-The saturation detector decides when the inference pool is "full". It gates
+The saturation detector estimates how loaded the inference pool is. It gates
 dispatch under flow control and feeds the pool-saturation gauge, so it shapes
-both signals this guide can scale on. EPP ships two:
+both signals this guide can scale on. The two detectors EPP ships define
+"loaded" differently, which is exactly why the choice matters:
 
 - **`utilization-detector` (default, recommended)** - a closed-loop detector that
   reacts to real-time telemetry (queue depth and KV-cache pressure), so it
   reflects actual memory pressure rather than just request counts. It is the EPP
   default, so this guide's `router.values.yaml` uses it without setting
-  `flowControl.saturationDetector`. Note it can lag under sudden bursts
-  ("thundering herd") and, in heterogeneous pools, treats all endpoints equally.
-  See the linked reference for the full tradeoff.
+  `flowControl.saturationDetector`. It has known limitations under sudden bursts
+  and in heterogeneous pools; see the linked reference for those and the full
+  tradeoff.
 - **`concurrency-detector`** - an open-loop detector based on in-flight request
-  accounting. It reacts instantly but is blind to KV-cache pressure, which makes
-  it a less reliable autoscaling signal; prefer the default unless you have a
-  specific reason to pin it.
+  accounting. It reacts instantly, but treats load as a raw request count, so
+  high concurrency does not necessarily mean the pool is full - with prefix
+  caching, for example, many concurrent requests can be cheap cache hits. It is
+  also blind to KV-cache pressure, which makes it a less reliable autoscaling
+  signal; prefer the default unless you have a specific reason to pin it.
 
 See
 [Saturation Detectors](../../../docs/architecture/core/router/epp/flow-control.md#saturation-detectors)
@@ -319,22 +327,24 @@ can see:
 - **Flow control on (this guide).** When the pool saturates, EPP pauses dispatch
   and buffers requests in its own priority queues. Unmet demand surfaces as
   `llm_d_epp_flow_control_queue_size`, so the queue-size trigger is the primary
-  scale-up signal and a low threshold (the default `1`) reacts promptly. Admitted
-  concurrency is gated per endpoint by the saturation detector, so aggregate
-  running requests still grow with replica count - but the per-endpoint dispatch
-  ceiling sits close to the running-request threshold, so running requests rarely
-  trip scale-up on their own. Treat the running-request trigger as a keep-warm and
-  anti-flap floor rather than the driver.
+  scale-up signal and a low threshold (the default `1`) reacts promptly. Dispatch
+  is gated per endpoint, so each replica admits only a bounded number of concurrent
+  requests, and that per-endpoint ceiling sits close to the running-request
+  threshold (`16`). Aggregate running requests still grow as replicas are added, but
+  a single replica rarely exceeds the threshold, so the running-request trigger
+  seldom trips scale-up on its own - the queue-size trigger is what drives scaling.
+  Treat the running-request trigger as a keep-warm and anti-flap floor, not the
+  driver.
 - **Flow control off.** This guide enables flow control, so this case applies only
   if you turn it off. Both signals this guide scales on -
   `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_pool_saturation` -
   are exposed *only* when the `flowControl` feature gate is on. With it off the
-  series are not emitted at all, so neither trigger resolves
-  and KEDA reports the metric as unavailable. When the pool saturates in this mode,
-  sheddable (negative-priority) requests are rejected with HTTP 429 and everything
-  else passes straight to the model servers. Scale on a signal that does not depend
-  on flow control instead: `llm_d_epp_request_running` (the EPP running-request
-  count, still emitted) or the vLLM-native `vllm:num_requests_waiting`.
+  series are not emitted at all, so the queue and saturation triggers resolve to
+  no data and KEDA reports the metric as unavailable. The running-request
+  trigger this guide already ships (`llm_d_epp_request_running`) is not gated by
+  flow control and keeps working, so scaling degrades to running-requests only;
+  tune its threshold accordingly, or drive scaling from a vLLM-native signal such
+  as `vllm:num_requests_waiting`.
 
 Confirm which mode you are in before tuning:
 
