@@ -14,7 +14,7 @@ on:
         type: string
         default: ''
       platforms:
-        description: 'Platforms to build (comma-separated: rocm,xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
+        description: 'Platforms to build (comma-separated: xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
         required: false
         type: string
         default: ''
@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: rocm,xpu,sglang-xpu,cpu)"
+        description: "Platforms to build (comma-separated: xpu,sglang-xpu,cpu)"
         required: false
         default: "xpu"
         type: string
@@ -111,7 +111,6 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      rocm: ${{ steps.force.outputs.rocm || steps.platforms-input.outputs.rocm || steps.filter.outputs.rocm }}
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
       sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu }}
@@ -121,7 +120,6 @@ jobs:
         if: inputs.force_build == true
         id: force
         run: |
-          echo "rocm=true" >> $GITHUB_OUTPUT
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "sglang-xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
@@ -140,7 +138,6 @@ jobs:
               *) printf 'false' ;;
             esac
           }
-          echo "rocm=$(has_platform rocm)" >> $GITHUB_OUTPUT
           echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
           echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
           echo "cpu=$(has_platform cpu)" >> $GITHUB_OUTPUT
@@ -153,9 +150,6 @@ jobs:
         id: filter
         with:
           filters: |
-            rocm:
-              - 'docker/Dockerfile.rocm'
-              - 'docker/scripts/common/build-uccl.sh'
             xpu:
               - 'docker/Dockerfile.xpu'
               - 'docker/common-versions'
@@ -517,95 +511,6 @@ jobs:
       - name: Sign image with cosign
         if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
         run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
-  rocm-build-llm-d:
-    needs: [detect-changes, resolve-registry]
-    if: ${{ needs.detect-changes.outputs.rocm == 'true' }}
-    runs-on: vllm-runner
-    steps:
-      - name: Set target registry
-        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
-
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref || '' }}
-          allow-unsafe-pr-checkout: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ needs.resolve-registry.outputs.registry }}
-          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
-          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
-
-      - name: Set image tag
-        id: set-tag
-        run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          PR_TAG="${{ github.event.pull_request.number }}"
-          if [ -n "${PR_TAG}" ]; then
-            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Build and push the image
-        id: build-and-push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/Dockerfile.rocm
-          platforms: linux/amd64
-          push: true
-          provenance: true
-          cache-from: type=registry,ref=${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:build-cache
-          cache-to: type=registry,ref=${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:build-cache,mode=max,oci-mediatypes=true,compression=zstd,ignore-error=true
-          tags: |
-            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
-            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-rocm:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-rocm:latest', env.REGISTRY, github.repository) || '' }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-        env:
-          DOCKER_BUILDKIT: "1"
-          BUILDKIT_PROGRESS: "plain"
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm:${{ steps.set-tag.outputs.tag }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          scanners: vuln              # skip secrets/config/license analyzers
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4.37.6
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
-      - name: Install cosign
-        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
-        uses: sigstore/cosign-installer@v3
-
-      - name: Sign image with cosign
-        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
-        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rocm@${{ steps.build-and-push.outputs.digest }}
   cpu-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
