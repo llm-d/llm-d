@@ -13,18 +13,24 @@ spec:
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
-          # CI-sized default for Intel XPU (Qwen3-0.6B). Update `modelName` in
-          # router/precise-prefix-cache-routing.values.yaml to match if using
-          # this overlay for scoring.
+          # Intel XPU default: Qwen3-32B from Hugging Face.
+          # To use a local model directory, replace the first arg with the
+          # mounted path, for example /data/hf_models/Qwen3-32B/, and uncomment
+          # the model-store volumeMount and volume below.
+          # Keep --served-model-name aligned with the router/render modelName.
           args:
-            - "Qwen/Qwen3-0.6B"
+            - "Qwen/Qwen3-32B"
+            - "--served-model-name=Qwen/Qwen3-32B"
             - "--port=$(POD_PORT)"
-            - "--dtype=float16"
+            - "--dtype=auto"
+            - "--quantization=fp8"
+            - "--tensor-parallel-size=2"
+            - "--max-model-len=24576"
             - "--disable-sliding-window"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
@@ -74,6 +80,11 @@ spec:
             # restricted SecurityContexts (e.g. OpenShift).
             - mountPath: /.triton
               name: triton-cache
+            # Optional: mount a pre-downloaded local model directory and use it
+            # as the first vLLM arg above to avoid downloading per pod.
+            # - mountPath: /data/hf_models
+            #   name: model-store
+            #   readOnly: true
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -95,3 +106,9 @@ spec:
           emptyDir: {}
         - name: triton-cache
           emptyDir: {}
+        # Optional: set this to your node-local model directory and uncomment
+        # the matching model-store volumeMount above.
+        # - name: model-store
+        #   hostPath:
+        #     path: /data/hf_models
+        #     type: Directory

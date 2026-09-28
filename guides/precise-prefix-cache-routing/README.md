@@ -13,6 +13,7 @@ The routing decision combines precise cache knowledge with token-based load bala
 
 - **Precise prefix-cache aware** — the [precise-prefix-cache-producer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) indexes real KV-block events from vLLM and publishes the exact resident-block fraction. The `prefix-cache-affinity-filter` reads it via `prefixMatchInfoProducerName` to keep each prefix group on its cache-warm endpoints, gated by a calibrated `peakPrefillThroughput` so saturated endpoints are bypassed. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
 - **Token-load aware** — the `token-load-scorer` (fed by the `inflight-load-producer`) picks the least token-loaded endpoint within the filtered set, balancing by queued prefill work rather than request counts.
+- **LMetric optional scorer** — the [lmetric-scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/lmetric) can replace the prefix-cache scorer when the routing policy should minimize estimated prefill work under decode load without complex hyperparameter tuning. It consumes the same precise prefix-match information plus the `inflight-load-producer`, then normalizes lower multiplicative cost to a higher score for each scheduling cycle.
 
 ## Default Configuration
 
@@ -32,7 +33,7 @@ The routing decision combines precise cache knowledge with token-based load bala
 | NVIDIA GPU | `modelserver/gpu/vllm/` | Qwen/Qwen3-32B | Default configuration |
 | NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/` | Qwen/Qwen3-32B | SGLang; `--page-size=64` matches the producer's `blockSizeTokens`; requires `render/standalone/` |
 | AMD GPU | `modelserver/amd/vllm/` | Qwen/Qwen3-32B | AMD GPU |
-| Intel XPU | `modelserver/xpu/vllm/` | Qwen/Qwen3-0.6B | CI-sized; update router `modelName` for real use |
+| Intel XPU | `modelserver/xpu/vllm/` | Qwen/Qwen3-32B | B60-class deployment uses two replicas, tensor parallelism 2, `--quantization=fp8`, and `--max-model-len=24576` |
 | Google TPU v6e | `modelserver/tpu/v6/vllm/` | Qwen/Qwen3-32B | GKE TPU |
 | Google TPU v7 | `modelserver/tpu/v7/vllm/` | Qwen3-Coder-480B-FP8 | GKE TPU |
 | CPU | `modelserver/cpu/vllm/` | Llama-3.2-3B-Instruct | CI-sized |
@@ -116,6 +117,8 @@ helm install ${GUIDE_NAME} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
+To use the optional LMetric policy instead, add `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/lmetric.values.yaml` after the guide values file.
+
 The release name `${GUIDE_NAME}` is mandatory for standard deployments — the inference pool selector matches a guide label that pairs with this release.
 
 The render (tokenizer) Service the `token-producer` plugin calls is deployed separately, in [step 4](#4-deploy-the-render-tokenizer-service).
@@ -140,6 +143,8 @@ helm install ${GUIDE_NAME} \
   --set provider.name=${PROVIDER_NAME} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+
+For Gateway Mode, add the same optional LMetric values file after the guide values file.
 
 </details>
 
