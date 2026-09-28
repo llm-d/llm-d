@@ -49,6 +49,22 @@ def http_json(method, url, body=None, timeout=600):
         return 0, {"error": str(error)}
 
 
+def http_stream(method, url, body, timeout=600):
+    """Send a streaming request, consume the whole response, and return its status."""
+    request = urllib.request.Request(
+        url, data=json.dumps(body).encode(), method=method, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            for _ in response:
+                pass
+            return response.status
+    except urllib.error.HTTPError as error:
+        return error.code
+    except OSError:
+        return 0
+
+
 def kubectl(kubectl_bin, args):
     result = subprocess.run([kubectl_bin, *args], capture_output=True, text=True, timeout=60)
     if result.returncode != 0:
@@ -160,8 +176,12 @@ def main():
             "model": model,
             "messages": [{"role": "user", "content": f"Request {index}: write a short story about the number {index}."}],
             "max_tokens": args.max_tokens,
+            # Streamed and read to the end: the latency scorer learns only from
+            # streamed responses the hub relays, so a non-streamed request, or a
+            # stream closed before its first chunk, teaches it nothing.
+            "stream": True,
         }
-        return http_json("POST", f"{base}/v1/chat/completions", request)[0]
+        return http_stream("POST", f"{base}/v1/chat/completions", request)
 
     started = time.time()
     with ThreadPoolExecutor(max_workers=args.concurrency) as pool:

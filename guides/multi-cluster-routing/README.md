@@ -230,13 +230,15 @@ python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py \
 <!-- guide:verify.tests end -->
 
 [`verify.py`](verify.py) reports how many requests each cluster served, next to its share of the model servers. With
-the load policy and clusters that have headroom, the split is about even (`INCONCLUSIVE`); once the smaller cluster
-queues requests, it gets less traffic. To see that, raise `--concurrency` and `--max-tokens`.
+the load scorer and clusters that have headroom, the split is about even (`INCONCLUSIVE`); once the smaller cluster
+queues requests, it gets less traffic. To see that, raise `--concurrency` and `--max-tokens`. With the latency scorer,
+the hub learns each cluster's latency from the first requests and then sends more traffic to the faster cluster.
 
 ## Known Constraints
 
 - **With the load policy, steering needs congestion**: clusters with headroom score equally, whatever their size.
-- **The latency policy needs llm-d-router v0.11 or later.**
+- **The latency scorer needs llm-d-router v0.11 or later, and streamed traffic**: it learns only from streamed
+  responses, so with non-streamed requests every cluster scores the same.
 - **Addresses must be IPs** with the standard router chart: if a cluster router's Service is recreated, re-run Step 3.
 - **With the load policy, cluster metrics are unauthenticated and read over HTTP** in this in-cluster example.
   Across real clusters, keep

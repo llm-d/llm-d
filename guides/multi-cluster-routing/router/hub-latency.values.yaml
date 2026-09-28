@@ -22,9 +22,23 @@ router:
               watchFile: true
           - type: latency-observer-producer-hub
             name: ttft-observer
+            parameters:
+              intervalDuration: 1s
+              windowSize: 500
+              maxObservationAge: 2m
+              maxRequests: 50
+              minRequests: 3
+              lowPercentile: 25
+              typicalPercentile: 50
+              bucketDuration: 5s
+              bucketHistorySize: 4
+          # ttftPercentilesProducerName must name the observer above; unset, the
+          # scorer reads nothing and every cluster ties.
           - type: latency-observation-scorer-hub
             name: ttft
             parameters:
+              explorationRate: 0.1
+              minInflightGap: 1
               ttftPercentilesProducerName: ttft-observer
           - type: max-score-picker
             name: picker
