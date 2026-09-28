@@ -288,6 +288,8 @@ this guide:
 | Running-request threshold | 16 | Decrease to scale earlier on active concurrency; increase if each replica can safely handle more concurrent requests within latency objectives. |
 | Polling interval | 15s | Controls how often KEDA polls triggers while the target is at zero replicas. |
 | Cooldown period | 300s | Controls the delay before KEDA scales the target to zero after triggers become inactive. |
+| Scale-up stabilization window | 300s | Holds scale-up recommendations so a still-loading replica is not counted as unmet demand. Size near the target Deployment's cold-start time. See [Startup-time mitigation](#startup-time-mitigation). |
+| Scale-down stabilization window | 300s | Holds capacity across brief demand dips before scaling in, avoiding flapping once a slow-starting replica goes Ready. See [Startup-time mitigation](#startup-time-mitigation). |
 
 ## Choosing Scaling Thresholds
 
@@ -351,6 +353,49 @@ Confirm which mode you are in before tuning:
 ```bash
 kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
 ```
+
+## Startup-time mitigation
+
+Model-server pods take minutes to load a model and become `Ready`, and this
+startup lag distorts autoscaling. While a new replica is still starting it does
+not serve traffic, so the demand signal it was meant to relieve stays elevated.
+Two problems follow: the HPA can keep scaling up and overshoot (the starting
+replica is not yet reducing the signal), and then, once the pod goes `Ready` and
+demand drops sharply, the HPA can scale back in immediately and flap.
+
+The checked-in `ScaledObject` mitigates both with HPA stabilization windows in
+its `behavior` block, so no extra metrics or dependencies are required:
+
+- **`scaleUp.stabilizationWindowSeconds: 300`** holds scale-up recommendations
+  over the window and acts on the most conservative one, so a replica that is
+  still loading is given time to become `Ready` and relieve demand before the HPA
+  adds another. Size this near the target Deployment's cold-start time: too low
+  and the HPA stacks replicas while one is still coming up; too high and it reacts
+  slowly to genuine sustained bursts.
+- **`scaleDown.stabilizationWindowSeconds: 300`** holds capacity across brief
+  demand dips, so the pool does not scale in the moment a slow-starting replica
+  finally absorbs a backlog and the signal drops.
+
+Measure your model's cold-start time (from pod scheduling to the first served
+request) and set `scaleUp.stabilizationWindowSeconds` to roughly that value.
+
+### Advanced alternative: pending-pod-aware supply
+
+Stabilization windows are deliberately blunt: they delay all scale-up equally,
+not just startup-driven overshoot. If you need demand-aware behavior, KEDA's
+[`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
+can compose triggers with a `formula`. You can pair the demand trigger with a
+second trigger that reports not-yet-available pods - for example a Prometheus
+query over `kube-state-metrics` such as `kube_deployment_status_replicas_unavailable`
+- and write a formula that discounts demand by the anticipated capacity of pods
+already coming up, so the HPA does not double-count a replica it has already
+requested.
+
+This is more precise but adds cost: it depends on `kube-state-metrics` being
+scraped into the same Prometheus, introduces a second trigger and a formula whose
+per-pod-capacity constant must itself be tuned, and a missing series can break the
+composite metric. Prefer the stabilization windows above unless you have a
+specific need the windows cannot meet.
 
 ## Apply the KEDA ScaledObject
 
