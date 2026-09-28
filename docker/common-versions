@@ -3,12 +3,12 @@
 # ============================================================================
 # Used by CUDA and CPU platforms
 VLLM_REPO=https://github.com/vllm-project/vllm.git
-VLLM_COMMIT_SHA=568afb3a13806beb53bb2e6bd518269357b237c0 # v0.26.0 release
+VLLM_COMMIT_SHA=ced6857afa0ea7b2e3f0846a62e1394e90f15607 # v0.30.0 release
 
 # Used by XPU: official prebuilt vLLM XPU image from Docker Hub.
 # The XPU image is a thin pass-through over this base; switch tags here to upgrade.
-# Official vLLM v0.26.0 release image.
-VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
+# Official vLLM v0.30.0 release image.
+VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.30.0
 
 # ============================================================================
 # SGLang XPU Version Configuration
