@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim-trixie
-ARG MOONCAKE_VERSION=0.3.11.post1
+ARG MOONCAKE_VERSION=0.3.13
 ARG PIP_INDEX_URL=https://pypi.org/simple
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

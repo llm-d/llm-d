@@ -256,16 +256,23 @@ kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mo
 #### MooncakeStore - SGLang (RoCE/SR-IOV)
 
 SGLang's HiCache can also back onto MooncakeStore, using an RDMA (RoCE)
-transport instead of the CPU-only paths above. This requires the [Mooncake
-Master](../../helpers/mooncake-master-store/) metadata service and a
-dedicated [SR-IOV RDMA network](../../helpers/sriov-network/) so each decode
-pod gets its own RDMA-capable VF instead of sharing a NIC pool.
+transport instead of the CPU-only paths above. This requires the [per-namespace
+Mooncake Master](../../helpers/mooncake-master-store-sglang/) metadata service
+and a dedicated [SR-IOV RDMA network](../../helpers/sriov-network/) so each
+decode pod gets its own RDMA-capable VF instead of sharing a NIC pool.
+
+Unlike the vLLM paths above, this variant deploys its own master into
+`${NAMESPACE}` alongside the decode pods rather than sharing the cluster-wide
+one in the `mooncake` namespace — which is why its config addresses the master
+as the bare `mooncake-master-store:50051`. That helper also pins a mooncake
+version matched to the SGLang image; see its README before changing either.
 
 **Prerequisites:**
 
 ```bash
-# Metadata service
-kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+# Metadata service, deployed into your own namespace (use base/ instead of
+# monitoring/ if you don't have the Prometheus Operator)
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store-sglang/monitoring/ -n ${NAMESPACE}
 ```
 
 Then follow [helpers/sriov-network/README.md](../../helpers/sriov-network/README.md) to create

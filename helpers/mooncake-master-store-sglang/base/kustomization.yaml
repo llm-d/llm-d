@@ -1,8 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: mooncake
+# No namespace: here on purpose -- this master is deployed once per consuming
+# namespace, alongside the model servers that use it, so placement comes from
+# `kubectl apply -n ${NAMESPACE}`. See ../README.md.
 resources:
-  - namespace.yaml
+  - serviceaccount.yaml
   - configmap.yaml
   - pvc.yaml
   - deployment.yaml

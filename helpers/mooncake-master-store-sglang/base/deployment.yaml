@@ -13,15 +13,28 @@ spec:
         prometheus.io/port: "9003"
         prometheus.io/path: "/metrics"
     spec:
+      serviceAccountName: mooncake-master-store
+      securityContext:
+        runAsUser: 0
+      # The snapshots PVC is provisioned by the Spectrum Scale CSI driver, which only runs
+      # on nodes labelled scale=true (the same selector its own DaemonSet uses). Without
+      # this, the Recreate strategy can place the master on a node lacking the driver, where
+      # it hangs in ContainerCreating with:
+      #   AttachVolume.Attach failed ... CSINode <node> does not contain driver
+      #   spectrumscale.csi.ibm.com
+      # Adjust or remove this if the snapshot volume uses a different storage class.
+      nodeSelector:
+        scale: "true"
       containers:
         - name: mooncake-master-store
-          image: ghcr.io/llm-d/mooncake-master-store:v0.8.0
+          image: ghcr.io/amit-berman/mooncake-master:0.3.11.post1
           command: ["mooncake_master"]
           args:
             - "--config_path=/etc/mooncake/master.yaml"
-            # Required for standalone-store (fs) mode — without this the Master
-            # rejects MountLocalDiskSegment RPCs from mooncake_client with UNABLE_OFFLOAD.
-            # No-op when no client attempts to mount.
+            # Required for the disk tier: without it the Master rejects
+            # MountLocalDiskSegment RPCs from clients with UNABLE_OFFLOAD. No-op when no
+            # client attempts to mount disk. Pairs with cluster_id/root_fs_dir in
+            # configmap.yaml.
             - "--enable_offload"
           env:
             - name: MOONCAKE_SNAPSHOT_LOCAL_PATH
