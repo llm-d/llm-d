@@ -9,7 +9,7 @@ router:
     pluginsConfigFile: "multi-cluster-routing-load.yaml"
     pluginsCustomConfig:
       multi-cluster-routing-load.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
           # Endpoints are clusters, listed in clusters.yaml.
@@ -50,7 +50,8 @@ router:
               - pluginRef: picker
         dataLayer:
           discovery:
-            pluginRef: discovery
+            endpoints:
+              pluginRef: discovery
           sources:
             - pluginRef: metrics-source
               extractors:

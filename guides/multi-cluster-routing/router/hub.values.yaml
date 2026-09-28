@@ -1,5 +1,5 @@
-## multi-cluster-routing hub: a cluster-scoped llm-d Router whose endpoints are
-## whole clusters, not pods. It discovers the clusters from clusters.yaml and
+## multi-cluster-routing hub: an llm-d Router whose endpoints are whole
+## clusters, not pods. It discovers the clusters from clusters.yaml and
 ## forwards every request to the cluster its scorers pick; the cluster's own
 ## router then picks the pod.
 ##
@@ -10,7 +10,8 @@
 ## Layer on top of: recipes/router/base.values.yaml
 
 router:
-  # Clients reach the hub's Envoy sidecar on port 80.
+  # Expose the hub on Service port 80, like the cluster routers; 8081 is the
+  # Envoy sidecar's listener.
   extraServicePorts:
     - name: http
       port: 80
@@ -33,24 +34,20 @@ router:
         mountPath: /etc/epp/clusters
         readOnly: true
 
-  # The chart names its Envoy ConfigMap "envoy" in every release, so a hub
-  # installed in the same namespace as a cluster's router would fail on
-  # ConfigMap ownership. Rename the hub's copy; the volume that mounts it must
-  # be restated too, because a list override replaces the preset's list.
+  # The chart's Envoy preset names its ConfigMap "envoy", whatever the release,
+  # so a hub installed in the same namespace as a cluster's router would fail on
+  # ConfigMap ownership. Renaming it in the preset renames both the ConfigMap
+  # and the sidecar volume that mounts it.
   proxy:
-    configMap:
-      name: mc-hub-envoy
-    volumes:
-      - name: config
+    presets:
+      envoy:
         configMap:
           name: mc-hub-envoy
-          items:
-            - key: envoy.yaml
-              path: envoy.yaml
 
   modelServers:
-    # The chart always creates an InferencePool and requires a selector for it.
-    # This EPP takes its endpoints from clusters.yaml, never from pods, so the
-    # selector deliberately matches nothing.
+    # The chart creates an InferencePool unless `router.inferencePool.create: false`,
+    # and requires a selector either way (it becomes the pool selector, or the EPP
+    # --endpoint-selector). This EPP takes its endpoints from clusters.yaml, never
+    # from pods, so the selector deliberately matches nothing.
     matchLabels:
       llm-d.ai/guide: multi-cluster-routing-hub

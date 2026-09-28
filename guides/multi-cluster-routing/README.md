@@ -2,8 +2,8 @@
 
 Route requests across several llm-d deployments ("clusters") that serve the same model. A **hub** router treats each
 cluster as one endpoint and sends each request to the cluster its scorers rank best; that cluster's own router then
-picks the pod. What "best" means is up to the scorers you configure on the hub. The clusters can run any model, model
-server, or hardware. This guide deploys a tested example: two copies of the
+picks the pod. What "best" means is up to the scorers you configure on the hub. The clusters can differ in model
+server, hardware, and size. This guide deploys a tested example: two copies of the
 [Optimized Baseline](../optimized-baseline/README.md), with a choice of two hub policies: cluster load, or the
 latency the hub observes.
 
@@ -30,7 +30,8 @@ the choice of scorers:
   router. Traffic moves away from **congested** clusters; while every cluster has headroom they score the same and
   traffic spreads evenly.
 - **Observed latency** (`HUB_SCORER=latency`): the latency-observation scorer predicts each cluster's
-  time-to-first-token from the responses the hub already receives. It scrapes nothing from the clusters.
+  time-to-first-token from the responses the hub already receives. It scrapes nothing from the clusters, and unlike
+  [Predicted Latency-Based Routing](../predicted-latency-routing/README.md) it needs no predictor model.
 - **Cache and session affinity**: the multicluster prefix-cache scorer and session-affinity filter keep related
   requests on the same cluster.
 - **Other policies** need a scorer that implements them.
@@ -57,7 +58,9 @@ Each cluster must provide:
 ## Prerequisites
 
 - The [Optimized Baseline prerequisites](../optimized-baseline/README.md#prerequisites) in each cluster namespace.
-- `helm`, `kubectl`, `envsubst`, Python 3.
+- Enough accelerators for 4 model-server replicas at TP=2 (8 GPUs). To use fewer, lower `count` in
+  `modelserver/cluster-{a,b}/kustomization.yaml`; keep the counts unequal to see the hub steer.
+- `helm` 3.13 or later, `kubectl`, `envsubst`, Python 3.
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
@@ -77,6 +80,7 @@ export NS_A=llm-d-mc-a
 export NS_B=llm-d-mc-b
 export NS_HUB=llm-d-mc-hub
 export HUB_SCORER=load # options: load, latency
+export LEAF_VALUES=
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -127,25 +131,20 @@ done
 
 ## Step 1: Deploy the cluster routers
 
-With `HUB_SCORER=load`, each cluster router also gets [`router/leaf.values.yaml`](router/leaf.values.yaml) so the
-hub can read its metrics. With `HUB_SCORER=latency`, the cluster routers need no changes.
+With `HUB_SCORER=load`, `LEAF_VALUES` adds [`router/leaf.values.yaml`](router/leaf.values.yaml) to each cluster
+router so the hub can read its metrics. With `HUB_SCORER=latency`, the cluster routers need no changes.
 
 <!-- guide:deploy.clusters start -->
 ```bash
 # only when HUB_SCORER=load:
-for ns in ${NS_A} ${NS_B}; do
-  helm install optimized-baseline ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/leaf.values.yaml \
-    -n ${ns} --version ${ROUTER_CHART_VERSION}
-done
+# Lets the hub read each cluster router's /metrics. The variable carries its own -f flag.
+export LEAF_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/leaf.values.yaml"
 
-# only when HUB_SCORER=latency:
 for ns in ${NS_A} ${NS_B}; do
   helm install optimized-baseline ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+    ${LEAF_VALUES} \
     -n ${ns} --version ${ROUTER_CHART_VERSION}
 done
 ```
@@ -163,8 +162,8 @@ The overlays give the clusters different capacity: 1 replica in A, 3 in B.
 ```bash
 kubectl apply -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/
 kubectl apply -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/
-kubectl wait pod -n ${NS_A} -l llm-d.ai/guide=optimized-baseline --for=condition=Ready --timeout=30m
-kubectl wait pod -n ${NS_B} -l llm-d.ai/guide=optimized-baseline --for=condition=Ready --timeout=30m
+kubectl rollout status deployment/optimized-baseline-nvidia-gpu-vllm-decode -n ${NS_A} --timeout=30m
+kubectl rollout status deployment/optimized-baseline-nvidia-gpu-vllm-decode -n ${NS_B} --timeout=30m
 ```
 <!-- guide:deploy.modelserver end -->
 
@@ -172,12 +171,16 @@ kubectl wait pod -n ${NS_B} -l llm-d.ai/guide=optimized-baseline --for=condition
 
 [`manifests/clusters.yaml`](manifests/clusters.yaml) has one entry per cluster: where the hub sends requests
 (`address:80`) and, for the load policy, where it reads metrics (`metricsAddress:9090`). Add an entry for each extra
-cluster; the hub reloads the list without a restart.
+cluster; the hub reloads the list without a restart once Kubernetes updates the mounted ConfigMap, which can take
+about a minute.
 
 <!-- guide:deploy.cluster_list start -->
 ```bash
-export CLUSTER_A_IP=$(kubectl get svc optimized-baseline-epp -n ${NS_A} -o jsonpath='{.spec.clusterIP}')
-export CLUSTER_B_IP=$(kubectl get svc optimized-baseline-epp -n ${NS_B} -o jsonpath='{.spec.clusterIP}')
+CLUSTER_A_IP=$(kubectl get svc optimized-baseline-epp -n ${NS_A} -o jsonpath='{.spec.clusterIP}')
+CLUSTER_B_IP=$(kubectl get svc optimized-baseline-epp -n ${NS_B} -o jsonpath='{.spec.clusterIP}')
+export CLUSTER_A_IP CLUSTER_B_IP
+: "${CLUSTER_A_IP:?cluster A router Service has no clusterIP - did Step 1 run in ${NS_A}?}"
+: "${CLUSTER_B_IP:?cluster B router Service has no clusterIP - did Step 1 run in ${NS_B}?}"
 envsubst '${CLUSTER_A_IP} ${CLUSTER_B_IP}' < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/clusters.yaml \
   | kubectl apply -n ${NS_HUB} -f -
 ```
@@ -217,57 +220,67 @@ kubectl run curl-test --rm -i --restart=Never \
   --namespace="${NS_HUB}" \
   --env="IP=${IP}" \
   --env="MODEL=${MODEL}" \
-  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+  -- /bin/sh -c 'set -o pipefail; curl -sS --fail -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}" | jq -e ".choices[0].text"'
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
 # See how the hub splits traffic across the clusters
 kubectl port-forward -n ${NS_HUB} svc/mc-hub-epp 8000:80 &
-python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py \
-  --base-url http://127.0.0.1:8000 --cluster a=${NS_A} --cluster b=${NS_B}
+PF_PID=$!
+trap 'kill ${PF_PID} 2>/dev/null' EXIT
+python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url http://127.0.0.1:8000 \
+  --scorer ${HUB_SCORER} --cluster a=${NS_A} --cluster b=${NS_B}
+kill ${PF_PID}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:verify.tests end -->
 
-[`verify.py`](verify.py) reports how many requests each cluster served, next to its share of the model servers. With
-the load scorer and clusters that have headroom, the split is about even (`INCONCLUSIVE`); once the smaller cluster
-queues requests, it gets less traffic. To see that, raise `--concurrency` and `--max-tokens`. With the latency scorer,
-the hub learns each cluster's latency from the first requests and then sends more traffic to the faster cluster.
+[`verify.py`](verify.py) sends 200 streamed requests through the hub. It passes when all of them succeed and every
+cluster serves some, then prints each cluster's share of the traffic next to its share of the model servers. With
+`HUB_SCORER=load`, it first checks that each cluster router serves its metrics without a token. It counts requests
+with vLLM's own counter, so it needs vLLM model servers.
+
+The split is reported, not judged. With the load scorer and clusters that have headroom, it is about even; once the
+smaller cluster queues requests, it gets less traffic. To see that, raise `--concurrency` and `--max-tokens`. With
+the latency scorer, the hub learns each cluster's latency from the first requests and then sends more traffic to the
+faster cluster.
 
 ## Known Constraints
 
 - **With the load policy, steering needs congestion**: clusters with headroom score equally, whatever their size.
-- **The latency scorer needs llm-d-router v0.11 or later, and streamed traffic**: it learns only from streamed
-  responses, so with non-streamed requests every cluster scores the same.
+- **The latency scorer needs streamed traffic**: it learns only from streamed responses, so with non-streamed
+  requests every cluster scores the same.
+- **The latency scorer needs an EPP image that includes it**: llm-d-router v0.11 or later, such as the chart's
+  default `main` image. An older EPP exits at startup with
+  `plugin type 'latency-observer-producer-hub' is not registered`.
 - **Addresses must be IPs** with the standard router chart: if a cluster router's Service is recreated, re-run Step 3.
 - **With the load policy, cluster metrics are unauthenticated and read over HTTP** in this in-cluster example.
-  Across real clusters, keep
-  the metrics source's default `https` with peer-certificate verification (`caCertPath`), and restrict access to
-  port 9090 with a NetworkPolicy.
-- **Hub config changes need a restart**: after `helm upgrade`, run `kubectl rollout restart deployment/mc-hub-epp`.
+  Across real clusters, keep the metrics source's default `https` with peer-certificate verification
+  (`caCertPath`), and restrict access to port 9090 with a NetworkPolicy.
+- **Hub config changes need a restart**: after a `helm upgrade` of the hub, run
+  `kubectl rollout restart deployment/mc-hub-epp -n ${NS_HUB}`. The cluster list is the exception: the hub reloads it.
 
 ## Troubleshooting
 
-- **503 `no healthy upstream`**: a cluster address is a hostname or stale IP. Compare
-  `kubectl get cm mc-hub-clusters -n ${NS_HUB} -o yaml` with the cluster routers' Service IPs.
-- **Split stays even under load (load policy)**: check that the hub can read a cluster's metrics:
-  `curl -s http://${CLUSTER_A_IP}:9090/metrics | grep llm_d_epp_average` from a pod. A `401` means the router was
-  installed without `leaf.values.yaml`.
+- **503 `no healthy upstream`, or a cluster serves no requests**: a cluster address is a hostname, empty, or a stale
+  IP. Compare `kubectl get cm mc-hub-clusters -n ${NS_HUB} -o yaml` with the cluster routers' Service IPs.
+- **`verify.py` reports HTTP 401 from a router's `/metrics` (load policy)**: that router was installed without
+  `leaf.values.yaml`, so the hub sees no load. `helm upgrade` it with the file.
 - **Hub pod fails to start**: `kubectl logs -n ${NS_HUB} deploy/mc-hub-epp -c epp`.
 
 ## Cleanup
 
 <!-- guide:cleanup start -->
 ```bash
-helm uninstall mc-hub -n ${NS_HUB}
-kubectl delete configmap mc-hub-clusters -n ${NS_HUB}
-kubectl delete -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/
-kubectl delete -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/
-for ns in ${NS_A} ${NS_B}; do helm uninstall optimized-baseline -n ${ns}; done
+helm uninstall mc-hub -n ${NS_HUB} --ignore-not-found
+kubectl delete configmap mc-hub-clusters -n ${NS_HUB} --ignore-not-found=true
+kubectl delete -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/ --ignore-not-found=true
+kubectl delete -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/ --ignore-not-found=true
+for ns in ${NS_A} ${NS_B}; do helm uninstall optimized-baseline -n ${ns} --ignore-not-found; done
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
-for ns in ${NS_A} ${NS_B} ${NS_HUB}; do kubectl delete namespace ${ns}; done
+for ns in ${NS_A} ${NS_B} ${NS_HUB}; do kubectl delete namespace ${ns} --ignore-not-found=true; done
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
