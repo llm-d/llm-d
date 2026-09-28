@@ -35,7 +35,7 @@ UCX is a good default: it is battle-tested, widely supported, and works across m
 
 ### UCCL
 
-[UCCL](https://github.com/ai-dynamo/uccl) (Unified Cloud Communication Library) is a newer transport backend integrated into NIXL as of llm-d v0.5. It implements a CPU-managed software transport stack — managing transport logic on the CPU rather than relying solely on network interface card (NIC) hardware offload. This enables fine-grained flow splitting and adaptive congestion control.
+[UCCL](https://github.com/uccl-project/uccl) (Unified Cloud Communication Library) is a newer transport backend integrated into NIXL as of llm-d v0.5. It implements a CPU-managed software transport stack — managing transport logic on the CPU rather than relying solely on network interface card (NIC) hardware offload. This enables fine-grained flow splitting and adaptive congestion control.
 
 UCCL currently supports:
 
@@ -289,7 +289,7 @@ In the future, this diagnostic will be automated as runtime scripts.
 ## Further Reading
 
 - [NIXL repository](https://github.com/ai-dynamo/nixl)
-- [UCCL repository](https://github.com/ai-dynamo/uccl)
+- [UCCL repository](https://github.com/uccl-project/uccl)
 - [P/D Disaggregation Well-Lit Path](../../well-lit-paths/foundations/pd-disaggregation.md) — deployment patterns using NIXL
 - [Wide Expert-Parallelism Well-Lit Path](../../well-lit-paths/foundations/wide-expert-parallelism.md) — multi-node deployment with DeepEP networking
 - [Model Servers](../../architecture/core/model-servers.md) — vLLM/SGLang configuration including KV transfer flags
