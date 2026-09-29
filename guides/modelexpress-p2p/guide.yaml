@@ -103,6 +103,8 @@ cleanup:
     - run: |
         # If you applied the Istio hardening, remove the policies (and the ns label):
         kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
+        # If you enabled broker ServiceAccount auth, remove its cluster-scoped TokenReview binding:
+        kubectl delete clusterrolebinding modelexpress-p2p-${NAMESPACE}-auth-delegator --ignore-not-found
         kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
   measurement:
     - run: |

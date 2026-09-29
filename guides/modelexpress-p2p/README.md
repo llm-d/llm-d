@@ -428,7 +428,7 @@ These are environment-specific observations, not official NVIDIA benchmark resul
 
 * [Measuring storage-backed loading paths](./measuring-storage-paths.md): time fastsafetensors from NFS and local NVMe against P2P in your own cluster.
 * [Reusing JIT compile caches across pods](./compile-cache.md): once weight transfer is sub-second, cut the `torch.compile` cost with P2P artifact transfer (0.5.0+, measured 20.1 s → 3.4 s) or a shared RWX PVC.
-* [Locking down the metadata broker](./security.md): Istio mTLS plus an AuthorizationPolicy for shared clusters.
+* [Locking down the metadata broker](./security.md): Istio mTLS, an AuthorizationPolicy, and broker-side ServiceAccount authentication for shared clusters.
 
 ## Cleanup
 
@@ -442,6 +442,8 @@ kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress
 
 # If you applied the Istio hardening, remove the policies (and the ns label):
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
+# If you enabled broker ServiceAccount auth, remove its cluster-scoped TokenReview binding:
+kubectl delete clusterrolebinding modelexpress-p2p-${NAMESPACE}-auth-delegator --ignore-not-found
 kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
 
 # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:
