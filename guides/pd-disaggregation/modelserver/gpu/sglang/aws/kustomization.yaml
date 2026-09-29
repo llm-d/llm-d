@@ -18,35 +18,41 @@ openapi:
 patches:
   - path: patch-decode.yaml
   - path: patch-prefill.yaml
-  - target:
+  # EFA devices, no CPU limit, and the p5en instance type.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
-      name: pd-disagg-sglang
-    patch: |-
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
-        value: "8"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
-        value: "8"
-      - op: remove
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/cpu
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
-        value:
-          node.kubernetes.io/instance-type: p5en.48xlarge
-  - target:
-      kind: DisaggregatedSet
-      name: pd-disagg-sglang
-    patch: |-
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
-        value: "8"
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
-        value: "8"
-      - op: remove
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/cpu
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
-        value:
-          node.kubernetes.io/instance-type: p5en.48xlarge
+      metadata:
+        name: pd-disagg-sglang
+      spec:
+        roles:
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    nodeSelector:
+                      node.kubernetes.io/instance-type: p5en.48xlarge
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            cpu: null
+                            vpc.amazonaws.com/efa: "8"
+                          requests:
+                            vpc.amazonaws.com/efa: "8"
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    nodeSelector:
+                      node.kubernetes.io/instance-type: p5en.48xlarge
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            cpu: null
+                            vpc.amazonaws.com/efa: "8"
+                          requests:
+                            vpc.amazonaws.com/efa: "8"

@@ -1,4 +1,4 @@
-# GKE overlay patch for SGLang prefill deployment.
+# GKE overlay patch for the SGLang prefill role.
 # Extends base/patch-prefill.yaml with GKE-specific DRA RDMA claims, UCX networking, and persistent HuggingFace cache.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet

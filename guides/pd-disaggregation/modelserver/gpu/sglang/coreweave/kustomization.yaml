@@ -2,24 +2,41 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+
+# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
+# patches match roles, containers, env, and volumes by key instead of by index.
+openapi:
+  path: disaggregatedset-schema.json
+
 patches:
-  - target:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
-      name: pd-disagg-sglang
-    patch: |-
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
-  - target:
-      kind: DisaggregatedSet
-      name: pd-disagg-sglang
-    patch: |-
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
+      metadata:
+        name: pd-disagg-sglang
+      spec:
+        roles:
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
