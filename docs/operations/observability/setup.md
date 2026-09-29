@@ -171,6 +171,7 @@ Available dashboards:
 | `llm-d-failure-saturation-dashboard` | Key failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache` | KV cache utilization and performance |
+| `llm-d-kv-cache-index` | KV-cache index throughput, hit rate, lookup and tokenization latency, and KV-events subscriber health for precise prefix-cache routing |
 | `llm-d-pd-coordinator-metrics` | Prefill/decode disaggregation metrics |
 | `llm-d-inference-gateway` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
 

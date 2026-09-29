@@ -285,7 +285,7 @@ Unlike the EPP and vLLM metrics above, these names carry no `llm_d_` prefix, so 
 
 For alerts built on these metrics, see [Alerting](./alerting.md#batch-gateway-batch-gatewayrules).
 
-## Step 4: Enable Inference Cost Metrics 
+## Step 4: Enable Inference Cost Metrics
 
 Install [inference cost tracking](../../../guides/recipes/observability/inferencecost/README.md) to generate OpenCost metrics and three special Prometheus gauges under the `llm_` prefix. These metrics join Kubernetes allocation costs with vLLM token throughput to produce per-model cost attribution that neither system can produce alone.
 
@@ -354,6 +354,7 @@ llm-d-sglang-overview                             1      30s
 llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
 llm-d-performance-kv-cache                        1      30s
+llm-d-kv-cache-index                              1      30s
 llm-d-pd-coordinator-metrics                      1      30s
 llm-d-batch-gateway-apiserver                     1      30s
 llm-d-batch-gateway-processor                     1      30s
@@ -371,6 +372,7 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-failure-saturation-dashboard.json` | Failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
+| `llm-d-kv-cache-index.json` | KV-cache index throughput, hit rate, lookup and tokenization latency, and KV-events subscriber health for precise prefix-cache routing |
 | `llm-d-pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
 | `llm-d-batch-gateway-apiserver.json` | Batch Gateway API server request rate, latency, and in-flight requests |
 | `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
@@ -378,6 +380,8 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-inference-cost.json` | Per-token and hourly infrastructure cost tracking via OpenCost (requires [inference cost tracking](../../../guides/recipes/observability/inferencecost/README.md)) |
 
 The three Batch Gateway dashboards are only useful if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md); each has a `namespace` variable to select the namespace it runs in.
+
+The `llm-d-kv-cache-index` dashboard is only populated when the router runs the `precise-prefix-cache-producer`, as in the [precise prefix cache routing guide](../../../guides/precise-prefix-cache-routing/README.md). The index panels also need `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on that producer (the guide sets it); without it they stay at zero while the KV-events panels still report.
 
 ## Step 6: Query Metrics
 
