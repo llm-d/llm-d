@@ -36,7 +36,7 @@ Re-apply the model-server overlay ([main guide Step 3](./README.md#3-deploy-the-
 kubectl rollout restart deploy/modelexpress-server -n ${NAMESPACE}
 ```
 
-The decode pods should now show a second container (`istio-proxy`). Confirm the NIXL ports are excluded:
+The decode pods should now carry an `istio-proxy` sidecar (listed under `initContainers` when the mesh uses Kubernetes native sidecars, otherwise as a second container). Confirm the NIXL ports are excluded:
 
 ```bash
 kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=modelexpress-p2p \
@@ -98,13 +98,16 @@ kubectl rollout status deploy/modelexpress-server -n ${NAMESPACE} --timeout=5m
 Confirm the broker came up in enforce mode, then repeat the scale-out from the [main guide](./README.md#verify-p2p-weight-transfer-during-scale-out) and check that no calls were rejected:
 
 ```bash
-kubectl logs deploy/modelexpress-server -n ${NAMESPACE} | grep -A4 'Security Configuration'
-# -> mode enforce, with the audience and allowlist above
-kubectl logs deploy/modelexpress-server -n ${NAMESPACE} | grep 'auth denied'
-# -> no output while receivers reach Ready
+kubectl logs -n ${NAMESPACE} -l app=modelexpress-server --prefix --tail=-1 \
+    | grep -E 'Mode:|ServiceAccount auth:|auth denied'
+# -> Mode: Enforce
+# -> ServiceAccount auth: enforce (1 allowed service account(s), 1 audience(s))
+# -> no `auth denied` lines while receivers reach Ready
 ```
 
-`auth denied` lines carry the rejection reason. The usual causes are a missing token mount (re-apply the model-server overlay), an audience mismatch, or an allowlist entry that does not match the `<namespace>:<serviceaccount>` the decode pods run as.
+Right after the rollout, the previous broker pod can still be terminating and prints `Mode: Off`; `--prefix` shows which pod each line came from.
+
+`auth denied` lines carry the rejection reason, for example `service account <namespace>:<serviceaccount> is not in the allowlist`. The usual causes are a missing token mount (re-apply the model-server overlay), an audience mismatch, or an allowlist entry that does not match the `<namespace>:<serviceaccount>` the decode pods run as. A rejected receiver logs `PERMISSION_DENIED` from the RDMA strategy and falls back to loading from storage, so it still reaches Ready, just without a peer transfer.
 
 To turn enforcement back off:
 
