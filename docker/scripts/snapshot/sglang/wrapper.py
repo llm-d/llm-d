@@ -13,6 +13,7 @@ Patches sglang.srt.entrypoints.http_server._wait_and_warmup to:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import sys
@@ -47,6 +48,10 @@ def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider
         get_serving,
         kill_process_tree,
     )
+    from sglang.srt.managers.io_struct import (
+        ReleaseMemoryOccupationReqInput,
+        ResumeMemoryOccupationReqInput,
+    )
 
     if snapshot_provider is None:
         # Get the configured snapshot provider, if any
@@ -77,11 +82,13 @@ def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider
                 execute_warmup_func=execute_warmup_func,
             )
 
+        logging.info("Waiting for weights to download and be ready in GPUs.")
         if get_model().checkpoint_engine_wait_weights_before_ready:
             _wait_weights_ready()
+            logging.info("Weights are ready in GPUs.")
 
         # Joiner schedulers are served through the primary after adoption.
-        skip_elastic_joiner_warmup = get_exec().moe.is_ep_scale_joiner
+        skip_elastic_joiner_warmup = server_args.is_ep_scale_joiner
         if skip_elastic_joiner_warmup:
             logger.debug(
                 "[Elastic EP] Skipping server warmup for elastic joiner (ep_join_mode=%s)",
@@ -98,10 +105,14 @@ def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider
         _freeze_gc_after_server_warmup(server_args)
 
         tokenizer_manager = http_server._global_state.tokenizer_manager
+        tokenizer_manager.server_status = ServerStatus.Starting
 
         # SLEEP
         logger.info("[Control Plane] Sleep signal received. Releasing memory occupation...")
-        tokenizer_manager.release_memory_occupation(tags=["weights", "kv_cache"])
+        asyncio.run_coroutine_threadsafe(
+            tokenizer_manager.release_memory_occupation(ReleaseMemoryOccupationReqInput(tags=["weights", "kv_cache"])),
+            tokenizer_manager.event_loop,
+        ).result()
 
         logger.info("Triggering snapshot checkpoint...")
         try:
@@ -112,8 +123,11 @@ def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider
 
         # WAKE
         logger.info("[Control Plane] Wake signal received. Resuming memory occupation...")
-        tokenizer_manager.resume_memory_occupation(tags=["weights", "kv_cache"])
-
+        asyncio.run_coroutine_threadsafe(
+            tokenizer_manager.resume_memory_occupation(
+                ResumeMemoryOccupationReqInput(tags=["weights", "kv_cache"])),
+            tokenizer_manager.event_loop,
+        ).result()
         # The server is ready for requests
         # Only set the server to ready once it has woken up again. This satisfies the readiness prob
         tokenizer_manager.server_status = ServerStatus.Up
@@ -127,4 +141,3 @@ def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider
 
     http_server._wait_and_warmup = patched_wait_and_warmup
     logger.info("Successfully patched SGLang _wait_and_warmup for GKE snapshotting.")
-
