@@ -1,6 +1,6 @@
 # Alerting
 
-This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker) and for the Batch Gateway. For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
+This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker), for the EPP's precise prefix-cache (KV-cache) index, and for the Batch Gateway. For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
 
 The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/getting-started/design/#prometheusrule) custom resource, so they require the Prometheus Operator (bundled with the kube-prometheus-stack installed by the [setup guide](./setup.md)).
 
@@ -80,6 +80,48 @@ The error-ratio alerts are `0/0`-safe: with no traffic the expression yields no 
 > [!NOTE]
 > `EPPExtProcStreamErrors` relies on opt-in metrics enabled by the EPP `--enable-grpc-stream-metrics` flag. When the flag is unset, the series are absent and the alert never fires. The matcher excludes `OK` and `Canceled` (a normal client disconnect) — adjust it for your environment.
 
+### KV-cache index (`kv-cache.index`, `kv-cache.events`)
+
+These alerts cover the precise prefix-cache pipeline embedded in the EPP: the KV-block index, the KV-events stream that feeds it from the model servers, and the `token-producer` tokenization in front of it. They ship as a separate `PrometheusRule` and are only relevant if you deployed [precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md) (or another config that uses the `precise-prefix-cache-producer`).
+
+```bash
+kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/alerts/kv-cache-alerting-rules.yaml
+kubectl get prometheusrules -n ${NAMESPACE}
+```
+
+You should then see the `kv-cache.index` and `kv-cache.events` groups under **Status → Rule Health** in the Prometheus UI.
+
+> [!IMPORTANT]
+> The `llm_d_epp_kv_cache_*` metrics are opt-in. Set `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on the `precise-prefix-cache-producer` parameters (the precise prefix-cache routing guide already does). Without it, `KVCacheIndexMetricsAbsent` fires and every other rule in this group stays silent. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: kv-cache-metrics`.
+
+#### Index (`kv-cache.index`)
+
+| Alert | Severity | Fires when | Why it matters |
+| --- | --- | --- | --- |
+| `KVCacheIndexMetricsAbsent` | warning | `absent(llm_d_epp_kv_cache_index_lookup_requests_total)` for 10m | Index metrics are disabled or not scraped, so none of the other KV-cache alerts can fire |
+| `KVCacheIndexNotAdmitting` | warning | Lookups flowing but zero `llm_d_epp_kv_cache_index_admissions_total` over 15m, for 15m | Nothing is being written to the index — the KV-events stream is broken and every lookup misses |
+| `KVCachePrefixHitRateLow` | warning | Predicted prefix hit rate < 10% for 30m (with > 0.1 req/s) | The index is not finding cached prefixes — stale index, broken event stream, or a block-hash mismatch between EPP and model servers |
+| `KVCacheIndexHighLookupLatency` | warning | P99 `llm_d_epp_kv_cache_index_lookup_latency_seconds` > 50ms for 10m | Lookups run on the request path, so slow lookups add directly to scheduling latency |
+| `KVCacheIndexEvictionSpike` | warning | Eviction rate > 3x the previous hour's rate (and > 10 blocks/s) for 5m | Model servers are repeatedly restarting or resetting their cache; hit rate drops until the index refills |
+
+`KVCachePrefixHitRateLow` uses `llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens`, a true 0–1 ratio. The index counters are not: `llm_d_epp_kv_cache_index_lookup_hits_total` counts matched *blocks* and `llm_d_epp_kv_cache_index_lookup_requests_total` counts *calls*, so their quotient is blocks per lookup. Workloads with no shared prefixes legitimately sit near zero — raise the threshold or drop this alert for them.
+
+`KVCacheIndexEvictionSpike` compares against the hour ending 15m ago, so it needs 75m of history before it can fire. A single short burst (one pod resetting its cache) clears within the 5m window and does not alert.
+
+#### KV events and tokenization (`kv-cache.events`)
+
+| Alert | Severity | Fires when | Why it matters |
+| --- | --- | --- | --- |
+| `KVCacheEventsSubscriberReconnecting` | warning | `llm_d_epp_kv_cache_events_subscriber_reconnections_total` increasing for a pod for 15m | The EPP keeps losing that pod's event stream; its cached blocks are missing from the index |
+| `KVCacheEventsZMQErrors` | warning | `llm_d_epp_kv_cache_events_zmq_errors_total` increasing for a pod/operation for 15m | A ZMQ step (`bind`, `connect`, `subscribe`, `recv`, `replay-*`) is failing, so that pod's stream is incomplete |
+| `KVCacheEventsStalled` | warning | A subscriber that received events before has received none for 15m while lookups continue, for 15m | Index entries for that pod are going stale |
+| `KVCacheEventsPoolBacklog` | warning | `llm_d_epp_kv_cache_events_pool_queue_depth` > 1000 for 15m | Event-pool workers cannot keep up and the index lags behind the model servers; raise `kvEventsConfig.concurrency` |
+| `KVCacheTokenizationSlow` | warning | > 5% of `token-producer` calls take over 100ms for 10m | Tokenization (via the render service) runs on the request path; check the render service's latency and capacity |
+
+`KVCacheTokenizationSlow` is built on `llm_d_epp_plugin_duration_seconds{plugin_type="token-producer"}`, whose largest bucket is 100ms, so it alerts on the share of calls above that bucket rather than on a quantile (which would be capped at 100ms).
+
+`KVCacheEventsStalled` also fires if a pod simply stops receiving requests. Treat it as a prompt to check that pod's stream, not proof that the stream is broken.
+
 ### Batch Gateway (`batch-gateway.rules`)
 
 These alerts cover the Batch Gateway processor and GC reconciler rather than the request path, so they are shipped as a separate `PrometheusRule` and are only relevant if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md).
@@ -120,6 +162,7 @@ See the [PromQL Reference](./promql.md) for more queries you can promote into al
 
 ```bash
 kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/epp-alerting-rules.yaml
+kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/kv-cache-alerting-rules.yaml
 kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/batch-gateway-alerting-rules.yaml
 ```
 
@@ -136,3 +179,5 @@ kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/batch-gate
 - `EPPExtProcStreamErrors` needs the EPP `--enable-grpc-stream-metrics` flag (see the note above).
 - Error-ratio alerts only evaluate once there is traffic — see the `0/0`-safe note above.
 - Self-health counters only produce series after the first error occurs.
+- KV-cache alerts need `enableMetrics: true` on the `precise-prefix-cache-producer` (see the KV-cache section above); `KVCacheIndexMetricsAbsent` fires when it is missing.
+- The per-pod KV-events counters (`messages_received`, `subscriber_reconnections`, `zmq_errors`) only produce series after the first event, reconnection or error for that pod, and are removed when the subscriber is.
