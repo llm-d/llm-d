@@ -4,7 +4,7 @@
 
 ## Summary
 
-llm-d is intentionally engine- and hardware-agnostic, yet no tool exists to evaluate its distributed-systems design space: how routing, flow control, autoscaling, placement, and disaggregation policies interact across multiple inference engines and hardware platforms, at a speed that makes configuration search, algorithm development, and research tractable. This document proposes a core llm-d Performance Simulator: a simulation framework that enables rapid, reproducible performance estimation across the llm-d ecosystem. The goal of the llm-d Performance Simulator is to predict latency and throughput by advancing a simulation clock event-to-event without running real workloads on hardware, achieving approximately 200× speedup over real-time execution.
+llm-d is intentionally engine- and hardware-agnostic, yet no tool exists to evaluate its distributed-systems design space: how routing, flow control, autoscaling, placement, and disaggregation policies interact across multiple inference engines and hardware platforms, at a speed that makes configuration search, algorithm development, and research tractable. This document proposes an incubating llm-d Performance Simulator: a simulation framework that enables rapid, reproducible performance estimation across the llm-d ecosystem. The goal of the llm-d Performance Simulator is to predict latency and throughput by advancing a simulation clock event-to-event without running real workloads on hardware, achieving approximately 200× speedup over real-time execution.
 
 ## Motivation
 
@@ -14,7 +14,7 @@ This proposal builds on the success of BLIS, which has already demonstrated the 
 
 ### Goals
 
-- Contribute the `inference-sim/inference-sim` repository to `llm-d/llm-d-perf-simulator`.
+- Contribute the `inference-sim/inference-sim` repository to `llm-d-incubation/llm-d-perf-simulator`.
 - Establish regular pinned releases of `llm-d-perf-simulator` along with the llm-d release cycle.
 - TBD: establish a regular community meeting for `llm-d-perf-simulator`.
 
@@ -136,7 +136,7 @@ We plan to augment this in the future with an automated, AI-driven parity-discov
 ### Road Map
 
 - Arxiv release of BLIS research paper
-- Migrate `inference-sim/inference-sim` repository to `llm-d/llm-d-perf-simulator`
+- Migrate `inference-sim/inference-sim` repository to `llm-d-incubation/llm-d-perf-simulator`
 - Update llm-d docs on when to use what type of simulators
 - Enhanced P/D accuracy
 - Improved network and communications modeling
@@ -147,7 +147,7 @@ We plan to augment this in the future with an automated, AI-driven parity-discov
 
 ### Rely on real cluster-based evaluation or build a new simulator
 
-One alternative is to rely exclusively on real cluster-based evaluation for llm-d development and capacity planning, or to build a new simulator from scratch tightly coupled to current system needs. The former approach is prohibitively slow, expensive, and non-deterministic for large-scale experimentation, while the latter would duplicate a year of work validated in BLIS, delaying availability of a usable system and discarding proven simulation workflows. Given that BLIS has already demonstrated success across capacity planning, algorithm development, and AI-driven discovery of improved inference policies, evolving it into a core llm-d simulator provides the most direct path to a unified, production-relevant simulation platform.
+One alternative is to rely exclusively on real cluster-based evaluation for llm-d development and capacity planning, or to build a new simulator from scratch tightly coupled to current system needs. The former approach is prohibitively slow, expensive, and non-deterministic for large-scale experimentation, while the latter would duplicate a year of work validated in BLIS, delaying availability of a usable system and discarding proven simulation workflows. Given that BLIS has already demonstrated success across capacity planning, algorithm development, and AI-driven discovery of improved inference policies, evolving it into an incubating llm-d simulator provides the most direct path to a unified, production-relevant simulation platform.
 
 ### Adopt an external simulator from another ecosystem
 
