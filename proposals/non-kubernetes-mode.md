@@ -18,6 +18,7 @@ research labs, providing reusable rollout infrastructure so teams can focus on R
 algorithms rather than reimplementing inference orchestration.
 
 Related repositories:
+
 - [llm-d-inference-scheduler no-kube branch](https://github.com/ezrasilvera/llm-d-inference-scheduler/tree/no-kube)
 - [llm-d-rl](https://github.com/llm-d-incubation/llm-d-rl)
 - [py-inference-scheduler](https://github.com/llm-d-incubation/py-inference-scheduler)
@@ -75,12 +76,11 @@ minikube/kind cluster setup. Testing routing logic changes requires pod
 restarts, image builds, and manifest updates. Inner-loop feedback is measured in
 minutes, not seconds.
 
-Benchmark platform requirements create additional friction. Some standardized 
-benchmarking  for AI inference stacks requires clean integration without 
-Kubernetes control plane. Clean performance evaluation requires 
-infrastructure-neutral deployment to isolate routing intelligence from 
+Benchmark platform requirements create additional friction. Some standardized
+benchmarking  for AI inference stacks requires clean integration without
+Kubernetes control plane. Clean performance evaluation requires
+infrastructure-neutral deployment to isolate routing intelligence from
 orchestration overhead.
-
 
 ### Goals
 
@@ -140,6 +140,7 @@ engine discovery via command-line flags for static URLs or file-based registry
 for Slurm environments.
 
 Key capabilities:
+
 - Weight synchronization via NCCL/NIXL (data plane separate from HTTP control plane)
 - Engine lifecycle management (sleep/wake/pause/resume)
 - Load-aware routing and session affinity for KV-cache reuse
@@ -206,34 +207,34 @@ graph TB
     subgraph Binary["llm-d-inference-scheduler<br/>(single Go binary)"]
         ExtProc["ext-proc Server<br/>(Envoy integration)"]
         Metrics["Metrics Collection<br/>(Prometheus scrape)"]
-        
+
         subgraph Scheduling["Scheduling Logic<br/>(mode-agnostic)"]
             Filters["Filters"]
             Scorers["Scorers"]
             Pickers["Pickers"]
             Profiles["Profile Handlers"]
         end
-        
+
         PluginIF["Discovery Plugin<br/>Interface"]
-        
+
         subgraph K8sPlugins["Kubernetes Plugins"]
             K8sIP["InferencePool<br/>(CRD watch)"]
             K8sPS["Pod Selector<br/>(pod watch)"]
         end
-        
+
         subgraph NonK8sPlugins["Non-Kubernetes Plugins"]
             FileD["File Discovery<br/>(YAML/JSON)"]
             DNSD["DNS Discovery<br/>(SRV records)"]
             StaticD["Static Discovery<br/>(hardcoded)"]
         end
     end
-    
+
     PluginIF --> K8sPlugins
     PluginIF --> NonK8sPlugins
     Scheduling --> PluginIF
     ExtProc --> Scheduling
     Metrics --> Scheduling
-    
+
     style Binary fill:#fff4e1
     style Scheduling fill:#e1f5ff
     style K8sPlugins fill:#e8f5e9
@@ -256,24 +257,24 @@ graph TB
     subgraph RL["RL Framework Layer"]
         FW["RL Framework<br/>(veRL, OpenRLHF, SkyRL, NeMo-RL)"]
     end
-    
+
     subgraph Controller["llm-d-rl Controller<br/>(Go binary, no K8s deps)"]
         WS["Weight Sync<br/>Coordination"]
         LC["Engine Lifecycle<br/>(sleep/wake/pause/resume)"]
         LR["Load-aware<br/>Routing"]
         SA["Session Affinity<br/>(KV-cache reuse)"]
     end
-    
+
     subgraph Workers["Rollout Worker Pool"]
         W1["vLLM Worker 1"]
         W2["vLLM Worker 2"]
         W3["vLLM Worker N"]
     end
-    
+
     FW -->|HTTP/gRPC<br/>control plane| Controller
     Controller -->|HTTP requests| Workers
     Controller -.->|NCCL/NIXL<br/>data plane| Workers
-    
+
     style RL fill:#e1f5ff
     style Controller fill:#fff4e1
     style Workers fill:#f0f0f0
@@ -296,6 +297,7 @@ the HTTP control plane.
 | Workload variant autoscaler | K8s HPA/VPA integration | External autoscaler API | 🔴 Future work |
 
 Deployment tools:
+
 - Kubernetes: Helm charts, Kustomize recipes (existing)
 - Slurm: Job submission scripts, shared filesystem coordination (in progress)
 - Docker Compose: Static file discovery (reference implementation)
@@ -303,6 +305,7 @@ Deployment tools:
 ### Feature parity guarantee
 
 Routing intelligence maintained across modes:
+
 - KV-cache utilization scoring (via metrics scrape)
 - Prefix-cache awareness (ZMQ events, direct subscription)
 - Predicted latency (XGBoost model, mode-agnostic)
@@ -311,6 +314,7 @@ Routing intelligence maintained across modes:
 - Flow control and admission control (built into ext-proc)
 
 Missing in non-Kubernetes mode:
+
 - Dynamic CRD-based configuration (replaced by static YAML)
 - Automatic pod discovery (replaced by file/DNS/static discovery)
 - Native Kubernetes autoscaling (external autoscaler must manage backends)
@@ -326,16 +330,16 @@ graph TB
         V2["vLLM<br/>instance 2"]
         Config["backends.yaml<br/>(static config)"]
     end
-    
+
     subgraph EPP["Inference Scheduler"]
         File["File Discovery<br/>Plugin"]
         Router["Routing Logic<br/>(KV-cache aware)"]
     end
-    
+
     subgraph Test["Test Client"]
         Curl["HTTP requests"]
     end
-    
+
     Config --> File
     File --> Router
     V1 -.->|metrics scrape| Router
@@ -343,7 +347,7 @@ graph TB
     Router --> V1
     Router --> V2
     Curl --> Router
-    
+
     style Local fill:#f0f0f0
     style EPP fill:#fff4e1
     style Test fill:#e8f5e9
@@ -358,11 +362,13 @@ rather than minutes.
 #### Community expansion
 
 Current addressable community (Kubernetes-only):
+
 - Cloud-native AI platforms (AWS SageMaker, GCP Vertex AI, Azure ML)
 - Managed Kubernetes inference (CoreWeave, Lambda, Modal)
 - Enterprise private cloud (OpenShift, Rancher)
 
 Expanded addressable community (with non-Kubernetes mode):
+
 - RL training infrastructure: 5+ major frameworks, thousands of researchers
 - AI research labs: academic and industry research clusters running Slurm
 - Benchmark ecosystems: SemiAnalysis, MLPerf, vendor performance testing
@@ -393,6 +399,7 @@ Concern: maintaining two deployment modes doubles testing surface and diverges
 codebases.
 
 Mitigation:
+
 - Single binary approach: mode selection via configuration, not separate codebases
 - Shared scheduling logic: all filters/scorers/pickers are mode-agnostic
 - Plugin abstraction: discovery plugins encapsulate mode-specific logic cleanly
@@ -404,6 +411,7 @@ Concern: supporting non-Kubernetes limits use of advanced Kubernetes features
 (custom schedulers, topology hints, device plugins).
 
 Mitigation:
+
 - Kubernetes mode is primary: advanced features (InferencePool CRD, operator
   patterns) remain Kubernetes-exclusive
 - Non-Kubernetes mode is subset: file/DNS discovery is deliberately simple;
@@ -414,23 +422,27 @@ Mitigation:
 ### Next steps
 
 #### Upstream EPP non-Kubernetes branch
+
 - Merge no-kube branch from ezrasilvera fork into main llm-d-inference-scheduler repo
 - Add file-based discovery plugin to release builds
 - Document Slurm deployment pattern with reference scripts
 - CI tests for file-based and DNS discovery modes
 
 #### RL ecosystem integration
+
 - Graduate llm-d-rl from incubation to core
 - Python client library for framework adapters (veRL, OpenRLHF, SkyRL)
 - Validation on Slurm jobs and various orchestration environments
 - Blog post: "llm-d for RL: Framework-agnostic rollout infrastructure"
 
 #### Benchmark platform validation
+
 - InferenceMax integration and published results
 - MLPerf submission preparation (if applicable)
 - Academic paper: "Deployment-agnostic inference routing for LLMs"
 
 #### Production hardening
+
 - Non-Kubernetes production reference architectures (Slurm, bare-metal)
 - SIG Installation guides for research environments
 - Security review for file-based discovery (shared filesystem permissions)

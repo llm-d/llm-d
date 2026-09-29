@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          imagePullPolicy: IfNotPresent
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --kv-connector=nixlv2
+            - --zap-log-level=1
+            - --secure-proxy=false
+            # MoRI-IO WRITE-mode toggle. When set, the prefill leg of
+            # buildKVTransferParamsForPrefill emits the full
+            # remote_host / remote_notify_port / remote_dp_rank /
+            # remote_handshake_port / "tx"-prefixed transfer_id tuple
+            - --moriio-write-mode
+            # MUST match the vLLM settings
+            - --moriio-tp-size=2
+            # Concurrent prefill/decode dispatch: fire both legs in
+            # parallel goroutines so decode block-allocation overlaps
+            # with prefill compute. Off-by-default in the sidecar;
+            # opt in here because WRITE-mode does not depend on
+            # prefill-supplied kv_transfer_params and is safe to
+            # parallelise.
+            - --moriio-parallel-dispatch
+            - --moriio-local-pod-ip=$(POD_IP)
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

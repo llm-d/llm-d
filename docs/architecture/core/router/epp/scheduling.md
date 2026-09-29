@@ -79,8 +79,9 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`prefix-cache-affinity-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity)**: A probabilistic filter that narrows candidates to "sticky" endpoints (those with high prefix cache scores). It includes a "TTFT load gate" to break stickiness if sticky endpoints are significantly slower than non-sticky ones.
 * **[`slo-headroom-tier-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/sloheadroomtier)**: Filters endpoints based on SLO headroom tiers to ensure quality of service.
 * **[`label-selector-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Keeps endpoints that matches a configured label selector.
-* **[`prefill-endpoints-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: A special instance of `label-selector-filter` that retains only endpoints with a prefill label.
-* **[`decode-endpoints-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: A special instance of `label-selector-filter` that retains only endpoints with a decode label.
+* **[`prefill-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `prefill`, `encode-prefill`, `prefill-decode`, or `encode-prefill-decode` roles.
+* **[`decode-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `decode`, `prefill-decode`, or `encode-prefill-decode` roles, and passes through endpoints without an `llm-d.ai/role` label. The former `both` role is removed; use `prefill-decode` instead.
+* **[`encode-filter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/bylabel)**: Retains endpoints with `encode`, `encode-prefill`, or `encode-prefill-decode` roles.
 
 ### Scorers
 
@@ -89,14 +90,14 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`kv-cache-utilization-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/kvcacheutilization)**: Prefers endpoints with lower KV cache utilization to avoid fragmentation.
 * **[`latency-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/latency)**: Scores endpoints based on predicted latency headroom, defined as the gap between the predicted request latency and the user's SLO if set.
 * **[`lora-affinity-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/loraaffinity)**: Prefers endpoints that already have the requested LoRA adapter active or have capacity to load it.
-* **[`prefix-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix)**: Scores based on the length of the prefix cache match.
+* **[`prefix-cache-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix)**: Scores based on the length of the prefix cache match.
 * **[`queue-depth-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth)**: Prefers endpoints with shorter request queues.
 * **[`running-requests-size-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/runningrequests)**: Scores based on the number of currently active requests.
 * **[`token-load-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload)**: Scores based on the total token load (input + output) handled by the endpoint.
-* **[`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache)** (DataProducer, paired with `prefix-cache-scorer`): Enables scoring on real-time KV-cache locality. While `prefix-scorer` relies on historical scheduling estimates, this tracks actual cache states via model server events for higher precision. Configure the producer and point the scorer at it with `prefixMatchInfoProducerName: precise-prefix-cache-producer`.
+* **[`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache)** (DataProducer, paired with `prefix-cache-scorer`): Publishes `PrefixCacheMatchInfo` from its event-driven KV-cache index. Set `prefixMatchInfoProducerName: precise-prefix-cache-producer` on the scorer to use this precise cache state.
 
   > [!NOTE]
-  > Without an explicit `prefixMatchInfoProducerName`, `prefix-cache-scorer` falls back to the auto-instantiated `approx-prefix-cache-producer`. (The older single-plugin `precise-prefix-cache-scorer` is deprecated in favor of this producer + `prefix-cache-scorer` pair.)
+  > Without an explicit `prefixMatchInfoProducerName`, `prefix-cache-scorer` falls back to the auto-instantiated `approx-prefix-cache-producer`.
 
 * **[`session-affinity-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/sessionaffinity)**: Assigns a maximum score to the specific endpoint that handled previous requests for the same session, while all other endpoints receive the minimum score.
 * **[`no-hit-lru-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/nohitlru)**: For cold requests (zero cache hits), the scorer prioritizes endpoints that have never handled one, followed by those used least recently. This ensures an even distribution of the intensive "prefill" workload across the cluster. If a request has existing cache hits, the scorer assigns equal scores to all endpoints (scorer has no impact).
@@ -113,9 +114,7 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`disagg-profile-handler`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/profilehandler/disagg)**: Runs two scheduling profiles, one for prefill and one for decode. The **decode endpoint** is set as the primary destination for the proxy to forward the original request, while the **prefill endpoint** is injected into the request as a specialized header.
 
 > [!NOTE]
-> Two older handlers are **deprecated** and kept only for backward compatibility:
-> - `pd-profile-handler` — use `disagg-profile-handler` instead.
-> - `data-parallel-profile-handler` — use `single-profile-handler` instead.
+> An older handler, `data-parallel-profile-handler`, is **deprecated** and kept only for backward compatibility, use `single-profile-handler` instead.
 
 ---
 
@@ -162,27 +161,62 @@ The following metrics provide visibility into the InferencePool health and sched
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `llm_d_epp_ready_endpoints` | Gauge | `name` | Number of ready pods in the pool |
+| `llm_d_epp_ready_endpoints` | Gauge | `name` | Number of ready endpoints in the pool |
 | `llm_d_epp_average_kv_cache_utilization` | Gauge | `name` | Average KV cache utilization across the pool |
 | `llm_d_epp_average_queue_size` | Gauge | `name` | Average number of pending requests across the pool |
-| `llm_d_epp_per_endpoint_queue_size` | Gauge | `model_server_pod`, `name` | Queue size for each individual pod |
-| `llm_d_epp_request_running` | Gauge | `name` | Average number of running requests across the pool |
+| `llm_d_epp_average_running_requests` | Gauge | `name` | Average number of running requests across the pool |
+| `llm_d_epp_std_dev_kv_cache_utilization` | Gauge | `name` | Standard deviation of KV cache utilization across the pool |
+| `llm_d_epp_std_dev_queue_size` | Gauge | `name` | Standard deviation of pending requests across the pool |
+| `llm_d_epp_std_dev_running_requests` | Gauge | `name` | Standard deviation of running requests across the pool |
+| `llm_d_epp_per_endpoint_queue_size` | Gauge | `name`, `model_server_endpoint` | Queue size for each individual endpoint |
 
 #### Scheduler Performance Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `llm_d_epp_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `pod_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
-| `llm_d_epp_scheduler_e2e_duration_seconds` | Distribution | *None* | End-to-end scheduling latency |
-| `llm_d_epp_plugin_duration_seconds` | Distribution | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
+| `llm_d_epp_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `endpoint_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
+| `llm_d_epp_scheduler_e2e_duration_seconds` | Histogram | *None* | End-to-end scheduling latency |
+| `llm_d_epp_plugin_duration_seconds` | Histogram | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
+| `llm_d_epp_plugin_data_scope_violations_total` | Counter | `extension_point`, `plugin_type`, `plugin_name`, `access` | Endpoint attribute accesses rejected due to undeclared DataKey (`read` or `write`) |
 
-#### Prefix Cache Metrics
+#### In-Flight Load Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `llm_d_epp_prefix_indexer_size` | Gauge | *None* | Size of the prefix indexer |
-| `llm_d_epp_prefix_indexer_hit_ratio` | Distribution | *None* | Hit ratio for prefix matches |
-| `llm_d_epp_prefix_indexer_hit_bytes` | Distribution | *None* | Bytes matched in prefix cache lookup |
+| `llm_d_epp_inflight_requests` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Requests currently in flight on each endpoint |
+| `llm_d_epp_inflight_tokens` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Tokens currently in flight on each endpoint |
+
+#### Disaggregation Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_epp_disagg_decision_total` | Counter | `plugin_name`, `plugin_type`, `model_name`, `decision_type` | Disaggregation routing decisions (`decode-only`, `prefill-decode`, `encode-decode`, `encode-prefill-decode`) |
+| `llm_d_epp_pd_decision_total` | Counter | `plugin_name`, `plugin_type`, `model_name`, `decision_type` | Prefill/Decode decisions (deprecated handler) |
+| `llm_d_epp_disaggregatedset_strict_header_no_match_total` | Counter | `plugin_type`, `plugin_name`, `selector` | Strict header selections that matched no endpoint |
+| `llm_d_epp_disaggregatedset_revision_gating_share` | Gauge | `plugin_type`, `plugin_name`, `mode`, `revision` | Current weighted revision gating share |
+
+#### Prefix Cache Metrics (Approximate)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_epp_prefix_indexer_size` | Gauge | `plugin_name`, `plugin_type` | Size of the approximate prefix indexer |
+| `llm_d_epp_prefix_indexer_hit_ratio` | Histogram | `plugin_name`, `plugin_type` | Hit ratio for prefix matches |
+| `llm_d_epp_prefix_indexer_hit_bytes` | Histogram | `plugin_name`, `plugin_type` | Bytes matched in prefix cache lookup |
+
+#### Data Layer Errors
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_epp_datalayer_poll_errors_total` | Counter | `source_type` | Data-source poll failures |
+| `llm_d_epp_datalayer_extract_errors_total` | Counter | `source_type`, `extractor_type` | Extractor failures |
+
+#### Multimodal Encoder Cache
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `llm_d_epp_encoder_cache_queries_total` | Counter | `plugin_type`, `plugin_name`, `modality` | Encoder-cache lookups |
+| `llm_d_epp_encoder_cache_hits_total` | Counter | `plugin_type`, `plugin_name`, `pod`, `modality` | Encoder-cache hits |
+| `llm_d_epp_encoder_cache_hit_ratio` | Histogram | `plugin_type`, `plugin_name` | Hit ratio for encoder cache lookups |
 
 #### System Info
 

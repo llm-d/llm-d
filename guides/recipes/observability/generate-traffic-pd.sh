@@ -29,9 +29,9 @@ MODEL_NAME="${MODEL_NAME:-meta-llama/Llama-3.1-8B-Instruct}"
 # Shared counter for statistics (macOS-compatible)
 STATS_DIR="/tmp/load_gen_stats_$$"
 mkdir -p "$STATS_DIR"
-echo "0" > "$STATS_DIR/total"
-echo "0" > "$STATS_DIR/success"
-echo "0" > "$STATS_DIR/fail"
+: > "$STATS_DIR/total"
+: > "$STATS_DIR/success"
+: > "$STATS_DIR/fail"
 
 increment_stat() {
     local stat_type=$1  # total, success, or failure

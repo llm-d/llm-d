@@ -22,6 +22,11 @@ spec:
             # reads. See extra-llm-api-options-configmap.yaml for the contents.
             - "--extra_llm_api_options=/etc/trtllm/llm_api_options.yaml"
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: HF_HOME
               value: /hf-cache
             # Overriding the container command (above) bypasses the image entrypoint

@@ -17,3 +17,5 @@ CLAUDE.md
 
 # AI
 .claude
+**/__pycache__/
+.envrc

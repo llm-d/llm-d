@@ -3,11 +3,10 @@ kind: Kustomization
 resources:
   - ../../../../recipes/modelserver/base/single-host/default
 
-
 namePrefix: precise-prefix-cache-routing-amd-vllm-
 
 components:
-  - ../../../../recipes/modelserver/components/images/amd-vllm
+  - ../../../../recipes/modelserver/components/images/amd-vllm/release
 
 labels:
   - pairs:

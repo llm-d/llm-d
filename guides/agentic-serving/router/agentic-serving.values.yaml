@@ -20,10 +20,10 @@ router:
             # WORKAROUND: autoTune is disabled and the LRU is sized manually.
             # autoTune derives lruCapacityPerServer from on-device (HBM) blocks
             # only (num_gpu_blocks) and ignores the KV-cache offload tier. With
-            # offloading enabled this under-counts cached prefixes. 
+            # offloading enabled this under-counts cached prefixes.
             # We size the LRU for the offload-extended cache
             # (~num_gpu_blocks x 1000). Remove once autoTune is made offload-aware
-            # upstream — tracked by the llm-d-router offload-aware-LRU issue. 
+            # upstream — tracked by the llm-d-router offload-aware-LRU issue.
             # https://github.com/llm-d/llm-d-router/issues/1650
             autoTune: false
             lruCapacityPerServer: 1570000

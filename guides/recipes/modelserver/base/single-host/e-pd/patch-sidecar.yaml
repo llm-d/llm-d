@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --ec-connector=ec-nixl
+            - --zap-log-level=1
+            - --secure-proxy=false
+          image: REPLACE_ROUTING_SIDECAR_IMAGE
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

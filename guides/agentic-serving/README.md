@@ -38,21 +38,22 @@ costs - from a routing-and-offloading baseline up to disaggregated serving, adde
 as a workload's scale and latency targets grow.
 
 The reference workload is the same across deployments — agentic code generation (see above) — so
-the sub-guides below differ along one axis: the **accelerator** they target (and the model and
-serving topology that fit it). Each is listed as *model on accelerator*. Pick the one matching
-your hardware:
+the sub-guides below differ by the **accelerator** they target and the **serving topology** that
+fits the model. Each is listed as *model on accelerator*; pick by hardware, then by topology:
 
-- [NVIDIA-Nemotron-3-Ultra-550B on H200](nemotron-3-ultra-550b-h200.md) — P/D-disaggregated serving on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
+- [NVIDIA-Nemotron-3-Ultra-550B on H200](nemotron-3-ultra-550b-h200.md) — P/D-disaggregated serving (TP=8) on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
+- [GLM-5.2-FP8 on H200](glm-5-2-h200.md) — wide expert-parallel P/D-disaggregated serving with MTP and tiered KV-offloading; the default uses 8 H200 nodes, with alternatives from 2 to 10 nodes. See the [GLM-5.2 blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d) for the benchmark analysis.
 - [Qwen3-Coder-480B on TPU v7](qwen3-coder-480b-tpu.md) — routing + CPU KV-offloading on 8× TPU v7x (2x2x1).
 
 ## Benchmarking
 
-Each deployment is benchmarked against a realistic agentic workload — large reused contexts
-and bursty, locality-heavy traffic — replayed with
-[`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) via the
-[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) harness, so cross-request and
-cross-turn prefix reuse is actually exercised rather than assumed. The exact preset is tuned per
-deployment (model, accelerator, and serving topology) rather than forced to be identical — see
-each sub-guide for its workload. Deployments are compared on program-level metrics — whole-session
-completion time and task throughput alongside TTFT and ITL. Replaying real agentic traces (program
-structure and tool-call timing from OpenTelemetry) is the direction for program-level evaluation.
+Each deployment is benchmarked against an agentic workload with large reused contexts and
+bursty, locality-heavy traffic. The Nemotron and Qwen deployments use
+[`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) through
+[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark); GLM-5.2 uses
+[`aiperf`](https://github.com/ai-dynamo/aiperf). Workload details and metrics differ by model,
+accelerator, and topology, so compare results within each sub-guide.
+
+The guides report request-level throughput, TTFT, and ITL, plus session or task metrics where
+the benchmark provides them. Replaying complete agent dependency graphs with tool timing and
+sub-agent fan-out remains a separate evaluation mode.

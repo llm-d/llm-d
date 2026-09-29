@@ -99,7 +99,7 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 * `prefill-decode` → pods capable of both prefill and decode
 
 > [!NOTE]
-> It is possible to override the default labels by configuring the `EndpointPickerConfig` to use the generic by-label filter plugin instead of the `prefill-filter` / `decode-filter`. TODO: provide an example of this.
+> To use a different label key, replace the role-specific filters with named `label-selector-filter` plugins in the `prefill` and `decode` profiles. Apply the same labels to the model-server Pods and keep the profile names `prefill` and `decode`; the `disagg-profile-handler` uses those names when it selects the profile.
 
 ### Routing Proxy Sidecar
 
@@ -181,5 +181,5 @@ vLLM and SGLang both reserve RAM ahead of time for KV cache memory. NIXL directl
 
 Disaggregated serving introduces operational considerations that are specific to each model server's KV transfer mechanism: dynamic connections, request cancellation, fault tolerance, and rollouts. See the engine-specific operations guides:
 
-* [Disaggregated Serving: Operations (vLLM)](operations-vllm.md)
-* [Disaggregated Serving: Operations (SGLang)](operations-sglang.md)
+* [Disaggregated Serving: Operations (vLLM)](../../../operations/disaggregation/vllm.md)
+* [Disaggregated Serving: Operations (SGLang)](../../../operations/disaggregation/sglang.md)

@@ -1,0 +1,47 @@
+load:
+  type: constant
+  stages:
+  - rate: 2
+    duration: 240
+  - rate: 6
+    duration: 360
+  - rate: 9
+    duration: 300
+  - rate: 3
+    duration: 240
+  request_timeout: 900
+api:
+  type: completion
+  streaming: true
+  headers:
+    x-llm-d-slo-ttft-ms: '3000'
+    x-llm-d-slo-tpot-ms: '100'
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+data:
+  type: random
+  input_distribution:
+    min: 3500
+    max: 4500
+    mean: 4000
+    std_dev: 300
+    total_count: 8000
+  output_distribution:
+    min: 900
+    max: 1100
+    mean: 1000
+    std_dev: 80
+    total_count: 8000
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: false
+storage:
+  local_storage:
+    path: /workspace

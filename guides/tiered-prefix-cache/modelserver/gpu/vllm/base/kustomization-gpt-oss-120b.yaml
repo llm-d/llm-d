@@ -7,7 +7,7 @@ resources:
 namePrefix: optimized-baseline-
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
 
 labels:
   - pairs:

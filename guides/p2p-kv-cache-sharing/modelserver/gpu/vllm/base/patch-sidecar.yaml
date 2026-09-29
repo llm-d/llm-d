@@ -1,0 +1,36 @@
+# Routing sidecar in front of the engine: consumes the KV-cache-source
+# header and injects the P2P pull (kv_transfer_params.remote_kv_source).
+# Mirrors the pd recipe's patch-sidecar.yaml with the offloading connector
+# flags; POD_IP lets the sidecar recognize itself as the source and skip
+# self-pulls.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --vllm-port=8200
+            - --kv-connector=offloading
+            - --p2p-connector-port=7777
+            - --secure-proxy=false
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          image: REPLACE_ROUTING_SIDECAR_IMAGE
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

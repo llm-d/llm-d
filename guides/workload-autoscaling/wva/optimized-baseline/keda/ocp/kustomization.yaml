@@ -1,0 +1,29 @@
+# OpenShift: metrics come from Thanos Querier, whose :9091 endpoint rejects unauthenticated
+# queries with a 401 — and KEDA suppresses that error and silently serves `fallback` replicas,
+# so an unauthenticated trigger looks healthy while autoscaling does nothing. Point the trigger
+# at Thanos and bearer-authenticate with the WVA ServiceAccount token (see
+# wva-triggerauthentication.yaml); its service CA verifies the serving cert, so unsafeSsl goes.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+  - wva-triggerauthentication.yaml
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+      - op: add
+        path: /spec/triggers/0/authenticationRef
+        value:
+          name: wva-prometheus-auth
+      - op: remove
+        path: /spec/triggers/0/metadata/unsafeSsl
+    target:
+      kind: ScaledObject
+      name: optimized-baseline-nvidia-gpu-vllm-decode-scaler

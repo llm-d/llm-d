@@ -1,0 +1,17 @@
+# Scrape the GKE TPU device-plugin metrics exporter with the Prometheus Operator.
+# The exporter is provided by the GKE TPU runtime.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: tpu-metrics-exporter
+  labels:
+    app.kubernetes.io/name: tpu-metrics-exporter
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: tpu-device-plugin
+  podMetricsEndpoints:
+    - portNumber: 2112
+      path: /metrics
+      interval: 15s

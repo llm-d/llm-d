@@ -36,13 +36,33 @@ else
   exit 1
 fi
 
+# GitHub serves release assets at releases/latest/download/<asset> for the
+# floating latest release and releases/download/<tag>/<asset> for pinned tags.
+# "latest" arrives here whenever the caller has sourced guides/env.sh, which
+# exports GATEWAY_API_VERSION=latest by default.
+release_url() {
+  local version=$1
+  if [[ "$version" == "latest" ]]; then
+    echo "releases/latest/download"
+  else
+    echo "releases/download/${version}"
+  fi
+}
+
+KUBECTL_FLAGS=()
+if [[ "$MODE" == "delete" ]]; then
+  KUBECTL_FLAGS=(--ignore-not-found)
+fi
+
 GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-"v1.5.1"}
 ### Base CRDs (standard GA APIs only)
 log_success "📜 Base CRDs: ${LOG_ACTION_NAME}..."
-kubectl $MODE -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml || true
+kubectl "$MODE" "${KUBECTL_FLAGS[@]}" -f "https://github.com/kubernetes-sigs/gateway-api/$(release_url "$GATEWAY_API_VERSION")/standard-install.yaml"
 
 
-GATEWAY_API_INFERENCE_EXTENSION_VERSION=${GATEWAY_API_INFERENCE_EXTENSION_VERSION:-"v1.5.0"}
+# guides/env.sh exports the short-form GAIE_VERSION; honor it when the long
+# form is unset so a sourced shell pins both installs consistently.
+GATEWAY_API_INFERENCE_EXTENSION_VERSION=${GATEWAY_API_INFERENCE_EXTENSION_VERSION:-${GAIE_VERSION:-"v1.5.0"}}
 ### GAIE CRDs
 log_success "🚪 GAIE CRDs: ${LOG_ACTION_NAME}..."
-kubectl $MODE -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GATEWAY_API_INFERENCE_EXTENSION_VERSION}/v1-manifests.yaml || true
+kubectl "$MODE" "${KUBECTL_FLAGS[@]}" -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/$(release_url "$GATEWAY_API_INFERENCE_EXTENSION_VERSION")/v1-manifests.yaml"

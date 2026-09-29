@@ -134,9 +134,9 @@ Use these **four subsections in this order** (same flow as [optimized-baseline â
 ### Conventions
 
 * **Namespaces:**
-  - **Workload namespace (per guide):** Model servers, router/EPP, and WVA run where the guide deploys them (e.g. `${NAMESPACE}` from the guide README). This is not the same as the monitoring stack namespace.
-  - **Monitoring stack namespace:** [install-prometheus-grafana.sh](../guides/recipes/observability/install-prometheus-grafana.sh) **central mode** (default) installs Prometheus, Grafana, and the Prometheus Operator into **`llm-d-monitoring`** (override with `-n` or `MONITORING_NAMESPACE`). That Prometheus discovers `PodMonitor` / `ServiceMonitor` objects **across all namespaces**. **Individual mode** (`-i`) installs the stack into a namespace you specify; use when you do not want a cluster-wide central monitoring namespace.
-  - **`PodMonitor` / `ServiceMonitor` placement:** Create scrape CRs in the **same namespace as the pods they select** (apply with the guide's `kubectl apply -n ${NAMESPACE}`). Central Prometheus in `llm-d-monitoring` still scrapes monitors that live in workload namespaces.
+  * **Workload namespace (per guide):** Model servers, router/EPP, and WVA run where the guide deploys them (e.g. `${NAMESPACE}` from the guide README). This is not the same as the monitoring stack namespace.
+  * **Monitoring stack namespace:** [install-prometheus-grafana.sh](../guides/recipes/observability/install-prometheus-grafana.sh) **central mode** (default) installs Prometheus, Grafana, and the Prometheus Operator into **`llm-d-monitoring`** (override with `-n` or `MONITORING_NAMESPACE`). That Prometheus discovers `PodMonitor` / `ServiceMonitor` objects **across all namespaces**. **Individual mode** (`-i`) installs the stack into a namespace you specify; use when you do not want a cluster-wide central monitoring namespace.
+  * **`PodMonitor` / `ServiceMonitor` placement:** Create scrape CRs in the **same namespace as the pods they select** (apply with the guide's `kubectl apply -n ${NAMESPACE}`). Central Prometheus in `llm-d-monitoring` still scrapes monitors that live in workload namespaces.
 * **Source vs. user-facing:** component repos define metrics; `llm-d/llm-d` carries the deployable manifests, dashboards, and rendered docs. Keep the metric reference in `llm-d/llm-d` in sync with the component's `docs/metrics.md` rather than letting them diverge.
 
 ### Follow-up

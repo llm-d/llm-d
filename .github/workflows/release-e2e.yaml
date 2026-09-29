@@ -1,0 +1,219 @@
+name: Release E2E (dispatch guide validation against a release branch)
+
+# The nightly e2e lanes test `main`, so the Release Testing matrix in
+# release/README.md needs those same lanes run against the release branch. This
+# workflow dispatches them with `matrix_type=<release branch>`, which makes
+# llm-d-infra's reusables check out that branch and write their badge to
+# badges/<badge_name>_<release branch>.json on gh-pages.
+#
+# Dispatch is manual and batched on purpose: the self-hosted clusters cannot take
+# 50 concurrent lanes. Render the matrix afterwards with release-matrix.yaml.
+#
+# `list_only` reviews what the lane filter matches without dispatching anything.
+# `dry_run` is forwarded to every lane that is dispatched: "true" exercises the lane
+# against the release branch without standing up a stack (its badge then reads
+# "dry-run"), "false" runs it for real. Forwarding it explicitly also pins the three
+# lanes whose own `dry_run` default is "true", which would otherwise publish
+# "dry-run" badges from a run meant to be real.
+#
+# Every dispatch first seeds a "never run" placeholder badge for each cell of the
+# matrix that does not have one yet. Shields has no default-if-missing, so a cell
+# whose endpoint file is absent renders "custom badge: resource not found" — a
+# freshly cut release branch would otherwise be a table of broken images. Seeding
+# is create-if-absent, so it never touches a real result and repeating it is free.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'Release branch to validate, e.g. "release-0.9"'
+        required: true
+        type: string
+      lanes:
+        description: 'Glob over lane names (the part after "nightly-e2e-"), e.g. "optimized-baseline-*". Default: every lane'
+        required: false
+        default: '*'
+        type: string
+      list_only:
+        description: 'List what would be dispatched without dispatching it'
+        required: false
+        default: 'true'
+        type: string
+      dry_run:
+        description: 'Value of "dry_run" every dispatched lane runs with ("true" exercises the lane without standing up a stack)'
+        required: false
+        default: 'false'
+        type: string
+
+# Least privilege by default; the jobs below elevate what they need.
+permissions:
+  contents: read
+
+jobs:
+  # Validation is its own job because the next one writes to gh-pages: a bad
+  # release_branch has to be rejected before anything is written, and the
+  # repository guard here skips both later jobs on forks.
+  validate:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate the inputs
+        env:
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          LIST_ONLY: ${{ inputs.list_only }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          # Reject anything that is not a release branch. "nightly" in particular
+          # would send release-branch results into the nightly badge files and
+          # corrupt the Nightly Testing matrix.
+          if [[ ! "$RELEASE_BRANCH" =~ ^release-[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::release_branch must look like 'release-0.9', got '$RELEASE_BRANCH'"
+            exit 1
+          fi
+
+          # Both flags are strings, and anything that is not exactly "true" reads as
+          # false below. An unchecked typo is expensive here: in list_only it would
+          # dispatch every matched lane, and in dry_run it would stand up a stack.
+          for flag in "list_only=$LIST_ONLY" "dry_run=$DRY_RUN"; do
+            case "${flag#*=}" in
+              true | false) ;;
+              *)
+                echo "::error::${flag%%=*} must be 'true' or 'false', got '${flag#*=}'"
+                exit 1
+                ;;
+            esac
+          done
+
+          if ! git ls-remote --exit-code --heads \
+                 https://github.com/${{ github.repository }}.git "$RELEASE_BRANCH" >/dev/null; then
+            echo "::error::branch '$RELEASE_BRANCH' does not exist in ${{ github.repository }}"
+            exit 1
+          fi
+          echo "Validating guides from '$RELEASE_BRANCH'"
+
+  seed-badges:
+    needs: [validate]
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      # Runs before the lanes so the matrix is readable from the first dispatch,
+      # including a list-only one. Create-if-absent, and always the full badge set
+      # rather than the `lanes` subset — seeding only the matched lanes would leave
+      # every other cell rendering "resource not found".
+      - name: Seed placeholder badges
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: python scripts/seed-release-badges.py --matrix-type "$RELEASE_BRANCH"
+
+  dispatch:
+    needs: [seed-badges]
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Dispatch the lanes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          LANES: ${{ inputs.lanes }}
+          LIST_ONLY: ${{ inputs.list_only }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Release E2E — \`$RELEASE_BRANCH\`"
+            echo
+            echo "Lane filter: \`$LANES\` &nbsp;·&nbsp; list only: \`$LIST_ONLY\`" \
+                 "&nbsp;·&nbsp; lane dry run: \`$DRY_RUN\`"
+            echo
+            echo "A lane's own nightly cron cancels an in-flight release run of that"
+            echo "lane (shared concurrency group). Avoid starting one within ~4h of"
+            echo "the time below."
+            echo
+            echo "| Lane | Own cron (UTC) | Dispatched |"
+            echo "|------|----------------|------------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          matched=0
+          dispatched=0
+
+          for path in .github/workflows/nightly-e2e-*.yaml; do
+            file="$(basename "$path")"
+            lane="${file#nightly-e2e-}"
+            lane="${lane%.yaml}"
+
+            # LANES is a glob pattern, so the right-hand side must stay unquoted.
+            # shellcheck disable=SC2053
+            [[ "$lane" == $LANES ]] || continue
+            matched=$((matched + 1))
+
+            cron="$(grep -m1 -E "^\s+- cron:" "$path" | sed -E "s/.*cron: *'([^']*)'.*/\1/" || true)"
+            [[ -n "$cron" ]] || cron='(none)'
+
+            if [[ "$LIST_ONLY" == "true" ]]; then
+              echo "| \`$lane\` | \`$cron\` | no (list only) |" >> "$GITHUB_STEP_SUMMARY"
+              echo "would dispatch: $file (dry_run=$DRY_RUN)"
+              continue
+            fi
+
+            if gh workflow run "$file" --ref main \
+                 --field "matrix_type=$RELEASE_BRANCH" \
+                 --field "dry_run=$DRY_RUN"; then
+              echo "| \`$lane\` | \`$cron\` | yes |" >> "$GITHUB_STEP_SUMMARY"
+              dispatched=$((dispatched + 1))
+            else
+              echo "| \`$lane\` | \`$cron\` | **failed** |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::could not dispatch $file"
+            fi
+
+            # Stagger so the API and the runner queue are not hit all at once.
+            sleep 5
+          done
+
+          if [[ "$matched" -eq 0 ]]; then
+            echo "::error::lane filter '$LANES' matched no workflow"
+            exit 1
+          fi
+
+          {
+            echo
+            echo "Matched **$matched** lane(s), dispatched **$dispatched**."
+            echo
+            if [[ "$LIST_ONLY" == "true" ]]; then
+              echo "Nothing was dispatched. Re-run with \`list_only=false\` to dispatch"
+              echo "the lanes above. Any cell that had no badge was still seeded with"
+              echo "\`never run\` (see the previous job), so the matrix renders."
+            elif [[ "$DRY_RUN" == "true" ]]; then
+              echo "> [!WARNING]"
+              echo "> Dispatched with \`dry_run=true\`, so these lanes publish"
+              echo "> \`dry-run\` badges, overwriting any real result already recorded"
+              echo "> for \`$RELEASE_BRANCH\`. Re-dispatch with \`dry_run=false\` for"
+              echo "> results the matrix can report."
+            else
+              echo "Render the matrix with \`release-matrix.yaml\` once these lanes"
+              echo "finish; until then their cells still read \`never run\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

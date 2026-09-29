@@ -1,0 +1,76 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: EndpointPickerConfig
+# Recommended arm: precise prefix-cache routing exactly as the
+# precise-prefix-cache-routing guide ships it, plus the p2p-source-producer.
+# Placement follows the cache; the pull fires only when a peer out-caches
+# the scheduled pod by at least minCachedTokenDelta tokens (set from the
+# measured pull-versus-recompute crossover) - queue-pressure spills,
+# evictions across idle gaps, cold replicas, session migration. The pull is
+# the recovery path, not the placement strategy. Match modelName and the
+# render Service URL to your deployment.
+plugins:
+- type: token-producer
+  parameters:
+    modelName: openai/gpt-oss-120b
+    vllm:
+      url: http://gptoss-render:8000
+- type: endpoint-notification-source
+- type: metrics-data-source
+  parameters: {scheme: "http", path: "/metrics", insecureSkipVerify: true}
+- type: core-metrics-extractor
+- type: precise-prefix-cache-producer
+  parameters:
+    indexerConfig:
+      kvBlockIndexConfig:
+        inMemoryConfig:
+          # matches the deployed router values (discovered endpoints x
+          # tiers; 32 covers a 16-pod fleet with GPU and CPU tiers)
+          podCacheSize: 32
+      kvCacheBackendConfigs:
+      - name: gpu
+        weight: 1.0
+      - name: cpu
+        weight: 0.4
+    tokenProcessorConfig:
+      blockSize: 64
+    speculativeIndexing: true
+    kvEventsConfig:
+      topicFilter: "kv@"
+      discoverPods: true
+      podDiscoveryConfig:
+        socketPort: 5556
+- type: p2p-source-producer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+    prefillProfileName: default
+    minCachedTokenDelta: 2048
+- type: prefix-cache-scorer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+- type: no-hit-lru-scorer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+- type: queue-scorer
+- type: kv-cache-utilization-scorer
+- type: max-score-picker
+- type: single-profile-handler
+dataLayer:
+  sources:
+  - pluginRef: metrics-data-source
+    extractors:
+    - pluginRef: core-metrics-extractor
+  - pluginRef: endpoint-notification-source
+    extractors:
+    - pluginRef: precise-prefix-cache-producer
+schedulingProfiles:
+- name: default
+  plugins:
+  - pluginRef: max-score-picker
+  - pluginRef: prefix-cache-scorer
+    weight: 3
+  - pluginRef: queue-scorer
+    weight: 2
+  - pluginRef: kv-cache-utilization-scorer
+    weight: 2
+  - pluginRef: no-hit-lru-scorer
+    weight: 2

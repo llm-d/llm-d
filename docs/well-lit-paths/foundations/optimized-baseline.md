@@ -41,6 +41,10 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
   </picture>
 </p>
 
+## Observability
+
+The optimized baseline balances two routing objectives, prefix-cache affinity and load-aware spread, so the signals that matter are cache hit rate and per-pod load balance watched together. The [guide's Observability & Troubleshooting section](../../../guides/optimized-baseline/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes (including the `peakPrefillThroughput` calibration trap on non-default hardware), backed by the shared [PromQL](../../operations/observability/promql.md) and [metric](../../operations/observability/metrics.md) references.
+
 ## Further Reading
 
 See [EPP Architecture](../../architecture/core/router/epp/README.md) for more details.

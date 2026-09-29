@@ -58,7 +58,7 @@ Offloaded KV caches can live on several tiers, ordered by read/write latency: fr
 - **CPU RAM** — Low operational overhead and typically far larger than accelerator HBM, making it the default offload target. Loading from CPU RAM is faster than recomputing prefill in most cases, and asynchronous offload adds little overhead.
 - **Local disk** — Increases capacity further, but is slower than CPU RAM. Suitable when the workload tolerates the added latency and local capacity is sufficient.
 - **Shared (remote) storage** — Provides capacity independent of deployment size, KV-cache sharing across replicas, fast scale-up (new replicas reuse existing cache), and persistence across restarts and failures. Latency and throughput depend on the underlying system, so evaluate that the transfer cost does not outweigh the savings. Mature enterprise systems (for example CephFS, GCP Lustre, IBM Storage Scale, AWS EFS) integrate through standard POSIX file access.
-- **P2P sharing** — Inference replicas can share caches in HBM or CPU memory over a peer-to-peer network, extending sharing without additional storage resources. This adds operational overhead and potential contention with model-parallelism traffic; more guidance will follow in future releases.
+- **P2P sharing** — Inference replicas can share caches in CPU memory over a peer-to-peer network, extending sharing without additional storage resources. See [Enable P2P Prefix Cache Sharing](enable-p2p-prefix-cache-sharing.md).
 
 ## Deploy
 
@@ -91,6 +91,10 @@ The connector does not evict data from the shared tier -- capacity is managed by
     <img src="../../assets/fs-offloading.svg" alt="Tiered Offloading to Filesystem">
   </picture>
 </p>
+
+## Observability
+
+Offloading only helps when blocks evicted from HBM are loaded back instead of recomputed, so the signals that matter are the offload tier hit rate, store and load volume, and whether the EPP's CPU prefix index matches what the model servers actually hold. The [tiered prefix cache guide's Observability & Troubleshooting section](../../../guides/tiered-prefix-cache/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes, backed by the shared [PromQL](../../operations/observability/promql.md#tiered-prefix-cache) and [metric](../../operations/observability/metrics.md#vllm-kv-offloading-metrics) references.
 
 ## Further Reading
 

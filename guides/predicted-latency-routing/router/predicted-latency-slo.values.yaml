@@ -1,8 +1,11 @@
 ## Predicted Latency-Based Scheduling — SLO-aware setup (streamingMode: true).
 ##
-## Overrides the chart's default plugin pipeline so predicted-latency-producer
-## trains on streaming TPOT samples. Required for x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms
-## request headers to be honored. Every request must be sent with
+## Overrides the chart's default plugin pipeline to admit and place requests against
+## their x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms headers: a strict affinity filter,
+## then an SLO-headroom tier filter, then a loose affinity filter, scored on predicted
+## latency. Sheddable requests (priority < 0) are rejected at admission when no
+## endpoint can meet the SLO. Enforcing a TPOT SLO means predicting TPOT, which is
+## trained from streaming samples — so every request must be sent with
 ## "stream": true in the body.
 ##
 ## For routing-only (no SLO headers), use predicted-latency.values.yaml.
@@ -33,15 +36,21 @@ router:
             maxPrefixTokensToMatch: 262144
         - type: predicted-latency-producer
           parameters:
+            # TPOT is predicted from the inter-token gaps of a streamed response, so
+            # x-llm-d-slo-tpot-ms cannot be predicted or enforced without this.
             streamingMode: true
         - type: prefix-cache-affinity-filter
           name: strict-affinity-filter
           parameters:
             affinityThreshold: 0.99
+            ttftSource: latencyPredictor
+            maxTTFTPenaltyMs: 5000
         - type: prefix-cache-affinity-filter
           name: loose-affinity-filter
           parameters:
             affinityThreshold: 0.8
+            ttftSource: latencyPredictor
+            maxTTFTPenaltyMs: 5000
         - type: latency-scorer
         - type: weighted-random-picker
         - type: slo-headroom-tier-filter

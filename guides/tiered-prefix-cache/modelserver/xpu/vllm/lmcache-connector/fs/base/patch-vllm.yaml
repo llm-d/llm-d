@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          env:
+            - name: LMCACHE_LOCAL_DISK
+              value: "file:///mnt/files-storage/kv-cache/"
+            - name: LMCACHE_EXTRA_CONFIG
+              value: "{\"use_odirect\":\"True\"}"
+            - name: LMCACHE_MAX_LOCAL_DISK_SIZE
+              value: "100.0"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

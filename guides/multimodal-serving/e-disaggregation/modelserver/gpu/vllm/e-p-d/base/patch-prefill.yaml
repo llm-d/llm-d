@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 3
+  replicas: 4
   template:
     spec:
       containers:
@@ -35,9 +35,6 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
-            - name: USER
-              value: llm-d
           resources:
             limits:
               cpu: "8"

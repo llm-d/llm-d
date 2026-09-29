@@ -1,0 +1,82 @@
+# KEDA ScaledObject implementing the SLO-driven autoscaling control law
+# (guide steps 2-3). expr-lang (https://expr-lang.org/) and PromQL have no
+# named constants, so the parameters below are literals in the expressions —
+# to retune one, change every occurrence noted.
+#
+# Parameters (guide "Tunables" table):
+#   θ_up    scaleUpThreshold   = 0.55            → formula (appears twice)
+#   θ_dn    scaleDownBoundary  = 0.40            → formula (appears twice)
+#   credit  in-flight credit   = readyReplicas/replicas  → formula, scale-up only
+#   N_min   minReplicaCount    = 3               → spec.minReplicaCount
+#   N_max   maxReplicaCount    = 8               → spec.maxReplicaCount
+#   HPA up  = max(100%, 4 pods)/60s, 30s stabilization  → behavior.scaleUp
+#   HPA dn  = 1 pod/120s, 180s stabilization            → behavior.scaleDown
+#
+# The formula variables are the trigger names below: `saturation`
+# (epp:saturation:smoothed), `replicas` (provisioned), `readyReplicas` (ready).
+#
+# Composite target "1" AverageValue = pass-through: the formula output IS the
+# desired replica count. The control law:
+#
+#   desired = replicas + ceil(replicas * (saturation*credit/θ_up - 1))  if saturation > θ_up
+#           = replicas - floor(replicas * (1 - saturation/θ_dn))        if saturation < θ_dn
+#           = replicas                                                  otherwise (hysteresis band)
+#   where credit = readyReplicas/replicas on the scale-up branch (else 1.0)
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: epp-saturation-decode
+  namespace: llm-d-optimized-baseline
+spec:
+  scaleTargetRef:
+    name: optimized-baseline-nvidia-gpu-vllm-decode
+  pollingInterval: 15
+  minReplicaCount: 3        # N_min
+  maxReplicaCount: 8        # N_max
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:            # HPA up: max(100%, 4 pods)/60s, 30s stabilization
+          stabilizationWindowSeconds: 30
+          selectPolicy: Max
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 60
+          - type: Pods
+            value: 4
+            periodSeconds: 60
+        scaleDown:          # HPA dn: 1 pod/120s, 180s stabilization
+          stabilizationWindowSeconds: 180
+          policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 120
+    scalingModifiers:
+      target: "1"
+      metricType: AverageValue
+      # literals below: θ_up = 0.55, θ_dn = 0.40, credit = readyReplicas/replicas (see header)
+      formula: >-
+        saturation > 0.55
+        ? replicas + ceil(replicas * (saturation * (readyReplicas > 0 && readyReplicas < replicas ? readyReplicas / replicas : 1.0) / 0.55 - 1))
+        : (saturation < 0.40 ? replicas - floor(replicas * (1 - saturation / 0.40)) : replicas)
+  triggers:
+  - type: prometheus
+    name: saturation
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc:80
+      query: epp:saturation:smoothed
+      threshold: "1"
+  - type: prometheus
+    name: replicas          # provisioned replica count
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc:80
+      query: max(kube_deployment_status_replicas{namespace="llm-d-optimized-baseline",deployment="optimized-baseline-nvidia-gpu-vllm-decode"})
+      threshold: "1"
+  - type: prometheus
+    name: readyReplicas     # ready replica count
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc:80
+      query: max(kube_deployment_status_replicas_ready{namespace="llm-d-optimized-baseline",deployment="optimized-baseline-nvidia-gpu-vllm-decode"})
+      threshold: "1"

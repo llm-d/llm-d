@@ -121,12 +121,132 @@ This document defines the process for releasing llm-d.
 1. Pushing the tag triggers CI action to build and publish the container image to the [ghcr registry].
 1. Test the steps in the tagged quickstart guide after the PR merges. TODO add e2e tests! <!-- link to an e2e tests once we have such one -->
 
+### Validate the release branch and update the release matrix
+
+The nightly e2e lanes test `main`, so a [Release Testing
+matrix](../../release/README.md#release-testing) that reflects the release branch
+needs those lanes dispatched against it explicitly. None of the steps below are
+triggered by the tag.
+
+`release-e2e.yaml` has two independent switches. `list_only` decides whether it
+dispatches anything at all; `dry_run` is the value every lane it dispatches runs
+with, so `dry_run=true` exercises a lane against the release branch without standing
+up a stack. Pass `dry_run` explicitly even when it is `false`: three lanes
+(`pd-disaggregation-ibm`, `wide-ep-ibm`, `workload-autoscaling-keda-epp-ibm`) default
+their own `dry_run` to `true` and would otherwise publish `dry-run` badges from a run
+meant to be real.
+
+Every dispatch, including a `list_only=true` one, first seeds a grey `never run`
+badge for any matrix cell that does not have one yet. A shields.io endpoint has no
+default-if-missing, so without this a cell whose lane has not run renders `custom
+badge: resource not found`. Seeding never overwrites an existing badge, so "still
+`never run`" is the reliable way to ask which lanes are outstanding.
+
+1. Review the lane list and each lane's cron window, dispatching nothing. This also
+   seeds the placeholder badges, so the matrix renders from here on:
+
+   ```shell
+   gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
+     --field release_branch=release-${MAJOR}.${MINOR} \
+     --field lanes='*' \
+     --field list_only=true
+   ```
+
+1. Optionally, dry run a batch of lanes against the release branch. Each lane checks
+   out `release-${MAJOR}.${MINOR}` and resolves its guide without deploying
+   anything — a cheap check that the branch is ready (guide `BRANCH` values updated,
+   pinned versions resolvable) before spending cluster time:
+
+   ```shell
+   gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
+     --field release_branch=release-${MAJOR}.${MINOR} \
+     --field lanes='optimized-baseline-*' \
+     --field list_only=false \
+     --field dry_run=true
+   ```
+
+   These lanes publish `dry-run` badges, which overwrite any real result already
+   recorded for this release. Do this before the real dispatch below, never after.
+
+1. Dispatch the lanes for real, in batches. A lane's own nightly cron cancels an
+   in-flight release run of that lane, so avoid starting one within ~4h of the cron
+   time shown in the listing summary:
+
+   ```shell
+   gh workflow run release-e2e.yaml --repo llm-d/llm-d --ref main \
+     --field release_branch=release-${MAJOR}.${MINOR} \
+     --field lanes='optimized-baseline-*' \
+     --field list_only=false \
+     --field dry_run=false
+   ```
+
+1. Wait for the lanes to publish their badges, and list the ones still outstanding.
+   Because every cell was seeded, a lane that has not run is one whose badge still
+   reads `never run` — absence no longer distinguishes them:
+
+   ```shell
+   for badge in $(grep -h 'badge_name:' .github/workflows/nightly-e2e-*.yaml \
+                    | awk '{print $2}' | sort -u); do
+     file="badges/${badge}_release-${MAJOR}.${MINOR}.json"
+     message=$(gh api "repos/llm-d/llm-d/contents/${file}?ref=gh-pages" \
+                 --jq '(.content | @base64d | fromjson).message' 2>/dev/null) \
+       || message='MISSING (no badge file)'
+     [[ "$message" == "passing" ]] || printf '%-45s %s\n' "$badge" "$message"
+   done
+   ```
+
+   This prints every cell that is not green, with why: `never run` for a lane nobody
+   has dispatched, `dry-run` for one only exercised without a stack, a failure
+   category for one that ran and failed, and `MISSING` for a badge the seeder did not
+   create (which means the matrix has a broken cell — check the `seed-badges` job).
+   There are 50 lanes and 50 distinct badge names, one per matrix cell.
+
+1. Re-dispatch any lane that failed for infrastructure reasons. This goes straight
+   to the lane rather than through the dispatcher, so `dry_run=false` has to be
+   passed here as well:
+
+   ```shell
+   gh workflow run <lane>.yaml --repo llm-d/llm-d --ref main \
+     --field matrix_type=release-${MAJOR}.${MINOR} \
+     --field dry_run=false
+   ```
+
+1. Render the matrix into `release/README.md` on `main`.
+
+   For a release candidate:
+
+   ```shell
+   gh workflow run release-matrix.yaml --repo llm-d/llm-d --ref main \
+     --field version=v${MAJOR}.${MINOR}.${PATCH}-rc.${RC} \
+     --field release_branch=release-${MAJOR}.${MINOR}
+   ```
+
+   For a major, minor or patch release:
+
+   ```shell
+   gh workflow run release-matrix.yaml --repo llm-d/llm-d --ref main \
+     --field version=v${MAJOR}.${MINOR}.${PATCH} \
+     --field release_branch=release-${MAJOR}.${MINOR}
+   ```
+
+1. Take ownership of the generated commit — CI cannot produce a DCO sign-off or a
+   signature on your behalf — and merge the PR:
+
+   ```shell
+   gh pr checkout release-matrix/v${MAJOR}.${MINOR}.${PATCH}
+   git commit --amend --reset-author -s -S --no-edit
+   git push --force-with-lease
+   ```
+
 ### Create the release
 
 1. Create a [new release]:
     1. Choose the tag that you created for the release.
     1. Use the tag as the release title, i.e. `v0.1.0` refer to previous release for the content of the release body.
     1. Click "Generate release notes" and preview the release body.
+    1. Copy the **Release Testing** matrix section for `release-${MAJOR}.${MINOR}`
+       from [`release/README.md`](../../release/README.md) into the release body, so
+       the notes carry the guide validation status for this release.
     1. Go to Gateway Inference Extension latest release and make sure to include the highlights in llm-d as well.
     1. If this is a release candidate, select the "This is a pre-release" checkbox.
 1. If you find any bugs in this process, create an [issue].

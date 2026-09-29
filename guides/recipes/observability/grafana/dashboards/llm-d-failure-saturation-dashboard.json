@@ -128,7 +128,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(inference_objective_request_error_total{namespace=~\"$namespace\"}[5m])) / sum(rate(inference_objective_request_total{namespace=~\"$namespace\"}[5m]))",
+          "expr": "sum(rate(llm_d_epp_request_error_total{namespace=~\"$namespace\"}[5m])) / sum(rate(llm_d_epp_request_total{namespace=~\"$namespace\"}[5m]))",
           "instant": false,
           "legendFormat": "Error Rate",
           "range": true,
@@ -226,7 +226,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by(model_name) (rate(inference_objective_request_error_total{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])) / sum by(model_name) (rate(inference_objective_request_total{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m]))",
+          "expr": "sum by(model_name) (rate(llm_d_epp_request_error_total{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])) / sum by(model_name) (rate(llm_d_epp_request_total{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m]))",
           "instant": false,
           "legendFormat": "{{model_name}}",
           "range": true,
@@ -421,7 +421,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(inference_objective_request_duration_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
           "instant": false,
           "legendFormat": "P50",
           "range": true,
@@ -433,7 +433,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(inference_objective_request_duration_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
+          "expr": "histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
           "hide": false,
           "instant": false,
           "legendFormat": "P90",
@@ -446,7 +446,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(inference_objective_request_duration_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m])))",
           "hide": false,
           "instant": false,
           "legendFormat": "P99",
@@ -829,7 +829,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by(model_name, target_model_name) (rate(inference_objective_request_total{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m]))",
+          "expr": "sum by(model_name, target_model_name) (rate(llm_d_epp_request_total{namespace=~\"$namespace\",model_name=~\"$model_name\"}[5m]))",
           "instant": false,
           "legendFormat": "{{model_name}}",
           "range": true,

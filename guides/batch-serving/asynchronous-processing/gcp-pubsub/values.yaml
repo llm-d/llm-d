@@ -1,0 +1,10 @@
+ap:
+  transport: "gcp-pubsub"
+  transportConfig:
+    # Replace with your GCP project and resources
+    project_id: "REPLACE_WITH_YOUR_PROJECT"
+    result_topic_id: "projects/REPLACE_WITH_YOUR_PROJECT/topics/async-proc-results"
+    topics:
+      - subscriber_id: "projects/REPLACE_WITH_YOUR_PROJECT/subscriptions/async-proc-requests-sub"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://REPLACE_WITH_IGW_HOST:80"

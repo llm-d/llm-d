@@ -1,0 +1,35 @@
+# Directories under guides/ excluded from the kustomize CI dry-run job.
+# One entry per line. Lines starting with # are comments. Blank lines are ignored.
+# Paths are relative to the guides/ directory.
+#
+# To add a new guide to CI coverage, remove it from this file.
+# To exclude a guide, add its path here with a comment explaining why.
+
+# Not a Kubernetes deployment — kustomize dry-run does not apply
+no-kubernetes-deployment
+
+# Prerequisite setup steps — not kustomize overlays
+prereq
+
+# Composable building blocks referenced by other guides — not standalone overlays.
+# Note: recipes/gateway IS validated (it is not listed here).
+recipes/modelserver
+recipes/router
+recipes/observability
+
+# Reinforcement learning guide — markdown documentation only, no kustomize overlays
+rl
+
+# Batch serving guide — markdown documentation only, no kustomize overlays
+batch-serving
+
+# Helper scripts — not a guide
+scripts
+
+# Contributor guide templates — not deployable overlays
+templates
+
+# Base kustomizations that are patches-only (no resources) or intentionally
+# incomplete — they require an overlay to be deployable.
+recipes/gateway/base
+workload-autoscaling/wva-config/base

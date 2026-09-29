@@ -52,7 +52,7 @@
   <!-- InferencePool A -->
   <rect x="345" y="45" width="455" height="105" rx="5" fill="#e1d5e7" stroke="#9673a6" stroke-width="1.5"/>
   <text x="572" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">InferencePool A (Qwen/Qwen3-32B)</text>
-  
+
   <!-- llm-d EPP A inside Pool A -->
   <rect x="360" y="75" width="85" height="50" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
   <text x="402" y="95" text-anchor="middle" font-size="9" font-weight="bold" fill="#000000">llm-d EPP</text>

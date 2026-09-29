@@ -1,0 +1,22 @@
+# The `test` op asserts torch-compile-cache is still volume index 1, so a
+# reorder in patch-vllm.yaml fails the kustomize build instead of silently
+# swapping the wrong volume.
+- op: test
+  path: /spec/template/spec/volumes/1/name
+  value: torch-compile-cache
+- op: replace
+  path: /spec/template/spec/volumes/1
+  value:
+    name: torch-compile-cache
+    persistentVolumeClaim:
+      claimName: vllm-compile-cache
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: VLLM_CACHE_ROOT
+    value: /root/.cache/vllm
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: TORCHINDUCTOR_CACHE_DIR
+    value: /root/.cache/torch_inductor

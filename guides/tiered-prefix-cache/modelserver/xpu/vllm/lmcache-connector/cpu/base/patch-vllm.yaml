@@ -7,16 +7,19 @@ spec:
     spec:
       containers:
         - name: modelserver
+          command: ["/bin/bash", "-c"]
           args:
-            - "Qwen/Qwen3-8B"
-            - "--dtype=bfloat16"
-            - "--block-size=64"
-            - "--tensor-parallel-size=1"
-            - "--max-num-seq=128"
-            - "--max_model_len=20480"
-            - "--uvicorn-log-level=warning"
-            - "--kv-transfer-config"
-            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-8B \
+                --dtype bfloat16 \
+                --block-size 64 \
+                --tensor-parallel-size=1 \
+                --max-num-seq 128 \
+                --max-model-len 20480 \
+                --uvicorn-log-level warning \
+                --kv-transfer-config \
+                '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
           env:
             - name: HF_TOKEN
               valueFrom:

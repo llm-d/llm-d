@@ -6,7 +6,7 @@
 
 The Batch Gateway provides an OpenAI-compatible batch inference API for llm-d, enabling batch and interactive workloads to run efficiently on shared GPU infrastructure. It has been incubating at [llm-d-incubation/batch-gateway](https://github.com/llm-d-incubation/batch-gateway) and is ready to graduate to the main `llm-d` organization.
 
-The system consists of an API server and a batch processor, backed by PostgreSQL for job and file metadata, Redis or Valkey for priority queuing, event coordination, and status caching, and S3-compatible object storage or filesystem for input and output files.  
+The system consists of an API server and a batch processor, backed by PostgreSQL for job and file metadata, Redis or Valkey for priority queuing, event coordination, and status caching, and S3-compatible object storage or filesystem for input and output files.
 The system supports SLO-based prioritization, multi-model and multi-endpoint dispatch, graceful shutdown, job recovery, and integration with the llm-d Router and flow control. Integration with the llm-d async processor is forthcoming, and additional integrations with llm-d components are on the roadmap.
 
 Graduating to `llm-d/llm-d-batch-gateway` signals production readiness, aligns the project with the rest of the llm-d ecosystem, and improves discoverability for adopters and contributors.

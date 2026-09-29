@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+  - ../common
+
+namePrefix: coord-disaggregation-nvidia-gpu-vllm-
+
+# TODO: Remove override once upstream vLLM includes encode-disaggregation support in an official release.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: ghcr.io/revit13/vllm-openai
+    newTag: 61e53561a
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-VL-32B-Instruct
+      llm-d.ai/guide: coord-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-decode.yaml

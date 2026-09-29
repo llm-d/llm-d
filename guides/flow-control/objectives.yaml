@@ -9,7 +9,7 @@ metadata:
 spec:
   priority: 100
   poolRef:
-    name: default-pool
+    name: flow-control
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
@@ -22,7 +22,7 @@ metadata:
 spec:
   priority: 0
   poolRef:
-    name: default-pool
+    name: flow-control
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
@@ -35,4 +35,4 @@ metadata:
 spec:
   priority: -10
   poolRef:
-    name: default-pool
+    name: flow-control

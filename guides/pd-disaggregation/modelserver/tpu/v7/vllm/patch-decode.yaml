@@ -10,22 +10,33 @@ spec:
         cloud.google.com/gke-tpu-accelerator: "tpu7x"
       containers:
         - name: modelserver
+          command: ["/bin/bash", "-c"]
           args:
-            - "Qwen/Qwen3.5-397B-A17B-FP8"
-            - "--max-model-len=9216"
-            - "--max-num-batched-tokens=8192"
-            - "--max-num-seqs=512"
-            - "--tensor-parallel-size=8"
-            - "--language-model-only"
-            - "--limit-mm-per-prompt"
-            - '{"image": 0, "video": 0}'
-            - "--kv-cache-dtype=fp8"
-            - "--enable-expert-parallel"
-            - "--no-disable-hybrid-kv-cache-manager"
-            - "--kv-transfer-config"
-            - '{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_consumer"}'
-            - "--port=8200"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          - |
+            set -euo pipefail
+
+            if [[ "${POD_IP}" == *":"* ]]; then
+              HOST_ADDR="::"
+              export VLLM_HOST_IP="[${POD_IP}]"
+            else
+              HOST_ADDR="0.0.0.0"
+              export VLLM_HOST_IP="${POD_IP}"
+            fi
+
+            exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+              --host "${HOST_ADDR}" \
+              --max-model-len=9216 \
+              --max-num-batched-tokens=8192 \
+              --max-num-seqs=512 \
+              --tensor-parallel-size=8 \
+              --language-model-only \
+              --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+              --kv-cache-dtype=fp8 \
+              --enable-expert-parallel \
+              --no-disable-hybrid-kv-cache-manager \
+              --kv-transfer-config '{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_consumer","kv_ip":"$(POD_IP)"}' \
+              --port=8200 \
+              --disable-access-log-for-endpoints=/health,/metrics,/v1/models
           resources:
             limits:
               cpu: "200"

@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    metadata:
+      annotations:
+        # Force a sidecar even if the namespace isn't labelled for injection.
+        sidecar.istio.io/inject: "true"
+        # RDMA/NIXL wireup stays outside the mesh, do not intercept these.
+        traffic.sidecar.istio.io/excludeInboundPorts: "5555,5556,6555,6556"
+        traffic.sidecar.istio.io/excludeOutboundPorts: "5555,5556,6555,6556"

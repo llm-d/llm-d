@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # 16 aggregated replicas, one GPU each. Every pod is both a puller and a
+  # source: it serves its own requests and answers peer pulls from its CPU
+  # tier.
+  replicas: 16
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          # Clear any stale offload-tier mmaps left by a previous pod on the
+          # node before starting, then exec vLLM.
+          command: ["sh", "-c", "rm -f /dev/shm/vllm_offload_*.mmap 2>/dev/null; exec vllm serve \"$@\"", "sh"]
+          args:
+            - openai/gpt-oss-120b
+            - --port=8200
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --tensor-parallel-size=1
+            # The offloading config below omits `block_size`, so it defaults to
+            # this engine block size. Keep it identical across all P2P peers.
+            # It does not need to match the router's
+            # tokenProcessorConfig.blockSize.
+            - --block-size=64
+            - --max-model-len=65536
+            # Tuning knob: raise for more GPU cache, lower to leave headroom.
+            - --gpu-memory-utilization=0.85
+            # OffloadingConnector with a CPU tier and a P2P secondary tier on
+            # :7777. offload_prompt_only:false so sources offload generated
+            # (decode-phase) blocks too, which peers can then pull. Size
+            # cpu_bytes_to_use at least as large as the per-pod GPU KV cache
+            # (below /dev/shm; this is 88 GiB).
+            - --kv-transfer-config
+            - '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","cpu_bytes_to_use":94489280512,"offload_prompt_only":false,"secondary_tiers":[{"type":"p2p","host":"$(POD_IP)","port":7777}]}}'
+            # KV events feed the router's precise prefix index (per-pod ZMQ PUB).
+            - --kv-events-config
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@openai/gpt-oss-120b"}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # NIXL and the P2P tier bind their side channels to the pod IP so
+            # peers can reach them (defaults are localhost).
+            - name: VLLM_P2P_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # vLLM seeds KV block hashes per process; all peers MUST share the
+            # same value or no block hash ever matches across pods and every
+            # lookup misses.
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+            # Used in the kv-events topic so pods are identified by their
+            # inference endpoint; matches the sidecar proxy port.
+            - name: POD_PORT
+              value: "8000"
+            - name: DO_NOT_TRACK
+              value: "1"
+          resources:
+            limits:
+              cpu: "8"
+              # Above cpu_bytes_to_use (the CPU tier is an shm mmap) plus model
+              # and runtime headroom.
+              memory: 160Gi
+              nvidia.com/gpu: "1"
+            requests:
+              cpu: "8"
+              memory: 160Gi
+              nvidia.com/gpu: "1"
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+      volumes:
+        # The CPU offload tier is an shm mmap; size >= cpu_bytes_to_use.
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 96Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

@@ -1,0 +1,20 @@
+# Expose an IB device to the engine container and allow it to pin memory.
+# rdma/ib must appear in BOTH limits and requests - an extended resource is
+# only scheduled when requested, and a pod that starts without the device
+# silently falls back to TCP, which reads as "the pull is slow" rather than
+# as a misconfiguration. Verify after rollout with:
+#   kubectl exec <pod> -c modelserver -- ls /dev/infiniband
+- op: add
+  path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
+  value: "1"
+- op: add
+  path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
+  value: "1"
+# UCX registers and pins KV memory for RDMA; without IPC_LOCK the
+# registration fails and the transport degrades back to TCP. The base sets no
+# securityContext, so add the whole object rather than appending to it.
+- op: add
+  path: /spec/template/spec/containers/0/securityContext
+  value:
+    capabilities:
+      add: ["IPC_LOCK"]

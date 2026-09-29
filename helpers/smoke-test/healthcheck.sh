@@ -132,6 +132,12 @@ CHECKS_FAILED=0
 CHECKS_WARNED=0
 FAILURES=""
 WARNINGS=""
+# The check functions update the counters above.  Keep their result strings in
+# globals as well, because invoking them through $(...) would run them in a
+# subshell and discard the counter updates.
+HEALTH_RESULT=""
+MODELS_RESULT=""
+INFER_RESULT=""
 
 pass() { CHECKS_TOTAL=$((CHECKS_TOTAL + 1)); CHECKS_PASSED=$((CHECKS_PASSED + 1)); }
 warn() {
@@ -162,7 +168,7 @@ check_health() {
       warn "/health returned HTTP ${http_code} (not required)"
     fi
   fi
-  echo "$http_code"
+  HEALTH_RESULT="$http_code"
 }
 
 # ── Check 2: /v1/models endpoint (readiness + optional model discovery) ──────
@@ -176,7 +182,7 @@ check_models() {
 
   if [[ "$http_code" != "200" ]]; then
     fail "/v1/models returned HTTP ${http_code}"
-    echo "000|"
+    MODELS_RESULT="000|"
     return
   fi
 
@@ -185,7 +191,7 @@ check_models() {
     model_count=$(echo "$body" | jq -r '.data | length' 2>/dev/null || echo "0")
     if [[ "$model_count" == "0" ]]; then
       fail "/v1/models returned 0 models"
-      echo "${http_code}|0"
+      MODELS_RESULT="${http_code}|0"
       return
     fi
 
@@ -201,7 +207,7 @@ check_models() {
   fi
 
   pass
-  echo "${http_code}|${model_count}"
+  MODELS_RESULT="${http_code}|${model_count}"
 }
 
 # ── Internal: POST helper (returns "HTTP|LATENCY|PATH_USED") ─────────────────
@@ -228,11 +234,43 @@ post_inference() {
   echo "${http_code}|${latency_ms}|${path}|${body}"
 }
 
+# Build the payload required by the selected OpenAI-compatible endpoint.
+build_inference_payload() {
+  local path="$1"
+
+  if [[ "$HAS_JQ" == "true" ]]; then
+    if [[ "$path" == "/v1/chat/completions" ]]; then
+      jq -n \
+        --arg model "$MODEL_ID" \
+        --arg content "$PROMPT" \
+        --argjson max_tokens "$MAX_TOKENS" \
+        '{model: $model, messages: [{role:"user", content:$content}], max_tokens: $max_tokens}'
+    else
+      jq -n \
+        --arg model "$MODEL_ID" \
+        --arg prompt "$PROMPT" \
+        --argjson max_tokens "$MAX_TOKENS" \
+        '{model: $model, prompt: $prompt, max_tokens: $max_tokens}'
+    fi
+  else
+    # Minimal JSON without jq
+    local esc_prompt
+    esc_prompt="$(json_escape "$PROMPT")"
+    if [[ "$path" == "/v1/chat/completions" ]]; then
+      printf '{"model":"%s","messages":[{"role":"user","content":"%s"}],"max_tokens":%s}\n' \
+        "$MODEL_ID" "$esc_prompt" "$MAX_TOKENS"
+    else
+      printf '{"model":"%s","prompt":"%s","max_tokens":%s}\n' \
+        "$MODEL_ID" "$esc_prompt" "$MAX_TOKENS"
+    fi
+  fi
+}
+
 # ── Check 3: Inference (/v1/completions and/or /v1/chat/completions) ─────────
 check_inference() {
   if [[ -z "$MODEL_ID" && "$HAS_JQ" != "true" ]]; then
     fail "Inference skipped — MODEL_ID is required when jq is not available"
-    echo "000|0|/v1/completions"
+    INFER_RESULT="000|0|/v1/completions"
     return
   fi
 
@@ -244,31 +282,7 @@ check_inference() {
     used_path="/v1/completions"
   fi
 
-  # Build payload
-  if [[ "$HAS_JQ" == "true" ]]; then
-    if [[ "$used_path" == "/v1/chat/completions" ]]; then
-      payload=$(jq -n \
-        --arg model "$MODEL_ID" \
-        --arg content "$PROMPT" \
-        --argjson max_tokens "$MAX_TOKENS" \
-        '{model: $model, messages: [{role:"user", content:$content}], max_tokens: $max_tokens}')
-    else
-      payload=$(jq -n \
-        --arg model "$MODEL_ID" \
-        --arg prompt "$PROMPT" \
-        --argjson max_tokens "$MAX_TOKENS" \
-        '{model: $model, prompt: $prompt, max_tokens: $max_tokens}')
-    fi
-  else
-    # Minimal JSON without jq
-    local esc_prompt
-    esc_prompt="$(json_escape "$PROMPT")"
-    if [[ "$used_path" == "/v1/chat/completions" ]]; then
-      payload="{\"model\":\"$MODEL_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"$esc_prompt\"}],\"max_tokens\":$MAX_TOKENS}"
-    else
-      payload="{\"model\":\"$MODEL_ID\",\"prompt\":\"$esc_prompt\",\"max_tokens\":$MAX_TOKENS}"
-    fi
-  fi
+  payload="$(build_inference_payload "$used_path")"
 
   local result http_code latency_ms path body
   result="$(post_inference "$used_path" "$payload")"
@@ -284,6 +298,7 @@ check_inference() {
       used_path="/v1/completions"
     fi
 
+    payload="$(build_inference_payload "$used_path")"
     result="$(post_inference "$used_path" "$payload")"
     http_code="${result%%|*}"; result="${result#*|}"
     latency_ms="${result%%|*}"; result="${result#*|}"
@@ -292,7 +307,7 @@ check_inference() {
 
   if [[ "$http_code" != "200" ]]; then
     fail "${path} returned HTTP ${http_code}"
-    echo "${http_code}|${latency_ms}|${path}"
+    INFER_RESULT="${http_code}|${latency_ms}|${path}"
     return
   fi
 
@@ -302,7 +317,7 @@ check_inference() {
     has_choices=$(echo "$body" | jq -r 'has("choices")' 2>/dev/null || echo "false")
     if [[ "$has_choices" != "true" ]]; then
       fail "${path} response missing 'choices' field"
-      echo "${http_code}|${latency_ms}|${path}"
+      INFER_RESULT="${http_code}|${latency_ms}|${path}"
       return
     fi
   fi
@@ -310,12 +325,12 @@ check_inference() {
   # Latency threshold check
   if [[ "$MAX_LATENCY" -gt 0 && "$latency_ms" -gt "$MAX_LATENCY" ]]; then
     fail "${path} latency ${latency_ms}ms exceeds threshold ${MAX_LATENCY}ms"
-    echo "${http_code}|${latency_ms}|${path}"
+    INFER_RESULT="${http_code}|${latency_ms}|${path}"
     return
   fi
 
   pass
-  echo "${http_code}|${latency_ms}|${path}"
+  INFER_RESULT="${http_code}|${latency_ms}|${path}"
 }
 
 # ── Report: text ─────────────────────────────────────────────────────────────
@@ -416,9 +431,12 @@ report_json() {
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
-health_code="$(check_health)"
-models_result="$(check_models)"
-infer_result="$(check_inference)"
+check_health
+health_code="$HEALTH_RESULT"
+check_models
+models_result="$MODELS_RESULT"
+check_inference
+infer_result="$INFER_RESULT"
 
 case "$OUTPUT_FORMAT" in
   json) report_json "$health_code" "$models_result" "$infer_result" ;;

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../base
+- healthcheckpolicy.yaml
+- gcpbackendpolicy.yaml
+
+patches:
+# GKE Gateway doesn't implement the Gateway API HTTPRoute `timeouts` field --
+# the equivalent backend timeout lives on gcpbackendpolicy.yaml's timeoutSec
+# instead, so drop it here rather than leaving a setting that silently does
+# nothing.
+- target:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: coordinator
+  patch: |-
+    - op: remove
+      path: /spec/rules/0/timeouts

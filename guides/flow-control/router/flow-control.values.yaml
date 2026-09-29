@@ -4,10 +4,9 @@ router:
       port: 80
       protocol: TCP
       targetPort: 8081
-    - name: metrics
-      port: 9090
-      protocol: TCP
-      targetPort: 9090
+    # No metrics entry here: the chart always exposes http-metrics:9090 on the
+    # EPP Service, so declaring it again produces a duplicate-port conflict
+    # that fails the install.
   epp:
     pluginsConfigFile: "custom-plugins.yaml"
     pluginsCustomConfig:

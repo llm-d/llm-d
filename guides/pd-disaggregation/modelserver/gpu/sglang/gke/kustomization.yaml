@@ -1,6 +1,31 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
 resources:
   - ../base
+
 components:
   - ../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+  # Shared GKE RDMA DRA resource claim template (pcieRoot rail alignment)
+  - ../../../components/gke-rdma
+
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
+  # Remove legacy nvidia.com/gpu limits and requests to enable pure DRA resource claim allocation
+  - target:
+      kind: Deployment
+      name: prefill
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1gpu
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1gpu

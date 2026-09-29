@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --connector=mooncake
+            - --zap-log-level=1
+            - --secure-proxy=false

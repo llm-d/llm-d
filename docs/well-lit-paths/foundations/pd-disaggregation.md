@@ -30,16 +30,22 @@ See the [P/D Disaggregation guide](../../../guides/pd-disaggregation) for manife
 </p>
 
 The setup creates 2 `Deployments` of vLLM (all are part of the same `InferencePool`):
+
 * The **prefill** `Deployment` is 4 replicas of TP=1 vLLM - labeled with `llm-d.ai/role=prefill`.
 * The **decode** `Deployment` is 1 replica of TP=5 vLLM - labeled with `llm-d.ai/role=decode`. All these pods have a routing proxy sidecar.
 
 During the standard request flow:
+
 * Request arrives at the proxy, which forwards the request to the EPP
 * EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants
 * Request is routed to the sidecar, which forwards the request to the prefill instance
 * Prefill instance processes the prompt, returning metadata about how to retrieve the KV blocks
 * Decode instance pulls the KVs over RDMA (IB, RoCE, EFA) with NIXL
 * Decode instances processes the decodes
+
+## Observability
+
+P/D disaggregation runs prefill and decode as independently scaled pools joined by a NIXL KV transfer, so the signals that matter are pool **balance** and transfer health rather than a single aggregate latency. The [P/D guide's Observability & Troubleshooting section](../../../guides/pd-disaggregation/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes, backed by the shared [PromQL](../../operations/observability/promql.md#prefilldecode-disaggregation) and [metric](../../operations/observability/metrics.md) references.
 
 ## Further Reading
 

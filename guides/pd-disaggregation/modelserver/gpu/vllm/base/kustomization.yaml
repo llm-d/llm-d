@@ -5,9 +5,12 @@ resources:
 
 namePrefix: pd-disaggregation-nvidia-gpu-vllm-
 
+# NOTE: the model server image component is intentionally not set here.
+# Each overlay sets its own (e.g. gpu-vllm/release, gpu-vllm/aws-efa) because
+# kustomize resolves component image transforms at the base level, preventing
+# overlays from overriding the resolved image name with a different component.
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:

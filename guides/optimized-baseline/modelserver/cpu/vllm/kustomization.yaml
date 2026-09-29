@@ -6,7 +6,7 @@ resources:
 namePrefix: optimized-baseline-cpu-vllm-
 
 components:
-  - ../../../../recipes/modelserver/components/images/cpu-vllm
+  - ../../../../recipes/modelserver/components/images/cpu-vllm/release
 
 labels:
   - pairs:

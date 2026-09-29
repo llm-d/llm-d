@@ -4,6 +4,7 @@ This page explains how to set up Prometheus, Grafana, and distributed tracing fo
 
 > [!NOTE]
 > Commands in this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
+>
 > ```bash
 > export NAMESPACE=<your-llm-d-namespace>
 > ```
@@ -163,13 +164,15 @@ kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80
 Available dashboards:
 
 | Dashboard | What it shows |
-|-----------|--------------|
+| ----------- | -------------- |
 | `llm-d-vllm-overview` | General vLLM metrics overview |
 | `llm-d-sglang-overview` | General SGLang metrics overview |
+| `llm-d-tpu-overview` | GKE TPU exporter health and hardware metrics; requires the [TPU recipe](../../../guides/recipes/observability/tpu/) |
 | `llm-d-failure-saturation-dashboard` | Key failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache` | KV cache utilization and performance |
 | `llm-d-pd-coordinator-metrics` | Prefill/decode disaggregation metrics |
+| `llm-d-inference-gateway` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
 
 ## Step 3: Install Distributed Tracing (Optional)
 

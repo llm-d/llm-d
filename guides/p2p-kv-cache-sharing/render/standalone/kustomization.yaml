@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Dedicated GPU-less render pool. Publishes the same Service name as the
+# default overlay (../), which fronts the model servers instead; apply
+# exactly one of the two.
+namePrefix: p2p-kv-cache-sharing-
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# Metadata-only guide label; render pods must not carry `llm-d.ai/guide` on
+# the pod template or the EPP would treat them as routable model servers.
+labels:
+  - pairs:
+      llm-d.ai/guide: p2p-kv-cache-sharing

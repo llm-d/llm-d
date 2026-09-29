@@ -1,0 +1,43 @@
+# The broker's gRPC API (:8001) does not authenticate callers on its own, so
+# strict mTLS plus an allow-list restrict it to the decode ServiceAccount.
+# Weight transfers ride RDMA and bypass the mesh; this covers only gRPC.
+#
+# ${NAMESPACE} is expanded via envsubst; see the README's Security section
+# for the apply command and the sidecar-injection prerequisites.
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: modelexpress-server-strict
+  labels:
+    llm-d.ai/guide: modelexpress-p2p
+spec:
+  # Broker-only scope so model-serving traffic and other workloads are
+  # unaffected.
+  selector:
+    matchLabels:
+      app: modelexpress-server
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: modelexpress-server-allow-decode
+  labels:
+    llm-d.ai/guide: modelexpress-p2p
+spec:
+  selector:
+    matchLabels:
+      app: modelexpress-server
+  action: ALLOW
+  # An ALLOW policy that selects a workload implicitly DENIES anything that
+  # doesn't match a rule, so this locks :8001 to the decode ServiceAccount.
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/${NAMESPACE}/sa/modelexpress-p2p-nvidia-gpu-vllm-sa"
+      to:
+        - operation:
+            ports: ["8001"]

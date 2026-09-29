@@ -188,8 +188,8 @@ sum_histogram_count() {
       '
 }
 
-ACTUAL=$(sum_histogram_count inference_objective_request_ttft_seconds)
-PREDICTED=$(sum_histogram_count inference_objective_request_predicted_ttft_seconds)
+ACTUAL=$(sum_histogram_count llm_d_epp_request_ttft_seconds)
+PREDICTED=$(sum_histogram_count llm_d_epp_request_predicted_ttft_seconds)
 
 echo "actual_ttft_count=${ACTUAL} predicted_ttft_count=${PREDICTED}"
 

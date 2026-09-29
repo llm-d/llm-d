@@ -29,7 +29,7 @@ The following steps occurs:
 
 ## Deploy
 
-See the [Wide Expert Parallelism guide](../../../guides/wide-ep-lws) for manifests and step-by-step deployment.
+See the [Wide Expert Parallelism guide](../../../guides/wide-ep/README.md) for manifests and step-by-step deployment. The model servers are deployed as a [`DisaggregatedSet`](../../../guides/wide-ep/README.md#2-deploy-the-model-server), which manages the prefill and decode roles as a single versioned unit.
 
 ## Architecture
 
@@ -52,6 +52,7 @@ As a result, we leverage the following design for the deployment:
 </p>
 
 The request flow works as follows:
+
 * Request arrives at the proxy, which forwards the request to the EPP
 * EPP schedules the request with P/D disaggregation, using the labels to detect the decode and prefill variants. The EPP schedules to specific pods within the LWS
 * Request is routed to the sidecar, which forwards the request to the prefill pods
