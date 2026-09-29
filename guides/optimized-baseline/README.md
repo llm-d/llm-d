@@ -33,22 +33,24 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 
 This guide includes configurations for the following accelerators:
 
-| Backend             | Directory          | Notes                                                           |
-| ------------------- | ------------------ | --------------------------------------------------------------- |
-| NVIDIA GPU          | `gpu`              | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
-| AMD GPU             | `amd`              | AMD GPU                                                         |
-| Intel XPU           | `xpu`              | Intel Data Center GPU Max 1550+                                 |
-| Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
-| Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
-| Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
-| Iluvatar GPU        | `iluvatar`         | Iluvatar BI-V150 (dual-die)                                     |
-| CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
+| Backend             | Directory          | Served model                       | Notes                                                           |
+| ------------------- | ------------------ | ---------------------------------- | --------------------------------------------------------------- |
+| NVIDIA GPU          | `gpu`              | `Qwen/Qwen3-32B`                   | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
+| AMD GPU             | `amd`              | `Qwen/Qwen3-32B`                   | AMD GPU                                                         |
+| Intel XPU           | `xpu`              | `Qwen/Qwen3-0.6B`                  | Intel Data Center GPU Max 1550+                                 |
+| Google TPU v6e      | `tpu/v6`           | `Qwen/Qwen3-32B`                   | GKE TPU                                                         |
+| Google TPU v7       | `tpu/v7`           | `Qwen/Qwen3-32B`                   | GKE TPU                                                         |
+| Rebellions NPU      | `npu`              | `openai/gpt-oss-120b`              | Rebellions NPU via DRA                                          |
+| Iluvatar GPU        | `iluvatar`         | `deepseek-ai/DeepSeek-V4-Flash`    | Iluvatar BI-V150 (dual-die)                                     |
+| CPU                 | `cpu`              | `meta-llama/Llama-3.2-3B-Instruct` | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
 > "x86 with bf16 acceleration": AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`
 >
 >
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
+>
+> The **Served model** column shows the model each backend serves. When it is not `Qwen/Qwen3-32B`, set `MODEL` to it so the verification and benchmark steps query the served model.
 
 ## Prerequisites
 
