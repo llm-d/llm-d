@@ -3,7 +3,7 @@
 Assumes the [main guide](./README.md) is deployed and its environment variables are set.
 
 > [!NOTE]
-> The broker's gRPC API (`:8001`) does not authenticate callers in the `0.5.0` release, so on a shared cluster restrict who can talk to it. This section does that with Istio mTLS plus an AuthorizationPolicy. (Optional, requires Istio; skip it on a single-tenant cluster.)
+> The broker's gRPC API (`:8001`) does not authenticate callers by default, so on a shared cluster restrict who can talk to it. This section does that with Istio mTLS plus an AuthorizationPolicy. (Optional, requires Istio; skip it on a single-tenant cluster.)
 
 **Scope.** These policies protect only the broker's gRPC API. The weight transfers themselves ride the RDMA fabric, which the mesh never sees; this guide assumes that fabric is trusted. The decode pods join the mesh with the NIXL/worker ports excluded from the sidecar, so weight transfer keeps working.
 
