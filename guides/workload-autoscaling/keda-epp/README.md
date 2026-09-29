@@ -414,6 +414,12 @@ the HPA stops requesting replacements for capacity that is already on the way. T
 composite; pair it with `fallback.behavior: scalingModifiers` so a failed trigger
 is passed to the formula as nil rather than failing the whole metric.
 
+Note that `kube_deployment_status_replicas_unavailable` counts every unavailable
+replica, not only starting ones, so a crashed or unschedulable pod is also
+discounted and can suppress the scale-up that would replace it; the discount
+assumes an unavailable pod is on its way to `Ready`, which holds during a cold
+start but not for a stuck pod.
+
 Because the formula - not a blunt window - now prevents overshoot, you can set
 `scaleUp.stabilizationWindowSeconds: 0` for a fast, demand-aware scale-up. But the
 discount introduces an oscillation trap: while the pod it requested is still
