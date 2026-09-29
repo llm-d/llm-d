@@ -237,8 +237,41 @@ the same Deployment (two ScaledObjects on one Deployment make conflicting HPAs).
   > in production.
 
 Both signals originate in the EPP flow-control subsystem, so both require the
-flow-control feature gate enabled by this guide's `router.values.yaml`. Detailed
-threshold guidance for flow control on vs. off is added in a later revision.
+flow-control feature gate enabled by this guide's `router.values.yaml`. How that
+subsystem shapes each signal, and how to set thresholds when flow control is off,
+is covered in [Flow control on vs. off](#flow-control-on-vs-off) below. For the
+subsystem itself, see
+[EPP Flow Control](../../../docs/architecture/core/router/epp/flow-control.md).
+
+> [!NOTE]
+> This guide is validated with vLLM model servers. The flow-control signals are
+> emitted by the EPP and are engine-agnostic, but the default thresholds are tuned
+> for vLLM; validate them before relying on the guide with another engine.
+
+### Saturation detector
+
+The saturation detector estimates how loaded the inference pool is. It gates
+dispatch under flow control and feeds the pool-saturation gauge, so it shapes
+both signals this guide can scale on. The two detectors EPP ships define
+"loaded" differently, which is exactly why the choice matters:
+
+- **`utilization-detector` (default, recommended)** - a closed-loop detector that
+  reacts to real-time telemetry (queue depth and KV-cache pressure), so it
+  reflects actual memory pressure rather than just request counts. It is the EPP
+  default, so this guide's `router.values.yaml` uses it without setting
+  `flowControl.saturationDetector`. It has known limitations under sudden bursts
+  and in heterogeneous pools; see the linked reference for those and the full
+  tradeoff.
+- **`concurrency-detector`** - an open-loop detector based on in-flight request
+  accounting. It reacts instantly, but treats load as a raw request count, so
+  high concurrency does not necessarily mean the pool is full - with prefix
+  caching, for example, many concurrent requests can be cheap cache hits. It is
+  also blind to KV-cache pressure, which makes it a less reliable autoscaling
+  signal; prefer the default unless you have a specific reason to pin it.
+
+See
+[Saturation Detectors](../../../docs/architecture/core/router/epp/flow-control.md#saturation-detectors)
+for the full comparison and each detector's tuning knobs.
 
 ## Configuration
 
@@ -255,6 +288,8 @@ this guide:
 | Running-request threshold | 16 | Decrease to scale earlier on active concurrency; increase if each replica can safely handle more concurrent requests within latency objectives. |
 | Polling interval | 15s | Controls how often KEDA polls triggers while the target is at zero replicas. |
 | Cooldown period | 300s | Controls the delay before KEDA scales the target to zero after triggers become inactive. |
+| Scale-up stabilization window | 300s | Holds scale-up recommendations so a still-loading replica is not counted as unmet demand. Size near the target Deployment's cold-start time. See [Startup-time mitigation](#startup-time-mitigation). |
+| Scale-down stabilization window | 300s | Holds capacity across brief demand dips before scaling in, avoiding flapping once a slow-starting replica goes Ready. See [Startup-time mitigation](#startup-time-mitigation). |
 
 ## Choosing Scaling Thresholds
 
@@ -284,6 +319,83 @@ Do not assume that values validated for one model, accelerator type, tensor
 parallel configuration, or request distribution apply to another deployment.
 Future benchmarking can provide more specific recommendations for validated
 model and hardware combinations.
+
+### Flow control on vs. off
+
+This guide enables EPP flow control, and the default thresholds assume it. Flow
+control changes *where* unmet demand accumulates, which changes what each trigger
+can see:
+
+- **Flow control on (this guide).** When the pool saturates, EPP pauses dispatch
+  and buffers requests in its own priority queues. Unmet demand surfaces as
+  `llm_d_epp_flow_control_queue_size`, so the queue-size trigger is the primary
+  scale-up signal and a low threshold (the default `1`) reacts promptly. Dispatch
+  is gated per endpoint, so each replica admits only a bounded number of concurrent
+  requests, and that per-endpoint ceiling sits close to the running-request
+  threshold (`16`). Aggregate running requests still grow as replicas are added, but
+  a single replica rarely exceeds the threshold, so the running-request trigger
+  seldom trips scale-up on its own - the queue-size trigger is what drives scaling.
+  Treat the running-request trigger as a keep-warm and anti-flap floor, not the
+  driver.
+- **Flow control off.** This guide enables flow control, so this case applies only
+  if you turn it off. Both signals this guide scales on -
+  `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_pool_saturation` -
+  are exposed *only* when the `flowControl` feature gate is on. With it off the
+  series are not emitted at all, so the queue and saturation triggers resolve to
+  no data and KEDA reports the metric as unavailable. The running-request
+  trigger this guide already ships (`llm_d_epp_request_running`) is not gated by
+  flow control and keeps working, so scaling degrades to running-requests only;
+  tune its threshold accordingly, or drive scaling from a vLLM-native signal such
+  as `vllm:num_requests_waiting`.
+
+Confirm which mode you are in before tuning:
+
+```bash
+kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+```
+
+## Startup-time mitigation
+
+Model-server pods take minutes to load a model and become `Ready`, and this
+startup lag distorts autoscaling. While a new replica is still starting it does
+not serve traffic, so the demand signal it was meant to relieve stays elevated.
+Two problems follow: the HPA can keep scaling up and overshoot (the starting
+replica is not yet reducing the signal), and then, once the pod goes `Ready` and
+demand drops sharply, the HPA can scale back in immediately and flap.
+
+The checked-in `ScaledObject` mitigates both with HPA stabilization windows in
+its `behavior` block, so no extra metrics or dependencies are required:
+
+- **`scaleUp.stabilizationWindowSeconds: 300`** holds scale-up recommendations
+  over the window and acts on the most conservative one, so a replica that is
+  still loading is given time to become `Ready` and relieve demand before the HPA
+  adds another. Size this near the target Deployment's cold-start time: too low
+  and the HPA stacks replicas while one is still coming up; too high and it reacts
+  slowly to genuine sustained bursts.
+- **`scaleDown.stabilizationWindowSeconds: 300`** holds capacity across brief
+  demand dips, so the pool does not scale in the moment a slow-starting replica
+  finally absorbs a backlog and the signal drops.
+
+Measure your model's cold-start time (from pod scheduling to the first served
+request) and set `scaleUp.stabilizationWindowSeconds` to roughly that value.
+
+### Advanced alternative: pending-pod-aware supply
+
+Stabilization windows are deliberately blunt: they delay all scale-up equally,
+not just startup-driven overshoot. If you need demand-aware behavior, KEDA's
+[`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
+can compose triggers with a `formula`. You can pair the demand trigger with a
+second trigger that reports not-yet-available pods - for example a Prometheus
+query over `kube-state-metrics` such as `kube_deployment_status_replicas_unavailable`
+- and write a formula that discounts demand by the anticipated capacity of pods
+already coming up, so the HPA does not double-count a replica it has already
+requested.
+
+This is more precise but adds cost: it depends on `kube-state-metrics` being
+scraped into the same Prometheus, introduces a second trigger and a formula whose
+per-pod-capacity constant must itself be tuned, and a missing series can break the
+composite metric. Prefer the stabilization windows above unless you have a
+specific need the windows cannot meet.
 
 ## Apply the KEDA ScaledObject
 

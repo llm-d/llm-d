@@ -84,15 +84,15 @@ This document describes the release process for llm-d. The release dates should 
 - **GitHub issue:** A clearly described issue linked to the milestone, with acceptance criteria.
 - **Production-ready example:** The feature must include a realistic, production-ready example (e.g., a guide under `guides/`). Toy examples or placeholder demonstrations are not acceptable.
 - **Proposal (if applicable):** Features involving public APIs, new components, or cross-SIG changes must have an approved [project
-  proposal](proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](CONTRIBUTING.md).
-- **Test coverage:** Appropriate unit, integration, or e2e test coverage as defined in the [testing requirements](CONTRIBUTING.md#testing-requirements).
+  proposal](../proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](../CONTRIBUTING.md).
+- **Test coverage:** Appropriate unit, integration, or e2e test coverage as defined in the [testing requirements](../CONTRIBUTING.md#testing-requirements).
 
 #### Coordination
 
   Feature tracking is coordinated through:
 
 - **Weekly project standup:** Overall release progress is reviewed every Wednesday at 12:30 PM ET (see the [public calendar](https://red.ht/llm-d-public-calendar)).
-- **SIG meetings:** Each [SIG](SIGS.md) reviews the status of their features during their regular meetings.
+- **SIG meetings:** Each [SIG](../SIGS.md) reviews the status of their features during their regular meetings.
 - **Slack:** Day-to-day coordination happens in the [#llm-d-dev](https://llm-d.slack.com/archives/C08SH9K8JGK) Slack channel and relevant SIG channels.
 
   > [!NOTE]
@@ -116,14 +116,12 @@ The final release work involves creating a tag in the llm-d repo, which triggers
 
 - **Release** images are created by the release workflow (`ci-release.yaml`) when a version tag is pushed. They follow the naming pattern
   `ghcr.io/llm-d/llm-d-{platform}:{version}` and are tagged with the release version. For example:
-  - `ghcr.io/llm-d/llm-d-rocm:v0.9.0`
-  - `ghcr.io/llm-d/llm-d-cpu:v0.9.0`
-
+  - `ghcr.io/llm-d/llm-d-rocm:v0.10.0`
+  - `ghcr.io/llm-d/llm-d-cpu:v0.10.0`
 
 - **Dev** images are created by the dev build workflow (`build-image.yaml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `quay.io/llm-d/llm-d-{platform}:{version}` and are tagged with the git short SHA or PR number. Please note these images are intentionally not signed as they represent work on open PR from contributors and the project is not responsible for verifying that every image works and is not nefarious. Here be dragons - be warned. Example:
   - `quay.io/llm-d/llm-d-cpu:pr-123`
   - `quay.io/llm-d/llm-d-rocm:latest` (from the default branch)
-
 
   The full list of platforms includes: `cuda`, `aws`, `cpu`, `rocm`, and `xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for
    the complete list.

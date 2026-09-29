@@ -10,12 +10,6 @@ components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/release
 
-# TODO(#2595): Remove this override once gpu-vllm/release is bumped to v0.30.0.
-# vLLM v0.30.0 is the first release with the ECCPU Connector P2P NIXL mode (vllm-project/vllm#47941).
-images:
-  - name: docker.io/vllm/vllm-openai
-    newTag: v0.30.0
-
 labels:
   - pairs:
       llm-d.ai/model: Qwen3-VL-32B-Instruct

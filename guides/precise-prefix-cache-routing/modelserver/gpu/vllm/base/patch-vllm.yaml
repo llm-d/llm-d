@@ -11,6 +11,8 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-32B"
+            # vLLM 0.30 requires this to serve /v1/*/render for token-producer.
+            - "--enable-scale-out"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--tensor-parallel-size=2"
             - "--block-size=64"

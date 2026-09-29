@@ -6,7 +6,7 @@
 > **The Workload Variant Autoscaler (WVA) is deprecated.** The WVA path is no
 > longer developed and receives no further releases; `v0.9.0` is the final
 > version, and the guide assets in [`wva/`](./wva/) are pinned to it. WVA-based
-> features, including [Replica Rebalancing](./replica-rebalancing/README.md),
+> features, including Replica Rebalancing (since removed),
 > are deprecated along with it. New deployments should use one of the KEDA + EPP
 > paths below; existing WVA deployments should migrate to the
 > [KEDA + EPP Metrics guide](./keda-epp/README.md) and select its saturation

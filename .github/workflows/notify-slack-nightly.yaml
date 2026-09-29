@@ -1,13 +1,11 @@
 ---
 name: Notify Slack - Nightly Results
 
-# Posts the result of every scheduled nightly to the Slack channel owned by the
-# SIG responsible for it.
+# Posts non-success scheduled nightly results to #llm-d-ci-alerts and mentions
+# the owners listed in the guide's OWNERS file when Slack user IDs are mapped.
 #
-# This replaces the `/github subscribe` integration, which had two limits we
-# could not work around: it only supports one workflow per channel (so a channel
-# like #sig-router, which owns 16 nightlies, could never be covered), and it
-# notifies on manual workflow_dispatch runs too, which was pure noise.
+# This replaces the `/github subscribe` integration, which notified on manual
+# workflow_dispatch runs and could not filter out successful nightlies.
 #
 # Channel routing lives in .github/slack-channels.yaml -- that file is the
 # source of truth. The `workflows:` list below is GENERATED from it by
@@ -23,9 +21,8 @@ name: Notify Slack - Nightly Results
 # indistinguishable from a quiet night. Generating the list means the rename
 # turns CI red in the very PR that does the renaming.
 #
-# Note that routing at runtime keys off the workflow's FILE name
-# (workflow_run.path), not its display name, so a rename can only stop
-# notifications -- it can never send them to the wrong channel.
+# Note that owner lookup at runtime keys off the workflow's FILE name
+# (workflow_run.path), not its display name.
 
 on:
   workflow_run:
@@ -38,6 +35,7 @@ on:
       - main
     workflows:
       # SLACK-WORKFLOWS-START
+      - "Nightly - Fast Model Actuation + KEDA E2E (OCP GPU)"
       - "Nightly - Fast Model Actuation E2E (OCP GPU)"
       - "Nightly - Flow Control E2E (GKE GPU)"
       - "Nightly - Optimized Baseline E2E (AMD ROCM)"
@@ -48,7 +46,8 @@ on:
       - "Nightly - Optimized Baseline E2E (GKE TPU)"
       - "Nightly - Optimized Baseline E2E (Intel XPU)"
       - "Nightly - Optimized Baseline E2E (OCP GPU)"
-      - "Nightly - PD Disaggregation E2E (AMD ROCM)"
+      - "Nightly - PD Disaggregation E2E (AMD ROCM MORI-IO)"
+      - "Nightly - PD Disaggregation E2E (AMD ROCM NIXL)"
       - "Nightly - PD Disaggregation E2E (CKS GPU)"
       - "Nightly - PD Disaggregation E2E (GKE GPU SGLang)"
       - "Nightly - PD Disaggregation E2E (GKE GPU)"
@@ -64,19 +63,24 @@ on:
       - "Nightly - Predicted Latency Routing E2E (AMD ROCM)"
       - "Nightly - Predicted Latency Routing E2E (CKS GPU)"
       - "Nightly - Predicted Latency Routing E2E (GKE GPU)"
+      - "Nightly - Predicted Latency Routing E2E (Intel XPU)"
       - "Nightly - Predicted Latency Routing E2E (OCP GPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (AMD ROCM, Native)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU SGLang)"
       - "Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading E2E (Intel XPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading E2E (OCP GPU)"
+      - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (AMD ROCM)"
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (GKE GPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (Intel XPU)"
       - "Nightly - Tiered Prefix Cache E2E (GKE TPU)"
+      - "Nightly - Tiered Prefix Cache FS Offloading E2E (AMD ROCM, Native)"
+      - "Nightly - Tiered Prefix Cache FS Offloading LMCache E2E (AMD ROCM)"
+      - "Nightly - Wide EP LWS E2E (AMD ROCM MORI-IO)"
       - "Nightly - Wide EP LWS E2E (CKS GPU)"
       - "Nightly - Wide EP LWS E2E (GKE GPU)"
       - "Nightly - Wide EP LWS E2E (Intel XPU)"
       - "Nightly - Wide EP LWS E2E (OCP GPU)"
-      - "Nightly - Workload Autoscaling E2E (CKS GPU)"
-      - "Nightly - Workload Autoscaling E2E (OCP GPU)"
       - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
       # SLACK-WORKFLOWS-END
 
@@ -104,8 +108,8 @@ on:
 
 # Deliberately minimal. A workflow_run-triggered workflow is handed secrets and a
 # privileged token even when the upstream run had neither, so it should ask for
-# no more than it uses: reading the mapping out of the repo, and reading the
-# upstream run and its jobs from the API.
+# no more than it uses: reading routing and owner mappings from the repo, and
+# reading the upstream run and its jobs from the API.
 permissions:
   contents: read
   actions: read
@@ -124,27 +128,27 @@ jobs:
     #      manual dispatches of a nightly and /test-nightly runs. Note this
     #      cannot move into `on:`: workflow_run offers no filter on the upstream
     #      run's own event, so we pay a ~2s empty run per manual dispatch.
-    #   3. conclusion -- see the list below.
+    #   3. conclusion -- only failures, timeouts and unstable results are posted.
     #
-    # 'cancelled' is excluded on purpose and is the common case: every nightly
-    # sets cancel-in-progress, so dispatching one while a run is in flight
-    # cancels that run, and that is not news for a channel. 'skipped' and
-    # 'neutral' say nothing about guide health. 'timed_out' IS notified: it is a
-    # real failure with its own signature, usually a hung standup.
+    # 'cancelled' and 'skipped' are excluded. GitHub Actions uses 'neutral' for
+    # an unstable result. 'timed_out' gets its own result label.
     if: >-
       github.repository == 'llm-d/llm-d' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.event == 'schedule' &&
-        contains(fromJSON('["success", "failure", "timed_out"]'), github.event.workflow_run.conclusion)))
+        contains(fromJSON('["failure", "timed_out", "neutral", "stale", "action_required", "startup_failure"]'), github.event.workflow_run.conclusion)))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout mapping and script
         uses: actions/checkout@v7
         with:
-          # Only the two files this job reads, rather than the whole repo.
+          # Read the notifier inputs, nightly workflow files and guide owners.
           sparse-checkout: |
             .github/slack-channels.yaml
+            .github/slack-owner-ids.yaml
             .github/scripts/notify-slack-nightly.py
+            .github/workflows/nightly-*.yaml
+            guides/**/OWNERS
           sparse-checkout-cone-mode: false
           persist-credentials: false
 

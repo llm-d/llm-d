@@ -146,7 +146,7 @@ above is unchanged: over-budget replicas simply stay Pending until quota frees.
 See the
 [Kueue-based replica rebalancing guide](../../../../guides/workload-autoscaling/kueue-rebalancing/README.md).
 It supersedes the experimental
-[replica rebalancer](../../../../guides/workload-autoscaling/replica-rebalancing/README.md),
+replica rebalancer (removed in #2498),
 which enforced the same budget from *above* the HPA by patching `maxReplicas` on
 annotated HPAs — an approach that requires HPA annotations KEDA does not
 propagate. The two must never run together.

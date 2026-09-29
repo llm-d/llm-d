@@ -30,9 +30,6 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── gpu-vllm
 │   ├── aws-efa
-│   │   ├── llm-d
-│   │   └── release
-│   ├── llm-d
 │   │   └── release
 │   ├── nightly
 │   └── release

@@ -7,8 +7,14 @@ resources:
   - serviceAccount.yaml
 
 components:
-  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+# TODO(#2339): Remove override once gpu-vllm/release is bumped to v0.30.0+ (required for DeepEP v2 + NCCL GIN).
+images:
+  - name: docker.io/vllm/vllm-openai
+    newName: docker.io/vllm/vllm-openai
+    newTag: v0.30.0
 
 labels:
   - pairs:
