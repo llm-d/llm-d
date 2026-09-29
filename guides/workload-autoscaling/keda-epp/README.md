@@ -384,17 +384,51 @@ request) and set `scaleUp.stabilizationWindowSeconds` to roughly that value.
 Stabilization windows are deliberately blunt: they delay all scale-up equally,
 not just startup-driven overshoot. If you need demand-aware behavior, KEDA's
 [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
-can compose triggers with a `formula`. You can pair the demand trigger with a
-second trigger that reports not-yet-available pods - for example a Prometheus
-query over `kube-state-metrics` such as `kube_deployment_status_replicas_unavailable`
-- and write a formula that discounts demand by the anticipated capacity of pods
-already coming up, so the HPA does not double-count a replica it has already
-requested.
+can compose triggers with a `formula`. Pair the running-requests demand trigger
+with a second trigger that reports not-yet-available pods - a Prometheus query
+over `kube-state-metrics`, `kube_deployment_status_replicas_unavailable` for the
+target Deployment - and write a formula that discounts demand by the anticipated
+capacity of the pods already coming up, so the HPA does not double-count a replica
+it has already requested.
+
+Name both triggers so the formula can reference them, and note the names must be
+valid [expr-lang](https://expr-lang.org/) identifiers (letters and underscores,
+not hyphens, since a hyphen parses as subtraction):
+
+```yaml
+advanced:
+  scalingModifiers:
+    # running = sum(llm_d_epp_request_running{...})  -- EPP running-requests demand
+    # pending = sum(kube_deployment_status_replicas_unavailable{deployment=...})
+    # 16      = the per-pod running-request target (same value as the demand trigger)
+    formula: "max(running - (pending ?? 0) * 16, 0)"
+    target: "16"
+    metricType: AverageValue
+```
+
+With `metricType: AverageValue` the HPA sets
+`desiredReplicas = ceil(composite / target)`, so each not-yet-available pod
+removes exactly one pod's worth of demand (`pending * 16`) from the numerator and
+the HPA stops requesting replacements for capacity that is already on the way. The
+`(pending ?? 0)` guard keeps a missing `pending` series from breaking the
+composite; pair it with `fallback.behavior: scalingModifiers` so a failed trigger
+is passed to the formula as nil rather than failing the whole metric.
+
+Because the formula - not a blunt window - now prevents overshoot, you can set
+`scaleUp.stabilizationWindowSeconds: 0` for a fast, demand-aware scale-up. But the
+discount introduces an oscillation trap: while the pod it requested is still
+`pending`, the discounted composite drops below `target`, so the formula alone
+would recommend tearing down the very replica it is waiting on. **Keep
+`scaleDown.stabilizationWindowSeconds` at or above your model's cold-start time**
+as the backstop - it holds the requested replica until it goes `Ready`. In an openshift validation run the requested replica took roughly 270s to load an 8B model
+and become `Ready`; the 300s scale-down window held it through that startup and
+released the pool back to one replica only once demand was gone. If the window is
+shorter than cold-start, the backstop fails and the pod is torn down mid-startup.
 
 This is more precise but adds cost: it depends on `kube-state-metrics` being
 scraped into the same Prometheus, introduces a second trigger and a formula whose
-per-pod-capacity constant must itself be tuned, and a missing series can break the
-composite metric. Prefer the stabilization windows above unless you have a
+per-pod-capacity constant must itself be tuned, and requires the scale-down window
+to exceed cold-start. Prefer the stabilization windows above unless you have a
 specific need the windows cannot meet.
 
 ## Apply the KEDA ScaledObject
