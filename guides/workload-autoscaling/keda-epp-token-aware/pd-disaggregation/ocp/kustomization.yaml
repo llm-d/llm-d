@@ -65,7 +65,7 @@ patches:
         value: "bearer"
     target:
       kind: ScaledObject
-      name: pd-disaggregation-nvidia-gpu-vllm-prefill-token-aware
+      name: pd-disagg-vllm-prefill-token-aware
   # Same for the decode trigger.
   - patch: |-
       - op: replace
@@ -76,7 +76,7 @@ patches:
         value: "bearer"
     target:
       kind: ScaledObject
-      name: pd-disaggregation-nvidia-gpu-vllm-decode-token-aware
+      name: pd-disagg-vllm-decode-token-aware
   # The ClusterRoleBinding from the metrics-reader component is cluster-scoped, so
   # its name must be unique per namespace or two deployments of this guide (or of
   # the keda-epp guide's overlays, which share the recipe) collide on it.

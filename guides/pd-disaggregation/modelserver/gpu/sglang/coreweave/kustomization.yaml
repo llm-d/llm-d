@@ -4,22 +4,22 @@ resources:
   - ../base
 patches:
   - target:
-      kind: Deployment
-      name: decode
+      kind: DisaggregatedSet
+      name: pd-disagg-sglang
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
         value: "1"
       - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
         value: "1"
   - target:
-      kind: Deployment
-      name: prefill
+      kind: DisaggregatedSet
+      name: pd-disagg-sglang
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/rdma~1ib
         value: "1"
       - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/rdma~1ib
         value: "1"

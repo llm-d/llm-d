@@ -37,7 +37,7 @@ replicas = ceil(  queued_tokens ÷ peakPrefillThroughput  ÷  threshold  )
 | | [P+D co-located](./optimized-baseline/) | [P/D-disaggregated](./pd-disaggregation/) |
 | --- | --- | --- |
 | **Base guide** | [optimized-baseline](../../optimized-baseline/README.md) | [pd-disaggregation](../../pd-disaggregation/README.md) |
-| **Objects** | one `ScaledObject`, two triggers, one Deployment | one `ScaledObject` per role, two Deployments |
+| **Objects** | one `ScaledObject`, two triggers, one Deployment | one `ScaledObject` per role, two `DisaggregatedSet` roles |
 | **Scaling rule** | `max(ceil(backlog_s / 1.5), ceil(kv / 0.8))` — the current bottleneck wins | prefill and decode scale independently |
 | **Trade-off** | simpler: one calibration, one object. A prompt-heavy burst and a generation-heavy burst both scale the whole pod | tracks lopsided load between phases, at the cost of two objects and a calibration through the KV-transfer path |
 
@@ -77,7 +77,15 @@ Before proceeding, ensure you have:
 
 1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../README.md#prerequisites) and [Prometheus Setup Guide](../../../docs/operations/observability/setup.md). This includes KEDA installation. The decode trigger additionally needs the model servers scraped, so apply your base guide's monitoring component (`recipes/modelserver/components/monitoring`, or `monitoring-pd` for P/D) — without it `vllm:kv_cache_usage_perc` never reaches Prometheus and that trigger reads 0 forever.
 
-2. **A deployed base guide** — complete either the [optimized-baseline guide](../../optimized-baseline/README.md) (P+D co-located) or the [pd-disaggregation guide](../../pd-disaggregation/README.md) (P/D-disaggregated), and set `TOPOLOGY` below to match.
+2. **A deployed base guide** — complete either the [optimized-baseline guide](../../optimized-baseline/README.md) (P+D co-located) or the [pd-disaggregation guide](../../pd-disaggregation/README.md) (P/D-disaggregated), and set `TOPOLOGY` below to match. For P/D, hand both roles' replica counts to KEDA, which requires a single slice:
+
+   ```bash
+   kubectl get disaggregatedset pd-disagg-vllm -n llm-d-pd-disaggregation -o json \
+     | jq '.spec.slices = 1 | .spec.roles |= map(.scaling = {"mode": "External"})' \
+     | kubectl replace -f -
+   ```
+
+   The ScaledObjects then target the `pd-disagg-vllm-prefill` and `pd-disagg-vllm-decode` `DisaggregatedSetRoleScaler`s.
 
 3. **The EPP plugins that emit the prefill signal** — `inflight-load-producer` (publishes `llm_d_epp_inflight_tokens`) and `prefix-cache-affinity-filter` (carries `peakPrefillThroughput`). **Both base guides already register these in their shipped router values**, so no EPP change is required beyond step 4. If you built your own router config, add them.
 
