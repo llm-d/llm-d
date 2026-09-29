@@ -168,3 +168,4 @@ llm-d provides [Gateway Mode deployment guides](../../../infrastructure/gateway/
 - [GKE Gateway](../../../infrastructure/gateway/gke.md)
 - [agentgateway](../../../infrastructure/gateway/agentgateway.md)
 - [Envoy AI Gateway](../../../infrastructure/gateway/envoy-ai-gateway.md)
+- [NGINX Gateway Fabric](../../../infrastructure/gateway/nginx-gateway-fabric.md)
