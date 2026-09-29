@@ -143,11 +143,11 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/predicted-latency-routing/m
 
 #### Prefill/Decode Disaggregation — gpt-oss-120b
 
-Predicted-latency scheduling also composes with prefill/decode disaggregation. Reuse the [pd-disaggregation guide's](../pd-disaggregation) model server (8 prefill TP=1 + 2 decode TP=4, `openai/gpt-oss-120b`) unchanged — the predictor is EPP-side only — and deploy the router with the P/D values file:
+Predicted-latency scheduling also composes with prefill/decode disaggregation. Reuse the [pd-disaggregation guide's](../pd-disaggregation) model server (8 prefill TP=1 + 2 decode TP=4, `openai/gpt-oss-120b`) unchanged — the predictor is EPP-side only — and deploy the router with the P/D values file. The model server runs as an LWS `DisaggregatedSet`, so it needs that guide's LWS prerequisite.
 
 ```bash
 export MODEL_NAME="openai/gpt-oss-120b"
-export INFRA_PROVIDER=gke # base | coreweave | gke | aws
+export INFRA_PROVIDER=gke/base # base | coreweave | gke/base | aws
 
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
