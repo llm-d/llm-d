@@ -398,12 +398,14 @@ def _check_env(env: Any, f: Findings) -> set[str]:
             continue
         declared.add(var)
         if not isinstance(spec, dict):
-            if spec is None or isinstance(spec, bool):
-                # YAML null/true/false would render and emit as the Python
-                # repr (`export VAR=None`). Quote the intended string.
+            if not isinstance(spec, str):
+                # A non-string scalar renders and emits as its Python repr.
+                # For `null`/`true` that is `export VAR=None`; for a list it
+                # is `export VAR=['a', 'b']`, which is not valid shell, so
+                # the emitted script fails to source at its env section.
                 f.error(
                     f"env.static.{var}: value must be a string, got {spec!r} "
-                    f"(quote YAML null/booleans)"
+                    f"(quote YAML null/booleans/lists)"
                 )
             continue
         if "sensitive" in spec and not isinstance(spec["sensitive"], bool):
@@ -414,12 +416,10 @@ def _check_env(env: Any, f: Findings) -> set[str]:
                 f"env.static.{var}.sensitive: must be a YAML boolean, "
                 f"got {spec['sensitive']!r}"
             )
-        if "default" in spec and (
-            spec["default"] is None or isinstance(spec["default"], bool)
-        ):
+        if "default" in spec and not isinstance(spec["default"], str):
             f.error(
                 f"env.static.{var}.default: must be a string, got "
-                f"{spec['default']!r} (quote YAML null/booleans)"
+                f"{spec['default']!r} (quote YAML null/booleans/lists)"
             )
         if spec.get("sensitive") is True:
             if "default" not in spec:
@@ -629,6 +629,15 @@ def check_md(text: str, guide: Any = None) -> Findings:
             found, _value, msg = resolve_path(guide, path)
             if not found:
                 f.error(f"guide:{path} — {msg}", source="md", line=line)
+            else:
+                # Resolving is not enough: render_path also requires the node
+                # to be a step list. Without this, `check` reports OK for a
+                # guide `render` cannot handle, and that failure later names
+                # neither the file, the line, nor the marker.
+                try:
+                    render_path(guide, path)
+                except GuideError as exc:
+                    f.error(f"guide:{path} — {exc}", source="md", line=line)
         if not _is_valid_body(m.group("body")):
             f.error(
                 f"guide:{path} — body between markers must be one or more fenced "
