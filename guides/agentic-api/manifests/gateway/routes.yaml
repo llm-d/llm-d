@@ -1,87 +1,17 @@
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: llm-d-inference-gateway
-spec:
-  gatewayClassName: gke-l7-regional-external-managed
-  listeners:
-    - name: default
-      port: 80
-      protocol: HTTP
-      allowedRoutes:
-        namespaces:
-          from: All
----
-apiVersion: networking.gke.io/v1
-kind: GCPBackendPolicy
-metadata:
-  name: wide-ep
-spec:
-  targetRef:
-    group: inference.networking.k8s.io
-    kind: InferencePool
-    name: wide-ep
-  default:
-    timeoutSec: 300
-    logging:
-      enabled: true
----
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
-metadata:
-  name: wide-ep
-spec:
-  targetRef:
-    group: inference.networking.k8s.io
-    kind: InferencePool
-    name: wide-ep
-  default:
-    timeoutSec: 2
-    checkIntervalSec: 2
-    config:
-      type: HTTP
-      httpHealthCheck:
-        requestPath: /health
-        port: 8000
----
-apiVersion: networking.gke.io/v1
-kind: GCPBackendPolicy
-metadata:
-  name: agentic-api
-spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: agentic-api
-  default:
-    timeoutSec: 300
-    logging:
-      enabled: true
----
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
-metadata:
-  name: agentic-api
-spec:
-  targetRef:
-    group: ""
-    kind: Service
-    name: agentic-api
-  default:
-    timeoutSec: 2
-    checkIntervalSec: 5
-    config:
-      type: HTTP
-      httpHealthCheck:
-        requestPath: /health
-        port: 9000
----
+# Provider-neutral HTTPRoutes for Gateway Mode.
+#
+# The `llm-d-inference-gateway` Gateway itself is NOT defined here — deploy it from
+# `guides/recipes/gateway/<provider>` (see docs/infrastructure/gateway/) so this guide
+# shares one Gateway per namespace with every other llm-d guide, as
+# guides/optimized-baseline does. Both routes below work unchanged on Istio, GKE,
+# agentgateway and kgateway.
+#
 # Internal HTTPRoute for inference requests emitted by agentic-api.
 # When agentic-api is configured with `--llm-api-base http://epp.gateway.internal`
-# (mapped to the GKE Gateway IP via hostAliases), reqwest sends `Host: epp.gateway.internal`
-# on every upstream request. In Gateway API, a matching `hostnames` route has higher
-# precedence than a wildcard route and routes directly to InferencePool/wide-ep without
-# touching the `Authorization` header.
+# (mapped to the Gateway address via hostAliases), reqwest sends
+# `Host: epp.gateway.internal` on every upstream request. In Gateway API, a matching
+# `hostnames` route has higher precedence than a wildcard route and routes directly to
+# InferencePool/wide-ep without touching the `Authorization` header.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -103,7 +33,7 @@ spec:
           kind: InferencePool
           name: wide-ep
 ---
-# External HTTPRoute for client traffic arriving at the GKE Gateway IP.
+# External HTTPRoute for client traffic arriving at the Gateway address.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
