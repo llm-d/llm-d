@@ -10,38 +10,43 @@ images:
     newName: public.ecr.aws/deep-learning-containers/sglang
     newTag: 0.5.20-gpu-py312-cu130-ubuntu24.04-ec2
 
+# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
+# patches match roles, containers, env, and volumes by key instead of by index.
+openapi:
+  path: disaggregatedset-schema.json
+
 patches:
   - path: patch-decode.yaml
   - path: patch-prefill.yaml
   - target:
-      kind: Deployment
-      name: decode
+      kind: DisaggregatedSet
+      name: pd-disagg-sglang
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
         value: "8"
       - op: add
-        path: /spec/template/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
         value: "8"
       - op: remove
-        path: /spec/template/spec/containers/0/resources/limits/cpu
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/cpu
       - op: add
-        path: /spec/template/spec/nodeSelector
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
         value:
           node.kubernetes.io/instance-type: p5en.48xlarge
   - target:
-      kind: Deployment
-      name: prefill
+      kind: DisaggregatedSet
+      name: pd-disagg-sglang
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/vpc.amazonaws.com~1efa
         value: "8"
       - op: add
-        path: /spec/template/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/requests/vpc.amazonaws.com~1efa
         value: "8"
       - op: remove
-        path: /spec/template/spec/containers/0/resources/limits/cpu
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/limits/cpu
       - op: add
-        path: /spec/template/spec/nodeSelector
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
         value:
           node.kubernetes.io/instance-type: p5en.48xlarge

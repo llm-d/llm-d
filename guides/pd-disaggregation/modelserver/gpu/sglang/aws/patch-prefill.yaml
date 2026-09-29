@@ -1,60 +1,64 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
 metadata:
-  name: prefill
+  name: pd-disagg-sglang
 spec:
-  replicas: 2
-  template:
-    spec:
-      affinity:
-        podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: llm-d.ai/model
-                    operator: In
-                    values:
-                      - gpt-oss-120b
-                  - key: llm-d.ai/guide
-                    operator: In
-                    values:
-                      - pd-disaggregation
-              topologyKey: topology.kubernetes.io/zone
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    llm-d.ai/role: "decode"
-                topologyKey: "kubernetes.io/hostname"
-      containers:
-        - name: modelserver
-          command: ["python3", "-m", "sglang.launch_server"]
-          args:
-            - "--model-path=openai/gpt-oss-120b"
-            - "--port=8000"
-            - "--host=0.0.0.0"
-            - "--disaggregation-mode=prefill"
-            - "--disaggregation-transfer-backend=nixl"
-            - "--tensor-parallel-size=4"
-            - "--page-size=64"
-            - "--log-level=info"
-            - "--enable-metrics"
-            - "--uvicorn-access-log-exclude-prefixes=/metrics"
-          resources:
-            limits:
-              cpu: "16"
-              memory: 64Gi
-              nvidia.com/gpu: "4"
-            requests:
-              cpu: "16"
-              memory: 64Gi
-              nvidia.com/gpu: "4"
-          securityContext:
-            capabilities:
-              add:
-                - IPC_LOCK
-          env:
-            - name: SGLANG_DISAGGREGATION_NIXL_BACKEND
-              value: "LIBFABRIC"
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1  # per slice
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              affinity:
+                podAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    - labelSelector:
+                        matchExpressions:
+                          - key: llm-d.ai/model
+                            operator: In
+                            values:
+                              - gpt-oss-120b
+                          - key: llm-d.ai/guide
+                            operator: In
+                            values:
+                              - pd-disaggregation
+                      topologyKey: topology.kubernetes.io/zone
+                podAntiAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                    - weight: 100
+                      podAffinityTerm:
+                        labelSelector:
+                          matchLabels:
+                            llm-d.ai/role: "decode"
+                        topologyKey: "kubernetes.io/hostname"
+              containers:
+                - name: modelserver
+                  command: ["python3", "-m", "sglang.launch_server"]
+                  args:
+                    - "--model-path=openai/gpt-oss-120b"
+                    - "--port=8000"
+                    - "--host=0.0.0.0"
+                    - "--disaggregation-mode=prefill"
+                    - "--disaggregation-transfer-backend=nixl"
+                    - "--tensor-parallel-size=4"
+                    - "--page-size=64"
+                    - "--log-level=info"
+                    - "--enable-metrics"
+                    - "--uvicorn-access-log-exclude-prefixes=/metrics"
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 64Gi
+                      nvidia.com/gpu: "4"
+                    requests:
+                      cpu: "16"
+                      memory: 64Gi
+                      nvidia.com/gpu: "4"
+                  securityContext:
+                    capabilities:
+                      add:
+                        - IPC_LOCK
+                  env:
+                    - name: SGLANG_DISAGGREGATION_NIXL_BACKEND
+                      value: "LIBFABRIC"
