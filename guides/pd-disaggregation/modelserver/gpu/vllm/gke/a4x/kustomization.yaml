@@ -11,7 +11,7 @@ openapi:
   path: disaggregatedset-schema.json
 
 patches:
-  # Configure prefill deployment with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
+  # Configure the prefill role with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
   - patch: |-
       apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
@@ -54,7 +54,7 @@ patches:
                         securityContext:
                           capabilities:
                             add: ["IPC_LOCK", "NET_ADMIN"]
-  # Configure decode deployment with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
+  # Configure the decode role with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
   - patch: |-
       apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet

@@ -1,4 +1,4 @@
-# GKE overlay patch for SGLang decode deployment.
+# GKE overlay patch for the SGLang decode role.
 # Extends base/patch-decode.yaml with GKE-specific DRA RDMA claims, UCX networking, and persistent HuggingFace cache.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
