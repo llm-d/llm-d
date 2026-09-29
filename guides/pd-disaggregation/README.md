@@ -300,7 +300,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 ```
 
 > [!TIP]
-> The `cks-mooncake` overlay uses MooncakeConnector instead of NixlConnector for KV transfer. It targets CKS clusters with InfiniBand / RDMA and has additional prerequisites — see [KV Transfer Backends](#kv-transfer-backends) above.
+> The `cks-mooncake` overlay uses MooncakeConnector instead of NixlConnector for KV transfer. It targets CKS clusters with InfiniBand / RDMA and has additional prerequisites — see [KV Transfer Backends](#supported-kv-transfer-backends) above.
 
 <details>
 <summary><h4>Deploying with SGLang</h4></summary>
@@ -456,15 +456,17 @@ For alert rules covering these signals, see [Alerting](../../docs/operations/obs
 
 The NVIDIA GPU overlays run prefill and decode as one LWS [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm`, or `pd-disagg-sglang` for SGLang) with `groupIdentity: Hash`. The controller runs each role of each slice as a LeaderWorkerSet named `<ds>-<slice>-<revision>-<role>`. The revision changes on every rollout, so query them by label:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 kubectl get leaderworkerset -n ${NAMESPACE} -l disaggregatedset.x-k8s.io/name=pd-disagg-vllm
 ```
+<!-- llm-d-cicd:skip end -->
 
 * Scaling `slices` adds or removes complete P/D copies at the current revision, without touching existing slices.
 * Role `replicas` apply per slice, so the xPyD ratio (see [P/D Best Practices](#pd-best-practices)) holds in every slice.
 * Rolling updates proceed independently per slice.
 
-See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/#operating-a-disaggregatedset) for scaling, rollouts, and placement.
+See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) for scaling, rollouts, and placement.
 
 ### Pinning Slices to Accelerator Domains (Placement Policy)
 
@@ -516,12 +518,11 @@ roles:
       ...
 ```
 
-Then point HPA, KEDA, or any `/scale`-aware autoscaler at the auto-created `DisaggregatedSetRoleScaler` named `<ds>-<role>` (for example `pd-disagg-vllm-prefill`). See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/#external-scaling-with-hpa-or-keda) and the [KEDA token-aware P/D guide](../workload-autoscaling/keda-epp-token-aware/README.md).
+Then point HPA, KEDA, or any `/scale`-aware autoscaler at the auto-created `DisaggregatedSetRoleScaler` named `<ds>-<role>` (for example `pd-disagg-vllm-prefill`). See the [LWS autoscaling example](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/autoscaling/) and the [KEDA token-aware P/D guide](../workload-autoscaling/keda-epp-token-aware/README.md).
 
-### Known Issues
+### Known Issue: Rolling Updates Can Stall on Fully Allocated Clusters
 
-1. **Rolling update can drain the old revision immediately when replicas change with the template.** If one apply changes a role's pod template and its `replicas`, the old revision can scale to zero before any new pod is ready. Change the template and replica counts in separate applies.
-2. **Rolling updates can stall on fully allocated clusters.** The controller creates new pods before draining their old counterparts. On a cluster with no spare accelerators the new pods stay Pending and the rollout never progresses. Keep at least one decode's worth of free accelerators before a template change (for example by scaling `slices` down by one first), or scale the old revision's LeaderWorkerSet down manually.
+The controller creates new pods before draining their old counterparts. On a cluster with no spare accelerators the new pods stay Pending and the rollout never progresses. Keep at least one decode's worth of free accelerators before a template change (for example by scaling `slices` down by one first), or scale the old revision's LeaderWorkerSet down manually.
 
 ## Verification
 
