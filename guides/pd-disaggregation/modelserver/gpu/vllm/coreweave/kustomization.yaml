@@ -5,13 +5,10 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-
-# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
-# patches match roles, containers, env, and volumes by key instead of by index.
-openapi:
-  path: disaggregatedset-schema.json
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
+  # Both roles get the same settings: written once under prefill and aliased into decode.
   - patch: |-
       apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
@@ -19,45 +16,11 @@ patches:
         name: pd-disagg-vllm
       spec:
         roles:
-          - name: decode
-            spec:
-              leaderWorkerTemplate:
-                workerTemplate:
-                  spec:
-                    volumes:
-                      - name: huggingface-cache
-                        hostPath:
-                          path: /var/cache/huggingface
-                          type: DirectoryOrCreate
-                    containers:
-                      - name: modelserver
-                        resources:
-                          limits:
-                            rdma/ib: "1"
-                          requests:
-                            rdma/ib: "1"
-                        env:
-                          - name: HF_HOME
-                            value: /root/.cache/huggingface
-                          - name: HF_HUB_DOWNLOAD_TIMEOUT
-                            value: "60"
-                          # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
-                          - name: HF_HUB_DISABLE_XET
-                            value: "1"
-                        volumeMounts:
-                          # Node-local HuggingFace cache shared across pods and restarts
-                          - mountPath: /root/.cache/huggingface
-                            name: huggingface-cache
           - name: prefill
-            spec:
+            spec: &coreweave
               leaderWorkerTemplate:
                 workerTemplate:
                   spec:
-                    volumes:
-                      - name: huggingface-cache
-                        hostPath:
-                          path: /var/cache/huggingface
-                          type: DirectoryOrCreate
                     containers:
                       - name: modelserver
                         resources:
@@ -77,3 +40,10 @@ patches:
                           # Node-local HuggingFace cache shared across pods and restarts
                           - mountPath: /root/.cache/huggingface
                             name: huggingface-cache
+                    volumes:
+                      - name: huggingface-cache
+                        hostPath:
+                          path: /var/cache/huggingface
+                          type: DirectoryOrCreate
+          - name: decode
+            spec: *coreweave

@@ -9,10 +9,8 @@ images:
     newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/sglang
     newTag: 0.5.12-gpu-py312-cu130-ubuntu24.04-ec2
 
-# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
-# patches match roles, containers, env, and volumes by key instead of by index.
-openapi:
-  path: disaggregatedset-schema.json
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
   - path: patch-decode.yaml

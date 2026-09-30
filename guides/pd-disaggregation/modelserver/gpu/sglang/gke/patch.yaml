@@ -1,13 +1,13 @@
-# GKE overlay patch for the SGLang decode role.
-# Extends base/patch-decode.yaml with GKE-specific DRA RDMA claims, UCX networking, and persistent HuggingFace cache.
+# GKE settings for both SGLang roles: DRA RDMA claims, UCX networking, and a persistent
+# HuggingFace cache. Written once under prefill and aliased into decode.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
   name: pd-disagg-sglang
 spec:
   roles:
-    - name: decode
-      spec:
+    - name: prefill
+      spec: &gke-common
         leaderWorkerTemplate:
           workerTemplate:
             spec:
@@ -74,3 +74,5 @@ spec:
                   hostPath:
                     path: /var/cache/huggingface
                     type: DirectoryOrCreate
+    - name: decode
+      spec: *gke-common

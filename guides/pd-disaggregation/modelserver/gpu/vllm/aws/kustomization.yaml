@@ -5,11 +5,7 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/aws-efa/release
-
-# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
-# patches match roles, containers, env, and volumes by key instead of by index.
-openapi:
-  path: disaggregatedset-schema.json
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
   - path: patch-decode.yaml
