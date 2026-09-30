@@ -1,6 +1,6 @@
 # Serve External APIs
 
-This section covers how to deploy an API gateway or proxy layer on top of **llm-d** to manage traffic across both self-hosted LLM workloads and third-party external model APIs (such as Google Gemini, OpenAI, or Anthropic).
+This section covers how to deploy an API gateway or proxy layer on top of **llm-d** to manage traffic across both self-hosted LLM workloads and third-party external model APIs (such as Google Gemini, OpenAI, Anthropic, or [OrcaRouter](https://www.orcarouter.ai)).
 
 By deploying a unified proxy front-ending your LLM infrastructure, you can:
 
@@ -19,7 +19,7 @@ flowchart TD
     Client["Client Applications"] --> Proxy["Kong / LiteLLM AI Gateway"]
 
     Proxy -->|"Self-Hosted Model Traffic"| Router["llm-d Router"]
-    Proxy -->|"External Provider Traffic"| External["External API Providers<br/>(Gemini, OpenAI, ...)"]
+    Proxy -->|"External Provider Traffic"| External["External API Providers<br/>(Gemini, OpenAI, OrcaRouter, ...)"]
 
     Router --> Pool["vLLM / SGLang Model Pool"]
 
