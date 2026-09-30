@@ -7,12 +7,30 @@ resources:
 components:
   # Shared GKE RDMA DRA resource claim template (pcieRoot rail alignment)
   - ../../../components/gke-rdma
-
-# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
-# patches match roles, containers, env, and volumes by key instead of by index.
-openapi:
-  path: disaggregatedset-schema.json
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
-  - path: patch-decode.yaml
-  - path: patch-prefill.yaml
+  - path: patch.yaml
+  # Prefill gets a longer startup window.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-sglang
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        startupProbe:
+                          initialDelaySeconds: 15
+                          periodSeconds: 30
+                          timeoutSeconds: 5
+                          failureThreshold: 240
+                          httpGet:
+                            path: /v1/models
+                            port: modelserver

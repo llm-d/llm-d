@@ -3,12 +3,11 @@ kind: Kustomization
 resources:
   - ../base
 
-# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
-# patches match roles, containers, env, and volumes by key instead of by index.
-openapi:
-  path: disaggregatedset-schema.json
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
+  # Both roles get the same settings: written once under prefill and aliased into decode.
   - patch: |-
       apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
@@ -16,20 +15,8 @@ patches:
         name: pd-disagg-sglang
       spec:
         roles:
-          - name: decode
-            spec:
-              leaderWorkerTemplate:
-                workerTemplate:
-                  spec:
-                    containers:
-                      - name: modelserver
-                        resources:
-                          limits:
-                            rdma/ib: "1"
-                          requests:
-                            rdma/ib: "1"
           - name: prefill
-            spec:
+            spec: &coreweave
               leaderWorkerTemplate:
                 workerTemplate:
                   spec:
@@ -40,3 +27,5 @@ patches:
                             rdma/ib: "1"
                           requests:
                             rdma/ib: "1"
+          - name: decode
+            spec: *coreweave

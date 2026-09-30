@@ -5,10 +5,8 @@ resources:
   - ../base
   - gke-rdma-claim-gb300.yaml
 
-# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge
-# patches match roles, containers, env, and volumes by key instead of by index.
-openapi:
-  path: disaggregatedset-schema.json
+components:
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
   # Configure the prefill role with DRANet resourceClaims (gke-rdma-claim-gb300), A4X Max GPU resources, env, and capabilities
