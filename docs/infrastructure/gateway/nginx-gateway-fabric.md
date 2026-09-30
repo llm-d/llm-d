@@ -109,7 +109,7 @@ curl -X POST http://${IP}/v1/completions \
 kubectl delete gateway llm-d-inference-gateway -n ${NAMESPACE}
 helm uninstall ngf -n nginx-gateway
 kubectl delete namespace nginx-gateway
-kubectl delete -f https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v${NGF_VERSION}/deploy/crds.yaml
+kubectl delete -f https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/main/deploy/crds.yaml
 ```
 
 To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [CRD installation guide](./install-crds.md#uninstalling-gateway-api-crds).
