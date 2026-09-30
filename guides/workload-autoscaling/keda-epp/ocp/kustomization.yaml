@@ -1,0 +1,49 @@
+# OpenShift adaptation for direct KEDA+EPP autoscaling. Thanos Querier's
+# authenticated :9091 endpoint is queried with a dedicated ServiceAccount token;
+# the service-account token Secret also supplies the OpenShift service CA.
+# This Component must be composed with the canonical keda-epp base; it is not a
+# standalone overlay.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - serviceaccount.yaml
+  - serviceaccount-token-secret.yaml
+  - clusterrolebinding.yaml
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/secretTargetRef
+        value:
+          - parameter: bearerToken
+            name: keda-prometheus-auth
+            key: token
+          - parameter: ca
+            name: keda-prometheus-auth
+            key: service-ca.crt
+    target:
+      kind: TriggerAuthentication
+      name: keda-prometheus-auth
+  - patch: |-
+      - op: test
+        path: /spec/triggers/0/name
+        value: epp-queue-size
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: bearer
+      - op: test
+        path: /spec/triggers/1/name
+        value: epp-running-requests
+      - op: replace
+        path: /spec/triggers/1/metadata/serverAddress
+        value: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      - op: add
+        path: /spec/triggers/1/metadata/authModes
+        value: bearer
+    target:
+      kind: ScaledObject
+      name: optimized-baseline-keda-epp
