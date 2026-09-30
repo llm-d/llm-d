@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: optimized-baseline-mthreads-vllm-
+
+components:
+  - ../../../../recipes/modelserver/components/images/mthreads-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: optimized-baseline
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: mthreads
+      llm-d.ai/model: Qwen3-32B
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml
