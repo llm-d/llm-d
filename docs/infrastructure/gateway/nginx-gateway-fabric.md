@@ -21,7 +21,17 @@ Install the required CRDs by following the [CRD installation guide](./install-cr
 
 ## Step 2: Install NGINX Gateway Fabric
 
-Set the NGINX Gateway Fabric version:
+Install NGINX Gateway Fabric with the Gateway API Inference Extension enabled:
+
+```bash
+helm install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --create-namespace \
+  --namespace nginx-gateway \
+  --set nginxGateway.gwAPIInferenceExtension.enable=true \
+  --wait
+```
+
+If you prefer to pin the [version of your NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric) deployment you can set the version as a variable and use it with ```--version``` during helm install:
 
 ```bash
 NGF_VERSION=2.7.2
@@ -37,6 +47,7 @@ helm install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
   --set nginxGateway.gwAPIInferenceExtension.enable=true \
   --wait
 ```
+
 
 Verify the installation:
 
@@ -120,9 +131,8 @@ To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [
 
 ```bash
 kubectl describe gateway llm-d-inference-gateway -n ${NAMESPACE}
-kubectl get pods -n nginx-gateway
-kubectl logs -n nginx-gateway deployment/ngf-nginx-gateway-fabric --tail=20
-```
+kubectl logs -n nginx-gateway deployment/ngf-nginx-gateway-fabric
+kubectl logs -n ${NAMESPACE} deployment/llm-d-inference-gateway-nginx
 
 Verify the `nginx` `GatewayClass` is present and accepted:
 
