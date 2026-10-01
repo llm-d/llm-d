@@ -340,3 +340,20 @@ def test_run_checks_on_healthy_gke_has_no_fail():
     results = preflight.run_checks(req(), CFG, builders.state(builders.healthy_gke()), False, True)
     assert "FAIL" not in statuses(results)
     assert "decode" in " ".join(r.detail for r in results if r.status == "INFO")
+
+
+# --- review fixes -----------------------------------------------------------------
+
+def test_rdma_via_unresolved_claim_is_not_reported_as_absent():
+    r = preflight.Requirements(frozenset(), (), "none", (), ("compute-domain-channel",))
+    results = preflight.check_rdma(r, CFG, builders.state(builders.healthy_coreweave()))
+    assert results[0].status == "WARN"
+    assert "compute-domain-channel" in results[0].detail
+    assert "requests no RDMA" not in results[0].detail
+
+
+def test_capacity_names_every_shortage_on_a_node():
+    responses = builders.healthy_coreweave()
+    responses[("get", "nodes")] = builders.items(builders.node("cpu-big", cpu="64", memory="600Gi", eph="100Gi"))
+    detail = preflight.check_capacity(req("coreweave"), builders.state(responses))[0].detail
+    assert "ephemeral-storage 100Gi < 1Ti" in detail and "nvidia.com/gpu 0 < 8" in detail

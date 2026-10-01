@@ -6,11 +6,15 @@ needs. It is read-only: it renders the guide's model-server overlay with
 created or changed.
 
 Supported today: `guides/wide-ep`, model `vllm-deepseek-r1-0528`, overlays
-`gke`, `coreweave`, `base`, `dgx-cloud-gb200`.
+`gke`, `coreweave`, `base`, `dgx-cloud-gb200`. Other overlays that render a
+`DisaggregatedSet` run best-effort: claims the render doesn't define are
+reported as not checked. Overlays without one, or with unrendered placeholders,
+exit with code 2.
 
 ## Run
 
-Needs `kubectl` 1.35+ and Python 3 with PyYAML (`python3 -m pip install pyyaml`).
+Needs a recent `kubectl` (the overlays use kustomize components, which its built-in
+kustomize renders) and Python 3 with PyYAML (`python3 -m pip install pyyaml`).
 
 ```bash
 python3 helpers/preflight/preflight.py guides/wide-ep \

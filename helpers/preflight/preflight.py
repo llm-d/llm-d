@@ -126,6 +126,7 @@ class Requirements:
     pods: tuple[PodReq, ...]
     rdma_mode: str  # "dra", "device-plugin" or "none"
     notes: tuple[str, ...]  # parts of the render that can't be checked
+    unresolved_claims: tuple[str, ...] = ()  # claim templates referenced but not in the render
 
 
 def parse_render(text: str) -> Requirements:
@@ -136,27 +137,34 @@ def parse_render(text: str) -> Requirements:
         raise PreflightError("unsupported overlay: no DisaggregatedSet in the rendered manifests")
     templates = {d["metadata"]["name"]: d for d in docs if d.get("kind") == "ResourceClaimTemplate"}
     notes: list[str] = []
-    pods = [pod for ds in sets for role in ds["spec"]["roles"] for pod in _role_pods(role, templates, notes)]
+    unresolved: list[str] = []
+    try:
+        pods = [pod for ds in sets for role in ds["spec"]["roles"]
+                for pod in _role_pods(role, templates, notes, unresolved)]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise PreflightError(f"unsupported overlay: cannot read the DisaggregatedSet ({exc})") from exc
     return Requirements(
         apis=frozenset(d["apiVersion"] for d in docs if "/" in d.get("apiVersion", "")),
         pods=tuple(pods),
         rdma_mode=_rdma_mode(pods),
         notes=tuple(dict.fromkeys(notes)),
+        unresolved_claims=tuple(dict.fromkeys(unresolved)),
     )
 
 
-def _role_pods(role: Mapping, templates: Mapping, notes: list[str]) -> list[PodReq]:
+def _role_pods(role: Mapping, templates: Mapping, notes: list[str], unresolved: list[str]) -> list[PodReq]:
     spec = role["spec"]
     lwt = spec["leaderWorkerTemplate"]
     size = int(lwt.get("size", 1))
     worker = lwt["workerTemplate"]
     name = role.get("name", "role")
-    leader = _pod_req(f"{name} leader", lwt.get("leaderTemplate", worker), templates, notes)
-    group = [leader] + [_pod_req(f"{name} worker", worker, templates, notes)] * (size - 1)
+    leader = _pod_req(f"{name} leader", lwt.get("leaderTemplate", worker), templates, notes, unresolved)
+    group = [leader] + [_pod_req(f"{name} worker", worker, templates, notes, unresolved)] * (size - 1)
     return group * int(spec.get("replicas", 1))
 
 
-def _pod_req(role: str, template: Mapping, templates: Mapping, notes: list[str]) -> PodReq:
+def _pod_req(role: str, template: Mapping, templates: Mapping, notes: list[str],
+             unresolved: list[str]) -> PodReq:
     spec = template.get("spec") or {}
     requests: dict[str, Decimal] = {}
     # Sidecars (init containers with restartPolicy: Always) run alongside the main containers.
@@ -172,14 +180,16 @@ def _pod_req(role: str, template: Mapping, templates: Mapping, notes: list[str])
         Toleration(t.get("key", ""), t.get("operator", "Equal"), str(t.get("value", "")), t.get("effect", ""))
         for t in spec.get("tolerations") or []
     )
-    return PodReq(role, requests, tolerations, _claimed_devices(spec, templates, notes))
+    return PodReq(role, requests, tolerations, _claimed_devices(spec, templates, notes, unresolved))
 
 
-def _claimed_devices(spec: Mapping, templates: Mapping, notes: list[str]) -> dict[str, int]:
+def _claimed_devices(spec: Mapping, templates: Mapping, notes: list[str],
+                     unresolved: list[str]) -> dict[str, int]:
     devices: dict[str, int] = {}
     for claim in spec.get("resourceClaims") or []:
         name = claim.get("resourceClaimTemplateName")
         if name not in templates:
+            unresolved.append(name or claim.get("name", "?"))
             notes.append(f"resource claim {claim.get('name')!r} uses "
                          f"{name or 'a pre-created claim'!r}, which is not in the rendered "
                          "manifests; its devices are not checked")
@@ -246,7 +256,10 @@ class GuideConfig:
 def load_guide_config(path: Path) -> GuideConfig:
     if not path.is_file():
         raise PreflightError(f"{path}: not found; this guide has no preflight requirements yet")
-    data = yaml.safe_load(path.read_text())
+    try:
+        data = yaml.safe_load(path.read_text())
+    except yaml.YAMLError as exc:
+        raise PreflightError(f"{path}: not valid YAML: {exc}") from exc
     try:
         severity = data["gpuDriver"].get("severity", "warn")
         if severity not in ("warn", "fail"):
@@ -527,6 +540,9 @@ def gpu_nodes(state: ClusterState) -> frozenset[str]:
 
 
 def check_rdma(req: Requirements, cfg: GuideConfig, state: ClusterState) -> list[Result]:
+    if req.rdma_mode == "none" and req.unresolved_claims:
+        return [Result(WARN, "RDMA", "devices are requested through claim templates the render doesn't define "
+                       f"({', '.join(req.unresolved_claims)}), so RDMA can't be verified", _see(cfg, "rdma"))]
     if req.rdma_mode == "none":
         return [Result(WARN, "RDMA", "the overlay requests no RDMA resource, so RDMA can't be verified "
                        "from the manifests", _see(cfg, "rdma"))]
@@ -630,11 +646,9 @@ def _pod_demand(pod: PodReq, state: ClusterState) -> dict[str, Decimal]:
 
 
 def _shortage(capacity: Mapping[str, Decimal], demand: Mapping[str, Decimal]) -> str | None:
-    for name, qty in demand.items():
-        have = capacity.get(name, Decimal(0))
-        if have < qty:
-            return f"{name} {format_quantity(name, have)} < {format_quantity(name, qty)}"
-    return None
+    short = [f"{name} {format_quantity(name, capacity.get(name, Decimal(0)))} < {format_quantity(name, qty)}"
+             for name, qty in demand.items() if capacity.get(name, Decimal(0)) < qty]
+    return ", ".join(short) or None
 
 
 def _describe(demand: Mapping[str, Decimal]) -> str:
