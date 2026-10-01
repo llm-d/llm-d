@@ -14,7 +14,7 @@ never changes the cluster.
 
 Exit codes: 0 no FAIL, 1 at least one FAIL, 2 usage or environment error.
 Guide-specific requirements that can't be read from the manifests live in
-`<guide>/preflight.yaml`. See helpers/preflight/README.md.
+`<guide>/preflight.yaml` under `requirements.cluster`. See helpers/preflight/README.md.
 """
 
 from __future__ import annotations
@@ -107,6 +107,8 @@ def tolerates(tolerations: Iterable[Toleration], taint: Taint) -> bool:
         if tol.operator != "Exists" and tol.key == taint.key and tol.value == taint.value:
             return True
     return False
+
+
 # ---------------------------------------------------------------------------
 # Requirements derived from the rendered overlay
 # ---------------------------------------------------------------------------
@@ -221,6 +223,8 @@ def _rdma_mode(pods: Iterable[PodReq]) -> str:
     if any(name.startswith("rdma/") for p in pods for name in p.requests):
         return "device-plugin"
     return "none"
+
+
 # ---------------------------------------------------------------------------
 # Guide requirements that can't be derived (<guide>/preflight.yaml)
 # ---------------------------------------------------------------------------
@@ -261,21 +265,26 @@ def load_guide_config(path: Path) -> GuideConfig:
         data = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:
         raise PreflightError(f"{path}: not valid YAML: {exc}") from exc
+    requirements = data.get("requirements") if isinstance(data, dict) else None
+    cluster = requirements.get("cluster") if isinstance(requirements, dict) else None
+    if not isinstance(cluster, dict):
+        raise PreflightError(f"{path}: expected the requirements under requirements.cluster "
+                             "(the block a guide.yaml `requirements:` section would hold)")
     try:
-        severity = data["gpuDriver"].get("severity", "warn")
+        severity = cluster["gpuDriver"].get("severity", "warn")
         if severity not in ("warn", "fail"):
             raise PreflightError(f"{path}: gpuDriver.severity must be 'warn' or 'fail', got {severity!r}")
-        min_version = parse_semver(str(data["lws"]["minVersion"]))
+        min_version = parse_semver(str(cluster["lws"]["minVersion"]))
         if min_version is None:
-            raise ValueError(f"lws.minVersion is not a version: {data['lws']['minVersion']!r}")
+            raise ValueError(f"lws.minVersion is not a version: {cluster['lws']['minVersion']!r}")
         return GuideConfig(
-            crds=tuple(data.get("crds") or ()),
+            crds=tuple(cluster.get("crds") or ()),
             lws_min_version=min_version,
-            driver_max_major_exclusive=int(data["gpuDriver"]["maxMajorExclusive"]),
+            driver_max_major_exclusive=int(cluster["gpuDriver"]["maxMajorExclusive"]),
             driver_severity=severity,
-            router_standalone=_router_size(data["router"]["standalone"]),
-            router_gateway=_router_size(data["router"]["gateway"]),
-            docs=dict(data.get("docs") or {}),
+            router_standalone=_router_size(cluster["router"]["standalone"]),
+            router_gateway=_router_size(cluster["router"]["gateway"]),
+            docs=dict(cluster.get("docs") or {}),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise PreflightError(f"{path}: invalid preflight config: {exc!r}") from exc
@@ -283,6 +292,8 @@ def load_guide_config(path: Path) -> GuideConfig:
 
 def _router_size(data: Mapping) -> RouterSize:
     return RouterSize(parse_quantity(data["cpu"]), parse_quantity(data["memory"]))
+
+
 # ---------------------------------------------------------------------------
 # Reading the cluster (read-only kubectl)
 # ---------------------------------------------------------------------------
@@ -436,6 +447,8 @@ def _lws_controllers(deployments: Iterable[Mapping]) -> Iterator[LwsController]:
             if _LWS_IMAGE.search(image):
                 yield LwsController(meta.get("namespace", ""), image,
                                     (meta.get("labels") or {}).get("app.kubernetes.io/version", ""))
+
+
 # ---------------------------------------------------------------------------
 # Checks: pure functions over Requirements, GuideConfig and ClusterState
 # ---------------------------------------------------------------------------
@@ -752,6 +765,8 @@ def run_checks(req: Requirements, cfg: GuideConfig, state: ClusterState,
         *check_router(cfg, state, gateway_mode),
         *check_notes(req),
     ]
+
+
 # ---------------------------------------------------------------------------
 # Report and CLI
 # ---------------------------------------------------------------------------
