@@ -19,6 +19,8 @@ spec:
           args:
             - "Qwen/Qwen3-0.6B"
             - "--port=$(POD_PORT)"
+            # vLLM 0.30 requires this to serve /v1/*/render for token-producer.
+            - "--enable-scale-out"
             - "--dtype=float16"
             - "--disable-sliding-window"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"

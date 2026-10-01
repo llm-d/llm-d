@@ -35,7 +35,7 @@ prerequisites:
     - skip_in: [ci]
       run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   gaie:
-    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/${GAIE_VERSION}/v1-manifests.yaml
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   keda:
     - run: |
         # KEDA (or, on OpenShift, the Custom Metrics Autoscaler Operator) must be
@@ -58,13 +58,13 @@ deploy:
     - run: |
         # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator.
         # Reused verbatim from the base guide (identical RBAC).
-        kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml
+        kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml
 
         # ServiceAccount + Role (namespaced): the launcher pods run as the
         # fma-launcher ServiceAccount so the state-change-reflector sidecar can
         # patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
         # annotation). Reused verbatim from the base guide.
-        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml
 
         # RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
         # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
@@ -106,25 +106,32 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
-  # AND the server-requesting pods together.
+  # AND the server-requesting pods together, at 1 replica -- NOT 0. The queue metric
+  # KEDA scales on is not emitted until the EPP has a ready backend, so starting at 0
+  # leaves KEDA nothing to read. Step 6 scales this to 0 instead.
   modelserver:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
-  # KEDA scale-from-zero autoscaling of the requester Deployment. Apply the OCP
-  # KEDA overlay -- the ScaledObject, its TriggerAuthentication, and the shared
-  # metrics-reader ServiceAccount + token -- into ${NAMESPACE}, then confirm the
-  # ScaledObject reconciled Ready. KEDA then creates the HPA and owns the replica
-  # count, scaling fma-requester to 0 when the flow-control queue is empty and
-  # back up on the next queued request.
+  # KEDA scale-from-zero autoscaling of the requester Deployment. The OCP overlay
+  # carries the ScaledObject, its TriggerAuthentication, and the metrics-reader
+  # ServiceAccount + token. Once Ready, KEDA owns the replica count.
   keda:
     - run: |
         kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
 
         kubectl wait --for=condition=Ready --timeout=120s \
-          scaledobject/fast-model-actuation-keda-queue -n ${NAMESPACE}
+          scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
+    # Reaching 0 is what proves the metric pipeline works -- Ready only means KEDA
+    # accepted the trigger. Budget covers cooldownPeriod + the HPA's scaleDown
+    # stabilization window (30s each) plus polling slack.
+    - run: |
+        kubectl wait --for=jsonpath='{.spec.replicas}'=0 \
+          deployment/fma-requester -n ${NAMESPACE} --timeout=240s
+
+        kubectl get deployment/fma-requester -n ${NAMESPACE}
 
 verify:
   endpoint:
@@ -132,7 +139,12 @@ verify:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
     request:
-      # Baseline sanity check.
+      # Scale-from-zero check: the pool is at 0, so this request is the demand
+      # signal. EPP holds it in the flow-control queue while KEDA activates,
+      # scales 0->1, and FMA brings vLLM up, then serves it -- so one request
+      # with a long --max-time blocks through the whole transition. No retry loop.
+      # Should be a hot start: step 6's scale-down left a sleeping vLLM instance to
+      # wake, though which path FMA takes depends on GPU assignment.
       - run: |
           kubectl run curl-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
@@ -142,17 +154,15 @@ verify:
             --env="MODEL=${MODEL}" \
             -- /bin/sh -c '
               set -e
-              i=0
-              while [ $i -lt 12 ]; do
-                code=$(curl -s -o /tmp/b -w "%{http_code}" --max-time 90 \
-                  -X POST "http://${IP}/v1/completions" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"max_tokens\": 5}" || echo 000)
-                echo "attempt ${i}: HTTP ${code}"
-                if [ "${code}" = "200" ]; then cat /tmp/b; echo; jq -e ".choices[0].text | length > 0" /tmp/b >/dev/null; exit 0; fi
-                i=$((i+1)); sleep 15
-              done
-              echo "no 200 after retries"; cat /tmp/b 2>/dev/null || true; exit 1'
+              code=$(curl -sS -o /tmp/body -w "%{http_code}" --max-time 600 \
+                -X POST "http://${IP}/v1/completions" \
+                -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"The capital of France is,\", \"max_tokens\": 10}")
+              echo "HTTP ${code}"
+              jq . /tmp/body || cat /tmp/body
+              [ "${code}" = "200" ] || { echo "expected HTTP 200, got ${code}" >&2; exit 1; }
+              jq -e ".choices[0].text | length > 0" /tmp/body >/dev/null \
+                || { echo "no completion text in response" >&2; exit 1; }'
 
 benchmark:
   setup:
@@ -196,14 +206,14 @@ cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
   # Namespaced RBAC for this guide (Role + ServiceAccount from rbac/role.yaml,
   # plus the imperatively-created RoleBinding).
-  - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml --ignore-not-found=true
   - run: kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
   # The per-deployment ClusterRoleBinding is namespace-suffixed, so it is unique
   # to this deployment and safe to delete on a shared cluster.
   - run: kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAMESPACE}" --ignore-not-found=true
   # Skipped in CI, where the cluster is shared; run only on a cluster you own.
   - skip_in: [ci]
-    run: kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml --ignore-not-found=true
+    run: kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml --ignore-not-found=true
   # Destructive / cluster-wide -- skipped in CI, where the namespace is reused
   # and the FMA CRDs are shared across deployments. Run only on a cluster you own.
   - skip_in: [ci]

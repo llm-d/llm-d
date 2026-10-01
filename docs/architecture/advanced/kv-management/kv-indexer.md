@@ -22,23 +22,26 @@ The precise view offers improved precision for harder-to-approximate scenarios:
 
 At the top level there are two components: the **Model Servers** and the **EPP**. Model servers publish KV-Events whenever their cache state changes; the EPP watches those events, stores them in an index, and consults the index during scheduling.
 
-Zooming into the EPP, three cooperating components do the work:
+Zooming into the EPP, four cooperating components do the work:
 
 - **Index** — stores the event-driven view of which blocks are resident on which pods.
-- **Data Producer** — tokenizes prompts and extracts multimodal features, so downstream components can derive block keys without re-tokenizing.
-- **Scorer** — consults the Index to score each candidate pod by how much of the request's prefix it already holds.
+- **Token Producer** — tokenizes prompts and extracts multimodal features into `TokenizedPrompt`.
+- **Precise Data Producer** — consumes `TokenizedPrompt`, derives block keys, consults the Index, and publishes per-endpoint `PrefixCacheMatchInfo`.
+- **Scorer** — consumes `PrefixCacheMatchInfo` to score each candidate pod by how much of the request's prefix it already holds.
 
 ```mermaid
 flowchart LR
-    Req([Inference Request]) --> DP
+    Req([Inference Request]) --> TP
 
     subgraph EPP["EPP"]
         direction TB
-        DP["Data Producer<br/>(tokenizer plugin)"]
-        Scorer["Scorer<br/>(precise-prefix-cache-scorer)"]
+        TP["Token Producer<br/>(token-producer)"]
+        DP["Data Producer<br/>(precise-prefix-cache-producer)"]
+        Scorer["Scorer<br/>(prefix-cache-scorer)"]
         Index[("Index<br/>(block key → pods)")]
+        TP --> DP
         DP --> Scorer
-        Scorer <-->|consult| Index
+        DP <-->|lookup| Index
     end
 
     subgraph MS["Model Servers"]
@@ -101,20 +104,55 @@ The Index is the hot data structure of the system: every scoring call queries it
 
 **Sizing.** In-memory backends size independently per replica; plan for roughly `keys × pod_entries` with overhead for the two-level LRU. The cost-aware backend is easier to bound because you specify a byte ceiling; it is the safer choice when per-entry size is hard to predict. For Redis / Valkey, the key space is proportional to unique blocks across the fleet, not to request volume.
 
-### Data Producer
+### Token Producer
 
-The Data Producer runs early in the scheduling cycle: it renders chat templates and tokenizes the prompt once per request (and extracts any multimodal features), writing the result onto the request so downstream components — the Scorer included — read from it rather than re-tokenizing.
+The Token Producer runs early in the scheduling cycle: it renders chat templates and tokenizes the prompt once per request (and extracts any multimodal features), writing `TokenizedPrompt` onto the request so downstream components do not re-tokenize.
 
-Today this role is implemented by the `token-producer` plugin.
+This role is implemented by the `token-producer` plugin. It does not access the KV-cache Index or score endpoints.
 
-The plugin tokenizes by calling vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. This is the default backend, pointed at `http://localhost:8000`. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`, deployed either as a sidecar in the EPP pod (loopback) or as a dedicated render Service shared across EPP replicas.
+The plugin uses the tokenizer-free `estimate` backend by default. For precise routing, select the exact-tokenization `vllm` backend with `modelName` and `vllm.url`. It calls vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`, deployed either as a sidecar in the EPP pod (loopback) or as a dedicated render Service shared across EPP replicas.
 
-> [!NOTE]
-> The earlier gRPC-over-UDS tokenizer sidecar (the `udsTokenizerConfig` backend) is **deprecated** and will be removed in a future release. Existing configs keep working but emit a deprecation warning at startup; migrate to the `vllm` HTTP backend.
+### Precise Prefix Cache Producer
+
+The `precise-prefix-cache-producer` consumes `TokenizedPrompt`, derives KV-block keys, looks them up in the event-driven Index, and publishes per-endpoint `PrefixCacheMatchInfo` for the `prefix-cache-scorer`.
+
+It also receives endpoint lifecycle notifications so it can manage per-pod KV-event subscriptions. Wire it to `endpoint-notification-source` in `dataLayer`:
+
+```yaml
+plugins:
+- type: token-producer
+  parameters:
+    modelName: Qwen/Qwen3-32B
+    vllm:
+      url: http://render:8000
+- type: endpoint-notification-source
+- type: precise-prefix-cache-producer
+  parameters:
+    speculativeIndexing: true
+- type: prefix-cache-scorer
+  parameters:
+    prefixMatchInfoProducerName: precise-prefix-cache-producer
+
+dataLayer:
+  sources:
+  - pluginRef: endpoint-notification-source
+    extractors:
+    - pluginRef: precise-prefix-cache-producer
+```
+
+The `prefix-cache-scorer` must reference this producer by name. Without that reference, it uses an automatically created `approx-prefix-cache-producer` instead.
+
+#### Speculative Indexing
+
+Confirmed KV-events arrive after a request has been routed. Back-to-back requests with the same prefix can be scheduled before `KVEvents` have propagated, breaking affinity.
+
+With `speculativeIndexing: true`, the precise producer inserts short-lived predicted entries in the Index for the selected pod (and, under P/D disaggregation, the selected prefill pod) right after the routing decision. Subsequent requests match against those entries until a confirming `BlockStored` arrives or a TTL (default `2s`) expires.
+
+The default 2-second TTL is tuned to comfortably exceed the typical routing-to-event latency without outliving a genuinely failed speculation.
 
 ### Scorer
 
-The Scorer's goal is to find, for each candidate pod, the length of the **longest consecutive prefix** of the request's block sequence that the pod has cached.
+The `prefix-cache-scorer` is stateless. It consumes `PrefixCacheMatchInfo` from the configured data producer and finds, for each candidate pod, the length of the **longest consecutive prefix** of the request's block sequence that the pod has cached.
 
 KV-cache blocks form a chain where block `i` depends on all blocks `0..i-1`. Due to the causal nature of attention, a server can reuse a cached block only if it holds the unbroken prefix leading up to it.
 
@@ -133,14 +171,6 @@ Even if Pod C happened to hold `B3` and `B4`, those entries are unusable without
 When blocks are stored across memory tiers, each matching block's contribution is weighted by tier. For a block cached on multiple tiers at once, the scorer takes the maximum weight. Defaults are `gpu = 1.0`, `cpu = 0.8`.
 
 Raw scores are then normalized to `[0.0, 1.0]` before being returned to the EPP, where they are combined with other scorers (queue depth, KV-cache utilization, etc.) through the standard Filter-Score-Pick pipeline.
-
-#### Speculative Indexing
-
-Confirmed KV-events arrive after a request has been routed. Back-to-back requests with the same prefix can be scheduled before `KVEvents` have propagated, breaking affinity.
-
-With `speculativeIndexing: true` (recommended for production), the Scorer inserts short-lived predicted entries in the Index for the selected pod (and, under P/D disaggregation, the selected prefill pod) right after the routing decision. Subsequent requests match against those entries until a confirming `BlockStored` arrives or a TTL (default `2s`) expires.
-
-The default 2-second TTL is tuned to comfortably exceed the typical routing-to-event latency without outliving a genuinely failed speculation.
 
 #### Multimodal, LoRA, and Hybrid Attention
 

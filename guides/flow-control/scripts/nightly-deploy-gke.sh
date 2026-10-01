@@ -40,13 +40,39 @@ python3 -c 'import yaml' 2>/dev/null \
 # the backpressure assertions race. Match on the key rather than the guide's
 # current value, so a future retune cannot silently no-op this, and fail loudly
 # if the substitution does not take.
+# Also increase EPP (--v=4) and Envoy (--log-level info) logging verbosity to
+# aid debugging CI failures.
 CI_VALUES="/tmp/${GUIDE_NAME}.ci.values.yaml"
-sed -E 's/(maxConcurrency:)[[:space:]]+[0-9]+/\1 4/' \
-  "${GUIDE_DIR}/router/${GUIDE_NAME}.values.yaml" > "${CI_VALUES}"
+awk '
+  { sub(/maxConcurrency:[[:space:]]+[0-9]+/, "maxConcurrency: 4") }
+  /^  epp:/ {
+    print
+    print "    flags:"
+    print "      v: 4"
+    next
+  }
+  { print }
+' "${GUIDE_DIR}/router/${GUIDE_NAME}.values.yaml" > "${CI_VALUES}"
 if ! grep -qE '^[[:space:]]*maxConcurrency:[[:space:]]+4$' "${CI_VALUES}"; then
   echo "ERROR: failed to override maxConcurrency in ${GUIDE_NAME} values" >&2
   exit 1
 fi
+cat << 'EOF' >> "${CI_VALUES}"
+  proxy:
+    args:
+      - "--service-node"
+      - "envoy-sidecar"
+      - "--log-level"
+      - "info"
+      - "--concurrency"
+      - "8"
+      - "--drain-strategy"
+      - "immediate"
+      - "--drain-time-s"
+      - "60"
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+EOF
 
 # emit: shared wrapper for every guide.py emit call — pins the ci context and
 # the nightly's --var overrides. NAMESPACE and INFRA_PROVIDER are plumbing,

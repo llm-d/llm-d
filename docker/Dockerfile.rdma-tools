@@ -1,7 +1,7 @@
 # CUDA version - provided via build args from docker/common-versions file via GH workflow
-ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=9
-ARG CUDA_PATCH=1
+ARG CUDA_MAJOR=13
+ARG CUDA_MINOR=0
+ARG CUDA_PATCH=2
 
 # Tool versions (pinned for reproducibility)
 ARG IPERF_VERSION=3.20

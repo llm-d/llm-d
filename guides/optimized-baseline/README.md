@@ -41,6 +41,7 @@ This guide includes configurations for the following accelerators:
 | Google TPU v6e      | `tpu/v6`           | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | GKE TPU                                                         |
 | Rebellions NPU      | `npu`              | Rebellions NPU via DRA                                          |
+| Iluvatar GPU        | `iluvatar`         | Iluvatar BI-V150 (dual-die)                                     |
 | CPU                 | `cpu`              | x86 with bf16 acceleration                                      |
 
 > [!NOTE]
@@ -247,6 +248,8 @@ helm install ${GUIDE_NAME} \
 </details>
 
 ### 2. Deploy the Model Server
+
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
 
 Apply the Kustomize overlays for your specific backend:
 

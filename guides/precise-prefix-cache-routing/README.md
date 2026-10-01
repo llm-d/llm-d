@@ -50,7 +50,7 @@ The routing decision combines precise cache knowledge with token-based load bala
 > The router runs as a **single replica** by default: the `token-load-scorer`'s in-flight token accounting is local to each EPP process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index itself is HA-safe (each replica converges independently via pod-discovery), so active-active HA (`--set router.epp.replicas=2`) can return if shared in-flight state lands upstream.
 
 For wide-EP LWS deployments (multi-port DP model servers), use the
-[`wide-ep-lws` precise routing variant](../wide-ep-lws/README.precise-prefix-cache-routing.md)
+[`wide-ep` precise routing variant](../wide-ep/README.precise-prefix-cache-routing.md)
 instead of the manifests here.
 
 ## Prerequisites
@@ -153,11 +153,11 @@ export INFRA_PROVIDER=base # base | gke
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 
-### 4. Deploy the Render (Tokenizer) Service
+### 4. Deploy and Check the Render (Tokenizer) Service
 
 The EPP `token-producer` plugin tokenizes prompts by calling vLLM's `/v1/*/render` endpoints. This guide serves that endpoint from a Service rather than a per-EPP-pod sidecar, so a single render pool is shared across EPP replicas and render capacity is decoupled from the EPP replica count.
 
-`vllm serve` already exposes `/v1/*/render`, so the default overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them.
+The default overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them. vLLM 0.30 requires `--enable-scale-out` for `vllm serve` to expose `/v1/*/render`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set this flag. The TPU overlays currently use vLLM 0.29, which exposes the endpoint without the flag.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
@@ -188,6 +188,30 @@ Because this pool is GPU-less and engine-agnostic, it tokenizes with vLLM's toke
 > These render pods deliberately do **not** carry the `llm-d.ai/guide` label — that label is the InferencePool / model-server selector, and the EPP would otherwise treat render pods as routable model servers (and try to subscribe to their nonexistent KV-event socket).
 
 </details>
+
+#### Verify the render Service
+
+Check that the chosen render Service returns token IDs before sending routed requests. Set `MODEL_NAME` to the model deployed by your overlay (for example, `Qwen/Qwen3-0.6B` on Intel XPU):
+
+```bash
+MODEL_NAME=Qwen/Qwen3-32B
+kubectl run render-check --rm -i --restart=Never \
+  --image=python:3.12-alpine --namespace="$NAMESPACE" \
+  --env="MODEL_NAME=$MODEL_NAME" -- \
+  python -c '
+import json, os, urllib.request
+data = json.dumps({"model": os.environ["MODEL_NAME"], "prompt": "render check", "max_tokens": 1}).encode()
+request = urllib.request.Request(
+    "http://precise-prefix-cache-routing-render:8000/v1/completions/render",
+    data=data, headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(request, timeout=10) as response:
+    body = json.load(response)
+assert isinstance(body, list) and body and body[0].get("token_ids"), body
+print(body[0]["token_ids"])
+'
+```
+
+For a routing check, send the same substantial prefix through the EPP twice and confirm its logs report a nonzero cached-prefix match. A successful completion alone does not verify prefix-aware routing.
 
 ### 5. (Optional) Enable Monitoring
 
@@ -351,7 +375,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 1. **Model server pods publish KV-cache events** — each pod (vLLM or SGLang) runs with `--kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` and `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, the server emits a ZMQ message. The GPU vLLM backend (v0.26.0+) additionally binds a ZMQ ROUTER socket on port 5559 and retains the last 10,000 batches in an in-memory replay buffer for index recovery.
 2. **Router subscribes per pod** — pod-discovery (`kvEventsConfig.discoverPods: true`) registers the `precise-prefix-cache-producer` as an extractor on the data-layer `endpoint-notification-source`, so each router replica installs a ZMQ subscriber per model server pod independently. All replicas converge to the same index. When a replay endpoint is available, each subscriber requests buffered events on first connect (or after an EPP restart) to rebuild its KV-block index without waiting for live traffic.
-3. **Router tokenizes the prompt** — before it can look the prefix up in that index, the `token-producer` plugin POSTs the prompt to the render Service to get exact token IDs. By default that Service fronts the model server pods themselves (`vllm serve` exposes `/v1/*/render`), so no separate renderer pool sits on the request path.
+3. **Router tokenizes the prompt** — before it can look the prefix up in that index, the `token-producer` plugin POSTs the prompt to the render Service to get exact token IDs. By default that Service fronts the model server pods themselves, whose overlays enable `/v1/*/render`.
 4. **Filter + score** — the `prefix-cache-affinity-filter` narrows candidates to the pods where the request's prefix blocks are resident (falling back to the least-loaded pods when the cache-warm set is saturated past `peakPrefillThroughput`), and the `token-load-scorer` picks the endpoint with the least in-flight token load among them.
 
 ## Benchmarking Reports

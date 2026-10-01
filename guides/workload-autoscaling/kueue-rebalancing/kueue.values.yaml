@@ -1,0 +1,67 @@
+## Kueue chart overrides for the kueue-rebalancing guide.
+## Layer on top of the chart defaults:
+##   helm install kueue oci://registry.k8s.io/kueue/charts/kueue \
+##     --version 0.19.1 -n kueue-system --create-namespace --wait \
+##     -f kueue.values.yaml
+##
+## Why this file exists: with the chart's default values the `pod` integration is
+## enabled, and the chart derives every webhook's `namespaceSelector` from
+## `managedJobsNamespaceSelector`. Left at the default, `mpod.kb.io` intercepts
+## pod CREATE in every namespace except `kube-system` and the release namespace,
+## with `failurePolicy: Fail` - so a Kueue outage blocks pod creation across the
+## whole cluster. Naming the model namespace confines both the controller's
+## reconciliation and the webhooks to it.
+##
+## `managedJobsNamespaceSelector` lives inside `controllerManagerConfigYaml`,
+## which is a single string: Helm replaces it wholesale rather than merging, so
+## the block below has to repeat the chart's defaults verbatim. Diff it against
+## `helm show values oci://registry.k8s.io/kueue/charts/kueue --version 0.19.1`
+## when bumping KUEUE_VERSION.
+##
+## EDIT ME: `values` must list every namespace whose model servers Kueue should
+## manage. It must never match the Kueue release namespace itself, or the
+## controller cannot create its own pods.
+managerConfig:
+  controllerManagerConfigYaml: |-
+    apiVersion: config.kueue.x-k8s.io/v1beta2
+    kind: Configuration
+    health:
+      healthProbeBindAddress: :8081
+    metrics:
+      bindAddress: :8443
+    webhook:
+      port: 9443
+    leaderElection:
+      leaderElect: true
+      resourceName: c1f6bfd2.kueue.x-k8s.io
+    controller:
+      groupKindConcurrency:
+        Job.batch: 5
+        Pod: 5
+        Workload.kueue.x-k8s.io: 10
+        LocalQueue.kueue.x-k8s.io: 5
+        ClusterQueue.kueue.x-k8s.io: 5
+        ResourceFlavor.kueue.x-k8s.io: 1
+    clientConnection:
+      qps: 300
+      burst: 500
+    managedJobsNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - llm-d-optimized-baseline
+    integrations:
+      frameworks:
+        - "batch/job"
+        - "kubeflow.org/mpijob"
+        - "ray.io/rayjob"
+        - "ray.io/rayservice"
+        - "ray.io/raycluster"
+        - "jobset.x-k8s.io/jobset"
+        - "workload.codeflare.dev/appwrapper"
+        - "trainer.kubeflow.org/trainjob"
+        - "pod"
+        - "deployment"
+        - "statefulset"
+        - "leaderworkerset.x-k8s.io/leaderworkerset"

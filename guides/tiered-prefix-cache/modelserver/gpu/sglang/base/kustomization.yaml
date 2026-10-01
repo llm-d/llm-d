@@ -18,4 +18,6 @@ labels:
     includeSelectors: true
     includeTemplates: true
 patches:
-  - path: patch-sglang.yaml
+  # Named patch-decode.yaml because llm-d-infra's CI globs for
+  # patch-{vllm,decode}.yaml when applying decode_pods overrides.
+  - path: patch-decode.yaml

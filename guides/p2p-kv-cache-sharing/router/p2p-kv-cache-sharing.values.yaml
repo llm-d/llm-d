@@ -51,6 +51,7 @@ router:
       pullPolicy: Always
     flags:
       ha-enable-leader-election: false
+      allow-experimental-plugins: true
     env:
       - name: HF_TOKEN
         valueFrom:
