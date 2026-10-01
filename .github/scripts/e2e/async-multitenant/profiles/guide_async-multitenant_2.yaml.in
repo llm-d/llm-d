@@ -1,0 +1,64 @@
+# Async population for the async-multitenant nightly (llm-d guide
+# guides/batch-serving/asynchronous-processing/multitenant).
+#
+# Requests carry X-AP-Mode: wait and X-Team: batch, so the llm-d-router
+# coordinator's async-broker step queues each one on the llm-d-async queue
+# coord-batch-a and holds the connection until llm-d-async has dispatched it
+# through the router (reserved-batch 30 for the one in-quota request,
+# overflow-batch -10 for the rest) and the result lands.
+#
+# Open-loop arrivals well above pool capacity keep a Redis backlog behind the
+# 16 dispatch workers, and the request_timeout cancels whatever was not
+# dispatched in time (a wait-mode client disconnect cancels pre-dispatch). The
+# stage therefore always ends about duration + request_timeout seconds after
+# it starts, whatever share of the pool realtime traffic takes, and leaves no
+# backlog behind. Timeouts are expected failures for this population; the
+# nightly only counts its successes. request_timeout must allow several
+# service times so dispatched work completes (the nightly overrides it from
+# its service-time estimate); the worker pool must hold rate x timeout
+# connections.
+# Canonical home: llm-d-benchmark workload/profiles/inference-perf/; the lane
+# carries a copy and installs it when the clone lacks the file.
+load:
+  type: constant
+  request_timeout: 20
+  num_workers: 16
+  worker_max_concurrency: 64
+  stages:
+    - rate: 10
+      duration: 180
+api:
+  type: completion
+  streaming: false
+  headers:
+    X-AP-Mode: wait
+    X-Team: batch
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+data:
+  type: random
+  input_distribution:
+    min: 200
+    max: 200
+    mean: 200
+    std_dev: 0
+    total_count: 100
+  output_distribution:
+    min: 128
+    max: 128
+    mean: 128
+    std_dev: 0
+    total_count: 100
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
+storage:
+  local_storage:
+    path: /workspace
