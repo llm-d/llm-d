@@ -68,6 +68,7 @@ Assuming the new model servers already exist, simply:
 
 Before shifting any weight, you can send a copy of live requests to the new pool with the Gateway API [`RequestMirror`](https://gateway-api.sigs.k8s.io/guides/user-guides/http-request-mirroring/) filter.
 Clients are still served only by the current pool, and the mirrored response is discarded.
+Before applying, confirm your gateway supports the `HTTPRouteRequestPercentageMirror` extended feature, which `percent` requires.
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
