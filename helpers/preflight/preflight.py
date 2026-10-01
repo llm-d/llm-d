@@ -269,3 +269,156 @@ def load_guide_config(path: Path) -> GuideConfig:
 
 def _router_size(data: Mapping) -> RouterSize:
     return RouterSize(parse_quantity(data["cpu"]), parse_quantity(data["memory"]))
+# ---------------------------------------------------------------------------
+# Reading the cluster (read-only kubectl)
+# ---------------------------------------------------------------------------
+
+
+class KubectlError(Exception):
+    def __init__(self, args: tuple[str, ...], returncode: int, stderr: str):
+        super().__init__(f"kubectl {' '.join(args)}: {stderr or f'exit {returncode}'}")
+        self.stderr = stderr
+
+    @property
+    def forbidden(self) -> bool:
+        return "forbidden" in self.stderr.lower()
+
+    @property
+    def unknown_resource(self) -> bool:
+        return "doesn't have a resource type" in self.stderr
+
+
+class Runner:
+    """The only code that runs kubectl. Tests replace it with a fake."""
+
+    def __init__(self, context: str | None = None, kubectl: str = "kubectl"):
+        self._base = [kubectl, *(["--context", context] if context else [])]
+
+    def text(self, *args: str) -> str:
+        try:
+            proc = subprocess.run([*self._base, *args], capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired as exc:
+            raise KubectlError(args, -1, f"timed out after {exc.timeout}s") from exc
+        if proc.returncode != 0:
+            raise KubectlError(args, proc.returncode, proc.stderr.strip())
+        return proc.stdout
+
+    def json(self, *args: str) -> dict:
+        return json.loads(self.text(*args, "-o", "json"))
+
+
+@dataclass(frozen=True)
+class Node:
+    name: str
+    allocatable: Mapping[str, Decimal]
+    taints: tuple[Taint, ...]
+    unschedulable: bool
+    labels: Mapping[str, str]
+    annotations: Mapping[str, str]
+
+
+@dataclass(frozen=True)
+class Device:
+    driver: str
+    node: str
+    attributes: Mapping[str, Any]  # attribute name -> unwrapped value
+
+
+@dataclass(frozen=True)
+class LwsController:
+    namespace: str
+    image: str
+    version_label: str  # app.kubernetes.io/version, if the install sets it
+
+
+@dataclass(frozen=True)
+class ClusterState:
+    """What preflight read. None means the list was denied or not served."""
+
+    api_versions: frozenset[str]
+    crds: frozenset[str] | None
+    nodes: tuple[Node, ...] | None
+    devices: tuple[Device, ...] | None
+    device_classes: Mapping[str, str | None] | None  # class -> driver from its CEL selector
+    lws: tuple[LwsController, ...] | None
+    webhooks: frozenset[str] | None
+    denied: tuple[str, ...]
+
+
+DRA_API = "resource.k8s.io/v1"
+_DRIVER_SELECTOR = re.compile(r"""device\.driver\s*==\s*['"]([^'"]+)['"]""")
+_LWS_IMAGE = re.compile(r"(^|/)lws(?=[:@]|$)")
+
+
+def collect_state(runner: Runner) -> ClusterState:
+    api_versions = frozenset(runner.text("api-versions").split())
+    denied: list[str] = []
+
+    def items(*args: str) -> list | None:
+        try:
+            return runner.json("get", *args)["items"]
+        except KubectlError as exc:
+            if not (exc.forbidden or exc.unknown_resource):
+                raise
+            denied.append(f"{args[0]} ({exc.stderr.splitlines()[-1] if exc.stderr else 'denied'})")
+            return None
+
+    dra = DRA_API in api_versions
+    crds = items("customresourcedefinitions")
+    nodes = items("nodes")
+    slices = items("resourceslices.resource.k8s.io") if dra else []
+    classes = items("deviceclasses.resource.k8s.io") if dra else []
+    deployments = items("deployments", "-A", "-l", "control-plane=controller-manager")
+    webhooks = items("validatingwebhookconfigurations")
+    return ClusterState(
+        api_versions=api_versions,
+        crds=None if crds is None else frozenset(c["metadata"]["name"] for c in crds),
+        nodes=None if nodes is None else tuple(_node(n) for n in nodes),
+        devices=None if slices is None else tuple(d for s in slices for d in _devices(s)),
+        device_classes=None if classes is None else {c["metadata"]["name"]: _class_driver(c) for c in classes},
+        lws=None if deployments is None else tuple(_lws_controllers(deployments)),
+        webhooks=None if webhooks is None else frozenset(
+            w["name"] for cfg in webhooks for w in cfg.get("webhooks") or []),
+        denied=tuple(denied),
+    )
+
+
+def _node(obj: Mapping) -> Node:
+    meta, spec, status = obj["metadata"], obj.get("spec") or {}, obj.get("status") or {}
+    return Node(
+        name=meta["name"],
+        allocatable={k: parse_quantity(v) for k, v in (status.get("allocatable") or {}).items()},
+        taints=tuple(Taint(t["key"], t.get("value", ""), t["effect"]) for t in spec.get("taints") or []),
+        unschedulable=bool(spec.get("unschedulable")),
+        labels=meta.get("labels") or {},
+        annotations=meta.get("annotations") or {},
+    )
+
+
+def _devices(obj: Mapping) -> Iterator[Device]:
+    spec = obj.get("spec") or {}
+    for device in spec.get("devices") or []:
+        attributes = {name: next(iter(value.values()), None)
+                      for name, value in (device.get("attributes") or {}).items()
+                      if isinstance(value, dict)}
+        # With perDeviceNodeSelection the node is set on each device instead of the slice.
+        node = device.get("nodeName") or spec.get("nodeName") or ""
+        yield Device(spec["driver"], node, attributes)
+
+
+def _class_driver(obj: Mapping) -> str | None:
+    for selector in (obj.get("spec") or {}).get("selectors") or []:
+        match = _DRIVER_SELECTOR.search((selector.get("cel") or {}).get("expression", ""))
+        if match:
+            return match.group(1)
+    return None
+
+
+def _lws_controllers(deployments: Iterable[Mapping]) -> Iterator[LwsController]:
+    for deployment in deployments:
+        meta = deployment["metadata"]
+        for container in deployment["spec"]["template"]["spec"].get("containers") or []:
+            image = container.get("image", "")
+            if _LWS_IMAGE.search(image):
+                yield LwsController(meta.get("namespace", ""), image,
+                                    (meta.get("labels") or {}).get("app.kubernetes.io/version", ""))
