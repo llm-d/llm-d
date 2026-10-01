@@ -37,8 +37,11 @@ spec:
               value: "y"
             - name: UCX_IB_GID_INDEX
               value: "3"
+            # Keep tcp in the list: on GKE node pools without RDMA NICs (for example
+            # A3 High), rc_mlx5/rc are unavailable and NIXL's UCX backend fails with
+            # "no active messages transport" unless UCX can fall back to tcp.
             - name: UCX_TLS
-              value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+              value: "rc_mlx5,rc,tcp,cuda_copy,cuda_ipc,sm,shm,self"
           securityContext:
             capabilities:
               add:
