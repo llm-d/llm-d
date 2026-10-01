@@ -99,8 +99,6 @@ jobs:
       bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/wide-ep' }}
       gateway_class: ${{ inputs.gateway_class || 'epponly' }}
       monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
-      # The README's AMD router block is CI-skipped; layer the override onto the default install here.
-      extra_helm_values: guides/wide-ep/router/amd.values.yaml
       # Matches the recipe's startup probe budget: 60 s delay + 240 x 30 s.
       standup_timeout: '7260'
       dry_run: ${{ inputs.dry_run || 'false' }}

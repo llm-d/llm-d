@@ -138,9 +138,8 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-For AMD Instinct, add the AMD router override. CI supplies it separately, so this block is skipped there:
+For AMD Instinct, add the AMD router override:
 
-<!-- llm-d-cicd:skip start -->
 ```bash
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
@@ -149,7 +148,6 @@ helm install ${GUIDE_NAME} \
     -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/amd.values.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
-<!-- llm-d-cicd:skip end -->
 
 <details>
 <summary><b>Gateway Mode</b></summary>
