@@ -1,0 +1,19 @@
+# Lets the broker call the TokenReview API to verify caller tokens.
+#
+# ${NAMESPACE} is expanded via envsubst; see the Security guide for the apply
+# command and the broker settings that turn enforcement on.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: modelexpress-p2p-${NAMESPACE}-auth-delegator
+  labels:
+    llm-d.ai/guide: modelexpress-p2p
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: modelexpress
+    namespace: ${NAMESPACE}

@@ -10,7 +10,7 @@ env:
 
     # Keep in sync with the modelexpress-server image tag and the client
     # version in image/Dockerfile.
-    MX_VERSION: v0.5.0
+    MX_VERSION: v0.6.0
 
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
@@ -103,6 +103,8 @@ cleanup:
     - run: |
         # If you applied the Istio hardening, remove the policies (and the ns label):
         kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
+        # If you enabled broker ServiceAccount auth, remove its cluster-scoped TokenReview binding:
+        kubectl delete clusterrolebinding modelexpress-p2p-${NAMESPACE}-auth-delegator --ignore-not-found
         kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
   measurement:
     - run: |

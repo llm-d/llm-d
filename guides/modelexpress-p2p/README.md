@@ -79,7 +79,7 @@ export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=modelexpress-p2p
 export NAMESPACE=llm-d-modelexpress-p2p
-export MX_VERSION=v0.5.0
+export MX_VERSION=v0.6.0
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -123,7 +123,7 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 ```
 <!-- guide:prerequisites.namespace end -->
 
-* A cluster admin installs the ModelExpress CRDs cluster-wide (one-time step). The apply pins the upstream `v0.5.0` tag so the CRD shape stays locked to the `modelexpress-server:0.5.0` pin instead of drifting with upstream `main`:
+* A cluster admin installs the ModelExpress CRDs cluster-wide (one-time step). The apply pins the upstream `v0.6.0` tag so the CRD shape stays locked to the `modelexpress-server:0.6.0` pin instead of drifting with upstream `main`:
 
 <!-- guide:prerequisites.crds start -->
 ```bash
@@ -131,7 +131,6 @@ kubectl apply -f https://raw.githubusercontent.com/ai-dynamo/modelexpress/${MX_V
 ```
 <!-- guide:prerequisites.crds end -->
 
-* Create an `nvcr-imagepullsecret` in the target namespace to grant access to `nvcr.io/nvidia/ai-dynamo/modelexpress-server`. See the [ModelExpress Helm README](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/helm/README.md#1-create-nvidia-container-registry-secret) for the secret recipe. Or build this image yourself and push it to a local registry of your choice.
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md). `gpt-oss-120b` is ungated, but the token avoids HF rate limits on the seed download, and the gated Llama checkpoint in [measuring-storage-paths](./measuring-storage-paths.md) needs it:
 
 <!-- guide:prerequisites.secrets start -->
@@ -150,7 +149,7 @@ kubectl create secret generic llm-d-hf-token \
 The `mx` load format comes from the [`modelexpress` Python client](https://github.com/ai-dynamo/modelexpress/tree/main/modelexpress_client/python), a vLLM plugin. Build a thin derived image on top of the shared GPU vLLM image from `guides/recipes/modelserver/components/images/gpu-vllm`. This way, the guide tracks the project default when that component changes.
 
 > [!WARNING]
-> The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the pattern of the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/v0.5.0/examples/p2p_transfer_k8s/client/vllm/Dockerfile), but takes its base image from the central llm-d image component:
+> The shared GPU vLLM image does not ship the ModelExpress client. You need an image with the client baked in. This Dockerfile follows the pattern of the upstream [ModelExpress client Dockerfile](https://github.com/ai-dynamo/modelexpress/blob/v0.6.0/examples/p2p_transfer_k8s/client/vllm/Dockerfile), but takes its base image from the central llm-d image component:
 
 ```dockerfile
 # guides/modelexpress-p2p/image/Dockerfile
@@ -160,8 +159,8 @@ FROM ${BASE_IMAGE}
 # `--no-deps` keeps the client from shadowing the image's pinned
 # vllm / torch / nixl, so its remaining deps must be listed explicitly:
 # google-crc32c (artifact chunk checksums) is not in the vLLM base image.
-# The 0.5.x wheels ship a prebuilt VMM allocator extension; no build step.
-ARG MODELEXPRESS_VERSION=0.5.0
+# The wheels ship a prebuilt VMM allocator extension; no build step.
+ARG MODELEXPRESS_VERSION=0.6.0
 ARG GOOGLE_CRC32C_VERSION=1.8.0
 RUN python3 -m pip install --target=/opt/modelexpress --no-deps --no-cache-dir \
         "modelexpress==${MODELEXPRESS_VERSION}" \
@@ -194,7 +193,7 @@ cd -
 
 vLLM 0.23.0 and newer recognize `--load-format modelexpress` natively once the client package is installed. The `VLLM_PLUGINS=modelexpress` env in `patch-vllm.yaml` is only needed for older vLLM bases and is harmless on newer ones.
 
-> The 0.5.0 client keeps `mx` as a backward-compatible alias for the canonical `modelexpress` load format. This guide uses `--load-format=mx`. Both work.
+> The client keeps `mx` as a backward-compatible alias for the canonical `modelexpress` load format. This guide uses `--load-format=mx`. Both work.
 
 ## Installation Instructions
 
@@ -429,7 +428,7 @@ These are environment-specific observations, not official NVIDIA benchmark resul
 
 * [Measuring storage-backed loading paths](./measuring-storage-paths.md): time fastsafetensors from NFS and local NVMe against P2P in your own cluster.
 * [Reusing JIT compile caches across pods](./compile-cache.md): once weight transfer is sub-second, cut the `torch.compile` cost with P2P artifact transfer (0.5.0+, measured 20.1 s → 3.4 s) or a shared RWX PVC.
-* [Locking down the metadata broker](./security.md): Istio mTLS plus an AuthorizationPolicy for shared clusters.
+* [Locking down the metadata broker](./security.md): Istio mTLS, an AuthorizationPolicy, and broker-side ServiceAccount authentication for shared clusters.
 
 ## Cleanup
 
@@ -443,6 +442,8 @@ kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/modelexpress
 
 # If you applied the Istio hardening, remove the policies (and the ns label):
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/security/istio-mtls-authz.yaml --ignore-not-found
+# If you enabled broker ServiceAccount auth, remove its cluster-scoped TokenReview binding:
+kubectl delete clusterrolebinding modelexpress-p2p-${NAMESPACE}-auth-delegator --ignore-not-found
 kubectl label namespace ${NAMESPACE} istio-injection- 2>/dev/null || true
 
 # If you ran the storage-backed measurement workloads, delete those overlays and the prewarm Job:
