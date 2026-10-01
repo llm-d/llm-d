@@ -1,7 +1,7 @@
 name: optimized-baseline
 
 _lists:
-  non_gpu: &non_gpu [amd, xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu]
+  non_gpu: &non_gpu [xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu]
 
 env:
   static:
@@ -103,12 +103,7 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
-    - when: {ACCELERATOR_TYPE: [gpu]}
-      run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
-
-    - when: {ACCELERATOR_TYPE: [amd], MODEL_SERVER: [vllm, sglang]}
+    - when: {ACCELERATOR_TYPE: [gpu, amd]}
       run: |
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
@@ -166,9 +161,7 @@ benchmark:
 
 cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-  - when: {ACCELERATOR_TYPE: [gpu]}
-    run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
-  - when: {ACCELERATOR_TYPE: [amd], MODEL_SERVER: [vllm, sglang]}
+  - when: {ACCELERATOR_TYPE: [gpu, amd]}
     run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   - when: {ACCELERATOR_TYPE: *non_gpu}
     run: |
