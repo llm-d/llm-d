@@ -250,14 +250,7 @@ Choose the overlay matching your infrastructure provider:
 
   The PVC omits `storageClassName` so it binds the cluster's default StorageClass, which must support `ReadWriteMany`. A node-local `hostPath` is deliberately *not* used here: on CoreWeave `/var/cache/huggingface` is a 15&nbsp;GB ramdisk (`/dev/ram0`), which cannot hold `gpt-oss-120b` (60.8&nbsp;GiB of safetensors) and fails the first download with `OSError: [Errno 28] No space left on device`. The shared PVC also means the weights are downloaded once for all replicas rather than once per node.
 
-  On a cold PVC, consider letting one replica of each role populate the cache before scaling to the full 8P/2D topology, so the first download is not attempted by ten pods at once:
-
-  ```bash
-  kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-nvidia-gpu-vllm-prefill deploy/${GUIDE_NAME}-nvidia-gpu-vllm-decode --replicas=1
-  # wait for both to become Ready, then
-  kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-nvidia-gpu-vllm-prefill --replicas=8
-  kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-nvidia-gpu-vllm-decode  --replicas=2
-  ```
+  On a cold cache all replicas start pulling at once; `huggingface_hub` takes a per-blob lock inside the cache directory, so the weights are fetched once and the remaining pods wait rather than each downloading a copy.
 
 > [!TIP]
 > Check subdirectories under your provider folder (e.g. `modelserver/gpu/vllm/gke/a4x` and `modelserver/gpu/vllm/gke/a4xmax` for GKE A4X/A4X Max / GB200/GB300 platforms) for platform-specific overlays. If your target hardware has specialized driver, memory, or network interconnect requirements, default provider settings may not adapt to your platform, and you should select the corresponding platform sub-overlay (for example, `export INFRA_PROVIDER=gke/a4xmax`).
