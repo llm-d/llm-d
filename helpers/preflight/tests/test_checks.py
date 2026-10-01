@@ -128,6 +128,7 @@ def test_webhook_absent_warns_with_helm_flag_hint():
     assert results[0].status == "WARN" and "enableDisaggregatedSet=true" in results[0].hint
 # --- RDMA ---------------------------------------------------------------------
 
+
 def test_rdma_dra_passes_on_healthy_gke():
     assert statuses(preflight.check_rdma(req(), CFG, builders.state(builders.healthy_gke()))) == ["PASS"]
 
@@ -211,6 +212,7 @@ def test_driver_unknown_warns():
     results = preflight.check_driver(CFG, builders.state(builders.healthy_coreweave()))
     assert statuses(results) == ["WARN"] and "not found" in results[0].detail
 # --- capacity -------------------------------------------------------------------
+
 
 def test_capacity_passes_on_healthy_gke():
     results = preflight.check_capacity(req(), builders.state(builders.healthy_gke()))
@@ -357,3 +359,9 @@ def test_capacity_names_every_shortage_on_a_node():
     responses[("get", "nodes")] = builders.items(builders.node("cpu-big", cpu="64", memory="600Gi", eph="100Gi"))
     detail = preflight.check_capacity(req("coreweave"), builders.state(responses))[0].detail
     assert "ephemeral-storage 100Gi < 1Ti" in detail and "nvidia.com/gpu 0 < 8" in detail
+
+
+def test_capacity_pass_without_requests_reads_naturally():
+    smoke = preflight.Requirements(frozenset(), (preflight.PodReq("decode leader", {}, (), {}),), "none", ())
+    detail = preflight.check_capacity(smoke, builders.state(builders.healthy_coreweave()))[0].detail
+    assert detail == "1/1 pods fit (no resource requests)"

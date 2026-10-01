@@ -81,6 +81,8 @@ def test_empty_key_exists_tolerates_everything():
 
 def test_no_tolerations():
     assert not preflight.tolerates([], GPU_TAINT)
+
+
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
@@ -206,6 +208,8 @@ spec: {spec: {}}
     spec = "{containers: [{name: vllm}], resourceClaims: [{name: c, resourceClaimTemplateName: t}]}"
     with pytest.raises(preflight.PreflightError, match="ResourceClaimTemplate 't'"):
         preflight.parse_render(_ds(spec, extra_docs=rct))
+
+
 OVERLAY_ROOT = REPO_ROOT / "guides" / "wide-ep" / "modelserver" / "gpu" / "vllm-deepseek-r1-0528"
 
 
