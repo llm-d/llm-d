@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - ../base
 
+namespace: grpereir-dev
+
 # The schema teaches kustomize the DisaggregatedSet merge keys so the
 # strategic merge patch below matches roles, containers, volumes, and env
 # entries by name instead of array index.

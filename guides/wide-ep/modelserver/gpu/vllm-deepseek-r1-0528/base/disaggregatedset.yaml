@@ -54,7 +54,7 @@ spec:
               emptyDir: {}
             containers:
             - name: vllm
-              image: REPLACE_MODEL_SERVER_IMAGE
+              image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.1-1788369031
               securityContext:
                 capabilities:
                   add:
@@ -295,7 +295,7 @@ spec:
               emptyDir: {}
             containers:
             - name: vllm
-              image: REPLACE_MODEL_SERVER_IMAGE
+              image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.1-1788369031
               securityContext:
                 capabilities:
                   add:
