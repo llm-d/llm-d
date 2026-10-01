@@ -210,3 +210,133 @@ def test_driver_from_gfd_label_and_gke_annotation():
 def test_driver_unknown_warns():
     results = preflight.check_driver(CFG, builders.state(builders.healthy_coreweave()))
     assert statuses(results) == ["WARN"] and "not found" in results[0].detail
+# --- capacity -------------------------------------------------------------------
+
+def test_capacity_passes_on_healthy_gke():
+    results = preflight.check_capacity(req(), builders.state(builders.healthy_gke()))
+    assert statuses(results) == ["PASS", "INFO"] and "4/4" in results[0].detail
+
+
+def test_capacity_passes_on_healthy_coreweave():
+    results = preflight.check_capacity(req("coreweave"), builders.state(builders.healthy_coreweave()))
+    assert results[0].status == "PASS"
+
+
+def test_capacity_small_boot_disk_fails_and_names_the_resource():
+    responses = builders.healthy_gke()
+    nodes = responses[("get", "nodes")]["items"]
+    for n in nodes:
+        n["status"]["allocatable"]["ephemeral-storage"] = "500Gi"
+    results = preflight.check_capacity(req(), builders.state(responses))
+    assert results[0].status == "FAIL"
+    assert "0/4" in results[0].detail and "ephemeral-storage" in results[0].detail
+
+
+def test_capacity_counts_dra_devices():
+    responses = builders.healthy_gke()
+    slices = responses[("get", "resourceslices.resource.k8s.io")]["items"]
+    responses[("get", "resourceslices.resource.k8s.io")] = builders.items(
+        *[s for s in slices if s["spec"]["nodeName"] != "gpu-3"])
+    results = preflight.check_capacity(req(), builders.state(responses))
+    assert results[0].status == "FAIL" and "3/4" in results[0].detail
+
+
+def test_capacity_excludes_untolerated_and_cordoned_nodes():
+    responses = builders.healthy_gke()
+    nodes = responses[("get", "nodes")]["items"]
+    nodes[0]["spec"]["taints"].append({"key": "dedicated", "value": "batch", "effect": "NoSchedule"})
+    nodes[1]["spec"]["unschedulable"] = True
+    results = preflight.check_capacity(req(), builders.state(responses))
+    assert results[0].status == "FAIL" and "2/4" in results[0].detail
+    assert "gpu-0" in results[0].detail and "gpu-1" in results[0].detail
+
+
+def test_capacity_warns_when_nodes_unreadable():
+    responses = builders.healthy_gke()
+    responses[("get", "nodes")] = builders.forbidden("nodes")
+    assert preflight.check_capacity(req(), builders.state(responses))[0].status == "WARN"
+
+
+def test_capacity_fails_on_dra_cluster_without_gpu_devices():
+    # Big CPU-only nodes and no DRA devices must not pass: GPU demand can't vanish.
+    responses = builders.healthy_gke()
+    responses[("get", "nodes")] = builders.items(
+        *[builders.node(n, cpu="190", memory="1800Gi", eph="2Ti") for n in builders.GPU_NODES])
+    responses[("get", "resourceslices.resource.k8s.io")] = builders.items()
+    responses[("get", "deviceclasses.resource.k8s.io")] = builders.items()
+    results = preflight.check_capacity(req(), builders.state(responses))
+    assert results[0].status == "FAIL" and "0/4" in results[0].detail
+    assert "gpu.nvidia.com devices 0 < 8" in results[0].detail
+    assert "decode" in results[0].detail or "prefill" in results[0].detail
+
+
+def test_capacity_warns_when_device_classes_unreadable():
+    responses = builders.healthy_gke()
+    responses[("get", "deviceclasses.resource.k8s.io")] = builders.forbidden("deviceclasses")
+    assert preflight.check_capacity(req(), builders.state(responses))[0].status == "WARN"
+
+
+def test_capacity_warns_when_device_class_names_no_driver():
+    responses = builders.healthy_gke()
+    responses[("get", "deviceclasses.resource.k8s.io")] = builders.items(
+        {"metadata": {"name": "gpu.nvidia.com"}, "spec": {"selectors": [{"cel": {"expression": "true"}}]}},
+        builders.device_class("mrdma.google.com"))
+    results = preflight.check_capacity(req(), builders.state(responses))
+    assert results[0].status == "WARN" and "gpu.nvidia.com" in results[0].detail
+
+
+# --- router node ------------------------------------------------------------------
+
+def test_router_fits_on_cpu_node():
+    results = preflight.check_router(CFG, builders.state(builders.healthy_gke()), False)
+    assert results[0].status == "PASS" and "cpu-0" in results[0].detail
+
+
+def test_router_ignores_dra_gpu_nodes():
+    responses = builders.healthy_gke()
+    nodes = responses[("get", "nodes")]["items"]
+    responses[("get", "nodes")] = builders.items(
+        *[n for n in nodes if n["metadata"]["name"] != "cpu-0"],
+        builders.node("cpu-small", cpu="3920m", memory="12Gi"))
+    for n in responses[("get", "nodes")]["items"]:
+        n["spec"]["taints"] = []  # even untainted, DRA GPU nodes are not router candidates
+    results = preflight.check_router(CFG, builders.state(responses), False)
+    assert results[0].status == "FAIL" and "cpu-small" in results[0].detail
+
+
+def test_router_warns_when_dra_slices_unreadable():
+    responses = builders.healthy_gke()
+    responses[("get", "resourceslices.resource.k8s.io")] = builders.forbidden("resourceslices")
+    assert preflight.check_router(CFG, builders.state(responses), False)[0].status == "WARN"
+
+
+def test_router_fails_when_only_tainted_cpu_nodes():
+    responses = builders.healthy_coreweave()
+    nodes = responses[("get", "nodes")]["items"]
+    for n in nodes:
+        n["spec"]["taints"] = [{"key": "dedicated", "value": "infra", "effect": "NoSchedule"}]
+    assert preflight.check_router(CFG, builders.state(responses), False)[0].status == "FAIL"
+
+
+def test_router_gateway_mode_needs_less():
+    responses = builders.healthy_gke()
+    nodes = responses[("get", "nodes")]["items"]
+    responses[("get", "nodes")] = builders.items(
+        *[n for n in nodes if n["metadata"]["name"] != "cpu-0"],
+        builders.node("cpu-6", cpu="5800m", memory="20Gi"))
+    st = builders.state(responses)
+    assert preflight.check_router(CFG, st, False)[0].status == "FAIL"
+    assert preflight.check_router(CFG, st, True)[0].status == "PASS"
+
+
+# --- notes and run_checks ----------------------------------------------------------
+
+def test_render_notes_become_warnings():
+    r = preflight.Requirements(frozenset(), (), "none", ("claim template 'x' is not in the rendered manifests",))
+    assert statuses(preflight.check_notes(r)) == ["WARN", "INFO"]
+
+
+def test_run_checks_on_healthy_gke_has_no_fail():
+    results = preflight.run_checks(req(), CFG, builders.state(builders.healthy_gke()), False, True)
+    assert "FAIL" not in statuses(results)
+    assert "decode" in " ".join(r.detail for r in results if r.status == "INFO")
