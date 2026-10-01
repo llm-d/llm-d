@@ -31,13 +31,10 @@ spec:
           size: 2
           workerTemplate:
             metadata:
-              # No `k8s.v1.cni.cncf.io/networks` annotation here on purpose. The eight rail interfaces
-              # have to be attached, but a NetworkAttachmentDefinition name and namespace are objects
-              # that exist only on one cluster, so there is no portable value to write. Your provider
-              # overlay must attach one NAD per rail as net1..net8, matching `amd.com/vnic: 8`, with
-              # every rail reachable between all four nodes; one unreachable rail hangs the 16-rank
-              # group. See `amd-ci/patch-amd-ci-fabric.yaml` for a worked example and
-              # `kubectl get net-attach-def -A` for what your cluster publishes.
+              # No `k8s.v1.cni.cncf.io/networks` annotation: NAD names are cluster-specific. The provider
+              # overlay must attach one NAD per rail as net1..net8 (matching `amd.com/vnic: 8`), each rail
+              # reachable between all four nodes, or the 16-rank group hangs. See
+              # `amd-ci/patch-amd-ci-fabric.yaml` and `kubectl get net-attach-def -A`.
               labels:
                 llm-d.ai/inference-serving: "true"
                 llm-d.ai/guide: "wide-ep"
@@ -141,9 +138,8 @@ spec:
                       value: "1"
                     # MORI_IB_GID_INDEX is deliberately unset: one global index across rails yields an all-zero source GID with no warning.
                     #
-                    # The fabric-, NIC- and driver-specific MoRI settings are deliberately absent, because
-                    # none of them has an honest portable default. Set them in your provider overlay
-                    # (`amd-ci/patch-amd-ci-fabric.yaml` is a worked example):
+                    # Fabric-, NIC- and driver-specific MoRI settings have no portable default; set them in
+                    # your provider overlay (see `amd-ci/patch-amd-ci-fabric.yaml`):
                     #
                     #   MORI_RDMA_DEVICES      ibverbs device names, one per rail, in the same order on
                     #                          every pod (`ls /sys/class/infiniband`). Unset, MoRI uses
@@ -159,13 +155,11 @@ spec:
                     #   MORI_ENABLE_RAIL_ONLY  Restricts cross-node QPs to the same rail, and
                     #   MORI_IO_RAIL_AFFINITY  pins the KV path to the sender's rail.
                     #
-                    # Read this before deploying base/ as-is: without MORI_ENABLE_RAIL_ONLY, MoRI builds a
-                    # full cross-node mesh. That is correct on a fully-connected fabric, but on a
-                    # rail-isolated one the cross-rail QPs never reach RTR and init hangs. It is only
-                    # valid where every rail is reachable between all nodes and ranks are node-major and
-                    # contiguous, which is why base/ cannot assume it; set it on every pod of both roles,
-                    # or none. MORI_ENABLE_HOST_PROXY is omitted on the same grounds -- it is a property of
-                    # your NIC firmware, and note MoRI's JIT gates -DMORI_PROXY_ENABLED on a literal "1".
+                    # Without MORI_ENABLE_RAIL_ONLY, MoRI builds a full cross-node mesh: correct on a
+                    # fully-connected fabric, but on a rail-isolated one the cross-rail QPs never reach RTR
+                    # and init hangs. Rail-only needs every rail reachable between all nodes and node-major,
+                    # contiguous ranks; set it on every pod of both roles or none. If you set
+                    # MORI_ENABLE_HOST_PROXY, use the literal "1", not "true".
 
                     - name: VLLM_ENGINE_READY_TIMEOUT_S
                       value: "7200"
@@ -183,10 +177,8 @@ spec:
                     # Deliberately off: Inductor's static launcher kills the engine on the first real request, not at startup.
                     - name: TORCHINDUCTOR_USE_STATIC_CUDA_LAUNCHER
                       value: "0"
-                    # The base image sets 0, forcing ROCr's legacy InterceptQueue: it stages a 16384-entry AQL ring
-                    # through a hardcoded 256-entry buffer, so a burst past 256 corrupts the heap and segfaults every
-                    # rank. 1 is the upstream default; never set it empty, which aborts at HSA init. Fixed by
-                    # ROCm/rocm-systems#4066.
+                    # The base image sets 0, selecting ROCr's legacy InterceptQueue, where a burst past 256 packets
+                    # corrupts the heap and segfaults every rank. Never empty (aborts at HSA init). ROCm/rocm-systems#4066.
                     - name: ROCPROFILER_QUEUE_INTERPOSITION
                       value: "1"
                     - name: HSA_ENABLE_SDMA
@@ -196,11 +188,8 @@ spec:
                     # DP/EP coordination rides the pod network; the RDMA rails belong to MoRI and carry no IPv4.
                     - name: NCCL_IB_DISABLE
                       value: "1"
-                    # Redundant but kept as a guard. Because the rail interfaces hold no IPv4 address,
-                    # eth0 is the only candidate and RCCL and Gloo both select it unaided; pinning it
-                    # stops a later IPv4-bearing secondary interface from silently capturing the
-                    # collectives. eth0 is the primary interface name Multus leaves in place -- confirm
-                    # with `ls /sys/class/net` if your CNI names it differently.
+                    # Stops a later IPv4-bearing secondary interface from capturing RCCL and Gloo traffic.
+                    # Check `ls /sys/class/net` if your CNI names the primary interface differently.
                     - name: NCCL_SOCKET_IFNAME
                       value: eth0
                     - name: GLOO_SOCKET_IFNAME
@@ -407,8 +396,7 @@ spec:
                     - --moriio-local-pod-ip=$(POD_IP)
                     - --moriio-remote-hosts=$(MORIIO_REMOTE_HOSTS)
                     - --moriio-decode-hosts=$(MORIIO_DECODE_HOSTS)
-                    # The 30s default aborts long prompts queued behind prefill (32k ISL at concurrency 64
-                    # waited up to 75s); 180s lets them finish instead of returning 504.
+                    # 32k-token prompts at concurrency 64 can queue 75 s behind prefill; the 30 s default returns 504.
                     - --moriio-parallel-decode-wait-timeout=180s
                     - --metrics-port=9095
                     - --zap-log-level=1
@@ -533,10 +521,8 @@ spec:
                     # Deliberately off: Inductor's static launcher kills the engine on the first real request, not at startup.
                     - name: TORCHINDUCTOR_USE_STATIC_CUDA_LAUNCHER
                       value: "0"
-                    # The base image sets 0, forcing ROCr's legacy InterceptQueue: it stages a 16384-entry AQL ring
-                    # through a hardcoded 256-entry buffer, so a burst past 256 corrupts the heap and segfaults every
-                    # rank. 1 is the upstream default; never set it empty, which aborts at HSA init. Fixed by
-                    # ROCm/rocm-systems#4066.
+                    # The base image sets 0, selecting ROCr's legacy InterceptQueue, where a burst past 256 packets
+                    # corrupts the heap and segfaults every rank. Never empty (aborts at HSA init). ROCm/rocm-systems#4066.
                     - name: ROCPROFILER_QUEUE_INTERPOSITION
                       value: "1"
                     - name: HSA_ENABLE_SDMA
@@ -545,8 +531,7 @@ spec:
                       value: "1"
                     - name: NCCL_IB_DISABLE
                       value: "1"
-                    # Redundant but kept as a guard; see the prefill role. The rails carry no IPv4, so RCCL
-                    # and Gloo would select eth0 unaided.
+                    # See the prefill role.
                     - name: NCCL_SOCKET_IFNAME
                       value: eth0
                     - name: GLOO_SOCKET_IFNAME

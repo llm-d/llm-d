@@ -1,7 +1,5 @@
-# Fabric, NIC and driver settings for the amd-ci cluster. base/ deliberately carries none of
-# these: see the block comment in the prefill role for what each one does and why it has no
-# portable default. Written once under the prefill role (&amd-ci-fabric) and reused for decode,
-# because MoRI requires identical settings on every pod of both roles.
+# Fabric, NIC and driver settings for the amd-ci cluster; base/'s prefill role explains each one.
+# Shared by both roles via &amd-ci-fabric: MoRI requires identical settings on every pod.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
