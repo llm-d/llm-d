@@ -1,0 +1,22 @@
+# Single LeaderWorkerSet managing a 2-node (16-GPU) aggregated Wide-EP replica
+# (handles both prefill and decode without P/D disaggregation).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - lws.yaml
+  - serviceAccount.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/llm-d/release
+
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-R1-0528
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
