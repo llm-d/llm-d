@@ -1,235 +1,538 @@
-# Deploying vLLM Agentic API (`vllm/agentic-api:v0.8.0`) with llm-d
+# Agentic API (`vllm/agentic-api`)
 
-This guide walks through deploying [vLLM Agentic API](https://github.com/vllm-project/agentic-api/blob/32f32c8d77182cf23d8251be7a75d87cc47dcfec/docs/deploying/README.md) (`vllm/agentic-api:v0.8.0`) with **llm-d** and PostgreSQL-backed response state persistence, supporting both **Standalone Router Mode** and **Gateway Mode** (validated on **Istio** and the **GKE managed Gateway**).
+Add the OpenAI-compatible **Responses API** — stateful multi-turn conversations, webhook tool
+loops and WebSocket streaming — to a deployment you already have, by putting
+[vLLM Agentic API](https://github.com/vllm-project/agentic-api/blob/main/docs/deploying/README.md)
+and a PostgreSQL state store in front of its llm-d Router.
 
----
+## Overview
 
-## Supported Gateway Providers
+This is an **extension**, not a standalone deployment. It assumes some other llm-d guide is
+already deployed and serving, and it adds exactly three things to that namespace:
 
-As in the aggregated well-lit path [`guides/optimized-baseline`](../optimized-baseline/README.md#prerequisites), Gateway Mode is selected with `PROVIDER_NAME` rather than hardcoded to GKE:
+| Added | What it is |
+| --- | --- |
+| `Deployment/agentic-api` + `Service/agentic-api:9000` | `vllm/agentic-api`, configured to use the base guide's router as its inference backend |
+| `Deployment/agentic-api-postgres` + PVC | PostgreSQL 17, which is what makes `previous_response_id` continuation work across requests |
+| 2 × `HTTPRoute` (Gateway Mode only) | Put `agentic-api` in front of the base guide's `InferencePool` for the agentic paths |
 
-```bash
-export PROVIDER_NAME=istio # options: none, gke, agentgateway, istio
+It does **not** touch the base guide. No `helm upgrade`, no `httpRoute.create=false`, no EPP
+restart — the base guide stays installed exactly as its own README describes, and removing this
+extension leaves it as it was.
+
+### Which guides can it extend?
+
+Any guide that deploys the llm-d Router **with vLLM as its model server**. The engine is not
+interchangeable here: `agentic-api` owns conversation state and delegates each inference round to
+*vLLM's own stateless Responses API*, so the upstream must expose `/v1/responses`
+([`ARCHITECTURE.md`](https://github.com/vllm-project/agentic-api/blob/main/ARCHITECTURE.md), ADR-01
+§1.1). SGLang and TensorRT-LLM overlays are therefore out of scope, as are the tool-calling flags
+below, which are vLLM CLI flags.
+
+Beyond the engine, the coupling is just a name. The router chart derives every resource name from
+its helm release name, which is the base guide's `GUIDE_NAME`:
+
+```
+helm release ${BASE_GUIDE_NAME}  ->  Service/${BASE_GUIDE_NAME}-epp
+                                     InferencePool/${BASE_GUIDE_NAME}
+                                     HTTPRoute/${BASE_GUIDE_NAME}       (Gateway Mode)
 ```
 
-| `PROVIDER_NAME` | What the llm-d router chart renders | Extra manifests this guide applies |
-| --- | --- | --- |
-| `istio` | A `DestinationRule` giving the Istio gateway TLS access to the EPP's ext_proc endpoint | none |
-| `gke` | `GCPBackendPolicy` + `HealthCheckPolicy` for `InferencePool/wide-ep` | [`manifests/gateway/gke-policies.yaml`](manifests/gateway/gke-policies.yaml), for `Service/agentic-api` — the chart does not know about that backend |
-| `none` | nothing | — |
+so `BASE_GUIDE_NAME` is all this guide needs in order to find them. The examples below use
+[`pd-disaggregation`](../pd-disaggregation/README.md); substitute
+[`optimized-baseline`](../optimized-baseline/README.md),
+[`wide-ep`](../wide-ep/README.md) or any other guide that deploys the router with a vLLM model
+server. Within a guide that offers several engines, pick its vLLM overlay, for example
+`modelserver/gpu/vllm/...` rather than `modelserver/gpu/sglang/...`.
 
-This guide ships **no `Gateway` of its own**: deploy one named `llm-d-inference-gateway` by following [the gateway guides](../../docs/infrastructure/gateway), and every llm-d guide in that namespace shares it with its own `HTTPRoute`s. The two `HTTPRoute`s in [`manifests/gateway/routes.yaml`](manifests/gateway/routes.yaml) are provider-neutral.
-
-**Standalone Router Mode needs no Gateway at all** and runs unchanged everywhere — start there.
-
----
+- - -
 
 ## Prerequisites
 
-1. **Deploy the `zai-org/GLM-5.3-Flash` Wide-EP Model Server & Router:**
-   Follow the [GLM-5.3-Flash Wide-EP P/D Disaggregated Guide (`guides/wide-ep/modelserver/gpu/vllm-glm-5.3-flash/README.md`)](../wide-ep/modelserver/gpu/vllm-glm-5.3-flash/README.md) to deploy `zai-org/GLM-5.3-Flash` (`2 prefill + 2 decode` pods, `DP=16, EP=16, TP=1` per role) and the `wide-ep` router in the `llm-d-wide-ep` namespace.
-   > [!IMPORTANT]
-   > Ensure `vllm serve` is started with `--reasoning-parser glm47`, `--tool-call-parser glm47`, and `--enable-auto-tool-choice` (already configured in [`guides/wide-ep/modelserver/gpu/vllm-glm-5.3-flash/base/disaggregatedset.yaml`](../wide-ep/modelserver/gpu/vllm-glm-5.3-flash/base/disaggregatedset.yaml)) so `agentic-api` can orchestrate tool calls and reasoning outputs.
+### A deployed base guide, with tool calling enabled
 
-2. **Verify `zai-org/GLM-5.3-Flash` Pods are Ready:**
-   ```bash
-   export NAMESPACE=llm-d-wide-ep
-   kubectl get pods -n ${NAMESPACE} -l llm-d.ai/model=GLM-5.3-Flash
-   ```
+Complete a guide such as [`pd-disaggregation`](../pd-disaggregation/README.md) first, in either
+Standalone or Gateway Mode, and note its `GUIDE_NAME` and `NAMESPACE`.
 
----
+#### Enable tool calling *before* deploying it
 
-## Architecture Topologies
+`agentic-api` orchestrates tool calls and reasoning output, so the **base guide's** vLLM must be
+started with `--enable-auto-tool-choice` plus the parsers for its model. These are vLLM CLI flags
+with no environment-variable equivalent, so they belong in the base guide's own model server
+overlay — add them there **before** you deploy it, or you will have to roll the model servers a
+second time. The parsers are per-model, and not every overlay sets them:
 
-### Mode 1: Standalone Router Mode (`llm-d-router-standalone`)
+| Model | Flags | Already set by |
+| --- | --- | --- |
+| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/patch-prefill.yaml) (both topologies), [`optimized-baseline/.../gpt-oss`](../optimized-baseline/modelserver/gpu/vllm/gpt-oss/patch-vllm.yaml), [`tiered-prefix-cache`](../tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm-gpt-oss-120b.yaml) |
+| `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra`](../agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra/gke/patch-prefill.yaml) |
 
-In **Standalone Mode**, `wide-ep-epp` runs with an embedded Envoy proxy sidecar (`Service/wide-ep-epp:80`). `agentic-api` sits as a Kubernetes `Service` (`Service/agentic-api:9000`) in front of `wide-ep-epp`, and configures `--llm-api-base http://wide-ep-epp.llm-d-wide-ep.svc.cluster.local:80`.
+> [!IMPORTANT]
+> Most model manifests in the repo still omit these flags — see
+> [llm-d#2640](https://github.com/llm-d/llm-d/issues/2640) for the remaining models and why a
+> reusable kustomize component was not the answer. Without them verification test `[3/4]` fails —
+> it reports the missing flags by name rather than a bare assertion — and the pre-flight check at the
+> end of this section reports it before you deploy anything.
+
+For `pd-disaggregation` + `gpt-oss-120b`, the flags are added by
+[llm-d#2641](https://github.com/llm-d/llm-d/pull/2641). Until that merges, or for any other
+model, use one of the two workarounds below.
+
+**Workaround A — edit the overlay before deploying the base guide (preferred).** This survives
+re-applying the overlay, which is what the base guide's own instructions tell you to do. Add the
+three flags to the model manifest, next to the other `vllm serve` args:
+
+```bash
+# e.g. guides/pd-disaggregation/modelserver/gpu/vllm/base/patch-{prefill,decode}.yaml
+#            - "--block-size=128"
+#   +        - "--enable-auto-tool-choice"
+#   +        - "--tool-call-parser=openai"
+#   +        - "--reasoning-parser=openai_gptoss"
+#
+# Or take llm-d#2641 directly:
+git fetch https://github.com/roytman/llm-d.git feat/pd-gpt-oss-tool-calling
+git cherry-pick FETCH_HEAD
+```
+
+**Workaround B — patch an already-running deployment.** Faster if the base guide is already up,
+but `kubectl apply -k` of the base overlay reverts it, and it only covers `Deployment`-based
+topologies (not the `vllm-ds` or `wide-ep` `DisaggregatedSet` manifests, which need Workaround A).
+Rolls the model servers, so weights reload:
+
+```bash
+# Run this after the base guide is deployed, in the same shell. That guide exports
+# NAMESPACE, which is reused here as-is -- deliberately not overwritten, since yours may
+# differ from its default. It exports the helm release name as GUIDE_NAME, which this
+# guide calls BASE_GUIDE_NAME; left unset, the selector below reads
+# `llm-d.ai/guide=`, matches nothing, and the loop patches nothing silently.
+export BASE_GUIDE_NAME="${BASE_GUIDE_NAME:-${GUIDE_NAME:-}}"
+: "${NAMESPACE:?NAMESPACE is unset: run this in the shell where you deployed the base guide, or set it to that namespace}"
+: "${BASE_GUIDE_NAME:?BASE_GUIDE_NAME is unset: set it to the base guide helm release name, e.g. pd-disaggregation}"
+
+# Selects only the vLLM model servers: the EPP Deployment carries none of these labels.
+# `modelserver` is containers[0]; a decode pod's routing-proxy is an initContainer sidecar.
+targets=$(kubectl get deploy -n "${NAMESPACE}" \
+            -l llm-d.ai/engine-type=vllm,llm-d.ai/guide="${BASE_GUIDE_NAME}" -o name)
+if [ -z "${targets}" ]; then
+  echo "No vLLM model server Deployments matched in ${NAMESPACE} for guide ${BASE_GUIDE_NAME}." >&2
+  echo "Check NAMESPACE/BASE_GUIDE_NAME, or use Workaround A if the guide uses a DisaggregatedSet." >&2
+  exit 1
+fi
+echo "Patching:"; echo "${targets}"
+
+# Piped into `while read` rather than `for d in ${targets}`: zsh does not word-split
+# unquoted expansions by default, so a `for` loop would pass both Deployments to
+# kubectl as one argument ("resource/name form may not have more than one slash").
+printf '%s\n' "${targets}" | while read -r d; do
+  [ -n "$d" ] || continue
+  kubectl patch -n "${NAMESPACE}" "$d" --type=json -p '[
+    {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--enable-auto-tool-choice"},
+    {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--tool-call-parser=openai"},
+    {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--reasoning-parser=openai_gptoss"}]'
+done
+
+kubectl rollout status -n "${NAMESPACE}" deploy -l llm-d.ai/engine-type=vllm --timeout=600s
+```
+
+> [!TIP]
+> Re-running this appends the flags a second time. vLLM takes the last occurrence of a repeated
+> argument, so it still starts, but check with
+> `kubectl get deploy -n "${NAMESPACE}" -l llm-d.ai/engine-type=vllm -o json | grep -c enable-auto-tool-choice`
+> and use Workaround A if you want the args to stay clean.
+
+> [!WARNING]
+> Both workarounds use the `gpt-oss` parser names. Substitute the parsers for **your** model from
+> the table above; a wrong parser is worse than none, because vLLM then tries to parse tool calls
+> with the wrong grammar.
+
+#### Gateway Mode: the Gateway comes from the base guide
+
+Nothing extra to do: a base guide deployed in Gateway Mode has already created the
+`llm-d-inference-gateway` Gateway, because its own instructions say to (see
+[`pd-disaggregation`](../pd-disaggregation/README.md#gateway-mode), which points at
+[the gateway guides](../../docs/infrastructure/gateway) and
+[`guides/recipes/gateway/<provider>`](../recipes/gateway)). The `Gateway` is namespaced, so one
+exists per namespace and every llm-d guide there shares it, each contributing its own `HTTPRoute`.
+This extension adds two more and touches neither the Gateway nor the base guide's route.
+
+What does matter is that `PROVIDER_NAME` here matches the provider the base guide was installed
+with. As [`guides/optimized-baseline`](../optimized-baseline/README.md) warns, the default `none`
+renders no provider-specific resources: on GKE the `InferencePool` gets no `HealthCheckPolicy`, so
+the Gateway marks the backend unhealthy and inference fails with 503s; on Istio the
+`DestinationRule` the gateway needs to reach the EPP ext_proc endpoint over TLS is missing. Confirm
+with `helm get values <base-guide-release> -n <namespace> | grep -A1 provider`.
+
+- - -
+
+## Architecture
+
+### Standalone Mode
+
+The base guide's EPP runs with an embedded Envoy sidecar, so `Service/${BASE_GUIDE_NAME}-epp`
+speaks plain HTTP on `:80` and `agentic-api` dials it directly by DNS. No Gateway, no
+`HTTPRoute`, nothing provider-specific — start here.
 
 ```mermaid
 flowchart LR
-    C["Client / verify.py\n(HTTP /v1/responses, Webhooks, WS)"]
-    A["Service: agentic-api:9000\n(vllm/agentic-api:v0.8.0)"]
-    PG[("PostgreSQL 17\n(agentic-api-postgres:5432)")]
-    R["Service: wide-ep-epp:80\n(Standalone Envoy + EPP)"]
-    V0["GLM-5.3-Flash Prefill (x2)\n(DP 16, EP 16)"]
-    V1["GLM-5.3-Flash Decode (x2)\n(DP 16, EP 16)"]
+    C["Client / verify.py<br>(HTTP /v1/responses, webhooks, WS)"]
+    A["Service: agentic-api:9000"]
+    PG[("PostgreSQL 17<br>agentic-api-postgres:5432")]
+    R["Service: ${BASE_GUIDE_NAME}-epp:80<br>(standalone Envoy + EPP)"]
+    V["Model servers<br>(base guide's topology)"]
 
     C -->|"/v1/responses"| A
-    A <-->|"Rehydrate & Persist"| PG
-    A -->|"--llm-api-base\nhttp://wide-ep-epp:80"| R
-    R -->|"Ports 8000-8007"| V0
-    R -->|"Ports 8000-8007"| V1
-    V0 -.->|"NIXL RDMA KV Transfer"| V1
+    A <-->|"rehydrate & persist"| PG
+    A -->|"--llm-api-base"| R
+    R -->|"prefix & load-aware selection"| V
 ```
 
-### Mode 2: Gateway Mode (`llm-d-router-gateway` + Istio or GKE)
+### Gateway Mode
 
-In **Gateway Mode**, both `agentic-api` (`Service/agentic-api:9000`) and the `llm-d` `InferencePool` (`InferencePool/wide-ep` backed by `wide-ep-epp:9002`) sit behind the **same Gateway (`llm-d-inference-gateway`)**. The topology below is identical on Istio and GKE — only the `gatewayClassName` and GKE's backend policies differ.
-- **External client requests** to `/v1/responses`, `/v1/conversations`, `/v1/messages`, and `/v1/models` hit `http://<GATEWAY_IP>` (`HTTPRoute/wide-ep-agentic-gateway-route`) and route to **`Service/agentic-api:9000`** first (allowing `/v1/models?client_version=...` to return the Codex Model Catalog).
-- **Loop avoidance via the `Host` header (`HTTPRoute` `spec.hostnames`):**
-  - `agentic-api` maps `epp.gateway.internal` to the Gateway address (`${GATEWAY_IP}`) via Kubernetes `hostAliases` and sets `--llm-api-base http://epp.gateway.internal`.
-  - Every upstream request from `agentic-api` to the Gateway automatically carries the HTTP header **`Host: epp.gateway.internal`**.
-  - A dedicated internal route (`HTTPRoute/wide-ep-internal-inference-route` with `hostnames: ["epp.gateway.internal"]`) matches `Host: epp.gateway.internal` at highest Gateway API precedence and routes directly to **`InferencePool/wide-ep` (`wide-ep-epp`)**, keeping the `Authorization` header completely free for end-user OIDC/Bearer tokens.
-
-> [!NOTE]
-> `hostAliases` requires a literal **IP**, and providers report their Gateway address differently: GKE publishes `status.addresses[0]` as `type: IPAddress` (an external LoadBalancer IP), while Istio publishes `type: Hostname` (the gateway `Service` FQDN, because the [Istio recipe](../recipes/gateway/istio/configmap.yaml) creates a `ClusterIP` Service). Reading `status.addresses[0].value` therefore yields an unusable value on Istio — Step 2B resolves `${GATEWAY_IP}` per provider. Either way the resulting IP is reachable from the `agentic-api` pod, which is all the `hostAliases` hop needs; reaching the Gateway from your laptop differs per provider, see [Step 2B](#step-2b-deploy-in-gateway-mode-istio-or-gke).
+Both `agentic-api` and the base guide's `InferencePool` sit behind the same
+`llm-d-inference-gateway`. In Gateway Mode the EPP has no HTTP listener — only ext_proc on
+`:9002` — so `agentic-api`'s own upstream call must go back out through the Gateway. The
+`Host` header is what stops that from looping:
 
 ```mermaid
 flowchart TB
     C["Client / verify.py"]
-    GW["Gateway: llm-d-inference-gateway\n(istio | gke-l7-regional-external-managed)\nhttp://<GATEWAY_IP>:80"]
-    A["Service: agentic-api:9000\n(--llm-api-base http://epp.gateway.internal)"]
+    GW["Gateway: llm-d-inference-gateway"]
+    A["Service: agentic-api:9000<br>--llm-api-base http://epp.gateway.internal"]
     PG[("PostgreSQL 17")]
-    POOL["InferencePool: wide-ep\n(EPP ext_proc :9002)"]
-    V["GLM-5.3-Flash Workers\n(16 DP / EP Ranks)"]
+    POOL["InferencePool: ${BASE_GUIDE_NAME}<br>(EPP ext_proc :9002)"]
+    V["Model servers"]
 
-    C -->|"1. POST http://<GATEWAY_IP>/v1/responses"| GW
-    GW -->|"2. HTTPRoute (wide-ep-agentic-gateway-route)\n(/v1/responses -> agentic-api)"| A
-    A <-->|"3. State Hydration"| PG
-    A -->|"4. POST http://epp.gateway.internal/v1/responses\nHeader: Host: epp.gateway.internal"| GW
-    GW -->|"5. HTTPRoute (wide-ep-internal-inference-route)\nhostnames: [epp.gateway.internal] -> InferencePool/wide-ep"| POOL
-    POOL -->|"6. Prefix & Load-Aware Selection"| V
+    C -->|"1. POST /v1/responses"| GW
+    GW -->|"2. HTTPRoute/agentic-api<br>(path prefix wins)"| A
+    A <-->|"3. state hydration"| PG
+    A -->|"4. POST /v1/responses<br>Host: epp.gateway.internal"| GW
+    GW -->|"5. HTTPRoute/agentic-api-internal<br>(hostname wins)"| POOL
+    POOL -->|"6. prefix & load-aware selection"| V
 ```
 
----
+`agentic-api` maps `epp.gateway.internal` to the Gateway address via Kubernetes `hostAliases` and
+is given `--llm-api-base http://epp.gateway.internal`, so every upstream request it makes carries
+`Host: epp.gateway.internal`. That leaves the `Authorization` header entirely free for end-user
+OIDC/Bearer tokens.
 
-## Step 1: Deploy PostgreSQL for Response State Persistence
+### What the two HTTPRoutes do to routing
 
-Create the `agentic-api-postgres` Secret and deploy PostgreSQL (`postgres:17-alpine` backed by a `PersistentVolumeClaim`):
+Both routes in [`manifests/gateway/routes.yaml`](manifests/gateway/routes.yaml) are **additive**.
+The chart's `HTTPRoute/${BASE_GUIDE_NAME}` (a single `PathPrefix: /` rule) is left in place, and
+these win over it on Gateway API matching precedence:
+
+| Request | Matched by | Goes to |
+| --- | --- | --- |
+| `/v1/responses`, `/v1/conversations`, `/v1/messages`, `/v1/models` | `HTTPRoute/agentic-api` — longer path prefix | `Service/agentic-api` |
+| anything with `Host: epp.gateway.internal` | `HTTPRoute/agentic-api-internal` — matching hostname | `InferencePool/${BASE_GUIDE_NAME}` |
+| `/v1/chat/completions`, `/v1/completions`, `/health`, `/metrics`, … | the chart's own route, unchanged | `InferencePool/${BASE_GUIDE_NAME}` |
+
+Precedence is specified *across* routes, not merely within one, so this does not depend on
+creation order ([`gateway-api/apis/v1/httproute_types.go`](https://github.com/kubernetes-sigs/gateway-api/blob/main/apis/v1/httproute_types.go)):
+
+> Across all rules specified on applicable Routes, precedence must be given to the match having:
+> […] "Prefix" path match with largest number of characters. […] **If ties still exist** across
+> multiple Routes, matching precedence MUST be determined [by] the oldest Route based on creation
+> timestamp.
+
+`/v1/responses` (13 characters) therefore beats `/` (1 character) regardless of which route was
+created first, and a matching `hostnames` entry outranks both. This was verified on Istio 1.30.3
+with Gateway API v1.6.2 CRDs, with the chart's route deliberately created first.
+
+> [!NOTE]
+> `/v1/models` is routed to `agentic-api` for the **Codex CLI**: with `?client_version=<ver>` set,
+> `agentic-api` transforms the upstream list into the Codex model catalog. Without that query
+> parameter it proxies the upstream response unchanged, so plain OpenAI clients see no
+> difference — but this does put `agentic-api` on the `/v1/models` path for the base deployment
+> too. Drop that one `matches` entry from `routes.yaml` to leave `/v1/models` with the
+> `InferencePool`; Codex then has to be pointed at `Service/agentic-api:9000` directly.
+
+- - -
+
+## Installation
+
+### 1. Environment
+
+The base guide already exported `REPO_ROOT`, `NAMESPACE` and its own `GUIDE_NAME`, so run this in
+the same shell and it mostly configures itself:
+
+| Variable | Where it comes from |
+| --- | --- |
+| `REPO_ROOT` | same expression as the base guide, so re-running it is a no-op |
+| `BASE_GUIDE_NAME` | inherited from the base guide's `GUIDE_NAME`. This guide needs a separate name for it because it reassigns `GUIDE_NAME` to `agentic-api` for its own paths, which is why `BASE_GUIDE_NAME` is declared first |
+| `NAMESPACE` | inherited. `${NAMESPACE:-…}` keeps yours rather than forcing the default below, which matters whenever the base guide was deployed somewhere else |
+| `GUIDE_NAME` | this guide, `agentic-api` |
+| `MODE` | your choice, and it must match how the base guide's router was installed |
+| `PROVIDER_NAME` | must match the provider the base guide was installed with. Unlike the two above it is a fixed choice rather than inherited, so check it against the base release before editing: `helm get values ${BASE_GUIDE_NAME} -n ${NAMESPACE} \| grep -A1 provider` |
+
+<!-- guide:env.static start -->
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export BASE_GUIDE_NAME=${BASE_GUIDE_NAME:-${GUIDE_NAME:-pd-disaggregation}}
+export NAMESPACE=${NAMESPACE:-llm-d-pd-disaggregation}
+export GUIDE_NAME=agentic-api
+export MODE=standalone # options: standalone, gateway
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
+```
+<!-- guide:env.static end -->
+
+Confirm the resolved values are the ones you expect before going further; an inherited
+`BASE_GUIDE_NAME` or `NAMESPACE` that is wrong shows up here rather than as a confusing failure
+later:
 
 ```bash
-export NAMESPACE=llm-d-wide-ep
-PGPASS=$(openssl rand -hex 16)
-
-kubectl create secret generic agentic-api-postgres -n ${NAMESPACE} \
-  --from-literal=password="$PGPASS" \
-  --from-literal=database-url="postgres://postgres:${PGPASS}@agentic-api-postgres.${NAMESPACE}.svc.cluster.local:5432/agentic_api" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-kubectl apply -n ${NAMESPACE} -f guides/agentic-api/manifests/postgres.yaml
-kubectl rollout status -n ${NAMESPACE} deployment/agentic-api-postgres --timeout=120s
+echo "base guide: ${BASE_GUIDE_NAME}   namespace: ${NAMESPACE}   mode: ${MODE}   provider: ${PROVIDER_NAME}"
 ```
 
----
+### 2. Confirm the base guide
 
-## Step 2A: Deploy in Standalone Mode (Recommended First)
+The pre-flight check below reports a missing tool-calling flag before anything is deployed:
 
-1. Ensure the `llm-d` router (`wide-ep-epp`) is deployed in standalone mode (see [`guides/wide-ep/modelserver/gpu/vllm-glm-5.3-flash/README.md`](../wide-ep/modelserver/gpu/vllm-glm-5.3-flash/README.md#1-deploy-the-llm-d-router-disaggregated-pd-mode)):
-   ```bash
-   kubectl get svc wide-ep-epp -n ${NAMESPACE}
-   ```
+<!-- guide:prerequisites.base_guide start -->
+```bash
+# The base guide must already be deployed, per its own README -- unmodified.
+# This extension never reinstalls or upgrades the router.
+kubectl get svc ${BASE_GUIDE_NAME}-epp -n ${NAMESPACE}
 
-2. Apply [`manifests/agentic-api-standalone.yaml`](manifests/agentic-api-standalone.yaml), which configures `vllm/agentic-api:v0.8.0` with `--llm-api-base http://wide-ep-epp.llm-d-wide-ep.svc.cluster.local:80`:
-   ```bash
-   kubectl apply -n ${NAMESPACE} -f guides/agentic-api/manifests/agentic-api-standalone.yaml
-   kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
-   ```
+# agentic-api cannot drive tool calls unless the base guide's vLLM was
+# started with the tool-calling flags. They are CLI-only -- vLLM has no
+# environment-variable equivalent -- so check the running pods rather than
+# trusting the overlay. Querying pods by label covers every topology
+# (Deployment, LeaderWorkerSet, DisaggregatedSet) and any container order.
+kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${BASE_GUIDE_NAME} -o yaml \
+  | grep -q -- "--enable-auto-tool-choice" \
+  || echo "WARNING: no --enable-auto-tool-choice on the ${BASE_GUIDE_NAME} model servers. Verification test [3/4] will fail. See the Prerequisites section of the guide README."
 
-3. **Verify Standalone Mode** using [`verify.py`](verify.py):
-   ```bash
-   kubectl port-forward -n ${NAMESPACE} svc/agentic-api 9000:9000 &
-   PF_PID=$!
-   sleep 3
+# only when MODE=gateway:
+# Gateway Mode additionally needs the InferencePool, the chart's own
+# HTTPRoute (which stays untouched), and a Gateway from
+# guides/recipes/gateway/<provider>.
+kubectl get inferencepool ${BASE_GUIDE_NAME} -n ${NAMESPACE}
+kubectl get httproute ${BASE_GUIDE_NAME} -n ${NAMESPACE}
+kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE}
+```
+<!-- guide:prerequisites.base_guide end -->
 
-   python3 guides/agentic-api/verify.py --base-url http://127.0.0.1:9000
 
-   kill $PF_PID
-   ```
+### 3. Create the PostgreSQL credentials
 
----
+The password is generated locally and only ever stored in the Secret.
 
-## Step 2B: Deploy in Gateway Mode (Istio or GKE)
+<!-- guide:prerequisites.secrets start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# The password is generated here and never stored outside the Secret. The
+# database-url uses the Service's short name, so the Secret is not tied to
+# any particular namespace.
+PGPASS=$(openssl rand -hex 16)
+kubectl create secret generic agentic-api-postgres -n ${NAMESPACE} \
+  --from-literal=password="${PGPASS}" \
+  --from-literal=database-url="postgres://postgres:${PGPASS}@agentic-api-postgres:5432/agentic_api" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
-1. **Deploy a Kubernetes Gateway named `llm-d-inference-gateway`** by following one of [the gateway guides](../../docs/infrastructure/gateway) — for Istio, [`istio.md`](../../docs/infrastructure/gateway/istio.md), which installs the control plane with `ENABLE_GATEWAY_API_INFERENCE_EXTENSION=true` and applies [`guides/recipes/gateway/istio`](../recipes/gateway/istio). The `Gateway` is namespaced, so each namespace needs its own even when the control plane is already up.
+### 4. Deploy PostgreSQL
 
-   Then set the provider and read the Gateway's address:
-   ```bash
-   export PROVIDER_NAME=istio # options: none, gke, agentgateway, istio
-   kubectl wait --for=condition=Programmed gateway/llm-d-inference-gateway -n ${NAMESPACE} --timeout=300s
+<!-- guide:deploy.postgres start -->
+```bash
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/postgres.yaml
+kubectl rollout status -n ${NAMESPACE} deployment/agentic-api-postgres --timeout=120s
+```
+<!-- guide:deploy.postgres end -->
 
-   # hostAliases needs an IP. GKE reports status.addresses[0] as type: IPAddress,
-   # but Istio reports type: Hostname (the gateway Service FQDN), so read its ClusterIP.
-   if [ "${PROVIDER_NAME}" = "istio" ]; then
-     export GATEWAY_IP=$(kubectl get svc llm-d-inference-gateway-istio -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-   else
-     export GATEWAY_IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
-   fi
-   echo "Gateway address: ${GATEWAY_IP}"
-   ```
+### 5. Point agentic-api at the base guide's router
 
-   > [!IMPORTANT]
-   > `${GATEWAY_IP}` must be a bare IP. If it holds a hostname such as
-   > `llm-d-inference-gateway-istio.<ns>.svc.cluster.local`, Step 4 fails with
-   > `spec.template.spec.hostAliases[0].ip: Invalid value: ... must be a valid IP address`.
-   > Check it with `echo "[${GATEWAY_IP}]"` before continuing.
+<!-- guide:deploy.api_base start -->
+```bash
+# only when MODE=standalone:
+# Standalone Mode: the base guide's EPP runs an Envoy sidecar, so its
+# Service speaks plain HTTP on :80 and agentic-api can dial it by DNS.
+export LLM_API_BASE=${BASE_GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80
 
-2. **Upgrade the `wide-ep` Router to Gateway Mode (`llm-d-router-gateway`):**
-   ```bash
-   kubectl delete deployment wide-ep-epp -n ${NAMESPACE} --ignore-not-found
-   helm upgrade --install wide-ep oci://ghcr.io/llm-d/charts/llm-d-router-gateway \
-     -f guides/recipes/router/base.values.yaml \
-     -f guides/wide-ep/router/wide-ep.values.yaml \
-     --set provider.name=${PROVIDER_NAME} \
-     --set httpRoute.create=false \
-     -n ${NAMESPACE} --version v0
-   ```
-   > [!IMPORTANT]
-   > Set `provider.name` to the provider whose Gateway you deployed in step 1. As [`guides/optimized-baseline`](../optimized-baseline/README.md) warns, the default `none` renders no provider-specific resources — on GKE that means no `HealthCheckPolicy` for the `InferencePool`, so the Gateway marks the backend unhealthy and inference requests fail with 503s. On Istio, `none` omits the `DestinationRule` the gateway needs to reach the EPP's ext_proc endpoint over TLS.
+# only when MODE=gateway:
+# Gateway Mode: the EPP has no HTTP listener (only ext_proc on :9002), so
+# agentic-api's upstream call goes back through the Gateway. The hostname
+# is what keeps that from looping -- see manifests/gateway/routes.yaml.
+export LLM_API_BASE=epp.gateway.internal
+```
+<!-- guide:deploy.api_base end -->
 
-   `httpRoute.create=false` because this guide supplies its own two routes in the next step.
+### 6. Resolve the Gateway address (Gateway Mode only)
 
-3. **Apply the `HTTPRoute`s (and, on GKE, the `agentic-api` backend policies):**
-   ```bash
-   kubectl apply -n ${NAMESPACE} -f guides/agentic-api/manifests/gateway/routes.yaml
+<!-- guide:deploy.gateway_address start -->
+```bash
+# only when MODE=gateway:
+kubectl wait --for=condition=Programmed gateway/llm-d-inference-gateway \
+  -n ${NAMESPACE} --timeout=300s
 
-   # GKE only: networking.gke.io CRDs, so this fails on Istio and other providers.
-   # Covers Service/agentic-api; the InferencePool's policies come from the chart above.
-   if [ "${PROVIDER_NAME}" = "gke" ]; then
-     kubectl apply -n ${NAMESPACE} -f guides/agentic-api/manifests/gateway/gke-policies.yaml
-   fi
-   ```
+# hostAliases requires a literal IP, and providers publish their Gateway
+# address differently: GKE reports type: IPAddress (an external LoadBalancer
+# IP), Istio reports type: Hostname (the Gateway Service FQDN, because the
+# recipe creates a ClusterIP Service). Key off the reported type rather than
+# PROVIDER_NAME so this holds for any provider.
+GW_TYPE=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].type}')
+GW_ADDR=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+if [ "${GW_TYPE}" = "Hostname" ]; then
+  export GATEWAY_SVC=${GW_ADDR%%.*}
+  export GATEWAY_IP=$(kubectl get svc ${GATEWAY_SVC} -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+else
+  export GATEWAY_SVC=""
+  export GATEWAY_IP=${GW_ADDR}
+fi
 
-4. **Substitute `${GATEWAY_IP}` into `agentic-api-gateway.yaml` and Apply:**
-   Substitute `${GATEWAY_IP}` into [`manifests/gateway/agentic-api-gateway.yaml`](manifests/gateway/agentic-api-gateway.yaml) (which maps `epp.gateway.internal` to `${GATEWAY_IP}` via `hostAliases` and sets `--llm-api-base http://epp.gateway.internal`) and apply:
-   ```bash
-   envsubst '${GATEWAY_IP}' < guides/agentic-api/manifests/gateway/agentic-api-gateway.yaml | kubectl apply -n ${NAMESPACE} -f -
-   kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
-   ```
+# Must print a bare IP. A hostname here fails the next step with
+# `spec.template.spec.hostAliases[0].ip: Invalid value: ... must be a valid IP address`.
+echo "Gateway address: [${GATEWAY_IP}]  (reported as ${GW_TYPE})"
+```
+<!-- guide:deploy.gateway_address end -->
 
-5. **Verify Gateway Mode** using [`verify.py`](verify.py).
-   As in [`guides/optimized-baseline`](../optimized-baseline/README.md#verification), the endpoint is whatever the `Gateway` reports in `status.addresses[0].value` — but whether your laptop can reach it depends on the provider's `Service` type.
+> [!IMPORTANT]
+> `${GATEWAY_IP}` must print a bare IP. If it holds a hostname such as
+> `llm-d-inference-gateway-istio.<ns>.svc.cluster.local`, the next step fails with
+> `spec.template.spec.hostAliases[0].ip: Invalid value: ... must be a valid IP address`.
 
-   **GKE** (`${GATEWAY_IP}` is an external LoadBalancer IP):
-   ```bash
-   python3 guides/agentic-api/verify.py --base-url http://${GATEWAY_IP} --skip-health
-   ```
+### 7. Deploy agentic-api
 
-   **Istio** (the recipe's Gateway `Service` is `ClusterIP`, so port-forward it):
-   ```bash
-   kubectl port-forward -n ${NAMESPACE} svc/llm-d-inference-gateway-istio 8080:80 &
-   PF_PID=$!
-   sleep 3
+The manifests carry `${…}` placeholders for the values resolved above, so they are rendered with
+`kubectl kustomize` and piped through `envsubst` — the same pattern as
+[`guides/tiered-prefix-cache`](../tiered-prefix-cache/README.md).
 
-   python3 guides/agentic-api/verify.py --base-url http://127.0.0.1:8080 --skip-health
+#### Standalone Mode
 
-   kill $PF_PID
-   ```
-   All four `verify.py` tests run entirely client-side (including the local webhook receiver in test `[3/4]`, which `verify.py` itself calls), so a port-forward is sufficient — nothing in the cluster needs to dial back to your machine.
+<!-- guide:deploy.standalone start -->
+```bash
+# only when MODE=standalone:
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/base \
+  | envsubst '${LLM_API_BASE}' \
+  | kubectl apply -n ${NAMESPACE} -f -
+kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
+```
+<!-- guide:deploy.standalone end -->
 
-   `--skip-health` is required in Gateway Mode for both providers: `/health` and `/ready` fall through the default route to the `InferencePool`, not to `agentic-api`.
+#### Gateway Mode
 
----
+`manifests/gateway-gke` is `manifests/gateway` plus the `networking.gke.io` policies for
+`Service/agentic-api`; the base guide's own router chart renders the equivalent policies for the
+`InferencePool` when installed with `provider.name=gke`.
 
-## Verification Script (`verify.py`)
+<!-- guide:deploy.gateway start -->
+```bash
+# only when MODE=gateway and PROVIDER_NAME=none or agentgateway or istio:
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway \
+  | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
+  | kubectl apply -n ${NAMESPACE} -f -
+kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
 
-[`guides/agentic-api/verify.py`](verify.py) requires only the Python 3 standard library and performs four end-to-end tests:
+# only when MODE=gateway and PROVIDER_NAME=gke:
+# gateway-gke adds the networking.gke.io policies for Service/agentic-api on
+# top of everything in manifests/gateway.
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway-gke \
+  | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
+  | kubectl apply -n ${NAMESPACE} -f -
+kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
+```
+<!-- guide:deploy.gateway end -->
 
-1. **Health & Model Discovery (`[1/4]`):** Verifies `/health`, `/ready` (in standalone mode), and `GET /v1/models` (`zai-org/GLM-5.3-Flash`).
-2. **Stateful HTTP `/v1/responses` (`[2/4]`):**
-   - **Turn 1:** Stores a secret verification code (`COBALT-7492`) with `store: true`, returning `resp_...`.
-   - **Turn 2:** Sends a follow-up request referencing **only** `previous_response_id` (no client-side message history) and verifies that `agentic-api` rehydrates the prior turn from PostgreSQL and returns `COBALT-7492`.
-3. **Webhook Mode & Stateful Tool Loop (`[3/4]`):**
-   - Starts a local HTTP webhook listener (`http://127.0.0.1:<port>/webhook/deployment-events`).
-   - Sends a stateful `/v1/responses` request with a `function` tool (`emit_deployment_webhook`), receives the model's `function_call`, dispatches the webhook payload to the HTTP webhook server (`WH-9981`), and sends the `function_call_output` back via `previous_response_id` to complete the stateful response.
-4. **WebSocket Mode (`[4/4]`):**
-   - Upgrades an RFC 6455 WebSocket connection to `ws://<endpoint>/v1/responses`, sends a `response.create` frame (`store: true, stream: true`), and verifies streaming completion (`response.completed`).
+- - -
+
+## Verification
+
+### Endpoint
+
+#### Standalone Mode
+
+<!-- guide:verify.endpoint.standalone start -->
+```bash
+kubectl port-forward -n ${NAMESPACE} svc/agentic-api 9000:9000 &
+PF_PID=$!
+sleep 3
+export AGENTIC_API_BASE_URL=http://127.0.0.1:9000
+```
+<!-- guide:verify.endpoint.standalone end -->
+
+#### Gateway Mode
+
+<!-- guide:verify.endpoint.gateway start -->
+```bash
+# only when PROVIDER_NAME=gke:
+# GATEWAY_IP is an external LoadBalancer IP, reachable directly.
+export AGENTIC_API_BASE_URL=http://${GATEWAY_IP}
+
+# only when PROVIDER_NAME=none or agentgateway or istio:
+# The Gateway Service is ClusterIP, so reach it through a port-forward.
+# GATEWAY_SVC was resolved in deploy.gateway_address above.
+kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_SVC} 8080:80 &
+PF_PID=$!
+sleep 3
+export AGENTIC_API_BASE_URL=http://127.0.0.1:8080
+```
+<!-- guide:verify.endpoint.gateway end -->
+
+### Run the checks
+
+<!-- guide:verify.tests start -->
+```bash
+# only when MODE=standalone:
+python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url ${AGENTIC_API_BASE_URL}
+
+# only when MODE=gateway:
+# --skip-health is required in Gateway Mode: /health and /ready are not in
+# the agentic route, so they fall through to the InferencePool.
+python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url ${AGENTIC_API_BASE_URL} --skip-health
+
+kill ${PF_PID:-} 2>/dev/null || true
+```
+<!-- guide:verify.tests end -->
+
+[`verify.py`](verify.py) needs only the Python 3 standard library, discovers the served model from
+`/v1/models`, and runs four end-to-end tests. All four are entirely client-side, including the
+webhook receiver in `[3/4]`, so a port-forward is sufficient — nothing in the cluster dials back
+to your machine.
+
+1. **Health & model discovery `[1/4]`** — `/health` and `/ready` (Standalone Mode only) plus
+   `GET /v1/models`.
+2. **Stateful HTTP `/v1/responses` `[2/4]`** — stores a secret code with `store: true`, then sends
+   a follow-up carrying *only* `previous_response_id` and no client-side history, verifying that
+   `agentic-api` rehydrated the prior turn from PostgreSQL.
+3. **Webhook mode & stateful tool loop `[3/4]`** — starts a local webhook listener, sends a
+   request with a `function` tool, dispatches the resulting `function_call` to the listener, and
+   returns the `function_call_output` via `previous_response_id`. This is the test that fails if
+   the base guide's model server lacks the tool-calling flags, and it says so.
+4. **WebSocket mode `[4/4]`** — upgrades an RFC 6455 connection to `ws://<endpoint>/v1/responses`,
+   sends a `response.create` frame and verifies streaming completion.
+
+- - -
+
+## Cleanup
+
+Removing the extension leaves the base guide exactly as it was.
+
+<!-- guide:cleanup.workload start -->
+```bash
+# only when MODE=standalone:
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/base \
+  | envsubst '${LLM_API_BASE}' \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+
+# only when MODE=gateway and PROVIDER_NAME=none or agentgateway or istio:
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway \
+  | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+
+# only when MODE=gateway and PROVIDER_NAME=gke:
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway-gke \
+  | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+```
+<!-- guide:cleanup.workload end -->
+
+<!-- guide:cleanup.postgres start -->
+```bash
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/postgres.yaml --ignore-not-found=true
+kubectl delete secret agentic-api-postgres -n ${NAMESPACE} --ignore-not-found=true
+# The PVC is deleted by the manifest above; the PV's fate follows its
+# StorageClass reclaim policy.
+```
+<!-- guide:cleanup.postgres end -->

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Gateway Mode: the same agentic-api Deployment as ../base, reached through the
+# shared `llm-d-inference-gateway` Gateway, plus the two HTTPRoutes that put it
+# in front of the base guide's InferencePool.
+#
+# The Gateway itself is NOT here -- deploy one from guides/recipes/gateway/<provider>
+# (see docs/infrastructure/gateway/) so every llm-d guide in the namespace shares
+# one Gateway, each contributing its own HTTPRoute.
+#
+# On GKE, build ./gke instead of this directory to also apply the
+# networking.gke.io policies for Service/agentic-api.
+resources:
+  - ../base
+  - routes.yaml
+
+patches:
+  - path: patch-hostaliases.yaml
+  - path: patch-service-neg.yaml

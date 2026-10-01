@@ -19,24 +19,14 @@ spec:
           operator: Equal
           value: present
           effect: NoSchedule
-      # Maps `epp.gateway.internal` to the Gateway address (${GATEWAY_IP}), which is an
-      # external IP on GKE and the Gateway Service ClusterIP on Istio -- either way it is
-      # reachable from this pod. When `--llm-api-base` is set to
-      # `http://epp.gateway.internal`, agentic-api sends `Host: epp.gateway.internal`
-      # on every upstream request to the Gateway,
-      # matching `HTTPRoute/wide-ep-internal-inference-route` (`hostnames: ["epp.gateway.internal"]`)
-      # and routing directly to `InferencePool/wide-ep`.
-      hostAliases:
-        - ip: "${GATEWAY_IP}"
-          hostnames:
-            - epp.gateway.internal
       containers:
         - name: agentic-api
           image: vllm/agentic-api:v0.8.0
           imagePullPolicy: IfNotPresent
           args:
+            # Substituted by envsubst; see kustomization.yaml for the per-mode values.
             - --llm-api-base
-            - http://epp.gateway.internal
+            - http://${LLM_API_BASE}
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -76,10 +66,6 @@ metadata:
   name: agentic-api
   labels:
     app: agentic-api
-  annotations:
-    # GKE-only: exposes this Service as a NEG so the GKE Gateway can target it.
-    # Ignored by Istio and other Gateway providers, so it is safe to leave in place.
-    cloud.google.com/neg: '{"ingress": true}'
 spec:
   selector:
     app: agentic-api

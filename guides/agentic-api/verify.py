@@ -94,14 +94,24 @@ def verify_health_and_models(base_url: str, check_health: bool = True) -> str:
 
 def verify_http_stateful_responses(base_url: str, model: str) -> None:
     print("\n[2/4] Verifying HTTP Mode Stateful /v1/responses API (PostgreSQL persistence) ...")
+    # A neutral framing on purpose. Calling this a "secret verification code" makes
+    # gpt-oss-120b refuse ("I'm sorry, but I can't comply with that") on vLLM's Responses
+    # API -- deterministically under greedy decoding, and about half the time at default
+    # sampling, which made this test flaky rather than failing outright. The wording below
+    # exercises exactly the same persistence path without tripping the refusal.
+    #
+    # temperature=0 is set for the same reason: this test asserts on an exact string, so it
+    # must not depend on a lucky sample.
     secret_code = "COBALT-7492"
 
     # Turn 1: Store state in PostgreSQL via agentic-api
     turn1_payload = {
         "model": model,
-        "input": f"Remember the secret verification code {secret_code}. Reply with 'ACK {secret_code}'.",
+        "input": f"Our ticket reference for this thread is {secret_code}. "
+                 f"Acknowledge by replying exactly: ACK {secret_code}",
         "store": True,
         "max_output_tokens": 512,
+        "temperature": 0,
     }
     status1, body1 = http_json("POST", f"{base_url}/v1/responses", turn1_payload)
     assert status1 == 200, f"Turn 1 failed with HTTP {status1}: {body1}"
@@ -109,14 +119,26 @@ def verify_http_stateful_responses(base_url: str, model: str) -> None:
     assert resp1_id and resp1_id.startswith("resp_"), f"Expected resp_ id, got: {body1}"
     out1 = extract_output_text(body1)
     print(f"  OK  Turn 1 stored response id={resp1_id} | output={out1!r}")
+    # Check Turn 1 before relying on Turn 2. Without this, a model that declined on Turn 1
+    # still reports "OK" here and the failure surfaces as a confusing Turn 2 assertion
+    # about PostgreSQL, when nothing was ever committed to recall.
+    assert secret_code in out1, (
+        f"Turn 1 did not acknowledge {secret_code!r}; the model answered {out1!r}.\n"
+        f"  This is a model-behaviour failure, not a persistence one -- nothing was stored to\n"
+        f"  recall in Turn 2. A refusal here usually means the prompt tripped the model's\n"
+        f"  safety policy; check it against the model directly with\n"
+        f"      POST /v1/responses  (Host: epp.gateway.internal in Gateway Mode)\n"
+        f"  before suspecting agentic-api or PostgreSQL."
+    )
 
     # Turn 2: Reference ONLY previous_response_id (no prior messages sent by client)
     turn2_payload = {
         "model": model,
         "previous_response_id": resp1_id,
-        "input": "What was the exact secret verification code I asked you to remember? Reply with only the code.",
+        "input": "What is the ticket reference for this thread? Reply with only the reference.",
         "store": True,
         "max_output_tokens": 512,
+        "temperature": 0,
     }
     status2, body2 = http_json("POST", f"{base_url}/v1/responses", turn2_payload)
     assert status2 == 200, f"Turn 2 failed with HTTP {status2}: {body2}"
@@ -170,6 +192,7 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
             "model": model,
             "store": True,
             "max_output_tokens": 512,
+            "temperature": 0,
             "tools": [
                 {
                     "type": "function",
@@ -186,14 +209,28 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
                 }
             ],
             "tool_choice": "auto",
-            "input": "Call the emit_deployment_webhook tool for service 'glm-5.3-flash' with status 'ready'.",
+            "input": "Call the emit_deployment_webhook tool for service 'llm-d' with status 'ready'.",
         }
         status1, body1 = http_json("POST", f"{base_url}/v1/responses", req1)
         assert status1 == 200, f"Webhook Step 1 failed with HTTP {status1}: {body1}"
         resp1_id = body1["id"]
 
         func_calls = [item for item in body1.get("output", []) if item.get("type") == "function_call"]
-        assert func_calls, f"Expected model to emit function_call item, got output: {body1.get('output')}"
+        # The most common cause of an empty function_call list is not agentic-api but
+        # the base guide's model server: tool calling is off unless vLLM was started
+        # with --enable-auto-tool-choice and a --tool-call-parser for this model.
+        # Say so, rather than dumping the output and leaving the reader guessing.
+        assert func_calls, (
+            f"Model {model!r} returned no function_call item, so the stateful tool loop "
+            f"cannot be verified.\n"
+            f"  Most likely the base guide's model server is missing the tool-calling "
+            f"flags. Check that its vLLM args include:\n"
+            f"      --enable-auto-tool-choice\n"
+            f"      --tool-call-parser <parser for this model>\n"
+            f"      --reasoning-parser <parser for this model>\n"
+            f"  See the Prerequisites section of guides/agentic-api/README.md.\n"
+            f"  Raw output was: {body1.get('output')}"
+        )
         fcall = func_calls[0]
         call_id = fcall["call_id"]
         args_obj = json.loads(fcall.get("arguments", "{}"))
@@ -212,6 +249,10 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
             headers={"X-Agentic-Webhook-Event": "tool.function_call"},
         )
         assert wh_status == 200 and len(received_webhooks) == 1, "Webhook listener did not receive callback"
+        assert received_webhooks[0]["payload"].get("call_id") == call_id, (
+            f"Webhook listener received a different call_id: "
+            f"{received_webhooks[0]['payload'].get('call_id')!r} != {call_id!r}"
+        )
         print(f"  OK  Webhook delivered to {webhook_url} -> ack={wh_ack}")
 
         # Step 3: Return webhook delivery receipt to agentic-api via stateful previous_response_id
@@ -220,6 +261,7 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
             "previous_response_id": resp1_id,
             "store": True,
             "max_output_tokens": 512,
+            "temperature": 0,
             "input": [
                 {
                     "type": "function_call_output",
@@ -232,10 +274,26 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
         assert status2 == 200, f"Webhook Step 3 continuation failed with HTTP {status2}: {body2}"
         final_text = extract_output_text(body2)
         print(f"  OK  Stateful webhook continuation completed id={body2.get('id')} | output={final_text!r}")
-        assert "WH-9981" in final_text or "delivered" in final_text.lower(), (
-            f"Expected webhook receipt confirmation in final output, got: {final_text!r}"
+        # Assert on the protocol, not on the model's prose. What this test exists to prove is
+        # that a function_call_output posted against previous_response_id is accepted and
+        # completes; how the model then words its summary is sampled text and varies run to
+        # run ("has been sent", "confirm the delivery", "successfully delivered"), so matching
+        # on it made this test fail while every mechanical step had in fact succeeded.
+        assert body2.get("status") == "completed", (
+            f"Expected status 'completed', got {body2.get('status')!r}; "
+            f"error={body2.get('error')!r} incomplete_details={body2.get('incomplete_details')!r}"
         )
-        print("  PASS Webhook delivery and stateful tool-output continuation verified.")
+        assert body2.get("error") is None, f"Continuation reported an error: {body2.get('error')!r}"
+        # The echoed previous_response_id is the actual evidence of stateful continuation: the
+        # function_call_output carried no conversation history, so it could only be resolved
+        # against the turn agentic-api had persisted.
+        assert body2.get("previous_response_id") == resp1_id, (
+            f"Continuation is not linked to the stored turn: "
+            f"previous_response_id={body2.get('previous_response_id')!r} != {resp1_id!r}"
+        )
+        assert final_text.strip(), "Continuation completed but produced no assistant text"
+        print("  PASS Webhook delivery and stateful tool-output continuation verified "
+              f"(status={body2.get('status')}, linked to {resp1_id}).")
     finally:
         server.shutdown()
 

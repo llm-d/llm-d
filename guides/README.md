@@ -36,6 +36,7 @@ We currently offer the following:
 Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/well-lit-paths/workloads/README.md) for overviews.
 
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
+* [Agentic API](./agentic-api/README.md) - an extension to any guide that deploys the router with a vLLM model server, rather than a deployment of its own: adds the OpenAI-compatible Responses API (stateful multi-turn conversations, webhook tool loops, WebSocket streaming) via `vllm/agentic-api` and a PostgreSQL state store, and additive `HTTPRoute`s that put it in front of the existing `InferencePool`.
 * [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
 * [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
 * [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.

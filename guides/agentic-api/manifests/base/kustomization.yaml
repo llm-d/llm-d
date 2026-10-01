@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# agentic-api in front of an already-deployed llm-d guide's router.
+#
+# `--llm-api-base` is left as a `${LLM_API_BASE}` placeholder rather than a concrete
+# value because it differs per mode and is not knowable at kustomize time:
+#
+#   standalone  ${BASE_GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80
+#   gateway     epp.gateway.internal                       (see ../gateway)
+#
+# Render with `kubectl kustomize <dir> | envsubst`, as guide.yaml does. The CI
+# kustomize dry-run recognises unresolved ${UPPER_CASE} placeholders and validates
+# structure only, so `kustomize build` must still succeed on this directory.
+resources:
+  - agentic-api.yaml
