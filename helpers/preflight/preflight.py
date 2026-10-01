@@ -509,3 +509,97 @@ def check_ds_webhook(state: ClusterState) -> list[Result]:
                    f"{DS_WEBHOOK} not registered; the controller still runs, but invalid DisaggregatedSets "
                    "are not rejected",
                    "installing LWS with helm: --set enableDisaggregatedSet=true")]
+PCIE_ROOT = "resource.kubernetes.io/pcieRoot"
+NVIDIA_DRA_DRIVER = "gpu.nvidia.com"
+_DRIVER_SOURCES = (
+    ("labels", "nvidia.com/cuda.driver-version.major"),  # GPU feature discovery
+    ("labels", "nvidia.com/cuda.driver.major"),  # GPU feature discovery, deprecated
+    ("annotations", "cloud.google.com/cuda.driver-version.major"),  # GKE device plugin
+)
+_HARD_EFFECTS = ("NoSchedule", "NoExecute")
+
+
+def gpu_nodes(state: ClusterState) -> frozenset[str]:
+    """Nodes with GPUs, whether exposed by a device plugin or by the NVIDIA DRA driver."""
+    plugin = {n.name for n in state.nodes or () if n.allocatable.get("nvidia.com/gpu", 0) > 0}
+    dra = {d.node for d in state.devices or () if d.driver == NVIDIA_DRA_DRIVER}
+    return frozenset(plugin | dra)
+
+
+def check_rdma(req: Requirements, cfg: GuideConfig, state: ClusterState) -> list[Result]:
+    if req.rdma_mode == "none":
+        return [Result(WARN, "RDMA", "the overlay requests no RDMA resource, so RDMA can't be verified "
+                       "from the manifests", _see(cfg, "rdma"))]
+    if req.rdma_mode == "device-plugin":
+        return _check_rdma_device_plugin(req, cfg, state)
+    return _check_rdma_dra(req, cfg, state)
+
+
+def _check_rdma_device_plugin(req: Requirements, cfg: GuideConfig, state: ClusterState) -> list[Result]:
+    if state.nodes is None:
+        return [Result(WARN, "RDMA", "cannot list nodes; not checked")]
+    resources = sorted({name for p in req.pods for name in p.requests if name.startswith("rdma/")})
+    missing = [r for r in resources if not any(n.allocatable.get(r, 0) > 0 for n in state.nodes)]
+    if missing:
+        return [Result(FAIL, "RDMA", f"no node has allocatable {', '.join(missing)}", _see(cfg, "rdma"))]
+    return [Result(PASS, "RDMA", f"{', '.join(resources)} allocatable on the cluster")]
+
+
+def _check_rdma_dra(req: Requirements, cfg: GuideConfig, state: ClusterState) -> list[Result]:
+    hint = _see(cfg, "gkeDra")
+    if state.device_classes is None or state.devices is None:
+        return [Result(WARN, "RDMA", "cannot list DeviceClasses or ResourceSlices; not checked", hint)]
+    classes = sorted({c for p in req.pods for c in p.devices})
+    missing = [c for c in classes if c not in state.device_classes]
+    if missing:
+        return [Result(FAIL, "RDMA", f"DeviceClass missing: {', '.join(missing)}", hint)]
+    drivers = {c: state.device_classes[c] for c in classes if state.device_classes[c]}
+    published = {d.driver for d in state.devices}
+    absent = [c for c, driver in drivers.items() if driver not in published]
+    if absent:
+        return [Result(FAIL, "RDMA", f"no ResourceSlice publishes devices for {', '.join(absent)}", hint)]
+    results = [Result(PASS, "RDMA", f"DeviceClasses {', '.join(classes)} present and devices published")]
+    unmapped = [c for c in classes if c not in drivers]
+    if unmapped:
+        results.append(Result(WARN, "RDMA", f"cannot tell which driver serves {', '.join(unmapped)}; "
+                              "its devices are not counted"))
+    without_root = sorted({d.node for d in state.devices
+                           if d.driver in drivers.values() and PCIE_ROOT not in d.attributes})
+    if len(drivers) > 1 and without_root:
+        results.append(Result(WARN, "RDMA", f"devices on {', '.join(without_root)} have no {PCIE_ROOT}; "
+                              "GPU/NIC pairing by PCIe root can't be confirmed", hint))
+    return results
+
+
+def _driver_major(raw: Any) -> int | None:
+    match = re.match(r"^\s*v?(\d+)", str(raw)) if raw not in (None, "") else None
+    return int(match.group(1)) if match else None
+
+
+def _driver_majors(state: ClusterState) -> dict[str, int]:
+    found: dict[str, int] = {}
+    for device in state.devices or ():
+        major = _driver_major(device.attributes.get("driverVersion")) if device.driver == NVIDIA_DRA_DRIVER else None
+        if major is not None:
+            found.setdefault(device.node, major)
+    for node in state.nodes or ():
+        for where, key in _DRIVER_SOURCES:
+            major = _driver_major(getattr(node, where).get(key))
+            if node.name not in found and major is not None:
+                found[node.name] = major
+    return found
+
+
+def check_driver(cfg: GuideConfig, state: ClusterState) -> list[Result]:
+    limit = cfg.driver_max_major_exclusive
+    hint = _see(cfg, "gpuDriver")
+    majors = _driver_majors(state)
+    if not majors:
+        return [Result(WARN, "GPU driver", "driver version not found (ResourceSlice driverVersion, "
+                       "GPU feature discovery labels, GKE annotations)", hint)]
+    too_new = sorted(name for name, major in majors.items() if major >= limit)
+    if not too_new:
+        return [Result(PASS, "GPU driver", f"major {', '.join(map(str, sorted(set(majors.values()))))} "
+                       f"on {len(majors)} node(s), below {limit}")]
+    status = FAIL if cfg.driver_severity == "fail" else WARN
+    return [Result(status, "GPU driver", f"R{limit} or newer on: {', '.join(too_new)}", hint)]
