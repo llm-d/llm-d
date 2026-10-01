@@ -1,0 +1,53 @@
+# AMD MoRI backend. Layer after wide-ep.values.yaml (ACCELERATOR=amd).
+router:
+  epp:
+    # The plugin config is one string, so it is restated in full; only the rollout screener's
+    # scope differs, pointing at the AMD DisaggregatedSet instead of the NVIDIA one.
+    pluginsCustomConfig:
+      wide-ep-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        # Pin each request to a single DisaggregatedSet revision during
+        # rollouts so prefill and decode never pair across revisions.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "disaggregatedset.x-k8s.io/name=wide-ep-amd-vllm-dsv3"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+
+  modelServers:
+    # One addressable port per pod: prefill's eight API servers share 8000 via SO_REUSEPORT, and
+    # on decode the routing sidecar fronts 8000. Listing 8001-8007 would target dead ports.
+    targetPorts:
+      - number: 8000
+    matchLabels:
+      llm-d.ai/guide: "wide-ep"
+      llm-d.ai/accelerator-variant: "gpu"
+      llm-d.ai/accelerator-vendor: "amd"

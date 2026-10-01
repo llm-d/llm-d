@@ -1,0 +1,39 @@
+# Single DisaggregatedSet managing the prefill and decode roles. Requires LWS v0.11.0+ with the
+# DisaggregatedSet CRD.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge patches in
+# provider overlays match roles, containers, volumes, and env entries by name, not index.
+openapi:
+  path: disaggregatedset-schema.json
+
+components:
+  - ../../../../../recipes/modelserver/components/images/amd-vllm/llm-d
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+# TODO: drop these overrides once MoRI-enabled ROCm vLLM and a sidecar carrying llm-d-router
+# PR #2816 are published under ghcr.io/llm-d.
+# Pinned by digest to the builds validated on MI355X (tags wide-ep-v0.2.0 / wide-ep-v0.1.0).
+images:
+  - name: ghcr.io/llm-d/llm-d-rocm
+    newName: ghcr.io/vcave/rocm/llm-d/vllm
+    digest: sha256:d290a46770f3327f5ca63e1f04b517577e792700d0da072ac9b48587d59a783a
+  - name: ghcr.io/llm-d/llm-d-router-disagg-sidecar
+    newName: ghcr.io/vcave/rocm/llm-d/llm-d-router-disagg-sidecar
+    digest: sha256:d3a8ab6ff8d1e41236ee2a7f4b875c82a52d06c2f1cbc8deb73d94f134bad794
+
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-V3
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true
