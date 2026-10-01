@@ -107,3 +107,107 @@ def tolerates(tolerations: Iterable[Toleration], taint: Taint) -> bool:
         if tol.operator != "Exists" and tol.key == taint.key and tol.value == taint.value:
             return True
     return False
+# ---------------------------------------------------------------------------
+# Requirements derived from the rendered overlay
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PodReq:
+    role: str
+    requests: Mapping[str, Decimal]
+    tolerations: tuple[Toleration, ...]
+    devices: Mapping[str, int]  # DRA device class -> devices per pod
+
+
+@dataclass(frozen=True)
+class Requirements:
+    apis: frozenset[str]  # group/version of every rendered object outside the core API
+    pods: tuple[PodReq, ...]
+    rdma_mode: str  # "dra", "device-plugin" or "none"
+    notes: tuple[str, ...]  # parts of the render that can't be checked
+
+
+def parse_render(text: str) -> Requirements:
+    """Turn `kubectl kustomize` output into what the model-server pods will request."""
+    docs = [d for d in yaml.safe_load_all(text) if isinstance(d, dict)]
+    sets = [d for d in docs if d.get("kind") == "DisaggregatedSet"]
+    if not sets:
+        raise PreflightError("unsupported overlay: no DisaggregatedSet in the rendered manifests")
+    templates = {d["metadata"]["name"]: d for d in docs if d.get("kind") == "ResourceClaimTemplate"}
+    notes: list[str] = []
+    pods = [pod for ds in sets for role in ds["spec"]["roles"] for pod in _role_pods(role, templates, notes)]
+    return Requirements(
+        apis=frozenset(d["apiVersion"] for d in docs if "/" in d.get("apiVersion", "")),
+        pods=tuple(pods),
+        rdma_mode=_rdma_mode(pods),
+        notes=tuple(dict.fromkeys(notes)),
+    )
+
+
+def _role_pods(role: Mapping, templates: Mapping, notes: list[str]) -> list[PodReq]:
+    spec = role["spec"]
+    lwt = spec["leaderWorkerTemplate"]
+    size = int(lwt.get("size", 1))
+    worker = lwt["workerTemplate"]
+    name = role.get("name", "role")
+    leader = _pod_req(f"{name} leader", lwt.get("leaderTemplate", worker), templates, notes)
+    group = [leader] + [_pod_req(f"{name} worker", worker, templates, notes)] * (size - 1)
+    return group * int(spec.get("replicas", 1))
+
+
+def _pod_req(role: str, template: Mapping, templates: Mapping, notes: list[str]) -> PodReq:
+    spec = template.get("spec") or {}
+    requests: dict[str, Decimal] = {}
+    # Sidecars (init containers with restartPolicy: Always) run alongside the main containers.
+    sidecars = [c for c in spec.get("initContainers") or [] if c.get("restartPolicy") == "Always"]
+    for container in [*(spec.get("containers") or []), *sidecars]:
+        resources = container.get("resources") or {}
+        # Kubernetes defaults a missing request to the limit.
+        merged = {**(resources.get("limits") or {}), **(resources.get("requests") or {})}
+        for name, quantity in merged.items():
+            if quantity is not None:
+                requests[name] = requests.get(name, Decimal(0)) + parse_quantity(quantity)
+    tolerations = tuple(
+        Toleration(t.get("key", ""), t.get("operator", "Equal"), str(t.get("value", "")), t.get("effect", ""))
+        for t in spec.get("tolerations") or []
+    )
+    return PodReq(role, requests, tolerations, _claimed_devices(spec, templates, notes))
+
+
+def _claimed_devices(spec: Mapping, templates: Mapping, notes: list[str]) -> dict[str, int]:
+    devices: dict[str, int] = {}
+    for claim in spec.get("resourceClaims") or []:
+        name = claim.get("resourceClaimTemplateName")
+        if name not in templates:
+            notes.append(f"resource claim {claim.get('name')!r} uses "
+                         f"{name or 'a pre-created claim'!r}, which is not in the rendered "
+                         "manifests; its devices are not checked")
+            continue
+        for request in _template_requests(name, templates[name]):
+            exactly = request.get("exactly")
+            if exactly is None:
+                form = "firstAvailable" if "firstAvailable" in request else "an unknown form"
+                notes.append(f"claim template {name!r} request {request.get('name')!r} "
+                             f"uses {form}; not checked")
+                continue
+            device_class = exactly["deviceClassName"]
+            devices[device_class] = devices.get(device_class, 0) + int(exactly.get("count", 1))
+    return devices
+
+
+def _template_requests(name: str, template: Mapping) -> list[Mapping]:
+    try:
+        return template["spec"]["spec"]["devices"]["requests"]
+    except (KeyError, TypeError) as exc:
+        raise PreflightError(f"unsupported ResourceClaimTemplate {name!r}: "
+                             "no spec.spec.devices.requests") from exc
+
+
+def _rdma_mode(pods: Iterable[PodReq]) -> str:
+    pods = list(pods)
+    if any(p.devices for p in pods):
+        return "dra"
+    if any(name.startswith("rdma/") for p in pods for name in p.requests):
+        return "device-plugin"
+    return "none"
