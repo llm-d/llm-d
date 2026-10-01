@@ -5,6 +5,13 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  # Model weights on an RWX PVC rather than a node-local hostPath. CoreWeave's
+  # /var/cache/huggingface is a 15 GB ramdisk (/dev/ram0), far too small for
+  # gpt-oss-120b (60.8 GiB of safetensors), so a hostPath there fails with
+  # `OSError: [Errno 28] No space left on device` during the first download.
+  # Requires the `model-pvc` PVC to exist in the namespace and the default
+  # StorageClass to support ReadWriteMany -- see the guide README.
+  - ../../../../../recipes/modelserver/components/model-cache
 
 patches:
   - target:
@@ -20,11 +27,6 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: HF_HOME
-          value: /root/.cache/huggingface
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
           name: HF_HUB_DOWNLOAD_TIMEOUT
           value: "60"
       # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
@@ -33,19 +35,6 @@ patches:
         value:
           name: HF_HUB_DISABLE_XET
           value: "1"
-      # Node-local HuggingFace cache shared across pods and restarts
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          mountPath: /root/.cache/huggingface
-          name: huggingface-cache
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: huggingface-cache
-          hostPath:
-            path: /var/cache/huggingface
-            type: DirectoryOrCreate
   - target:
       kind: Deployment
       name: prefill
@@ -59,11 +48,6 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: HF_HOME
-          value: /root/.cache/huggingface
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
           name: HF_HUB_DOWNLOAD_TIMEOUT
           value: "60"
       # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
@@ -72,16 +56,3 @@ patches:
         value:
           name: HF_HUB_DISABLE_XET
           value: "1"
-      # Node-local HuggingFace cache shared across pods and restarts
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          mountPath: /root/.cache/huggingface
-          name: huggingface-cache
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: huggingface-cache
-          hostPath:
-            path: /var/cache/huggingface
-            type: DirectoryOrCreate
