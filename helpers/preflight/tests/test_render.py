@@ -5,11 +5,15 @@ Run from the repo root:
     python -m pytest helpers/preflight/tests/ -v
 """
 
+import os
+import shutil
+import subprocess
 import sys
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "helpers" / "preflight"))
@@ -202,3 +206,19 @@ spec: {spec: {}}
     spec = "{containers: [{name: vllm}], resourceClaims: [{name: c, resourceClaimTemplateName: t}]}"
     with pytest.raises(preflight.PreflightError, match="ResourceClaimTemplate 't'"):
         preflight.parse_render(_ds(spec, extra_docs=rct))
+OVERLAY_ROOT = REPO_ROOT / "guides" / "wide-ep" / "modelserver" / "gpu" / "vllm-deepseek-r1-0528"
+
+
+@pytest.mark.parametrize("name", ["gke", "coreweave", "base", "dgx-cloud-gb200"])
+def test_render_fixture_matches_manifests(name):
+    if shutil.which("kubectl") is None:
+        if os.environ.get("CI"):
+            pytest.fail("kubectl is required in CI to check that render fixtures are current")
+        pytest.skip("kubectl not installed")
+    live = subprocess.run(["kubectl", "kustomize", str(OVERLAY_ROOT / name)],
+                          capture_output=True, text=True, check=True).stdout
+    fixture = FIXTURES / "render" / f"{name}.yaml"
+    overlay = OVERLAY_ROOT.relative_to(REPO_ROOT) / name
+    assert list(yaml.safe_load_all(live)) == list(yaml.safe_load_all(fixture.read_text())), (
+        f"stale fixture; regenerate: {{ echo '# yamllint disable'; kubectl kustomize {overlay}; }} "
+        f"> {fixture.relative_to(REPO_ROOT)}")

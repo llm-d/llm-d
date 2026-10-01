@@ -731,3 +731,74 @@ def run_checks(req: Requirements, cfg: GuideConfig, state: ClusterState,
         *check_router(cfg, state, gateway_mode),
         *check_notes(req),
     ]
+# ---------------------------------------------------------------------------
+# Report and CLI
+# ---------------------------------------------------------------------------
+
+
+def format_text(results: Iterable[Result]) -> str:
+    results = list(results)
+    lines = []
+    for r in results:
+        lines.append(f"{r.status:<5} {r.check}: {r.detail}")
+        if r.hint and r.status in (WARN, FAIL):
+            lines.append(f"      hint: {r.hint}")
+    counts = {s: sum(r.status == s for r in results) for s in (FAIL, WARN, PASS)}
+    lines.append(f"\n{counts[FAIL]} FAIL, {counts[WARN]} WARN, {counts[PASS]} PASS")
+    return "\n".join(lines)
+
+
+def format_json(results: Iterable[Result]) -> str:
+    return json.dumps([asdict(r) for r in results], indent=2)
+
+
+def exit_code(results: Iterable[Result]) -> int:
+    return 1 if any(r.status == FAIL for r in results) else 0
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Read-only check that a cluster can run an llm-d guide.")
+    parser.add_argument("guide", help="guide directory, e.g. guides/wide-ep")
+    parser.add_argument("--overlay", required=True,
+                        help="model-server overlay relative to the guide, "
+                             "e.g. modelserver/gpu/vllm-deepseek-r1-0528/gke")
+    parser.add_argument("--context", help="kubeconfig context to check (default: current)")
+    parser.add_argument("--gateway-mode", action="store_true",
+                        help="the router runs behind a Gateway (also checks Gateway API CRDs)")
+    parser.add_argument("--output", choices=("text", "json"), default="text")
+    return parser.parse_args(argv)
+
+
+def _kubectl_text(runner: Runner, *args: str, what: str) -> str:
+    try:
+        return runner.text(*args)
+    except KubectlError as exc:
+        raise PreflightError(f"could not {what}: {exc.stderr or exc}") from exc
+
+
+def main(argv: list[str] | None = None, runner_factory=Runner, which=shutil.which) -> int:
+    args = _parse_args(argv)
+    try:
+        if which("kubectl") is None:
+            raise PreflightError("kubectl not found on PATH")
+        guide = Path(args.guide)
+        if not guide.is_dir():
+            raise PreflightError(f"{guide}: not a directory")
+        cfg = load_guide_config(guide / "preflight.yaml")
+        overlay = guide / args.overlay
+        if not overlay.is_dir():
+            raise PreflightError(f"{overlay}: not a directory")
+        runner = runner_factory(args.context)
+        req = parse_render(_kubectl_text(runner, "kustomize", str(overlay), what="render the overlay"))
+        _kubectl_text(runner, "version", what="reach the cluster")
+        state = collect_state(runner)
+    except (PreflightError, KubectlError) as exc:
+        print(f"preflight: {exc}", file=sys.stderr)
+        return 2
+    results = run_checks(req, cfg, state, args.gateway_mode, which("helm") is not None)
+    print(format_json(results) if args.output == "json" else format_text(results))
+    return exit_code(results)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
