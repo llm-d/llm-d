@@ -603,3 +603,131 @@ def check_driver(cfg: GuideConfig, state: ClusterState) -> list[Result]:
                        f"on {len(majors)} node(s), below {limit}")]
     status = FAIL if cfg.driver_severity == "fail" else WARN
     return [Result(status, "GPU driver", f"R{limit} or newer on: {', '.join(too_new)}", hint)]
+def _schedulable(node: Node, tolerations: Iterable[Toleration]) -> bool:
+    tolerations = tuple(tolerations)
+    return not node.unschedulable and all(
+        tolerates(tolerations, t) for t in node.taints if t.effect in _HARD_EFFECTS)
+
+
+def _node_capacity(node: Node, state: ClusterState) -> dict[str, Decimal]:
+    capacity = dict(node.allocatable)
+    for device in state.devices or ():
+        if device.node == node.name:
+            key = f"{device.driver} devices"
+            capacity[key] = capacity.get(key, Decimal(0)) + 1
+    return capacity
+
+
+def _pod_demand(pod: PodReq, state: ClusterState) -> dict[str, Decimal]:
+    """Per-pod demand keyed like _node_capacity. A DeviceClass whose driver is unknown
+    is keyed by its own name, so a pod that needs it is never placed silently."""
+    demand = {name: qty for name, qty in pod.requests.items() if qty > 0}
+    for device_class, count in pod.devices.items():
+        driver = (state.device_classes or {}).get(device_class) or device_class
+        key = f"{driver} devices"
+        demand[key] = demand.get(key, Decimal(0)) + count
+    return demand
+
+
+def _shortage(capacity: Mapping[str, Decimal], demand: Mapping[str, Decimal]) -> str | None:
+    for name, qty in demand.items():
+        have = capacity.get(name, Decimal(0))
+        if have < qty:
+            return f"{name} {format_quantity(name, have)} < {format_quantity(name, qty)}"
+    return None
+
+
+def _describe(demand: Mapping[str, Decimal]) -> str:
+    return ", ".join(f"{format_quantity(name, qty)} {name}" for name, qty in sorted(demand.items()))
+
+
+def check_capacity(req: Requirements, state: ClusterState) -> list[Result]:
+    name = "model-server capacity"
+    note = Result(INFO, name, "checked against allocatable; pods already running are not subtracted")
+    dra_unreadable = req.rdma_mode == "dra" and (state.devices is None or state.device_classes is None)
+    if state.nodes is None or dra_unreadable:
+        return [Result(WARN, name, "cannot list nodes, ResourceSlices or DeviceClasses; not checked"), note]
+    classes = state.device_classes or {}
+    unmapped = sorted({c for p in req.pods for c in p.devices if c in classes and not classes[c]})
+    if unmapped:
+        return [Result(WARN, name, f"cannot tell which driver serves DeviceClass {', '.join(unmapped)}; "
+                       "device counts not checked"), note]
+    return [_place_pods(req, state), note]
+
+
+def _place_pods(req: Requirements, state: ClusterState) -> Result:
+    """First-fit placement of every model-server pod onto schedulable nodes."""
+    free = {n.name: _node_capacity(n, state) for n in state.nodes}
+    excluded: set[str] = set()
+    placed, unplaced = 0, None
+    for pod in req.pods:
+        demand = _pod_demand(pod, state)
+        target = None
+        for node in state.nodes:
+            if not _schedulable(node, pod.tolerations):
+                excluded.add(node.name)
+            elif target is None and _shortage(free[node.name], demand) is None:
+                target = node.name
+        if target is None:
+            unplaced = unplaced or (pod, demand)
+            continue
+        free = {**free, target: {k: v - demand.get(k, Decimal(0)) for k, v in free[target].items()}}
+        placed += 1
+    total = len(req.pods)
+    per_pod = _describe(_pod_demand(req.pods[0], state)) if req.pods else "nothing"
+    if unplaced is None:
+        return Result(PASS, "model-server capacity", f"{placed}/{total} pods fit ({per_pod} each)")
+    pod, demand = unplaced
+    reasons = [f"{n.name}: {_shortage(free[n.name], demand)}" for n in state.nodes
+               if n.name not in excluded and _shortage(free[n.name], demand)][:6]
+    detail = f"{placed}/{total} pods fit; first that doesn't: {pod.role}, needs {_describe(demand)}"
+    if reasons:
+        detail += "; short: " + "; ".join(reasons)
+    if excluded:
+        detail += f"; not schedulable for these pods (taint or cordon): {', '.join(sorted(excluded))}"
+    return Result(FAIL, "model-server capacity", detail)
+
+
+def check_router(cfg: GuideConfig, state: ClusterState, gateway_mode: bool) -> list[Result]:
+    size = cfg.router_gateway if gateway_mode else cfg.router_standalone
+    want = f"{format_quantity('cpu', size.cpu)} CPU and {format_quantity('memory', size.memory)} memory"
+    if state.nodes is None:
+        return [Result(WARN, "router node", "cannot list nodes; not checked")]
+    if DRA_API in state.api_versions and state.devices is None:
+        # DRA GPU nodes have no nvidia.com/gpu in allocatable; without ResourceSlices
+        # they can't be told apart from CPU nodes.
+        return [Result(WARN, "router node", "cannot list ResourceSlices, so GPU nodes can't be "
+                       "excluded; not checked")]
+    gpus = gpu_nodes(state)
+    candidates = [n for n in state.nodes if n.name not in gpus and not n.unschedulable
+                  and not any(t.effect in _HARD_EFFECTS for t in n.taints)]
+    for node in candidates:
+        if node.allocatable.get("cpu", 0) >= size.cpu and node.allocatable.get("memory", 0) >= size.memory:
+            return [Result(PASS, "router node", f"{node.name} fits the router ({want})")]
+    detail = f"no untainted non-GPU node with {want} allocatable"
+    if candidates:
+        biggest = max(candidates, key=lambda n: n.allocatable.get("cpu", 0))
+        cpu = format_quantity("cpu", biggest.allocatable.get("cpu", Decimal(0)))
+        memory = format_quantity("memory", biggest.allocatable.get("memory", Decimal(0)))
+        detail += f"; largest is {biggest.name} with {cpu} CPU, {memory} memory"
+    return [Result(FAIL, "router node", detail, "router requests come from guides/recipes/router/base.values.yaml")]
+
+
+def check_notes(req: Requirements) -> list[Result]:
+    return [Result(WARN, "manifests", note) for note in req.notes] + [
+        Result(INFO, "decode memory", "out-of-memory at decode depends on runtime settings and is not checked")]
+
+
+def run_checks(req: Requirements, cfg: GuideConfig, state: ClusterState,
+               gateway_mode: bool, helm_found: bool) -> list[Result]:
+    return [
+        *check_access(state, helm_found),
+        *check_apis(req, cfg, state, gateway_mode),
+        *check_lws(cfg, state),
+        *check_ds_webhook(state),
+        *check_rdma(req, cfg, state),
+        *check_driver(cfg, state),
+        *check_capacity(req, state),
+        *check_router(cfg, state, gateway_mode),
+        *check_notes(req),
+    ]
