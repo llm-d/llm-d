@@ -126,3 +126,87 @@ def test_webhook_absent_warns_with_helm_flag_hint():
         builders.webhook_config("vleaderworkerset.kb.io"))
     results = preflight.check_ds_webhook(builders.state(responses))
     assert results[0].status == "WARN" and "enableDisaggregatedSet=true" in results[0].hint
+# --- RDMA ---------------------------------------------------------------------
+
+def test_rdma_dra_passes_on_healthy_gke():
+    assert statuses(preflight.check_rdma(req(), CFG, builders.state(builders.healthy_gke()))) == ["PASS"]
+
+
+def test_rdma_missing_device_class_fails():
+    responses = builders.healthy_gke()
+    responses[("get", "deviceclasses.resource.k8s.io")] = builders.items(builders.device_class("gpu.nvidia.com"))
+    results = preflight.check_rdma(req(), CFG, builders.state(responses))
+    assert results[0].status == "FAIL" and "mrdma.google.com" in results[0].detail
+    assert "docs/infrastructure/providers/gke/README.md" in results[0].hint
+
+
+def test_rdma_no_nic_devices_published_fails():
+    responses = builders.healthy_gke()
+    slices = responses[("get", "resourceslices.resource.k8s.io")]["items"]
+    responses[("get", "resourceslices.resource.k8s.io")] = builders.items(
+        *[s for s in slices if s["spec"]["driver"] != "mrdma.google.com"])
+    results = preflight.check_rdma(req(), CFG, builders.state(responses))
+    assert results[0].status == "FAIL" and "mrdma.google.com" in results[0].detail
+
+
+def test_rdma_missing_pcie_root_warns():
+    responses = builders.healthy_gke()
+    for s in responses[("get", "resourceslices.resource.k8s.io")]["items"]:
+        if s["spec"]["driver"] == "mrdma.google.com":
+            for d in s["spec"]["devices"]:
+                d["attributes"] = {}
+    results = preflight.check_rdma(req(), CFG, builders.state(responses))
+    assert statuses(results) == ["PASS", "WARN"] and "pcieRoot" in results[1].detail
+
+
+def test_rdma_unreadable_slices_warn():
+    responses = builders.healthy_gke()
+    responses[("get", "resourceslices.resource.k8s.io")] = builders.forbidden("resourceslices")
+    assert statuses(preflight.check_rdma(req(), CFG, builders.state(responses))) == ["WARN"]
+
+
+def test_rdma_device_plugin_passes_and_fails():
+    st = builders.state(builders.healthy_coreweave())
+    assert statuses(preflight.check_rdma(req("coreweave"), CFG, st)) == ["PASS"]
+    responses = builders.healthy_coreweave()
+    responses[("get", "nodes")] = builders.items(builders.node("gpu-0", gpu=8))
+    results = preflight.check_rdma(req("coreweave"), CFG, builders.state(responses))
+    assert results[0].status == "FAIL" and "rdma/ib" in results[0].detail
+
+
+def test_rdma_not_in_manifests_warns():
+    results = preflight.check_rdma(req("base"), CFG, builders.state(builders.healthy_coreweave()))
+    assert statuses(results) == ["WARN"] and "docs/infrastructure/rdma/README.md" in results[0].hint
+
+
+# --- GPU driver -----------------------------------------------------------------
+
+def test_driver_below_limit_passes():
+    assert statuses(preflight.check_driver(CFG, builders.state(builders.healthy_gke("570.172.08")))) == ["PASS"]
+
+
+def test_driver_r580_warns_by_default():
+    results = preflight.check_driver(CFG, builders.state(builders.healthy_gke("580.65.06")))
+    assert results[0].status == "WARN" and "580" in results[0].detail and "gpu-0" in results[0].detail
+
+
+def test_driver_r580_fails_when_configured():
+    results = preflight.check_driver(replace(CFG, driver_severity="fail"),
+                                     builders.state(builders.healthy_gke("580.65.06")))
+    assert results[0].status == "FAIL"
+
+
+def test_driver_from_gfd_label_and_gke_annotation():
+    responses = builders.healthy_coreweave()
+    responses[("get", "nodes")] = builders.items(
+        builders.node("a", gpu=8, labels={"nvidia.com/cuda.driver-version.major": "580"}),
+        builders.node("b", gpu=8, labels={"nvidia.com/cuda.driver.major": "570"}),
+        builders.node("c", gpu=8, annotations={"cloud.google.com/cuda.driver-version.major": "575"}))
+    results = preflight.check_driver(CFG, builders.state(responses))
+    assert results[0].status == "WARN"
+    assert results[0].detail.endswith(": a")  # only node a is on R580; b (570) and c (575) are not
+
+
+def test_driver_unknown_warns():
+    results = preflight.check_driver(CFG, builders.state(builders.healthy_coreweave()))
+    assert statuses(results) == ["WARN"] and "not found" in results[0].detail
