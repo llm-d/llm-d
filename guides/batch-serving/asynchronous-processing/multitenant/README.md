@@ -1,5 +1,7 @@
 # Multi-Tenant Async Processing — Quota, Priority & Saturation
 
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml)
+
 An advanced [Async Processor](https://github.com/llm-d/llm-d-async) scenario built on the
 [asynchronous-processing](../README.md) guide, across three dimensions — **team × tier × model**. Each
 **team** gets a per-team quota (reserved vs. overflow) and a priority **tier**; each **model** gets its
@@ -659,6 +661,25 @@ Note that deadline proximity only works when Redis Sorted Set queues are used (`
 The gate-metric panels need an image newer than v0.7.2. GMP / Monarch lags real time ~1–2 min, so gate control
 is bang-bang on that timescale; the self-hosted Prometheus path reacts within one scrape.
 </details>
+
+## Nightly test
+
+A GKE nightly (`nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x`) deploys this guide, including the
+optional coordinator from step 4, with [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh).
+It then benchmarks realtime traffic (the coordinator's `passthrough` mode) with and without a queued
+llm-d-async backlog (`wait` mode) at 20/80/90/100 % of the router's configured capacity. What the nightly
+measures and how its bounds are chosen is documented with the validator in
+[`.github/scripts/e2e/async-multitenant/`](../../../../.github/scripts/e2e/async-multitenant/README.md).
+
+The nightly relies on the in-flight eviction enabled in the router values: without it, async work
+admitted past the router's capacity makes realtime requests wait behind it and the isolation checks fail
+(measurements in [llm-d-async#468](https://github.com/llm-d/llm-d-async/issues/468)).
+
+**Status: Tier 1 (Experimental)**, per the [guide policy](../../../../docs/well-lit-paths/guides-definition.md).
+Reference environment: GKE, one NVIDIA H100 (nightly) or L4 (development), vLLM, `Qwen/Qwen3-8B`.
+Gaps to Tier 2: no kustomize overlays (manifests and Helm values are applied by hand, and
+`batch-serving` is excluded from the kustomize dry-run job). Gaps to Tier 3: no `guide.yaml`, so the
+nightly deploy script mirrors this README's commands instead of emitting them with `scripts/guide.py`.
 
 ## Notes & gotchas
 

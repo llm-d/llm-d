@@ -108,6 +108,7 @@ GUIDES = [
     ("Tiered Prefix Cache (LMCache)", "../guides/tiered-prefix-cache/README.md", "tiered-prefix-cache", "lmcache"),
     ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency-routing", None),
     ("Flow Control", "../guides/flow-control/README.md", "flow-control", None),
+    ("Async Processing (Multi-Tenant)", "../guides/batch-serving/asynchronous-processing/multitenant/README.md", "async-multitenant", None),
     ("Workload Autoscaling (KEDA + EPP Queue)", "../guides/workload-autoscaling/keda-epp-queue/README.md", "workload-autoscaling-keda-epp", None),
     ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation-base/README.md", "fast-model-actuation-base", None),
     ("Multimodal Serving (Aggregation)", "../guides/multimodal-serving/aggregation/README.md", "multimodal-serving-aggregation", None),

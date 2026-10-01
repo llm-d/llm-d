@@ -35,6 +35,7 @@ on:
       - main
     workflows:
       # SLACK-WORKFLOWS-START
+      - "Nightly - Async Multi-Tenant E2E (GKE GPU)"
       - "Nightly - Fast Model Actuation + KEDA E2E (OCP GPU)"
       - "Nightly - Fast Model Actuation E2E (OCP GPU)"
       - "Nightly - Flow Control E2E (GKE GPU)"

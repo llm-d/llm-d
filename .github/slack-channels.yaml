@@ -34,6 +34,7 @@ fallback_channel: "#llm-d-ci-alerts"
 
 channels:
   "#llm-d-ci-alerts":
+    - nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-base-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml
