@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Enables decode-side prefix caching with a host-DRAM (L2) tier for SGLang P/D disaggregation.
+#
+# Memory sizing:
+# SGLang allocates the hierarchical cache host pool eagerly and pins it in host memory at
+# --hicache-size (GB) per TP rank. At TP=2 with --hicache-size=64, the host pool is 128 GB per pod.
+# Sizing requests == limits at 256Gi prevents node memory overcommit (the scheduler reserves the full
+# allocation upfront so pods cannot overcommit host RAM and trigger cgroup OOM kills when pinning)
+# and protects against kubelet memory-pressure eviction ranking by ensuring the container cannot
+# exceed its request. This leaves ~128 GB headroom above the pinned host pool for model weights,
+# engine runtime, PyTorch overhead, and the 16Gi /dev/shm tmpfs.
+#
+# An 8-GPU node (e.g. a3-megagpu-8g with 1,872 GiB, p5.48xlarge with 2,048 GiB) hosts at most
+# 4 TP=2 pods. 4 x 256Gi = 1,024 GiB (<=55% of node RAM), so GPUs remain the binding scheduling
+# constraint without orphaning memory. Adjust requests/limits if --hicache-size is changed:
+#   pod_memory ≈ (hicache_size × TP) + 128Gi headroom
+
+patches:
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --disaggregation-decode-enable-radix-cache
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --enable-hierarchical-cache
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --hicache-size=64
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 256Gi
