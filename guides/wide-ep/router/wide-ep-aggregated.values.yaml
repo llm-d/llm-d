@@ -1,0 +1,41 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "wide-ep-aggregated-config.yaml"
+    pluginsCustomConfig:
+      wide-ep-aggregated-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+
+  modelServers:
+    # targetPorts must list all 8 DP rank ports so the EPP routes requests
+    # to all 16 DP ranks across the 2 nodes. Without this, only rank 0 receives traffic.
+    targetPorts:
+      - number: 8000
+      - number: 8001
+      - number: 8002
+      - number: 8003
+      - number: 8004
+      - number: 8005
+      - number: 8006
+      - number: 8007
+    matchLabels:
+      llm-d.ai/guide: "wide-ep"
