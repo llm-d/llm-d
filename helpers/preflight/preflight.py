@@ -422,3 +422,90 @@ def _lws_controllers(deployments: Iterable[Mapping]) -> Iterator[LwsController]:
             if _LWS_IMAGE.search(image):
                 yield LwsController(meta.get("namespace", ""), image,
                                     (meta.get("labels") or {}).get("app.kubernetes.io/version", ""))
+# ---------------------------------------------------------------------------
+# Checks: pure functions over Requirements, GuideConfig and ClusterState
+# ---------------------------------------------------------------------------
+
+PASS, WARN, FAIL, INFO = "PASS", "WARN", "FAIL", "INFO"
+GATEWAY_CRDS = ("gateways.gateway.networking.k8s.io", "httproutes.gateway.networking.k8s.io")
+DS_WEBHOOK = "vdisaggregatedset.kb.io"
+
+
+@dataclass(frozen=True)
+class Result:
+    status: str
+    check: str
+    detail: str
+    hint: str = ""
+
+
+def _see(cfg: GuideConfig, key: str) -> str:
+    return f"see {cfg.docs[key]}" if key in cfg.docs else ""
+
+
+def check_access(state: ClusterState, helm_found: bool) -> list[Result]:
+    results = [Result(PASS, "cluster access", "kubectl reached the API server")]
+    if not helm_found:
+        results.append(Result(WARN, "client tools", "helm not found on PATH",
+                              "the guide installs the router with helm"))
+    results += [Result(WARN, "permissions", f"could not list {item}", "checks that need it are reported as WARN")
+                for item in state.denied]
+    return results
+
+
+def check_apis(req: Requirements, cfg: GuideConfig, state: ClusterState, gateway_mode: bool) -> list[Result]:
+    missing_apis = sorted(req.apis - state.api_versions)
+    results = [
+        Result(FAIL, "APIs", f"not served: {', '.join(missing_apis)}", _see(cfg, "prerequisites"))
+        if missing_apis else Result(PASS, "APIs", f"served: {', '.join(sorted(req.apis))}")
+    ]
+    wanted = cfg.crds + (GATEWAY_CRDS if gateway_mode else ())
+    if state.crds is None:
+        results.append(Result(WARN, "CRDs", "cannot list CRDs; not checked"))
+    else:
+        missing = [c for c in wanted if c not in state.crds]
+        results.append(Result(FAIL, "CRDs", f"missing: {', '.join(missing)}", _see(cfg, "prerequisites"))
+                       if missing else Result(PASS, "CRDs", f"present: {', '.join(wanted)}"))
+    return results
+
+
+def _fmt_version(version: tuple[int, int, int]) -> str:
+    return "v" + ".".join(str(part) for part in version)
+
+
+def _image_tag(image: str) -> str:
+    last = image.rsplit("/", 1)[-1].split("@", 1)[0]
+    return last.split(":", 1)[1] if ":" in last else ""
+
+
+def check_lws(cfg: GuideConfig, state: ClusterState) -> list[Result]:
+    want = _fmt_version(cfg.lws_min_version)
+    hint = _see(cfg, "prerequisites")
+    if state.lws is None:
+        return [Result(WARN, "LWS controller", "cannot list deployments; not checked")]
+    if not state.lws:
+        return [Result(WARN, "LWS controller", "no Deployment with label control-plane=controller-manager "
+                       f"running an lws image; need {want} or newer", hint)]
+    results = []
+    for ctrl in state.lws:
+        where = f"{ctrl.namespace}/{ctrl.image}"
+        version = parse_semver(_image_tag(ctrl.image)) or parse_semver(ctrl.version_label)
+        if version is None:
+            results.append(Result(WARN, "LWS controller", f"{where}: version unknown; need {want} or newer", hint))
+        elif version < cfg.lws_min_version:
+            results.append(Result(FAIL, "LWS controller",
+                                  f"{where}: {_fmt_version(version)} is older than {want}", hint))
+        else:
+            results.append(Result(PASS, "LWS controller", f"{where}: {_fmt_version(version)}"))
+    return results
+
+
+def check_ds_webhook(state: ClusterState) -> list[Result]:
+    if state.webhooks is None:
+        return [Result(WARN, "DisaggregatedSet webhook", "cannot list validating webhooks; not checked")]
+    if DS_WEBHOOK in state.webhooks:
+        return [Result(PASS, "DisaggregatedSet webhook", f"{DS_WEBHOOK} registered")]
+    return [Result(WARN, "DisaggregatedSet webhook",
+                   f"{DS_WEBHOOK} not registered; the controller still runs, but invalid DisaggregatedSets "
+                   "are not rejected",
+                   "installing LWS with helm: --set enableDisaggregatedSet=true")]
