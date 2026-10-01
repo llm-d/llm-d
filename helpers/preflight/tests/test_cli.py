@@ -44,7 +44,7 @@ def test_bad_severity_is_rejected(tmp_path):
 
 
 def test_missing_key_is_rejected(tmp_path):
-    (tmp_path / "preflight.yaml").write_text("crds: []\n")
+    (tmp_path / "preflight.yaml").write_text("requirements:\n  cluster:\n    crds: []\n")
     with pytest.raises(preflight.PreflightError, match="invalid preflight config"):
         preflight.load_guide_config(tmp_path / "preflight.yaml")
 
@@ -168,4 +168,13 @@ def test_unparseable_render_exits_2(capsys):
 def test_malformed_config_is_a_usage_error(tmp_path):
     (tmp_path / "preflight.yaml").write_text("crds: [unclosed\n")
     with pytest.raises(preflight.PreflightError, match="not valid YAML"):
+        preflight.load_guide_config(tmp_path / "preflight.yaml")
+
+
+def test_requirements_live_under_requirements_cluster(tmp_path):
+    # Same container a guide.yaml `requirements:` block would use (see #2636), so moving it is a copy.
+    flat = "crds: []\nlws: {minVersion: v0.11.0}\ngpuDriver: {maxMajorExclusive: 580}\n" \
+           "router: {standalone: {cpu: '8', memory: 16Gi}, gateway: {cpu: '4', memory: 8Gi}}\n"
+    (tmp_path / "preflight.yaml").write_text(flat)
+    with pytest.raises(preflight.PreflightError, match="requirements.cluster"):
         preflight.load_guide_config(tmp_path / "preflight.yaml")

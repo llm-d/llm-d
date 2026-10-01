@@ -50,9 +50,10 @@ CEL filter, so partitioned devices (for example MIG) may be over-counted.
 
 ## Adding a guide
 
-Add `<guide>/preflight.yaml` with what can't be read from the manifests
-(see `guides/wide-ep/preflight.yaml`). The overlay must render a
-`DisaggregatedSet`.
+Add `<guide>/preflight.yaml` with what can't be read from the manifests,
+under `requirements.cluster` (see `guides/wide-ep/preflight.yaml`). That is the
+block a `guide.yaml` `requirements:` section would hold, so it can move there
+unchanged. The overlay must render a `DisaggregatedSet`.
 
 ## Tests
 
