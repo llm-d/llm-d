@@ -61,7 +61,7 @@ router:
     pluginsConfigFile: "p2p-kv-cache-sharing-plugins.yaml"
     pluginsCustomConfig:
       p2p-kv-cache-sharing-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
           - type: token-producer
