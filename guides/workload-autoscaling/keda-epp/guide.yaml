@@ -16,11 +16,18 @@ env:
     SCALEDOBJECT_NAME: {default: "optimized-baseline-keda-epp"}
     HPA_NAME: {default: "keda-hpa-optimized-baseline"}
 
+    # EPP service name (the `service` label on EPP metrics) and the InferencePool
+    # name (the `inference_pool` label on pool-saturation; the EPP --pool-name /
+    # Helm release name, NOT the namespace). Rendered into the overlay PromQL by
+    # envsubst at apply time.
+    EPP_SERVICE: {default: "optimized-baseline-epp"}
+    INFERENCE_POOL: {default: "optimized-baseline"}
+
     # Scaling signal. `queue` = EPP flow-control queue size (default, mature).
     # `saturation` = EPP pool saturation (alternative, experimental - no nightly
     # coverage yet). Rendered as an annotation only; it selects which leaf overlay
     # the deploy step names, it does not gate execution.
-    TRIGGER: {default: queue, values: [queue, saturation]}
+    SIGNAL: {default: queue, values: [queue, saturation]}
 
     # Target platform. `existing` = generic Kubernetes with the bundled
     # kube-prometheus-stack over plain in-cluster HTTP. `ocp` = OpenShift with
@@ -28,7 +35,18 @@ env:
     # annotation only - it does not gate execution.
     ENV: {default: existing, values: [existing, ocp]}
 
-    # Autoscaling overlays for this guide (leaf = <platform>-<trigger>).
+    # Overshoot solution (how scale-up avoids over-provisioning while new pods
+    # sit Pending). `windows` = HPA stabilization windows (the portable default
+    # shipped here): a 300s scaleUp stabilization window smooths the decision so
+    # the HPA does not keep requesting capacity that is already in flight. The
+    # `guard` approach (pending-aware scalingModifiers that subtract Pending pods
+    # from demand) moves that protection into the metric formula, which lets the
+    # HPA scaleUp stabilization window drop to 0 for immediate scale-up; it
+    # arrives in a later PR. Rendered as an annotation only - it does not gate
+    # execution.
+    OVERSHOOT: {default: windows, values: [windows]}
+
+    # Autoscaling overlays for this guide (leaf = overlays/<platform>/<signal>).
     OVERLAY_ROOT: ${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline
 
   source: ["${REPO_ROOT}/guides/env.sh"]
@@ -60,21 +78,24 @@ deploy:
         kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
         kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 
-  # Apply the leaf overlay for the chosen TRIGGER x ENV. Generic Kubernetes uses
-  # the bundled kube-prometheus-stack over plain in-cluster HTTP with no client
-  # auth; OpenShift uses Thanos Querier + the shared metrics-reader recipe.
+  # Apply the leaf overlay for the chosen SIGNAL x ENV. The overlay carries ${...}
+  # placeholders (namespace, model, deployment, EPP service, inference pool), so
+  # the leaf is built and piped through envsubst before kubectl applies it.
+  # Generic Kubernetes uses the bundled kube-prometheus-stack over plain
+  # in-cluster HTTP with no client auth; OpenShift uses Thanos Querier + the
+  # shared metrics-reader recipe.
   apply_k8s_queue:
-    - when: {TRIGGER: [queue], ENV: [existing]}
-      run: kubectl apply -k ${OVERLAY_ROOT}/k8s-queue
+    - when: {SIGNAL: [queue], ENV: [existing]}
+      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
   apply_k8s_saturation:
-    - when: {TRIGGER: [saturation], ENV: [existing]}
-      run: kubectl apply -k ${OVERLAY_ROOT}/k8s-saturation
+    - when: {SIGNAL: [saturation], ENV: [existing]}
+      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
   apply_ocp_queue:
-    - when: {TRIGGER: [queue], ENV: [ocp]}
-      run: kubectl apply -k ${OVERLAY_ROOT}/ocp-queue
+    - when: {SIGNAL: [queue], ENV: [ocp]}
+      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
   apply_ocp_saturation:
-    - when: {TRIGGER: [saturation], ENV: [ocp]}
-      run: kubectl apply -k ${OVERLAY_ROOT}/ocp-saturation
+    - when: {SIGNAL: [saturation], ENV: [ocp]}
+      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 
 verify:
   # ScaledObject Ready=True confirms the scaler config is valid; KEDA then creates
@@ -143,11 +164,11 @@ verify:
 cleanup:
   # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
   # the target Deployment or reset its replica count.
-  - when: {TRIGGER: [queue], ENV: [existing]}
-    run: kubectl delete -k ${OVERLAY_ROOT}/k8s-queue --ignore-not-found=true
-  - when: {TRIGGER: [saturation], ENV: [existing]}
-    run: kubectl delete -k ${OVERLAY_ROOT}/k8s-saturation --ignore-not-found=true
-  - when: {TRIGGER: [queue], ENV: [ocp]}
-    run: kubectl delete -k ${OVERLAY_ROOT}/ocp-queue --ignore-not-found=true
-  - when: {TRIGGER: [saturation], ENV: [ocp]}
-    run: kubectl delete -k ${OVERLAY_ROOT}/ocp-saturation --ignore-not-found=true
+  - when: {SIGNAL: [queue], ENV: [existing]}
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+  - when: {SIGNAL: [saturation], ENV: [existing]}
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+  - when: {SIGNAL: [queue], ENV: [ocp]}
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+  - when: {SIGNAL: [saturation], ENV: [ocp]}
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -

@@ -14,7 +14,9 @@ apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
   name: keda-prometheus-auth
-  namespace: llm-d-optimized-baseline
+  # Must live in the same namespace as the ScaledObject it serves; rendered by
+  # envsubst at apply time (NAMESPACE), same as the ScaledObject.
+  namespace: ${NAMESPACE}
 spec:
   secretTargetRef:
     - parameter: bearerToken

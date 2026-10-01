@@ -44,9 +44,25 @@ scaling decisions. The HPA remains visible for inspection, but KEDA owns it.
    Confirm that Prometheus is scraping the EPP metrics endpoint before
    configuring autoscaling.
 
-Set the guide environment variables. `TRIGGER` selects the scaling signal
+Set the guide environment variables. `SIGNAL` selects the scaling signal
 (`queue` or `saturation`) and `ENV` selects the platform (`existing` or `ocp`);
-together they name the overlay you apply:
+together they name the overlay you apply.
+
+The deployment-specific variables are rendered into the overlay with `envsubst`
+at apply time. The defaults below match the stock optimized-baseline
+deployment, so if you followed that guide unchanged you can leave them as-is.
+When adapting the guide to your own deployment you typically change only two of
+them, `NAMESPACE` and `MODEL`; the other three follow from the Helm release
+name (and accelerator) you chose at install time:
+
+- `NAMESPACE` - the namespace you deployed into.
+- `MODEL` - the model you serve; must match the `model_name` label on the EPP
+  metrics.
+- `EPP_SERVICE` - the EPP service name, `<release>-epp`.
+- `INFERENCE_POOL` - the InferencePool name, which equals `<release>`.
+- `TARGET_DEPLOYMENT` - the decode Deployment the ScaledObject targets,
+  `<release>-<accelerator>-vllm-decode` (for the stock release,
+  `optimized-baseline-nvidia-gpu-vllm-decode`).
 
 <!-- guide:env.static start -->
 ```bash
@@ -59,8 +75,11 @@ export MODEL=Qwen/Qwen3-32B
 export TARGET_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
 export SCALEDOBJECT_NAME=optimized-baseline-keda-epp
 export HPA_NAME=keda-hpa-optimized-baseline
-export TRIGGER=queue # options: queue, saturation
+export EPP_SERVICE=optimized-baseline-epp
+export INFERENCE_POOL=optimized-baseline
+export SIGNAL=queue # options: queue, saturation
 export ENV=existing # options: existing, ocp
+export OVERSHOOT=windows # options: windows
 export OVERLAY_ROOT=${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline
 ```
 <!-- guide:env.static end -->
@@ -197,9 +216,9 @@ kubectl port-forward -n ${MONITORING_NAMESPACE} \
 
 OpenShift environments use the Custom Metrics Autoscaler Operator (KEDA) and
 cluster monitoring through Thanos Querier. The OpenShift leaf overlays
-([`ocp-queue`](optimized-baseline/ocp-queue/) and
-[`ocp-saturation`](optimized-baseline/ocp-saturation/)) configure this for you -
-apply one of them instead of the `k8s-*` leaves:
+([`overlays/ocp/queue`](optimized-baseline/overlays/ocp/queue/) and
+[`overlays/ocp/saturation`](optimized-baseline/overlays/ocp/saturation/)) configure
+this for you - apply one of them instead of the `overlays/k8s/*` leaves:
 
 - Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091`
   and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a
@@ -211,21 +230,24 @@ apply one of them instead of the `k8s-*` leaves:
   service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving
   certificate) into the token Secret automatically, so **no CA copy is required**.
 
-Before applying, edit the PromQL label selectors in the triggers to match your
-EPP service, namespace, and model (the namespace transformer cannot rewrite the
-opaque query strings). When deploying this guide to multiple namespaces on a
-shared cluster, give the `keda-epp-metrics-reader-monitoring-view`
-ClusterRoleBinding a namespace-unique name so the bindings do not collide.
+The overlays carry `${...}` placeholders for the namespace, model, target
+deployment, EPP service, and inference pool, so you set those as environment
+variables and the apply step renders them with `envsubst` - no manual YAML edits.
+The OCP leaf also renders the metrics-reader ClusterRoleBinding subject namespace
+from `${NAMESPACE}`, so the binding follows your deployment namespace. When
+deploying this guide to multiple namespaces on a shared cluster, give the
+`keda-epp-metrics-reader-monitoring-view` ClusterRoleBinding a namespace-unique
+name so the cluster-scoped bindings do not collide.
 
 ## Choosing a Scaling Signal
 
 This guide ships two scaling signals as overlays. Pick one; do not apply both to
 the same Deployment (two ScaledObjects on one Deployment make conflicting HPAs).
 
-- **Queue depth (default)** - `k8s-queue` / `ocp-queue`. Scales on requests
-  waiting in EPP Flow Control plus running-request concurrency. The mature,
-  recommended path; it carries the OCP scale-event nightly.
-- **Pool saturation** - `k8s-saturation` / `ocp-saturation`. Scales on the EPP
+- **Queue depth (default)** - `overlays/k8s/queue` / `overlays/ocp/queue`. Scales
+  on requests waiting in EPP Flow Control plus running-request concurrency. The
+  mature, recommended path; it carries the OCP scale-event nightly.
+- **Pool saturation** - `overlays/k8s/saturation` / `overlays/ocp/saturation`. Scales on the EPP
   pool-saturation gauge plus running-request concurrency; it reacts before
   requests queue. Uses `maxReplicaCount: 10`.
 
@@ -401,13 +423,13 @@ specific need the windows cannot meet.
 
 Review the base
 [`scaledobject.yaml`](optimized-baseline/base/scaledobject.yaml) and your
-chosen trigger component before applying. At minimum, verify these
-deployment-specific fields:
+chosen trigger component before applying. The namespace, target deployment, and
+the PromQL label selectors are rendered from the environment variables in the
+export block above by `envsubst` at apply time, so the fields to review and
+adjust directly in the YAML are:
 
-- `metadata.namespace`
-- `spec.scaleTargetRef.name`
-- Prometheus `serverAddress`
-- The PromQL label selectors
+- Prometheus `serverAddress` (the bundled kube-prometheus-stack on generic
+  Kubernetes; the OCP overlay repoints it at Thanos Querier)
 - The trigger thresholds
 
 This walkthrough intentionally begins with one target replica so that a 1-to-N
@@ -421,16 +443,18 @@ kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout
 ```
 <!-- guide:deploy.prepare end -->
 
-Apply the leaf overlay for your `TRIGGER` and `ENV`. On a generic Kubernetes
-cluster with the bundled kube-prometheus-stack (plain in-cluster HTTP, no auth
-secret), use the `k8s-*` leaf.
+Apply the leaf overlay for your `SIGNAL` and `ENV`. Each apply builds the leaf,
+renders its `${...}` placeholders with `envsubst`, and pipes the result to
+`kubectl apply`. On a generic Kubernetes cluster with the bundled
+kube-prometheus-stack (plain in-cluster HTTP, no auth secret), use the
+`overlays/k8s/*` leaf.
 
 Queue signal (default):
 
 <!-- guide:deploy.apply_k8s_queue start -->
 ```bash
-# only when TRIGGER=queue and ENV=existing:
-kubectl apply -k ${OVERLAY_ROOT}/k8s-queue
+# only when SIGNAL=queue and ENV=existing:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_queue end -->
 
@@ -438,8 +462,8 @@ Saturation signal (experimental):
 
 <!-- guide:deploy.apply_k8s_saturation start -->
 ```bash
-# only when TRIGGER=saturation and ENV=existing:
-kubectl apply -k ${OVERLAY_ROOT}/k8s-saturation
+# only when SIGNAL=saturation and ENV=existing:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_saturation end -->
 
@@ -451,8 +475,8 @@ Queue signal (default):
 
 <!-- guide:deploy.apply_ocp_queue start -->
 ```bash
-# only when TRIGGER=queue and ENV=ocp:
-kubectl apply -k ${OVERLAY_ROOT}/ocp-queue
+# only when SIGNAL=queue and ENV=ocp:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_queue end -->
 
@@ -460,8 +484,8 @@ Saturation signal (experimental):
 
 <!-- guide:deploy.apply_ocp_saturation start -->
 ```bash
-# only when TRIGGER=saturation and ENV=ocp:
-kubectl apply -k ${OVERLAY_ROOT}/ocp-saturation
+# only when SIGNAL=saturation and ENV=ocp:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_saturation end -->
 
@@ -618,17 +642,17 @@ available, and the generated HPA has no scaling-limited conditions.
 
 <!-- guide:cleanup start -->
 ```bash
-# only when TRIGGER=queue and ENV=existing:
-kubectl delete -k ${OVERLAY_ROOT}/k8s-queue --ignore-not-found=true
+# only when SIGNAL=queue and ENV=existing:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when TRIGGER=saturation and ENV=existing:
-kubectl delete -k ${OVERLAY_ROOT}/k8s-saturation --ignore-not-found=true
+# only when SIGNAL=saturation and ENV=existing:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when TRIGGER=queue and ENV=ocp:
-kubectl delete -k ${OVERLAY_ROOT}/ocp-queue --ignore-not-found=true
+# only when SIGNAL=queue and ENV=ocp:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when TRIGGER=saturation and ENV=ocp:
-kubectl delete -k ${OVERLAY_ROOT}/ocp-saturation --ignore-not-found=true
+# only when SIGNAL=saturation and ENV=ocp:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 ```
 <!-- guide:cleanup end -->
 
