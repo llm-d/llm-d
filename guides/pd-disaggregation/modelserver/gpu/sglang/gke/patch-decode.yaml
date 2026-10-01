@@ -49,6 +49,16 @@ spec:
             # "no active messages transport" unless UCX can fall back to tcp.
             - name: UCX_TLS
               value: "rc_mlx5,rc,tcp,cuda_copy,cuda_ipc,sm,shm,self"
+            # Each gke-rdma claim adds a NIC (eth1, eth2, ...) on its own subnet.
+            # On node pools without RoCE those subnets do not route TCP between
+            # pods, but UCX's tcp transport advertises every interface, so the
+            # prefill side dials one of the decode pod's secondary addresses and
+            # the KV transfer hangs until the request times out ("UCX ERROR
+            # connect(...) failed: Connection timed out"). Pin UCX to the pod
+            # network. Remove this on a RoCE-capable pool to let UCX use the
+            # RDMA devices again.
+            - name: UCX_NET_DEVICES
+              value: "eth0"
           securityContext:
             capabilities:
               add:
