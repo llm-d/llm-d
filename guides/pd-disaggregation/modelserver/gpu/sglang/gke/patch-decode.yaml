@@ -26,6 +26,13 @@ spec:
               value: "60"
             - name: HF_HUB_DISABLE_XET
               value: "1"
+            # The base patches enable the KV staging buffer for heterogeneous TP.
+            # This overlay runs homogeneous TP=2 (#2442), and SGLang's NIXL
+            # transfer backend does not accept the staging path's
+            # slot_layer_ids argument (TypeError in NixlKVManager.set_kv_buffer_tensors
+            # on v0.5.19 and v0.5.20), so turn staging off here.
+            - name: SGLANG_DISAGG_STAGING_BUFFER
+              value: "0"
             # UCX and RoCE configurations for GKE Container-Optimized OS
             - name: UCX_IB_ROCE_REACHABILITY_MODE
               value: "all"
