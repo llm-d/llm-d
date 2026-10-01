@@ -151,3 +151,19 @@ def test_missing_pyyaml_exits_2_with_hint():
             f"runpy.run_path({str(SCRIPT)!r}, run_name='__main__')")
     proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert proc.returncode == 2 and "pip install pyyaml" in proc.stderr
+
+
+def test_unparseable_render_exits_2(capsys):
+    # vllm-glm-5.2 ships envsubst placeholders; the render can't be read as numbers.
+    responses = _responses()
+    responses[("kustomize", str(WIDE_EP / GKE))] = RENDER_GKE.replace("size: 2", "size: ${PREFILL_SIZE}", 1)
+    code, out = _main(capsys, responses=responses)
+    assert code == 2
+    assert "cannot read the DisaggregatedSet" in out.err and "PREFILL_SIZE" in out.err
+    assert "Traceback" not in out.err
+
+
+def test_malformed_config_is_a_usage_error(tmp_path):
+    (tmp_path / "preflight.yaml").write_text("crds: [unclosed\n")
+    with pytest.raises(preflight.PreflightError, match="not valid YAML"):
+        preflight.load_guide_config(tmp_path / "preflight.yaml")

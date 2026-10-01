@@ -222,3 +222,9 @@ def test_render_fixture_matches_manifests(name):
     assert list(yaml.safe_load_all(live)) == list(yaml.safe_load_all(fixture.read_text())), (
         f"stale fixture; regenerate: {{ echo '# yamllint disable'; kubectl kustomize {overlay}; }} "
         f"> {fixture.relative_to(REPO_ROOT)}")
+
+
+def test_unresolved_claims_are_recorded():
+    spec = ("{containers: [{name: vllm}], "
+            "resourceClaims: [{name: c, resourceClaimTemplateName: wide-ep-compute-domain}]}")
+    assert preflight.parse_render(_ds(spec)).unresolved_claims == ("wide-ep-compute-domain",)
