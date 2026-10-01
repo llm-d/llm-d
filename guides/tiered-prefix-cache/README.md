@@ -232,6 +232,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelse
 
 MooncakeStore supports two deployment modes: embedded CPU DRAM (`cpu`) and standalone CPU DRAM + SSD (`fs`). Both require the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service. The `fs` variant additionally requires the [Mooncake Client](../../helpers/mooncake-client/), a standalone process that owns the CPU DRAM pool and SSD persistence tier.
 
+> [!NOTE]
+> Both variants use RDMA. The model server pods (and the Mooncake Client for `fs`) request `rdma/ib: 1`, so nodes must expose that resource or the pods stay `Pending`. See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md).
+
 **Prerequisites:**
 
 ```bash
