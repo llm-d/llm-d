@@ -211,3 +211,61 @@ def _rdma_mode(pods: Iterable[PodReq]) -> str:
     if any(name.startswith("rdma/") for p in pods for name in p.requests):
         return "device-plugin"
     return "none"
+# ---------------------------------------------------------------------------
+# Guide requirements that can't be derived (<guide>/preflight.yaml)
+# ---------------------------------------------------------------------------
+
+_SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
+
+
+def parse_semver(text: str) -> tuple[int, int, int] | None:
+    match = _SEMVER.match(text or "")
+    if not match:
+        return None
+    major, minor, patch = match.groups()
+    return int(major), int(minor), int(patch)
+
+
+@dataclass(frozen=True)
+class RouterSize:
+    cpu: Decimal
+    memory: Decimal
+
+
+@dataclass(frozen=True)
+class GuideConfig:
+    crds: tuple[str, ...]
+    lws_min_version: tuple[int, int, int]
+    driver_max_major_exclusive: int
+    driver_severity: str  # "warn" or "fail"
+    router_standalone: RouterSize
+    router_gateway: RouterSize
+    docs: Mapping[str, str]
+
+
+def load_guide_config(path: Path) -> GuideConfig:
+    if not path.is_file():
+        raise PreflightError(f"{path}: not found; this guide has no preflight requirements yet")
+    data = yaml.safe_load(path.read_text())
+    try:
+        severity = data["gpuDriver"].get("severity", "warn")
+        if severity not in ("warn", "fail"):
+            raise PreflightError(f"{path}: gpuDriver.severity must be 'warn' or 'fail', got {severity!r}")
+        min_version = parse_semver(str(data["lws"]["minVersion"]))
+        if min_version is None:
+            raise ValueError(f"lws.minVersion is not a version: {data['lws']['minVersion']!r}")
+        return GuideConfig(
+            crds=tuple(data.get("crds") or ()),
+            lws_min_version=min_version,
+            driver_max_major_exclusive=int(data["gpuDriver"]["maxMajorExclusive"]),
+            driver_severity=severity,
+            router_standalone=_router_size(data["router"]["standalone"]),
+            router_gateway=_router_size(data["router"]["gateway"]),
+            docs=dict(data.get("docs") or {}),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise PreflightError(f"{path}: invalid preflight config: {exc!r}") from exc
+
+
+def _router_size(data: Mapping) -> RouterSize:
+    return RouterSize(parse_quantity(data["cpu"]), parse_quantity(data["memory"]))

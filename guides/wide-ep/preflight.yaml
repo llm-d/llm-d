@@ -1,0 +1,33 @@
+# Requirements for helpers/preflight/preflight.py that can't be read from
+# `kubectl kustomize` of a model-server overlay. Everything else (APIs, pod
+# count, per-pod resources, DRA device classes, rdma/* resources) is derived
+# from the render.
+
+# Created by the router Helm chart and the DisaggregatedSet controller, so not
+# visible in the model-server render.
+crds:
+  - inferencepools.inference.networking.k8s.io
+  - leaderworkersets.leaderworkerset.x-k8s.io
+
+lws:
+  minVersion: v0.11.0  # README.md, Prerequisites
+
+gpuDriver:
+  # modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md, "GPU driver": R580
+  # crashed DeepEP high-throughput kernels. Written before prefill and decode
+  # moved to deepep_v2 (#2339, #2602), so it is a warning, not a failure.
+  maxMajorExclusive: 580
+  severity: warn
+
+router:
+  # guides/recipes/router/base.values.yaml: EPP 4 CPU / 8Gi plus the proxy
+  # sidecar 4 CPU / 8Gi in standalone mode. The "up to 12 CPUs" in the GKE
+  # README is the chart default that base.values.yaml overrides.
+  standalone: {cpu: "8", memory: 16Gi}
+  gateway: {cpu: "4", memory: 8Gi}  # EPP only
+
+docs:
+  rdma: docs/infrastructure/rdma/README.md
+  gkeDra: docs/infrastructure/providers/gke/README.md
+  gpuDriver: guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md
+  prerequisites: guides/wide-ep/README.md
