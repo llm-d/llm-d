@@ -225,6 +225,7 @@ def _rdma_mode(pods: Iterable[PodReq]) -> str:
 # Guide requirements that can't be derived (<guide>/preflight.yaml)
 # ---------------------------------------------------------------------------
 
+
 _SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
 
 
@@ -439,6 +440,7 @@ def _lws_controllers(deployments: Iterable[Mapping]) -> Iterator[LwsController]:
 # Checks: pure functions over Requirements, GuideConfig and ClusterState
 # ---------------------------------------------------------------------------
 
+
 PASS, WARN, FAIL, INFO = "PASS", "WARN", "FAIL", "INFO"
 GATEWAY_CRDS = ("gateways.gateway.networking.k8s.io", "httproutes.gateway.networking.k8s.io")
 DS_WEBHOOK = "vdisaggregatedset.kb.io"
@@ -522,6 +524,8 @@ def check_ds_webhook(state: ClusterState) -> list[Result]:
                    f"{DS_WEBHOOK} not registered; the controller still runs, but invalid DisaggregatedSets "
                    "are not rejected",
                    "installing LWS with helm: --set enableDisaggregatedSet=true")]
+
+
 PCIE_ROOT = "resource.kubernetes.io/pcieRoot"
 NVIDIA_DRA_DRIVER = "gpu.nvidia.com"
 _DRIVER_SOURCES = (
@@ -619,6 +623,8 @@ def check_driver(cfg: GuideConfig, state: ClusterState) -> list[Result]:
                        f"on {len(majors)} node(s), below {limit}")]
     status = FAIL if cfg.driver_severity == "fail" else WARN
     return [Result(status, "GPU driver", f"R{limit} or newer on: {', '.join(too_new)}", hint)]
+
+
 def _schedulable(node: Node, tolerations: Iterable[Toleration]) -> bool:
     tolerations = tuple(tolerations)
     return not node.unschedulable and all(
@@ -688,9 +694,10 @@ def _place_pods(req: Requirements, state: ClusterState) -> Result:
         free = {**free, target: {k: v - demand.get(k, Decimal(0)) for k, v in free[target].items()}}
         placed += 1
     total = len(req.pods)
-    per_pod = _describe(_pod_demand(req.pods[0], state)) if req.pods else "nothing"
+    first = _pod_demand(req.pods[0], state) if req.pods else {}
+    per_pod = f"{_describe(first)} each" if first else "no resource requests"
     if unplaced is None:
-        return Result(PASS, "model-server capacity", f"{placed}/{total} pods fit ({per_pod} each)")
+        return Result(PASS, "model-server capacity", f"{placed}/{total} pods fit ({per_pod})")
     pod, demand = unplaced
     reasons = [f"{n.name}: {_shortage(free[n.name], demand)}" for n in state.nodes
                if n.name not in excluded and _shortage(free[n.name], demand)][:6]

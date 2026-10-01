@@ -52,6 +52,8 @@ def test_missing_key_is_rejected(tmp_path):
 @pytest.mark.parametrize("raw, expected", [("v0.11.0", (0, 11, 0)), ("0.10.2", (0, 10, 2)), ("main", None), ("", None)])
 def test_parse_semver(raw, expected):
     assert preflight.parse_semver(raw) == expected
+
+
 SCRIPT = REPO_ROOT / "helpers" / "preflight" / "preflight.py"
 GKE = "modelserver/gpu/vllm-deepseek-r1-0528/gke"
 RENDER_GKE = (Path(__file__).resolve().parent / "fixtures" / "render" / "gke.yaml").read_text()
