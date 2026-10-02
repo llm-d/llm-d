@@ -44,8 +44,8 @@ def assigned(days: int) -> dict:
     return {"__typename": "AssignedEvent", "createdAt": ago(days)}
 
 
-def reminder(days: int) -> dict:
-    return comment(days, air.REMINDER_MARKER + "\nstatus?", author="Bot")
+def reminder(days: int, author: str = "Bot") -> dict:
+    return comment(days, air.REMINDER_MARKER + "\nstatus?", author=author)
 
 
 def issue(items=(), created=100, number=7, assignees=("alice",), labels=(), linked=0) -> dict:
@@ -94,6 +94,10 @@ def test_mentions_issue(text, expected):
 
 def test_linked_pull_request_counts():
     assert air.has_pull_request(issue(linked=1), [], REPO)
+
+
+def test_linked_query_includes_closed_pull_requests():
+    assert "includeClosedPrs: true" in air.ISSUES_QUERY
 
 
 def test_assignee_pull_request_mention_counts():
@@ -156,6 +160,12 @@ def test_reply_after_reminder_restarts_the_clock():
 def test_quoting_the_marker_is_a_reply_not_a_reminder():
     quote = comment(1, f"> {air.REMINDER_MARKER}\nstill on it")
     assert air.decide(issue([comment(40), reminder(20), quote]), [], REPO, NOW) is None
+
+
+def test_reminder_posted_by_a_user_token_is_not_activity():
+    items = [comment(40), reminder(14, author="User")]
+    assert air.decide(issue(items), [], REPO, NOW) == "unassign"
+    assert air.decide(issue([comment(40), reminder(13, author="User")]), [], REPO, NOW) is None
 
 
 def test_second_reminder_after_a_reply_goes_quiet():

@@ -8,9 +8,10 @@ issue that has an assignee and no pull request:
 2. If nobody comments within UNASSIGN_AFTER of that, remove the assignees and
    add the `help wanted` label.
 
-An issue has a pull request when one is linked to it, or when an open pull
-request by one of the assignees mentions it. Any comment (or a new assignment)
-after the reminder restarts the clock. Bot comments never count as activity.
+An issue has a pull request when any pull request is linked to it, or when an
+open pull request by one of the assignees mentions it. Any comment (or a new
+assignment) after the reminder restarts the clock. Bot comments never count as
+activity. Our reminder is found by its marker at the start, whoever posted it.
 Issues are never closed.
 
 Usage:
@@ -62,7 +63,7 @@ query($owner: String!, $name: String!, $cursor: String) {
         createdAt
         labels(first: 50) { nodes { name } }
         assignees(first: 20) { nodes { login } }
-        closedByPullRequestsReferences(first: 1, includeClosedPrs: false) { totalCount }
+        closedByPullRequestsReferences(first: 1, includeClosedPrs: true) { totalCount }
         timelineItems(last: 100, itemTypes: [ISSUE_COMMENT, ASSIGNED_EVENT]) {
           nodes {
             __typename
@@ -138,6 +139,11 @@ def is_bot(item: dict) -> bool:
     return (item.get("author") or {}).get("__typename") == "Bot"
 
 
+def is_reminder(item: dict) -> bool:
+    # Match by marker, not author type: a user token posts it as a User.
+    return (item.get("body") or "").startswith(REMINDER_MARKER)
+
+
 def decide(issue: dict, pulls: list[dict], repo: str, now: datetime) -> str | None:
     """Return "remind", "unassign" or None for one assigned issue."""
     labels = {label["name"] for label in issue["labels"]["nodes"]}
@@ -148,10 +154,9 @@ def decide(issue: dict, pulls: list[dict], repo: str, now: datetime) -> str | No
     reminder = None
     for item in issue["timelineItems"]["nodes"]:
         created = parse_ts(item["createdAt"])
-        if is_bot(item):
-            if REMINDER_MARKER in item["body"]:
-                reminder = created
-        else:
+        if is_reminder(item):
+            reminder = created
+        elif not is_bot(item):
             activity = max(activity, created)
 
     if reminder and reminder >= activity:

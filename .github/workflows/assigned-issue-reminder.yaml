@@ -19,6 +19,11 @@ permissions:
   issues: write
   pull-requests: read
 
+# Serialize runs; the read-then-comment flow is not atomic.
+concurrency:
+  group: assigned-issue-reminder
+  cancel-in-progress: false
+
 jobs:
   remind:
     if: github.repository == 'llm-d/llm-d'
