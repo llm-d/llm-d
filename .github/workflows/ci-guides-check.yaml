@@ -11,6 +11,8 @@ on:
     paths:
       - .github/workflows/ci-guides-check.yaml
       - guides/**
+      - scripts/assigned-issue-reminder.py
+      - scripts/github_api.py
       - scripts/guide.py
       - scripts/matrix_common.py
       - scripts/seed-release-badges.py
