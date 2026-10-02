@@ -83,7 +83,8 @@ When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowCon
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
-- **In-Flight Eviction (`enableEviction: true`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`, such as `overflow-batch` at priority `-10`) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
+- **In-Flight Eviction (`enableEviction: true`, on in this guide's `flow-control.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`, such as `overflow-batch` at priority `-10`) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
+  This guide enables it because the router can admit more async work than `maxConcurrency` allows; without eviction, interactive requests then wait behind that work for a full request duration ([measurements](https://github.com/llm-d/llm-d-async/issues/468)). The cost is wasted work: evicted requests are retried by `llm-d-async` and redo their generation.
 - For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
 
 #### With Flow Control OFF (Baseline Router with Saturation Detection)
@@ -152,7 +153,8 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, `POOL_NAME`, `SAT_CAP` in the saturation overlays, and `PROM_URL`). Render one for your
+`POOL_A`, `POOL_B`, `POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, and `COORDINATOR_IMAGE`
+in the optional coordinator manifest). Render one for your
 environment before installing:
 
 ```bash
@@ -161,7 +163,8 @@ render() {   # render <overlay-path> -> stdout
       -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
       -e "s/POOL_NAME/${POOL_NAME:-${POOL_A}}/g" \
       -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
-      -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" "$1"
+      -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
+      -e "s#COORDINATOR_IMAGE#${ROUTER_COORDINATOR_IMAGE}:${ROUTER_COORDINATOR_VERSION}#g" "$1"
 }
 ```
 
@@ -266,9 +269,72 @@ Workload Identity, follow the printed binding to map the GSA onto the chart's `l
 >   kubectl rollout restart deploy/llm-d-async -n ${NAMESPACE}
 >   ```
 
+### 4. (Optional) HTTP front door with the router coordinator
+
+Publishing (below) writes requests straight into Redis. To accept requests over HTTP instead, deploy the
+llm-d-router coordinator with its
+[`async-broker` step](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md)
+in front of the router. Each request picks a serving mode with the `X-AP-Mode` header and a tenant with
+`X-Team`:
+
+| `X-AP-Mode` | Behaviour |
+| :-- | :-- |
+| `passthrough` | Forwarded live to the router, stamped with the tenant's objective (streaming works as usual) |
+| `wait` | Written to an llm-d-async queue; the connection is held until the result is back |
+| `enqueue` | Written to an llm-d-async queue; answers `202` with an id, and the result is fetched later from `GET /v1/requests/{id}` |
+
+The coordinator's config ([`manifests/coordinator/config.yaml`](manifests/coordinator/config.yaml)) maps
+tenant `realtime` to live interactive traffic (`reserved-interactive`, priority 100), and tenants `standard`
+and `batch` to two coordinator queues, `coord-standard-a` and `coord-batch-a`. Those queues sit beside the team
+queues in their own `coord` worker pool, with 16 workers so that queued traffic alone can fill the model server,
+and share the team queues' quota counters. Installing them replaces the llm-d-async values from step 3 with
+[`values/redis/quota-only-coordinator.yaml`](values/redis/quota-only-coordinator.yaml), which is
+`quota-only.yaml` plus the two queues and the pool.
+
+```bash
+# 1. Keyspace notifications let held wait-mode requests wake up as soon as the result lands
+#    (without them the coordinator polls). This setting does not survive a Redis restart.
+kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli CONFIG SET notify-keyspace-events Kl
+
+# 2. llm-d-async with the coordinator queues
+render ${MT}/values/redis/quota-only-coordinator.yaml > /tmp/mt-redis-coordinator.yaml
+helm upgrade --install llm-d-async \
+    oci://ghcr.io/llm-d/charts/llm-d-async \
+    -f /tmp/mt-redis-coordinator.yaml \
+    -n ${NAMESPACE} --version ${ASYNC_VERSION}
+
+# 3. The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
+render ${MT}/manifests/coordinator/config.yaml > /tmp/coordinator.yaml
+kubectl -n ${NAMESPACE} create configmap llm-d-coordinator-config \
+    --from-file=coordinator.yaml=/tmp/coordinator.yaml --dry-run=client -o yaml | kubectl apply -f -
+render ${MT}/manifests/coordinator/coordinator.yaml | kubectl apply -n ${NAMESPACE} -f -
+kubectl -n ${NAMESPACE} rollout status deploy/llm-d-coordinator
+```
+
+Try it:
+
+```bash
+kubectl -n ${NAMESPACE} port-forward svc/llm-d-coordinator 8080:8080 &
+
+# Live, at interactive priority
+curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
+  -H 'X-AP-Mode: passthrough' -H 'X-Team: realtime' \
+  -d "{\"model\":\"${MODEL_A}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+
+# Queued on coord-batch-a; the response arrives once llm-d-async has dispatched it
+curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
+  -H 'X-AP-Mode: wait' -H 'X-Team: batch' \
+  -d "{\"model\":\"${MODEL_A}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+```
+
+A client that disconnects while its `wait` request is still queued cancels it before dispatch. The coordinator
+trusts `X-Team` as sent, like the rest of the llm-d serving path, so put it behind your own authentication when
+tenants matter.
+
 ## Publishing requests
 
 A request is a JSON body — `id`, `created`, `deadline`, a `payload` (the inference request that is dispatched to llm-d Router), and `metadata.team` (the tenant identifier that the quota gate evaluates).
+With the optional coordinator from step 4, HTTP clients can submit requests instead; the rest of this section uses Redis directly.
 
 ### Queues as Serving Dimensions vs. Team Identity
 - **The Queue is a Serving Dimension:** A queue corresponds to an service tier and model pair (e.g., `interactive` tier for `model-a`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue. 
@@ -620,6 +686,10 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 ## Cleanup
 
 ```bash
+# Only if you deployed the optional coordinator (step 4)
+render ${MT}/manifests/coordinator/coordinator.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+kubectl -n ${NAMESPACE} delete configmap llm-d-coordinator-config --ignore-not-found
+
 helm uninstall llm-d-async -n ${NAMESPACE}
 helm uninstall llm-d-router -n ${NAMESPACE}
 render ${MT}/manifests/inferenceobjectives.yaml | kubectl delete -f -

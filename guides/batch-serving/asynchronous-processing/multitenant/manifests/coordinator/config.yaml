@@ -1,0 +1,77 @@
+# Coordinator configuration for this guide's optional HTTP front door
+# (README step 4). The README's render() replaces NAMESPACE; the result is
+# mounted as /etc/coordinator/coordinator.yaml from the
+# llm-d-coordinator-config ConfigMap. Parameters:
+# https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md
+#
+# Tenants are selected with the X-Team header:
+#   * realtime -> no queue: with X-AP-Mode: passthrough the request is stamped
+#     reserved-interactive (priority 100) and forwarded live to the router.
+#   * standard -> queue coord-standard-a, tier async.
+#   * batch    -> queue coord-batch-a, tier batch (the default).
+# With X-AP-Mode: enqueue or wait a request is written to its queue; llm-d-async
+# dispatches it to the router like the guide's own queues, with the
+# tier-priority merge policy stamping reserved or overflow objectives. The quota
+# prefix and attribute match the guide's redis-quota gates, so the coordinator
+# and llm-d-async share one counter per (model, team).
+log_level: 2
+
+server:
+  listen_addr: ":8080"
+  # The coordinator serves TLS with a self-signed certificate by default. This
+  # topology is plain HTTP end to end (harness pods, the llm-d-async dispatch
+  # loop-back and the router itself), and the deployment's probes are HTTP.
+  secure_serving: false
+  read_timeout: 30s
+  # Wait-mode holds the client connection until the async result lands; this
+  # must exceed the async-broker wait timeout below.
+  write_timeout: 600s
+  shutdown_timeout: 25s
+
+gateway:
+  address: "http://llm-d-router-epp.NAMESPACE.svc.cluster.local:80"
+  max_idle_conns_per_host: 200
+  idle_conn_timeout: 90s
+  timeout: 600s
+
+pipeline:
+  use_openai_format: true
+  steps:
+    - type: async-broker
+      params:
+        redis_url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+        tenant_header: X-Team
+        routes:
+          - tenant: realtime
+            tier: interactive
+          - tenant: standard
+            queue: coord-standard-a
+            tier: async
+          - tenant: batch
+            queue: coord-batch-a
+            tier: batch
+        default_queue: coord-batch-a
+        default_tier: batch
+        objectives:
+          interactive:
+            reserved: reserved-interactive
+            overflow: overflow-interactive
+          async:
+            reserved: reserved-async
+            overflow: overflow-async
+          batch:
+            reserved: reserved-batch
+            overflow: overflow-batch
+        quota:
+          prefix: "quota:a:"
+          attribute: team
+          limits:
+            standard: 2
+            batch: 1
+        timeouts:
+          wait:
+            default_seconds: 300
+            max_seconds: 600
+        wait_cap_seconds: 300
+        wakeup_mode: auto
+    - type: decode

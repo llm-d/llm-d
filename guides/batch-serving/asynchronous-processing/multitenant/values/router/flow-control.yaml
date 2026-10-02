@@ -52,6 +52,12 @@ router:
           defaultRequestTTL: "300s"
           saturationDetector:
             pluginRef: concurrency-detector
+          # Reclaim capacity from sheddable (negative-priority) in-flight requests,
+          # here overflow-batch at -10, when a higher-priority request is blocked by
+          # pool saturation. Without it, async work admitted past maxConcurrency
+          # holds the pool and realtime requests wait a full service time in flow
+          # control; see https://github.com/llm-d/llm-d-async/issues/468.
+          enableEviction: true
           priorityBands:
           - priority: 100
             maxRequests: "500"

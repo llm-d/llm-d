@@ -37,3 +37,7 @@ export ROUTER_GATEWAY_CHART=${ROUTER_GATEWAY_CHART:-oci://ghcr.io/llm-d/charts/l
 ### Container Image coordinates and tag for router chart
 export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-main}
 export ROUTER_EPP_IMAGE=${ROUTER_EPP_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker}
+
+### Container Image coordinates and tag for the router coordinator (async-broker front door)
+export ROUTER_COORDINATOR_VERSION=${ROUTER_COORDINATOR_VERSION:-main}
+export ROUTER_COORDINATOR_IMAGE=${ROUTER_COORDINATOR_IMAGE:-ghcr.io/llm-d/llm-d-router-coordinator}
