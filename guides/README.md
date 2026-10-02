@@ -27,6 +27,7 @@ We currently offer the following:
 
 * [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
+* [Runtime AI Inventory](./runtime-inventory/README.md) - Generate an auditable CycloneDX ML-BOM of the models and runtimes actually serving in any well-lit path deployment, via the unprivileged k8s-aibom controller.
 * [Fast Model Actuation](./fast-model-actuation-base/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
 * [Fast Model Actuation + KEDA Autoscaling](./fast-model-actuation-keda/README.md) - saturation-based KEDA autoscaling on top of Fast Model Actuation: scale the GPU-reserving requester Deployment on EPP flow-control metrics, bringing vLLM instances online via hot start (wake a sleeping instance) or warm start (new instance on an existing launcher).
 * [Pod Snapshots](./pod-snapshot/README.md) - checkpoint and restore single-GPU vLLM model servers to eliminate cold-start model download and initialization latencies, currently implemented on GKE with GKE Sandbox (gVisor) and GCS snapshots.
