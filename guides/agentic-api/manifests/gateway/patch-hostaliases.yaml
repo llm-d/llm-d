@@ -1,0 +1,20 @@
+# Maps `epp.gateway.internal` to the Gateway address (${GATEWAY_IP}) -- an external
+# LoadBalancer IP on GKE, the Gateway Service's ClusterIP on Istio. Either is
+# reachable from this pod, which is all this hop needs.
+#
+# With `--llm-api-base http://epp.gateway.internal` (../base), every upstream
+# request agentic-api makes carries `Host: epp.gateway.internal`, which matches
+# HTTPRoute/agentic-api-internal in routes.yaml and is routed straight to the base
+# guide's InferencePool. Without this, the request would match
+# HTTPRoute/agentic-api on path length and loop back into agentic-api itself.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-api
+spec:
+  template:
+    spec:
+      hostAliases:
+        - ip: "${GATEWAY_IP}"
+          hostnames:
+            - epp.gateway.internal

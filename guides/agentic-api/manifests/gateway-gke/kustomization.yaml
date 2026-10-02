@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Gateway Mode on GKE: everything in ../gateway plus the networking.gke.io policies
+# for Service/agentic-api.
+#
+# The matching policies for the base guide's InferencePool are NOT here -- the llm-d
+# router chart renders those itself when the base guide is installed with
+# `provider.name=gke`. Only the agentic-api Service is invisible to that chart.
+#
+# A sibling of ../gateway rather than a directory inside it, matching the layout of
+# the modelserver overlays elsewhere in guides/ (e.g. pd-disaggregation's
+# modelserver/gpu/vllm/{base,gke}); kustomize rejects an overlay nested inside the
+# base it references as a cycle.
+resources:
+  - ../gateway
+  - gke-policies.yaml
