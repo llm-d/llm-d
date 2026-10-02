@@ -384,18 +384,72 @@ request) and set `scaleUp.stabilizationWindowSeconds` to roughly that value.
 Stabilization windows are deliberately blunt: they delay all scale-up equally,
 not just startup-driven overshoot. If you need demand-aware behavior, KEDA's
 [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
-can compose triggers with a `formula`. You can pair the demand trigger with a
-second trigger that reports not-yet-available pods - for example a Prometheus
-query over `kube-state-metrics` such as `kube_deployment_status_replicas_unavailable`
-- and write a formula that discounts demand by the anticipated capacity of pods
-already coming up, so the HPA does not double-count a replica it has already
-requested.
+can compose triggers with a `formula`. The idea: normalize whichever demand
+signal the leaf uses (queue size, pool saturation, or running requests) to a
+*desired replica count* in its own PromQL, then discount that demand by the
+capacity of pods already coming up, so the HPA does not double-count a replica it
+has already requested.
+
+Normalizing in PromQL is what lets one formula serve every leaf: the per-pod
+target becomes a divisor in the trigger query rather than a constant in the
+formula, so the formula never has to know which signal it received. Name the
+triggers so the formula can reference them (the names must be valid
+[expr-lang](https://expr-lang.org/) identifiers - letters and underscores, not
+hyphens, since a hyphen parses as subtraction):
+
+```yaml
+advanced:
+  scalingModifiers:
+    # demand   = desired replicas from load, normalized in the trigger's own
+    #            PromQL. Pick ONE query for your leaf's signal:
+    #   queue:      sum(llm_d_epp_flow_control_queue_size{...}) / <per-pod queue target>
+    #   saturation: max(llm_d_epp_flow_control_pool_saturation{...}) / <target>
+    #                 * scalar(max(kube_deployment_status_replicas{deployment=...}))
+    #   running:    sum(llm_d_epp_request_running{...}) / <per-pod running target>
+    # the other two triggers are the same for every leaf:
+    # pending  = sum(kube_deployment_status_replicas_unavailable{deployment=...})
+    # replicas = max(kube_deployment_status_replicas{deployment=...})
+    formula: >-
+      demand <= replicas
+      ? demand
+      : max(demand - (pending ?? 0), replicas)
+    target: "1"
+    metricType: AverageValue
+```
+
+With `target: "1"` and `metricType: AverageValue` the composite is a pass-through:
+the formula output *is* the desired replica count (`desiredReplicas = ceil(composite)`).
+One display caveat: because the metric is `AverageValue`, `kubectl get hpa` shows
+the composite divided by the current replicas, so a healthy pool reads about `1/1`,
+not the raw formula output.
+
+The discount is scale-up-only. When `demand <= replicas` the pool is already at or
+above what load needs, so the formula returns raw `demand` and scale-down proceeds
+normally. Only when scaling up (`demand > replicas`) does it subtract the pods
+already coming (`pending`), floored at the current `replicas` so the discount can
+never recommend tearing down a replica it is still waiting on. Each pending pod
+removes one pod's worth from the *additions*, so the HPA stops requesting
+replacements for capacity that is already on the way. The `(pending ?? 0)` guard
+keeps a missing `pending` series from breaking the composite; pair it with
+`fallback.behavior: scalingModifiers` so a failed trigger is passed to the formula
+as nil rather than failing the whole metric.
+
+Note that `kube_deployment_status_replicas_unavailable` counts every unavailable
+replica, not only starting ones, so a crashed or unschedulable pod is also
+discounted and can suppress the scale-up that would replace it; the discount
+assumes an unavailable pod is on its way to `Ready`, which holds during a cold
+start but not for a stuck pod.
+
+Since the discount is scale-up-only it cannot recommend a scale-in, so
+`scaleDown.stabilizationWindowSeconds` is an ordinary damper here rather than a
+required backstop - size it to your tolerance for brief demand dips. And because
+the formula, not a blunt window, prevents overshoot, you can also set
+`scaleUp.stabilizationWindowSeconds: 0` for a fast, demand-aware scale-up.
 
 This is more precise but adds cost: it depends on `kube-state-metrics` being
-scraped into the same Prometheus, introduces a second trigger and a formula whose
-per-pod-capacity constant must itself be tuned, and a missing series can break the
-composite metric. Prefer the stabilization windows above unless you have a
-specific need the windows cannot meet.
+scraped into the same Prometheus and introduces the `pending` and `replicas`
+triggers alongside the demand signal. Prefer the stabilization windows above
+unless you have a specific need the windows cannot meet.
 
 ## Apply the KEDA ScaledObject
 
