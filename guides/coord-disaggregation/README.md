@@ -571,6 +571,94 @@ actually has *lower* request latency and TTFT than the sidecar, and from there o
 the two are essentially tied. More network hops, in other words, don't translate
 into a performance penalty.
 
+### Deferred decoding under heavy multimodal load (Qwen3-VL-235B, H200)
+
+The three runs above answer one question: *how much does the Coordinator's extra
+Gateway/EPP round trip per phase cost?* To isolate that, both arms were forced down
+the same prefill → decode path, so the only difference left was the number of hops —
+and the answer was "a few milliseconds, at most a few percent of TTFT".
+
+This benchmark asks the other question: *is there a benefit to picking the decode pod
+later?* The sidecar picks prefill and decode together, before prefill starts; the
+Coordinator picks decode only after prefill has finished, when the pool's state may
+have changed. It was run under a workload chosen to make that difference matter —
+long multimodal prefills, long outputs, and decode pushed to its KV-cache limit.
+
+This benchmark runs with 4 × `a3-ultragpu-8g` (8 × H200 141GB each),`Qwen/Qwen3-VL-235B-A22B-Instruct` on vLLM v0.26.0, TP=8 (one pod per node),
+NixlConnector over GKE multi-network RDMA, 2 prefill + 2 decode pods. Both arms run in
+Gateway mode behind the same GKE Gateway, with the same EPP image and this guide's
+scheduling profiles on both sides: prefill = `prefix-cache-affinity-filter` +
+`token-load-scorer`, decode = `active-request-scorer`. The sidecar arm is the
+[P/D Disaggregation](../pd-disaggregation/README.md) guide (`always-disagg-pd-decider`);
+the Coordinator arm runs the PD-only pipeline `prefill → decode` (no `conditional-decode`,
+so every request does prefill then decode on both arms). Load comes from
+[inference-perf](https://github.com/kubernetes-sigs/inference-perf) running in-cluster:
+~300 text tokens plus 1–14 synthetic images per request, every request unique, same
+seed on both arms, each load level run twice.
+
+**Where the two architectures tie.** With a fixed 6000-token output and 1–12 × 1080p
+images per request, a closed-loop concurrency ladder (50 → 300) is indistinguishable
+between the arms: throughput, TPOT, ITL and E2E latency agree within ~2% at every
+level and TTFT p99 within 1–4%. Bursts of 160–280 requests with the same per-request
+shape give the Coordinator a ~10% mean/p99 TTFT edge only right at the decode
+KV-capacity knee (N≈160) and nothing above it, where both decode pods queue regardless
+of routing. A 1 prefill + 3 decode layout is prefill-bound: the Coordinator keeps the
+three decode pods visibly more even (running-request gap 2 vs 6) but decode is never
+contended, so nothing improves and the extra per-phase Gateway hop costs 4–8% of TTFT.
+
+**Where the Coordinator wins.** Keep 2P/2D, make the per-request load heavy-tailed —
+output length log-normal (mean 2500, std 3000, capped at 11000 tokens) and images
+1–14 × 360p/1080p mixed, i.e. ~10× spread in both KV footprint and decode residency —
+and release the requests in bursts of 300 / 360 / 420 so that the two decode pods run
+at 125–145 concurrent requests and 85–100% KV. Means of two repeats per level
+(sidecar / Coordinator):
+
+| Burst size | Throughput (req/s) | Mean E2E (s) | Mean TTFT (s) | P99 TTFT (s) | Mean TPOT (ms) |
+|---|---|---|---|---|---|
+| 300 | 0.93 / **1.03** | 137 / **124** | 45.9 / **41.8** | 92 / **90** | 44.0 / 44.6 |
+| 360 | 1.01 / **1.06** | 150 / **143** | 55.0 / **52.6** | 115 / **106** | 46.1 / 46.6 |
+| 420 | 1.05 / **1.15** | 171 / **154** | 64.1 / **61.1** | 147 / **124** | 52.1 / **45.7** |
+
+<p float="left">
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_throughput.png" width="45%" />
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_latency.png" width="45%" />
+</p>
+<p float="left">
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_decode_imbalance.png" width="60%" />
+</p>
+
+Throughput is 4–10% higher and E2E latency 5–10% lower at every burst size, and at 420
+requests — the one level where the sidecar's decode pods drift far enough apart to
+exhaust one pod's KV (per-pod running-request gap up to 71, 84 requests queued behind
+the fuller pod while the other drained) — p99 TTFT drops 15% and mean TPOT 12%.
+The per-pod traces show the mechanism directly: under the sidecar the two decode
+pods start level and separate as short requests finish, because every placement was
+fixed at t=0; under the Coordinator they stay within ~15 requests of each other for
+the whole burst.
+
+**When to expect an advantage from deferred decoding.** The EPP picks the decode pod
+with the fewest in-flight requests, and the in-flight count is maintained in the
+EPP process at *scheduling* time, not read back from vLLM. So the sidecar's early
+pick is not working from stale data — it is working from an exact reservation made
+before prefill starts — and the Coordinator's later pick only adds information when
+all three of the following hold:
+
+1. **Decode is the contended stage** (KV near its limit or per-step latency rising with
+   batch size). If prefill is the bottleneck the decode choice does not matter and the
+   Coordinator's extra round trip per phase is a small net cost.
+2. **Per-request load is heterogeneous** — long-tailed output lengths and/or widely
+   varying prompt (image) sizes — so that an equal *count* of requests per pod is not
+   an equal *load*. With uniform requests the count is already the right measure.
+3. **Placement is committed in bulk** (bursts). Deciding at prefill completion lets
+   the Coordinator see which pod has actually freed KV since the burst arrived; in a
+   steady stream the sidecar's counts receive the same feedback from completions and
+   the two converge.
+
+Deployments that pick decode from scraped vLLM metrics (`queue-scorer`,
+`kv-cache-utilization-scorer`) will see a larger gap than measured here, because those
+signals lag and do not include requests still in prefill; the in-process `token-load-scorer`
+`active-request-scorer` used by both guides removes most of that staleness.
+
 ## Cleanup
 
 Same commands regardless of topology — `${ROUTER_RELEASES}` and
