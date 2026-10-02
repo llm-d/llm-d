@@ -1,5 +1,5 @@
 """
-Unit tests for GKE Snapshot Providers, Cache Clearing, and vLLM Lifespan Wrapper.
+Unit tests for GKE Snapshot Providers, Cache Clearing, vLLM Lifespan Wrapper, and SGLang Wrapper.
 """
 
 from __future__ import annotations
@@ -493,6 +493,531 @@ class TestLauncher(unittest.TestCase):
             self.assertIsNotNone(mock_api_server.build_app)
 
 
+class TestSGLangWrapper(unittest.TestCase):
+    def _make_mock_http_server(self):
+        mock_http_server = MagicMock()
+        mock_http_server.ServerStatus = MagicMock(Starting="Starting", Up="Up")
+        mock_http_server._wait_and_warmup = MagicMock(return_value="orig_warmup")
+        mock_http_server._execute_server_warmup = MagicMock(return_value=True)
+        mock_http_server._freeze_gc_after_server_warmup = MagicMock()
+        mock_http_server._wait_weights_ready = MagicMock()
+        mock_http_server.get_model.return_value = MagicMock(
+            checkpoint_engine_wait_weights_before_ready=False
+        )
+        mock_http_server.get_exec.return_value = MagicMock(
+            moe=MagicMock(spec=["ep_join_mode"], ep_join_mode=None)
+        )
+        mock_http_server.get_serving.return_value = MagicMock(skip_server_warmup=False)
+        mock_http_server.get_observability.return_value = MagicMock(
+            debug_tensor_dump_input_file=None
+        )
+        mock_http_server.kill_process_tree = MagicMock()
+        mock_http_server._global_state = MagicMock(tokenizer_manager=MagicMock())
+        return mock_http_server
+
+    def setUp(self):
+        patcher = patch(
+            "asyncio.run_coroutine_threadsafe",
+            side_effect=lambda coro, loop: MagicMock(
+                result=lambda: asyncio.run(coro) if asyncio.iscoroutine(coro) else coro
+            ),
+        )
+        self.mock_run_threadsafe = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _make_sglang_modules(self, mock_http_server):
+        mock_io_struct = MagicMock()
+        mock_io_struct.ReleaseMemoryOccupationReqInput.side_effect = (
+            lambda tags=None: {"type": "release", "tags": tags}
+        )
+        mock_io_struct.ResumeMemoryOccupationReqInput.side_effect = (
+            lambda tags=None: {"type": "resume", "tags": tags}
+        )
+        return {
+            "sglang": MagicMock(),
+            "sglang.srt": MagicMock(),
+            "sglang.srt.entrypoints": MagicMock(http_server=mock_http_server),
+            "sglang.srt.entrypoints.http_server": mock_http_server,
+            "sglang.srt.managers": MagicMock(io_struct=mock_io_struct),
+            "sglang.srt.managers.io_struct": mock_io_struct,
+        }
+
+    def test_patch_sglang_wait_and_warmup_disabled_provider(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        orig_wait = mock_http_server._wait_and_warmup
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules), patch.dict(
+            os.environ, {"SNAPSHOT_PROVIDER": ""}, clear=True
+        ):
+            patch_sglang_wait_and_warmup(snapshot_provider=None)
+            self.assertEqual(mock_http_server._wait_and_warmup, orig_wait)
+
+    def test_patch_sglang_wait_and_warmup_sleep_trigger_wake(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        orig_wait = mock_http_server._wait_and_warmup
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+        mock_callback = MagicMock()
+
+        events = []
+        status_during_phases = {}
+        tokenizer_mgr = mock_http_server._global_state.tokenizer_manager
+        mock_http_server._execute_server_warmup.side_effect = (
+            lambda *a, **kw: events.append("warmup") or True
+        )
+        mock_http_server._freeze_gc_after_server_warmup.side_effect = (
+            lambda *a, **kw: events.append("freeze_gc")
+        )
+
+        async def _async_release(req):
+            status_during_phases["release"] = tokenizer_mgr.server_status
+            events.append("release")
+
+        def _trigger():
+            status_during_phases["trigger"] = tokenizer_mgr.server_status
+            events.append("trigger")
+
+        async def _async_resume(req):
+            status_during_phases["resume"] = tokenizer_mgr.server_status
+            events.append("resume")
+
+        tokenizer_mgr.release_memory_occupation.side_effect = _async_release
+        mock_provider.trigger.side_effect = _trigger
+        tokenizer_mgr.resume_memory_occupation.side_effect = _async_resume
+        mock_callback.side_effect = lambda: events.append("callback")
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules):
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            self.assertNotEqual(mock_http_server._wait_and_warmup, orig_wait)
+
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                launch_callback=mock_callback,
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+        self.assertEqual(
+            events,
+            ["warmup", "freeze_gc", "release", "trigger", "resume", "callback"],
+        )
+        self.assertEqual(
+            status_during_phases,
+            {
+                "release": mock_http_server.ServerStatus.Starting,
+                "trigger": mock_http_server.ServerStatus.Starting,
+                "resume": mock_http_server.ServerStatus.Starting,
+            },
+        )
+        self.assertEqual(self.mock_run_threadsafe.call_count, 2)
+        for call in self.mock_run_threadsafe.call_args_list:
+            self.assertEqual(call[0][1], tokenizer_mgr.event_loop)
+        tokenizer_mgr.release_memory_occupation.assert_called_once_with(
+            {"type": "release", "tags": ["weights", "kv_cache"]}
+        )
+        mock_provider.trigger.assert_called_once()
+        tokenizer_mgr.resume_memory_occupation.assert_called_once_with(
+            {"type": "resume", "tags": ["weights", "kv_cache"]}
+        )
+        self.assertEqual(tokenizer_mgr.server_status, mock_http_server.ServerStatus.Up)
+        mock_callback.assert_called_once()
+
+    def test_patch_sglang_wait_and_warmup_wait_weights_ready(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        mock_http_server.get_model.return_value.checkpoint_engine_wait_weights_before_ready = (
+            True
+        )
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+
+        events = []
+        mock_http_server._wait_weights_ready.side_effect = lambda: events.append(
+            "wait_weights"
+        )
+        mock_http_server._execute_server_warmup.side_effect = (
+            lambda *a, **kw: events.append("warmup") or True
+        )
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules):
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+        mock_http_server._wait_weights_ready.assert_called_once()
+        self.assertEqual(events, ["wait_weights", "warmup"])
+        mock_provider.trigger.assert_called_once()
+
+    def test_patch_sglang_wait_and_warmup_skip_server_warmup(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        mock_http_server.get_serving.return_value.skip_server_warmup = True
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules), patch(
+            "docker.scripts.snapshot.sglang.wrapper.logger"
+        ) as mock_logger:
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+            mock_logger.warning.assert_called_once_with(
+                "[Control Plane] Warmup skipped."
+            )
+
+        mock_http_server._execute_server_warmup.assert_not_called()
+        mock_http_server._freeze_gc_after_server_warmup.assert_called_once()
+        mock_provider.trigger.assert_called_once()
+
+    def test_patch_sglang_wait_and_warmup_elastic_ep_scale_joiner_skips_warmup(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        mock_http_server.get_exec.return_value.moe.ep_join_mode = "scale"
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules):
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=True),
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+        mock_http_server._execute_server_warmup.assert_not_called()
+        mock_provider.trigger.assert_called_once()
+
+    def test_patch_sglang_wait_and_warmup_debug_tensor_dump_kills_process_tree(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        mock_http_server.get_observability.return_value.debug_tensor_dump_input_file = (
+            "/tmp/dump.pt"
+        )
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules), patch(
+            "os.getpid", return_value=9999
+        ):
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+        mock_http_server.kill_process_tree.assert_called_once_with(9999)
+
+    def test_patch_sglang_wait_and_warmup_trigger_failure_handled_gracefully(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+        mock_provider.trigger.side_effect = SnapshotError("Checkpoint trigger failed")
+        mock_callback = MagicMock()
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules), patch(
+            "docker.scripts.snapshot.sglang.wrapper.logger"
+        ) as mock_logger:
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                launch_callback=mock_callback,
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+            mock_logger.error.assert_called_once()
+            self.assertIn(
+                "Snapshot checkpointing failed",
+                mock_logger.error.call_args[0][0],
+            )
+
+        tokenizer_mgr = mock_http_server._global_state.tokenizer_manager
+        tokenizer_mgr.release_memory_occupation.assert_called_once_with(
+            {"type": "release", "tags": ["weights", "kv_cache"]}
+        )
+        tokenizer_mgr.resume_memory_occupation.assert_called_once_with(
+            {"type": "resume", "tags": ["weights", "kv_cache"]}
+        )
+        self.assertEqual(tokenizer_mgr.server_status, mock_http_server.ServerStatus.Up)
+        mock_callback.assert_called_once()
+
+    def test_patch_sglang_wait_and_warmup_warmup_failure_aborts_before_snapshot(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        mock_http_server._execute_server_warmup.return_value = False
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+        mock_callback = MagicMock()
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules):
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                launch_callback=mock_callback,
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+        tokenizer_mgr = mock_http_server._global_state.tokenizer_manager
+        mock_http_server._freeze_gc_after_server_warmup.assert_not_called()
+        tokenizer_mgr.release_memory_occupation.assert_not_called()
+        mock_provider.trigger.assert_not_called()
+        tokenizer_mgr.resume_memory_occupation.assert_not_called()
+        self.assertNotEqual(
+            tokenizer_mgr.server_status, mock_http_server.ServerStatus.Up
+        )
+        mock_callback.assert_not_called()
+
+    @patch("docker.scripts.snapshot.providers.GKESnapshotProvider")
+    def test_patch_sglang_wait_and_warmup_provider_gke_gvisor(self, mock_provider_cls):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_provider_inst = MagicMock()
+        mock_provider_inst.is_available.return_value = True
+        mock_provider_cls.return_value = mock_provider_inst
+
+        mock_http_server = self._make_mock_http_server()
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules), patch.dict(
+            os.environ, {"SNAPSHOT_PROVIDER": "gke_gvisor"}, clear=True
+        ):
+            patch_sglang_wait_and_warmup(snapshot_provider=None)
+            mock_http_server._wait_and_warmup(
+                MagicMock(is_ep_scale_joiner=False),
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+        mock_provider_cls.assert_called_once()
+        mock_provider_inst.trigger.assert_called_once()
+
+    def test_patch_sglang_wait_and_warmup_provider_not_available_falls_back(self):
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        mock_http_server = self._make_mock_http_server()
+        orig_wait = mock_http_server._wait_and_warmup
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = False
+        mock_provider.proc_path = CHECKPOINT_PATH
+        mock_callback = MagicMock()
+
+        modules = self._make_sglang_modules(mock_http_server)
+        with patch.dict("sys.modules", modules), patch(
+            "docker.scripts.snapshot.sglang.wrapper.logger"
+        ) as mock_logger:
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            server_args = MagicMock(is_ep_scale_joiner=False)
+            result = mock_http_server._wait_and_warmup(
+                server_args,
+                launch_callback=mock_callback,
+                execute_warmup_func=mock_http_server._execute_server_warmup,
+            )
+
+            mock_logger.warning.assert_called_once()
+            self.assertIn(
+                "Pod snapshot trigger not available",
+                mock_logger.warning.call_args[0][0],
+            )
+
+        self.assertEqual(result, "orig_warmup")
+        orig_wait.assert_called_once_with(
+            server_args,
+            launch_callback=mock_callback,
+            execute_warmup_func=mock_http_server._execute_server_warmup,
+        )
+        tokenizer_mgr = mock_http_server._global_state.tokenizer_manager
+        tokenizer_mgr.release_memory_occupation.assert_not_called()
+        mock_provider.trigger.assert_not_called()
+        tokenizer_mgr.resume_memory_occupation.assert_not_called()
+
+
+class TestSGLangLauncher(unittest.TestCase):
+    def test_sglang_launcher_api_server_not_importable_warning(self):
+        from docker.scripts.snapshot.sglang import launcher as sglang_launcher
+
+        with patch.dict("sys.modules", {"sglang": None, "sglang.srt": None}), patch(
+            "docker.scripts.snapshot.sglang.launcher.logger"
+        ) as mock_logger:
+            result = sglang_launcher._hook_api_server()
+            self.assertFalse(result)
+            mock_logger.warning.assert_called_once()
+            self.assertIn(
+                "SGLang server is not importable",
+                mock_logger.warning.call_args[0][0],
+            )
+
+    @patch("docker.scripts.snapshot.sglang.wrapper.patch_sglang_wait_and_warmup")
+    def test_sglang_launcher_hook_api_server_success(self, mock_patch):
+        from docker.scripts.snapshot.sglang import launcher as sglang_launcher
+
+        result = sglang_launcher._hook_api_server()
+        self.assertTrue(result)
+        mock_patch.assert_called_once()
+
+    @patch("sys.argv", ["launcher.py", "--model-path", "Qwen/Qwen3-32B"])
+    def test_sglang_launcher_main(self):
+        from docker.scripts.snapshot.sglang import launcher as sglang_launcher
+
+        mock_launch_server = MagicMock()
+        mock_prepare_args = MagicMock(return_value="parsed_args")
+        modules = {
+            "sglang": MagicMock(),
+            "sglang.srt": MagicMock(),
+            "sglang.srt.entrypoints": MagicMock(),
+            "sglang.srt.entrypoints.http_server": MagicMock(
+                launch_server=mock_launch_server
+            ),
+            "sglang.srt.server_args": MagicMock(
+                prepare_server_args=mock_prepare_args
+            ),
+        }
+        with patch.dict("sys.modules", modules):
+            sglang_launcher.main()
+
+        mock_prepare_args.assert_called_once_with(["--model-path", "Qwen/Qwen3-32B"])
+        mock_launch_server.assert_called_once_with("parsed_args")
+
+    def test_sglang_launcher_main_not_installed_raises(self):
+        from docker.scripts.snapshot.sglang import launcher as sglang_launcher
+
+        with patch.dict(
+            "sys.modules", {"sglang.srt.entrypoints.http_server": None}
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                sglang_launcher.main()
+            self.assertIn(
+                "sglang must be installed to run snapshot launcher",
+                str(ctx.exception),
+            )
+
+
+class TestSnapshotImports(unittest.TestCase):
+    def test_snapshot_package_and_subpackage_exports(self):
+        import importlib
+
+        snapshot_pkg = importlib.import_module("docker.scripts.snapshot")
+        sglang_pkg = importlib.import_module("docker.scripts.snapshot.sglang")
+        vllm_pkg = importlib.import_module("docker.scripts.snapshot.vllm")
+        sglang_wrapper = importlib.import_module(
+            "docker.scripts.snapshot.sglang.wrapper"
+        )
+        sglang_launcher = importlib.import_module(
+            "docker.scripts.snapshot.sglang.launcher"
+        )
+
+        expected_top_level = {
+            "GKESnapshotProvider",
+            "SnapshotError",
+            "get_snapshot_provider",
+            "patch_vllm_lifespan",
+            "patch_sglang_wait_and_warmup",
+        }
+        self.assertTrue(expected_top_level.issubset(set(snapshot_pkg.__all__)))
+        for name in expected_top_level:
+            self.assertTrue(hasattr(snapshot_pkg, name), f"Missing export {name}")
+
+        self.assertEqual(sglang_pkg.__all__, ["patch_sglang_wait_and_warmup"])
+        self.assertIs(
+            sglang_pkg.patch_sglang_wait_and_warmup,
+            sglang_wrapper.patch_sglang_wait_and_warmup,
+        )
+        self.assertEqual(vllm_pkg.__all__, ["patch_vllm_lifespan"])
+        self.assertTrue(callable(sglang_launcher.main))
+        self.assertTrue(callable(sglang_launcher._hook_api_server))
+
+    def test_snapshot_init_loads_when_only_sglang_or_vllm_mounted(self):
+        import importlib
+        import docker.scripts.snapshot as snapshot_pkg
+
+        try:
+            # Simulate SGLang pod where docker/scripts/snapshot/vllm ConfigMap is not mounted
+            with patch.dict("sys.modules", {"docker.scripts.snapshot.vllm": None}):
+                importlib.reload(snapshot_pkg)
+                self.assertIn("patch_sglang_wait_and_warmup", snapshot_pkg.__all__)
+                self.assertNotIn("patch_vllm_lifespan", snapshot_pkg.__all__)
+
+            # Simulate vLLM pod where docker/scripts/snapshot/sglang ConfigMap is not mounted
+            with patch.dict("sys.modules", {"docker.scripts.snapshot.sglang": None}):
+                importlib.reload(snapshot_pkg)
+                self.assertIn("patch_vllm_lifespan", snapshot_pkg.__all__)
+                self.assertNotIn("patch_sglang_wait_and_warmup", snapshot_pkg.__all__)
+        finally:
+            importlib.reload(snapshot_pkg)
+
+    def test_sglang_wrapper_strict_module_imports(self):
+        import types
+        from docker.scripts.snapshot.sglang.wrapper import patch_sglang_wait_and_warmup
+
+        http_server_mod = types.ModuleType("sglang.srt.entrypoints.http_server")
+        for attr in (
+            "ServerStatus",
+            "_wait_and_warmup",
+            "_execute_server_warmup",
+            "_freeze_gc_after_server_warmup",
+            "_wait_weights_ready",
+            "get_exec",
+            "get_model",
+            "get_observability",
+            "get_serving",
+            "kill_process_tree",
+        ):
+            setattr(http_server_mod, attr, MagicMock(name=attr))
+
+        io_struct_mod = types.ModuleType("sglang.srt.managers.io_struct")
+        for attr in (
+            "ReleaseMemoryOccupationReqInput",
+            "ResumeMemoryOccupationReqInput",
+        ):
+            setattr(io_struct_mod, attr, MagicMock(name=attr))
+
+        entrypoints_mod = types.ModuleType("sglang.srt.entrypoints")
+        entrypoints_mod.http_server = http_server_mod
+        managers_mod = types.ModuleType("sglang.srt.managers")
+        managers_mod.io_struct = io_struct_mod
+        srt_mod = types.ModuleType("sglang.srt")
+        srt_mod.entrypoints = entrypoints_mod
+        srt_mod.managers = managers_mod
+        sglang_mod = types.ModuleType("sglang")
+        sglang_mod.srt = srt_mod
+
+        strict_modules = {
+            "sglang": sglang_mod,
+            "sglang.srt": srt_mod,
+            "sglang.srt.entrypoints": entrypoints_mod,
+            "sglang.srt.entrypoints.http_server": http_server_mod,
+            "sglang.srt.managers": managers_mod,
+            "sglang.srt.managers.io_struct": io_struct_mod,
+        }
+
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        with patch.dict("sys.modules", strict_modules):
+            patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+            self.assertTrue(callable(http_server_mod._wait_and_warmup))
+
+        # Verify missing required symbol raises ImportError
+        delattr(io_struct_mod, "ReleaseMemoryOccupationReqInput")
+        with patch.dict("sys.modules", strict_modules):
+            with self.assertRaises(ImportError):
+                patch_sglang_wait_and_warmup(snapshot_provider=mock_provider)
+
+
 if __name__ == "__main__":
     unittest.main()
-
