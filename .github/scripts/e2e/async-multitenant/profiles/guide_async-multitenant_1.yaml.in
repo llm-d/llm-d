@@ -1,0 +1,55 @@
+# Realtime population for the async-multitenant nightly (llm-d guide
+# guides/batch-serving/asynchronous-processing/multitenant).
+#
+# Closed-loop streaming completions sent to the llm-d-router coordinator with
+# X-AP-Mode: passthrough, which the async-broker step stamps as
+# reserved-interactive (priority 100) before forwarding live to the router.
+# concurrency_level maps 1:1 onto the router concurrency-detector's notion of
+# saturation, so the nightly's experiment overrides it per level (2/8/9/10 of
+# maxConcurrency 10) together with num_requests (~80 s per stage).
+#
+# Prompt and output lengths are fixed (ignore_eos) so per-request service time
+# is stable and the realtime/async comparison isolates queueing effects.
+# Canonical home: llm-d-benchmark workload/profiles/inference-perf/; the lane
+# carries a copy and installs it when the clone lacks the file.
+load:
+  type: concurrent
+  request_timeout: 120
+  stages:
+    - concurrency_level: 2
+      num_requests: 80
+api:
+  type: completion
+  streaming: true
+  headers:
+    X-AP-Mode: passthrough
+    X-Team: realtime
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+data:
+  type: random
+  input_distribution:
+    min: 200
+    max: 200
+    mean: 200
+    std_dev: 0
+    total_count: 100
+  output_distribution:
+    min: 128
+    max: 128
+    mean: 128
+    std_dev: 0
+    total_count: 100
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
+storage:
+  local_storage:
+    path: /workspace

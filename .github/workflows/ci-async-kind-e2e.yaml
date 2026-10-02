@@ -6,8 +6,9 @@ name: CI Async Processing E2E (kind)
 # queue and assert a completion lands back on the result queue.
 #
 # This is a GPU-free, single-runner check intended to gate the guide on PRs. The
-# real per-provider/per-accelerator nightly e2e is driven separately via
-# llm-d-benchmark (see llm-d/llm-d#1360).
+# GPU nightly for the multitenant scenario (flow control + coordinator
+# async-broker, realtime isolation benchmark) is
+# nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml.
 
 on:
   pull_request:

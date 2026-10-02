@@ -1,0 +1,221 @@
+# Values for the multi-tenant scenario with the optional router coordinator
+# (README step 4): values/redis/quota-only.yaml plus two queues fed by the
+# coordinator's async-broker step and their own worker pool. Everything above
+# the coordinator entries is identical to quota-only.yaml
+# (scripts/tests/test_multitenant_coordinator_values.py checks this).
+#
+# The coordinator queues differ from the team queues in three ways:
+#   * no result_queue_name: each queued message carries its own result
+#     mailbox, which the async-broker step reads for wait and enqueue modes;
+#   * result_ttl_seconds: unfetched results expire;
+#   * their own worker pool `coord` with more workers (16) than the router's
+#     concurrency limit (10), so coordinator traffic alone can saturate the
+#     model server; the team pools have 8 each.
+#
+# Values for the multi-tenant scenario — team × tier × MODEL (Scenarios A + B),
+# Redis SortedSet queue backend.
+#
+# Replace the placeholders: NAMESPACE, IGW_HOST (one inference gateway that routes
+# by payload.model to two InferencePools), POOL_A / POOL_B (the two InferencePool
+# names — used by the saturation overlay).
+#
+# MODEL_A / MODEL_B below are the guide's ${MODEL_A} / ${MODEL_B} shell variables,
+# not placeholders in this file: the served model names reach the system through
+# payload.model in the publisher, never through these values.
+#
+# Three dimensions:
+#   - MODEL  -> its own worker pool (model-a / model-b): independent concurrency
+#     and (in the saturation overlay) independent saturation back-off. 6 queues =
+#     3 teams × 2 models; the publisher sends model-a traffic to the *-a queues
+#     (payload.model = MODEL_A) and model-b traffic to the *-b queues.
+#   - TEAM   -> a per-(team, model) reserved quota via redis-quota in `classifying`
+#     mode: within quota -> reserved, over quota -> overflow (dispatched, not
+#     nacked). Per-model `prefix` (quota:a: / quota:b:) keeps the counters separate.
+#   - TIER   -> a per-queue `tier` label (premium=interactive, standard=async,
+#     batch=batch).
+#
+# The tier-priority merge policy runs per pool independently: within each model it
+# dispatches the 6 (classification × tier) lanes in strict order (all reserved
+# before any overflow; interactive>async>batch within each) and stamps
+# x-llm-d-inference-objective. Results land on a per-model
+# list (results-a-list / -b-list).
+ap:
+
+  transport: "redis-sortedset"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      objective_header: "x-llm-d-inference-objective"
+      fairness_header: "x-llm-d-inference-fairness-id"
+      fairness_attribute: "team"
+      lane_objectives:
+        reserved-interactive: "reserved-interactive"
+        reserved-async: "reserved-async"
+        reserved-batch: "reserved-batch"
+        overflow-interactive: "overflow-interactive"
+        overflow-async: "overflow-async"
+        overflow-batch: "overflow-batch"
+
+  transportConfig:
+    urlSecret:
+      url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+    result_queue_name: "results-a-list"   # default; per-queue result_queue_name overrides below
+    poll_interval_ms: 500
+    batch_size: 10
+    queues:
+      # ---------- MODEL A (pool model-a, payload.model = MODEL_A) ----------
+      - queue_name: "team-premium-a"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels:
+          tier: "interactive"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "team-standard-a"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels:
+          tier: "async"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "team-batch-a"
+        worker_pool_id: "model-a"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-a-list"
+        labels:
+          tier: "batch"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:a:"
+
+      # ---------- MODEL B (pool model-b, payload.model = MODEL_B) ----------
+      - queue_name: "team-premium-b"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels:
+          tier: "interactive"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - queue_name: "team-standard-b"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels:
+          tier: "async"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:b:"
+      - queue_name: "team-batch-b"
+        worker_pool_id: "model-b"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_queue_name: "results-b-list"
+        labels:
+          tier: "batch"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:b:"
+
+      # ---------- COORDINATOR (async-broker step, README step 4) ----------
+      - queue_name: "coord-standard-a"
+        worker_pool_id: "coord"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_ttl_seconds: 3600
+        labels:
+          tier: "async"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:a:"
+      - queue_name: "coord-batch-a"
+        worker_pool_id: "coord"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://IGW_HOST:80"
+        result_ttl_seconds: 3600
+        labels:
+          tier: "batch"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:a:"
+
+  # One pool per model — independent concurrency (and, in the saturation overlay,
+  # independent saturation back-off).
+  workerPools:
+    - id: "model-a"
+      workers: 8
+    - id: "model-b"
+      workers: 8
+    - id: "coord"
+      workers: 16
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: false
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  grafana:
+    dashboards:
+      enabled: false

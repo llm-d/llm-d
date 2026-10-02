@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/ci-guides-check.yaml
+      - .github/scripts/e2e/async-multitenant/**
       - guides/**
       - scripts/guide.py
       - scripts/matrix_common.py
@@ -49,3 +50,6 @@ jobs:
 
       - name: Run guide.py tests
         run: python -m pytest scripts/tests/ -v
+
+      - name: Run async-multitenant validator tests
+        run: python -m unittest discover -s .github/scripts/e2e/async-multitenant -p 'test_*.py' -v
