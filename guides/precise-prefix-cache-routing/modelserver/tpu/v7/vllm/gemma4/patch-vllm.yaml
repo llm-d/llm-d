@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          args:
+            - "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic"
+            - "--port=$(POD_PORT)"
+            - "--tensor-parallel-size=2"
+            - "--data-parallel-size=4"
+            - "--enable-expert-parallel"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=16384"
+            - "--max-num-batched-tokens=2048"
+            - "--max-num-seqs=512"
+            - "--enable-prefix-caching"
+            - "--disable-hybrid-kv-cache-manager"
+            - "--kv-cache-dtype=fp8"
+            - "--block-size=256"
+            - "--language-model-only"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic"}'
+          env:
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
+          resources:
+            limits:
+              google.com/tpu: 4
+            requests:
+              google.com/tpu: 4

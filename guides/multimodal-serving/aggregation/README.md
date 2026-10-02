@@ -31,7 +31,8 @@ This guide includes configurations for the following accelerators and inference 
 | NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
 | Intel XPU          | `modelserver/xpu/vllm/base/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60            |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas |
-| Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `google/gemma-4-31B-it`      | Same hardware; <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |
+| Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic` | Same hardware (`DP=4, TP=2, EP=8`); <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |
+| Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3.5-397b/` | `Qwen/Qwen3.5-397B-A17B-FP8` | Same hardware (`TP=8, EP=8`) |
 
 > [!NOTE]
 > Review replica count, tensor parallelism, and the `2x2x1` topology against your own slice before
@@ -151,8 +152,11 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_
 # Google TPU v7 — Qwen3-VL-32B-Instruct
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
 
-# Google TPU v7 — google/gemma-4-31B-it
+# Google TPU v7 — RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
+
+# Google TPU v7 — Qwen/Qwen3.5-397B-A17B-FP8
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3.5-397b/
 ```
 
 > [!NOTE]

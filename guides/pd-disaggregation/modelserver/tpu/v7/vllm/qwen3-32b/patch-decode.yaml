@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              exec vllm serve Qwen/Qwen3-32B \
+                --host 0.0.0.0 \
+                --max-model-len=16384 \
+                --max-num-batched-tokens=8192 \
+                --max-num-seqs=64 \
+                --tensor-parallel-size=4 \
+                --attention-backend=CUSTOM \
+                --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_consumer","kv_ip":"$(POD_IP)"}' \
+                --port=8200 \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+          resources:
+            limits:
+              cpu: "64"
+              memory: 256Gi
+              google.com/tpu: 4
+            requests:
+              cpu: "64"
+              memory: 256Gi
+              google.com/tpu: 4

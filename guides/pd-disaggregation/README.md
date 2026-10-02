@@ -334,8 +334,21 @@ Tool calling and reasoning parsing are enabled with the parsers for the model ea
 
 **Known issues:**
 
-> [!NOTE]
-> The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
+<details>
+<summary><h4>Other Models (TPU7x)</h4></summary>
+
+```bash
+# Google TPU v7 / vLLM — Qwen/Qwen3-32B
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-32b/
+
+# Google TPU v7 / vLLM — deepseek-ai/DeepSeek-V4-Flash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/deepseek-v4-flash/
+
+# Google TPU v7 / vLLM — RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
+```
+
+</details>
 
 </details>
 <details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">

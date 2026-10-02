@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              exec vllm serve RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic \
+                --host 0.0.0.0 \
+                --port=8000 \
+                --served-model-name=RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic \
+                --tensor-parallel-size=4 \
+                --enable-expert-parallel \
+                --max-model-len=16384 \
+                --max-num-batched-tokens=2048 \
+                --max-num-seqs=512 \
+                --gpu-memory-utilization=0.90 \
+                --kv-cache-dtype=fp8 \
+                --attention-backend=CUSTOM \
+                --block-size=256 \
+                --language-model-only \
+                --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_producer","kv_ip":"$(POD_IP)"}' \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+          resources:
+            limits:
+              cpu: "180"
+              memory: 800Gi
+              google.com/tpu: 4
+            requests:
+              cpu: "180"
+              memory: 800Gi
+              google.com/tpu: 4

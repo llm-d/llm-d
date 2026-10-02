@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/multi-host/default
+
+namePrefix: agentic-serving-tpu-vllm-glm52-fp8-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: agentic-serving
+      llm-d.ai/model: GLM-5.2-FP8
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+      llm-d.ai/backend: torch-tpu
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/leaderTemplate/metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        create: true
+patches:
+  - path: patch-vllm.yaml
