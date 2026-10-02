@@ -14,6 +14,9 @@ spec:
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--disable-hybrid-kv-cache-manager"
             - "--max_model_len=8192"
+            # Drain in-flight requests on SIGTERM. Sized with the grace period in
+            # recipes/modelserver/components/graceful-shutdown; raise both together.
+            - "--shutdown-timeout=45"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
