@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the queue-based KEDA + EPP autoscaling path (keda-epp/README.md) on the AMD
 # ROCm CI cluster in a single namespace. ROCm sibling of nightly-deploy-ocp-keda-epp.sh,
-# using the k8s-queue overlay against the cluster's in-cluster Prometheus.
+# using the overlays/k8s/queue overlay against the cluster's in-cluster Prometheus.
 #
 # Environment variables:
 #   NAMESPACE             target namespace (default: keda-epp-queue-rocm-XXXX)
@@ -110,7 +110,7 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/optimized-baseline/modelserver/amd/vllm/base/
-  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/k8s-queue/
+  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/overlays/k8s/queue/
 patches:
   # The trigger queries and serverAddress are opaque strings the namespace transformer
   # cannot reach. maxReplicaCount matches the GPUs the nightly reserves. The shorter
