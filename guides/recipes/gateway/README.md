@@ -8,7 +8,7 @@ This directory contains recipes for deploying a `Gateway` called `llm-d-inferenc
 > [!WARNING]
 > The `kgateway` and `kgateway-openshift` recipes are deprecated in llm-d and will be removed in the next release. Prefer `agentgateway` for new self-installed inference deployments. These recipes are retained only to support migrations during the current release.
 
-Available recipes: `agentgateway`, `envoy-ai-gateway`, `istio`, `gke-l7-rilb`, `gke-l7-regional-external-managed`.
+Available recipes: `agentgateway`, `envoy-ai-gateway`, `istio`, `nginx-gateway-fabric`, `gke-l7-rilb`, `gke-l7-regional-external-managed`.
 
 A `Gateway` can be deployed with:
 
