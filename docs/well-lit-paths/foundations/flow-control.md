@@ -70,6 +70,16 @@ In the background EPP monitors the model servers for saturation. If it detects s
 > [!WARNING]
 > **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector. In production, these headers should be stripped from external requests and injected by an upstream trusted API gateway, identity provider, or Envoy AuthZ filter based on the API key.
 
+## Observability
+
+Flow control is work-conserving, so the queue stays empty whenever the pool has headroom and the metrics
+only say something under contention. What matters is queue depth and wait time per priority band, read
+against the pool saturation gate that holds dispatch and separately from the queue limits that reject to
+protect the EPP's memory. The [guide's Observability & Troubleshooting section](../../../guides/flow-control/README.md#4-observability--troubleshooting)
+covers the key metrics for this path and the common failure modes, backed by the shared
+[PromQL](../../operations/observability/promql.md#flow-control) and
+[metric](../../operations/observability/metrics.md#flow-control-metrics) references.
+
 ## Further Reading
 
 See [Flow Control architecture](../../architecture/core/router/epp/flow-control.md) for full details of the design.
