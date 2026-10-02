@@ -7,5 +7,6 @@ resources:
   - ../../../../../render
 components:
   - ../../components/kv-events
+  - ../../components/render-endpoints
 patches:
   - path: delete-evictor.yaml
