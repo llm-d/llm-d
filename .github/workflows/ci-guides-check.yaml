@@ -3,7 +3,7 @@ name: CI Guides Check
 # Guides on the guide.yaml method render their README bash fences from the
 # YAML (see guides/templates/README.md). The job fails when a README is stale
 # relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`) and
-# runs the unit tests under scripts/tests/.
+# runs the unit tests under scripts/tests/ and helpers/preflight/tests/.
 
 on:
   pull_request:
@@ -15,6 +15,7 @@ on:
       - scripts/matrix_common.py
       - scripts/seed-release-badges.py
       - scripts/tests/**
+      - helpers/preflight/**
   workflow_dispatch:
 
 permissions:
@@ -47,5 +48,5 @@ jobs:
       - name: Check rendered READMEs are current
         run: python scripts/guide.py render guides/*/ --check
 
-      - name: Run guide.py tests
-        run: python -m pytest scripts/tests/ -v
+      - name: Run guide.py and preflight tests
+        run: python -m pytest scripts/tests/ helpers/preflight/tests/ -v
