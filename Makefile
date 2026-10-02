@@ -104,7 +104,7 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	elif [ "$(BUILDER)" = "docker" ]; then \
 	  echo "🐳 Docker detected: Building with buildx for linux/$(ARCH)..."; \
 	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE_PATH) >$(DOCKERFILE_DIR)/Dockerfile.cross; \
-	  - docker buildx create --use --name image-builder || true; \
+	  docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
