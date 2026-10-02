@@ -1,0 +1,78 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: npu-prefill-claim
+  labels:
+    llm-d.ai/role: prefill
+spec:
+  spec:
+    devices:
+      # dranet needs the rdma profile to hand the pod a RoCE VF rather than a plain netdev.
+      config:
+        - opaque:
+            driver: dra.net
+            parameters:
+              profile: rdma
+          requests:
+            - nic
+      requests:
+        - name: npu
+          exactly:
+            deviceClassName: npu.rebellions.ai
+            count: 4
+            # One DeviceClass serves every Rebellions product, so a claim reaches a
+            # specific NPU only by filtering here. productName carries no domain prefix.
+            selectors:
+              - cel:
+                  expression: device.attributes["npu.rebellions.ai"].productName.startsWith("RBLN-CR")
+        - name: nic
+          exactly:
+            deviceClassName: dranet
+            count: 1
+            selectors:
+              - cel:
+                  expression: device.attributes["dra.net"].rdma
+      # The NPUs and the VF must land on one NUMA node. Left unconstrained the scheduler
+      # may pair a numa1 NPU with a numa0 VF, which passes scheduling and only fails once
+      # the transfer starts: no usable data-plane RoCE NIC on numa=1.
+      constraints:
+        - requests: [npu, nic]
+          matchAttribute: resource.kubernetes.io/numaNode
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: npu-decode-claim
+  labels:
+    llm-d.ai/role: decode
+spec:
+  spec:
+    devices:
+      config:
+        - opaque:
+            driver: dra.net
+            parameters:
+              profile: rdma
+          requests:
+            - nic
+      requests:
+        - name: npu
+          exactly:
+            deviceClassName: npu.rebellions.ai
+            count: 4
+            selectors:
+              - cel:
+                  expression: device.attributes["npu.rebellions.ai"].productName.startsWith("RBLN-CR")
+        - name: nic
+          exactly:
+            deviceClassName: dranet
+            count: 1
+            selectors:
+              - cel:
+                  expression: device.attributes["dra.net"].rdma
+      # The NPUs and the VF must land on one NUMA node. Left unconstrained the scheduler
+      # may pair a numa1 NPU with a numa0 VF, which passes scheduling and only fails once
+      # the transfer starts: no usable data-plane RoCE NIC on numa=1.
+      constraints:
+        - requests: [npu, nic]
+          matchAttribute: resource.kubernetes.io/numaNode
