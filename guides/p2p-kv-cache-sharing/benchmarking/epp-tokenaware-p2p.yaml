@@ -1,0 +1,71 @@
+apiVersion: llm-d.ai/v1alpha1
+kind: EndpointPickerConfig
+# Token-aware arm: placement by per-pod in-flight uncached tokens on the
+# precise index (no prefix-affinity scorer or filter), plus the
+# p2p-source-producer. The token-load scorer prices each pod by the prompt
+# tokens it would still have to prefill for this request, so a pod holding
+# the prefix is preferred until it is loaded, and a request placed elsewhere
+# pulls the prefix instead of recomputing it. Use it when many concurrent
+# sessions contend for a limited set of owner pods (the document Q&A
+# regime). Match modelName and the render Service URL to your deployment.
+plugins:
+  - type: token-producer
+    parameters:
+      modelName: openai/gpt-oss-120b
+      vllm:
+        url: http://gptoss-render:8000
+  - type: endpoint-notification-source
+  - type: metrics-data-source
+    parameters: {scheme: "http", path: "/metrics", insecureSkipVerify: true}
+  - type: core-metrics-extractor
+  - type: inflight-load-producer
+    parameters:
+      # discount each pod's in-flight prompt tokens by what the precise index
+      # says it already caches
+      prefixMatchInfoProducerName: precise-prefix-cache-producer
+  - type: precise-prefix-cache-producer
+    parameters:
+      indexerConfig:
+        kvBlockIndexConfig:
+          inMemoryConfig:
+            # discovered endpoints x tiers; 32 covers a 16-pod fleet with GPU
+            # and CPU tiers
+            podCacheSize: 32
+        kvCacheBackendConfigs:
+          - name: gpu
+            weight: 1.0
+          # A CPU-resident prefix is nearly as cheap to serve as a
+          # GPU-resident one once the pull exists, so it is weighted close to
+          # the GPU tier.
+          - name: cpu
+            weight: 0.9
+      tokenProcessorConfig:
+        blockSize: 64
+      speculativeIndexing: false
+      kvEventsConfig:
+        topicFilter: "kv@"
+        concurrency: 8
+        discoverPods: true
+        podDiscoveryConfig:
+          socketPort: 5556
+  - type: p2p-source-producer
+    parameters:
+      prefixMatchInfoProducerName: precise-prefix-cache-producer
+      prefillProfileName: default
+      minCachedTokenDelta: 2048
+  - type: token-load-scorer
+  - type: max-score-picker
+  - type: single-profile-handler
+dataLayer:
+  sources:
+    - pluginRef: metrics-data-source
+      extractors:
+        - pluginRef: core-metrics-extractor
+    - pluginRef: endpoint-notification-source
+      extractors:
+        - pluginRef: precise-prefix-cache-producer
+schedulingProfiles:
+  - name: default
+    plugins:
+      - pluginRef: token-load-scorer
+      - pluginRef: max-score-picker
