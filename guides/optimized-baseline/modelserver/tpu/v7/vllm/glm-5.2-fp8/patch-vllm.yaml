@@ -1,0 +1,118 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 2
+    leaderTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inference-serving: "true"
+      spec:
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 2x2x2
+        containers:
+          - name: modelserver
+            command: ["/bin/bash", "-c"]
+            args:
+              - |
+                set -euo pipefail
+                bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader \
+                  --ray_cluster_size=${LWS_GROUP_SIZE} --ray_init_timeout=1800
+                exec vllm serve zai-org/GLM-5.2-FP8 \
+                  --tokenizer=zai-org/GLM-5.2-FP8 \
+                  --host=0.0.0.0 \
+                  --port=8000 \
+                  --data-parallel-size=16 \
+                  --tensor-parallel-size=1 \
+                  --max-model-len=9216 \
+                  --max-num-seqs=64 \
+                  --max-num-batched-tokens=1024 \
+                  --kv-cache-dtype=fp8 \
+                  --gpu-memory-utilization=0.9 \
+                  --enable-expert-parallel \
+                  --enable-ep-weight-filter \
+                  --api-server-count=1 \
+                  --safetensors-load-strategy=prefetch \
+                  --async-scheduling \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            env:
+              - name: TPU_MULTIHOST_BACKEND
+                value: "ray"
+              - name: PJRT_DEVICE
+                value: "TPU"
+              - name: VLLM_TARGET_DEVICE
+                value: "tpu"
+              - name: TPU_SPARSE_MLA_NOPE_LAYOUT
+                value: "tensorcore"
+              - name: TPU_SPARSE_MLA_ROPE_LAYOUT
+                value: "tensorcore"
+              - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+                value: "0"
+              - name: VLLM_USE_AOT_COMPILE
+                value: "0"
+              - name: MOE_REQUANTIZE_BLOCK_SIZE
+                value: "512"
+              - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+                value: "0"
+              - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                value: "false"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+            resources:
+              limits:
+                google.com/tpu: 4
+              requests:
+                google.com/tpu: 4
+    workerTemplate:
+      spec:
+        nodeSelector:
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 2x2x2
+        containers:
+          - name: modelserver
+            command: ["/bin/bash", "-c"]
+            args:
+              - |
+                set -euo pipefail
+                exec bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker \
+                  --ray_address=${LWS_LEADER_ADDRESS} --ray_init_timeout=1800
+            env:
+              - name: TPU_MULTIHOST_BACKEND
+                value: "ray"
+              - name: PJRT_DEVICE
+                value: "TPU"
+              - name: VLLM_TARGET_DEVICE
+                value: "tpu"
+              - name: TPU_SPARSE_MLA_NOPE_LAYOUT
+                value: "tensorcore"
+              - name: TPU_SPARSE_MLA_ROPE_LAYOUT
+                value: "tensorcore"
+              - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+                value: "0"
+              - name: VLLM_USE_AOT_COMPILE
+                value: "0"
+              - name: MOE_REQUANTIZE_BLOCK_SIZE
+                value: "512"
+              - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+                value: "0"
+              - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                value: "false"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+            resources:
+              limits:
+                google.com/tpu: 4
+              requests:
+                google.com/tpu: 4

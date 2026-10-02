@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "deepseek-ai/DeepSeek-V4-Flash"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--served-model-name=deepseek-ai/DeepSeek-V4-Flash"
+            - "--tensor-parallel-size=1"
+            - "--data-parallel-size=8"
+            - "--data-parallel-size-local=8"
+            - "--enable-expert-parallel"
+            - "--quantization=deepseek_v4_fp8"
+            - "--kv-cache-dtype=fp8_e4m3"
+            - "--max-model-len=9216"
+            - "--max-num-batched-tokens=2048"
+            - "--max-num-seqs=256"
+            - "--gpu-memory-utilization=0.90"
+            - "--async-scheduling"
+            - "--trust-remote-code"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          env:
+            - name: VLLM_PLUGINS
+              value: "torchtpu,torchtpu_layers"
+            - name: NEW_MODEL_DESIGN
+              value: "1"
+            - name: MODEL_IMPL_TYPE
+              value: "vllm"
+            - name: MOE_REQUANTIZE_WEIGHT_DTYPE
+              value: "fp4"
+            - name: MOE_REQUANTIZE_BLOCK_SIZE
+              value: "512"
+            - name: TPU_ROPE_CACHE_ROW_MAJOR
+              value: "1"
+            - name: TPU_MOE_HASH_TABLE_ROW_MAJOR
+              value: "1"
+            - name: TPU_DSV4_HONOR_CONTINUE_FINAL_MESSAGE
+              value: "1"
+            - name: TPU_MULTIHOST_BACKEND
+              value: "mp"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+              value: "0"
+            - name: VLLM_USE_AOT_COMPILE
+              value: "0"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            limits:
+              memory: 900Gi
+              cpu: "96"
+              google.com/tpu: 4
+            requests:
+              memory: 800Gi
+              cpu: "96"
+              google.com/tpu: 4
+          volumeMounts:
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /dev/shm
+              name: dshm
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 360
+          livenessProbe:
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--served-model-name=RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic"
+            - "--tensor-parallel-size=2"
+            - "--data-parallel-size=4"
+            - "--enable-expert-parallel"
+            - "--max-model-len=16384"
+            - "--max-num-batched-tokens=2048"
+            - "--max-num-seqs=512"
+            - "--async-scheduling"
+            - "--enable-prefix-caching"
+            - "--disable-hybrid-kv-cache-manager"
+            - "--gpu-memory-utilization=0.90"
+            - "--kv-cache-dtype=fp8"
+            - "--attention-backend=CUSTOM"
+            - "--block-size=256"
+            - "--language-model-only"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          env:
+            - name: VLLM_PLUGINS
+              value: "torchtpu"
+            - name: TPU_MULTIHOST_BACKEND
+              value: "mp"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            limits:
+              memory: 800Gi
+              cpu: "180"
+              google.com/tpu: 4
+            requests:
+              memory: 800Gi
+              cpu: "180"
+              google.com/tpu: 4
+          volumeMounts:
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /dev/shm
+              name: dshm
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory

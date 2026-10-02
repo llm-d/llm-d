@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "nvidia/GLM-5.2-NVFP4"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--served-model-name=nvidia/GLM-5.2-NVFP4"
+            - "--tensor-parallel-size=8"
+            - "--data-parallel-size=1"
+            - "--enable-expert-parallel"
+            - "--enable-ep-weight-filter"
+            - "--kv-cache-dtype=fp8"
+            - "--max-model-len=9216"
+            - "--max-num-batched-tokens=2048"
+            - "--max-num-seqs=64"
+            - "--gpu-memory-utilization=0.88"
+            - "--enable-prefix-caching"
+            - "--api-server-count=1"
+            - "--async-scheduling"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+          env:
+            - name: TPU_SPARSE_MLA_NOPE_LAYOUT
+              value: "tensorcore"
+            - name: TPU_SPARSE_MLA_ROPE_LAYOUT
+              value: "tensorcore"
+            - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+              value: "0"
+            - name: VLLM_USE_AOT_COMPILE
+              value: "0"
+            - name: MOE_REQUANTIZE_BLOCK_SIZE
+              value: "512"
+            - name: PJRT_DEVICE
+              value: "TPU"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            limits:
+              google.com/tpu: 4
+            requests:
+              google.com/tpu: 4
+          volumeMounts:
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+            - mountPath: /dev/shm
+              name: dshm
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 360
+          livenessProbe:
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
