@@ -24,7 +24,7 @@ env:
     # Serving topology of the deployment being autoscaled. `optimized-baseline` is
     # P+D co-located (kv_both, one InferencePool, one Deployment) and gets ONE
     # ScaledObject with both triggers. `pd-disaggregation` splits prefill and decode
-    # across Deployments and gets one ScaledObject per role.
+    # across DisaggregatedSet roles and gets one ScaledObject per role.
     TOPOLOGY: {default: optimized-baseline, values: [optimized-baseline, pd-disaggregation]}
 
     # Autoscaling overlays for this guide (<strategy>/<topology>).

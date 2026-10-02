@@ -7,7 +7,7 @@
 #
 # Before applying, update:
 #   - namespace in the query, to your deployment's namespace
-#   - the .*decode.* pod selector if your Deployments are named differently
+#   - the .*decode.* pod selector if your pods are named differently
 #   - threshold, minReplicaCount, maxReplicaCount
 #   - serverAddress if your Prometheus is not the bundled llm-d stack (see ../ocp)
 #
@@ -16,15 +16,15 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: pd-disaggregation-nvidia-gpu-vllm-decode-token-aware
+  name: pd-disagg-vllm-decode-token-aware
   labels:
     app.kubernetes.io/part-of: keda-epp-token-aware
     llm-d.ai/role: decode
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: pd-disaggregation-nvidia-gpu-vllm-decode
+    apiVersion: disaggregatedset.x-k8s.io/v1
+    kind: DisaggregatedSetRoleScaler
+    name: pd-disagg-vllm-decode
   minReplicaCount: 1
   maxReplicaCount: 10
   # No pollingInterval here on purpose. KEDA only honours it when it owns
