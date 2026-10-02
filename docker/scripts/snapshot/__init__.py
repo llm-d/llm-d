@@ -22,8 +22,9 @@ except ImportError:
     pass
 
 try:
-    from .sglang import patch_sglang_wait_and_warmup
+    from .sglang import sglang_snapshot_callback, sglang_warmup_and_snapshot
 
-    __all__.append("patch_sglang_wait_and_warmup")
+    __all__.extend(["sglang_snapshot_callback", "sglang_warmup_and_snapshot"])
 except ImportError:
     pass
+

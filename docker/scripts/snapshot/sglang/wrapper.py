@@ -3,141 +3,145 @@ SGLang Wrapper Entrypoint for GKE Fast Pod Snapshotting (docker/scripts/snapshot
 
 Note: Scope is single-rank deployments (DP/multi-rank barrier coordination is not covered).
 
-Patches sglang.srt.entrypoints.http_server._wait_and_warmup to:
-1. Run standard server warmup (captures CUDA graphs, pre-allocates VRAM, and freezes GC).
-2. Release physical VRAM via tokenizer_manager.release_memory_occupation(tags=["weights", "kv_cache"]).
+Provides sglang_warmup_and_snapshot (invoked via launch_server's execute_warmup_func) and
+sglang_snapshot_callback to execute the snapshot lifecycle before the server flips to ServerStatus.Up:
+1. Run standard server warmup while keeping tokenizer_manager.server_status at ServerStatus.Starting.
+2. Release physical VRAM via HTTP POST to /release_memory_occupation (tags=["weights", "kv_cache"]).
 3. Trigger the snapshot checkpoint via snapshot_provider.trigger() (clearing model weights cache on disk).
-4. Re-allocate physical VRAM via tokenizer_manager.resume_memory_occupation(tags=["weights", "kv_cache"]) upon restore.
-5. Mark tokenizer_manager.server_status = ServerStatus.Up and invoke launch_callback to begin serving traffic.
+4. Re-allocate physical VRAM via HTTP POST to /resume_memory_occupation (tags=["weights", "kv_cache"]) upon restore.
+5. Flip tokenizer_manager.server_status to ServerStatus.Up only after memory occupation is resumed.
+6. Terminate the server process tree via kill_process_tree if the sleep/wake cycle fails.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-import sys
-from typing import Optional
+import requests
+from typing import Callable, Optional
 
-from ..providers import (
-    GKESnapshotProvider,
-    get_snapshot_provider,
-)
-
+from ..providers import GKESnapshotProvider, get_snapshot_provider
 
 logger = logging.getLogger("sglang.snapshot.wrapper")
 
 
-def patch_sglang_wait_and_warmup(snapshot_provider: Optional[GKESnapshotProvider] = None):
-    """
-    Patches sglang's http_server._wait_and_warmup for GKE pod snapshotting (single-rank scope).
+def _set_server_status(status_name: str) -> None:
+    """Update SGLang's tokenizer_manager.server_status if initialized."""
+    try:
+        from sglang.srt.entrypoints import http_server  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
 
-    Args:
-        snapshot_provider: Snapshot provider instance. Defaults to the provider configured
-            by the SNAPSHOT_PROVIDER environment variable (or None if unset/disabled).
-    """
-    from sglang.srt.entrypoints import http_server
-    from sglang.srt.entrypoints.http_server import (
-        ServerStatus,
-        _execute_server_warmup,
-        _freeze_gc_after_server_warmup,
-        _wait_weights_ready,
-        get_exec,
-        get_model,
-        get_observability,
-        get_serving,
-        kill_process_tree,
-    )
-    from sglang.srt.managers.io_struct import (
-        ReleaseMemoryOccupationReqInput,
-        ResumeMemoryOccupationReqInput,
-    )
+        global_state = getattr(http_server, "_global_state", None)
+        tokenizer_manager = getattr(global_state, "tokenizer_manager", None)
+        server_status_enum = getattr(http_server, "ServerStatus", None)
+        if tokenizer_manager is not None and server_status_enum is not None:
+            tokenizer_manager.server_status = getattr(server_status_enum, status_name)
+    except ImportError:
+        pass
 
+
+def sglang_snapshot_callback(
+    server_url: str,
+    snapshot_provider: Optional[GKESnapshotProvider] = None,
+) -> bool:
+    """
+    Executes the snapshot cycle after SGLang warmup and before the server flips to ServerStatus.Up.
+    """
     if snapshot_provider is None:
-        # Get the configured snapshot provider, if any
         snapshot_provider = get_snapshot_provider()
 
     if snapshot_provider is None:
         logger.info(
             "No snapshot provider configured (SNAPSHOT_PROVIDER is unset or empty). Snapshotting is disabled."
         )
-        return
+        return True
 
-    original_wait_and_warmup = http_server._wait_and_warmup
+    if hasattr(snapshot_provider, "is_available") and not snapshot_provider.is_available():
+        logger.warning(
+            "Pod snapshot trigger not available (checkpoint file '%s' is not writable). Skipping snapshot.",
+            getattr(snapshot_provider, "proc_path", "unknown"),
+        )
+        return True
 
-    def patched_wait_and_warmup(
-        server_args,
-        launch_callback=None,
-        execute_warmup_func=_execute_server_warmup,
-    ):
-        # This is a blocking function not asynchronous context.
-        if hasattr(snapshot_provider, "is_available") and not snapshot_provider.is_available():
-            logger.warning(
-                "Pod snapshot trigger not available (checkpoint file '%s' is not writable). Skipping snapshot.",
-                getattr(snapshot_provider, "proc_path", "unknown"),
-            )
-            return original_wait_and_warmup(
-                server_args,
-                launch_callback=launch_callback,
-                execute_warmup_func=execute_warmup_func,
-            )
+    # Ensure server_status remains Starting during sleep, checkpoint, and wake-up so
+    # readiness/health probes (/health, /ready) return 503 until memory is restored.
+    _set_server_status("Starting")
 
-        logging.info("Waiting for weights to download and be ready in GPUs.")
-        if get_model().checkpoint_engine_wait_weights_before_ready:
-            _wait_weights_ready()
-            logging.info("Weights are ready in GPUs.")
-
-        # Joiner schedulers are served through the primary after adoption.
-        skip_elastic_joiner_warmup = server_args.is_ep_scale_joiner
-        if skip_elastic_joiner_warmup:
-            logger.debug(
-                "[Elastic EP] Skipping server warmup for elastic joiner (ep_join_mode=%s)",
-                get_exec().moe.ep_join_mode,
-            )
-
-        # Warmup captures CUDA graphs and pre-allocates VRAM
-        if not get_serving().skip_server_warmup and not skip_elastic_joiner_warmup:
-            if not execute_warmup_func(server_args):
-                return
-        else:
-            logger.warning("[Control Plane] Warmup skipped.")
-
-        _freeze_gc_after_server_warmup(server_args)
-
-        tokenizer_manager = http_server._global_state.tokenizer_manager
-        tokenizer_manager.server_status = ServerStatus.Starting
-
-        # SLEEP
+    try:
+        # STEP 1: Release GPU memory occupation (KV cache), move weights, save addresses
         logger.info("[Control Plane] Sleep signal received. Releasing memory occupation...")
-        asyncio.run_coroutine_threadsafe(
-            tokenizer_manager.release_memory_occupation(ReleaseMemoryOccupationReqInput(tags=["weights", "kv_cache"])),
-            tokenizer_manager.event_loop,
-        ).result()
+        resp = requests.post(
+            f"{server_url}/release_memory_occupation",
+            json={"tags": ["weights", "kv_cache"]},
+            timeout=600,
+        )
+        resp.raise_for_status()
 
-        logger.info("Triggering snapshot checkpoint...")
+        # STEP 2: Trigger the snapshot / checkpoint
         try:
+            logger.info("Triggering snapshot checkpoint...")
             snapshot_provider.trigger()
             logger.info("Snapshot checkpoint created successfully.")
         except Exception as e:
-            logger.error("Snapshot checkpointing failed: %s. Resuming sglang service without checkpoint.", e, exc_info=True)
+            # We continue without snapshotting but this can still leave us
+            # in an inconsistent state. Ex: trigger may clear the weights
+            # before it failed. They would need to be downloaded again.
+            logger.error(
+                "Snapshot checkpointing failed: %s. Resuming sglang service without checkpoint.",
+                e,
+                exc_info=True,
+            )
+        finally:
+            # STEP 3: Regardless of success or failure, resume GPU memory occupation, restore addresses, move weights, allocate VRAM
+            logger.info("Resuming sglang memory occupation...")
+            resp = requests.post(
+                f"{server_url}/resume_memory_occupation",
+                json={"tags": ["weights", "kv_cache"]},
+                timeout=600,
+            )
+            resp.raise_for_status()
+            logger.info("SGLang memory occupation resumed successfully.")
 
-        # WAKE
-        logger.info("[Control Plane] Wake signal received. Resuming memory occupation...")
-        asyncio.run_coroutine_threadsafe(
-            tokenizer_manager.resume_memory_occupation(
-                ResumeMemoryOccupationReqInput(tags=["weights", "kv_cache"])),
-            tokenizer_manager.event_loop,
-        ).result()
-        # The server is ready for requests
-        # Only set the server to ready once it has woken up again. This satisfies the readiness prob
-        tokenizer_manager.server_status = ServerStatus.Up
-        logger.info("The server is fired up and ready to roll!")
-
-        if get_observability().debug_tensor_dump_input_file:
+        # STEP 4: Flip server status to Up only after memory occupation has been restored
+        _set_server_status("Up")
+        return True
+    except Exception as e:
+        logger.error("Sleep/wake cycle failed; killing server: %s", e, exc_info=True)
+        try:
+            from sglang.srt.entrypoints.http_server import kill_process_tree  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
             kill_process_tree(os.getpid())
+        except ImportError:
+            logger.critical(
+                "Failed to import kill_process_tree. Forcing exit."
+            )
+            os._exit(1)
+        return False
 
-        if launch_callback is not None:
-            launch_callback()
 
-    http_server._wait_and_warmup = patched_wait_and_warmup
-    logger.info("Successfully patched SGLang _wait_and_warmup for GKE snapshotting.")
+def sglang_warmup_and_snapshot(
+    server_args,
+    snapshot_provider: Optional[GKESnapshotProvider] = None,
+    execute_warmup_func: Optional[Callable] = None,
+) -> bool:
+    """
+    Runs SGLang's standard server warmup followed by the sleep/snapshot/wake cycle
+    before _wait_and_warmup marks the server as ready.
+    """
+    if execute_warmup_func is None:
+        from sglang.srt.entrypoints.http_server import _execute_server_warmup  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+
+        warmup_fn: Callable = _execute_server_warmup  # pyright: ignore[reportAssignmentType]
+    else:
+        warmup_fn = execute_warmup_func
+
+    if not warmup_fn(server_args):
+        return False
+
+    server_url = (
+        server_args.url()
+        if hasattr(server_args, "url")
+        else f"http://{server_args.host}:{server_args.port}"
+    )
+    return sglang_snapshot_callback(
+        server_url=server_url,
+        snapshot_provider=snapshot_provider,
+    )

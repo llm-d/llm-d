@@ -2,6 +2,7 @@
 SGLang Snapshot Integration Package.
 """
 
-from .wrapper import patch_sglang_wait_and_warmup
+from .wrapper import sglang_snapshot_callback, sglang_warmup_and_snapshot
 
-__all__ = ["patch_sglang_wait_and_warmup"]
+__all__ = ["sglang_snapshot_callback", "sglang_warmup_and_snapshot"]
+
