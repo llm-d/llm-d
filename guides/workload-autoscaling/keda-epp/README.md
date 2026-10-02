@@ -49,8 +49,10 @@ Set the guide environment variables. `SIGNAL` selects the scaling signal
 together they name the overlay you apply.
 
 The deployment-specific variables are rendered into the overlay with `envsubst`
-at apply time. The defaults below match the stock optimized-baseline
-deployment, so if you followed that guide unchanged you can leave them as-is.
+at apply time, so install `envsubst` (shipped with GNU gettext; `brew install
+gettext` on macOS, where it is not present by default). The defaults below match
+the stock optimized-baseline deployment, so if you followed that guide unchanged
+you can leave them as-is.
 When adapting the guide to your own deployment you typically change only two of
 them, `NAMESPACE` and `MODEL`; the other three follow from the Helm release
 name (and accelerator) you chose at install time:
@@ -221,9 +223,11 @@ cluster monitoring through Thanos Querier. The OpenShift leaf overlays
 this for you - apply one of them instead of the `overlays/k8s/*` leaves:
 
 - Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091`
-  and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a
-  401, and KEDA silently serves `fallback` replicas when a trigger errors, so
-  unauthenticated autoscaling looks healthy while doing nothing.
+  and enables `authModes: bearer`. Without it Thanos rejects the query (401 when
+  unauthenticated, 403 when the ServiceAccount lacks `cluster-monitoring-view`), the
+  trigger errors, and the ScaledObject goes `Ready=False` with `KEDAScalerFailed`
+  events. No `fallback` is configured, so autoscaling fails visibly rather than
+  looking healthy while doing nothing.
 - Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the
   `cluster-monitoring-view` ClusterRole, and adds a `keda-prometheus-auth`
   `TriggerAuthentication` pointing at that SA's token Secret. On OpenShift the
@@ -234,10 +238,11 @@ The overlays carry `${...}` placeholders for the namespace, model, target
 deployment, EPP service, and inference pool, so you set those as environment
 variables and the apply step renders them with `envsubst` - no manual YAML edits.
 The OCP leaf also renders the metrics-reader ClusterRoleBinding subject namespace
-from `${NAMESPACE}`, so the binding follows your deployment namespace. When
-deploying this guide to multiple namespaces on a shared cluster, give the
-`keda-epp-metrics-reader-monitoring-view` ClusterRoleBinding a namespace-unique
-name so the cluster-scoped bindings do not collide.
+from `${NAMESPACE}`, so the binding follows your deployment namespace. Because the
+ClusterRoleBinding is cluster-scoped, the OCP leaf also renders its name as
+`keda-epp-metrics-reader-monitoring-view-${NAMESPACE}`, so deploying to multiple
+namespaces on a shared cluster does not make the bindings collide - no manual
+rename is needed.
 
 ## Choosing a Scaling Signal
 
@@ -467,7 +472,7 @@ kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE
 ```
 <!-- guide:deploy.apply_k8s_saturation end -->
 
-On OpenShift, use the `ocp-*` leaf instead (see the [OpenShift](#openshift)
+On OpenShift, use the `overlays/ocp/<signal>` leaf instead (see the [OpenShift](#openshift)
 note - it points both triggers at Thanos Querier and bearer-authenticates via a
 dedicated ServiceAccount; no CA copy is needed).
 

@@ -10,9 +10,12 @@
 # ClusterRoleBinding subject namespace (kustomize leaves an explicit subject
 # namespace as-is), so the patch below sets it to ${NAMESPACE} too. Without it the
 # binding points at the wrong namespace on any non-default deployment, the SA is
-# not granted cluster-monitoring-view, Thanos returns 401, and KEDA silently
-# serves fallback replicas. The shared recipe stays untouched so the other guides
-# that apply it with plain `kubectl apply -k` keep working.
+# not granted cluster-monitoring-view, and Thanos rejects the query (401 when
+# unauthenticated, 403 when the SA lacks the role). The trigger then errors and the
+# ScaledObject goes Ready=False with KEDAScalerFailed events; no `fallback` is
+# configured, so autoscaling fails visibly rather than silently. The shared recipe
+# stays untouched so the other guides that apply it with plain `kubectl apply -k`
+# keep working.
 #
 # The ClusterRoleBinding is cluster-scoped, so the patch also makes its name
 # namespace-unique (...-${NAMESPACE}); otherwise a second deployment on the same
