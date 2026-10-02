@@ -1,0 +1,53 @@
+## multi-cluster-routing hub: an llm-d Router whose endpoints are whole
+## clusters, not pods. It discovers the clusters from clusters.yaml and
+## forwards every request to the cluster its scorers pick; the cluster's own
+## router then picks the pod.
+##
+## This file holds the settings every hub needs. The routing policy (which
+## scorers rank the clusters) comes from one of the hub-<policy>.values.yaml
+## files layered on top.
+##
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  # Expose the hub on Service port 80, like the cluster routers; 8081 is the
+  # Envoy sidecar's listener.
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    flags:
+      # Every multicluster plugin is registered Alpha. Without this flag the EPP
+      # refuses the configuration at startup instead of ignoring the plugins.
+      allow-experimental-plugins: true
+
+    # clusters.yaml comes from the mc-hub-clusters ConfigMap, rendered in Step 3.
+    volumes:
+      - name: clusters
+        configMap:
+          name: mc-hub-clusters
+    volumeMounts:
+      - name: clusters
+        mountPath: /etc/epp/clusters
+        readOnly: true
+
+  # The chart's Envoy preset names its ConfigMap "envoy", whatever the release,
+  # so a hub installed in the same namespace as a cluster's router would fail on
+  # ConfigMap ownership. Renaming it in the preset renames both the ConfigMap
+  # and the sidecar volume that mounts it.
+  proxy:
+    presets:
+      envoy:
+        configMap:
+          name: mc-hub-envoy
+
+  modelServers:
+    # The chart creates an InferencePool unless `router.inferencePool.create: false`,
+    # and requires a selector either way (it becomes the pool selector, or the EPP
+    # --endpoint-selector). This EPP takes its endpoints from clusters.yaml, never
+    # from pods, so the selector deliberately matches nothing.
+    matchLabels:
+      llm-d.ai/guide: multi-cluster-routing-hub

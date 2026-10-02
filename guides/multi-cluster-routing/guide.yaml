@@ -1,0 +1,126 @@
+name: multi-cluster-routing
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: multi-cluster-routing
+    # Two example clusters and the hub. NS_HUB may be the same as a cluster's namespace.
+    NS_A: {default: llm-d-mc-a}
+    NS_B: {default: llm-d-mc-b}
+    NS_HUB: {default: llm-d-mc-hub}
+
+    # How the hub ranks clusters: "load" scrapes each cluster's KV-cache and queue
+    # metrics; "latency" learns each cluster's TTFT from the hub's own traffic.
+    HUB_SCORER: {default: load, values: [load, latency]}
+    LEAF_VALUES: {default: ""}
+
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
+
+    MODEL: {default: "Qwen/Qwen3-32B"}
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: |
+        for ns in ${NS_A} ${NS_B} ${NS_HUB}; do
+          kubectl create namespace ${ns} --dry-run=client -o yaml | kubectl apply -f -
+        done
+  secrets:
+    - skip_in: [ci]
+      run: |
+        for ns in ${NS_A} ${NS_B}; do
+          kubectl create secret generic llm-d-hf-token \
+            --from-literal="HF_TOKEN=${HF_TOKEN}" \
+            --namespace "${ns}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        done
+
+deploy:
+  clusters:
+    - when: {HUB_SCORER: [load]}
+      run: |
+        # Lets the hub read each cluster router's /metrics. The variable carries its own -f flag.
+        export LEAF_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/leaf.values.yaml"
+    - run: |
+        for ns in ${NS_A} ${NS_B}; do
+          helm install optimized-baseline ${ROUTER_STANDALONE_CHART} \
+            -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+            -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+            ${LEAF_VALUES} \
+            -n ${ns} --version ${ROUTER_CHART_VERSION}
+        done
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/
+        kubectl apply -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/
+        kubectl rollout status deployment/optimized-baseline-nvidia-gpu-vllm-decode -n ${NS_A} --timeout=30m
+        kubectl rollout status deployment/optimized-baseline-nvidia-gpu-vllm-decode -n ${NS_B} --timeout=30m
+
+  cluster_list:
+    - run: |
+        CLUSTER_A_IP=$(kubectl get svc optimized-baseline-epp -n ${NS_A} -o jsonpath='{.spec.clusterIP}')
+        CLUSTER_B_IP=$(kubectl get svc optimized-baseline-epp -n ${NS_B} -o jsonpath='{.spec.clusterIP}')
+        export CLUSTER_A_IP CLUSTER_B_IP
+        : "${CLUSTER_A_IP:?cluster A router Service has no clusterIP - did Step 1 run in ${NS_A}?}"
+        : "${CLUSTER_B_IP:?cluster B router Service has no clusterIP - did Step 1 run in ${NS_B}?}"
+        envsubst '${CLUSTER_A_IP} ${CLUSTER_B_IP}' < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/clusters.yaml \
+          | kubectl apply -n ${NS_HUB} -f -
+
+  standalone:
+    - run: |
+        helm install mc-hub ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/hub.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/hub-${HUB_SCORER}.values.yaml \
+          -n ${NS_HUB} --version ${ROUTER_CHART_VERSION}
+        kubectl rollout status deployment/mc-hub-epp -n ${NS_HUB} --timeout=5m
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service mc-hub-epp -n ${NS_HUB} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    - run: |
+        kubectl run curl-test --rm -i --restart=Never \
+          --image=${CURL_TEST_IMAGE} \
+          --namespace="${NS_HUB}" \
+          --env="IP=${IP}" \
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c 'set -o pipefail; curl -sS --fail -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}" | jq -e ".choices[0].text"'
+    - skip_in: [ci]
+      run: |
+        # See how the hub splits traffic across the clusters
+        kubectl port-forward -n ${NS_HUB} svc/mc-hub-epp 8000:80 &
+        PF_PID=$!
+        trap 'kill ${PF_PID} 2>/dev/null' EXIT
+        python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url http://127.0.0.1:8000 \
+          --scorer ${HUB_SCORER} --cluster a=${NS_A} --cluster b=${NS_B}
+        kill ${PF_PID}
+
+cleanup:
+  - run: |
+      helm uninstall mc-hub -n ${NS_HUB} --ignore-not-found
+      kubectl delete configmap mc-hub-clusters -n ${NS_HUB} --ignore-not-found=true
+      kubectl delete -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/ --ignore-not-found=true
+      kubectl delete -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/ --ignore-not-found=true
+      for ns in ${NS_A} ${NS_B}; do helm uninstall optimized-baseline -n ${ns} --ignore-not-found; done
+  - skip_in: [ci]
+    run: |
+      for ns in ${NS_A} ${NS_B} ${NS_HUB}; do kubectl delete namespace ${ns} --ignore-not-found=true; done

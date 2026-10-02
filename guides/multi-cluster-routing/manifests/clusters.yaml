@@ -1,0 +1,34 @@
+# The hub's endpoint list: one entry per cluster. Render with envsubst
+# (Step 3 of the guide sets CLUSTER_A_IP and CLUSTER_B_IP).
+#
+# `address`/`port` is where the hub forwards requests: the cluster router's
+# Service, which exposes port 80 -> the Envoy sidecar's 8081. With the standard
+# router chart it must be an IP: the hub's Envoy forwards via an ORIGINAL_DST
+# cluster that parses the chosen endpoint as IP:port, so a DNS name makes every
+# request fail with 503 "no healthy upstream". (The discovery plugin itself
+# accepts hostnames.)
+#
+# `metricsAddress`/`metricsPort` is where the hub reads that cluster's load, for
+# scorers that use it: the cluster EPP's /metrics on port 9090. Here it is the
+# same IP as `address`, because with the chart's default sidecar proxy one
+# Service carries both ports; with `router.proxy.mode: service` the proxy gets
+# its own Service, and the two addresses differ.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mc-hub-clusters
+data:
+  clusters.yaml: |
+    endpoints:
+      - name: cluster-a
+        address: "${CLUSTER_A_IP}"
+        port: "80"
+        labels:
+          metricsAddress: "${CLUSTER_A_IP}"
+          metricsPort: "9090"
+      - name: cluster-b
+        address: "${CLUSTER_B_IP}"
+        port: "80"
+        labels:
+          metricsAddress: "${CLUSTER_B_IP}"
+          metricsPort: "9090"
