@@ -69,7 +69,6 @@ router:
         schedulingProfiles:
         - name: default
           plugins:
-          - pluginRef: predicted-latency-producer
           - pluginRef: loose-affinity-filter
           - pluginRef: latency-scorer
           - pluginRef: weighted-random-picker
