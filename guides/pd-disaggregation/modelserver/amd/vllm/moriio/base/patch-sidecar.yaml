@@ -19,7 +19,7 @@ spec:
             # remote_host / remote_notify_port / remote_dp_rank /
             # remote_handshake_port / "tx"-prefixed transfer_id tuple
             - --moriio-write-mode
-            # MUST match the vLLM settings
+            # MUST match the base vLLM settings
             - --moriio-tp-size=2
             # Concurrent prefill/decode dispatch: fire both legs in
             # parallel goroutines so decode block-allocation overlaps
