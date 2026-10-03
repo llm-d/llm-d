@@ -55,6 +55,16 @@ This guide includes configurations for the following accelerators:
 | NVIDIA GPU (GB200) | `modelserver/gpu/vllm-deepseek-r1-0528/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
 | Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
 
+### Model Recipes
+
+Besides the DeepSeek-R1-0528 configurations above, this guide hosts per-model recipes that reuse its router and prerequisites:
+
+| Recipe | Engine | Directory |
+| --- | --- | --- |
+| GLM-5.2-FP8 on H200 | vLLM | [`modelserver/gpu/vllm-glm-5.2/`](modelserver/gpu/vllm-glm-5.2/README.md) |
+| GLM-5.2-FP8 on H200 | SGLang (Rust frontend, `/generate`) | [`modelserver/gpu/sglang-glm-5.2/`](modelserver/gpu/sglang-glm-5.2/README.md) |
+| DeepSeek-V4 | vLLM | [`modelserver/gpu/vllm-deepseek-v4/`](modelserver/gpu/vllm-deepseek-v4/README.md) |
+
 > [!NOTE]
 > NVIDIA GPU backends that use DeepEP for inter-node EP require All-to-All RDMA
 > connectivity. Every NIC on a host must be able to communicate with every NIC

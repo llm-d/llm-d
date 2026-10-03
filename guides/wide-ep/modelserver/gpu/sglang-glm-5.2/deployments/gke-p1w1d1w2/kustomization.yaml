@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# GLM-5.2-FP8 on SGLang: 1 prefill node (DEP8) + 2 decode nodes (DEP16, wide) -> 3 nodes / 24 GPUs.
+resources:
+  - ../../providers/gke
+patches:
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+    patch: |-
+      # Roles are ordered [prefill, decode] in the base DisaggregatedSet.
+      - op: replace
+        path: /spec/roles/0/spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/roles/0/spec/leaderWorkerTemplate/size
+        value: 1
+      - op: replace
+        path: /spec/roles/1/spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/size
+        value: 2

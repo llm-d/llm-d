@@ -1,0 +1,569 @@
+# GLM-5.2-FP8 on SGLang with the Rust frontend, P/D disaggregated, wide EP.
+#
+# Every attention-DP rank runs its own embedded Rust HTTP listener, so each
+# rank is a separate llm-d endpoint (pod IP x port), exactly like the vLLM
+# multi-port DP layout:
+#
+#   prefill pod:  SGLang rank r listens on 8000+r      (r = 0..7, node local)
+#   decode pod:   routing sidecar rank r on 8000+r  ->  SGLang rank r on 8200+r
+#
+# Requests use SGLang's native /generate API with pre-tokenized input_ids.
+# The sidecar injects bootstrap_host/bootstrap_port/bootstrap_room and sends
+# the same body to the chosen prefill rank and to its local decode rank.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  # Keep this name at 33 characters or fewer: LWS labels every pod with
+  # <name>-0-<8 char hash>-<role>-<10 char hash>, and labels are limited to
+  # 63 bytes. A longer name makes the StatefulSets fail to create pods.
+  name: wide-ep-sglang-glm-5-2
+  labels:
+    llm-d.ai/model: GLM-5.2-FP8
+    llm-d.ai/guide: wide-ep
+    llm-d.ai/engine-type: sglang
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+spec:
+  roles:
+    - name: prefill
+      metadata:
+        labels:
+          llm-d.ai/model: GLM-5.2-FP8
+          llm-d.ai/guide: wide-ep
+          llm-d.ai/engine-type: sglang
+          llm-d.ai/accelerator-variant: gpu
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/inference-serving: 'true'
+          llm-d.ai/role: prefill
+      spec:
+        replicas: ${PREFILL_REPLICAS}
+        # Tear down the old group before creating the new one on updates. The
+        # DisaggregatedSet default (maxSurge=1, maxUnavailable=0) would require a
+        # full spare copy of the role to schedule, which deadlocks rollouts on
+        # clusters sized for exactly one copy.
+        rolloutStrategy:
+          type: RollingUpdate
+          rollingUpdateConfiguration:
+            maxSurge: 0
+            maxUnavailable: 1
+        leaderWorkerTemplate:
+          size: ${PREFILL_SIZE}
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/guide: "wide-ep"
+                llm-d.ai/engine-type: "sglang"
+                llm-d.ai/accelerator-variant: "gpu"
+                llm-d.ai/accelerator-vendor: "nvidia"
+                llm-d.ai/model: GLM-5.2-FP8
+                llm-d.ai/role: prefill
+            spec:
+              serviceAccountName: sglang-glm-5-2
+              volumes:
+                - name: dshm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 256Gi
+                - name: hf-cache
+                  hostPath:
+                    path: /mnt/local/hf-cache
+                    type: DirectoryOrCreate
+                - name: jit-cache
+                  hostPath:
+                    path: /mnt/local/jit-cache
+                    type: DirectoryOrCreate
+              containers:
+                - name: sglang
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  securityContext:
+                    capabilities:
+                      add:
+                        - IPC_LOCK
+                        - SYS_RAWIO
+                    runAsGroup: 0
+                    runAsUser: 0
+                  imagePullPolicy: Always
+                  command:
+                    - /bin/bash
+                    - -c
+                  args:
+                    - |-
+                      find /dev/shm -type f -delete
+
+                      #################
+                      # RUN SGLang GLM-5.2-FP8 prefill worker
+                      #################
+
+                      # Attention DP and EP span every pod in the group with TP=1
+                      # per rank, so all three parallel sizes equal the group's
+                      # total GPU count (SGLang's --tp-size is the total GPU count).
+                      DP_SIZE=$(( LWS_GROUP_SIZE * DP_SIZE_LOCAL ))
+
+                      MTP_ARGS=""
+                      if [ "${ENABLE_MTP:-1}" = "1" ]; then
+                        MTP_ARGS="--speculative-algorithm EAGLE --speculative-num-steps ${MTP_NUM_STEPS:-3} --speculative-eagle-topk 1 --speculative-num-draft-tokens ${MTP_NUM_DRAFT_TOKENS:-4}"
+                      fi
+
+                      # SGLang splits --chunked-prefill-size and
+                      # --max-running-requests evenly across the attention-DP
+                      # ranks, so scale the per-rank budgets up.
+                      CHUNKED_PREFILL_SIZE=$(( ${PREFILL_CHUNK_TOKENS_PER_RANK:-8192} * DP_SIZE ))
+                      MAX_RUNNING_REQUESTS=$(( ${PREFILL_MAX_RUNNING_REQUESTS_PER_RANK:-64} * DP_SIZE ))
+
+                      # P/D bootstrap with the Rust frontend: the bootstrap
+                      # registry is served by the rank-0 listener (port 8000) of
+                      # every prefill pod, not by a separate bootstrap server.
+                      # --disaggregation-bootstrap-port must name that port, and
+                      # the decode sidecar injects the same port
+                      # (SGLANG_BOOTSTRAP_PORT). round_robin makes each prefill
+                      # rank register the room it served so the EPP may pick any
+                      # rank; the P/D default follow_bootstrap_room fails the
+                      # request when the rank differs from room % dp_size.
+                      exec python3 -m sglang.launch_server \
+                        --model-path zai-org/GLM-5.2-FP8 \
+                        --trust-remote-code \
+                        --host 0.0.0.0 \
+                        --port 8000 \
+                        --nnodes ${LWS_GROUP_SIZE} \
+                        --node-rank ${LWS_WORKER_INDEX:-0} \
+                        --dist-init-addr ${LWS_LEADER_ADDRESS}:5757 \
+                        --tp-size ${DP_SIZE} \
+                        --dp-size ${DP_SIZE} \
+                        --ep-size ${DP_SIZE} \
+                        --enable-dp-attention \
+                        --moe-a2a-backend deepep \
+                        --deepep-mode normal \
+                        --moe-dense-tp-size 1 \
+                        --enable-dp-lm-head \
+                        --disaggregation-mode prefill \
+                        --disaggregation-transfer-backend ${DISAGG_TRANSFER_BACKEND:-nixl} \
+                        --disaggregation-bootstrap-port 8000 \
+                        --load-balance-method round_robin \
+                        --mem-fraction-static ${PREFILL_MEM_FRACTION_STATIC:-0.85} \
+                        --chunked-prefill-size ${CHUNKED_PREFILL_SIZE} \
+                        --max-running-requests ${MAX_RUNNING_REQUESTS} \
+                        ${CONTEXT_LENGTH:+--context-length ${CONTEXT_LENGTH}} \
+                        --reasoning-parser glm45 \
+                        --tool-call-parser glm47 \
+                        --watchdog-timeout 3600 \
+                        --dist-timeout 3600 \
+                        $MTP_ARGS
+                  env:
+                    - name: POD_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    - name: HF_HOME
+                      value: /mnt/hf-cache
+                    # Serve from the embedded Rust frontend: one HTTP listener
+                    # per attention-DP rank instead of the single Python frontend.
+                    - name: SGLANG_RUST_SERVER
+                      value: "1"
+                    # Fail fast if the image lacks the prebuilt Rust extension
+                    # instead of compiling it inside the container.
+                    - name: SGLANG_RUST_BUILD_MODE
+                      value: never
+                    # Keep /health a plain 200 on the rank-0 listener. The decode
+                    # side heartbeats the prefill bootstrap address (this port)
+                    # with GET /health every 5s and drops the prefill, failing
+                    # in-flight transfers, after 2 misses; the default deep probe
+                    # can take up to 20s while a prefill batch is running.
+                    - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+                      value: "false"
+                    - name: DP_SIZE_LOCAL
+                      value: "8"
+                    - name: ENABLE_MTP
+                      value: "1"
+                    - name: MTP_NUM_STEPS
+                      value: "3"
+                    - name: MTP_NUM_DRAFT_TOKENS
+                      value: "4"
+                    - name: PREFILL_MEM_FRACTION_STATIC
+                      value: "0.85"
+                    - name: PREFILL_CHUNK_TOKENS_PER_RANK
+                      value: "8192"
+                    - name: PREFILL_MAX_RUNNING_REQUESTS_PER_RANK
+                      value: "64"
+                    - name: CONTEXT_LENGTH
+                      value: ""
+                    - name: DISAGG_TRANSFER_BACKEND
+                      value: nixl
+                    - name: NVIDIA_GDRCOPY
+                      value: enabled
+                    - name: NVSHMEM_REMOTE_TRANSPORT
+                      value: ibgda
+                    - name: NVSHMEM_IB_ENABLE_IBGDA
+                      value: "true"
+                    - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                      value: eth0
+                    - name: GLOO_SOCKET_IFNAME
+                      value: eth0
+                    - name: NCCL_SOCKET_IFNAME
+                      value: eth0
+                  ports:
+                    - containerPort: 8000
+                      name: dp0
+                      protocol: TCP
+                    - containerPort: 8001
+                      name: dp1
+                      protocol: TCP
+                    - containerPort: 8002
+                      name: dp2
+                      protocol: TCP
+                    - containerPort: 8003
+                      name: dp3
+                      protocol: TCP
+                    - containerPort: 8004
+                      name: dp4
+                      protocol: TCP
+                    - containerPort: 8005
+                      name: dp5
+                      protocol: TCP
+                    - containerPort: 8006
+                      name: dp6
+                      protocol: TCP
+                    - containerPort: 8007
+                      name: dp7
+                      protocol: TCP
+                  # Probes. The Rust listener binds only after the weights are
+                  # loaded and the communication groups are up, so a TCP check on
+                  # the pod's local rank-0 port already means the engine is
+                  # initialized. Readiness runs a one-token /generate with the
+                  # fake bootstrap host (the same probe SGLang's /health_generate
+                  # uses) because the Rust /health endpoints answer 503 on every
+                  # listener except global DP rank 0, which would keep multi-node
+                  # worker pods out of the InferencePool.
+                  startupProbe:
+                    tcpSocket:
+                      port: dp0
+                    initialDelaySeconds: 0
+                    periodSeconds: 1
+                    timeoutSeconds: 5
+                    failureThreshold: 2700
+                  livenessProbe:
+                    tcpSocket:
+                      port: dp0
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    exec:
+                      command:
+                        - /bin/sh
+                        - -c
+                        - >-
+                          curl -sf -m 50 -X POST http://127.0.0.1:8000/generate
+                          -H 'Content-Type: application/json'
+                          -d '{"input_ids":[0],"sampling_params":{"max_new_tokens":1},"bootstrap_host":"2.2.2.2","bootstrap_room":0}'
+                          > /dev/null
+                    periodSeconds: 30
+                    timeoutSeconds: 55
+                    failureThreshold: 3
+                  resources:
+                    limits:
+                      memory: 512Gi
+                      nvidia.com/gpu: "8"
+                    requests:
+                      cpu: 32
+                      memory: 512Gi
+                      nvidia.com/gpu: "8"
+                  volumeMounts:
+                    - name: dshm
+                      mountPath: /dev/shm
+                    - name: hf-cache
+                      mountPath: /mnt/hf-cache
+                    # FlashInfer, DeepGEMM, and Triton JIT caches.
+                    - name: jit-cache
+                      mountPath: /root/.cache
+    - name: decode
+      metadata:
+        labels:
+          llm-d.ai/model: GLM-5.2-FP8
+          llm-d.ai/guide: wide-ep
+          llm-d.ai/engine-type: sglang
+          llm-d.ai/accelerator-variant: gpu
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/inference-serving: 'true'
+          llm-d.ai/role: decode
+      spec:
+        replicas: ${DECODE_REPLICAS}
+        # See the prefill role above: avoid surge-based rollouts that need a
+        # spare copy of the role's GPUs.
+        rolloutStrategy:
+          type: RollingUpdate
+          rollingUpdateConfiguration:
+            maxSurge: 0
+            maxUnavailable: 1
+        leaderWorkerTemplate:
+          size: ${DECODE_SIZE}
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/guide: "wide-ep"
+                llm-d.ai/engine-type: "sglang"
+                llm-d.ai/accelerator-variant: "gpu"
+                llm-d.ai/accelerator-vendor: "nvidia"
+                llm-d.ai/model: GLM-5.2-FP8
+                llm-d.ai/role: decode
+            spec:
+              serviceAccountName: sglang-glm-5-2
+              initContainers:
+                - name: routing-proxy
+                  args:
+                    - --port=8000
+                    - --model-server-port=8200
+                    - --data-parallel-size=8
+                    - --kv-connector=sglang
+                    - --zap-log-level=1
+                    - --secure-proxy=false
+                    - --enable-prefiller-sampling
+                  env:
+                    # Injected as bootstrap_port on both P/D legs. Must be the
+                    # prefill pods' rank-0 Rust listener port, which hosts the
+                    # bootstrap registry (see the prefill role).
+                    - name: SGLANG_BOOTSTRAP_PORT
+                      value: "8000"
+                  image: REPLACE_ROUTING_SIDECAR_IMAGE
+                  imagePullPolicy: Always
+                  ports:
+                    - containerPort: 8000
+                      name: rank0
+                      protocol: TCP
+                    - containerPort: 8001
+                      name: rank1
+                      protocol: TCP
+                    - containerPort: 8002
+                      name: rank2
+                      protocol: TCP
+                    - containerPort: 8003
+                      name: rank3
+                      protocol: TCP
+                    - containerPort: 8004
+                      name: rank4
+                      protocol: TCP
+                    - containerPort: 8005
+                      name: rank5
+                      protocol: TCP
+                    - containerPort: 8006
+                      name: rank6
+                      protocol: TCP
+                    - containerPort: 8007
+                      name: rank7
+                      protocol: TCP
+                  restartPolicy: Always
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+              volumes:
+                - name: dshm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 256Gi
+                - name: hf-cache
+                  hostPath:
+                    path: /mnt/local/hf-cache
+                    type: DirectoryOrCreate
+                - name: jit-cache
+                  hostPath:
+                    path: /mnt/local/jit-cache
+                    type: DirectoryOrCreate
+              containers:
+                - name: sglang
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  securityContext:
+                    capabilities:
+                      add:
+                        - IPC_LOCK
+                        - SYS_RAWIO
+                    runAsGroup: 0
+                    runAsUser: 0
+                  imagePullPolicy: Always
+                  command:
+                    - /bin/bash
+                    - -c
+                  args:
+                    - |-
+                      find /dev/shm -type f -delete
+
+                      #################
+                      # RUN SGLang GLM-5.2-FP8 decode worker
+                      #################
+
+                      # See the prefill role: DP = EP = total GPUs, TP=1 per rank.
+                      DP_SIZE=$(( LWS_GROUP_SIZE * DP_SIZE_LOCAL ))
+
+                      MTP_ARGS=""
+                      if [ "${ENABLE_MTP:-1}" = "1" ]; then
+                        MTP_ARGS="--speculative-algorithm EAGLE --speculative-num-steps ${MTP_NUM_STEPS:-3} --speculative-eagle-topk 1 --speculative-num-draft-tokens ${MTP_NUM_DRAFT_TOKENS:-4}"
+                      fi
+
+                      # DeepEP low-latency dispatches at most
+                      # SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK tokens per
+                      # rank per step: running requests x draft tokens with MTP.
+                      # SGLang splits --max-running-requests across the attention-DP
+                      # ranks, so pass per-rank x DP; keep the per-rank value and
+                      # the CUDA graph capture sizes within that budget.
+                      MAX_RUNNING_REQUESTS=$(( ${DECODE_MAX_RUNNING_REQUESTS_PER_RANK:-32} * DP_SIZE ))
+                      exec python3 -m sglang.launch_server \
+                        --model-path zai-org/GLM-5.2-FP8 \
+                        --trust-remote-code \
+                        --host 0.0.0.0 \
+                        --port 8200 \
+                        --nnodes ${LWS_GROUP_SIZE} \
+                        --node-rank ${LWS_WORKER_INDEX:-0} \
+                        --dist-init-addr ${LWS_LEADER_ADDRESS}:5757 \
+                        --tp-size ${DP_SIZE} \
+                        --dp-size ${DP_SIZE} \
+                        --ep-size ${DP_SIZE} \
+                        --enable-dp-attention \
+                        --moe-a2a-backend deepep \
+                        --deepep-mode low_latency \
+                        --moe-dense-tp-size 1 \
+                        --enable-dp-lm-head \
+                        --disaggregation-mode decode \
+                        --disaggregation-transfer-backend ${DISAGG_TRANSFER_BACKEND:-nixl} \
+                        --mem-fraction-static ${DECODE_MEM_FRACTION_STATIC:-0.85} \
+                        --max-running-requests ${MAX_RUNNING_REQUESTS} \
+                        --cuda-graph-max-bs-decode ${DECODE_CUDA_GRAPH_MAX_BS:-32} \
+                        ${CONTEXT_LENGTH:+--context-length ${CONTEXT_LENGTH}} \
+                        --reasoning-parser glm45 \
+                        --tool-call-parser glm47 \
+                        --watchdog-timeout 3600 \
+                        --dist-timeout 3600 \
+                        $MTP_ARGS
+                  env:
+                    - name: POD_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    - name: HF_HOME
+                      value: /mnt/hf-cache
+                    - name: SGLANG_RUST_SERVER
+                      value: "1"
+                    - name: SGLANG_RUST_BUILD_MODE
+                      value: never
+                    # Keep /health a plain 200 on the rank-0 listener. The decode
+                    # side heartbeats the prefill bootstrap address (this port)
+                    # with GET /health every 5s and drops the prefill, failing
+                    # in-flight transfers, after 2 misses; the default deep probe
+                    # can take up to 20s while a prefill batch is running.
+                    - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+                      value: "false"
+                    - name: SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK
+                      value: "128"
+                    - name: DP_SIZE_LOCAL
+                      value: "8"
+                    - name: ENABLE_MTP
+                      value: "1"
+                    - name: MTP_NUM_STEPS
+                      value: "3"
+                    - name: MTP_NUM_DRAFT_TOKENS
+                      value: "4"
+                    - name: DECODE_MEM_FRACTION_STATIC
+                      value: "0.85"
+                    - name: DECODE_MAX_RUNNING_REQUESTS_PER_RANK
+                      value: "32"
+                    - name: DECODE_CUDA_GRAPH_MAX_BS
+                      value: "32"
+                    - name: CONTEXT_LENGTH
+                      value: ""
+                    - name: DISAGG_TRANSFER_BACKEND
+                      value: nixl
+                    - name: NVIDIA_GDRCOPY
+                      value: enabled
+                    - name: NVSHMEM_REMOTE_TRANSPORT
+                      value: ibgda
+                    - name: NVSHMEM_IB_ENABLE_IBGDA
+                      value: "true"
+                    - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                      value: eth0
+                    - name: GLOO_SOCKET_IFNAME
+                      value: eth0
+                    - name: NCCL_SOCKET_IFNAME
+                      value: eth0
+                  ports:
+                    - containerPort: 8200
+                      name: sglang-rank0
+                      protocol: TCP
+                    - containerPort: 8201
+                      name: sglang-rank1
+                      protocol: TCP
+                    - containerPort: 8202
+                      name: sglang-rank2
+                      protocol: TCP
+                    - containerPort: 8203
+                      name: sglang-rank3
+                      protocol: TCP
+                    - containerPort: 8204
+                      name: sglang-rank4
+                      protocol: TCP
+                    - containerPort: 8205
+                      name: sglang-rank5
+                      protocol: TCP
+                    - containerPort: 8206
+                      name: sglang-rank6
+                      protocol: TCP
+                    - containerPort: 8207
+                      name: sglang-rank7
+                      protocol: TCP
+                  # Probes. The Rust listener binds only after the weights are
+                  # loaded and the communication groups are up, so a TCP check on
+                  # the pod's local rank-0 port already means the engine is
+                  # initialized. Readiness runs a one-token /generate with the
+                  # fake bootstrap host (the same probe SGLang's /health_generate
+                  # uses) because the Rust /health endpoints answer 503 on every
+                  # listener except global DP rank 0, which would keep multi-node
+                  # worker pods out of the InferencePool.
+                  startupProbe:
+                    tcpSocket:
+                      port: sglang-rank0
+                    initialDelaySeconds: 0
+                    periodSeconds: 1
+                    timeoutSeconds: 5
+                    failureThreshold: 2700
+                  livenessProbe:
+                    tcpSocket:
+                      port: sglang-rank0
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    exec:
+                      command:
+                        - /bin/sh
+                        - -c
+                        - >-
+                          curl -sf -m 50 -X POST http://127.0.0.1:8200/generate
+                          -H 'Content-Type: application/json'
+                          -d '{"input_ids":[0],"sampling_params":{"max_new_tokens":1},"bootstrap_host":"2.2.2.2","bootstrap_room":0}'
+                          > /dev/null
+                    periodSeconds: 30
+                    timeoutSeconds: 55
+                    failureThreshold: 3
+                  resources:
+                    limits:
+                      memory: 512Gi
+                      nvidia.com/gpu: "8"
+                    requests:
+                      cpu: 32
+                      memory: 512Gi
+                      nvidia.com/gpu: "8"
+                  volumeMounts:
+                    - name: dshm
+                      mountPath: /dev/shm
+                    - name: hf-cache
+                      mountPath: /mnt/hf-cache
+                    - name: jit-cache
+                      mountPath: /root/.cache
