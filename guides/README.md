@@ -45,6 +45,7 @@ Workload-centric guides — each provides the recommended, cohesive deployment f
 
 * [Encode Disaggregation](./multimodal-serving/e-disaggregation/README.md) - Offload multimodal encoding (images, video, audio) to dedicated workers via E/PD or E/P/D topologies, freeing prefill/decode resources for text computation.
 * [Coordinator Disaggregation](./coord-disaggregation/README.md) - Drive an Encode/Prefill/Decode pipeline through a standalone Coordinator service instead of a per-pod routing sidecar, so the pipeline (which phases run, and in what order) is a configurable list of steps rather than fixed logic, and each phase's pod is picked only when that phase is about to run.
+* [Turn-Priority Fairness](./turn-priority-fairness/README.md) - Order flow-control queues by conversation depth so the deepest multi-turn sessions dispatch first and keep their prefixes resident in the KV cache, holding latency and throughput flat as concurrency rises.
 
 ## Centralized Configuration
 

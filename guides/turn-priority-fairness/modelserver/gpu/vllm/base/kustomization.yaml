@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: turn-priority-fairness-nvidia-gpu-vllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-30B-A3B-Instruct-2507
+      llm-d.ai/guide: turn-priority-fairness
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml
