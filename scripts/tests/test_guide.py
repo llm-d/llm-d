@@ -102,6 +102,19 @@ def test_yaml_null_and_bool_env_values_fail_validation():
     assert "env.static.BADDEFAULT" in msgs
 
 
+def test_list_valued_env_values_fail_validation():
+    # A list is no more a string than `null` is, so it likewise renders and
+    # emits as its Python repr: `export LISTED=['a', 'b']`. Unlike `None` that
+    # is not valid shell, so the emitted script aborts at its env section.
+    data = _minimal()
+    data["env"]["static"]["LISTED"] = ["a", "b"]
+    data["env"]["static"]["LISTED_DEFAULT"] = {"default": ["x", "y"]}
+    findings = guide.Guide.from_text(yaml_text=yaml.safe_dump(data)).check()
+    msgs = "\n".join(str(f) for f in findings)
+    assert "env.static.LISTED" in msgs
+    assert "env.static.LISTED_DEFAULT" in msgs
+
+
 def test_non_bool_sensitive_flag_fails_validation():
     # `sensitive: "true"` passed validation as non-sensitive but was treated
     # as sensitive by render and emit — the export silently vanished.
@@ -279,6 +292,39 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
     rc = guide.main([command, str(tmp_path), "--yaml", str(tmp_path / "guide.yaml")])
     assert rc == 2
     assert "not both" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# marker resolution
+# --------------------------------------------------------------------------
+
+
+def test_marker_path_that_cannot_render_fails_validation():
+    # `check` resolved the path but never tried to render it, so a marker
+    # pointing at a scalar reported OK while `render` raised
+    # "don't know how to render node of type str" — naming neither the marker
+    # nor its line.
+    md = (
+        "# Probe\n"
+        "\n"
+        "<!-- guide:deploy start -->\n"
+        "```bash\n"
+        "echo hi\n"
+        "```\n"
+        "<!-- guide:deploy end -->\n"
+        "\n"
+        "<!-- guide:name start -->\n"
+        "```bash\n"
+        "echo hi\n"
+        "```\n"
+        "<!-- guide:name end -->\n"
+    )
+    findings = guide.Guide.from_text(
+        yaml_text=yaml.safe_dump(_minimal()), md_text=md
+    ).check()
+    msgs = "\n".join(str(f) for f in findings)
+    assert "guide:name" in msgs
+    assert "guide:deploy" not in msgs, "a renderable step list must still pass"
 
 
 # --------------------------------------------------------------------------
