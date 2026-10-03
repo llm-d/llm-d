@@ -78,7 +78,10 @@ def find_used_vars(script_content: str) -> Set[str]:
     """find all ${VAR}, ${VAR:-default}, $VAR references in script"""
     # matches: ${VAR}, ${VAR:-default}, "${VAR}", $VAR, etc.
     # excludes: $1, $@, $*, $?, $$, $!, etc. (special vars)
-    pattern = r'\$\{([A-Z_][A-Z0-9_]*)[^}]*\}|\$([A-Z_][A-Z0-9_]*)\b'
+    # only the opening `${NAME` is matched, not through the closing brace, so a
+    # var nested in another expansion's default (`${A:-${B}}`, `${A:-$B}`) is
+    # still seen instead of being swallowed by the outer match
+    pattern = r'\$\{([A-Z_][A-Z0-9_]*)|\$([A-Z_][A-Z0-9_]*)\b'
     used = set()
 
     for match in re.finditer(pattern, script_content):
