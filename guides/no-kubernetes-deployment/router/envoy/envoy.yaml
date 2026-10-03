@@ -110,6 +110,8 @@ static_resources:
             max_pending_requests: 40000
             max_requests: 40000
             max_retries: 1024
+      # Requires the EPP to run with --health-checking=true, which serves
+      # gRPC health on this port (9002); otherwise Envoy only reaches it via panic routing.
       health_checks:
         - timeout: 2s
           interval: 10s
