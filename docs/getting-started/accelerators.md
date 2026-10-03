@@ -9,11 +9,12 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Vendor | Models | Maintainers |
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
+| Biren | 166M | FengSibo (@fengsibo, <fengsiboacer@gmail.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
-| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
+| MetaX | C500X | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>), Minho Park (@rebel-minhopark, <minho.park@rebellions.ai>) |
 
@@ -99,6 +100,13 @@ Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefi
 ## MetaX C500X
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
+
+## Biren 166M
+
+Biren 166M GPUs have community overlays with `hostNetwork` and hostPath device mounts (no in-tree device plugin yet):
+
+- [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, two `TP=8` replicas of Qwen3-32B.
+- [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
 
 ## Rebellions NPU
 

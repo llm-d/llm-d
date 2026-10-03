@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/pd/vllm
+
+namePrefix: pd-disaggregation-biren-vllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/biren-vllm/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen72B_INT8
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: biren
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
