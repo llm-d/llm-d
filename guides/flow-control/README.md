@@ -166,7 +166,7 @@ with `Insufficient cpu` needs a node with the pod's full CPU request allocatable
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../../docs/infrastructure/gateway).
+1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../../docs/platform/gateways).
 2. *Deploy the router and an HTTPRoute* that connects it to the Gateway as follows:
 
 <!-- guide:deploy.gateway start -->
@@ -390,7 +390,7 @@ curl -X POST http://${IP}/v1/completions \
 > [!WARNING]
 > **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector.
 >
-> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/api-reference/epp-http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule. After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
+> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/reference/api/http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule. After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
 
 #### 3. Verify the Classification
 
@@ -632,7 +632,7 @@ llmdbenchmark \
 
 ## Observability
 
-The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/core/router/epp/flow-control.md) for more details.
+The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/router/epp/flow-control.md) for more details.
 
 ## Cleanup
 
@@ -666,4 +666,4 @@ Afterward `kubectl get all,inferenceobjectives,pvc -n ${NAMESPACE}` returns
 
 ## Further Reading
 
-See [Flow Control architecture](../../docs/architecture/core/router/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](../../docs/architecture/router/epp/flow-control.md) for full details of the design.

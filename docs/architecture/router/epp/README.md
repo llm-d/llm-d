@@ -26,7 +26,7 @@ The following diagram shows the end-to-end lifecycle of a request as it flows th
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../../../assets/epp-design.svg" alt="EPP Design">
+    <img src="../../../assets/epp-design.svg" alt="EPP Design">
   </picture>
 </p>
 
@@ -89,7 +89,7 @@ The **Data Layer** operates asynchronously, consuming and storing data from a va
 
 Other modules in the EPP consult the **Data Layer** during request processing.
 
-See [Data Layer](datalayer.md) for more details on the design.
+See [Data Layer](data-layer.md) for more details on the design.
 
 ## How to Configure
 
@@ -98,4 +98,4 @@ The EPP is configured by passing an `EndpointPickerConfig` YAML to the binary vi
 > [!IMPORTANT]
 > The configuration is only read on startup. Any updates to the configuration require a restart of the EPP process to take effect.
 
-For a detailed guide on the configuration schema, mental model, and examples, see the [Configuration Guide](configuration.md).
+For a detailed guide on the configuration schema, mental model, and examples, see the [Configuration Guide](../../../reference/epp-configuration.md).

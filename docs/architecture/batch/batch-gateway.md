@@ -5,7 +5,7 @@ Batch Gateway adds OpenAI-compatible batch inference processing to the llm-d sta
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../../assets/batch-gateway.svg" alt="Batch Gateway Architecture">
+    <img src="../../assets/batch-gateway.svg" alt="Batch Gateway Architecture">
   </picture>
 </p>
 
@@ -87,7 +87,7 @@ The batch route authenticates (verifying identity), while the inference route au
 
 ## Related
 
-- [Batch Gateway Deployment Guide](../../../../guides/batch-serving/batch-gateway) — deployment instructions, configuration options, and usage.
+- [Batch Gateway Deployment Guide](../../../guides/batch-serving/batch-gateway) — deployment instructions, configuration options, and usage.
 - [Batch Gateway Repository](https://github.com/llm-d/llm-d-batch-gateway) — source code, Helm chart, deployment and usage guides.
 - [Batch Gateway Design Documents](https://github.com/llm-d/llm-d-batch-gateway/tree/main/docs/design) — detailed design documents.
 - [Async Processor](async-processor.md) — composes with Batch Gateway for gated request dispatching.

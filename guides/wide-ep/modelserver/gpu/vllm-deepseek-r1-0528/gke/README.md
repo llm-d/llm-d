@@ -27,7 +27,7 @@ Models with Mamba layers (for example GLM-5.3-Flash) need `VLLM_SSM_CONV_STATE_L
 Create a Dataplane V2 cluster and a node pool with `--accelerator-network-profile=auto`,
 the DRA node labels, and managed GPU driver install disabled, then install the NVIDIA
 driver DaemonSet and the NVIDIA GPU DRA driver. See
-[GPU DRA and DRANET on GKE](../../../../../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
+[GPU DRA and DRANET on GKE](../../../../../../docs/platform/providers/gke.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
 
 > [!WARNING]
 > Scale node pools created with `--accelerator-network-profile=auto` to zero instead of

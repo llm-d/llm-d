@@ -104,7 +104,7 @@ kubectl create secret generic llm-d-hf-token \
 
 #### Standalone Mode
 
-This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/core/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
+This deploys the llm-d Router in the simple [Standalone Mode](../../docs/architecture/router/proxy.md). The release name `${GUIDE_NAME}` is mandatory — the inference pool selector matches a guide label that pairs with this release.
 
 Tokenization is served by a separate render Service, not a chart-injected EPP sidecar — the chart's `router.tokenizer` sidecar is off by default, and the `token-producer` plugin points at that Service.
 
@@ -125,7 +125,7 @@ The render (tokenizer) Service the `token-producer` plugin calls is deployed sep
 
 To use a Kubernetes Gateway managed proxy instead of the standalone Envoy sidecar, do **not** apply the standalone chart above. Instead:
 
-1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../../docs/infrastructure/gateway) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
+1. **Deploy a Kubernetes Gateway**. See [the gateway guides](../../docs/platform/gateways) for step-by-step deployment of a Gateway named `llm-d-inference-gateway`.
 
 2. **Deploy the llm-d Router and HTTPRoute** via the `llm-d-router-gateway` chart with `httpRoute.create=true`:
 

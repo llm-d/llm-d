@@ -84,7 +84,7 @@ When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowCon
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
 - **In-Flight Eviction (`enableEviction: true`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`, such as `overflow-batch` at priority `-10`) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
-- For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
+- For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/router/epp/flow-control.md).
 
 #### With Flow Control OFF (Baseline Router with Saturation Detection)
 When llm-d Router operates in standard baseline mode (without the `flowControl` feature gate):

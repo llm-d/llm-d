@@ -1,7 +1,7 @@
 # GKE TPU Observability
 
 Use this reference to interpret GKE TPU device-plugin metrics and troubleshoot
-missing data. Follow the [TPU recipe](../../../guides/recipes/observability/tpu/)
+missing data. Follow the [TPU recipe](../../../guides/recipes/observability/tpu)
 to enable scraping and load the dashboard. The reference targets the exporter
 interface below. Check the exporter output before relying on a hardware panel.
 

@@ -52,7 +52,7 @@ For simpler single-model deployments, see the [Optimized Baseline](../optimized-
   > [!IMPORTANT]
   > When deploying InferencePools for this guide, do **not** use `--set httpRoute.create=true`. This guide's HTTPRoutes (Step 3) handle routing based on model name headers. Pool-level catch-all routes would conflict with header-based routing.
 
-* A Kubernetes Gateway (e.g., Istio, GKE, AgentGateway) deployed in your cluster. See [Gateway Infrastructure](../../docs/infrastructure/gateway/README.md).
+* A Kubernetes Gateway (e.g., Istio, GKE, AgentGateway) deployed in your cluster. See [Gateway Infrastructure](../../docs/platform/gateways/README.md).
 
 ## Step 1: Deploy IPP
 
@@ -204,6 +204,6 @@ curl -X POST "http://${GATEWAY_IP}/v1/chat/completions" \
 
 ## Further Reading
 
-* [Multi-Model Routing Capability](../../docs/well-lit-paths/foundations/multi-model-routing.md) — High-level overview and architecture
-* [IPP Architecture](../../docs/architecture/advanced/inference-payload-processing/README.md) — Technical details of the Inference Payload Processor
+* [Multi-Model Routing Capability](../../docs/operations/traffic/multi-model-routing.md) — High-level overview and architecture
+* [IPP Architecture](../../docs/architecture/payload-processing.md) — Technical details of the Inference Payload Processor
 * [IPP Repository](https://github.com/llm-d/llm-d-inference-payload-processor) — Source code, configuration reference, and plugin documentation

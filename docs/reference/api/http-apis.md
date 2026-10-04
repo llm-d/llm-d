@@ -1,6 +1,6 @@
 # EPP HTTP APIs Reference
 
-This document lists the HTTP APIs the [Endpoint Picker (EPP)](../architecture/core/router/epp) supports for inference traffic. Depending on the API, the EPP may parse fields from the request body to do prefix-cache aware routing, and plugin decisions.
+This document lists the HTTP APIs the [Endpoint Picker (EPP)](../../architecture/router/epp) supports for inference traffic. Depending on the API, the EPP may parse fields from the request body to do prefix-cache aware routing, and plugin decisions.
 
 ## Supported HTTP APIs
 
@@ -17,7 +17,7 @@ This document lists the HTTP APIs the [Endpoint Picker (EPP)](../architecture/co
 
 ## Request Examples
 
-The examples below parameterize the model as `${MODEL_NAME}` and the proxy endpoint as `${IP}`. Set `${MODEL_NAME}` to [`Qwen/Qwen3-VL-32B-Instruct`](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) from the [multimodal aggregation guide](../../guides/multimodal-serving/aggregation/README.md), and set `${IP}` to the proxy endpoint IP retrieved per that guide's verification steps.
+The examples below parameterize the model as `${MODEL_NAME}` and the proxy endpoint as `${IP}`. Set `${MODEL_NAME}` to [`Qwen/Qwen3-VL-32B-Instruct`](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) from the [multimodal aggregation guide](../../../guides/multimodal-serving/aggregation/README.md), and set `${IP}` to the proxy endpoint IP retrieved per that guide's verification steps.
 
 ```bash
 export MODEL_NAME=Qwen/Qwen3-VL-32B-Instruct

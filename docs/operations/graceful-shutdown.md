@@ -85,12 +85,12 @@ upstream gateways **retry** rather than treating the drain as a hard fault.
 These retryable semantics only apply while the EPP is still reachable over its
 `ext_proc` stream. Once the EPP process is actually gone, the outcome is governed
 by the `InferencePool`'s
-[`failureMode`](../architecture/core/inferencepool.md). For high-availability
+[`failureMode`](../architecture/inferencepool.md). For high-availability
 Router configurations and `failOpen` behavior during leader teardown, see
 [Router Operations](router.md).
 
 For the full set of flow-control outcome codes, see
-[Flow Control](../architecture/core/router/epp/flow-control.md).
+[Flow Control](../architecture/router/epp/flow-control.md).
 
 ## Recommended Configuration
 
@@ -176,5 +176,5 @@ Expected behavior with `--shutdown-timeout` set:
 - [Disaggregated Serving Operations (vLLM)](disaggregation/vllm.md)
 - [Readiness Probes](readiness-probes.md)
 - [Router Operations](router.md)
-- [Flow Control](../architecture/core/router/epp/flow-control.md)
+- [Flow Control](../architecture/router/epp/flow-control.md)
 - [Kubernetes Pod Termination](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination)

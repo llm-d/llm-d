@@ -1,6 +1,6 @@
 # EPP gRPC APIs Reference
 
-This document lists the gRPC APIs the [Endpoint Picker (EPP)](../architecture/core/router/epp) supports for inference traffic. gRPC requests flow through the gateway as HTTP/2 (H2C) traffic, and the EPP decodes the gRPC frames and protobuf payloads to do prefix-cache aware routing, plugin decisions, and response usage tracking.
+This document lists the gRPC APIs the [Endpoint Picker (EPP)](../../architecture/router/epp) supports for inference traffic. gRPC requests flow through the gateway as HTTP/2 (H2C) traffic, and the EPP decodes the gRPC frames and protobuf payloads to do prefix-cache aware routing, plugin decisions, and response usage tracking.
 
 Unlike the HTTP APIs, gRPC parsing is not enabled by default: the matching parser plugin must be configured in the [EndpointPickerConfig](endpointpickerconfig.md).
 
@@ -212,7 +212,7 @@ Response (embedding vector truncated for readability):
 
 ## HTTP Headers
 
-The [EPP HTTP headers](epp-http-headers.md) (request classification, flow control, and SLO headers such as `x-llm-d-inference-objective` and `x-llm-d-inference-fairness-id`) work for gRPC requests exactly as they do for HTTP.
+The [EPP HTTP headers](http-headers.md) (request classification, flow control, and SLO headers such as `x-llm-d-inference-objective` and `x-llm-d-inference-fairness-id`) work for gRPC requests exactly as they do for HTTP.
 
 Specify them as gRPC metadata on the call. With grpcurl, use `-H`:
 

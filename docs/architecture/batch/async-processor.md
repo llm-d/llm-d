@@ -5,7 +5,7 @@ The Async Processor is a lightweight dispatch agent that pulls inference request
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../../assets/async-processor.svg" alt="Async Processor High-Level Architecture">
+    <img src="../../assets/async-processor.svg" alt="Async Processor High-Level Architecture">
   </picture>
 </p>
 
@@ -14,7 +14,7 @@ The Async Processor is a lightweight dispatch agent that pulls inference request
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../../assets/async-processor-internal.svg" alt="llm-d-async Internal Pipeline Architecture (4 Queues and 2 Worker Pools)">
+    <img src="../../assets/async-processor-internal.svg" alt="llm-d-async Internal Pipeline Architecture (4 Queues and 2 Worker Pools)">
   </picture>
 </p>
 
@@ -235,6 +235,6 @@ Prometheus metrics include request totals, success/failure counts, retry counts,
 
 ## Related
 
-- [Async Processor Well-Lit Path](../../../well-lit-paths/workloads/batch-serving/asynchronous-processing.md) — a guide for deploying the Async Processor.
+- [Async Processor Well-Lit Path](../../use-cases/batch-and-offline.md) — a guide for deploying the Async Processor.
 - [Async Processor Repository](https://github.com/llm-d/llm-d-async) — source code and Helm chart.
 - [Batch Gateway](batch-gateway.md) — composes with the Async Processor for batch job management.

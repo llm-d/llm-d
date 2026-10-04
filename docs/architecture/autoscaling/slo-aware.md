@@ -1,14 +1,14 @@
 # SLO-Aware Autoscaling with KEDA — the control law
 
 This is the full derivation of the control law used by the
-[SLO-aware autoscaling guide](../../../../guides/workload-autoscaling/slo-aware/README.md):
+[SLO-aware autoscaling guide](../../../guides/workload-autoscaling/slo-aware/README.md):
 how the EPP's latency histograms become a single saturation signal, how the
 KEDA formula maps that signal to a desired replica count, and why each
 asymmetry in the design exists. For the deployable manifests, tunables, and
 benchmark results, use the guide; read this when you want to understand or
 modify the loop itself.
 
-This is a specialization of the [KEDA + EPP design](./keda-epp.md): the same
+This is a specialization of the [KEDA + EPP design](keda-epp.md): the same
 pipeline and the same KEDA-owned HPA, with latency rather than queue depth as
 the signal.
 
@@ -99,7 +99,7 @@ engineering: pod warmup is roughly *half* the scale-up transient, so cutting it
 directly shrinks the violations paid at every scale-up. A torch-compile cache
 volume + a fast startupProbe took our pod-ready time from ~2 m 15 s to ~100 s;
 that patch ships with the guide as
-[`slo-aware/decode-warmup-patch.yaml`](../../../../guides/workload-autoscaling/slo-aware/decode-warmup-patch.yaml)
+[`slo-aware/decode-warmup-patch.yaml`](../../../guides/workload-autoscaling/slo-aware/decode-warmup-patch.yaml)
 (recommended — apply it to the decode Deployment, see the guide's Deploy
 section). This is the patch used to produce the guide's benchmark results.
 

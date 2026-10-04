@@ -3,7 +3,7 @@
 The Flow Control layer within the EPP is a critical mechanism for pool defense and multi-tenancy. It protects the pool of model servers from overload by shifting intelligent queuing to the gateway, enforcing strict priority and tenant-aware fairness.
 
 > [!IMPORTANT]
-> EPP Flow Control is currently behind the `flowControl` feature gate. You must explicitly enable it in your [EndpointPickerConfig](configuration.md) to use these capabilities.
+> EPP Flow Control is currently behind the `flowControl` feature gate. You must explicitly enable it in your [EndpointPickerConfig](../../../reference/epp-configuration.md) to use these capabilities.
 
 ### The LLM Queuing Problem
 
@@ -245,7 +245,7 @@ Understanding the execution of this configuration requires examining the core co
 
 ### Resource Guardrails & Memory Isolation
 
-To prevent the EPP itself from resource exhaustion when queues grow, Flow Control enforces configurable capacity limits. See the [Global Fields section in the Configuration Guide](configuration.md#global-fields) for details on setting `maxBytes` and `maxRequests`:
+To prevent the EPP itself from resource exhaustion when queues grow, Flow Control enforces configurable capacity limits. See the [Global Fields section in the Configuration Guide](../../../reference/epp-configuration.md#global-fields) for details on setting `maxBytes` and `maxRequests`:
 
 * **Global Limits**: Configured via `maxBytes` (payload size) and `maxRequests` (count) across all priority bands. These limits support both plain integers and Kubernetes Quantity format (e.g., `10Gi`, `1k`). If a new request would exceed these limits, it is immediately rejected with an HTTP 429 (Too Many Requests).
 * **Per-Band Limits**: Each priority band can have its own `maxBytes` and `maxRequests` limits. This provides **memory isolation** between bands; heavy traffic in a lower-priority band cannot fill the queue space reserved for higher-priority bands.
@@ -298,7 +298,7 @@ sequenceDiagram
 
 In-flight eviction terminates an already-dispatched, negative-priority (`priority < 0`) request to reclaim capacity for a higher-priority request blocked at its dispatch ceiling. Gated dispatch decides only whether to release new work, so it cannot recover capacity that lower-priority requests are already holding.
 
-When `enableEviction: true` (see [Flow Control configuration](configuration.md#flow-control)), Flow Control may end an already-dispatched, **negative-priority** (`priority < 0`) request to make room for blocked higher-priority demand. Eviction only occurs while a higher-priority band is blocked at its dispatch ceiling with requests queued behind it, and only targets in-flight requests in negative-priority bands. Under the default Usage Limit Policy that ceiling is full pool saturation; under `priority-holdback-policy` each band holds back at a lower ceiling, so eviction can begin before the pool is full. The default victim policy selects the lowest priority first, then the most recently dispatched, so requests that have already accrued the most work are evicted last.
+When `enableEviction: true` (see [Flow Control configuration](../../../reference/epp-configuration.md#flow-control)), Flow Control may end an already-dispatched, **negative-priority** (`priority < 0`) request to make room for blocked higher-priority demand. Eviction only occurs while a higher-priority band is blocked at its dispatch ceiling with requests queued behind it, and only targets in-flight requests in negative-priority bands. Under the default Usage Limit Policy that ceiling is full pool saturation; under `priority-holdback-policy` each band holds back at a lower ceiling, so eviction can begin before the pool is full. The default victim policy selects the lowest priority first, then the most recently dispatched, so requests that have already accrued the most work are evicted last.
 
 ```mermaid
 sequenceDiagram
@@ -390,7 +390,7 @@ The `Drop Reason` column lists the value emitted in the `x-llm-d-request-dropped
 
 ### Extension Points
 
-The Flow Control layer behavior is customizable via several extension points implemented as plugins. For details on how to register and reference these plugins in your config, see the [Flow Control section in the Configuration Guide](configuration.md#flowcontrol):
+The Flow Control layer behavior is customizable via several extension points implemented as plugins. For details on how to register and reference these plugins in your config, see the [Flow Control section in the Configuration Guide](../../../reference/epp-configuration.md#flowcontrol):
 
 1. **Fairness Policy**: Determines how to share dispatch opportunities between different flows within the exact same Priority level.
 2. **Ordering Policy**: Determines the order in which requests are served within a specific flow.
@@ -442,7 +442,7 @@ Available plugins:
 
 #### True Demand Autoscaling
 
-Traditional metrics like GPU utilization fail to quantify unfulfilled demand because LLM compute is highly non-linear. Shifting the queue to the EPP provides a definitive "True Demand" metric (Queue Depth). External scalers like KEDA can use this metric to scale out replicas based on the exact volume of traffic waiting to be served. See [Autoscaling](../../../advanced/autoscaling/README.md) for more details.
+Traditional metrics like GPU utilization fail to quantify unfulfilled demand because LLM compute is highly non-linear. Shifting the queue to the EPP provides a definitive "True Demand" metric (Queue Depth). External scalers like KEDA can use this metric to scale out replicas based on the exact volume of traffic waiting to be served. See [Autoscaling](../../autoscaling/README.md) for more details.
 
 ### Metrics & Observability
 
@@ -473,6 +473,6 @@ The five revocation and reclaim metrics above apply only when `enableEviction: t
 
 A pre-configured Grafana dashboard is available to visualize these metrics, making it easy to monitor queue depths, dispatch latency, and saturation state transitions.
 
-To load this dashboard, follow the [Observability Setup guide](../../../../operations/observability/setup.md), which installs Prometheus and Grafana and loads the llm-d dashboards.
+To load this dashboard, follow the [Observability Setup guide](../../../operations/observability/setup.md), which installs Prometheus and Grafana and loads the llm-d dashboards.
 
-![Flow Control Dashboard](../../images/flow_control_dashboard.png)
+![Flow Control Dashboard](../../core/images/flow_control_dashboard.png)

@@ -27,7 +27,7 @@ Both IPP and EPP contribute to routing decisions:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../../assets/ipp-request-flow.svg" alt="IPP Request Flow">
+    <img src="../assets/ipp-request-flow.svg" alt="IPP Request Flow">
   </picture>
 </p>
 
@@ -70,4 +70,4 @@ IPP exposes Prometheus-compatible metrics on port 9090 at `/metrics`, providing 
 ## Further Reading
 
 * [IPP Repository](https://github.com/llm-d/llm-d-inference-payload-processor) — Source code, configuration reference, and plugin documentation
-* [Multi-Model Routing](../../../well-lit-paths/foundations/multi-model-routing.md) — Using IPP for model-aware routing
+* [Multi-Model Routing](../operations/traffic/multi-model-routing.md) — Using IPP for model-aware routing

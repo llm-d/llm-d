@@ -41,7 +41,7 @@ sequenceDiagram
 ```
 
 > [!IMPORTANT]
-> P2P prefix cache sharing builds on the [Tiered Prefix Cache](tiered-prefix-cache.md)
+> P2P prefix cache sharing builds on the [Tiered Prefix Cache](tiered-kv-cache.md)
 > path: peers serve pulls from their CPU offload tier. The shipped
 > configuration uses the same `--block-size`, `PYTHONHASHSEED`, and tensor
 > parallel layout on every peer. Other layouts need a compatible peer
@@ -49,7 +49,7 @@ sequenceDiagram
 > model-runner constraints. Size the CPU tier to retain useful blocks;
 > making it larger than the per-pod GPU KV cache is the guide's recommended
 > starting point, not a correctness requirement. The
-> [guide's Best Practices](../../../guides/p2p-kv-cache-sharing/README.md#best-practices)
+> [guide's Best Practices](../../guides/p2p-kv-cache-sharing/README.md#best-practices)
 > covers each requirement, its sizing rule, and its failure mode.
 
 ## When It Pays
@@ -81,11 +81,11 @@ The guide ships prefix affinity plus the pull as the general-purpose
 default. Reach for load-aware placement plus the pull when many
 concurrent sessions contend on their owner pods. Both regimes are
 measured in the
-[benchmark report](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md).
+[benchmark report](../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md).
 
 ## Deploy
 
-See the [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing)
+See the [P2P KV Cache Sharing guide](../../guides/p2p-kv-cache-sharing)
 for manifests, verification gates, and step-by-step deployment.
 
 ## Architecture
@@ -94,7 +94,7 @@ for manifests, verification gates, and step-by-step deployment.
    `OffloadingConnector` with a CPU tier plus a P2P secondary tier: every
    pod both offloads computed KV to CPU and serves it to peers.
 2. **The router builds the precise prefix index** from the KV events
-   (the [Precise Prefix Cache Routing](precise-prefix-cache-routing.md)
+   (the [Precise Prefix Cache Routing](precise-prefix-cache.md)
    mechanism), so it knows which pods hold which prefix blocks.
 3. **The `p2p-source-producer` selects a source** from the CPU-tier holders
    within one index block of the largest cached prefix, weighted to avoid
@@ -114,8 +114,8 @@ normal NIXL P/D path transfers the request's KV to the selected decoder.
 
 ## Further Reading
 
-- [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing) - manifests, verification gates, benchmarking.
-- [Benchmark report: gpt-oss-120b on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
-- [Benchmark report: GLM-5.2 on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - C64 policy comparison, four-arm observation, and pull mechanism evidence.
-- [Tiered Prefix Cache](tiered-prefix-cache.md) - the offload tiers P2P serves from.
-- [Precise Prefix Cache Routing](precise-prefix-cache-routing.md) - the index that selects the pull source.
+- [P2P KV Cache Sharing guide](../../guides/p2p-kv-cache-sharing) - manifests, verification gates, benchmarking.
+- [Benchmark report: gpt-oss-120b on H200](../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
+- [Benchmark report: GLM-5.2 on H200](../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - C64 policy comparison, four-arm observation, and pull mechanism evidence.
+- [Tiered Prefix Cache](tiered-kv-cache.md) - the offload tiers P2P serves from.
+- [Precise Prefix Cache Routing](precise-prefix-cache.md) - the index that selects the pull source.

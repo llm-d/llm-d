@@ -9,7 +9,7 @@ each target model-server pool can be isolated by metrics and scaled
 independently.
 
 This is the recommended autoscaling path in llm-d. The
-[WVA path](./wva.md) is deprecated.
+[WVA path](wva-deprecated.md) is deprecated.
 
 ## Functionality
 
@@ -42,7 +42,7 @@ objective-relative signals (pool saturation, estimated latency against an SLO).
 
 ### Architecture
 
-![KEDA + EPP Architecture](keda-epp-architecture.svg)
+![KEDA + EPP Architecture](../advanced/autoscaling/keda-epp-architecture.svg)
 
 ### Scaling Pipeline
 
@@ -74,17 +74,17 @@ paths is which EPP metrics the triggers read and how thresholds are derived.
 
 | Signal | EPP metrics | Threshold is | Guide |
 |---|---|---|---|
-| **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp (queue signal)](../../../../guides/workload-autoscaling/keda-epp/README.md) |
-| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../../guides/workload-autoscaling/keda-epp/README.md#choosing-a-scaling-signal) |
-| **Token backlog** | `llm_d_epp_inflight_tokens`, per-pod KV cache occupancy | Seconds of prefill queue wait, derived from a share of the TTFT SLO and a calibrated `peakPrefillThroughput` | [keda-epp-token-aware](../../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
-| **Estimated latency** | EPP predicted/actual TTFT and TPOT histograms | Latency ÷ SLO, with a hysteresis band | [slo-aware](../../../../guides/workload-autoscaling/slo-aware/README.md) |
+| **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp (queue signal)](../../../guides/workload-autoscaling/keda-epp/README.md) |
+| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../guides/workload-autoscaling/keda-epp/README.md#choosing-a-scaling-signal) |
+| **Token backlog** | `llm_d_epp_inflight_tokens`, per-pod KV cache occupancy | Seconds of prefill queue wait, derived from a share of the TTFT SLO and a calibrated `peakPrefillThroughput` | [keda-epp-token-aware](../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
+| **Estimated latency** | EPP predicted/actual TTFT and TPOT histograms | Latency ÷ SLO, with a hysteresis band | [slo-aware](../../../guides/workload-autoscaling/slo-aware/README.md) |
 
 Queue depth and pool saturation are lagging-to-leading counts of unmet demand.
 Token backlog exists because request counts rate an 8192-token prompt the same
 as a 512-token one, while the prefill work differs by 16×. Estimated latency
 scales against the objective itself rather than a proxy for it; its control law
 is derived in
-[SLO-Aware Autoscaling with KEDA](./slo-aware-keda.md).
+[SLO-Aware Autoscaling with KEDA](slo-aware.md).
 
 ### Dual-Metric Strategy
 
@@ -122,7 +122,7 @@ Because the latency signal is measured on ready pods only, those pods
 over-report the post-warmup load while a scale-up is in flight; the credit makes
 each ask cover only the deficit beyond the pods already on their way, instead of
 racing to `maxReplicas` while nothing has become Ready. See
-[SLO-Aware Autoscaling with KEDA](./slo-aware-keda.md) for the derivation.
+[SLO-Aware Autoscaling with KEDA](slo-aware.md) for the derivation.
 
 The simpler per-metric `AverageValue` paths do not carry this term. There, the
 HPA's own stabilization windows and scale-up policies are what keep a
@@ -144,7 +144,7 @@ keeps sole ownership of the HPA it generates and the autoscaling configuration
 above is unchanged: over-budget replicas simply stay Pending until quota frees.
 
 See the
-[Kueue-based replica rebalancing guide](../../../../guides/workload-autoscaling/kueue-rebalancing/README.md).
+[Kueue-based replica rebalancing guide](../../../guides/workload-autoscaling/kueue-rebalancing/README.md).
 It supersedes the experimental
 replica rebalancer (removed in #2498),
 which enforced the same budget from *above* the HPA by patching `maxReplicas` on
@@ -198,10 +198,10 @@ the model to load.
 - **Warmup is paid at every scale-up.** Model load and torch-compile time sit
   between the decision and the capacity. Cutting pod-ready time is usually the
   highest-leverage tuning available; see the warmup patch discussed in
-  [SLO-Aware Autoscaling with KEDA](./slo-aware-keda.md).
+  [SLO-Aware Autoscaling with KEDA](slo-aware.md).
 
 ## Deployment Guides
 
-Start from the [workload autoscaling guides](../../../../guides/workload-autoscaling/README.md),
+Start from the [workload autoscaling guides](../../../guides/workload-autoscaling/README.md),
 which cover the reusable router values, `ScaledObject`s, authentication notes,
 and verification steps for each of the signals in the table above.

@@ -12,7 +12,7 @@ The following visualizes the forward pass in a DP/EP deployment in vLLM:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../assets/dp-ep-deployment.svg" alt="DP/EP deployment">
+    <img src="../assets/dp-ep-deployment.svg" alt="DP/EP deployment">
   </picture>
 </p>
 
@@ -29,7 +29,7 @@ The following steps occurs:
 
 ## Deploy
 
-See the [Wide Expert Parallelism guide](../../../guides/wide-ep/README.md) for manifests and step-by-step deployment. The model servers are deployed as a [`DisaggregatedSet`](../../../guides/wide-ep/README.md#2-deploy-the-model-server), which manages the prefill and decode roles as a single versioned unit.
+See the [Wide Expert Parallelism guide](../../guides/wide-ep/README.md) for manifests and step-by-step deployment. The model servers are deployed as a [`DisaggregatedSet`](../../guides/wide-ep/README.md#2-deploy-the-model-server), which manages the prefill and decode roles as a single versioned unit.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ As a result, we leverage the following design for the deployment:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../assets/wide-ep.svg" alt="Multi-Node Wide Expert Parallelism">
+    <img src="../assets/wide-ep.svg" alt="Multi-Node Wide Expert Parallelism">
   </picture>
 </p>
 
@@ -64,7 +64,7 @@ The request flow works as follows:
 
 See:
 
-* [PD Architecture](../../architecture/advanced/disaggregation/README.md) for more details on disaggregation in llm-d
+* [PD Architecture](../architecture/disaggregation.md) for more details on disaggregation in llm-d
 * [vLLM docs on DP deployment](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/)
 * [vLLM docs on EP deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/)
 * [vLLM docs on DeepEP and DeepGEMM](https://docs.vllm.ai/en/latest/design/fused_moe_modular_kernel/)

@@ -163,7 +163,7 @@ To ensure backward compatibility, a feature gate should usually be removed over 
 
 This section covers components that process requests and responses before they reach the scheduling phase, or after a backend has been selected.
 
-> For full architectural details and a list of available parsers, admitters, and data producers, see the [Request Handling reference](request-handling.md).
+> For full architectural details and a list of available parsers, admitters, and data producers, see the [Request Handling reference](../architecture/router/epp/request-handling.md).
 
 #### Parsers
 
@@ -214,9 +214,9 @@ They are automatically active and do not need to be referenced elsewhere in the 
 
 ### Flow Control
 
-See [Flow Control](flow-control.md) for more architectural details on how the EPP's flow control layer works internally.
+See [Flow Control](../architecture/router/epp/flow-control.md) for more architectural details on how the EPP's flow control layer works internally.
 
-The `flowControl` section configures the EPP's Flow Control layer, which acts as a pool defense mechanism by buffering requests before they reach backend model servers. Flow Control implements a 3-tier dispatch hierarchy: **Priority → Fairness → Ordering**. For a visual breakdown of how this looks in practice, see the [Queuing Topology diagram in the Flow Control reference](flow-control.md#queuing-topology--the-3-tier-dispatch).
+The `flowControl` section configures the EPP's Flow Control layer, which acts as a pool defense mechanism by buffering requests before they reach backend model servers. Flow Control implements a 3-tier dispatch hierarchy: **Priority → Fairness → Ordering**. For a visual breakdown of how this looks in practice, see the [Queuing Topology diagram in the Flow Control reference](../architecture/router/epp/flow-control.md#queuing-topology--the-3-tier-dispatch).
 
 When flow control is enabled (via the `FlowControl` feature gate), incoming requests are queued in memory and dispatched according to configured priority bands, fairness policies, and ordering policies. When the pool is saturated (as determined by the [saturation detector](#saturation-detector)), requests are held in the queue until capacity frees up.
 
@@ -269,7 +269,7 @@ flowControl:
 - `maxBytes`: Global capacity limit across all priority levels. Supports Kubernetes resource quantity format (e.g., `10Gi`, `512Mi`) or plain integers (bytes). If `0` or omitted, no global limit is enforced (unlimited).
 - `maxRequests`: Optional global maximum request count limit. If `0` or omitted, no global limit is enforced (unlimited).
 - `defaultRequestTTL`: Fallback timeout for requests that do not carry a deadline. If `0` or omitted, it defaults to the client context deadline (which may wait indefinitely).
-- `enableEviction`: When `true`, already-dispatched **negative-priority** (`priority < 0`) requests can be evicted to reclaim capacity when higher-priority requests are blocked by pool saturation. Pacing and sizing self-configure from the selected saturation detector. Disabled by default. See [In-Flight Eviction](flow-control.md#in-flight-eviction) for the lifecycle and response mapping.
+- `enableEviction`: When `true`, already-dispatched **negative-priority** (`priority < 0`) requests can be evicted to reclaim capacity when higher-priority requests are blocked by pool saturation. Pacing and sizing self-configure from the selected saturation detector. Disabled by default. See [In-Flight Eviction](../architecture/router/epp/flow-control.md#in-flight-eviction) for the lifecycle and response mapping.
 - `defaultPriorityBand`: A template used to dynamically provision priority bands that are not explicitly configured in `priorityBands`.
 - `priorityBands`: A list of explicit configurations for specific priority levels.
 
@@ -283,7 +283,7 @@ These fields apply to both `defaultPriorityBand` and entries in `priorityBands`:
 - `orderingPolicyRef`: References a plugin name for request ordering within the band. Default: `fcfs-ordering-policy`.
 - `fairnessPolicyRef`: References a plugin name for fairness policy within the band. Default: `global-strict-fairness-policy`.
 
-For a full list of available Fairness and Ordering policies, see the [Flow Control reference](flow-control.md#concrete-plugins).
+For a full list of available Fairness and Ordering policies, see the [Flow Control reference](../architecture/router/epp/flow-control.md#concrete-plugins).
 
 #### Saturation Detector
 
@@ -299,13 +299,13 @@ flowControl:
 
 - `pluginRef`: References a plugin instance defined in the global `plugins` section. Defaults to `utilization-detector` if omitted or empty. *Note: If a `utilization-detector` is not explicitly defined in your `plugins` array, the gateway will automatically instantiate one under the hood using standard default parameters.*
 
-For a full list of available Saturation Detector plugins, see the [Flow Control reference](flow-control.md#concrete-plugins).
+For a full list of available Saturation Detector plugins, see the [Flow Control reference](../architecture/router/epp/flow-control.md#concrete-plugins).
 
 ---
 
 ### Scheduling Profiles
 
-The `schedulingProfiles` section configures the EPP's Scheduling component. For full architectural details and a list of available filters, scorers, and pickers, see the [Scheduling reference](scheduling.md).
+The `schedulingProfiles` section configures the EPP's Scheduling component. For full architectural details and a list of available filters, scorers, and pickers, see the [Scheduling reference](../architecture/router/epp/scheduling.md).
 
 Incoming requests are routed to candidate model servers by executing a pipeline of filters, scorers, and a final picker defined in these profiles.
 
@@ -326,7 +326,7 @@ schedulingProfiles:
 ```
 
 > [!NOTE]
-> To use **precise** prefix-cache routing (exact, KV-event-driven) instead of the approximate default, declare a `precise-prefix-cache-producer` in the top-level `plugins` section and set `prefixMatchInfoProducerName: precise-prefix-cache-producer` on the `prefix-cache-scorer`; otherwise the scorer falls back to the approximate producer. See the [Precise Prefix Cache Routing guide](../../../../../guides/precise-prefix-cache-routing/README.md).
+> To use **precise** prefix-cache routing (exact, KV-event-driven) instead of the approximate default, declare a `precise-prefix-cache-producer` in the top-level `plugins` section and set `prefixMatchInfoProducerName: precise-prefix-cache-producer` on the `prefix-cache-scorer`; otherwise the scorer falls back to the approximate producer. See the [Precise Prefix Cache Routing guide](../../guides/precise-prefix-cache-routing/README.md).
 
 #### Scheduling Profile Fields
 
@@ -461,9 +461,9 @@ The EPP exposes a Prometheus-compatible metrics endpoint on **port 9090** at `/m
 
 Metrics are organized by the subsystem that owns the logic. For detailed tables of metrics available in each subsystem, see:
 
-- **[Request Handling Metrics](request-handling.md#metrics--observability)**: Request volume, latency, token usage, and success rates.
-- **[Flow Control Metrics](flow-control.md#metrics--observability)**: Queue sizes, dispatch cycles, and pool saturation.
-- **[Routing Metrics](scheduling.md#metrics--observability)**: Router performance and pool health state.
+- **[Request Handling Metrics](../architecture/router/epp/request-handling.md#metrics--observability)**: Request volume, latency, token usage, and success rates.
+- **[Flow Control Metrics](../architecture/router/epp/flow-control.md#metrics--observability)**: Queue sizes, dispatch cycles, and pool saturation.
+- **[Routing Metrics](../architecture/router/epp/scheduling.md#metrics--observability)**: Router performance and pool health state.
 
 ### Monitoring Stack
 

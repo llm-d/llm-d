@@ -9,7 +9,7 @@
 
 This guide deploys a standalone **Coordinator** service in front of an Encode /
 Prefill / Decode (EPD) topology. Instead of the per decode pod [Routing
-Sidecar](../../docs/architecture/advanced/disaggregation/README.md) that today's
+Sidecar](../../docs/architecture/disaggregation.md) that today's
 [P/D Disaggregation](../pd-disaggregation/README.md) guide uses to dispatch a fixed
 prefill→decode sequence, the Coordinator is a single service that drives a
 **configurable pipeline** over each request:
@@ -190,7 +190,7 @@ Kubernetes Gateway. Deploy one first if your cluster doesn't already have one:
 > Mode wiring is documented and maintained.
 > Use Gateway Mode for both EPP topologies.
 
-1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/infrastructure/gateway) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster.
+1. *Deploy a Kubernetes Gateway*. Follow [the gateway guides](../../docs/platform/gateways) for step by step deployment for a Gateway named `llm-d-inference-gateway`. You only need to create one Gateway for your cluster.
 
 #### Single EPP (default)
 
@@ -344,7 +344,7 @@ out through that same Gateway, so `${GATEWAY_ADDRESS}` — referenced by
 address reachable from *inside* the cluster, and how you get one differs per
 provider. This is set here rather than in step 1 because on GKE the address doesn't
 exist until the Gateway has been reconciled (wait for `PROGRAMMED=True`, see
-[the GKE gateway guide](../../docs/infrastructure/gateway/gke.md#step-3-verify-the-gateway)):
+[the GKE gateway guide](../../docs/platform/gateways/gke.md#step-3-verify-the-gateway)):
 
 ```bash
 case "${PROVIDER_NAME}" in
@@ -596,5 +596,5 @@ anything else in it, like the `llm-d-hf-token` secret) alone — `kubectl delete
 namespace ${NAMESPACE}` if you want it gone entirely.
 
 If nothing else in your cluster still uses it, also remove the
-`llm-d-inference-gateway` Gateway by following [the gateway istio cleanup guide](../../docs/infrastructure/gateway/istio.md#cleanup), or
-[the agentgateway cleanup guide](../../docs/infrastructure/gateway/agentgateway.md#cleanup).
+`llm-d-inference-gateway` Gateway by following [the gateway istio cleanup guide](../../docs/platform/gateways/istio.md#cleanup), or
+[the agentgateway cleanup guide](../../docs/platform/gateways/agentgateway.md#cleanup).

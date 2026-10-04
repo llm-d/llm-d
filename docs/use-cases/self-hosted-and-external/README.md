@@ -47,5 +47,5 @@ Both guides support connecting the external API proxy to **llm-d** via either:
 
 Select a guide to proceed with deployment:
 
-- **[LiteLLM Proxy Guide](./litellm.md)**: Deploy LiteLLM with PostgreSQL for virtual API key management, user spend tracking, budget caps, and multi-provider routing.
-- **[Kong AI Gateway Guide](./kong.md)**: Deploy Kong in DB-less mode using Kubernetes Gateway API and custom resources (`KongPlugin`, `HTTPRoute`) for high-performance routing.
+- **[LiteLLM Proxy Guide](litellm.md)**: Deploy LiteLLM with PostgreSQL for virtual API key management, user spend tracking, budget caps, and multi-provider routing.
+- **[Kong AI Gateway Guide](kong.md)**: Deploy Kong in DB-less mode using Kubernetes Gateway API and custom resources (`KongPlugin`, `HTTPRoute`) for high-performance routing.

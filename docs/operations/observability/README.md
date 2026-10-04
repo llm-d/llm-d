@@ -7,13 +7,13 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 
 ## Documentation
 
-* [Setup](./setup.md) — Install Prometheus and Grafana, load dashboards, and deploy tracing backends
-* [Metrics](./metrics.md) — Enable and interpret model server and EPP metrics
-* [Distributed Tracing](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
-* [PromQL Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
-* [Alerting](./alerting.md) — Apply the default EPP Prometheus alerting rules
-* [GKE TPU Observability](./tpu.md) — Interpret TPU hardware metrics and troubleshoot missing data
+* [Setup](setup.md) — Install Prometheus and Grafana, load dashboards, and deploy tracing backends
+* [Metrics](metrics.md) — Enable and interpret model server and EPP metrics
+* [Distributed Tracing](tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
+* [PromQL Reference](promql.md) — Ready-to-use queries for dashboards and alerting
+* [Alerting](alerting.md) — Apply the default EPP Prometheus alerting rules
+* [GKE TPU Observability](tpu-metrics-gke.md) — Interpret TPU hardware metrics and troubleshoot missing data
 
 ## Runnable assets
 
-Scripts, Grafana dashboard JSON, alerting rules, and tracing manifests live in [`guides/recipes/observability/`](../../../guides/recipes/observability/) in the llm-d repository (not published as website pages).
+Scripts, Grafana dashboard JSON, alerting rules, and tracing manifests live in [`guides/recipes/observability/`](../../../guides/recipes/observability) in the llm-d repository (not published as website pages).

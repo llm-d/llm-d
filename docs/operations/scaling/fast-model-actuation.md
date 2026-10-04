@@ -5,7 +5,7 @@ In Kubernetes, once a Pod has been allocated some GPUs it keeps that exclusive a
 Fast Model Actuation (FMA) attacks vLLM startup time with two complementary techniques: **vLLM sleep/wake**, which parks a loaded model's tensors in main memory and restores them to the GPU in seconds — skipping model loading and CUDA-graph compilation entirely — and a **launcher** process that loads the vLLM Python modules once and spawns child vLLM instances on demand, skipping that module import. Together they turn model swap-in and replica scale-up from a minutes-scale cold start into a near-instant operation — without changing steady-state serving performance.
 
 > [!NOTE]
-> FMA's value is *actuation speed*, not inference throughput. Resident servers add only a small (~2.5%) CPU-memory overhead, and served performance matches a standard deployment. The [Workload Autoscaling](workload-autoscaling.md) capability decides *when* to scale; FMA addresses *how fast* the new capacity becomes ready.
+> FMA's value is *actuation speed*, not inference throughput. Resident servers add only a small (~2.5%) CPU-memory overhead, and served performance matches a standard deployment. The [Workload Autoscaling](autoscaling.md) capability decides *when* to scale; FMA addresses *how fast* the new capacity becomes ready.
 
 ## Deploy
 

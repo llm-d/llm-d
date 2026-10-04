@@ -256,19 +256,19 @@ Each vLLM instance requires a Mooncake configuration file, pointed to by the `MO
 | `MOONCAKE_CONFIG_PATH` | (required) | Path to `mooncake_config.json` |
 | `PYTHONHASHSEED` | (random) | Must be set to same fixed value across all instances sharing the store |
 
-For deployment recipes, see the [Tiered Prefix Cache Guide — Mooncake Store](../../../../guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store).
+For deployment recipes, see the [Tiered Prefix Cache Guide — Mooncake Store](../../../guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store).
 
 ### Other Connectors
 
 Out-of-tree engines coexist with the native path through a common integration contract on the llm-d side:
 
 - **Serving-stack side** — each engine is already connector-compatible with one or more of vLLM, SGLang (via HiCache), and TensorRT-LLM, so the model server drives lookups, stores, and loads through its standard KV-cache connector API.
-- **Scheduling side** — connectors integrate with llm-d through **KV-Events**: cache mutation notifications that the [KV-Cache Indexer](./kv-indexer.md) consumes to maintain a global view of cache distribution, enabling prefix-aware routing regardless of which backend is in use.
+- **Scheduling side** — connectors integrate with llm-d through **KV-Events**: cache mutation notifications that the [KV-Cache Indexer](indexer.md) consumes to maintain a global view of cache distribution, enabling prefix-aware routing regardless of which backend is in use.
 
 > [!NOTE]
 > llm-d's deployment guides cover LMCache and Mooncake Store today. The integration pattern is the same for KVBM and other connector-compatible engines — they work out-of-the-box on the serving-stack side.
 
-For deployment recipes, see the [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache).
+For deployment recipes, see the [Tiered Prefix Cache Guide](../../../guides/tiered-prefix-cache).
 
 ## Configuration
 
@@ -371,7 +371,7 @@ Any POSIX filesystem is a candidate; the best choice for a given deployment depe
 
 ## Further Reading
 
-- [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache) — Step-by-step deployment guides
+- [Tiered Prefix Cache Guide](../../../guides/tiered-prefix-cache) — Step-by-step deployment guides
 - [llm-d KV-Disaggregation Roadmaps](https://github.com/llm-d/llm-d-kv-cache/issues?q=is%3Aissue%20state%3Aopen%20label%3Aroadmap) — Planned features and improvements across offloading and KV-cache management
 - [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
 - [vLLM KV Offloading Connector](https://vllm.ai/blog/kv-offloading-connector) — Deep dive into vLLM's native offloading

@@ -101,7 +101,7 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps:
 
-1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../../docs/infrastructure/gateway).
+1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../../docs/platform/gateways).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
 ```bash

@@ -18,14 +18,14 @@ llm-d's EPP natively supports the concept of disaggregation, enabling compositio
 
 ## Deploy
 
-See the [P/D Disaggregation guide](../../../guides/pd-disaggregation) for manifests and step-by-step deployment.
+See the [P/D Disaggregation guide](../../guides/pd-disaggregation) for manifests and step-by-step deployment.
 
 ## Architecture
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
-    <img src="../../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
+    <img src="../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
   </picture>
 </p>
 
@@ -45,8 +45,8 @@ During the standard request flow:
 
 ## Observability
 
-P/D disaggregation runs prefill and decode as independently scaled pools joined by a NIXL KV transfer, so the signals that matter are pool **balance** and transfer health rather than a single aggregate latency. The [P/D guide's Observability & Troubleshooting section](../../../guides/pd-disaggregation/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes, backed by the shared [PromQL](../../operations/observability/promql.md#prefilldecode-disaggregation) and [metric](../../operations/observability/metrics.md) references.
+P/D disaggregation runs prefill and decode as independently scaled pools joined by a NIXL KV transfer, so the signals that matter are pool **balance** and transfer health rather than a single aggregate latency. The [P/D guide's Observability & Troubleshooting section](../../guides/pd-disaggregation/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes, backed by the shared [PromQL](../operations/observability/promql.md#prefilldecode-disaggregation) and [metric](../operations/observability/metrics.md) references.
 
 ## Further Reading
 
-See [PD Architecture](../../architecture/advanced/disaggregation/README.md) for more details.
+See [PD Architecture](../architecture/disaggregation.md) for more details.

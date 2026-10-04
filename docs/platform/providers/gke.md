@@ -177,7 +177,7 @@ For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` ov
 
 When deploying large-scale model inference on GKE clusters (such as multi-replica prefill and decode deployments), concurrent model weight downloads across multiple pods can trigger Hugging Face HTTP 429 Rate Limiting errors, leading to container startup timeouts.
 
-For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../../operations/model-loading-and-startup.md).
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../operations/scaling/model-loading.md).
 
 ### Google Cloud Storage Integration (Recommended for Production)
 
@@ -189,7 +189,7 @@ For step-by-step instructions, see the [GKE Hugging Face GCS Transfer Guide](htt
 
 For all TPU machines, follow the [TPUs in GKE documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
 
-For Ironwood (TPU7x), GKE supports dynamic slicing: TPU capacity is provisioned as fixed sub-blocks and partitioned into workload-shaped sub-slices (e.g. `2x2x1`, `2x2x2`) at scheduling time, improving recovery time, startup latency, and fleet utilization. See [TPU Dynamic Slicing on GKE](./dynamic-slicing/README.md) for cluster setup and the corresponding llm-d model server recipes.
+For Ironwood (TPU7x), GKE supports dynamic slicing: TPU capacity is provisioned as fixed sub-blocks and partitioned into workload-shaped sub-slices (e.g. `2x2x1`, `2x2x2`) at scheduling time, improving recovery time, startup latency, and fleet utilization. See [TPU Dynamic Slicing on GKE](gke-tpu-dynamic-slicing.md) for cluster setup and the corresponding llm-d model server recipes.
 
 ### Monitoring
 

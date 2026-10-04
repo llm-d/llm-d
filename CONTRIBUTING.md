@@ -321,7 +321,7 @@ alphabetically after positioned siblings and use an auto-generated label.
 
 To add a new infrastructure provider to our well-lit paths, we request the following support:
 
-* Documentation on configuring the platform to support one or more [well-lit path guides](../../guides/README.md#well-lit-path-guides)
+* Documentation on configuring the platform to support one or more [well-lit path guides](guides/README.md#well-lit-path-guides)
 * The appropriate configuration contributed to the guide to deal with provider specific variation
 * An automated test environment that validates the supported guides
 * At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.

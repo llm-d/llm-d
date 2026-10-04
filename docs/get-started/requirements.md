@@ -10,7 +10,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
-| Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
+| Google | [TPU](../platform/providers/gke.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
@@ -55,9 +55,9 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 ## Google TPU
 
-Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
+Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../platform/providers/gke.md) for cluster setup.
 
-On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/dynamic-slicing/README.md).
+On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../platform/providers/gke-tpu-dynamic-slicing.md).
 
 ## AMD ROCm
 

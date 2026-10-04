@@ -20,9 +20,9 @@ llm-d uses the APIs defined in the Gateway API Inference Extension (GAIE) projec
 
 | CRD |  Purpose | Provider |
 |-----|----------|----------|
-| [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. | `kubernetes-sigs/gateway-api-inference-extension` |
-| [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. | `llm-d/llm-d-router` |
-| [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. | `llm-d/llm-d-router` |
+| [InferencePool](api/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. | `kubernetes-sigs/gateway-api-inference-extension` |
+| [InferenceObjective](api/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. | `llm-d/llm-d-router` |
+| [InferenceModelRewrite](api/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. | `llm-d/llm-d-router` |
 
 The versions for the GAIE CRDs are derived from the [env.sh file](../../guides/env.sh). This makes upgrades easy as they are stored in a common location across guides.
 
@@ -128,7 +128,7 @@ Well-Lit Paths are tested, benchmarked deployment recipes that show off llm-d's 
 > IB and RoCE networking, which is not yet standardized.
 > Users can adapt the examples to other platforms as needed.
 
-See the [full list of guides](../well-lit-paths/README.md) for more details.
+See the [full list of capabilities](../capabilities/README.md) for more details.
 
 ## 5. Gateways
 

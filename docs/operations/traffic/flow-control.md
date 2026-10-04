@@ -72,4 +72,4 @@ In the background EPP monitors the model servers for saturation. If it detects s
 
 ## Further Reading
 
-See [Flow Control architecture](../../architecture/core/router/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](../../architecture/router/epp/flow-control.md) for full details of the design.

@@ -68,4 +68,4 @@ The precise implementation provides 100% accuracy by leveraging actual token dat
 
 ### Composition with KV Cache Management
 
-Both implementations are part of the broader **KV Cache Management** ecosystem in llm-d. While the Approximate implementation is self-contained, the Precise implementation relies on the [KV-Cache Indexer](kv-indexer.md) and can work in tandem with [KV Offloading](kv-offloader.md) to manage cache state across accelerator and host memory boundaries.
+Both implementations are part of the broader **KV Cache Management** ecosystem in llm-d. While the Approximate implementation is self-contained, the Precise implementation relies on the [KV-Cache Indexer](indexer.md) and can work in tandem with [KV Offloading](offloading.md) to manage cache state across accelerator and host memory boundaries.

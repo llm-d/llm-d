@@ -17,7 +17,7 @@ your model servers via the llm-d EPP.
 
 ## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
-Install the required CRDs by following the [CRD installation guide](./install-crds.md).
+Install the required CRDs by following the [CRD installation guide](install-crds.md).
 
 ## Step 2: Install Envoy AI Gateway
 
@@ -195,7 +195,7 @@ helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
 kubectl delete gatewayclass envoy-ai-gateway
 ```
 
-To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [CRD installation guide](./install-crds.md#uninstalling-gateway-api-crds).
+To uninstall the Gateway API and Gateway API Inference Extension CRDs, see the [CRD installation guide](install-crds.md#uninstalling-gateway-api-crds).
 
 ## Troubleshooting
 
