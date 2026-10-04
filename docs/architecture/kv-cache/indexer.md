@@ -1,4 +1,4 @@
-# KV-Cache Indexer
+# KV cache indexer
 
 The **KV-Cache Indexer** is a component of the **llm-d Router** (residing within the **EPP**) that enables precise prefix-cache-aware routing functionality.
 

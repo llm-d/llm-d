@@ -1,4 +1,4 @@
-# llm-d Infrastructure Providers
+# Providers
 
 This directory contains documentation specific to each Kubernetes provider for deploying llm-d, as well as troubleshooting and known issues.
 

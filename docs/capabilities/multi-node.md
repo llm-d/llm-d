@@ -1,4 +1,4 @@
-# Multi-Node Serving Orchestration
+# Multi-node serving
 
 ## (Optional) Install LeaderWorkerSet for multi-host inference
 

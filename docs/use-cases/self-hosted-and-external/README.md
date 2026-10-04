@@ -1,4 +1,4 @@
-# Serve External APIs
+# Serve self-hosted and external models
 
 This section covers how to deploy an API gateway or proxy layer on top of **llm-d** to manage traffic across both self-hosted LLM workloads and third-party external model APIs (such as Google Gemini, OpenAI, or Anthropic).
 

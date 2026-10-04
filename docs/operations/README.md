@@ -1,4 +1,4 @@
-# Operational Excellence
+# Operations
 
 Operational Excellence guidelines focus on overarching Day-2 site reliability engineering, cluster-wide telemetry frameworks, and safe lifecycle rollout strategies for generative AI inference deployments.
 

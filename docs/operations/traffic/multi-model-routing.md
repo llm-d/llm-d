@@ -1,4 +1,4 @@
-# Multi-Model Routing
+# Multi-model and LoRA routing
 
 Organizations often need to serve multiple large language models behind a single API endpoint. A chatbot application might use a Qwen model for conversational tasks, while a recommendation system uses DeepSeek for complex reasoning. Each base model may also have multiple Low-Rank Adaptation (LoRA) fine-tuned variants serving different use cases.
 

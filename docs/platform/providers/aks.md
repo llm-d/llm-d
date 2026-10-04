@@ -1,4 +1,4 @@
-# Deploying llm-d on Azure Kubernetes Service
+# Azure (AKS)
 
 ## Status and scope
 

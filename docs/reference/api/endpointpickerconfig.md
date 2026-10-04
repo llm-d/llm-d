@@ -1,4 +1,4 @@
-# EndpointPickerConfig (EPP Configuration)
+# EndpointPickerConfig
 
 `EndpointPickerConfig` defines the internal configuration for the **Endpoint Picker (EPP)**. Unlike Kubernetes resources (like `InferencePool`), this is a configuration schema used to initialize the EPP binary, typically provided via a ConfigMap or a local file.
 

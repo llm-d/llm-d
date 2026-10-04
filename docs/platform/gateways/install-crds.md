@@ -1,4 +1,4 @@
-# Installing Gateway API CRDs
+# Install Gateway API CRDs
 
 Before deploying any Gateway provider, you must install the Gateway API and Gateway API Inference Extension CRDs.
 

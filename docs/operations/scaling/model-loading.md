@@ -1,4 +1,4 @@
-# Model Loading and Startup Acceleration
+# Model loading and startup
 
 Use this guide to optimize model startup time in existing llm-d deployments, covering model-file retrieval, weight loading, compilation, and other engine initialization.
 

@@ -1,4 +1,4 @@
-# llm-d on minikube
+# minikube
 
 ## Prerequisites
 

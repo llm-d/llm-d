@@ -1,4 +1,4 @@
-# Artifacts
+# Images, charts and versions
 
 This page lists the llm-d release artifacts and dependencies:
 

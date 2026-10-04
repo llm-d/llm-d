@@ -1,4 +1,4 @@
-# Batch Inference
+# Batch inference
 
 llm-d supports batch and offline inference workloads through two components that can be deployed independently or together:
 

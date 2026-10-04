@@ -1,4 +1,4 @@
-# P/D Disaggregation
+# P/D disaggregation
 
 LLM inference has two computationally distinct phases:
 

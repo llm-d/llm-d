@@ -1,4 +1,4 @@
-# Infrastructure & Environments
+# Platform setup
 
 This section covers the hardware and software requirements for llm-d, cluster configuration, accelerator specs, and platform adaptations across diverse physical execution environments.
 

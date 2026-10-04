@@ -1,4 +1,4 @@
-# Disaggregated Serving Operations
+# Disaggregation operations
 
 Disaggregated serving separates the **prefill** and **decode** stages of LLM inference onto different model server instances. While disaggregated serving offers superior performance and resource efficiency, it introduces operational complexity around dynamic connections, request cancellation, fault tolerance, and safe rollouts.
 

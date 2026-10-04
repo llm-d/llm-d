@@ -1,4 +1,4 @@
-# Workloads
+# Use cases
 
 A workload guide provides the recommended, cohesive deployment for serving a production workload on llm-d. Each defines the workload, then composes the relevant [capability building blocks](../capabilities/README.md) into one stack tuned to serve it.
 

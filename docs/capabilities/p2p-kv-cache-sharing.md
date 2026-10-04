@@ -1,4 +1,4 @@
-# [Experimental] Enable P2P Prefix Cache Sharing
+# P2P KV cache sharing (experimental)
 
 Prefix caches are per-pod, but their content is often fleet-wide: shared
 system prompts, common documents, session histories. Prefix-aware routing

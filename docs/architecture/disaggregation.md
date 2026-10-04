@@ -1,4 +1,4 @@
-# Disaggregated Serving
+# Disaggregation
 
 ## Functionality
 

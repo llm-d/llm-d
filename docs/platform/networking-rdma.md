@@ -1,4 +1,4 @@
-# Remote Direct Memory Access (RDMA) and Networking Configuration
+# Networking and RDMA
 
 ## Why Networking Matters
 

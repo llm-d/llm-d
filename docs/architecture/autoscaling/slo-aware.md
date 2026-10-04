@@ -1,4 +1,4 @@
-# SLO-Aware Autoscaling with KEDA — the control law
+# SLO-aware autoscaling
 
 This is the full derivation of the control law used by the
 [SLO-aware autoscaling guide](../../../guides/workload-autoscaling/slo-aware/README.md):

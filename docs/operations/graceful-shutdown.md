@@ -1,4 +1,4 @@
-# Graceful Shutdown & Request Draining
+# Graceful shutdown and draining
 
 ## Overview
 

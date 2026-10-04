@@ -1,4 +1,4 @@
-# LiteLLM for Hosting llm-d Inference Stack and External APIs
+# LiteLLM
 
 This guide demonstrates how to deploy a **LiteLLM proxy** (Helm chart, PostgreSQL-backed) on Kubernetes to provide a single, OpenAI-compatible entry point that fronts both an existing **llm-d inference stack** and external LLM provider APIs.
 

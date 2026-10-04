@@ -1,4 +1,4 @@
-# KEDA with EPP Metrics
+# KEDA with EPP metrics
 
 The Endpoint Picker (EPP) and KEDA integration scales model server replicas
 using demand-side signals from EPP. Rather than relying on coarse resource

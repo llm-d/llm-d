@@ -1,4 +1,4 @@
-# Fast Model Actuation
+# Fast model actuation
 
 In Kubernetes, once a Pod has been allocated some GPUs it keeps that exclusive allocation for the rest of the Pod's lifetime. Scaling a model server up or down therefore means creating or destroying whole pods, and each new pod pays a full **cold start** — pull the image, initialize the runtime, load gigabytes of weights, and compile CUDA graphs — before it can serve a single request. On a shared GPU pool, swapping between model variants repeats that cold start on every swap.
 

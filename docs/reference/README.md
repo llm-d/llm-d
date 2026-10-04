@@ -1,4 +1,4 @@
-# API Reference
+# Reference
 
 ## Core Kubernetes APIs
 

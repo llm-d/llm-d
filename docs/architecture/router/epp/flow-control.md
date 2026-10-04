@@ -1,4 +1,4 @@
-# Flow Control
+# Flow control internals
 
 The Flow Control layer within the EPP is a critical mechanism for pool defense and multi-tenancy. It protects the pool of model servers from overload by shifting intelligent queuing to the gateway, enforcing strict priority and tenant-aware fairness.
 
@@ -390,7 +390,7 @@ The `Drop Reason` column lists the value emitted in the `x-llm-d-request-dropped
 
 ### Extension Points
 
-The Flow Control layer behavior is customizable via several extension points implemented as plugins. For details on how to register and reference these plugins in your config, see the [Flow Control section in the Configuration Guide](../../../reference/epp-configuration.md#flowcontrol):
+The Flow Control layer behavior is customizable via several extension points implemented as plugins. For details on how to register and reference these plugins in your config, see the [Flow Control section in the Configuration Guide](../../../reference/epp-configuration.md#flow-control):
 
 1. **Fairness Policy**: Determines how to share dispatch opportunities between different flows within the exact same Priority level.
 2. **Ordering Policy**: Determines the order in which requests are served within a specific flow.

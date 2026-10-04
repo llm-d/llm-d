@@ -1,4 +1,4 @@
-# Observability Setup
+# Setup
 
 This page explains how to set up Prometheus, Grafana, and distributed tracing for an llm-d deployment. All guides reference this page — set this up once and it works across every guide.
 

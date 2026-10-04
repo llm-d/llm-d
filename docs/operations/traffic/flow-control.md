@@ -1,4 +1,4 @@
-# Flow Control
+# Flow control and fairness
 
 Flow Control feature enables intelligent request queuing. Request queuing is useful for multiple reasons:
 

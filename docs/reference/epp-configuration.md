@@ -1,4 +1,4 @@
-# Configuration
+# EPP configuration
 
 The `EndpointPickerConfig` is the central configuration for the Endpoint Picker (EPP), defining the graph of plugins and parameters that drive request handling, flow control, and scheduling decisions.
 

@@ -1,4 +1,4 @@
-# Kong AI Gateway for Routing llm-d Inference Stack and External APIs
+# Kong AI Gateway
 
 This guide demonstrates how to deploy **Kong AI Gateway** (Helm chart, DB-less mode, Kong Ingress Controller) on Kubernetes to route traffic across an existing **llm-d inference stack** and external LLM provider APIs.
 

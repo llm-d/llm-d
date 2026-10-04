@@ -1,4 +1,4 @@
-# PromQL Query Reference
+# PromQL reference
 
 Ready-to-use PromQL queries for monitoring llm-d deployments. Use these in the Prometheus UI or as the basis for Grafana panels. For a default set of ready-to-apply alerts built on these metrics, see [Alerting](alerting.md).
 

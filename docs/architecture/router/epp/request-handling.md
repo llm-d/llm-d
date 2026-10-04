@@ -1,4 +1,4 @@
-# Request Handler
+# Request handling
 
 ## Functionality
 

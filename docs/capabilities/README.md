@@ -1,4 +1,4 @@
-# Core Capability Building Blocks
+# Capabilities
 
 Core Capability Building Blocks represent the individual functional optimization, intelligent routing, and physical inference execution features of llm-d.
 

@@ -1,4 +1,4 @@
-# Workload Variant Autoscaler (WVA) — Deprecated
+# Workload Variant Autoscaler (deprecated)
 
 > [!WARNING]
 > **Deprecated.** The Workload Variant Autoscaler is deprecated and is no longer

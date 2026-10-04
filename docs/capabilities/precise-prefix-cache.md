@@ -1,4 +1,4 @@
-# Precise Prefix Cache Routing
+# Precise prefix-cache routing
 
 The model server is the most accurate source of truth for what's cached on its own GPUs and memory tiers. vLLM, SGLang and NVIDIA TensorRT-LLM publish every cache change as an event; llm-d subscribes to that stream, builds a near-real-time view of resident blocks across the fleet, and scores requests against it. The prefix-affinity score is combined with the standard load-aware scorers, similarly to the [Optimized Baseline](optimized-baseline.md) path.
 

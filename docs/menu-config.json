@@ -360,7 +360,7 @@
     },
     "architecture/payload-processing": {
       "position": 9,
-      "label": "Inference payload processing"
+      "label": "Inference Payload Processor (IPP)"
     },
     "reference/api/inferencepool": {
       "position": 1,

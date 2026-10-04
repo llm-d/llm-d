@@ -1,4 +1,4 @@
-# Agentic Serving
+# Serve agentic workloads
 
 Agents are becoming the dominant shape of production LLM traffic. A single user goal expands into
 a long *program* of model calls interleaved with tool execution — coding agents, deep-research

@@ -1,4 +1,4 @@
-# Predicted Latency-Based Scheduling
+# Predicted-latency routing
 
 llm-d's [optimized baseline guide](optimized-baseline.md) leverages load signals and prefix-cache affinity to schedule requests, combining the signals together with heuristics.
 

@@ -1,4 +1,4 @@
-# Multimodal Workload Serving
+# Serve multimodal workloads
 
 Multimodal inputs are fundamentally changing the shape of production LLM traffic.
 A single prompt expands beyond text to include dense, non-text modalities—high-resolution images, video frames, or audio clips.

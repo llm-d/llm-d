@@ -1,4 +1,4 @@
-# GKE TPU Observability
+# TPU metrics on GKE
 
 Use this reference to interpret GKE TPU device-plugin metrics and troubleshoot
 missing data. Follow the [TPU recipe](../../../guides/recipes/observability/tpu)

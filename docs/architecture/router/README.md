@@ -1,4 +1,4 @@
-# llm-d Router
+# Router
 
 The **llm-d Router** is the intelligent entry point for inference requests in the llm-d stack. It provides sophisticated, LLM-aware load balancing, request queuing, and policy enforcement without reimplementing a full-featured network proxy.
 

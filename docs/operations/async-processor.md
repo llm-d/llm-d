@@ -1,4 +1,4 @@
-# llm-d Async Processor Operations Guide
+# Async processor operations
 
 This guide covers operational best practices, scaling behavior, and container sizing recommendations for the [Async Processor](https://github.com/llm-d/llm-d-async).
 

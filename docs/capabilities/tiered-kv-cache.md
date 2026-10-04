@@ -1,4 +1,4 @@
-# Tiered Prefix Cache
+# Tiered KV cache
 
 Given the multi-turn nature of agentic workloads, prefix-cache re-use is a critical factor for high performance inference.
 

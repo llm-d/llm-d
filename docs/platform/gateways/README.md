@@ -1,4 +1,4 @@
-# Gateway Guides
+# Gateways
 
 This directory contains guides for deploying a Kubernetes Gateway as a proxy for the **llm-d Router**. For more information on this capability, see [llm-d Router in Gateway Mode](../../architecture/router/proxy.md#gateway-mode-inference-gateway).
 

@@ -1,4 +1,4 @@
-# vLLM Model-Aware Readiness Probes
+# Readiness probes (vLLM)
 
 ## Overview
 
