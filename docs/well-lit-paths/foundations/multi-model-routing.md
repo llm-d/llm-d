@@ -5,7 +5,7 @@ Organizations often need to serve multiple large language models behind a single
 Traditional path-based routing cannot distinguish between these models when they share the same API path (`/v1/chat/completions`). The **Inference Payload Processor (IPP)** solves this by extracting the model name from the request body and routing to the appropriate InferencePool.
 
 > [!NOTE]
-> This capability requires IPP deployment. For simpler deployments serving a single model, see the [Optimized Baseline](optimized-baseline.md) guide instead.
+> This capability requires IPP deployment. For simpler deployments serving a single model, see the [Optimized Baseline](../../../guides/optimized-baseline/README.md) guide instead.
 
 ## Deploy
 

@@ -9,6 +9,16 @@
 
 ## Overview
 
+Traditional HTTP requests are fast, uniform, and cheap. Standard round-robin request scheduling strategies balance this load well.
+
+LLM requests break all three assumptions. They are:
+
+* **Multi-turn** - conversations and agentic tool loops send the same growing prefix repeatedly
+* **Slow** - a single request can take over a minute generating tokens
+* **Non-uniform** - range from 1000s of reasoning tokens to a 100k+ context tokens
+
+The llm-d Router injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **server load metrics**.
+
 This guide deploys the recommended out of the box [configuration](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md) for most vLLM and SGLang deployments, reducing tail latency and increasing throughput through load-aware and prefix-cache aware balancing.
 
 The optimized-baseline defaults to two main routing criteria:
@@ -21,25 +31,27 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 
 ## Supported Accelerators and Model Servers
 
-This guide includes configurations for the following accelerators. Each accelerator serves exactly one model:
+This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves exactly one model:
 
-| Backend             | Directory          | Served model                       | Model servers                  | Notes                                                           |
-| ------------------- | ------------------ | ---------------------------------- | ------------------------------ | --------------------------------------------------------------- |
-| NVIDIA GPU          | `gpu`              | `Qwen/Qwen3-32B`                   | vLLM, SGLang                   | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
-| AMD GPU             | `amd`              | `Qwen/Qwen3-32B`                   | vLLM, SGLang                   | AMD Instinct MI355X GPUs (`INFRA_PROVIDER` options: `base`, `gke`, `amd-ci`) |
-| Intel XPU           | `xpu`              | `Qwen/Qwen3-0.6B`                  | vLLM                           | Intel Data Center GPU Max 1550+                                 |
-| Google TPU v6e      | `tpu/v6`           | `Qwen/Qwen3-32B`                   | vLLM                           | GKE TPU                                                         |
-| Google TPU v7       | `tpu/v7`           | `Qwen/Qwen3-32B`                   | vLLM                           | GKE TPU                                                         |
-| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | vLLM     | TPU7x sub-slices formed on demand, see [below](#2-deploy-the-model-server) |
-| Rebellions NPU      | `npu`              | `openai/gpt-oss-120b`              | vLLM                           | Rebellions NPU via DRA                                          |
-| Iluvatar GPU        | `iluvatar`         | `deepseek-ai/DeepSeek-V4-Flash`    | vLLM                           | Iluvatar BI-V150 (dual-die)                                     |
-| MetaX GPU           | `metax`            | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | vLLM                  | MetaX GPU                                                       |
-| CPU                 | `cpu`              | `meta-llama/Llama-3.2-3B-Instruct` | vLLM                           | x86 with bf16 acceleration: AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32` |
+<!-- guide:support start -->
+| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | Default configuration; `INFRA_PROVIDER` options: `base`, `gke` |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | AMD Instinct MI355X GPUs; `INFRA_PROVIDER` options: `base`, `amd-ci` |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | Intel Data Center GPU Max 1550+ |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | GKE TPU |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | GKE TPU |
+| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | TPU7x sub-slices formed on demand by GKE dynamic slicing and Kueue; see [below](#2-deploy-the-model-server) |
+| Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | Allocated via DRA |
+| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | x86 with bf16 acceleration: AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32` |
+| Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | Iluvatar BI-V150 (dual-die) |
+| MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — |  |
+
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
 
 > [!NOTE]
-> SGLang configurations exist for NVIDIA and AMD GPUs only; on the other backends this guide runs on vLLM.
->
-> The **Served model** column shows the model each backend serves. When it is not `Qwen/Qwen3-32B`, set `MODEL` to it so the verification steps query the served model.
+> The **Served model** column shows the model each accelerator serves. When it is not `Qwen/Qwen3-32B`, set `MODEL` to it so the verification steps query the served model.
 
 ## Prerequisites
 
@@ -51,7 +63,9 @@ This guide includes configurations for the following accelerators. Each accelera
 
 - (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
-**Set the branch and clone the llm-d repo** (if you already have a checkout, skip this and run the remaining commands from inside it):
+### Get the guide
+
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the manifests, Helm values, and Kustomize overlays it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
 
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
@@ -62,6 +76,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.clone end -->
 
+### Configure the environment
+
 **Set the guide-specific environment variables:**
 
 <!-- guide:env.static start -->
@@ -71,8 +87,8 @@ export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu
-export MODEL_SERVER=vllm # options: vllm, sglang
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax
+export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2
 export MODEL=Qwen/Qwen3-32B
@@ -120,8 +136,27 @@ kubectl create secret generic llm-d-hf-token \
 ```bash
 # Paths to values files
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+```
+<!-- variants:start -->
+<details open data-when="MODEL_SERVER=vllm,sglang">
+<summary><b>vLLM / SGLang</b></summary>
+
+```bash
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 ```
+
+</details>
+<details data-when="MODEL_SERVER=trtllm">
+<summary><b>TensorRT-LLM</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
@@ -136,7 +171,11 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-#### Standalone Mode
+**Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
+
+<!-- tabs:start group=mode -->
+<details open>
+<summary><b>Standalone Mode</b></summary>
 
 This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
 
@@ -154,8 +193,9 @@ helm install ${GUIDE_NAME} \
 
 To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recipes](../recipes/router/README.md).
 
+</details>
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -178,12 +218,17 @@ helm install ${GUIDE_NAME} \
 <!-- guide:deploy.gateway end -->
 
 </details>
+<!-- tabs:end -->
 
 ### 2. Deploy the Model Server
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
 
-**Apply the Kustomize overlays** for your specific backend:
+**Apply the Kustomize overlays** for your specific backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere):
+
+<!-- tabs:start group=modelserver -->
+<details open>
+<summary><b>Default</b></summary>
 
 <!-- guide:deploy.modelserver.standard start -->
 ```bash
@@ -192,7 +237,8 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver.standard end -->
 
-<details>
+</details>
+<details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
 <summary><b>Google TPU v7 (dynamic slicing)</b></summary>
 
 <!-- guide:deploy.modelserver.dynamic_slice start -->
@@ -233,6 +279,7 @@ Notes:
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
 
 </details>
+<!-- tabs:end -->
 
 **(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
@@ -251,6 +298,10 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 
 #### Key metrics for this path
 
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
 | Signal | Why it matters for the optimized baseline | Where to look |
 |--------|-------------------------------------------|---------------|
 | Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
@@ -259,7 +310,27 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 | Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
 | TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
 
-> SGLang deployments expose the equivalent signals under `sglang_*` (`sglang_num_running_reqs`, `sglang_token_usage`, `sglang_cache_hit_rate`); the PromQL reference lists both.
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+SGLang deployments expose the equivalent signals under `sglang_*`; the [PromQL reference](../../docs/operations/observability/promql.md) lists both engines.
+
+| Signal | Why it matters for the optimized baseline | Where to look |
+|--------|-------------------------------------------|---------------|
+| Per-pod load (`llm_d_epp_request_total`, `sglang_num_running_reqs`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`sglang_cache_hit_rate`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization (`sglang_token_usage`) | Drives the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+
+</details>
+<details>
+<summary><b>TensorRT-LLM</b></summary>
+
+`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/core/model-servers.md) for the flags that enable them.
+
+</details>
+<!-- tabs:end -->
 
 #### Common failure modes
 
@@ -273,7 +344,9 @@ For alert rules covering these signals, see [Alerting](../../docs/operations/obs
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+<!-- tabs:start group=mode -->
+<details open>
+<summary><b>Standalone Mode</b></summary>
 
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
@@ -281,6 +354,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 ```
 <!-- guide:verify.endpoint.standalone end -->
 
+</details>
 <details>
 <summary><b>Gateway Mode</b></summary>
 
@@ -291,6 +365,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 <!-- guide:verify.endpoint.gateway end -->
 
 </details>
+<!-- tabs:end -->
 
 ### 2. Send Test Requests
 
@@ -346,9 +421,26 @@ done
 
 What to expect:
 
-**vLLM**: one pod reports most of the 10 requests in `vllm:request_success_total`, and its `vllm:prefix_cache_hits_total` is a large fraction of `vllm:prefix_cache_queries_total` (every request after the first reuses the cached prefix). The other pods show few or none of these requests.
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
 
-**SGLang**: one pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+One pod reports most of the 10 requests in `vllm:request_success_total`, and its `vllm:prefix_cache_hits_total` is a large fraction of `vllm:prefix_cache_queries_total` (every request after the first reuses the cached prefix). The other pods show few or none of these requests.
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+One pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+
+</details>
+<details>
+<summary><b>TensorRT-LLM</b></summary>
+
+The command above reads vLLM and SGLang counters only. For `trtllm-serve`, query `/prometheus/metrics` on each pod instead (replace `:8000/proxy/metrics` with `:8000/proxy/prometheus/metrics`) and compare `trtllm_num_requests_running` across pods.
+
+</details>
+<!-- tabs:end -->
 
 If the requests are spread evenly and hit rates stay near zero, prefix-cache affinity is not taking effect; see [Common failure modes](#common-failure-modes). Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
@@ -356,13 +448,18 @@ If the requests are spread evenly and hit rates stay near zero, prefix-cache aff
 
 To remove the deployed components:
 
+<!-- tabs:start group=modelserver -->
+<details open>
+<summary><b>Default</b></summary>
+
 <!-- guide:cleanup.modelserver.standard start -->
 ```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 ```
 <!-- guide:cleanup.modelserver.standard end -->
 
-<details>
+</details>
+<details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
 <summary><b>Google TPU v7 (dynamic slicing)</b></summary>
 
 <!-- guide:cleanup.modelserver.dynamic_slice start -->
@@ -374,6 +471,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 <!-- guide:cleanup.modelserver.dynamic_slice end -->
 
 </details>
+<!-- tabs:end -->
 
 <!-- guide:cleanup.rest start -->
 ```bash

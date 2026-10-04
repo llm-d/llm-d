@@ -1,5 +1,64 @@
 name: optimized-baseline
 
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+support:
+  engines: {vllm: vLLM, sglang: SGLang, trtllm: TensorRT-LLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default configuration; `INFRA_PROVIDER` options: `base`, `gke`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated, sglang: validated, trtllm: community}
+    amd:
+      label: AMD GPU
+      notes: "AMD Instinct MI355X GPUs; `INFRA_PROVIDER` options: `base`, `amd-ci`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated, sglang: community}
+    xpu:
+      label: Intel XPU
+      notes: "Intel Data Center GPU Max 1550+"
+      model: Qwen/Qwen3-0.6B
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE TPU"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "GKE TPU"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+    "tpu/v7-dynamic-slice":
+      label: Google TPU v7 (dynamic slicing)
+      notes: "TPU7x sub-slices formed on demand by GKE dynamic slicing and Kueue; see [below](#2-deploy-the-model-server)"
+      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      engines: {vllm: community}
+    npu:
+      label: Rebellions NPU
+      notes: "Allocated via DRA"
+      model: openai/gpt-oss-120b
+      engines: {vllm: community}
+    cpu:
+      label: CPU
+      notes: "x86 with bf16 acceleration: AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`"
+      model: meta-llama/Llama-3.2-3B-Instruct
+      engines: {vllm: community}
+    iluvatar:
+      label: Iluvatar GPU
+      notes: "Iluvatar BI-V150 (dual-die)"
+      model: deepseek-ai/DeepSeek-V4-Flash
+      engines: {vllm: community}
+    metax:
+      label: MetaX GPU
+      model: deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+      engines: {vllm: community}
+
 env:
   static:
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
@@ -12,9 +71,10 @@ env:
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", npu, cpu]}
-    MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
-    INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]} # amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd only)
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", npu, cpu, iluvatar, metax]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
+    # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*, cpu); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
+    INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
     TPU_SLICE_TOPOLOGY: {default: 2x2x1, values: [2x2x1, 2x2x2]} # only for ACCELERATOR_TYPE=tpu/v7-dynamic-slice
 
     MODEL: {default: "Qwen/Qwen3-32B"}
@@ -47,7 +107,13 @@ deploy:
     - run: |
         # Paths to values files
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+    - when: {MODEL_SERVER: [vllm, sglang]}
+      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+    # trtllm-serve needs its own values: modelServers.type and the /prometheus/metrics path.
+    - when: {MODEL_SERVER: [trtllm]}
+      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}

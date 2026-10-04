@@ -3,8 +3,8 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # Mirrors the vLLM/SGLang variants: 8 replicas × TP=2 = 16 GPUs total.
-  replicas: 8
+  # Mirrors the vLLM/SGLang variants: 2 replicas × TP=2 = 4 GPUs total.
+  replicas: 2
   template:
     spec:
       containers:

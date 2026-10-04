@@ -1,6 +1,6 @@
 # Predicted Latency-Based Scheduling
 
-llm-d's [optimized baseline guide](./optimized-baseline.md) leverages load signals and prefix-cache affinity to schedule requests, combining the signals together with heuristics.
+llm-d's [optimized baseline guide](../../../guides/optimized-baseline/README.md) leverages load signals and prefix-cache affinity to schedule requests, combining the signals together with heuristics.
 
 This path is for operators who want to adopt predicted latency-based scheduling - which uses an XGBoost model trained online - to make scheduling decisions. This strategy is useful when:
 
