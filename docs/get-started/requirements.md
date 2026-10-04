@@ -149,3 +149,28 @@ CPU-only inference is supported for deployments without GPU accelerators. This e
 **Set `MODEL` when running the guide's steps.** The CPU overlay serves
 `meta-llama/Llama-3.2-3B-Instruct`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
 `MODEL=meta-llama/Llama-3.2-3B-Instruct` so the validation and benchmark steps address the served model.
+
+## Cluster and host requirements
+
+llm-d tests on the following configurations, supporting leading-edge AI accelerators:
+
+* Kubernetes: 1.29 or newer
+  * Your cluster scheduler must support placing multiple pods within the same networking domain for running multi-host inference
+  * Kubernetes v1.33.0+ is recommended for complete sidecar init container support (restartPolicy: Always). If using Kubernetes v1.28.x or below, pods may get stuck in Init:0/1 state due to incomplete sidecar support.
+* Recent generation datacenter-class accelerators
+  * AMD MI250X or newer
+  * Google TPU v5e, v6e, and newer
+  * NVIDIA L4, A100, H100, H200, B200, and newer
+* Fast internode networking
+  * For accelerators
+    * AMD Infinity Fabric, InfiniBand NICs
+    * Google TPU ICI
+    * NVIDIA NVLink, InfiniBand or RoCE NICs
+  * For hosts and north/south traffic
+    * Fast (100Gbps+ aggregate throughput) datacenter NICs
+* Hosts
+  * 80+ x86 or ARM cores per machine
+  * 500GiB or more of memory
+  * PCIe 5+
+
+Older configurations may function, especially slightly older accelerators, but testing is best-effort.

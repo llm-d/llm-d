@@ -316,3 +316,12 @@ files or `sidebar_position` / `sidebar_label` frontmatter to docs.
 When you **add a page or folder**, add its entry to `docs/menu-config.json` so it gets a
 human-readable label and an explicit position. Items with no entry still appear, but sort
 alphabetically after positioned siblings and use an auto-generated label.
+
+## Adding an infrastructure provider
+
+To add a new infrastructure provider to our well-lit paths, we request the following support:
+
+* Documentation on configuring the platform to support one or more [well-lit path guides](../../guides/README.md#well-lit-path-guides)
+* The appropriate configuration contributed to the guide to deal with provider specific variation
+* An automated test environment that validates the supported guides
+* At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.

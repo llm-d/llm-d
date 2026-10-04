@@ -183,3 +183,38 @@ Clients that publish requests or consume results can import the Go modules relea
 |------------|----------|-------------|
 | [llm-d/llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) | Python | Benchmarking framework |
 | [llm-d/llm-d-inference-sim](https://github.com/llm-d/llm-d-inference-sim) | Go | GPU-free vLLM simulator |
+
+## Building your own vLLM image
+
+llm-d provides container images derived from the [vLLM upstream](https://github.com/vllm-project/vllm/tree/main/docker) that are tested with the supported hardware and have all necessary optimized libraries installed. To build and deploy with your own image, you should integrate:
+
+* General
+  * vLLM: 0.10.0 or newer
+  * NIXL: 0.5.0 or newer
+  * UCX: 0.19.0 or newer
+* NVIDIA-specific
+  * NVSHMEM: 3.3.9 or newer
+
+llm-d guides expect a series of conventions to be followed in the vLLM image:
+
+* General
+  * At least one vLLM compatible Python version must be available (3.9 to 3.12)
+    * We recommend at least 3.10+
+  * Required system libraries must be bundled
+    * `LD_LIBRARY_PATH` must contain all necessary system libraries for vLLM to function
+  * `PATH` must contain the vLLM binary and directly invoking `vllm` should start with the correct Python environment (i.e. a virtual env)
+  * The default image command (or if not specified, entrypoint) should start vLLM in a serving configuration and accept additional arguments
+    * A pod with `args` should see all arguments passed to vLLM
+    * A pod with `command: ["vllm", "serve"]` should override any image defaults
+* Caches
+  * Default compilation cache directory environment variables under a shared root path under `/tmp/cache/compile/<NAME>`
+    * I.e. set `VLLM_CACHE_ROOT=/tmp/cache/compile/vllm` to ensure vLLM compiles to a temporary directory
+    * Future versions of vLLM will recommend mounting a pod volume to `/tmp/cache` to mitigate restart for some caches.
+  * Do not hardcode the model cache directory and model cache environment variables
+    * Future versions of llm-d will provide conventions for vLLM model loading
+* Hardware
+  * Follow best practices for your hardware ecosystem, including:
+    * Expecting to mount hardware-specific drivers and libraries from a standard host location as a value
+    * Ahead Of Time (AOT) compilation of kernels
+  * NVIDIA specific
+    * `LD_LIBRARY_PATH` includes the `/usr/local/nvidia/lib64` directory to allow Kubernetes GPU operators to inject the appropriate driver
