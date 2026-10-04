@@ -123,10 +123,14 @@ def mentions_issue(text: str, repo: str, number: int) -> bool:
     return re.search(pattern, text) is not None
 
 
+def assignee_logins(issue: dict) -> list[str]:
+    return [a["login"] for a in issue["assignees"]["nodes"]]
+
+
 def has_pull_request(issue: dict, pulls: list[dict], repo: str) -> bool:
     if issue["closedByPullRequestsReferences"]["totalCount"]:
         return True
-    assignees = {a["login"] for a in issue["assignees"]["nodes"]}
+    assignees = set(assignee_logins(issue))
     return any(
         pr["author"]
         and pr["author"]["login"] in assignees
@@ -164,8 +168,12 @@ def decide(issue: dict, pulls: list[dict], repo: str, now: datetime) -> str | No
     return "remind" if now - activity >= REMIND_AFTER else None
 
 
+def issue_path(repo: str, number: int, resource: str) -> str:
+    return f"/repos/{repo}/issues/{number}/{resource}"
+
+
 def comment(repo: str, token: str, number: int, body: str) -> None:
-    api("POST", f"/repos/{repo}/issues/{number}/comments", token, {"body": body})
+    api("POST", issue_path(repo, number, "comments"), token, {"body": body})
 
 
 def remind(repo: str, token: str, number: int, assignees: list[str]) -> None:
@@ -182,8 +190,8 @@ def remind(repo: str, token: str, number: int, assignees: list[str]) -> None:
 def unassign(repo: str, token: str, number: int, assignees: list[str]) -> None:
     # Unassign last among the state changes so a failure leaves the issue
     # assigned and the next run retries.
-    api("POST", f"/repos/{repo}/issues/{number}/labels", token, {"labels": [HELP_WANTED_LABEL]})
-    api("DELETE", f"/repos/{repo}/issues/{number}/assignees", token, {"assignees": assignees})
+    api("POST", issue_path(repo, number, "labels"), token, {"labels": [HELP_WANTED_LABEL]})
+    api("DELETE", issue_path(repo, number, "assignees"), token, {"assignees": assignees})
     comment(repo, token, number, UNASSIGN_BODY)
 
 
@@ -210,7 +218,7 @@ def main() -> int:
         if not action:
             continue
         number = issue["number"]
-        assignees = [a["login"] for a in issue["assignees"]["nodes"]]
+        assignees = assignee_logins(issue)
         print(f"#{number}: {action} {' '.join(assignees)}" + (" (dry run)" if args.dry_run else ""))
         if not args.dry_run:
             ACTIONS[action](args.repo, token, number, assignees)
