@@ -308,10 +308,10 @@ Section labels, ordering, and collapse state are controlled **only** by
 files or `sidebar_position` / `sidebar_label` frontmatter to docs.
 
 * **`categories`** — keyed by folder path relative to `docs/` (any depth, slash-separated,
-  e.g. `well-lit-paths/foundations`). Fields: `label`, `position` (order among siblings),
+  e.g. `operations/observability`). Fields: `label`, `position` (order among siblings),
   `collapsed`.
 * **`pages`** — keyed by doc id (path under `docs/` without extension, e.g.
-  `getting-started/quickstart`). Fields: `position`, `label`.
+  `get-started/quickstart`). Fields: `position`, `label`.
 
 When you **add a page or folder**, add its entry to `docs/menu-config.json` so it gets a
 human-readable label and an explicit position. Items with no entry still appear, but sort
@@ -321,7 +321,7 @@ alphabetically after positioned siblings and use an auto-generated label.
 
 To add a new infrastructure provider to our well-lit paths, we request the following support:
 
-* Documentation on configuring the platform to support one or more [well-lit path guides](guides/README.md#well-lit-path-guides)
+* Documentation on configuring the platform to support one or more [well-lit path guides](https://github.com/llm-d/llm-d/tree/main/guides#well-lit-path-guides)
 * The appropriate configuration contributed to the guide to deal with provider specific variation
 * An automated test environment that validates the supported guides
 * At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.
