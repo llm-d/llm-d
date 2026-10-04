@@ -36,7 +36,7 @@ This guide includes configurations for the following accelerators:
 | Backend             | Directory          | Served model                       | Notes                                                           |
 | ------------------- | ------------------ | ---------------------------------- | --------------------------------------------------------------- |
 | NVIDIA GPU          | `gpu`              | `Qwen/Qwen3-32B`                   | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`) |
-| AMD GPU             | `amd`              | `Qwen/Qwen3-32B`                   | vLLM (`INFRA_PROVIDER` options: `base`, `amd-ci`)                |
+| AMD GPU             | `amd`              | `Qwen/Qwen3-32B`                   | AMD Instinct MI355X GPUs                                        |
 | Intel XPU           | `xpu`              | `Qwen/Qwen3-0.6B`                  | Intel Data Center GPU Max 1550+                                 |
 | Google TPU v6e      | `tpu/v6`           | `Qwen/Qwen3-32B`                   | GKE TPU                                                         |
 | Google TPU v7       | `tpu/v7`           | `Qwen/Qwen3-32B`                   | GKE TPU                                                         |
@@ -257,15 +257,11 @@ Apply the Kustomize overlays for your specific backend:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
-# only when ACCELERATOR_TYPE=gpu:
+# only when ACCELERATOR_TYPE=gpu or amd:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
-# only when ACCELERATOR_TYPE=amd and MODEL_SERVER=vllm:
-kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
-
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
+# only when ACCELERATOR_TYPE=xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
 #
 # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
 #
@@ -510,13 +506,10 @@ To remove the deployed components:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-# only when ACCELERATOR_TYPE=gpu:
+# only when ACCELERATOR_TYPE=gpu or amd:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 
-# only when ACCELERATOR_TYPE=amd and MODEL_SERVER=vllm:
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
-
-# only when ACCELERATOR_TYPE=amd or xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
+# only when ACCELERATOR_TYPE=xpu or hpu or tpu/v6 or tpu/v7 or npu or cpu:
 #
 # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
 #
