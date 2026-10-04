@@ -20,8 +20,9 @@ router:
               watchFile: true
           # Scrapes each cluster's EPP /metrics. The plugin defaults to https with
           # peer-certificate verification, because it crosses a cluster trust
-          # boundary. This in-cluster example reads the EPPs' plain-HTTP metrics;
-          # across real clusters, drop `scheme: http` and set caCertPath.
+          # boundary. The cluster routers serve their metrics over plain HTTP, so
+          # this guide sets `scheme: http` and limits who can reach the metrics
+          # port instead (see the guide's Known Constraints).
           - type: multicluster-metrics-data-source
             name: metrics-source
             parameters:

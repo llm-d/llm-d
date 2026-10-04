@@ -2,8 +2,9 @@
 ## token. The observer learns each cluster's latency curve from the responses
 ## the hub already receives, and the scorer reads it at the cluster's current
 ## in-flight load. Nothing is scraped from the clusters, so their routers need no
-## changes. Needs an EPP image that includes these plugins; see the guide's
-## Known Constraints.
+## changes. Needs llm-d-router v0.11 or later, such as the chart's default
+## `main` image; an older EPP exits at startup with "plugin type
+## 'latency-observer-producer-hub' is not registered".
 ##
 ## Layer on top of: recipes/router/base.values.yaml and hub.values.yaml
 
