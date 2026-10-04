@@ -8,6 +8,10 @@ While [well-lit path guides](../well-lit-paths/README.md) teach how to configure
 
 End-to-end telemetry setup, OpenTelemetry tracing, standard Prometheus metrics, PromQL dashboards, and monitoring architectures.
 
+### [General Serving Operations](general-serving.md)
+
+Request cancellation and graceful shutdown for a standard (non-disaggregated) deployment.
+
 ### [Disaggregated Serving Operations](disaggregation/README.md)
 
 Operational considerations and engine-specific guides (vLLM and SGLang) for dynamic connections, request cancellation, fault tolerance, and safe rollouts.
