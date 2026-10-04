@@ -10,9 +10,6 @@ LLM requests break all three assumptions. They are:
 
 The llm-d Router injects awareness of the LLM-workload into the load-balancing layer considering **prefix-cache affinity** and **server load metrics**.
 
-> [!NOTE]
-> This guide demonstrates one approach to prefix- and load-aware routing. The llm-d Router supports other options as well, including session affinity and active request based routing, which make no assumptions about the router's ability to parse the request or probe the servers. See [configuration](../../architecture/core/router/epp/configuration.md) for more details on the available scorers, or [precise prefix cache routing](precise-prefix-cache-routing.md) for KV-event-driven scoring.
-
 ## Deploy
 
 See the [optimized baseline guide](../../../guides/optimized-baseline) for manifests and step-by-step deployment.
@@ -43,7 +40,7 @@ EPP continuously probes each endpoints' metrics by scraping `/metrics` at a regu
 
 ## Observability
 
-The optimized baseline balances two routing objectives, prefix-cache affinity and load-aware spread, so the signals that matter are cache hit rate and per-pod load balance watched together. The [guide's Observability & Troubleshooting section](../../../guides/optimized-baseline/README.md#4-observability--troubleshooting) covers the key metrics for this path and the common failure modes (including the `peakPrefillThroughput` calibration trap on non-default hardware), backed by the shared [PromQL](../../operations/observability/promql.md) and [metric](../../operations/observability/metrics.md) references.
+The optimized baseline balances two routing objectives, prefix-cache affinity and load-aware spread, so the signals that matter are cache hit rate and per-pod load balance watched together. The [guide's Observability & Troubleshooting section](../../../guides/optimized-baseline/README.md#3-observability--troubleshooting) covers the key metrics for this path and the common failure modes (including the `peakPrefillThroughput` calibration trap on non-default hardware), backed by the shared [PromQL](../../operations/observability/promql.md) and [metric](../../operations/observability/metrics.md) references.
 
 ## Further Reading
 

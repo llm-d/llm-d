@@ -682,7 +682,7 @@ def _env_static_lines(node: Any) -> list[tuple[str, bool, str]]:
     return out
 
 
-def _render_env_static(node: Any) -> str:
+def _render_env_static(node: Any, source: Any = None) -> str:
     """Fenced markdown for ``env.static``.
 
     Variables marked ``sensitive: true`` render into their own fence wrapped in
@@ -701,6 +701,13 @@ def _render_env_static(node: Any) -> str:
             groups[-1][1].append(line)
         else:
             groups.append((sensitive, [line]))
+
+    if source:
+        src_lines = _env_source_body(source).splitlines()
+        if groups and not groups[-1][0]:
+            groups[-1][1].extend(src_lines)
+        else:
+            groups.append((False, src_lines))
 
     parts: list[str] = []
     for sensitive, lines in groups:
@@ -777,13 +784,18 @@ def render_steps(node: Any) -> str:
     return "\n".join(parts)
 
 
-def render_path(guide: Any, path: str) -> str:
+def render_path(guide: Any, path: str, *, include_env_source: bool = False) -> str:
     """Markdown (already fenced) for one marker path."""
     found, value, msg = resolve_path(guide, path)
     if not found:
         raise GuideError(msg)
     if path == "env.static":
-        return _render_env_static(value)
+        src = (
+            guide.get("env", {}).get("source")
+            if include_env_source and isinstance(guide, dict) and isinstance(guide.get("env"), dict)
+            else None
+        )
+        return _render_env_static(value, src)
     if path == "env.source":
         return _fence(_env_source_body(value))
     return render_steps(value)
@@ -796,10 +808,13 @@ def render_md(guide: Any, text: str) -> str:
     if not markers.ok():
         raise GuideError("README markers are malformed — cannot render", markers)
 
+    inline_src = "env.source" not in marker_paths(text)
+
     def replace(match: re.Match) -> str:
         # render_path returns markdown that already carries its own ```bash
         # fence(s) and cicd:skip wrappers — inject it between the marker pair.
-        return f"{match.group(1)}\n{render_path(guide, match.group('path'))}\n{match.group(4)}"
+        body = render_path(guide, match.group("path"), include_env_source=inline_src)
+        return f"{match.group(1)}\n{body}\n{match.group(4)}"
 
     return MARKER_PAIR.sub(replace, text)
 

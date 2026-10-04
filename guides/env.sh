@@ -37,3 +37,6 @@ export ROUTER_GATEWAY_CHART=${ROUTER_GATEWAY_CHART:-oci://ghcr.io/llm-d/charts/l
 ### Container Image coordinates and tag for router chart
 export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-main}
 export ROUTER_EPP_IMAGE=${ROUTER_EPP_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker}
+
+### Container image used by guide verification steps
+export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
