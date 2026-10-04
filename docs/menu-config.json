@@ -1,115 +1,406 @@
 {
   "categories": {
-    "getting-started": { "label": "Getting Started", "position": 1, "collapsed": false },
-
-    "well-lit-paths": { "label": "Well-Lit Paths", "position": 2, "collapsed": false },
-    "well-lit-paths/foundations": { "label": "Foundations", "position": 1, "collapsed": false },
-    "well-lit-paths/workloads": { "label": "Workloads", "position": 2, "collapsed": false },
-    "well-lit-paths/workloads/batch-serving": { "label": "Serve Batch Workloads", "position": 3, "collapsed": true },
-
-    "architecture": { "label": "Concepts (Architecture)", "position": 4, "collapsed": true },
-    "architecture/core": { "label": "Core", "position": 1, "collapsed": true },
-    "architecture/core/router": { "label": "Router", "position": 2 },
-    "architecture/core/router/epp": { "label": "EPP", "position": 2 },
-    "architecture/advanced": { "label": "Capabilities", "position": 2, "collapsed": true },
-    "architecture/advanced/disaggregation": { "label": "Disaggregation", "position": 1, "collapsed": true },
-    "architecture/advanced/kv-management": { "label": "KV Cache Management", "position": 3, "collapsed": true },
-    "architecture/advanced/autoscaling": { "label": "Autoscaling", "position": 4, "collapsed": true },
-    "architecture/advanced/batch": { "label": "Batch Processing", "position": 5, "collapsed": true },
-    "architecture/advanced/inference-payload-processing": { "label": "Inference Payload Processing", "position": 6, "collapsed": true },
-
-    "operations": { "label": "Operations & Monitoring", "position": 5, "collapsed": true },
-    "operations/observability": { "label": "Observability", "position": 1, "collapsed": true },
-    "operations/disaggregation": { "label": "Disaggregation", "position": 2, "collapsed": true },
-    "operations/rollouts": { "label": "Rollouts", "position": 3, "collapsed": true },
-    "operations/serve-external-apis": { "label": "Serve External APIs", "position": 4, "collapsed": true },
-
-    "infrastructure": { "label": "Infrastructure & Environments", "position": 6, "collapsed": true },
-    "infrastructure/providers": { "label": "Kubernetes Infrastructure Providers", "position": 1, "collapsed": true },
-    "infrastructure/providers/aks": { "label": "AKS", "position": 1 },
-    "infrastructure/providers/digitalocean": { "label": "DigitalOcean", "position": 2 },
-    "infrastructure/providers/gke": { "label": "GKE", "position": 3 },
-    "infrastructure/providers/minikube": { "label": "minikube", "position": 4 },
-    "infrastructure/providers/openshift": { "label": "OpenShift", "position": 5 },
-    "infrastructure/providers/openshift-aws": { "label": "OpenShift on AWS", "position": 6 },
-    "infrastructure/gateway": { "label": "Kubernetes Gateways", "position": 2, "collapsed": true },
-    "infrastructure/rdma": { "label": "RDMA & Networking Configuration", "position": 5 },
-
-    "api-reference": { "label": "References", "position": 7, "collapsed": true }
+    "get-started": {
+      "label": "Get started",
+      "position": 1,
+      "collapsed": false
+    },
+    "use-cases": {
+      "label": "Use cases",
+      "position": 2,
+      "collapsed": false
+    },
+    "use-cases/self-hosted-and-external": {
+      "label": "Serve self-hosted and external models",
+      "position": 4,
+      "collapsed": true
+    },
+    "capabilities": {
+      "label": "Capabilities",
+      "position": 3,
+      "collapsed": false
+    },
+    "operations": {
+      "label": "Operations",
+      "position": 4,
+      "collapsed": true
+    },
+    "operations/observability": {
+      "label": "Observability",
+      "position": 1,
+      "collapsed": true
+    },
+    "operations/scaling": {
+      "label": "Scaling and actuation",
+      "position": 2,
+      "collapsed": true
+    },
+    "operations/traffic": {
+      "label": "Traffic and multi-tenancy",
+      "position": 3,
+      "collapsed": true
+    },
+    "operations/disaggregation": {
+      "label": "Disaggregation operations",
+      "position": 4,
+      "collapsed": true
+    },
+    "platform": {
+      "label": "Platform setup",
+      "position": 5,
+      "collapsed": true
+    },
+    "platform/providers": {
+      "label": "Providers",
+      "position": 1,
+      "collapsed": true
+    },
+    "platform/gateways": {
+      "label": "Gateways",
+      "position": 2,
+      "collapsed": true
+    },
+    "architecture": {
+      "label": "Architecture",
+      "position": 6,
+      "collapsed": true
+    },
+    "architecture/router": {
+      "label": "Router",
+      "position": 1,
+      "collapsed": true
+    },
+    "architecture/router/epp": {
+      "label": "Endpoint Picker (EPP)",
+      "position": 2,
+      "collapsed": true
+    },
+    "architecture/kv-cache": {
+      "label": "KV cache",
+      "position": 4,
+      "collapsed": true
+    },
+    "architecture/batch": {
+      "label": "Batch inference",
+      "position": 7,
+      "collapsed": true
+    },
+    "architecture/autoscaling": {
+      "label": "Autoscaling",
+      "position": 8,
+      "collapsed": true
+    },
+    "reference": {
+      "label": "Reference",
+      "position": 7,
+      "collapsed": true
+    },
+    "reference/api": {
+      "label": "API",
+      "position": 1,
+      "collapsed": true
+    }
   },
   "pages": {
-    "getting-started/quickstart": { "position": 1 },
-    "getting-started/accelerators": { "position": 2, "label": "Supported Accelerators" },
-
-    "well-lit-paths/foundations/optimized-baseline": { "position": 1, "label": "Deploy an Optimized Baseline" },
-    "well-lit-paths/foundations/predicted-latency": { "position": 2, "label": "Route Requests by Predicted Latency" },
-    "well-lit-paths/foundations/precise-prefix-cache-routing": { "position": 3, "label": "Enable Precise Prefix-Cache Aware Routing" },
-    "well-lit-paths/foundations/tiered-prefix-cache": { "position": 4, "label": "Configure a Tiered Prefix Cache" },
-    "well-lit-paths/foundations/enable-p2p-prefix-cache-sharing": { "position": 5, "label": "Enable P2P Prefix Cache Sharing" },
-    "well-lit-paths/foundations/pd-disaggregation": { "position": 6, "label": "Deploy Prefill/Decode Disaggregation" },
-    "well-lit-paths/foundations/wide-expert-parallelism": { "position": 7, "label": "Scale MoE Models with Wide Expert Parallelism" },
-    "well-lit-paths/foundations/flow-control": { "position": 8, "label": "Apply Flow Control and Fairness" },
-    "well-lit-paths/foundations/workload-autoscaling": { "position": 9, "label": "Autoscale your Inference Pool" },
-    "well-lit-paths/foundations/multi-model-routing": { "position": 10 },
-    "well-lit-paths/foundations/fast-model-actuation": { "position": 11, "label": "Speed Up Scale-Up with Fast Model Actuation" },
-
-    "well-lit-paths/workloads/agentic-serving": { "position": 1, "label": "Serve Agentic Workloads" },
-    "well-lit-paths/workloads/multimodal-serving": { "position": 2, "label": "Serve Multimodal Workloads" },
-    "well-lit-paths/workloads/batch-serving/asynchronous-processing": { "position": 1, "label": "Asynchronous Processing" },
-    "well-lit-paths/workloads/batch-serving/batch-gateway": { "position": 2, "label": "Batch Gateway" },
-
-    "architecture/core/inferencepool": { "position": 1 },
-    "architecture/core/model-servers": { "position": 3 },
-    "architecture/core/router/proxy": { "position": 1 },
-    "architecture/core/router/epp/request-handling": { "position": 1 },
-    "architecture/core/router/epp/flow-control": { "position": 2 },
-    "architecture/core/router/epp/scheduling": { "position": 3 },
-    "architecture/core/router/epp/datalayer": { "position": 4 },
-    "architecture/core/router/epp/configuration": { "position": 5 },
-
-    "architecture/advanced/latency-predictor": { "position": 2 },
-    "architecture/advanced/kv-management/prefix-cache-aware-routing": { "position": 1 },
-    "architecture/advanced/kv-management/kv-indexer": { "position": 2 },
-    "architecture/advanced/kv-management/kv-offloader": { "position": 3 },
-    "architecture/advanced/autoscaling/keda-epp": { "position": 1, "label": "KEDA + EPP Metrics" },
-    "architecture/advanced/autoscaling/slo-aware-keda": { "position": 2, "label": "SLO-Aware Autoscaling" },
-    "architecture/advanced/autoscaling/wva": { "position": 3, "label": "Workload Variant Autoscaler (Deprecated)" },
-    "architecture/advanced/batch/batch-gateway": { "position": 1 },
-    "architecture/advanced/batch/async-processor": { "position": 2 },
-
-    "operations/observability/metrics": { "position": 1, "label": "Monitoring & Metrics" },
-    "operations/observability/tracing": { "position": 2, "label": "Tracing" },
-    "operations/observability/promql": { "position": 3, "label": "PromQL" },
-    "operations/observability/setup": { "position": 4 },
-    "operations/observability/alerting": { "position": 5 },
-    "operations/disaggregation/vllm": { "position": 1, "label": "vLLM" },
-    "operations/disaggregation/sglang": { "position": 2, "label": "SGLang" },
-    "operations/readiness-probes": { "position": 2, "label": "Readiness Probes" },
-    "operations/rollouts/adapter-rollout": { "position": 1 },
-    "operations/rollouts/blue-green-update": { "position": 2 },
-    "operations/serve-external-apis/litellm": { "position": 1, "label": "LiteLLM Integration" },
-    "operations/serve-external-apis/kong": { "position": 2, "label": "Kong AI Gateway Integration" },
-    "operations/router": { "position": 5, "label": "Router Operations" },
-    "operations/async-processor": { "position": 6, "label": "Async Processor Operations" },
-    "operations/graceful-shutdown": { "position": 7, "label": "Graceful Shutdown & Draining" },
-    "operations/model-loading-and-startup": { "position": 8, "label": "Model Loading and Startup Acceleration" },
-
-    "infrastructure/multi-node": { "position": 3, "label": "Kubernetes Multi-Node Orchestration" },
-    "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },
-    "infrastructure/gateway/istio": { "position": 1 },
-    "infrastructure/gateway/gke": { "position": 2 },
-    "infrastructure/gateway/agentgateway": { "position": 3 },
-    "infrastructure/gateway/envoy-ai-gateway": { "position": 4 },
-    "infrastructure/gateway/install-crds": { "position": 5 },
-
-    "api-reference/inferencepool": { "position": 1, "label": "InferencePool" },
-    "api-reference/inferenceobjective": { "position": 2, "label": "InferenceObjective" },
-    "api-reference/inferencemodelrewrite": { "position": 3, "label": "InferenceModelRewrite" },
-    "api-reference/endpointpickerconfig": { "position": 4, "label": "Component Config: EndpointPickerConfig" },
-    "api-reference/epp-http-apis": { "position": 5, "label": "HTTP APIs" },
-    "api-reference/epp-grpc-apis": { "position": 6, "label": "RPC APIs" },
-    "api-reference/epp-http-headers": { "position": 7, "label": "HTTP Headers" },
-    "api-reference/glossary": { "position": 8, "label": "Glossary" },
-    "api-reference/artifacts": { "position": 9, "label": "Artifacts" }
+    "get-started/requirements": {
+      "position": 1,
+      "label": "Requirements"
+    },
+    "get-started/quickstart": {
+      "position": 2,
+      "label": "Quickstart"
+    },
+    "use-cases/agentic": {
+      "position": 1,
+      "label": "Serve agentic workloads"
+    },
+    "use-cases/multimodal": {
+      "position": 2,
+      "label": "Serve multimodal workloads"
+    },
+    "use-cases/batch-and-offline": {
+      "position": 3,
+      "label": "Serve batch and offline jobs"
+    },
+    "use-cases/self-hosted-and-external/litellm": {
+      "position": 1,
+      "label": "LiteLLM"
+    },
+    "use-cases/self-hosted-and-external/kong": {
+      "position": 2,
+      "label": "Kong AI Gateway"
+    },
+    "capabilities/optimized-baseline": {
+      "position": 1,
+      "label": "Optimized baseline"
+    },
+    "capabilities/precise-prefix-cache": {
+      "position": 2,
+      "label": "Precise prefix-cache routing"
+    },
+    "capabilities/predicted-latency": {
+      "position": 3,
+      "label": "Predicted-latency routing"
+    },
+    "capabilities/tiered-kv-cache": {
+      "position": 4,
+      "label": "Tiered KV cache"
+    },
+    "capabilities/p2p-kv-cache-sharing": {
+      "position": 5,
+      "label": "P2P KV cache sharing (experimental)"
+    },
+    "capabilities/pd-disaggregation": {
+      "position": 6,
+      "label": "P/D disaggregation"
+    },
+    "capabilities/wide-expert-parallelism": {
+      "position": 7,
+      "label": "Wide expert parallelism"
+    },
+    "capabilities/multi-node": {
+      "position": 8,
+      "label": "Multi-node serving"
+    },
+    "operations/observability/setup": {
+      "position": 1,
+      "label": "Setup"
+    },
+    "operations/observability/metrics": {
+      "position": 2,
+      "label": "Metrics"
+    },
+    "operations/observability/tracing": {
+      "position": 3,
+      "label": "Distributed tracing"
+    },
+    "operations/observability/promql": {
+      "position": 4,
+      "label": "PromQL reference"
+    },
+    "operations/observability/alerting": {
+      "position": 5,
+      "label": "Alerting"
+    },
+    "operations/observability/tpu-metrics-gke": {
+      "position": 6,
+      "label": "TPU metrics on GKE"
+    },
+    "operations/scaling/autoscaling": {
+      "position": 1,
+      "label": "Autoscaling"
+    },
+    "operations/scaling/fast-model-actuation": {
+      "position": 2,
+      "label": "Fast model actuation"
+    },
+    "operations/scaling/model-loading": {
+      "position": 3,
+      "label": "Model loading and startup"
+    },
+    "operations/traffic/flow-control": {
+      "position": 1,
+      "label": "Flow control and fairness"
+    },
+    "operations/traffic/multi-model-routing": {
+      "position": 2,
+      "label": "Multi-model and LoRA routing"
+    },
+    "operations/disaggregation/vllm": {
+      "position": 1,
+      "label": "vLLM"
+    },
+    "operations/disaggregation/sglang": {
+      "position": 2,
+      "label": "SGLang"
+    },
+    "operations/rollouts": {
+      "position": 5,
+      "label": "Rollouts and updates"
+    },
+    "operations/graceful-shutdown": {
+      "position": 6,
+      "label": "Graceful shutdown and draining"
+    },
+    "operations/readiness-probes": {
+      "position": 7,
+      "label": "Readiness probes (vLLM)"
+    },
+    "operations/router": {
+      "position": 8,
+      "label": "Router operations"
+    },
+    "operations/async-processor": {
+      "position": 9,
+      "label": "Async processor operations"
+    },
+    "platform/providers/gke": {
+      "position": 1,
+      "label": "Google (GKE)"
+    },
+    "platform/providers/aks": {
+      "position": 2,
+      "label": "Azure (AKS)"
+    },
+    "platform/providers/openshift": {
+      "position": 3,
+      "label": "OpenShift"
+    },
+    "platform/providers/openshift-aws": {
+      "position": 4,
+      "label": "OpenShift on AWS"
+    },
+    "platform/providers/digitalocean": {
+      "position": 5,
+      "label": "DigitalOcean (DOKS)"
+    },
+    "platform/providers/minikube": {
+      "position": 6,
+      "label": "minikube"
+    },
+    "platform/providers/gke-tpu-dynamic-slicing": {
+      "position": 7,
+      "label": "GKE TPU dynamic slicing"
+    },
+    "platform/gateways/install-crds": {
+      "position": 1,
+      "label": "Install Gateway API CRDs"
+    },
+    "platform/gateways/istio": {
+      "position": 2,
+      "label": "Istio"
+    },
+    "platform/gateways/gke": {
+      "position": 3,
+      "label": "GKE Gateway"
+    },
+    "platform/gateways/agentgateway": {
+      "position": 4,
+      "label": "Agentgateway"
+    },
+    "platform/gateways/envoy-ai-gateway": {
+      "position": 5,
+      "label": "Envoy AI Gateway"
+    },
+    "platform/networking-rdma": {
+      "position": 3,
+      "label": "Networking and RDMA"
+    },
+    "platform/without-kubernetes": {
+      "position": 4,
+      "label": "Without Kubernetes"
+    },
+    "architecture/router/proxy": {
+      "position": 1,
+      "label": "Proxy"
+    },
+    "architecture/router/epp/request-handling": {
+      "position": 1,
+      "label": "Request handling"
+    },
+    "architecture/router/epp/scheduling": {
+      "position": 2,
+      "label": "Request scheduling"
+    },
+    "architecture/router/epp/flow-control": {
+      "position": 3,
+      "label": "Flow control internals"
+    },
+    "architecture/router/epp/data-layer": {
+      "position": 4,
+      "label": "Data layer"
+    },
+    "architecture/inferencepool": {
+      "position": 2,
+      "label": "InferencePool"
+    },
+    "architecture/model-servers": {
+      "position": 3,
+      "label": "Model servers"
+    },
+    "architecture/kv-cache/prefix-cache-routing": {
+      "position": 1,
+      "label": "Prefix-cache routing"
+    },
+    "architecture/kv-cache/indexer": {
+      "position": 2,
+      "label": "KV cache indexer"
+    },
+    "architecture/kv-cache/offloading": {
+      "position": 3,
+      "label": "KV cache offloading"
+    },
+    "architecture/disaggregation": {
+      "position": 5,
+      "label": "Disaggregation"
+    },
+    "architecture/latency-prediction": {
+      "position": 6,
+      "label": "Latency prediction"
+    },
+    "architecture/batch/batch-gateway": {
+      "position": 1,
+      "label": "Batch gateway"
+    },
+    "architecture/batch/async-processor": {
+      "position": 2,
+      "label": "Async processor"
+    },
+    "architecture/autoscaling/keda-epp": {
+      "position": 1,
+      "label": "KEDA with EPP metrics"
+    },
+    "architecture/autoscaling/slo-aware": {
+      "position": 2,
+      "label": "SLO-aware autoscaling"
+    },
+    "architecture/autoscaling/wva-deprecated": {
+      "position": 3,
+      "label": "Workload Variant Autoscaler (deprecated)"
+    },
+    "architecture/payload-processing": {
+      "position": 9,
+      "label": "Inference payload processing"
+    },
+    "reference/api/inferencepool": {
+      "position": 1,
+      "label": "InferencePool"
+    },
+    "reference/api/inferenceobjective": {
+      "position": 2,
+      "label": "InferenceObjective"
+    },
+    "reference/api/inferencemodelrewrite": {
+      "position": 3,
+      "label": "InferenceModelRewrite"
+    },
+    "reference/api/endpointpickerconfig": {
+      "position": 4,
+      "label": "EndpointPickerConfig"
+    },
+    "reference/api/http-apis": {
+      "position": 5,
+      "label": "HTTP APIs"
+    },
+    "reference/api/grpc-apis": {
+      "position": 6,
+      "label": "gRPC APIs"
+    },
+    "reference/api/http-headers": {
+      "position": 7,
+      "label": "HTTP headers"
+    },
+    "reference/epp-configuration": {
+      "position": 2,
+      "label": "EPP configuration"
+    },
+    "reference/glossary": {
+      "position": 3,
+      "label": "Glossary"
+    },
+    "reference/images-and-versions": {
+      "position": 4,
+      "label": "Images, charts and versions"
+    }
   }
 }
