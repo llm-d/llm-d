@@ -40,7 +40,7 @@ Both analyzers integrate with a pipeline that includes cost-aware optimization, 
 
 The following diagram shows how WVA fits into the overall llm-d architecture:
 
-![WVA High-Level Architecture](../advanced/autoscaling/wva-architecture.svg)
+![WVA High-Level Architecture](../../assets/architecture/autoscaling/wva-architecture.svg)
 
 ### Scaling Engine Architecture
 
@@ -51,7 +51,7 @@ The WVA scaling engine runs as a background goroutine alongside the Kubernetes c
 
 The main loop runs every 30 seconds and follows a four-stage pipeline pattern:
 
-![Scaling Engine Pipeline](../advanced/autoscaling/scaling-engine-pipeline.svg)
+![Scaling Engine Pipeline](../../assets/architecture/autoscaling/scaling-engine-pipeline.svg)
 
 **Pipeline stages:**
 

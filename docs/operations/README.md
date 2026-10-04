@@ -12,7 +12,7 @@ End-to-end telemetry setup, OpenTelemetry tracing, standard Prometheus metrics, 
 
 Operational considerations and engine-specific guides (vLLM and SGLang) for dynamic connections, request cancellation, fault tolerance, and safe rollouts.
 
-### [Zero-Downtime Rollouts](rollouts.md)
+### [Zero-Downtime Rollouts](rollouts/README.md)
 
 Production rollout strategies including Blue-Green updates and live LoRA adapter hot-swapping without dropping active client traffic.
 

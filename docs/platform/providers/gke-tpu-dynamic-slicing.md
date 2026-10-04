@@ -24,13 +24,13 @@ Prepare the cluster by following [Use dynamic slicing in GKE with Kueue](https:/
 
 ## Kueue Resources for llm-d
 
-The Kueue resources published in the GCP guide target super-slicing. Sub-slicing needs a `Topology` that enumerates the full partition hierarchy of a sub-block, from `cloud.google.com/gce-topology-block` down through each `cloud.google.com/gke-tpu-partition-<shape>-id` label to `kubernetes.io/hostname`. [`kueue-tas.yaml`](../../infrastructure/providers/gke/dynamic-slicing/kueue-tas.yaml) provides that `Topology` together with a `ResourceFlavor`, an `AdmissionCheck` delegating slice formation to the slice controller (`accelerator.gke.io/slice`), and a `ClusterQueue` covering `google.com/tpu`, `cpu`, and `memory`. Apply it once per cluster:
+The Kueue resources published in the GCP guide target super-slicing. Sub-slicing needs a `Topology` that enumerates the full partition hierarchy of a sub-block, from `cloud.google.com/gce-topology-block` down through each `cloud.google.com/gke-tpu-partition-<shape>-id` label to `kubernetes.io/hostname`. [`kueue-tas.yaml`](../../assets/providers/gke-tpu-dynamic-slicing/kueue-tas.yaml) provides that `Topology` together with a `ResourceFlavor`, an `AdmissionCheck` delegating slice formation to the slice controller (`accelerator.gke.io/slice`), and a `ClusterQueue` covering `google.com/tpu`, `cpu`, and `memory`. Apply it once per cluster:
 
 ```bash
 kubectl apply -f kueue-tas.yaml
 ```
 
-Then create the [`LocalQueue`](../../infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml) in every namespace that runs dynamic-slice model servers, e.g. for the P/D disaggregation guide:
+Then create the [`LocalQueue`](../../assets/providers/gke-tpu-dynamic-slicing/kueue-localqueue.yaml) in every namespace that runs dynamic-slice model servers, e.g. for the P/D disaggregation guide:
 
 ```bash
 kubectl apply -n llm-d-pd-disaggregation -f kueue-localqueue.yaml

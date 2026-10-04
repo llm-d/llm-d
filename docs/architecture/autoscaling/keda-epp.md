@@ -42,7 +42,7 @@ objective-relative signals (pool saturation, estimated latency against an SLO).
 
 ### Architecture
 
-![KEDA + EPP Architecture](../advanced/autoscaling/keda-epp-architecture.svg)
+![KEDA + EPP Architecture](../../assets/architecture/autoscaling/keda-epp-architecture.svg)
 
 ### Scaling Pipeline
 

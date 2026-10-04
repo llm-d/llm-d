@@ -99,6 +99,11 @@
       "label": "API",
       "position": 1,
       "collapsed": true
+    },
+    "operations/rollouts": {
+      "label": "Rollouts and updates",
+      "position": 5,
+      "collapsed": true
     }
   },
   "pages": {
@@ -213,10 +218,6 @@
     "operations/disaggregation/sglang": {
       "position": 2,
       "label": "SGLang"
-    },
-    "operations/rollouts": {
-      "position": 5,
-      "label": "Rollouts and updates"
     },
     "operations/graceful-shutdown": {
       "position": 6,

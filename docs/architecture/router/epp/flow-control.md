@@ -475,4 +475,4 @@ A pre-configured Grafana dashboard is available to visualize these metrics, maki
 
 To load this dashboard, follow the [Observability Setup guide](../../../operations/observability/setup.md), which installs Prometheus and Grafana and loads the llm-d dashboards.
 
-![Flow Control Dashboard](../../core/images/flow_control_dashboard.png)
+![Flow Control Dashboard](../../../assets/architecture/router/flow_control_dashboard.png)

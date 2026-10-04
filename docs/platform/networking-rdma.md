@@ -12,7 +12,7 @@ Networking is a first-order concern for distributed inference latency.
 
 llm-d uses a layered networking stack for KV Cache transfers and inter-node communication:
 
-![Networking Stack](../infrastructure/rdma/networking-stack.svg)
+![Networking Stack](../assets/platform/networking-stack.svg)
 
 ### NIXL
 
