@@ -18,7 +18,7 @@ import urllib.request
 
 NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
 REDIS_DEPLOY = os.environ.get("REDIS_DEPLOY", "deploy/redis")
-MODEL = os.environ.get("MODEL", "Qwen/Qwen3-8B")
+MODEL = os.environ.get("MODEL", "Qwen/Qwen3-32B")
 PROM_URL = os.environ.get("PROM_URL", "http://localhost:9090")
 MONITORING_NAMESPACE = os.environ.get("MONITORING_NAMESPACE", "llm-d-monitoring")
 TTL = 3600  # 1 hour deadline

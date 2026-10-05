@@ -21,8 +21,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 DEFAULT_NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
-DEFAULT_MODEL_A = os.environ.get("MODEL_A", "Qwen/Qwen3-8B")
-DEFAULT_MODEL_B = os.environ.get("MODEL_B", "Qwen/Qwen3-8B")
+DEFAULT_MODEL_A = os.environ.get("MODEL_A", "Qwen/Qwen3-32B")
+DEFAULT_MODEL_B = os.environ.get("MODEL_B", "Qwen/Qwen3-32B")
 DEFAULT_REDIS = os.environ.get("REDIS_DEPLOY", "deploy/redis")
 
 def check_port_open(host="127.0.0.1", port=8080):

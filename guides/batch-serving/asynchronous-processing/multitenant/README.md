@@ -122,7 +122,8 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   `InferenceObjective` CRD and define the objective resources in your cluster matching your `InferencePool`.
 
 - **Model Serving Stack & Router.** The walkthrough deploys a single llm-d Router instance (which creates
-  the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-8B`. In a multi-model
+  the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
+  parallelism 2). In a multi-model
   environment, you can point `POOL_A` and `POOL_B` to separate `InferencePool`s for physical pool isolation.
 
 - **Environment.** In addition to the base guide's variables:
@@ -134,12 +135,15 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
 
   export NAMESPACE=llm-d-async
   export ASYNC_VERSION=v0.10.0         # llm-d-async release (supports lane_objectives & tier-priority)
+  export GUIDE_NAME=async-multitenant  # model server label the router selects on
+  export INFRA_PROVIDER=base           # optimized-baseline model server variant: base, or gke on GKE
+  export HF_TOKEN=<your Hugging Face token>
 
   # InferencePool names (saturation-gate scope) and served model names (go in payload.model).
   # In this single-router demo, both logical model pools point to the deployed llm-d-router instance:
   export POOL_A=llm-d-router POOL_B=llm-d-router       # InferencePool names (saturation-gate scope)
   export POOL_NAME=llm-d-router                       # Shared pool name for InferenceObjectives
-  export MODEL_A=Qwen/Qwen3-8B MODEL_B=Qwen/Qwen3-8B   # served model names (go in payload.model)
+  export MODEL_A=Qwen/Qwen3-32B MODEL_B=Qwen/Qwen3-32B # served model names (go in payload.model)
 
   # Scenario C only: the base URL the saturation gates read PromQL from. The default
   # matches the monitoring setup; override it if your Prometheus lives somewhere else:
@@ -182,9 +186,21 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 # 1. Install InferenceObjective CRD (ROUTER_RELEASE_URL exported from guides/env.sh)
 kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
 
-# 2. Deploy vLLM backend (copy secret & deploy manifest)
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/vllm.yaml
+# 2. Deploy the vLLM model server, which reads the Hugging Face token from llm-d-hf-token
+kubectl create secret generic llm-d-hf-token --from-literal="HF_TOKEN=${HF_TOKEN}" \
+    -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
+  | kubectl apply -n ${NAMESPACE} -f -
 ```
+
+Instead of maintaining its own model server manifests, this guide renders the
+[optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay
+(`guides/optimized-baseline/modelserver/gpu/vllm/`) as the [flow-control](../../../flow-control/README.md) guide does:
+`sed` swaps in this guide's `llm-d.ai/guide` label, which the router selects on. The model (`Qwen/Qwen3-32B`, two GPUs
+per replica), image, probes and volumes follow that guide. The one change is a single replica instead of eight: the
+router's `maxConcurrency` and the llm-d-async worker pools below are sized so that async work saturates one replica.
 
 > [!TIP]
 > **Prometheus and Grafana:** If you do not already have Prometheus running, deploy the standard stack using the central [Observability Setup Guide](../../../../docs/operations/observability/setup.md) (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
@@ -608,7 +624,7 @@ to install the standard Prometheus and Grafana stack:
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
 # 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
-kubectl apply -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
+kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
 ```
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
@@ -693,9 +709,10 @@ kubectl -n ${NAMESPACE} delete configmap llm-d-coordinator-config --ignore-not-f
 helm uninstall llm-d-async -n ${NAMESPACE}
 helm uninstall llm-d-router -n ${NAMESPACE}
 render ${MT}/manifests/inferenceobjectives.yaml | kubectl delete -f -
-kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/vllm.yaml
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
-kubectl delete -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
+kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
 ```
 
 <details>

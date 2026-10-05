@@ -94,4 +94,4 @@ router:
 
   modelServers:
     matchLabels:
-      app: vllm-1
+      llm-d.ai/guide: async-multitenant   # set on the model server by README step 1's sed

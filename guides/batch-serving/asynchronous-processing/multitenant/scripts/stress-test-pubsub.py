@@ -31,8 +31,8 @@ if not DEFAULT_PROJECT:
         DEFAULT_PROJECT = None
 
 DEFAULT_NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
-DEFAULT_MODEL_A = os.environ.get("MODEL_A", "Qwen/Qwen3-8B")
-DEFAULT_MODEL_B = os.environ.get("MODEL_B", "Qwen/Qwen3-8B")
+DEFAULT_MODEL_A = os.environ.get("MODEL_A", "Qwen/Qwen3-32B")
+DEFAULT_MODEL_B = os.environ.get("MODEL_B", "Qwen/Qwen3-32B")
 
 def check_port_open(host="127.0.0.1", port=8080):
     import socket
