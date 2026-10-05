@@ -1,10 +1,12 @@
 """
 Launcher for SGLang with GKE Fast Pod Snapshotting support.
 
-Delegates CLI invocation to sglang.srt.entrypoints.http_server.launch_server and plugs the
-snapshot lifecycle into its two warmup hooks (see wrapper.py):
+Delegates CLI invocation to sglang.srt.entrypoints.http_server.launch_server. When a snapshot
+provider is configured and available (and both --enable-memory-saver and
+--enable-weights-cpu-backup are set), plugs the snapshot lifecycle into launch_server's two
+warmup hooks (see wrapper.py):
 
-- execute_warmup_func: sglang_warmup_and_snapshot runs SGLang's server warmup, then holds the
+- execute_warmup_func: sglang_warmup_and_hold runs SGLang's server warmup, then holds the
   server at ServerStatus.Starting.
 - launch_callback: sglang_snapshot_callback runs the sleep/snapshot/wake cycle, then restores
   the post-warmup status.
@@ -16,10 +18,41 @@ either way, before the server reports ready.
 from __future__ import annotations
 
 import functools
+import logging
 import sys
-from typing import Any
+from typing import Any, Optional
 
-from .wrapper import sglang_snapshot_callback, sglang_warmup_and_snapshot
+from ..providers import GKESnapshotProvider, get_snapshot_provider
+from .wrapper import sglang_snapshot_callback, sglang_warmup_and_hold
+
+logger = logging.getLogger("sglang.snapshot.launcher")
+
+
+def _get_snapshot_provider_for_launch(server_args) -> Optional[GKESnapshotProvider]:
+    snapshot_provider = get_snapshot_provider()
+    if snapshot_provider is None:
+        logger.info(
+            "No snapshot provider configured (SNAPSHOT_PROVIDER is unset or empty). Snapshotting is disabled."
+        )
+        return None
+
+    if not snapshot_provider.is_available():
+        logger.warning(
+            "Pod snapshot trigger not available (checkpoint file '%s' is not writable). Skipping snapshot.",
+            snapshot_provider.proc_path,
+        )
+        return None
+
+    # Without --enable-memory-saver, SGLang frees no GPU memory on release; without
+    # --enable-weights-cpu-backup, SGLang throws the weights away instead of copying them to CPU memory.
+    if not (server_args.enable_memory_saver and server_args.enable_weights_cpu_backup):
+        logger.warning(
+            "Both --enable-memory-saver and --enable-weights-cpu-backup are required for SGLang "
+            "pod snapshotting; no snapshot will be taken."
+        )
+        return None
+
+    return snapshot_provider
 
 
 def main() -> None:
@@ -35,10 +68,10 @@ def main() -> None:
         ) from err
 
     server_args = prepare_server_args(sys.argv[1:])
-    # Same URL SGLang's own warmup uses (https with --ssl-certfile, loopback for
-    # 0.0.0.0/::, bracketed IPv6). Don't read server_args.host/.port directly:
-    # SGLang injects those fields at runtime, so type checkers can't see them.
-    server_url = server_args.url()
+    snapshot_provider = _get_snapshot_provider_for_launch(server_args)
+    if snapshot_provider is None:
+        launch_server(server_args)
+        return
 
     # The warmup hook saves the post-warmup server status here; the snapshot callback restores it.
     held_status: dict[str, Any] = {}
@@ -46,13 +79,13 @@ def main() -> None:
     launch_server(
         server_args,
         execute_warmup_func=functools.partial(
-            sglang_warmup_and_snapshot,
+            sglang_warmup_and_hold,
             execute_warmup_func=_execute_server_warmup,
             held_status=held_status,
         ),
         launch_callback=functools.partial(
             sglang_snapshot_callback,
-            server_url=server_url,
+            snapshot_provider=snapshot_provider,
             server_args=server_args,
             held_status=held_status,
         ),
