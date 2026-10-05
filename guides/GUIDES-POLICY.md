@@ -54,7 +54,7 @@ A directory under `guides/` is a guide if and only if all of the following hold:
 
 Guides are a starting point for a user's own configuration, not a supported
 product surface. That framing is already stated in
-[`guides/README.md`](../../guides/README.md) and this document does not change it.
+[`guides/README.md`](./README.md) and this document does not change it.
 
 - - -
 
