@@ -81,7 +81,7 @@ export EPP_SERVICE=optimized-baseline-epp
 export INFERENCE_POOL=optimized-baseline
 export SIGNAL=queue # options: queue, saturation
 export ENV=existing # options: existing, ocp
-export OVERSHOOT=windows # options: windows
+export OVERSHOOT=windows # options: windows, guard
 export OVERLAY_ROOT=${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline
 ```
 <!-- guide:env.static end -->
@@ -406,23 +406,52 @@ its `behavior` block, so no extra metrics or dependencies are required:
 Measure your model's cold-start time (from pod scheduling to the first served
 request) and set `scaleUp.stabilizationWindowSeconds` to roughly that value.
 
-### Advanced alternative: pending-pod-aware supply
+### Overshoot guard
 
 Stabilization windows are deliberately blunt: they delay all scale-up equally,
-not just startup-driven overshoot. If you need demand-aware behavior, KEDA's
+not just startup-driven overshoot. The overshoot guard (`OVERSHOOT=guard`,
+queue signal only) is the demand-aware alternative. It uses KEDA's
 [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
-can compose triggers with a `formula`. You can pair the demand trigger with a
-second trigger that reports not-yet-available pods - for example a Prometheus
-query over `kube-state-metrics` such as `kube_deployment_status_replicas_unavailable`
-- and write a formula that discounts demand by the anticipated capacity of pods
-already coming up, so the HPA does not double-count a replica it has already
-requested.
+to replace the running-requests keep-warm trigger with two supply triggers over
+`kube-state-metrics` - `pending` (`kube_deployment_status_replicas_unavailable`,
+pods created but not yet `Ready`) and `replicas` (current replica count) - and a
+formula that discounts demand by the pods already coming up:
 
-This is more precise but adds cost: it depends on `kube-state-metrics` being
-scraped into the same Prometheus, introduces a second trigger and a formula whose
-per-pod-capacity constant must itself be tuned, and a missing series can break the
-composite metric. Prefer the stabilization windows above unless you have a
-specific need the windows cannot meet.
+```
+demand <= replicas ? demand : max(demand - (pending ?? 0), replicas)
+```
+
+Because the formula, not a time window, now absorbs overshoot, the guard sets
+`scaleUp.stabilizationWindowSeconds: 0` for immediate scale-up and adds a
+`fallback` (`behavior: static`, `replicas: 1`) so a formula that cannot evaluate
+degrades to a single replica instead of failing the `ScaledObject`. It ships for
+the queue signal only: renaming the raw signal to a replica-unit `demand` is
+correct only when the signal's per-pod target is 1, which holds for queue depth
+but not for the pool-wide saturation ratio.
+
+The guard is more precise but adds cost: it depends on `kube-state-metrics` being
+scraped into the same Prometheus, and the two supply series fail differently. A
+missing `pending` series is read as zero (`pending ?? 0`), so the guard keeps
+scaling but loses its overshoot protection (demand-only scaling). A missing
+`demand` or `replicas` series makes the formula unevaluable, so after
+`failureThreshold` polls the `fallback` takes over and holds a single replica,
+even mid-burst. Prefer the stabilization windows above unless you need scale-up
+faster than a cold-start-sized window allows.
+
+Exercising the guard needs heavier load than the windows path. The guard drops
+the running-requests keep-warm trigger and scales purely on `demand` (queue
+depth), and that queue only builds once load exceeds vLLM's continuous-batching
+capacity - moderate concurrency is absorbed with the queue at zero, so the guard
+reads no demand and does not scale. In the [Generate Bounded
+Load](#generate-bounded-load) step, raise concurrency and per-request
+`max_tokens` until `llm_d_epp_flow_control_queue_size` (the `demand` signal) goes
+non-zero; that gauge, not a fixed request count, is the thing to drive, because
+the load needed to saturate the batch depends on the model, GPU, tensor-parallel
+degree, and `max-model-len`. A larger model leaves less KV-cache headroom and
+queues at lower concurrency, a smaller one at higher - as a rough starting point
+try a few hundred concurrent requests with `max_tokens` in the low thousands and
+climb until the gauge moves. Otherwise a guard that is working correctly looks
+like one that never scales.
 
 ## Apply the KEDA ScaledObject
 
@@ -458,10 +487,21 @@ Queue signal (default):
 
 <!-- guide:deploy.apply_k8s_queue start -->
 ```bash
-# only when SIGNAL=queue and ENV=existing:
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=windows:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_queue end -->
+
+Queue signal with the overshoot guard (`OVERSHOOT=guard`): same signal, but the
+pending-aware `scalingModifiers` formula replaces the scale-up stabilization
+window (see [Overshoot guard](#overshoot-guard)).
+
+<!-- guide:deploy.apply_k8s_queue_guard start -->
+```bash
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+```
+<!-- guide:deploy.apply_k8s_queue_guard end -->
 
 Saturation signal (experimental):
 
@@ -480,10 +520,21 @@ Queue signal (default):
 
 <!-- guide:deploy.apply_ocp_queue start -->
 ```bash
-# only when SIGNAL=queue and ENV=ocp:
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=windows:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_queue end -->
+
+Queue signal with the overshoot guard (`OVERSHOOT=guard`): the guard rewrites the
+trigger list, so this leaf bearer-authenticates all three triggers against Thanos
+(see [Overshoot guard](#overshoot-guard)).
+
+<!-- guide:deploy.apply_ocp_queue_guard start -->
+```bash
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+```
+<!-- guide:deploy.apply_ocp_queue_guard end -->
 
 Saturation signal (experimental):
 
@@ -647,14 +698,20 @@ available, and the generated HPA has no scaling-limited conditions.
 
 <!-- guide:cleanup start -->
 ```bash
-# only when SIGNAL=queue and ENV=existing:
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=windows:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=existing:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when SIGNAL=queue and ENV=ocp:
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=windows:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=ocp:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
