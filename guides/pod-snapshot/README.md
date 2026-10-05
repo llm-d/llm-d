@@ -252,7 +252,7 @@ helm install ${GUIDE_NAME} \
 <details>
 <summary><b>Gateway Mode (Optional)</b></summary>
 
-To use a Kubernetes Gateway instead of standalone mode, deploy a Gateway named `llm-d-inference-gateway` (see [Gateway guides](../../docs/infrastructure/gateway)) and install the Gateway router chart:
+To use a Kubernetes Gateway instead of standalone mode, deploy a Gateway named `llm-d-inference-gateway` (see [Gateway guides](../../docs/platform/gateways)) and install the Gateway router chart:
 
 <!-- guide:deploy.gateway start -->
 ```bash

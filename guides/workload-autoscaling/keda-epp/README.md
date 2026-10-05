@@ -268,7 +268,7 @@ flow-control feature gate enabled by this guide's `router.values.yaml`. How that
 subsystem shapes each signal, and how to set thresholds when flow control is off,
 is covered in [Flow control on vs. off](#flow-control-on-vs-off) below. For the
 subsystem itself, see
-[EPP Flow Control](../../../docs/architecture/core/router/epp/flow-control.md).
+[EPP Flow Control](../../../docs/architecture/router/epp/flow-control.md).
 
 > [!NOTE]
 > This guide is validated with vLLM model servers. The flow-control signals are
@@ -297,7 +297,7 @@ both signals this guide can scale on. The two detectors EPP ships define
   signal; prefer the default unless you have a specific reason to pin it.
 
 See
-[Saturation Detectors](../../../docs/architecture/core/router/epp/flow-control.md#saturation-detectors)
+[Saturation Detectors](../../../docs/architecture/router/epp/flow-control.md#saturation-detectors)
 for the full comparison and each detector's tuning knobs.
 
 ## Configuration

@@ -2,13 +2,13 @@
 
 This recipe scrapes the existing GKE TPU device-plugin exporter and loads a
 reference dashboard. Metric definitions, compatibility notes, and troubleshooting
-live in [GKE TPU Observability](../../../../docs/operations/observability/tpu.md).
+live in [GKE TPU Observability](../../../../docs/operations/observability/tpu-metrics-gke.md).
 
 ## Prerequisites
 
 - A GKE TPU node pool with the device-plugin exporter exposing `/metrics` on port 2112.
 - `kubectl` configured for that cluster, and `REPO_ROOT` set to this repository.
-- Check your exporter's [metric interface](../../../../docs/operations/observability/tpu.md#metric-interface).
+- Check your exporter's [metric interface](../../../../docs/operations/observability/tpu-metrics-gke.md#metric-interface).
   Some runtime metrics are optional and may not appear on every TPU type.
 
 ## Stack
@@ -37,7 +37,7 @@ selectors so monitoring of other components continues to work. The PodMonitor's
 `spec.selector` selects exporter pods and must remain `k8s-app: tpu-device-plugin`.
 
 Check the target in Prometheus before opening the dashboard. See
-[exporter checks and troubleshooting](../../../../docs/operations/observability/tpu.md#check-the-exporter)
+[exporter checks and troubleshooting](../../../../docs/operations/observability/tpu-metrics-gke.md#check-the-exporter)
 if discovery, scraping, or hardware metrics are missing.
 
 ## Dashboards
@@ -57,6 +57,6 @@ Select the Prometheus data source and exporter job (default:
 Start with instance, model, and topology set to **All**, then narrow the selection.
 Scrape health remains visible when model/topology metrics are absent. Duty-cycle
 and memory panels require optional runtime metrics; use the
-[metric availability check](../../../../docs/operations/observability/tpu.md#check-the-exporter)
+[metric availability check](../../../../docs/operations/observability/tpu-metrics-gke.md#check-the-exporter)
 to distinguish missing metrics from a scrape failure. For a multi-cluster
 installation, select a data source scoped to one cluster.

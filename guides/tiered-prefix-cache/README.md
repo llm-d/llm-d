@@ -12,7 +12,7 @@
 
 This guide deploys prefix-cache offloading: evicted KV-cache blocks move from accelerator HBM to larger, more cost-effective tiers (CPU RAM, and optionally a shared filesystem) and are pulled back on demand instead of being recomputed. This increases the effective cache size and prefix-cache reuse for multi-turn and long-context workloads.
 
-For the concepts, tier tradeoffs, and architecture, see the [Tiered Prefix Cache well-lit path](../../docs/well-lit-paths/foundations/tiered-prefix-cache.md). This guide focuses on deployment. The prefix-aware request scheduling from the [optimized baseline](../optimized-baseline/README.md) also applies here.
+For the concepts, tier tradeoffs, and architecture, see the [Tiered Prefix Cache well-lit path](../../docs/capabilities/tiered-kv-cache.md). This guide focuses on deployment. The prefix-aware request scheduling from the [optimized baseline](../optimized-baseline/README.md) also applies here.
 
 ## Choosing a Path
 
@@ -140,7 +140,7 @@ helm install tiered-prefix-cache \
 <details>
 <summary><h4>Gateway Mode</h4></summary>
 
-1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/platform/gateways).
 2. *Deploy the llm-d Router and an HTTPRoute*:
 
 ```bash
@@ -274,7 +274,7 @@ kubectl apply -k ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/mo
 #### TPU (Google TPU v6 / v7)
 
 > [!NOTE]
-> Multi-host TPU deployments require the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/multi-node.md) installed on the cluster.
+> Multi-host TPU deployments require the [LeaderWorkerSet (LWS) controller](../../docs/capabilities/multi-node.md) installed on the cluster.
 
 ```bash
 export TPU_VERSION=v7         # v6 | v7

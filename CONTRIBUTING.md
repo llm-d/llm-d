@@ -308,11 +308,40 @@ Section labels, ordering, and collapse state are controlled **only** by
 files or `sidebar_position` / `sidebar_label` frontmatter to docs.
 
 * **`categories`** — keyed by folder path relative to `docs/` (any depth, slash-separated,
-  e.g. `well-lit-paths/foundations`). Fields: `label`, `position` (order among siblings),
+  e.g. `operations/observability`). Fields: `label`, `position` (order among siblings),
   `collapsed`.
 * **`pages`** — keyed by doc id (path under `docs/` without extension, e.g.
-  `getting-started/quickstart`). Fields: `position`, `label`.
+  `get-started/quickstart`). Fields: `position`, `label`.
 
 When you **add a page or folder**, add its entry to `docs/menu-config.json` so it gets a
 human-readable label and an explicit position. Items with no entry still appear, but sort
 alphabetically after positioned siblings and use an auto-generated label.
+
+Positions are shared between folders and pages under the same parent. A folder at
+position 1 and a page at position 1 in the same section tie, and then fall back to
+alphabetical order, so number the children of each folder in one sequence.
+
+### Redirects when you move a page (`docs/redirects.json`)
+
+Page URLs come from the folder tree, so moving or renaming a page changes its URL and
+breaks every existing link and search result that points at it.
+
+When you **move or rename a page**, add an entry to
+[`docs/redirects.json`](docs/redirects.json): the old path on the left, the new one on the
+right, both relative to `docs/` and without a file extension.
+
+```json
+{ "moves": { "operations/old-page": "operations/new-page" } }
+```
+
+The website reads this file on every sync and turns each entry into a redirect, so no
+change is needed in `llm-d/llm-d.github.io`.
+
+## Adding an infrastructure provider
+
+To add a new infrastructure provider to our well-lit paths, we request the following support:
+
+* Documentation on configuring the platform to support one or more [well-lit path guides](https://github.com/llm-d/llm-d/tree/main/guides#well-lit-path-guides)
+* The appropriate configuration contributed to the guide to deal with provider specific variation
+* An automated test environment that validates the supported guides
+* At least one documented platform maintainer who responds to GitHub issues and is available for regular discussion in the llm-d slack channel `#sig-installation`.

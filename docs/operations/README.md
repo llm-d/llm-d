@@ -1,8 +1,8 @@
-# Operational Excellence
+# Operations
 
 Operational Excellence guidelines focus on overarching Day-2 site reliability engineering, cluster-wide telemetry frameworks, and safe lifecycle rollout strategies for generative AI inference deployments.
 
-While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section governs enterprise cluster observability, alerting, and zero-downtime model updates.
+While [capability guides](../capabilities/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section governs enterprise cluster observability, alerting, and zero-downtime model updates.
 
 ### [Cluster Observability](observability/README.md)
 
@@ -24,7 +24,7 @@ Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are
 
 Draining in-flight requests during scale-down, rolling updates, and node drains for general serving: the Kubernetes termination sequence, vLLM `--shutdown-timeout`, request cancellation on client disconnect, and EPP flow-control drain semantics.
 
-### [Serve External APIs](serve-external-apis/README.md)
+### [Serve External APIs](../use-cases/self-hosted-and-external/README.md)
 
 Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs.
 
@@ -36,6 +36,6 @@ Operational best practices, high availability scaling modes, standalone proxy ar
 
 Throughput modeling, concurrency sizing (backed by a measured sweep), container resource sizing, and horizontal scaling for the Async Processor batch-dispatch agent.
 
-### [Model Loading and Startup Acceleration](model-loading-and-startup.md)
+### [Model Loading and Startup Acceleration](scaling/model-loading.md)
 
 Model sources, persistent caches, and startup optimization options for llm-d deployments.

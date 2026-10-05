@@ -4,16 +4,16 @@ High-level guide to llm-d architecture. Start here, then dive into specific guid
 
 ## Core Components
 
-The llm-d architecture is built around three primary concepts: the [Router](core/router/README.md), the [InferencePool](core/inferencepool.md), and the [Model Server](core/model-servers.md).
+The llm-d architecture is built around three primary concepts: the [Router](router/README.md), the [InferencePool](inferencepool.md), and the [Model Server](model-servers.md).
 
-- **[llm-d Router](core/router/README.md)** - The intelligent entry point for inference requests. It provides LLM-aware load balancing, request queuing, and policy enforcement. It is composed of two functional parts:
-  - **[Proxy](core/router/proxy.md)**: A high-performance L7 proxy conformant with the [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/concepts/conformance/) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
-  - **[Endpoint Picker (EPP)](core/router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
+- **[llm-d Router](router/README.md)** - The intelligent entry point for inference requests. It provides LLM-aware load balancing, request queuing, and policy enforcement. It is composed of two functional parts:
+  - **[Proxy](router/proxy.md)**: A high-performance L7 proxy conformant with the [Gateway API Inference Extension (GAIE)](https://gateway-api-inference-extension.sigs.k8s.io/concepts/conformance/) that accepts user requests and consults the EPP via the `ext-proc` protocol to determine the optimal destination.
+  - **[Endpoint Picker (EPP)](router/epp/README.md)**: The routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.
 
-- **[InferencePool](core/inferencepool.md)** - The API that groups Model Server pods serving the same base model via a label selector. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router. Additionally:
+- **[InferencePool](inferencepool.md)** - The API that groups Model Server pods serving the same base model via a label selector. Conceptualized as an "LLM-optimized Service", it serves as the discovery target for the Router. Additionally:
   - **Variant** - A logical sub-grouping of Model Server pods within an InferencePool, expressed through pod labels rather than a dedicated resource. Variants distinguish model servers based on shared characteristics such as serving role (e.g., prefill or decode), cost profile, performance profile (throughput, latency), or other operational attributes.
 
-- **[Model Server](core/model-servers.md)** - The inference engine (such as vLLM or SGLang) that executes the model on hardware accelerators (GPUs, TPUs, HPUs).
+- **[Model Server](model-servers.md)** - The inference engine (such as vLLM or SGLang) that executes the model on hardware accelerators (GPUs, TPUs, HPUs).
 
 <p align="center">
   <picture>
@@ -30,30 +30,30 @@ llm-d's core design can be extended with optional advanced patterns:
 
 llm-d provides a comprehensive ecosystem for managing and reusing the KV cache across the inference pool. This includes:
 
-- [Prefix-Cache Aware Routing](advanced/kv-management/prefix-cache-aware-routing.md): Heuristic and precise techniques to maximize cache hits.
-- [KV-Cache Indexing](advanced/kv-management/kv-indexer.md): Event-driven tracking of cache state across all model servers.
-- [KV Offloading](advanced/kv-management/kv-offloader.md): Tiered storage hierarchy (CPU, SSD) for extending cache capacity.
-- [P2P Prefix Cache Sharing](../well-lit-paths/foundations/enable-p2p-prefix-cache-sharing.md): Pulling cached prefix KV blocks from a peer's CPU tier instead of recomputing them.
+- [Prefix-Cache Aware Routing](kv-cache/prefix-cache-routing.md): Heuristic and precise techniques to maximize cache hits.
+- [KV-Cache Indexing](kv-cache/indexer.md): Event-driven tracking of cache state across all model servers.
+- [KV Offloading](kv-cache/offloading.md): Tiered storage hierarchy (CPU, SSD) for extending cache capacity.
+- [P2P Prefix Cache Sharing](../capabilities/p2p-kv-cache-sharing.md): Pulling cached prefix KV blocks from a peer's CPU tier instead of recomputing them.
 
-See [KV Cache Management](advanced/kv-management/README.md) for an overview of how these components compose.
+See [KV Cache Management](kv-cache/README.md) for an overview of how these components compose.
 
 ### Disaggregated Serving
 
 In disaggregated serving, a single inference request is split into multiple phases (e.g., Prefill and Decode) handled by specialized workers. The llm-d Router orchestrates this flow by selecting both a prefill and a decode endpoint and coordinating the KV-cache transfer between them.
 
-See [Disaggregation](advanced/disaggregation/README.md) for complete details.
+See [Disaggregation](disaggregation.md) for complete details.
 
 ### Predicted Latency-Based Routing
 
 The llm-d Router can be extended with "consultant" sidecars that provide advanced signals for routing decisions. The primary implementation is the **Latency Predictor**, which enables routing based on predicted ITL and TTFT.
 
-- [Latency Predictor](advanced/latency-predictor.md): Trains an XGBoost model online to predict request latency for better endpoint scoring and SLO enforcement.
+- [Latency Predictor](latency-prediction.md): Trains an XGBoost model online to predict request latency for better endpoint scoring and SLO enforcement.
 
 ### Batch Inference
 
 Batch and offline inference workloads are handled by two modules that can be deployed independently or together. The Batch Gateway provides an OpenAI-compatible Batch API for job management, while the Async Processor dispatches queued requests with flow-control gating. When composed, the Batch Gateway delegates dispatch to the Async Processor.
 
-See [Batch Inference](advanced/batch/README.md) for details on the batch inference design.
+See [Batch Inference](batch/README.md) for details on the batch inference design.
 
 ### Autoscaling
 
@@ -61,7 +61,7 @@ llm-d supports proactive, SLO-aware autoscaling driven by metrics exported by th
 
 The Workload Variant Autoscaler (WVA), which globally optimized replica placement across variants and inference pools, is deprecated.
 
-See [Autoscaling](advanced/autoscaling/README.md) for complete details.
+See [Autoscaling](autoscaling/README.md) for complete details.
 
 <p align="center">
   <picture>

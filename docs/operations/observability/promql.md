@@ -1,6 +1,6 @@
-# PromQL Query Reference
+# PromQL reference
 
-Ready-to-use PromQL queries for monitoring llm-d deployments. Use these in the Prometheus UI or as the basis for Grafana panels. For a default set of ready-to-apply alerts built on these metrics, see [Alerting](./alerting.md).
+Ready-to-use PromQL queries for monitoring llm-d deployments. Use these in the Prometheus UI or as the basis for Grafana panels. For a default set of ready-to-apply alerts built on these metrics, see [Alerting](alerting.md).
 
 To generate traffic and populate error metrics for testing, use the [traffic generation script](../../../guides/recipes/observability/generate-traffic-basic.sh).
 
@@ -28,7 +28,7 @@ Start here when something looks wrong.
 
 ### GKE TPU Hardware
 
-For GKE TPU hardware metrics, see the [TPU metric interface and checks](./tpu.md#metric-interface).
+For GKE TPU hardware metrics, see the [TPU metric interface and checks](tpu-metrics-gke.md#metric-interface).
 For example, `tensorcore_utilization{job="kube-system/tpu-metrics-exporter",make="cloud-tpu"}`
 returns per-series utilization in percent; `memory_used{job="kube-system/tpu-metrics-exporter",make="cloud-tpu"}`
 returns bytes. Substitute the actual scrape job. These gauges do not need `rate()`.

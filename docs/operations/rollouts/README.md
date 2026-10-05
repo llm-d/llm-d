@@ -1,4 +1,4 @@
-# Rollouts
+# Rollouts and updates
 
 Rollouts are incremental deployment operations that gradually introduce new versions of inference infrastructure with minimal service disruption. Rather than replacing all running instances at once, a rollout shifts traffic progressively — allowing you to monitor behavior at each stage and roll back immediately if problems arise.
 

@@ -1,6 +1,6 @@
 # vLLM on GKE TPU7x Dynamic Sub-Slices
 
-These recipes deploy aggregated (non-disaggregated) vLLM model servers onto dynamically formed TPU7x sub-slices, as variants of the [Optimized Baseline guide](../../../../README.md). Instead of provisioning one static node pool per TPU topology, capacity is pre-provisioned as `4x4x4` sub-blocks and [GKE dynamic slicing](../../../../../../docs/infrastructure/providers/gke/dynamic-slicing/README.md) forms a sub-slice per model server replica at scheduling time, via Kueue Topology-Aware Scheduling.
+These recipes deploy aggregated (non-disaggregated) vLLM model servers onto dynamically formed TPU7x sub-slices, as variants of the [Optimized Baseline guide](../../../../README.md). Instead of provisioning one static node pool per TPU topology, capacity is pre-provisioned as `4x4x4` sub-blocks and [GKE dynamic slicing](../../../../../../docs/platform/providers/gke-tpu-dynamic-slicing.md) forms a sub-slice per model server replica at scheduling time, via Kueue Topology-Aware Scheduling.
 
 Each replica is a `LeaderWorkerSet` group; the GKE slice controller activates the requested sub-slice shape for the group and re-forms it on healthy partitions after hardware failure.
 
@@ -15,7 +15,7 @@ Both variants serve `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`, the model used fo
 
 ## Prerequisites
 
-1. Complete the cluster and Kueue TAS setup in [TPU Dynamic Slicing on GKE](../../../../../../docs/infrastructure/providers/gke/dynamic-slicing/README.md).
+1. Complete the cluster and Kueue TAS setup in [TPU Dynamic Slicing on GKE](../../../../../../docs/platform/providers/gke-tpu-dynamic-slicing.md).
 2. Deploy the llm-d router by following the [Optimized Baseline guide](../../../../README.md) through the router installation step, with `NAMESPACE=llm-d-optimized-baseline`.
 3. Create the `LocalQueue` in the guide namespace:
 

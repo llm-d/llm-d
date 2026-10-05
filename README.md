@@ -23,13 +23,13 @@ llm-d is a [Cloud Native Computing Foundation (CNCF)](https://www.cncf.io/) sand
 
 Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/sgl-project/sglang) handle efficiently running large language models on accelerators. llm-d provides state-of-the-art orchestration and optimizations above model servers to serve high-scale real-world traffic efficiently and reliably. Our offerings are organized into the following themes:
 
-* **[Intelligent Routing:](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline)** Maximize performance with prefix-cache and load-aware balancing, including experimental predicted latency-based scheduling to decrease latency and increase throughput.
-* **[Advanced KV-Cache Management:](https://llm-d.ai/docs/well-lit-paths/foundations/tiered-prefix-cache)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
-* **[Serving Large Models:](https://llm-d.ai/docs/well-lit-paths/foundations/wide-expert-parallelism)** Optimize massive models (e.g., DeepSeek-R1, GPT-OSS) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
+* **[Intelligent Routing:](https://llm-d.ai/docs/capabilities/optimized-baseline)** Maximize performance with prefix-cache and load-aware balancing, including experimental predicted latency-based scheduling to decrease latency and increase throughput.
+* **[Advanced KV-Cache Management:](https://llm-d.ai/docs/capabilities/tiered-kv-cache)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
+* **[Serving Large Models:](https://llm-d.ai/docs/capabilities/wide-expert-parallelism)** Optimize massive models (e.g., DeepSeek-R1, GPT-OSS) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
 * **[Operational Excellence:](https://llm-d.ai/docs/operations)** Ensure production stability with intelligent flow control for multi-tenant serving and proactive, SLO-aware autoscaling based on real-time inference signals.
-* **[Batch Processing:](https://llm-d.ai/docs/well-lit-paths/workloads/batch-serving)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
+* **[Batch Processing:](https://llm-d.ai/docs/use-cases/batch-and-offline)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
 
-For a complete list of tested recipes and architectural patterns, see our [well-lit path guides](https://llm-d.ai/docs/well-lit-paths). These guides provide benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. Our intent is to eliminate the heavy lifting common in tuning and deploying generative AI inference on modern accelerators.
+For a complete list of tested recipes and architectural patterns, see our [well-lit path guides](https://llm-d.ai/docs/capabilities). These guides provide benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. Our intent is to eliminate the heavy lifting common in tuning and deploying generative AI inference on modern accelerators.
 
 ## Performance Highlights
 
@@ -46,10 +46,10 @@ Explore detailed, reproducible benchmarks on [Prism](https://prism.llm-d.ai).
 
 ## Get Started Now
 
-Ready to achieve SOTA performance? Follow our [Quickstart Guide](https://llm-d.ai/docs/getting-started/quickstart) to deploy your first optimized inference service on Kubernetes. You'll learn how to set up the llm-d stack, configure the intelligent router, and validate performance with production-ready benchmarks.
+Ready to achieve SOTA performance? Follow our [Quickstart Guide](https://llm-d.ai/docs/get-started/quickstart) to deploy your first optimized inference service on Kubernetes. You'll learn how to set up the llm-d stack, configure the intelligent router, and validate performance with production-ready benchmarks.
 
 > [!TIP]
-> Most users begin with our [Optimized Baseline](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline), which provides a high-performance foundation for a wide range of LLM serving use cases.
+> Most users begin with our [Optimized Baseline](https://llm-d.ai/docs/capabilities/optimized-baseline), which provides a high-performance foundation for a wide range of LLM serving use cases.
 
 ## Latest News 🔥
 
@@ -76,7 +76,7 @@ llm-d accelerates distributed inference by integrating industry-standard open te
 
 Our [guides](./guides/README.md) are living docs and kept current. For details about the Helm charts and component releases, visit our [GitHub Releases page](https://github.com/llm-d/llm-d/releases) to review release notes.
 
-See the [accelerator docs](./docs/getting-started/accelerators.md) for points of contact and more details about the accelerators, networks, and configurations tested.
+See the [accelerator docs](./docs/get-started/requirements.md) for points of contact and more details about the accelerators, networks, and configurations tested.
 
 ## Contribute
 

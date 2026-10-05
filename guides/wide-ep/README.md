@@ -63,18 +63,18 @@ This guide includes configurations for the following accelerators:
 > and `allgather_reducescatter`; it does not use DeepEP, but still requires
 > full-mesh pod network connectivity between decode and prefill workers.
 >
-> See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+> See [RDMA and Networking Configuration](../../docs/platform/networking-rdma.md)
 > for how the networking stack (NIXL/UCX, InfiniBand/RoCE) fits together and what
-> the cluster must provide, and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md)
+> the cluster must provide, and the [multi-node deployment guide](../../docs/capabilities/multi-node.md)
 > for cross-node setup.
 
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 * Have a cluster with RDMA-capable accelerator nodes. For the networking stack and
-  how to verify it, see [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
-  and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md). For GKE, see the
-  [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the
+  how to verify it, see [RDMA and Networking Configuration](../../docs/platform/networking-rdma.md)
+  and the [multi-node deployment guide](../../docs/capabilities/multi-node.md). For GKE, see the
+  [provider setup doc](../../docs/platform/providers/gke.md) and the
   [GKE overlay cluster prerequisites](modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md#cluster-prerequisites).
 * Checkout llm-d repo:
 
@@ -154,7 +154,7 @@ helm install ${GUIDE_NAME} \
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
+1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/platform/gateways).
 2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
 
 ```bash

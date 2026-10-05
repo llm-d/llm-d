@@ -201,7 +201,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/router/proxy.md) with an Envoy sidecar (default):
 
 > [!IMPORTANT]
 > Before running the command below, execute the path setup commands from the previous section: the `export ROUTER_BASE_VALUES=...` and `export ROUTER_VALUES=...` commands above.
@@ -225,7 +225,7 @@ To use **agentgateway** as the sidecar proxy instead of Envoy, see [router recip
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../../docs/infrastructure/gateway).
+1. _Deploy a Kubernetes Gateway_ named by following one of [the gateway guides](../../docs/platform/gateways).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
 
 > [!IMPORTANT]
@@ -251,7 +251,7 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/scaling/model-loading.md).
 
 Apply the Kustomize overlays for your specific backend:
 

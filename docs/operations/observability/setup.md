@@ -1,4 +1,4 @@
-# Observability Setup
+# Setup
 
 This page explains how to set up Prometheus, Grafana, and distributed tracing for an llm-d deployment. All guides reference this page — set this up once and it works across every guide.
 
@@ -167,7 +167,7 @@ Available dashboards:
 | ----------- | -------------- |
 | `llm-d-vllm-overview` | General vLLM metrics overview |
 | `llm-d-sglang-overview` | General SGLang metrics overview |
-| `llm-d-tpu-overview` | GKE TPU exporter health and hardware metrics; requires the [TPU recipe](../../../guides/recipes/observability/tpu/) |
+| `llm-d-tpu-overview` | GKE TPU exporter health and hardware metrics; requires the [TPU recipe](../../../guides/recipes/observability/tpu) |
 | `llm-d-failure-saturation-dashboard` | Key failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache` | KV cache utilization and performance |
@@ -189,7 +189,7 @@ kubectl port-forward -n ${NAMESPACE} svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
 
-For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Distributed Tracing](./tracing.md).
+For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Distributed Tracing](tracing.md).
 
 ## Cleanup
 

@@ -1,4 +1,4 @@
-# Distributed Tracing
+# Distributed tracing
 
 This guide shows how to enable [OpenTelemetry](https://opentelemetry.io/) distributed tracing across llm-d components.
 

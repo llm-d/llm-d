@@ -1,6 +1,6 @@
 # Metrics
 
-This page covers how to enable and interpret metrics from an llm-d deployment. For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first.
+This page covers how to enable and interpret metrics from an llm-d deployment. For Prometheus and Grafana installation, see [Observability Setup](setup.md) first.
 
 > [!NOTE]
 > Commands in this page use `${NAMESPACE}` for the namespace where your llm-d workload runs. Set it before following along:
@@ -11,12 +11,12 @@ This page covers how to enable and interpret metrics from an llm-d deployment. F
 
 ## Prerequisites
 
-- A running llm-d deployment with an InferencePool and model servers — see the [quickstart](../../getting-started/quickstart.md) if needed
-- Prometheus and Grafana installed — see [Observability Setup](./setup.md)
+- A running llm-d deployment with an InferencePool and model servers — see the [quickstart](../../get-started/quickstart.md) if needed
+- Prometheus and Grafana installed — see [Observability Setup](setup.md)
 
 > [!NOTE]
-> TPU hardware metrics require the [GKE TPU monitoring recipe](../../../guides/recipes/observability/tpu/), which scrapes the GKE device-plugin exporter rather than the model server.
-> [GKE TPU Observability](./tpu.md) documents metric names, units, labels, and environment checks. Metric availability depends on the GKE runtime and TPU type; the vLLM image version alone does not determine that interface.
+> TPU hardware metrics require the [GKE TPU monitoring recipe](../../../guides/recipes/observability/tpu), which scrapes the GKE device-plugin exporter rather than the model server.
+> [GKE TPU Observability](tpu-metrics-gke.md) documents metric names, units, labels, and environment checks. Metric availability depends on the GKE runtime and TPU type; the vLLM image version alone does not determine that interface.
 
 ## Step 1: Enable Model Server Metrics
 
@@ -32,7 +32,7 @@ components:
   # - ../../../recipes/modelserver/components/monitoring-pd  # add for prefill/decode disaggregation
 ```
 
-The monitoring component creates PodMonitors that scrape model server metrics. See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details.
+The monitoring component creates PodMonitors that scrape model server metrics. See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring) for details.
 
 ### Verify PodMonitors
 
@@ -283,7 +283,7 @@ Unlike the EPP and vLLM metrics above, these names carry no `llm_d_` prefix, so 
 > [!NOTE]
 > The Batch Gateway dashboards compute histogram quantiles by summing buckets across pods before applying `histogram_quantile`, which yields a fleet-wide approximate percentile rather than an exact one. This is acceptable because each job is processed by exactly one pod, but it can mask a single consistently-slow pod. Add `by (le, pod)` for a per-pod breakdown.
 
-For alerts built on these metrics, see [Alerting](./alerting.md#batch-gateway-batch-gatewayrules).
+For alerts built on these metrics, see [Alerting](alerting.md#batch-gateway-batch-gatewayrules).
 
 ## Step 4: Enable Inference Cost Metrics 
 
@@ -367,7 +367,7 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | ----------- | -------------- |
 | `llm-d-vllm-overview.json` | General vLLM metrics overview |
 | `llm-d-sglang-overview.json` | General SGLang metrics overview |
-| `llm-d-tpu-overview.json` | GKE TPU exporter health and hardware metrics; see the [TPU recipe](../../../guides/recipes/observability/tpu/) |
+| `llm-d-tpu-overview.json` | GKE TPU exporter health and hardware metrics; see the [TPU recipe](../../../guides/recipes/observability/tpu) |
 | `llm-d-failure-saturation-dashboard.json` | Failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
