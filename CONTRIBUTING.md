@@ -317,6 +317,26 @@ When you **add a page or folder**, add its entry to `docs/menu-config.json` so i
 human-readable label and an explicit position. Items with no entry still appear, but sort
 alphabetically after positioned siblings and use an auto-generated label.
 
+Positions are shared between folders and pages under the same parent. A folder at
+position 1 and a page at position 1 in the same section tie, and then fall back to
+alphabetical order, so number the children of each folder in one sequence.
+
+### Redirects when you move a page (`docs/redirects.json`)
+
+Page URLs come from the folder tree, so moving or renaming a page changes its URL and
+breaks every existing link and search result that points at it.
+
+When you **move or rename a page**, add an entry to
+[`docs/redirects.json`](docs/redirects.json): the old path on the left, the new one on the
+right, both relative to `docs/` and without a file extension.
+
+```json
+{ "moves": { "operations/old-page": "operations/new-page" } }
+```
+
+The website reads this file on every sync and turns each entry into a redirect, so no
+change is needed in `llm-d/llm-d.github.io`.
+
 ## Adding an infrastructure provider
 
 To add a new infrastructure provider to our well-lit paths, we request the following support:
