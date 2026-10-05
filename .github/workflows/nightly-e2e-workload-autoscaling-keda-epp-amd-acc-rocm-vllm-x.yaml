@@ -6,7 +6,7 @@ name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)
 
 on:
   schedule:
-    - cron: '0 18 * * *'  # 18:00 UTC daily (clear of the other ROCm nightlies)
+    - cron: '0 13 * * *'  # 13:00 UTC daily
   workflow_dispatch:
     inputs:
       # decode_pods, prefill_pods, harness and workload are accepted only because

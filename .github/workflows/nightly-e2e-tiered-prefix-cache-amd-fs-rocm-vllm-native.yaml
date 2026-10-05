@@ -68,7 +68,7 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 14 * * *'  # 14:00 UTC daily
+    - cron: '0 11 * * *'  # 11:00 UTC daily
 
 permissions:
   contents: write

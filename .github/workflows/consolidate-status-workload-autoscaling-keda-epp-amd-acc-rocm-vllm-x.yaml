@@ -20,7 +20,7 @@ on:
         default: 'main'
 
   schedule:
-    - cron: '0 20 * * *'  # 20:00 UTC daily (after the 18:00 UTC nightly)
+    - cron: '0 15 * * *'  # 15:00 UTC daily (after the 13:00 UTC nightly)
 
 jobs:
   check_for_success:
