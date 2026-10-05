@@ -465,6 +465,7 @@ kubectl get leaderworkerset -n ${NAMESPACE} -l disaggregatedset.x-k8s.io/name=pd
 * Scaling `slices` adds or removes complete P/D copies at the current revision, without touching existing slices.
 * Role `replicas` apply per slice, so the xPyD ratio (see [P/D Best Practices](#pd-best-practices)) holds in every slice.
 * Rolling updates proceed independently per slice.
+* Changing either role's template rolls both roles; one revision covers all roles.
 
 See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) for scaling, rollouts, and placement.
 
