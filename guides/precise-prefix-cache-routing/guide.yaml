@@ -113,7 +113,6 @@ deploy:
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
     # SGLang has no render endpoints: a dedicated, GPU-less vLLM render pool.
     - when: {MODEL_SERVER: [sglang]}
-      skip_in: [ci]
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
 
   monitoring:
@@ -173,7 +172,6 @@ cleanup:
     - when: {MODEL_SERVER: [vllm]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
     - when: {MODEL_SERVER: [sglang]}
-      skip_in: [ci]
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
