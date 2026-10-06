@@ -21,7 +21,9 @@ This implementation uses Redis Sorted Sets as the backend for the request queue.
      helm install redis bitnami/redis -n redis --create-namespace --set auth.enabled=true --set auth.password=$REDIS_PASSWORD
 
      # Create a secret holding the full connection URL for the Async Processor
-     # (referenced via ap.transportConfig.urlSecret.name / ap.transportConfig.urlSecret.key in values.yaml):
+     # (referenced via ap.transportConfig.urlSecret.name / ap.transportConfig.urlSecret.key in values.yaml).
+     # The chart is installed into this namespace later, but the Secret has to exist first:
+     kubectl create namespace llm-d-async --dry-run=client -o yaml | kubectl apply -f -
      kubectl create secret generic redis-creds -n llm-d-async \
        --from-literal=url="redis://:$REDIS_PASSWORD@redis-master.redis.svc.cluster.local:6379"
      ```
