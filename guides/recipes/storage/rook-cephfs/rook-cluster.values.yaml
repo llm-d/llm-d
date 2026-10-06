@@ -1,0 +1,215 @@
+## Rook CephCluster and CephFS values for the rook-cephfs storage recipe.
+## Chart: rook-ceph-cluster from https://charts.rook.io/release
+##
+## Ceph runs on the same nodes as the model servers: every node labelled
+## llm-d.ai/ceph-storage=true hosts mons, MDS daemons, and OSDs on its local
+## NVMe. The pool, daemon and client settings below are tuned for large,
+## regenerable KV-cache blocks, not for durable general-purpose storage.
+
+clusterName: rook-ceph
+
+toolbox:
+  enabled: true
+
+# Pin the exact version: a floating major tag can pull a newer point release
+# for some daemons and leave the operator stuck reconciling mixed versions.
+cephImage:
+  repository: quay.io/ceph/ceph
+  tag: v19.2.4
+
+cephClusterSpec:
+  dataDirHostPath: /var/lib/rook
+
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  mgr:
+    count: 2
+    allowMultiplePerNode: false
+    modules:
+      - name: pg_autoscaler
+        enabled: true
+  dashboard:
+    enabled: true
+
+  # Host networking keeps the CephFS data path (kernel client -> OSD) off the
+  # pod overlay. Set addressRanges to the subnets of your high-speed NICs so
+  # that the OSDs advertise addresses on them; without it Ceph binds to each
+  # node's primary (management) address. List every subnet the OSDs may use,
+  # plus the management subnet the mons live on. Put site-specific values in
+  # your own file and pass it with ROOK_CLUSTER_EXTRA_VALUES.
+  #
+  # Apply this at install time. Switching a running cluster from the pod
+  # network to host networking breaks mon quorum.
+  network:
+    provider: host
+    # addressRanges:
+    #   public:
+    #     - 10.243.65.0/24  # management subnet (mons)
+    #     - 10.0.0.0/16     # data NIC 1
+    #     - 10.1.0.0/16     # data NIC 2
+
+  cephConfig:
+    global:
+      # The KV-cache filesystem's pools below keep a single copy.
+      mon_allow_pool_size_one: "true"
+      # 4 MiB messenger receive buffer.
+      ms_tcp_rcvbuf: "4194304"
+    osd:
+      # 8 GiB memory target, below the 12 GiB container limit set in resources.
+      osd_memory_target: "8589934592"
+      # 16 shards x 4 workers per OSD. Sized for nodes with many cores; watch
+      # OSD CPU saturation before reusing these on smaller nodes.
+      osd_op_num_shards_ssd: "16"
+      osd_op_num_threads_per_shard_ssd: "4"
+      # Favor client reads and writes over recovery and scrub.
+      osd_mclock_profile: high_client_ops
+      ms_async_op_threads: "5"
+      # Workaround for high OSD CPU with more discard threads on Ceph 19 (Squid).
+      # Re-evaluate after a Ceph upgrade.
+      bdev_async_discard_threads: "1"
+    mds:
+      # 4 GiB metadata cache, within the 8 GiB MDS container limit.
+      mds_cache_memory_limit: "4294967296"
+    client:
+      # 32 MiB read-ahead, larger metadata and object caches, and more
+      # operations in flight.
+      client_readahead_max_bytes: "33554432"
+      client_cache_size: "65536"
+      client_oc_size: "1073741824"
+      objecter_inflight_ops: "4096"
+      objecter_inflight_op_bytes: "524288000"
+
+  resources:
+    osd:
+      requests:
+        cpu: "2"
+        memory: "8Gi"
+      limits:
+        cpu: "4"
+        memory: "12Gi"
+    mon:
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    mgr:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+
+  placement:
+    all:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: llm-d.ai/ceph-storage
+                  operator: In
+                  values:
+                    - "true"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+
+  storage:
+    # useAllNodes is narrowed to the labelled nodes by the placement above.
+    useAllNodes: true
+    useAllDevices: false
+    # WARNING: every unused device matching this regex becomes an OSD. The
+    # default takes nvme1n1..nvme7n1 and leaves nvme0n1 alone. Check `lsblk`
+    # on each node and adjust the filter so that it does not match the OS or
+    # model-cache drives.
+    deviceFilter: "^nvme[1-7]n1$"
+
+cephBlockPools: []
+cephObjectStores: []
+
+cephFileSystems:
+  - name: kvcache-fs
+    spec:
+      # One copy of the metadata as well: this filesystem holds nothing but
+      # cache, so losing it means recreating it and refilling the cache. Raise
+      # to 3 if the filesystem must survive the loss of an OSD.
+      metadataPool:
+        replicated:
+          size: 1
+          requireSafeReplicaSize: false
+      dataPools:
+        - name: data0
+          deviceClass: nvme
+          # KV cache is recomputable: losing an object costs one prefill, not
+          # data. A single copy gives the full raw NVMe capacity to the cache.
+          # Raise size to 2 or 3 if warm cache must survive a node failure.
+          # Never store model weights or other durable data in this pool.
+          replicated:
+            size: 1
+            requireSafeReplicaSize: false
+          # With a single placement group all I/O lands on one primary OSD.
+          parameters:
+            pg_num: "128"
+      preserveFilesystemOnDelete: false
+      metadataServer:
+        activeCount: 2
+        activeStandby: true
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        priorityClassName: system-cluster-critical
+        placement:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: llm-d.ai/ceph-storage
+                      operator: In
+                      values:
+                        - "true"
+          # Spread the MDS daemons over the storage nodes.
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app: rook-ceph-mds
+          tolerations:
+            - key: nvidia.com/gpu
+              operator: Exists
+              effect: NoSchedule
+    storageClass:
+      enabled: true
+      isDefault: false
+      name: rook-cephfs-fast
+      pool: data0
+      reclaimPolicy: Delete
+      allowVolumeExpansion: true
+      volumeBindingMode: "Immediate"
+      # No access-time writes, and 64 MiB read/write sizes for the large
+      # sequential KV block transfers. Mount options apply at mount time:
+      # restart the model servers after changing them.
+      mountOptions:
+        - noatime
+        - nodiratime
+        - wsize=67108864
+        - rsize=67108864
+      parameters:
+        csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+        csi.storage.k8s.io/provisioner-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/controller-publish-secret-name: rook-csi-cephfs-provisioner
+        csi.storage.k8s.io/controller-publish-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+        csi.storage.k8s.io/node-stage-secret-namespace: "{{ .Release.Namespace }}"

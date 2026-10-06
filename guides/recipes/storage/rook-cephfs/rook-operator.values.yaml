@@ -1,0 +1,16 @@
+## Rook operator values for the rook-cephfs storage recipe.
+## Chart: rook-ceph from https://charts.rook.io/release
+
+# Required on OpenShift: Ceph pods write to hostPath volumes under SELinux.
+hostpathRequiresPrivileged: true
+
+# The Ceph daemons run on the host network (see rook-cluster.values.yaml).
+# Pods on the cluster network often cannot reach node addresses on the Ceph
+# ports, so the operator and the CSI pods must be on the host network too.
+enforceHostNetwork: true
+
+# The operator may land on a tainted GPU node.
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
