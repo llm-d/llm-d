@@ -372,9 +372,10 @@ def verify_websocket_responses(base_url: str, model: str) -> None:
                 break
             resp_header += chunk
         status_line = resp_header.split(b"\r\n", 1)[0].decode("ascii", errors="replace")
-        if "101" not in status_line:
-            print(f"  NOTE WebSocket upgrade returned '{status_line}' (skipping WS check on HTTP-only proxy).")
-            return
+        assert "101" in status_line, (
+            f"WebSocket upgrade to ws://{host}:{port}/v1/responses failed with '{status_line}' "
+            f"(pass --skip-websocket if your proxy/Gateway does not support WebSocket upgrades)"
+        )
 
         print(f"  OK  Connected to ws://{host}:{port}/v1/responses ({status_line})")
         frame1 = {
@@ -424,6 +425,11 @@ def main() -> None:
         action="store_true",
         help="Skip /health and /ready checks when testing through a Gateway that only exposes /v1/*",
     )
+    parser.add_argument(
+        "--skip-websocket",
+        action="store_true",
+        help="Explicitly skip [4/4] WebSocket /v1/responses upgrade check",
+    )
     args = parser.parse_args()
 
     base_url = args.base_url.rstrip("/")
@@ -432,10 +438,19 @@ def main() -> None:
 
     verify_http_stateful_responses(base_url, model)
     verify_webhook_mode(base_url, model)
-    verify_websocket_responses(base_url, model)
+    if args.skip_websocket:
+        print("\n[4/4] Skipping WebSocket Mode (WS /v1/responses) check (--skip-websocket).")
+    else:
+        verify_websocket_responses(base_url, model)
 
+    skipped = [
+        name
+        for flag, name in ((args.skip_health, "health"), (args.skip_websocket, "websocket"))
+        if flag
+    ]
+    suffix = f" [skipped: {', '.join(skipped)}]" if skipped else ""
     print("\n============================================================")
-    print(f"ALL VERIFICATION CHECKS PASSED AGAINST {base_url} ({model})")
+    print(f"ALL VERIFICATION CHECKS PASSED AGAINST {base_url} ({model}){suffix}")
     print("============================================================")
 
 

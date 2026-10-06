@@ -1,4 +1,4 @@
-# Agentic API (`vllm/agentic-api`)
+# [Experimental] Agentic API (`vllm/agentic-api`)
 
 Add the OpenAI-compatible **Responses API** — stateful multi-turn conversations, webhook tool
 loops and WebSocket streaming — to a deployment you already have, by putting
@@ -288,7 +288,7 @@ echo "base guide: ${BASE_GUIDE_NAME}   namespace: ${NAMESPACE}   mode: ${MODE}  
 
 The pre-flight check below reports a missing tool-calling flag before anything is deployed:
 
-<!-- guide:prerequisites.base_guide start -->
+<!-- guide:prerequisites.base_guide.common start -->
 ```bash
 # The base guide must already be deployed, per its own README -- unmodified.
 # This extension never reinstalls or upgrades the router.
@@ -302,7 +302,13 @@ kubectl get svc ${BASE_GUIDE_NAME}-epp -n ${NAMESPACE}
 kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${BASE_GUIDE_NAME} -o yaml \
   | grep -q -- "--enable-auto-tool-choice" \
   || echo "WARNING: no --enable-auto-tool-choice on the ${BASE_GUIDE_NAME} model servers. Verification test [3/4] will fail. See the Prerequisites section of the guide README."
+```
+<!-- guide:prerequisites.base_guide.common end -->
 
+**Gateway Mode only** — confirm the `InferencePool`, the base chart's `HTTPRoute`, and the `Gateway` are present:
+
+<!-- guide:prerequisites.base_guide.gateway start -->
+```bash
 # only when MODE=gateway:
 # Gateway Mode additionally needs the InferencePool, the chart's own
 # HTTPRoute (which stays untouched), and a Gateway from
@@ -311,24 +317,26 @@ kubectl get inferencepool ${BASE_GUIDE_NAME} -n ${NAMESPACE}
 kubectl get httproute ${BASE_GUIDE_NAME} -n ${NAMESPACE}
 kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE}
 ```
-<!-- guide:prerequisites.base_guide end -->
+<!-- guide:prerequisites.base_guide.gateway end -->
 
 
 ### 3. Create the PostgreSQL credentials
 
-The password is generated locally and only ever stored in the Secret.
+The password is generated locally and only ever stored in the Secret (reusing the existing Secret on reruns so it stays in sync with an already-initialized PVC).
 
 <!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 # The password is generated here and never stored outside the Secret. The
 # database-url uses the Service's short name, so the Secret is not tied to
-# any particular namespace.
-PGPASS=$(openssl rand -hex 16)
-kubectl create secret generic agentic-api-postgres -n ${NAMESPACE} \
-  --from-literal=password="${PGPASS}" \
-  --from-literal=database-url="postgres://postgres:${PGPASS}@agentic-api-postgres:5432/agentic_api" \
-  --dry-run=client -o yaml | kubectl apply -f -
+# any particular namespace. Reuse the existing Secret on reruns so its
+# password stays in sync with an already-initialized PostgreSQL PVC.
+if ! kubectl get secret agentic-api-postgres -n ${NAMESPACE} >/dev/null 2>&1; then
+  PGPASS=$(openssl rand -hex 16)
+  kubectl create secret generic agentic-api-postgres -n ${NAMESPACE} \
+    --from-literal=password="${PGPASS}" \
+    --from-literal=database-url="postgres://postgres:${PGPASS}@agentic-api-postgres:5432/agentic_api"
+fi
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.secrets end -->
@@ -344,20 +352,28 @@ kubectl rollout status -n ${NAMESPACE} deployment/agentic-api-postgres --timeout
 
 ### 5. Point agentic-api at the base guide's router
 
-<!-- guide:deploy.api_base start -->
+#### Standalone Mode
+
+<!-- guide:deploy.api_base.standalone start -->
 ```bash
 # only when MODE=standalone:
 # Standalone Mode: the base guide's EPP runs an Envoy sidecar, so its
 # Service speaks plain HTTP on :80 and agentic-api can dial it by DNS.
 export LLM_API_BASE=${BASE_GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80
+```
+<!-- guide:deploy.api_base.standalone end -->
 
+#### Gateway Mode
+
+<!-- guide:deploy.api_base.gateway start -->
+```bash
 # only when MODE=gateway:
 # Gateway Mode: the EPP has no HTTP listener (only ext_proc on :9002), so
 # agentic-api's upstream call goes back through the Gateway. The hostname
 # is what keeps that from looping -- see manifests/gateway/routes.yaml.
 export LLM_API_BASE=epp.gateway.internal
 ```
-<!-- guide:deploy.api_base end -->
+<!-- guide:deploy.api_base.gateway end -->
 
 ### 6. Resolve the Gateway address (Gateway Mode only)
 
@@ -417,14 +433,22 @@ kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
 `Service/agentic-api`; the base guide's own router chart renders the equivalent policies for the
 `InferencePool` when installed with `provider.name=gke`.
 
-<!-- guide:deploy.gateway start -->
+**Istio / agentgateway / other providers:**
+
+<!-- guide:deploy.gateway.default start -->
 ```bash
 # only when MODE=gateway and PROVIDER_NAME=none or agentgateway or istio:
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway \
   | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
   | kubectl apply -n ${NAMESPACE} -f -
 kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
+```
+<!-- guide:deploy.gateway.default end -->
 
+**GKE (`PROVIDER_NAME=gke`):**
+
+<!-- guide:deploy.gateway.gke start -->
+```bash
 # only when MODE=gateway and PROVIDER_NAME=gke:
 # gateway-gke adds the networking.gke.io policies for Service/agentic-api on
 # top of everything in manifests/gateway.
@@ -433,7 +457,7 @@ kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway-gke \
   | kubectl apply -n ${NAMESPACE} -f -
 kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
 ```
-<!-- guide:deploy.gateway end -->
+<!-- guide:deploy.gateway.gke end -->
 
 - - -
 
@@ -454,12 +478,20 @@ export AGENTIC_API_BASE_URL=http://127.0.0.1:9000
 
 #### Gateway Mode
 
-<!-- guide:verify.endpoint.gateway start -->
+**GKE (`PROVIDER_NAME=gke`):**
+
+<!-- guide:verify.endpoint.gateway.gke start -->
 ```bash
 # only when PROVIDER_NAME=gke:
 # GATEWAY_IP is an external LoadBalancer IP, reachable directly.
 export AGENTIC_API_BASE_URL=http://${GATEWAY_IP}
+```
+<!-- guide:verify.endpoint.gateway.gke end -->
 
+**Istio / agentgateway / other providers:**
+
+<!-- guide:verify.endpoint.gateway.clusterip start -->
+```bash
 # only when PROVIDER_NAME=none or agentgateway or istio:
 # The Gateway Service is ClusterIP, so reach it through a port-forward.
 # GATEWAY_SVC was resolved in deploy.gateway_address above.
@@ -468,23 +500,33 @@ PF_PID=$!
 sleep 3
 export AGENTIC_API_BASE_URL=http://127.0.0.1:8080
 ```
-<!-- guide:verify.endpoint.gateway end -->
+<!-- guide:verify.endpoint.gateway.clusterip end -->
 
 ### Run the checks
 
-<!-- guide:verify.tests start -->
+#### Standalone Mode
+
+<!-- guide:verify.tests.standalone start -->
 ```bash
 # only when MODE=standalone:
 python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url ${AGENTIC_API_BASE_URL}
+kill ${PF_PID:-} 2>/dev/null || true
+```
+<!-- guide:verify.tests.standalone end -->
 
+#### Gateway Mode
+
+<!-- guide:verify.tests.gateway start -->
+```bash
 # only when MODE=gateway:
 # --skip-health is required in Gateway Mode: /health and /ready are not in
 # the agentic route, so they fall through to the InferencePool.
+# GKE Gateway Mode talks to the external IP directly and starts no
+# port-forward, so PF_PID may legitimately be unset.
 python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url ${AGENTIC_API_BASE_URL} --skip-health
-
 kill ${PF_PID:-} 2>/dev/null || true
 ```
-<!-- guide:verify.tests end -->
+<!-- guide:verify.tests.gateway end -->
 
 [`verify.py`](verify.py) needs only the Python 3 standard library, discovers the served model from
 `/v1/models`, and runs four end-to-end tests. All four are entirely client-side, including the
@@ -501,7 +543,8 @@ to your machine.
    returns the `function_call_output` via `previous_response_id`. This is the test that fails if
    the base guide's model server lacks the tool-calling flags, and it says so.
 4. **WebSocket mode `[4/4]`** — upgrades an RFC 6455 connection to `ws://<endpoint>/v1/responses`,
-   sends a `response.create` frame and verifies streaming completion.
+   sends a `response.create` frame and verifies streaming completion (pass `--skip-websocket` to
+   explicitly skip this check when testing through an HTTP-only proxy).
 
 - - -
 
@@ -509,24 +552,40 @@ to your machine.
 
 Removing the extension leaves the base guide exactly as it was.
 
-<!-- guide:cleanup.workload start -->
+#### Standalone Mode
+
+<!-- guide:cleanup.workload.standalone start -->
 ```bash
 # only when MODE=standalone:
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/base \
   | envsubst '${LLM_API_BASE}' \
   | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+```
+<!-- guide:cleanup.workload.standalone end -->
 
+#### Gateway Mode (Istio / agentgateway / other providers)
+
+<!-- guide:cleanup.workload.gateway start -->
+```bash
 # only when MODE=gateway and PROVIDER_NAME=none or agentgateway or istio:
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway \
   | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
   | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+```
+<!-- guide:cleanup.workload.gateway end -->
 
+#### Gateway Mode (GKE)
+
+<!-- guide:cleanup.workload.gateway_gke start -->
+```bash
 # only when MODE=gateway and PROVIDER_NAME=gke:
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/gateway-gke \
   | envsubst '${LLM_API_BASE} ${GATEWAY_IP} ${BASE_GUIDE_NAME}' \
   | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
 ```
-<!-- guide:cleanup.workload end -->
+<!-- guide:cleanup.workload.gateway_gke end -->
+
+#### PostgreSQL
 
 <!-- guide:cleanup.postgres start -->
 ```bash
