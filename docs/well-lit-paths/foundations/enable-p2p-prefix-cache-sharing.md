@@ -79,14 +79,12 @@ it:
 
 The guide ships prefix affinity plus the pull as the general-purpose
 default. Reach for load-aware placement plus the pull when many
-concurrent sessions contend on their owner pods. Both regimes are
-measured in the
-[benchmark report](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md).
+concurrent sessions contend on their owner pods.
 
 ## Deploy
 
 See the [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing)
-for manifests, verification gates, and step-by-step deployment.
+for manifests, mechanism verification, and step-by-step deployment.
 
 ## Architecture
 
@@ -114,8 +112,6 @@ normal NIXL P/D path transfers the request's KV to the selected decoder.
 
 ## Further Reading
 
-- [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing) - manifests, verification gates, benchmarking.
-- [Benchmark report: gpt-oss-120b on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
-- [Benchmark report: GLM-5.2 on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - C64 policy comparison, four-arm observation, and pull mechanism evidence.
+- [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing) - manifests and mechanism verification.
 - [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) - the offload tiers P2P serves from.
 - [Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) - the index that selects the pull source.
