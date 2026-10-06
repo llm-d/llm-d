@@ -224,7 +224,7 @@ export MODEL_NAME="openai/gpt-oss-120b"
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 
-* For NVIDIA GPU, you have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.0` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
+* For NVIDIA GPU, you have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
 * Create a target namespace for the installation
 
 ```bash
