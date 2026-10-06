@@ -351,16 +351,22 @@ Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscale
 
 ## Benchmarking
 
-Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every shape runs on a fresh stack starting at 1 replica (`maxReplicas: 4`), with the shipped profile rates.
+Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every shape runs on a fresh, calibrated stack starting at 1 replica per role (`maxReplicas: 4`), with the shipped profile rates. Static is the same stack with no ScaledObject, fixed at 1 replica per role.
 
-| Topology | Shape (ISL/OSL) | Measured `peakPrefillThroughput` | Replicas (start → peak) | TTFT p50 / p99 | Failed / total |
-| --- | --- | --- | --- | --- | --- |
-| P+D | prefill-heavy (8192/256) | 15521 | 1 → 3 | 0.62 s / 43.8 s | 9 / 2316 |
-| P+D | symmetrical (2048/2048) | 15569 | 1 | 0.20 s / 0.43 s | 0 / 1248 |
-| P+D | decode-heavy (256/4096) | 15414 | 1 | 0.09 s / 0.13 s | 0 / 624 |
-| P/D | prefill-heavy (8192/256) | 1154 | prefill 1 → 4, decode 1 | 439 s / 593 s | 1498 / 2316 |
-| P/D | symmetrical (2048/2048) | 1192 | prefill 1 → 4, decode 1 → 2 | 1.97 s / 150 s | 15 / 1248 |
-| P/D | decode-heavy (256/4096) | 1210 | prefill 1, decode 1 | 0.33 s / 0.58 s | 0 / 624 |
+Cells are autoscaled / static.
+
+| Topology | Shape (ISL/OSL) | Replicas, autoscaled (start → peak) | Peak GPUs | TTFT p50 | TTFT p99 | Failed / total | Output tok/s |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P+D | prefill-heavy (8192/256) | 1 → 3 | 6 / 2 | **0.62 s** / 225 s | **43.8 s** / 470 s | 9 / 0 of 2316 | 572 / 510 |
+| P+D | symmetrical (2048/2048) | 1 | 2 / 2 | 0.20 s / 0.21 s | 0.43 s / 0.41 s | 0 / 0 of 1248 | 1885 / 1984 |
+| P+D | decode-heavy (256/4096) | 1 | 2 / 2 | 0.09 s / 0.09 s | 0.13 s / 0.13 s | 0 / 0 of 624 | 1785 / 1856 |
+| P/D | prefill-heavy (8192/256) | prefill 1 → 4, decode 1 | 6 / 3 | 439 s / 303 s¹ | 593 s / 592 s¹ | **1498** / 2200 of 2316 | **135** / 20 |
+| P/D | symmetrical (2048/2048) | prefill 1 → 4, decode 1 → 2 | 8 / 3 | **1.97 s** / 282 s | **150 s** / 536 s | 15 / 0 of 1248 | **1888** / 1353 |
+| P/D | decode-heavy (256/4096) | prefill 1, decode 1 | 3 / 3 | 0.33 s / 0.27 s | 0.58 s / 0.45 s | 0 / 0 of 624 | 1790 / 1950 |
+
+¹ TTFT covers completed requests only, so 116 static requests against 818 autoscaled.
+
+Measured `peakPrefillThroughput`: P+D 15375–15569. P/D 1154–1210 autoscaled, 1332–1410 static.
 
 | | prefill-heavy | symmetrical | decode-heavy |
 | --- | --- | --- | --- |
@@ -387,7 +393,7 @@ for SHAPE in prefill_heavy symmetrical decode_heavy; do
 done
 ```
 
-On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to `standup`, `run` and `teardown`. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
+For the static baseline, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
 
 ### Sizing
 
