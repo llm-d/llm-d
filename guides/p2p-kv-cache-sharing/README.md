@@ -12,6 +12,33 @@ The deployment composes three llm-d capabilities:
 
 The reference deployment is two aggregated `openai/gpt-oss-120b` replicas, one GPU each: the smallest fleet in which one pod can pull a prefix its peer computed. A P/D variant (pull on the prefill leg) is described in [P/D variant](#pd-variant-p2p-over-nixl-disaggregation).
 
+### Why P2P sharing
+
+Prefix caches are per-pod, but their content is often fleet-wide: shared system prompts, common documents, session histories. Prefix-aware routing sends each request to the pod that caches its prefix, but routing cannot always follow the cache: a hot prefix's owner saturates, a working set outgrows any single pod, a session is rebalanced. Those requests recompute KV tensors that already exist on a peer.
+
+The pull fires when a request shares a prefix with an earlier one but is scheduled to a different pod. Two requests share a prefix whenever they begin with the same tokens: the next turn of a conversation, another question against the same document, another session on a shared system prompt. The first request's pod is the **KV cache source**: it computed the prefix and holds a copy in its CPU tier. When the router schedules a prefix-sharing request to a different pod, it names the source on the request, and the scheduled pod (the **consumer**) pulls the prefix instead of recomputing it:
+
+```mermaid
+sequenceDiagram
+    participant R as llm-d router
+    participant S as KV cache source pod<br/>(serves request 1, caches the prefix)
+    participant C as consumer pod<br/>(serves request 2, prefix missing)
+    R->>S: request 1
+    Note over S: computes the prefix KV, caches it,<br/>offloads a copy to its CPU tier
+    Note over R: request 2 arrives sharing request 1's prefix,<br/>but placement picks a different pod
+    R->>C: request 2 + header naming the source pod
+    alt without P2P prefix cache sharing
+        Note over C: recomputes the full shared prefix
+    else with P2P prefix cache sharing
+        C->>S: request the prefix blocks
+        S-->>C: prefix KV blocks, CPU tier to CPU tier over NIXL
+        Note over C: computes only the remainder<br/>(request 2's unshared tokens)
+    end
+```
+
+> [!IMPORTANT]
+> P2P sharing builds on the [Tiered Prefix Cache](../tiered-prefix-cache/README.md): peers serve pulls from their CPU offload tier. Every peer must use the same `--block-size`, `PYTHONHASHSEED`, and tensor-parallel layout, and the CPU tier must be sized to retain useful blocks. [Best Practices](#best-practices) covers each requirement, its sizing rule, and its failure mode.
+
 ### When to use this path
 
 Recompute cost grows with prefix length; the CPU-to-CPU pull grows much more slowly. The crossover is model-, hardware-, and transport-specific, so the router requests a pull only when the selected source holds at least `minCachedTokenDelta` more prefix tokens than the scheduled pod (see [Calibrate `minCachedTokenDelta`](#4-optional-calibrate-mincachedtokendelta)).
@@ -29,6 +56,7 @@ What the pull is worth depends on the placement in front of it:
 - **Affinity + P2P** (the shipped default) sends each request to the pod that already holds its prefix, so the pull rarely fires: it is a fallback for the requests placement displaces, not a throughput feature, and it does not recover a restarted router (the prefix index loses the pre-restart cache map).
 - **Load-aware + P2P** deliberately scatters requests, and the pull is what makes scattering affordable. It wins when many concurrent sessions contend on their owner pods; when nothing contends, affinity stays ahead because a local hit is free. To try it, drop the `prefix-cache-scorer` and `no-hit-lru-scorer` from the scheduling profile in the [router values](router/p2p-kv-cache-sharing.values.yaml) and replace the `max-score-picker` with the `weighted-random-picker`.
 - **P/D + P2P** addresses KV that no placement decision could have made local.
+- **GPU KV capacity is the bottleneck**: cache co-location uses capacity more efficiently, because concurrent same-prefix requests on one pod share one copy of the blocks, while spreading pays a per-pod copy whether the prefix is pulled or recomputed.
 
 Re-measure both placements on your own workload before assuming either generalizes. Performance benchmarks are not part of this guide.
 
@@ -43,12 +71,16 @@ Re-measure both placements on your own workload before assuming either generaliz
 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves exactly one model:
 
+<!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `openai/gpt-oss-120b` | 🟡 community | Default. H100/H200 80 GB+ · 2 replicas × TP=1 (2 GPUs) · 160 GiB memory per pod · `INFRA_PROVIDER`: `base` (TCP), `rdma` |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | 🟡 community | 2 replicas × 1 GPU via DRA · TCP only |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | 🟡 community | 2 replicas × 1 GPU via DRA · TCP only (`INFRA_PROVIDER=base`) |
 
-🟡 community: not covered by nightly E2E · — no configuration. SGLang has no equivalent of the `OffloadingConnector` P2P tier, so this guide is vLLM-only.
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
+
+SGLang has no equivalent of the `OffloadingConnector` P2P secondary tier, so this guide is vLLM-only.
 
 > [!NOTE]
 > The `token-producer` `modelName` in [`router/p2p-kv-cache-sharing.values.yaml`](router/p2p-kv-cache-sharing.values.yaml) is `openai/gpt-oss-120b`. On Intel XPU, set it to `Qwen/Qwen3-0.6B` (`MODEL`) before deploying the router: the render Service fronts the model servers, so a mismatched model is rejected and the router routes without token IDs.

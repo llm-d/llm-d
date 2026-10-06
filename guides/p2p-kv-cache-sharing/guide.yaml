@@ -1,5 +1,26 @@
 name: p2p-kv-cache-sharing
 
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# No nightly E2E workflow covers this guide yet, so every cell is community.
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100/H200 80 GB+ · 2 replicas × TP=1 (2 GPUs) · 160 GiB memory per pod · `INFRA_PROVIDER`: `base` (TCP), `rdma`"
+      model: openai/gpt-oss-120b
+      engines: {vllm: community}
+    xpu:
+      label: Intel XPU
+      notes: "2 replicas × 1 GPU via DRA · TCP only (`INFRA_PROVIDER=base`)"
+      model: Qwen/Qwen3-0.6B
+      engines: {vllm: community}
+
 env:
   static:
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))

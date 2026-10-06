@@ -26,6 +26,10 @@ sections:
         slug: tiered-prefix-cache
         title: Configure a Tiered Prefix Cache
         position: 4
+      - dir: guides/p2p-kv-cache-sharing
+        slug: enable-p2p-prefix-cache-sharing
+        title: Enable P2P Prefix Cache Sharing
+        position: 5
   models:
     target: well-lit-paths/models
     guides: []
