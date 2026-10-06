@@ -3,18 +3,16 @@ kind: Kustomization
 
 # Dedicated render (tokenizer) pool for precise-prefix-cache-routing.
 #
-# Fallback for backends that do not serve vLLM's /v1/*/render endpoints — most
-# notably SGLang — and for anyone who would rather not spend model-server CPU on
-# tokenization. It runs a GPU-less `vllm launch render` Deployment fronted by a
-# Service, so the tokenizer is always vLLM's regardless of which engine serves
-# inference.
+# For backends that do not serve vLLM's /v1/*/render endpoints, notably SGLang,
+# and for anyone who would rather not spend model-server CPU on tokenization. It
+# runs a GPU-less `vllm launch render` Deployment fronted by a Service, so the
+# tokenizer is always vLLM's regardless of which engine serves inference. The
+# router reaches it through `vllm.url` in router/sglang.values.yaml.
 #
-# The default (../) fronts the model server pods with a Service instead and is
-# the preferred choice for vLLM backends: at higher QPS it keeps render latency
-# more contained than this separately-scheduled pool. Both overlays produce the
-# same Service name, so `vllm.url` in
-# router/precise-prefix-cache-routing.values.yaml never changes — apply exactly
-# one of them.
+# vLLM backends need no render pool: the router renders on the model servers
+# through `vllm.endpointDiscovery` (router/precise-prefix-cache-routing.values.yaml),
+# which at higher QPS keeps render latency more contained than this
+# separately-scheduled pool.
 namePrefix: precise-prefix-cache-routing-
 
 resources:

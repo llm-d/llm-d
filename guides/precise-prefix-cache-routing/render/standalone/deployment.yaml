@@ -10,8 +10,8 @@ spec:
   #
   # This pool is scheduled independently of the model servers, so under a rising
   # QPS ladder it becomes the render bottleneck before the model servers do —
-  # which is why the default overlay (../) serves render from the model server
-  # pods instead. Size this up if you stay on this overlay (e.g. for SGLang).
+  # which is why vLLM backends render on the model server pods instead. Size
+  # this up if you use this pool (e.g. for SGLang).
   replicas: 3
   selector:
     matchLabels:

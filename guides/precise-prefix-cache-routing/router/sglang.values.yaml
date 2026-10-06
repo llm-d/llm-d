@@ -1,0 +1,76 @@
+## precise-prefix-cache-routing router overrides for the SGLang backend.
+## Layer on top of: recipes/router/base.values.yaml and
+## precise-prefix-cache-routing.values.yaml.
+##
+## Replaces the plugin config with the SGLang variant:
+##   - `token-producer` renders on the dedicated `../render/standalone/` pool,
+##     because SGLang does not serve vLLM's `/v1/*/render` endpoints;
+##   - `kvEventsConfig.engineType: sglang` selects the SGLang KV-event decoder;
+##   - no replay socket, which the SGLang overlay does not bind.
+## Everything else matches precise-prefix-cache-routing.values.yaml; keep the
+## two in sync.
+
+router:
+  epp:
+    pluginsCustomConfig:
+      precise-prefix-cache-routing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              # Must match the model argument in
+              # ../render/standalone/deployment.yaml and the model SGLang serves.
+              modelName: Qwen/Qwen3-32B
+              vllm:
+                # Dedicated render pool (../render/standalone/): SGLang pods do
+                # not serve vLLM's render endpoints, so endpoint discovery
+                # cannot render on them.
+                url: "http://precise-prefix-cache-routing-render:8000"
+          - type: endpoint-notification-source
+          - type: precise-prefix-cache-producer
+            parameters:
+              tokenProcessorConfig:
+                blockSizeTokens: 64
+                # XXH64 block hashing, about 8x cheaper than the default
+                # cbor-fnv. Block keys are internal to the router's index, so
+                # this need not match the engine. Change it only on a fresh
+                # index: keys built under one algorithm never match the other.
+                hashAlgorithm: xxh64
+              speculativeIndexing: true
+              indexerConfig:
+                kvBlockIndexConfig:
+                  enableMetrics: true
+              kvEventsConfig:
+                # SGLang's KV-event messages omit trailing optional fields.
+                engineType: sglang
+                topicFilter: "kv@"
+                concurrency: 8
+                discoverPods: true
+                podDiscoveryConfig:
+                  # The SGLang overlay binds no replay socket.
+                  socketPort: 5556
+          - type: inflight-load-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: prefix-cache-affinity-filter
+            parameters:
+              # Exact resident-block fractions from KV-cache events, not the
+              # approximate producer.
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              # Measured with guides/recipes/router/calibration/calibrate.sh on
+              # this guide's reference setup (Qwen3-32B, H100 80 GB, TP=2,
+              # chunk 8192) — SGLang measures the same value as vLLM. Re-measure
+              # for other hardware/models.
+              peakPrefillThroughput: 15926
+          - type: token-load-scorer
+        dataLayer: # metrics-data-source + core-metrics-extractor injected by default
+          sources:
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: prefix-cache-affinity-filter
+              - pluginRef: token-load-scorer
