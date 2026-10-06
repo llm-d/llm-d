@@ -50,7 +50,7 @@ The **Async Processor** is a lightweight, high-throughput agent designed to deco
 - **Key Capabilities**:
   - **Dynamic Dispatch Gating**: Evaluates downstream engine telemetry (such as KV cache utilization and request queue depth via Prometheus) to dispatch background requests only when slack capacity is available, protecting interactive traffic from latency spikes.
   - **Quota & Priority Management**: Enforces concurrency limits, budget gates, and tier-based scheduling across multiple tenants and worker pools.
-  - **Resilience**: Automatically retries transient failures with exponential backoff and dead-letter handling.
+  - **Resilience**: Automatically retries transient failures with exponential backoff until the request's deadline; dead-lettering, where available, is the broker's (GCP Pub/Sub subscriptions).
 
 ### 3. Unified Hybrid Deployment
 
