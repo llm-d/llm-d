@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: precise-prefix-cache-routing-cpu-vllm-
+
+components:
+  - ../../../../../recipes/modelserver/components/images/cpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: precise-prefix-cache-routing
+      llm-d.ai/model: Llama-3.2-3B-Instruct
+      llm-d.ai/accelerator-variant: cpu
+      llm-d.ai/accelerator-vendor: intel
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml

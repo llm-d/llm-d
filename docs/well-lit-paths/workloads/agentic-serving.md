@@ -56,7 +56,7 @@ The [agentic-serving guide](../../../guides/agentic-serving) is the operational 
 composes llm-d's existing well-lit paths into a deployment stack — the
 [optimized baseline](../../../guides/optimized-baseline/README.md) for prefix- and load-aware routing,
 [tiered KV-cache offloading](../foundations/tiered-prefix-cache.md) to keep idle sessions resident,
-[precise prefix-cache routing](../foundations/precise-prefix-cache-routing.md) for exact KV-state visibility, and [P/D disaggregation](../foundations/pd-disaggregation.md) for interactivity under load — into
+[precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md) for exact KV-state visibility, and [P/D disaggregation](../foundations/pd-disaggregation.md) for interactivity under load — into
 the recommended deployment, realized per accelerator and benchmarked against a shared, realistic
 agentic workload. See the guide for how each layer maps to the workload.
 
