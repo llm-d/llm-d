@@ -353,20 +353,31 @@ Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscale
 
 Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every shape runs on a fresh, calibrated stack starting at 1 replica per role (`maxReplicas: 4`), with the shipped profile rates. Static is the same stack with no ScaledObject, fixed at 1 replica per role.
 
-Cells are autoscaled / static.
+| Topology | Shape (ISL/OSL) | Mode | Replicas (start → peak) | Peak GPUs | TTFT p50 | TTFT p99 | Completed / total | Output tok/s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P+D | prefill-heavy (8192/256) | **Autoscaled** | 1 → 3 | 6 | **0.62 s** | **43.8 s** | 2307 / 2316 | **572** |
+| | | Static | 1 | 2 | 225 s | 470 s | 2316 / 2316 | 510 |
+| P+D | symmetrical (2048/2048) | **Autoscaled** | 1 | 2 | 0.20 s | 0.43 s | 1248 / 1248 | 1885 |
+| | | Static | 1 | 2 | 0.21 s | 0.41 s | 1248 / 1248 | 1984 |
+| P+D | decode-heavy (256/4096) | **Autoscaled** | 1 | 2 | 0.09 s | 0.13 s | 624 / 624 | 1785 |
+| | | Static | 1 | 2 | 0.09 s | 0.13 s | 624 / 624 | 1856 |
+| P/D | prefill-heavy (8192/256) | **Autoscaled** | prefill 1 → 4, decode 1 | 6 | 439 s¹ | 593 s¹ | **818** / 2316 | **135** |
+| | | Static | prefill 1, decode 1 | 3 | 303 s¹ | 592 s¹ | 116 / 2316 | 20 |
+| P/D | symmetrical (2048/2048) | **Autoscaled** | prefill 1 → 4, decode 1 → 2 | 8 | **1.97 s** | **150 s** | 1233 / 1248 | **1888** |
+| | | Static | prefill 1, decode 1 | 3 | 282 s | 536 s | 1248 / 1248 | 1353 |
+| P/D | decode-heavy (256/4096) | **Autoscaled** | prefill 1, decode 1 | 3 | 0.33 s | 0.58 s | 624 / 624 | 1790 |
+| | | Static | prefill 1, decode 1 | 3 | 0.27 s | 0.45 s | 624 / 624 | 1950 |
 
-| Topology | Shape (ISL/OSL) | Replicas, autoscaled (start → peak) | Peak GPUs | TTFT p50 | TTFT p99 | Failed / total | Output tok/s |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| P+D | prefill-heavy (8192/256) | 1 → 3 | 6 / 2 | **0.62 s** / 225 s | **43.8 s** / 470 s | 9 / 0 of 2316 | 572 / 510 |
-| P+D | symmetrical (2048/2048) | 1 | 2 / 2 | 0.20 s / 0.21 s | 0.43 s / 0.41 s | 0 / 0 of 1248 | 1885 / 1984 |
-| P+D | decode-heavy (256/4096) | 1 | 2 / 2 | 0.09 s / 0.09 s | 0.13 s / 0.13 s | 0 / 0 of 624 | 1785 / 1856 |
-| P/D | prefill-heavy (8192/256) | prefill 1 → 4, decode 1 | 6 / 3 | 439 s / 303 s¹ | 593 s / 592 s¹ | **1498** / 2200 of 2316 | **135** / 20 |
-| P/D | symmetrical (2048/2048) | prefill 1 → 4, decode 1 → 2 | 8 / 3 | **1.97 s** / 282 s | **150 s** / 536 s | 15 / 0 of 1248 | **1888** / 1353 |
-| P/D | decode-heavy (256/4096) | prefill 1, decode 1 | 3 / 3 | 0.33 s / 0.27 s | 0.58 s / 0.45 s | 0 / 0 of 624 | 1790 / 1950 |
-
-¹ TTFT covers completed requests only, so 116 static requests against 818 autoscaled.
+¹ Over completed requests only.
 
 Measured `peakPrefillThroughput`: P+D 15375–15569. P/D 1154–1210 autoscaled, 1332–1410 static.
+
+**How to read:**
+
+- **Load above one replica → autoscaling wins.** P+D prefill-heavy TTFT p50 drops from 225 s to 0.62 s. P/D symmetrical drops from 282 s to 1.97 s with 40% more output. P/D prefill-heavy completes 7× more requests (818 vs 116).
+- **Load within one replica → no change.** The other three stay at 1 replica and match static within noise, at the same GPU count.
+- **GPUs follow load.** Extra replicas (peak 6–8 GPUs vs 2–3) are added only for the shapes that need them, and only for prefill in P/D prefill-heavy.
+- **The ceiling still binds.** P/D prefill-heavy hits `maxReplicas: 4` at the shipped rate. Raise `maxReplicas` or lower the rate to meet a TTFT SLO.
 
 | | prefill-heavy | symmetrical | decode-heavy |
 | --- | --- | --- | --- |
