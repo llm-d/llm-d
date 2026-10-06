@@ -228,7 +228,7 @@ your own transport.
 * CPU tier (`cpu_bytes_to_use`) larger than the per-pod GPU KV cache -
   2x as the working default. The tier's value is the KV that GPU evicts
   and CPU *retains* (the
-  [tiered path's](../../docs/well-lit-paths/foundations/tiered-prefix-cache.md)
+  [tiered path's](../tiered-prefix-cache/README.md)
   receptive field): a smaller tier mostly duplicates blocks that are
   still GPU-resident, and the router's view of who holds a prefix
   outruns what sources can actually serve.

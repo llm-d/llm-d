@@ -10,9 +10,67 @@
 
 ## Overview
 
-This guide deploys prefix-cache offloading: KV-cache blocks evicted from accelerator memory (HBM) move to larger, cheaper tiers (CPU RAM, and optionally a shared filesystem) and are loaded back on demand instead of being recomputed. This increases the effective cache size and prefix-cache reuse for multi-turn and long-context workloads.
+Given the multi-turn nature of agentic workloads, prefix-cache re-use is a critical factor for high performance inference.
 
-It builds on the [Optimized Baseline](../optimized-baseline/README.md): the router keeps the same prefix- and load-aware scoring and adds a second prefix-cache scorer that tracks what each model server holds in its CPU tier, so a request also prefers the pod that can load its prefix from CPU RAM.
+Model servers hold KV-caches in GPU RAM with an LRU eviction scheme. Once space runs out from other requests consuming the resources, the KV caches are evicted. Follow on requests then must recompute the prefill. However, rather than evicting KV caches from GPU memory, we can instead leverage other system resources such as CPU RAM, local NVMe drives, and network storage systems to hold the evicted KVs - pulling them back into GPU RAM on demand.
+
+This increases the **KV-working set size**, growing the **receptive-field** (the amount of time KV caches are retained in the system).
+
+- Without KV offloading:
+
+```text
+   ┌───────┐           ┌─────────┐            ┌───────────┐
+   │user A │           │ user A  │            │  user A   │
+   │  req  │           │   KV    │            │ follow-on │
+   │       │           │ evicted │            │    req    │
+   └───┬───┘           └────┬────┘            └─────┬─────┘
+       │                    │                       │
+───────●────────────────────●───────────────────────●───────▶ time
+       │                    │                       │
+       t                   t+a                     t+b
+       │                    │                       │
+       │◄───── KV live ────►│ ✗                     │
+                                                    ▼
+                                              ┌────────────┐
+                                              │ RECOMPUTE  │
+                                              │  PREFILL   │
+                                              └────────────┘
+```
+
+- With KV offloading:
+
+```text
+   ┌───────┐           ┌─────────┐            ┌───────────┐
+   │user A │           │ user A  │            │  user A   │
+   │  req  │           │   KV    │            │ follow-on │
+   │       │           │ offload │            │    req    │
+   └───┬───┘           └────┬────┘            └─────┬─────┘
+       │                    │                       │
+───────●────────────────────●───────────────────────●───────▶ time
+       │                    │                       │
+       t                   t+a                     t+b
+       │                    │                       │
+       │◄─────────────── KV live ──────────────────►│ ✓
+                                                    ▼
+                                              ┌────────────┐
+                                              │ PULL FROM  │
+                                              │  CPU RAM   │
+                                              └────────────┘
+```
+
+> [!IMPORTANT]
+> CPU KV Cache offloading is low overhead and introduces ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
+
+### Storage tiers
+
+Offloaded KV caches can live on several tiers, ordered by read/write latency: frequently accessed caches stay closest to the accelerator, while larger or colder caches move to slower, higher-capacity tiers. We recommend always enabling the HBM and CPU RAM tiers, and adding a filesystem tier when the working set grows beyond HBM + CPU RAM.
+
+- **CPU RAM** — Low operational overhead and typically far larger than accelerator HBM, making it the default offload target. Loading from CPU RAM is faster than recomputing prefill in most cases, and asynchronous offload adds little overhead.
+- **Local disk** — Increases capacity further, but is slower than CPU RAM. Suitable when the workload tolerates the added latency and local capacity is sufficient.
+- **Shared (remote) storage** — Provides capacity independent of deployment size, KV-cache sharing across replicas, fast scale-up (new replicas reuse existing cache), and persistence across restarts and failures. Latency and throughput depend on the underlying system, so evaluate that the transfer cost does not outweigh the savings. Mature enterprise systems (for example CephFS, GCP Lustre, IBM Storage Scale, AWS EFS) integrate through standard POSIX file access.
+- **P2P sharing** — Inference replicas can share caches in CPU memory over a peer-to-peer network, extending sharing without additional storage resources. See [Enable P2P Prefix Cache Sharing](../../docs/well-lit-paths/foundations/enable-p2p-prefix-cache-sharing.md).
+
+This guide deploys the CPU RAM tier and, optionally, a shared filesystem tier. It builds on the [Optimized Baseline](../optimized-baseline/README.md): the router keeps the same prefix- and load-aware scoring and adds a second prefix-cache scorer that tracks what each model server holds in its CPU tier, so a request also prefers the pod that can load its prefix from CPU RAM.
 
 ### Choosing an offloading path
 
@@ -38,19 +96,55 @@ The vLLM native overlays give each replica a 100 GB CPU tier (`cpu_bytes_to_use`
 > dimensions, so their KV specs cannot be unified and the server fails to start. To serve
 > such a model, add `--no-disable-hybrid-kv-cache-manager` to the vLLM args to keep HMA enabled.
 
+### Architecture
+
+llm-d leverages the following architectures for offloading.
+
+#### CPU KV Cache Offloading
+
+Each model server offloads to host CPU memory through its own native mechanism: vLLM uses the `OffloadingConnector`, and SGLang uses HiCache. Pods are configured with the connector enabled and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/cpu-offloading.svg" alt="CPU KV Cache Offloading">
+  </picture>
+</p>
+
+#### Tiered Offloading to Filesystem
+
+vLLM's `OffloadingConnector` natively supports a multi-tier hierarchy: HBM → CPU RAM → filesystem. Configured with `TieringOffloadingSpec` and a `secondary_tiers` entry of `type: fs`, evicted blocks spill from CPU RAM to a ReadWriteMany PVC mounted at `/mnt/files-storage` (backed by Lustre, CephFS, IBM Storage Scale, AWS EFS, or similar). I/O is asynchronous and uses GPU DMA, parallelized across read/write threads. Because the tier is shared, newly scaled pods read existing cache immediately and the cache persists across pod restarts; capacity is bounded only by the storage system.
+
+The connector does not evict data from the shared tier -- capacity is managed by the storage system or by an external controller (a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache)).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/fs-offloading.svg" alt="Tiered Offloading to Filesystem">
+  </picture>
+</p>
+
+Further reading:
+
+- [vLLM KV offloading connector](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) — design of the native `OffloadingConnector` and its tiering.
+- [Multi-tier KV offloading RFC](https://github.com/vllm-project/vllm/issues/38260) — the upstream tiering design.
+- [LMCache](https://lmcache.ai) and [SGLang HiCache](https://github.com/sgl-project/sglang) — alternative offloading implementations supported by this path.
+
 ## Supported Accelerators and Model Servers
 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves one model:
 
+<!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` · `INFRA_PROVIDER`: `base`, `amd-ci` |
-| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (serves `Qwen/Qwen3-8B` on 1 XPU) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU) |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct` |
 
-✅ validated: covered by a nightly E2E workflow · 🟡 community: not covered by nightly E2E · — no configuration. SGLang runs on NVIDIA GPU only; the other accelerators serve vLLM.
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
 
 ## Prerequisites
 
@@ -330,24 +424,48 @@ kubectl run prefix-test --rm -i --restart=Never \
 ```
 <!-- guide:verify.tests.shared_prefix end -->
 
-**Read the offload counters** of every model server pod:
+**Read the offload counters** of every model server pod. What to expect on the pod that served the burst:
 
-<!-- guide:verify.tests.offload_metrics start -->
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
+<!-- guide:verify.tests.offload_metrics[0] start -->
 ```bash
 # Offload counters of every model server pod, read through the
 # Kubernetes API server proxy (no port-forward needed)
 for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate)|sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total))' || true
+    | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
 done
 ```
-<!-- guide:verify.tests.offload_metrics end -->
+<!-- guide:verify.tests.offload_metrics[0] end -->
 
-What to expect on the pod that served the burst:
+With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total` (and `lmcache:local_cache_usage` for LMCache).
 
-- **vLLM `native`**: `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total` (and `lmcache:local_cache_usage` for LMCache).
-- **SGLang HiCache**: `sglang_hicache_host_used_tokens` is above zero (the `write_through` policy copies every computed block to host memory).
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+<!-- guide:verify.tests.offload_metrics[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# HiCache counters of every model server pod, read through the
+# Kubernetes API server proxy (no port-forward needed)
+for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+  echo "== ${pod}"
+  kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+    | grep -E '^sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total)' || true
+done
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.offload_metrics[1] end -->
+
+`sglang_hicache_host_used_tokens` is above zero (the `write_through` policy copies every computed block to host memory).
+
+</details>
+<!-- tabs:end -->
 
 Hits from the offload tier (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang_cached_tokens_total{cache_source="host"}` and `sglang_load_back_tokens_total`) appear once a prefix has been evicted from HBM and is requested again, which happens under real cache pressure rather than with 10 requests.
 

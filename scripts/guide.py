@@ -700,6 +700,9 @@ def _check_support(guide: dict, f: Findings) -> None:
 _WORKFLOW_ACCEL = re.compile(
     r"accelerator_type:\s*\$\{\{\s*inputs\.accelerator_type\s*\|\|\s*'([^']+)'\s*\}\}"
 )
+_WORKFLOW_BACKEND = re.compile(
+    r"backend_type:\s*\$\{\{\s*inputs\.backend_type\s*\|\|\s*'([^']+)'\s*\}\}"
+)
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -765,9 +768,19 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
         nightly: set[tuple[str, str]] = set()
         for wf in sorted(wf_dir.iterdir()):
             m = pat.match(wf.name)
-            if not m:
-                continue
-            eng = m.group("engine")
+            if m:
+                eng, acc = m.group("engine"), m.group("acc")
+            else:
+                # Workflows named another way (e.g. nightly-e2e-<guide>-<prov>-
+                # <tier>-<acc>-<engine>-<connector>.yaml) count when they declare
+                # both accelerator_type and backend_type input defaults.
+                if not re.match(rf"^nightly-e2e-{re.escape(name)}-.+\.ya?ml$", wf.name):
+                    continue
+                text = wf.read_text(errors="replace")
+                bm = _WORKFLOW_BACKEND.search(text)
+                if not bm or not _WORKFLOW_ACCEL.search(text):
+                    continue
+                eng, acc = bm.group(1), ""
             if eng not in engine_values:
                 f.error(
                     f"workflow {wf.name} targets engine {eng!r} which is not in "
@@ -775,8 +788,8 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
                 )
                 continue
             am = _WORKFLOW_ACCEL.search(wf.read_text(errors="replace"))
-            accel = am.group(1) if am else m.group("acc")
-            pair = (accel, m.group("engine"))
+            accel = am.group(1) if am else acc
+            pair = (accel, eng)
             nightly.add(pair)
             status = support_status(guide, *pair)
             if status != "validated":

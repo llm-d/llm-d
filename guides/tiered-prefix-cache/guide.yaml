@@ -1,5 +1,40 @@
 name: tiered-prefix-cache
 
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+support:
+  engines: {vllm: vLLM, sglang: SGLang}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache)"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated, sglang: validated}
+    amd:
+      label: AMD GPU
+      notes: "2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` · `INFRA_PROVIDER`: `base`, `amd-ci`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    xpu:
+      label: Intel XPU
+      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU)"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+
 env:
   static:
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
@@ -137,13 +172,23 @@ verify:
                   -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
               done'
     offload_metrics:
-      - run: |
+      - when: {MODEL_SERVER: [vllm]}
+        run: |
           # Offload counters of every model server pod, read through the
           # Kubernetes API server proxy (no port-forward needed)
           for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
             echo "== ${pod}"
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-              | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate)|sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total))' || true
+              | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
+          done
+      - when: {MODEL_SERVER: [sglang]}
+        run: |
+          # HiCache counters of every model server pod, read through the
+          # Kubernetes API server proxy (no port-forward needed)
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            echo "== ${pod}"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | grep -E '^sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total)' || true
           done
     shared_tier:
       - when: {VARIANT: [fs], CONNECTOR: [native]}
