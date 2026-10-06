@@ -560,6 +560,7 @@ env:                            # required
     VAR:                        # constant (scalar form)
     VAR: { default: <v> }       # overridable default
     VAR: { default: <v>, values: [<v1>, <v2>] }   # categorical (values gates when:)
+    VAR: { default: <v>, comment: <text> }        # `comment` renders as an inline `# <text>`
     VAR: { default: PLACEHOLDER, sensitive: true } # secret — see "Sensitive variables"
   source: ["<path>", …]         # optional — `source <path>` lines (verbatim)
 

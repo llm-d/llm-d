@@ -313,3 +313,14 @@ def test_repo_manifest_is_valid():
     path = REPO_ROOT / guide.DEFAULT_MANIFEST
     data = yaml.safe_load(path.read_text())
     assert guide.check_manifest(data, REPO_ROOT).ok()
+
+
+def test_env_comment_renders_inline():
+    lines = guide._env_static_lines(
+        {
+            "MODEL": {"default": "m", "comment": "set me"},
+            "ENGINE": {"default": "a", "values": ["a", "b"], "comment": "pick one"},
+        }
+    )
+    assert lines[0][2] == "export MODEL=m # set me"
+    assert lines[1][2] == "export ENGINE=a # options: a, b; pick one"

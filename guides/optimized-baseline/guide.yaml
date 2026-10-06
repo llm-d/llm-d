@@ -11,51 +11,52 @@ support:
   accelerators:
     gpu:
       label: NVIDIA GPU
-      notes: "Default configuration; `INFRA_PROVIDER` options: `base`, `gke`"
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke`"
       model: Qwen/Qwen3-32B
       engines: {vllm: validated, sglang: validated, trtllm: community}
     amd:
       label: AMD GPU
-      notes: "AMD Instinct MI355X GPUs; `INFRA_PROVIDER` options: `base`, `amd-ci`"
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci`"
       model: Qwen/Qwen3-32B
       engines: {vllm: validated, sglang: community}
     xpu:
       label: Intel XPU
-      notes: "Intel Data Center GPU Max 1550+"
+      notes: "Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16"
       model: Qwen/Qwen3-0.6B
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE TPU"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8)"
       model: Qwen/Qwen3-32B
       engines: {vllm: validated}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE TPU"
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8)"
       model: Qwen/Qwen3-32B
       engines: {vllm: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
-      notes: "TPU7x sub-slices formed on demand by GKE dynamic slicing and Kueue; see [below](#2-deploy-the-model-server)"
+      notes: "GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server)"
       model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
       engines: {vllm: community}
     npu:
       label: Rebellions NPU
-      notes: "Allocated via DRA"
+      notes: "RBLN-CR series · 2 replicas × 1 NPU via DRA"
       model: openai/gpt-oss-120b
       engines: {vllm: community}
     cpu:
       label: CPU
-      notes: "x86 with bf16 acceleration: AMX or AVX512-BF16 (Intel Sapphire Rapids+ / GCP C3, AMD Zen 4+); 64 cores + 64GB RAM per replica. Older CPUs without AMX/AVX512-BF16 (e.g. Cascade/Ice Lake) crash on the bf16 model unless run with `--dtype=float32`"
+      notes: "x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model)"
       model: meta-llama/Llama-3.2-3B-Instruct
       engines: {vllm: community}
     iluvatar:
       label: Iluvatar GPU
-      notes: "Iluvatar BI-V150 (dual-die)"
+      notes: "BI-V150 (dual-die) · 1 replica × 4 GPUs"
       model: deepseek-ai/DeepSeek-V4-Flash
       engines: {vllm: community}
     metax:
       label: MetaX GPU
+      notes: "2 replicas × TP=8 (16 GPUs)"
       model: deepseek-ai/DeepSeek-R1-Distill-Llama-70B
       engines: {vllm: community}
 
@@ -77,7 +78,7 @@ env:
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
     TPU_SLICE_TOPOLOGY: {default: 2x2x1, values: [2x2x1, 2x2x2]} # only for ACCELERATOR_TYPE=tpu/v7-dynamic-slice
 
-    MODEL: {default: "Qwen/Qwen3-32B"}
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the Served model for your accelerator (table above)"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 

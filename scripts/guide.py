@@ -307,7 +307,7 @@ TOP_REQUIRED = {"name", "env", "deploy"}
 TOP_OPTIONAL = {"_lists", "prerequisites", "verify", "benchmark", "cleanup", "support"}
 STEP_KEYS = {"run", "when", "skip_in"}
 ENV_KEYS = {"static", "source", "derive"}
-ENV_VAR_KEYS = {"default", "values", "sensitive"}
+ENV_VAR_KEYS = {"default", "values", "sensitive", "comment"}
 
 # Step-list sections walked when cross-checking `when:` filters against the
 # support matrix.
@@ -982,8 +982,13 @@ def _env_static_lines(node: Any) -> list[tuple[str, bool, str]]:
                 out.append((var, True, f"export {var}={spec['default']}"))
             elif "default" in spec:
                 line = f"export {var}={spec['default']}"
+                notes = []
                 if spec.get("values"):
-                    line += " # options: " + ", ".join(str(v) for v in spec["values"])
+                    notes.append("options: " + ", ".join(str(v) for v in spec["values"]))
+                if spec.get("comment"):
+                    notes.append(str(spec["comment"]))
+                if notes:
+                    line += " # " + "; ".join(notes)
                 out.append((var, False, line))
             else:
                 raise GuideError(
