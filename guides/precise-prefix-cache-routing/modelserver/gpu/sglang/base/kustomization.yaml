@@ -1,12 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../recipes/modelserver/base/single-host/default
+  - ../../../../../recipes/modelserver/base/single-host/default
 
 namePrefix: precise-prefix-cache-routing-gpu-sglang-
 
 components:
-  - ../../../../recipes/modelserver/components/images/gpu-sglang/release
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang/release
 
 labels:
   - pairs:
