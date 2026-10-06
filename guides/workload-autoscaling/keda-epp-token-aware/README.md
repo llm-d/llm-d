@@ -349,6 +349,46 @@ That distinction is the one worth internalising. `0` means the query ran and the
 
 Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscaler-sync-period`, 15 s by default), not by a `pollingInterval` on the ScaledObject: KEDA honours that field only when it owns activation or caching — `minReplicaCount: 0`, `idleReplicaCount: 0`, or a trigger with `useCachedMetrics`. Setting it otherwise is inert and makes KEDA 2.20 warn on every apply, so these overlays omit it. Use the `behavior` block to change how fast replicas are added or removed; if you set `minReplicaCount: 0` to scale to zero, `pollingInterval` starts mattering and should be set deliberately.
 
+## Benchmarking
+
+Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every shape runs on a fresh stack starting at 1 replica (`maxReplicas: 4`), with the shipped profile rates.
+
+| Topology | Shape (ISL/OSL) | Measured `peakPrefillThroughput` | Replicas (start → peak) | TTFT p50 / p99 | Failed / total |
+| --- | --- | --- | --- | --- | --- |
+| P+D | prefill-heavy (8192/256) | 15521 | 1 → 3 | 0.62 s / 43.8 s | 9 / 2316 |
+| P+D | symmetrical (2048/2048) | 15569 | 1 | 0.20 s / 0.43 s | 0 / 1248 |
+| P+D | decode-heavy (256/4096) | 15414 | 1 | 0.09 s / 0.13 s | 0 / 624 |
+| P/D | prefill-heavy (8192/256) | 1154 | prefill 1 → 4, decode 1 | 439 s / 593 s | 1498 / 2316 |
+| P/D | symmetrical (2048/2048) | 1192 | prefill 1 → 4, decode 1 → 2 | 1.97 s / 150 s | 15 / 1248 |
+| P/D | decode-heavy (256/4096) | 1210 | prefill 1, decode 1 | 0.33 s / 0.58 s | 0 / 624 |
+
+| | prefill-heavy | symmetrical | decode-heavy |
+| --- | --- | --- | --- |
+| P+D | ![P+D prefill-heavy replicas](benchmark-results/pd-colocated_prefill_heavy_replicas.png) | ![P+D symmetrical replicas](benchmark-results/pd-colocated_symmetrical_replicas.png) | ![P+D decode-heavy replicas](benchmark-results/pd-colocated_decode_heavy_replicas.png) |
+| P/D | ![P/D prefill-heavy replicas](benchmark-results/pd-disaggregated_prefill_heavy_replicas.png) | ![P/D symmetrical replicas](benchmark-results/pd-disaggregated_symmetrical_replicas.png) | ![P/D decode-heavy replicas](benchmark-results/pd-disaggregated_decode_heavy_replicas.png) |
+
+### Reproduce
+
+Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) at `def43ab6` or later:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
+cd llm-d-benchmark && source .venv/bin/activate
+
+SPEC=guides/keda-epp-token-aware                     # P+D
+# SPEC=guides/keda-epp-token-aware-pd-disaggregation # P/D
+
+for SHAPE in prefill_heavy symmetrical decode_heavy; do
+  llmdbenchmark --spec ${SPEC} standup -p ${NAMESPACE}
+  make calibrate-peak-prefill NAMESPACE=${NAMESPACE} APPLY=1
+  llmdbenchmark --spec ${SPEC} --workspace results/${SHAPE} run -p ${NAMESPACE} \
+    --harness inference-perf --workload random_${SHAPE}.yaml --monitoring --analyze
+  llmdbenchmark --spec ${SPEC} teardown -p ${NAMESPACE}
+done
+```
+
+On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to `standup`, `run` and `teardown`. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
+
 ## Cleanup
 
 <!-- guide:cleanup start -->
