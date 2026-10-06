@@ -33,7 +33,7 @@ back-off per model — and within each pool three teams contend by **tier** and 
 | | batch | `team-batch-b` | `batch` | concurrency **1** | `quota:b:` |
 
 > [!NOTE]
-> **Single-Router Demo vs. Multi-Model Production:** In a full multi-model production environment, each model is typically served by its own `InferencePool` behind a gateway (e.g. using Gateway API HTTPRoutes with dedicated llm-d Routers). To keep this demo lightweight and runnable on a single GPU (or CPU test cluster), the walkthrough deploys a **single llm-d Router instance** and a single vLLM model server (`Qwen/Qwen3-8B`), with both logical model pipelines (`model-a` and `model-b`) pointing to that shared llm-d Router pool (`POOL_A=llm-d-router`, `POOL_B=llm-d-router`). If your cluster already has multiple `InferencePool`s deployed, you can point `POOL_A` and `POOL_B` to distinct pools for full physical backend isolation.
+> **Single-Router Demo vs. Multi-Model Production:** In a full multi-model production environment, each model is typically served by its own `InferencePool` behind a gateway (e.g. using Gateway API HTTPRoutes with dedicated llm-d Routers). To keep this demo lightweight, the walkthrough deploys a **single llm-d Router instance** and a single vLLM model server (`Qwen/Qwen3-32B` on two GPUs, or `Qwen/Qwen3-8B` on one GPU with the [single-GPU override](#1-install-crds-and-deploy-the-backend-model-server)), with both logical model pipelines (`model-a` and `model-b`) pointing to that shared llm-d Router pool (`POOL_A=llm-d-router`, `POOL_B=llm-d-router`). If your cluster already has multiple `InferencePool`s deployed, you can point `POOL_A` and `POOL_B` to distinct pools for full physical backend isolation.
 
 The three dimensions:
 
@@ -121,6 +121,11 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   `x-llm-d-inference-objective` header matching the request's priority lane. You must install the
   `InferenceObjective` CRD and define the objective resources in your cluster matching your `InferencePool`.
 
+- **Hardware.** The default model server is one replica of `Qwen/Qwen3-32B` with tensor parallelism 2: two
+  NVIDIA GPUs with 80 GB of memory each (for example H100 or A100 80GB), and a node with 8 CPUs and 96 GiB of
+  memory free for the pod. On a single GPU (for example one L4), use the
+  [single-GPU override](#1-install-crds-and-deploy-the-backend-model-server), which serves `Qwen/Qwen3-8B` instead.
+
 - **Model Serving Stack & Router.** The walkthrough deploys a single llm-d Router instance (which creates
   the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
   parallelism 2). In a multi-model
@@ -157,8 +162,8 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, `POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, and `COORDINATOR_IMAGE`
-in the optional coordinator manifest). Render one for your
+`POOL_A`, `POOL_B`, `POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, `COORDINATOR_IMAGE`
+in the optional coordinator manifest, and `POOL_A` in the vLLM PodMonitor). Render one for your
 environment before installing:
 
 ```bash
@@ -201,6 +206,32 @@ Instead of maintaining its own model server manifests, this guide renders the
 `sed` swaps in this guide's `llm-d.ai/guide` label, which the router selects on. The model (`Qwen/Qwen3-32B`, two GPUs
 per replica), image, probes and volumes follow that guide. The one change is a single replica instead of eight: the
 router's `maxConcurrency` and the llm-d-async worker pools below are sized so that async work saturates one replica.
+
+<details>
+<summary><h4>Single GPU</h4></summary>
+
+On one GPU, serve `Qwen/Qwen3-8B` with tensor parallelism 1 instead (the setup the guide's
+[eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used). Set the served model name to
+match before publishing, because requests carry it in `payload.model`:
+
+```bash
+export MODEL_A=Qwen/Qwen3-8B MODEL_B=Qwen/Qwen3-8B
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
+  | yq '(select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "modelserver")) |= (
+      .args[0] = "Qwen/Qwen3-8B"
+      | .args |= map(select(test("^--tensor-parallel-size=") | not)) + ["--tensor-parallel-size=1", "--max-model-len=4000"]
+      | .resources.limits."nvidia.com/gpu" = 1 | .resources.requests."nvidia.com/gpu" = 1
+      | .resources.limits.cpu = "8" | .resources.requests.cpu = "4"
+      | .resources.limits.memory = "40Gi" | .resources.requests.memory = "20Gi")' \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+
+`--max-model-len=4000` keeps the KV cache within a 24 GB GPU such as an L4. The pods keep optimized-baseline's
+`llm-d.ai/model: Qwen3-32B` label, which only identifies the overlay they came from.
+
+</details>
 
 > [!TIP]
 > **Prometheus and Grafana:** If you do not already have Prometheus running, deploy the standard stack using the central [Observability Setup Guide](../../../../docs/operations/observability/setup.md) (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
@@ -307,19 +338,18 @@ and share the team queues' quota counters. Installing them replaces the llm-d-as
 [`values/redis/quota-only-coordinator.yaml`](values/redis/quota-only-coordinator.yaml), which is
 `quota-only.yaml` plus the two queues and the pool.
 
-```bash
-# 1. Keyspace notifications let held wait-mode requests wake up as soon as the result lands
-#    (without them the coordinator polls). This setting does not survive a Redis restart.
-kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli CONFIG SET notify-keyspace-events Kl
+The guide's Redis (`manifests/redis.yaml`) starts with keyspace notifications enabled
+(`--notify-keyspace-events Kl`), so held `wait` requests wake up as soon as their result lands instead of polling.
 
-# 2. llm-d-async with the coordinator queues
+```bash
+# 1. llm-d-async with the coordinator queues
 render ${MT}/values/redis/quota-only-coordinator.yaml > /tmp/mt-redis-coordinator.yaml
 helm upgrade --install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-redis-coordinator.yaml \
     -n ${NAMESPACE} --version ${ASYNC_VERSION}
 
-# 3. The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
+# 2. The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
 render ${MT}/manifests/coordinator/config.yaml > /tmp/coordinator.yaml
 kubectl -n ${NAMESPACE} create configmap llm-d-coordinator-config \
     --from-file=coordinator.yaml=/tmp/coordinator.yaml --dry-run=client -o yaml | kubectl apply -f -
@@ -624,7 +654,7 @@ to install the standard Prometheus and Grafana stack:
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
 # 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
+render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl apply -n ${NAMESPACE} -f -
 ```
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
@@ -712,7 +742,7 @@ render ${MT}/manifests/inferenceobjectives.yaml | kubectl delete -f -
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
-kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${MT}/manifests/prometheus-vllm-podmonitor.yaml
+render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 ```
 
 <details>

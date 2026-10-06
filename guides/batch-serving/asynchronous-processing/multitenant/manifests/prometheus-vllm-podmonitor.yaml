@@ -4,13 +4,14 @@
 # The vLLM pod is optimized-baseline's GPU vLLM overlay, relabelled
 # llm-d.ai/guide=async-multitenant (README step 1), with metrics on the
 # `modelserver` port (8000). The saturation overlays' PromQL filters on
-# inference_pool, which this monitor sets to the guide's single pool,
-# llm-d-router; the pods themselves carry no such label.
+# inference_pool, which the pods do not carry, so this monitor sets it on every
+# series to the pool name the guide's render() writes in (the same value the
+# saturation overlays filter on).
 #
-# Apply it into the model server's namespace (kubectl apply -n ${NAMESPACE}):
-# with no namespaceSelector it watches only its own namespace. The
-# Prometheus from install-prometheus-grafana.sh picks up PodMonitors in every
-# namespace. Adjust selector / port for your own model server.
+# Render it and apply it into the model server's namespace: with no
+# namespaceSelector it watches only its own namespace. The Prometheus from
+# install-prometheus-grafana.sh picks up PodMonitors in every namespace.
+# Adjust selector / port for your own model server.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -27,4 +28,4 @@ spec:
       interval: 15s
       relabelings:
         - targetLabel: inference_pool
-          replacement: llm-d-router
+          replacement: POOL_A
