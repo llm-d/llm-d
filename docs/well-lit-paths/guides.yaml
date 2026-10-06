@@ -18,6 +18,10 @@ sections:
         slug: optimized-baseline
         title: Deploy an Optimized Baseline
         position: 1
+      - dir: guides/precise-prefix-cache-routing
+        slug: precise-prefix-cache-routing
+        title: Enable Precise Prefix-Cache Aware Routing
+        position: 3
   models:
     target: well-lit-paths/models
     guides: []

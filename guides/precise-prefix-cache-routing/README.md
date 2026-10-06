@@ -19,20 +19,45 @@ It builds on the [Optimized Baseline](../optimized-baseline/README.md): the same
 
 The router needs exact token IDs to look a prompt up in the index, so this guide also deploys a **render (tokenizer) Service** that the router calls before every routing decision.
 
+### Why KV-cache events
+
+The model server is the most accurate source of truth for what's cached on its own accelerators and memory tiers. vLLM, SGLang and NVIDIA TensorRT-LLM publish every cache change as an event; llm-d subscribes to that stream, builds a near-real-time view of resident blocks across the fleet, and scores requests against it.
+
+KV-events have become the ecosystem-standard substrate for exposing accurate cache state: where reusable inference state lives and how it changes over time. As KV-cache orchestration grows more sophisticated and agentic workloads stretch prefixes longer, cache state becomes something the control plane needs to observe and act on. The same view scales naturally to:
+
+- tier-aware cache tracking across GPU HBM, CPU DRAM, local NVMe, and shared storage;
+- policies that account for explicit prompt-cache placement and dynamic KV-offloading;
+- cache movement and prefetching workflows for fleet-wide KV reuse;
+- advanced KV retention and eviction policies for agentic patterns;
+- hybrid-attention models where layer groups (full, sliding-window, linear) evict independently.
+
+### Architecture
+
+The split is straightforward: **model servers** produce KV-events on every cache change; the **llm-d Router** consumes them to score pods for better routing decisions. The two sides are decoupled: model server and router replicas scale independently.
+
+Inside the llm-d Router:
+
+- An **indexer** consumes the event stream and maintains a `block key → pods` mapping for every block resident across the fleet.
+- A **scorer** derives block keys deterministically from the input and queries the index. It returns the longest consecutive prefix each candidate pod has cached, weighted by tier.
+
+Events flow from model server pods to the router over ZMQ via **pod discovery**: each model server pod binds its own ZMQ socket and every router replica subscribes to every pod independently, so all replicas converge to the same index. See [KV-Cache Indexer](../../docs/architecture/advanced/kv-management/kv-indexer.md) for the full architecture, and [How It Works](#how-it-works) below for how this guide wires it up.
+
 ## Supported Accelerators and Model Servers
 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves exactly one model:
 
+<!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
+| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | 2 replicas × 1 GPU via DRA · fp16 |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x2x1`, TP=8) |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29 |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
 
-✅ validated: covered by a nightly E2E workflow · 🟡 community: not covered by nightly E2E · — no configuration. SGLang runs on NVIDIA GPU only; the other accelerators serve vLLM.
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
 
 > [!NOTE]
 > The router and the model servers must agree on two things:
@@ -178,26 +203,48 @@ The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v
 **Apply the render overlay for your model server.** Both overlays publish the same Service name, so the router configuration is the same either way:
 
 <!-- guide:deploy.render start -->
+<!-- variants:start -->
+<details open data-when="MODEL_SERVER=vllm">
+<summary><b>vLLM</b></summary>
+
 ```bash
-# only when MODEL_SERVER=vllm:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 ```
+
+</details>
+<details data-when="MODEL_SERVER=sglang">
+<summary><b>SGLang</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when MODEL_SERVER=sglang:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:deploy.render end -->
 
-- **vLLM** — the `render/` overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them. vLLM 0.30 requires `--enable-scale-out` for `vllm serve` to expose `/v1/*/render`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set it, and the TPU overlays use vLLM 0.29, which exposes the endpoint without the flag.
-  Render capacity scales with the fleet, which keeps render latency (part of TTFT, since every request is tokenized before it is routed) contained at higher QPS.
-  The trade-off: tokenization CPU competes with serving on the same pods (the GPU overlay requests 8 CPU / limits 16 per replica; raise that if render latency climbs under load).
-  Only `Ready` endpoints receive render calls, so apply this after the model servers, as ordered here.
-- **SGLang** — SGLang does not implement vLLM's render endpoints, so the `render/standalone/` overlay runs a dedicated, GPU-less `vllm launch render` pool (3 replicas) instead.
-  It tokenizes with vLLM's tokenizer whichever engine serves inference, and also suits vLLM deployments that should not spend model server CPU on tokenization.
-  It is configured for `Qwen/Qwen3-32B`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) together with the router `token-producer` `modelName`. Scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
-  These render pods deliberately do **not** carry the `llm-d.ai/guide` label: the router would otherwise treat them as routable model servers.
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
+The `render/` overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them. vLLM 0.30 requires `--enable-scale-out` for `vllm serve` to expose `/v1/*/render`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set it, and the TPU overlays use vLLM 0.29, which exposes the endpoint without the flag.
+Render capacity scales with the fleet, which keeps render latency (part of TTFT, since every request is tokenized before it is routed) contained at higher QPS.
+The trade-off: tokenization CPU competes with serving on the same pods (the GPU overlay requests 8 CPU / limits 16 per replica; raise that if render latency climbs under load).
+Only `Ready` endpoints receive render calls, so apply this after the model servers, as ordered here.
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+SGLang does not implement vLLM's render endpoints, so the `render/standalone/` overlay runs a dedicated, GPU-less `vllm launch render` pool (3 replicas) instead.
+It tokenizes with vLLM's tokenizer whichever engine serves inference, and also suits vLLM deployments that should not spend model server CPU on tokenization.
+It is configured for `Qwen/Qwen3-32B`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) together with the router `token-producer` `modelName`. Scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
+These render pods deliberately do **not** carry the `llm-d.ai/guide` label: the router would otherwise treat them as routable model servers.
+
+</details>
+<!-- tabs:end -->
 
 **(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
@@ -288,8 +335,20 @@ done
 
 What to expect:
 
-- **vLLM** — one pod reports most of the 10 requests in `vllm:request_success_total`, and its `vllm:prefix_cache_hits_total` is a large fraction of `vllm:prefix_cache_queries_total` (every request after the first reuses the cached prefix). The other pods show few or none of these requests.
-- **SGLang** — one pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
+One pod reports most of the 10 requests in `vllm:request_success_total`, and its `vllm:prefix_cache_hits_total` is a large fraction of `vllm:prefix_cache_queries_total` (every request after the first reuses the cached prefix). The other pods show few or none of these requests.
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+One pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+
+</details>
+<!-- tabs:end -->
 
 If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render check above, confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
@@ -311,16 +370,26 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 <!-- guide:cleanup.modelserver end -->
 
 <!-- guide:cleanup.render start -->
+<!-- variants:start -->
+<details open data-when="MODEL_SERVER=vllm">
+<summary><b>vLLM</b></summary>
+
 ```bash
-# only when MODEL_SERVER=vllm:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 ```
+
+</details>
+<details data-when="MODEL_SERVER=sglang">
+<summary><b>SGLang</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when MODEL_SERVER=sglang:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:cleanup.render end -->
 
 <!-- guide:cleanup.rest start -->

@@ -166,8 +166,22 @@ def test_repo_checks_nightly_must_match_validated(tmp_path):
     assert any("targets engine 'trtllm' which is not in" in e for e in errs)
 
 
+def test_repo_checks_hyphenated_provider(tmp_path):
+    gdir = _repo(
+        tmp_path,
+        ["gpu/vllm", "gpu/sglang", "tpu/vllm"],
+        [("nightly-e2e-sup-guide-amd-ci-acc-gpu-vllm-x.yaml", "gpu")],
+    )
+    assert guide.check_support_repo(_guide(), gdir).ok()
+
+
 def test_optimized_baseline_matrix_matches_repo():
     g = guide.Guide.load(REPO_ROOT / "guides" / "optimized-baseline")
+    assert g.check().ok(), _errors(g.check())
+
+
+def test_precise_prefix_cache_routing_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "precise-prefix-cache-routing")
     assert g.check().ok(), _errors(g.check())
 
 

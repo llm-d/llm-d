@@ -94,7 +94,7 @@ for manifests, verification gates, and step-by-step deployment.
    `OffloadingConnector` with a CPU tier plus a P2P secondary tier: every
    pod both offloads computed KV to CPU and serves it to peers.
 2. **The router builds the precise prefix index** from the KV events
-   (the [Precise Prefix Cache Routing](precise-prefix-cache-routing.md)
+   (the [Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md)
    mechanism), so it knows which pods hold which prefix blocks.
 3. **The `p2p-source-producer` selects a source** from the CPU-tier holders
    within one index block of the largest cached prefix, weighted to avoid
@@ -118,4 +118,4 @@ normal NIXL P/D path transfers the request's KV to the selected decoder.
 - [Benchmark report: gpt-oss-120b on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
 - [Benchmark report: GLM-5.2 on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - C64 policy comparison, four-arm observation, and pull mechanism evidence.
 - [Tiered Prefix Cache](tiered-prefix-cache.md) - the offload tiers P2P serves from.
-- [Precise Prefix Cache Routing](precise-prefix-cache-routing.md) - the index that selects the pull source.
+- [Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) - the index that selects the pull source.

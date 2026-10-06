@@ -12,7 +12,7 @@ These guides teach single architectural capabilities that you can configure inde
 
 ### Advanced KV-Cache Management
 
-- **[Precise Prefix Cache Routing](precise-prefix-cache-routing.md)**: Near-real-time routing based on exact cache state published by model servers.
+- **[Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md)**: Near-real-time routing based on exact cache state published by model servers.
 - **[Tiered Prefix Cache](tiered-prefix-cache.md)**: Efficiently managing KV caches by offloading to CPU RAM, NVMe, or network storage to improve prefix-cache re-use.
 - **[Enable P2P Prefix Cache Sharing](enable-p2p-prefix-cache-sharing.md)**: Pulling cached prefix KV blocks directly from a peer's CPU offload tier instead of recomputing them, turning per-pod prefix caches into a fleet-wide resource.
 
