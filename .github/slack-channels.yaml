@@ -40,7 +40,6 @@ channels:
     - nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
     - nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml
-    - nightly-e2e-optimized-baseline-gke-acc-gpu-trtllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml

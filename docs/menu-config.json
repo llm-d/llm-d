@@ -42,7 +42,6 @@
     "getting-started/quickstart": { "position": 1 },
     "getting-started/accelerators": { "position": 2, "label": "Supported Accelerators" },
 
-    "well-lit-paths/foundations/optimized-baseline": { "position": 1, "label": "Deploy an Optimized Baseline" },
     "well-lit-paths/foundations/predicted-latency": { "position": 2, "label": "Route Requests by Predicted Latency" },
     "well-lit-paths/foundations/precise-prefix-cache-routing": { "position": 3, "label": "Enable Precise Prefix-Cache Aware Routing" },
     "well-lit-paths/foundations/tiered-prefix-cache": { "position": 4, "label": "Configure a Tiered Prefix Cache" },
