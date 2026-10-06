@@ -1193,6 +1193,18 @@ def render_steps(node: Any, guide: Any = None) -> str:
     if not steps:
         return _fence("")
 
+    # A marker that points at one variant step (e.g. `deploy.render[1]`) is
+    # placed by the author in its own context — typically an engine tab — so
+    # render a bare fence rather than a one-entry variant group. Non-default
+    # variants stay wrapped in cicd:skip markers, as in a variant group.
+    if isinstance(node, dict) and "run" in node and _is_variant_step(node, guide):
+        return "\n".join(
+            _plain_fences(
+                [{k: v for k, v in node.items() if k != "when"}],
+                force_skip=not _when_matches_defaults(node["when"], guide),
+            )
+        )
+
     segments: list[tuple[bool, list[dict]]] = []
     for step in steps:
         variant = _is_variant_step(step, guide)

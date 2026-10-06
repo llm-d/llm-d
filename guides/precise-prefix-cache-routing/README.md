@@ -202,32 +202,15 @@ The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v
 
 **Apply the render overlay for your model server.** Both overlays publish the same Service name, so the router configuration is the same either way:
 
-<!-- guide:deploy.render start -->
-<!-- variants:start -->
-<details open data-when="MODEL_SERVER=vllm">
-<summary><b>vLLM</b></summary>
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
-```
-
-</details>
-<details data-when="MODEL_SERVER=sglang">
-<summary><b>SGLang</b></summary>
-
-<!-- llm-d-cicd:skip start -->
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
-```
-<!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:deploy.render end -->
-
 <!-- tabs:start group=engine -->
 <details open>
 <summary><b>vLLM</b></summary>
+
+<!-- guide:deploy.render[0] start -->
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+```
+<!-- guide:deploy.render[0] end -->
 
 The `render/` overlay is a **Service with no pods of its own**: it selects the model server pods you just deployed and tokenizes on them. vLLM 0.30 requires `--enable-scale-out` for `vllm serve` to expose `/v1/*/render`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set it, and the TPU overlays use vLLM 0.29, which exposes the endpoint without the flag.
 Render capacity scales with the fleet, which keeps render latency (part of TTFT, since every request is tokenized before it is routed) contained at higher QPS.
@@ -237,6 +220,14 @@ Only `Ready` endpoints receive render calls, so apply this after the model serve
 </details>
 <details>
 <summary><b>SGLang</b></summary>
+
+<!-- guide:deploy.render[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.render[1] end -->
 
 SGLang does not implement vLLM's render endpoints, so the `render/standalone/` overlay runs a dedicated, GPU-less `vllm launch render` pool (3 replicas) instead.
 It tokenizes with vLLM's tokenizer whichever engine serves inference, and also suits vLLM deployments that should not spend model server CPU on tokenization.

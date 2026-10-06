@@ -205,6 +205,19 @@ def test_variant_group_rendering():
     assert "# only when" not in out
 
 
+def test_single_variant_step_renders_bare_fence():
+    g = _guide()
+    steps = [s for s in g["deploy"]["modelserver"] if "when" in s]
+    default = next(s for s in steps if guide._when_matches_defaults(s["when"], g))
+    other = next(s for s in steps if not guide._when_matches_defaults(s["when"], g))
+    out = guide.render_steps(default, g)
+    assert "variants:start" not in out and "<details" not in out
+    assert "# only when" not in out and guide.CICD_SKIP_START not in out
+    out = guide.render_steps(other, g)
+    assert "variants:start" not in out and "<details" not in out
+    assert out.startswith(guide.CICD_SKIP_START)
+
+
 def test_guides_without_support_render_unchanged():
     g = _guide()
     del g["support"]
