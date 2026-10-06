@@ -84,6 +84,15 @@ prerequisites:
           --namespace "${NAMESPACE}" \
           --dry-run=client -o yaml | kubectl apply -f -
 
+# Why some `when:` steps also carry `skip_in: [ci]`: guide.py only treats
+# ACCELERATOR_TYPE / MODEL_SERVER filters as variants, and wraps non-default
+# variants in cicd:skip markers in the README automatically. Steps keyed on
+# CONNECTOR, HOST_TYPE or MONITORING render as plain fences with an
+# `# only when ...` comment and no skip marker. The tiered nightlies stand the
+# guide up by parsing the README's bash blocks and don't honor those comments,
+# so `skip_in: [ci]` is what keeps them from running the MooncakeStore,
+# TPU multi-host and router-monitoring steps, which no nightly covers.
+# Drop it only once a nightly targets that configuration.
 deploy:
   router_values:
     - run: |
@@ -114,6 +123,7 @@ deploy:
         envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 
   mooncake:
+    # skip_in ci: no nightly covers MooncakeStore (see the note above deploy:).
     - when: {CONNECTOR: [mooncake-store]}
       skip_in: [ci]
       run: |
@@ -130,6 +140,7 @@ deploy:
       run: |
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+    # skip_in ci: no nightly covers TPU multi-host (see the note above deploy:).
     - when: {HOST_TYPE: [multi-host]}
       skip_in: [ci]
       run: |
@@ -213,6 +224,8 @@ verify:
           kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${PODS[1]}:8000/proxy/metrics" \
             | grep -E '^(vllm:external_prefix_cache_hits_total|sglang[:_]cached_tokens_total)' || true
 
+# skip_in ci on the multi-host and MooncakeStore steps below: same reason as in
+# deploy (no nightly covers them; see the note above deploy:).
 cleanup:
   modelserver:
     - when: {HOST_TYPE: [single-host]}
