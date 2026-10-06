@@ -7,7 +7,12 @@ env:
 
     NAMESPACE: llm-d-optimized-baseline
     MONITORING_NAMESPACE: llm-d-monitoring
-    KEDA_NAMESPACE: keda
+
+    # Namespace the KEDA operator runs in. `keda` matches a generic KEDA install
+    # (ENV=existing); on OpenShift (ENV=ocp) the Custom Metrics Autoscaler operator
+    # lives in `openshift-keda`, and the Troubleshooting `kubectl logs -n
+    # ${KEDA_NAMESPACE}` command keys off this, so set it to match your platform.
+    KEDA_NAMESPACE: {default: keda, values: [keda, openshift-keda]}
 
     MODEL: {default: "Qwen/Qwen3-32B"}
 
@@ -69,7 +74,7 @@ prerequisites:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
   confirm:
     - run: |
-        kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+        kubectl logs deployment/optimized-baseline-epp -c epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
         kubectl get servicemonitor -n ${NAMESPACE}
 
 deploy:
@@ -138,7 +143,7 @@ verify:
           # override the timeouts shorter.
           # Under OVERSHOOT=guard the defaults below are also too light: the guard
           # drops the running-requests trigger and scales purely on queue depth,
-          # which only forms once load exceeds vLLM's continuous-batching capacity
+          # which only forms once load exceeds a replica's serving capacity
           # (moderate concurrency is absorbed with the queue at zero). Raise
           # SCALE_CONCURRENCY and SCALE_MAX_TOKENS until llm_d_epp_flow_control_
           # queue_size goes non-zero; the threshold depends on the model, GPU,
