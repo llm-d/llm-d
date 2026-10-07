@@ -21,3 +21,15 @@ labels:
 patches:
   - path: patch-encode.yaml
   - path: patch-decode.yaml
+  # VLLM_USE_V2_MODEL_RUNNER=1 for all vLLM instances: both instances (encode
+  # and PD decode) use the CPU EC connector, which fails at startup without the
+  # V2 model runner, see
+  # https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: VLLM_USE_V2_MODEL_RUNNER
+          value: "1"
