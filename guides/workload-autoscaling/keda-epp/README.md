@@ -292,9 +292,18 @@ kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout
 
 Apply the leaf overlay for your `SIGNAL` and `ENV`. Each apply builds the leaf,
 renders its `${...}` placeholders with `envsubst`, and pipes the result to
-`kubectl apply`. On a generic Kubernetes cluster with the bundled
-kube-prometheus-stack (plain in-cluster HTTP, no auth secret), use the
-`overlays/k8s/*` leaf.
+`kubectl apply`.
+
+### Platform specifics
+
+The apply command differs by platform: the overlay path (`overlays/k8s/*` vs
+`overlays/ocp/*`) and the Prometheus auth are not the same on a generic cluster
+and on OpenShift. Pick the block for your `ENV`.
+
+#### Generic Kubernetes
+
+On a generic Kubernetes cluster with the bundled kube-prometheus-stack (plain
+in-cluster HTTP, no auth secret), use the `overlays/k8s/*` leaf.
 
 Queue signal (default):
 
@@ -324,6 +333,8 @@ Saturation signal (experimental):
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_saturation end -->
+
+#### OpenShift
 
 On OpenShift, use the `overlays/ocp/<signal>` leaf instead (see the [OpenShift](#openshift)
 note - it points both triggers at Thanos Querier and bearer-authenticates via a
