@@ -13,7 +13,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 MT = ROOT / "guides/batch-serving/asynchronous-processing/multitenant"
-COORD_QUEUES = {"coord-standard-a", "coord-batch-a"}
+COORD_QUEUES = {"coord-standard", "coord-batch"}
 
 
 def _load(path: Path):
@@ -43,7 +43,7 @@ def test_coordinator_overlay_is_quota_only_plus_coordinator_entries() -> None:
 def test_coordinator_queues_shape() -> None:
     _, coord_queues, _ = _split(_load(MT / "values/redis/quota-only-coordinator.yaml"))
     team_gate = next(q for q in _load(MT / "values/redis/quota-only.yaml")["ap"]["transportConfig"]["queues"]
-                     if q["queue_name"] == "team-batch-a")["gate_params"]
+                     if q["queue_name"] == "team-batch")["gate_params"]
     for q in coord_queues:
         assert q["worker_pool_id"] == "coord"
         assert "result_queue_name" not in q  # results go to each message's own mailbox

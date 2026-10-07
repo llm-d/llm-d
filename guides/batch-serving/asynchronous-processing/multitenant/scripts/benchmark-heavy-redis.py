@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Heavy Multi-Tenant Benchmark for Async Processor (Redis SortedSet backend).
-Dispatches 600 requests across all 6 tier-priority queues (team × tier × model)
+Dispatches 600 requests across the 3 team queues (team × tier)
 and monitors multi-minute in-process queue draining and upstream completion.
 """
 
@@ -24,12 +24,9 @@ MONITORING_NAMESPACE = os.environ.get("MONITORING_NAMESPACE", "llm-d-monitoring"
 TTL = 3600  # 1 hour deadline
 
 QUEUES_SPEC = [
-    ("team-premium-a", "premium", "a", 150),
-    ("team-standard-a", "standard", "a", 100),
-    ("team-batch-a", "batch", "a", 50),
-    ("team-premium-b", "premium", "b", 150),
-    ("team-standard-b", "standard", "b", 100),
-    ("team-batch-b", "batch", "b", 50),
+    ("team-premium", "premium", 300),
+    ("team-standard", "standard", 200),
+    ("team-batch", "batch", 100),
 ]
 
 def check_port_open(host="127.0.0.1", port=9090):
@@ -52,7 +49,7 @@ def start_prom_port_forward(namespace=MONITORING_NAMESPACE, local_port=9090):
 def clear_existing_results():
     print("[*] Clearing previous results lists...")
     subprocess.run(
-        ["kubectl", "-n", NAMESPACE, "exec", REDIS_DEPLOY, "--", "redis-cli", "DEL", "results-a-list", "results-b-list"],
+        ["kubectl", "-n", NAMESPACE, "exec", REDIS_DEPLOY, "--", "redis-cli", "DEL", "results-list"],
         capture_output=True, text=True
     )
 
@@ -62,11 +59,11 @@ def enqueue_all(model_name=MODEL, max_tokens=80):
     run_id = f"{now}-{random.randint(1000, 9999)}"
     total_enqueued = 0
 
-    print(f"[*] Enqueuing 600 multi-tenant requests across 6 queues (max_tokens={max_tokens}, TTL={TTL}s)...")
-    for q_name, team, model, count in QUEUES_SPEC:
+    print(f"[*] Enqueuing 600 multi-tenant requests across 3 queues (max_tokens={max_tokens}, TTL={TTL}s)...")
+    for q_name, team, count in QUEUES_SPEC:
         zadd_args = []
         for i in range(1, count + 1):
-            msg_id = f"bench-{team}-{model}-{run_id}-{i:04d}"
+            msg_id = f"bench-{team}-{run_id}-{i:04d}"
             msg_obj = {
                 "internal": {},
                 "request_kind": "plain",
@@ -122,23 +119,18 @@ def monitor_drain(total_enqueued, max_wait_sec=600, prom_url=None):
         elapsed = int(time.time() - start_time)
 
         # Query Redis results
-        res_a = subprocess.run(
-            ["kubectl", "-n", NAMESPACE, "exec", REDIS_DEPLOY, "--", "redis-cli", "LLEN", "results-a-list"],
-            capture_output=True, text=True
-        )
-        res_b = subprocess.run(
-            ["kubectl", "-n", NAMESPACE, "exec", REDIS_DEPLOY, "--", "redis-cli", "LLEN", "results-b-list"],
+        res = subprocess.run(
+            ["kubectl", "-n", NAMESPACE, "exec", REDIS_DEPLOY, "--", "redis-cli", "LLEN", "results-list"],
             capture_output=True, text=True
         )
         try:
-            done_a = int(res_a.stdout.strip())
-            done_b = int(res_b.stdout.strip())
+            total_done = int(res.stdout.strip())
         except Exception:
-            done_a, done_b = 0, 0
+            total_done = 0
 
         # Query Redis remaining backlog
         q_backlog = 0
-        for q_name, _, _, _ in QUEUES_SPEC:
+        for q_name, _, _ in QUEUES_SPEC:
             res = subprocess.run(
                 ["kubectl", "-n", NAMESPACE, "exec", REDIS_DEPLOY, "--", "redis-cli", "ZCARD", q_name],
                 capture_output=True, text=True
@@ -148,14 +140,13 @@ def monitor_drain(total_enqueued, max_wait_sec=600, prom_url=None):
             except Exception:
                 pass
 
-        total_done = done_a + done_b
         pct = (total_done / total_enqueued) * 100 if total_enqueued > 0 else 0
 
         # Query Prometheus live gauges
         in_flight = int(query_prom("sum(llm_d_async_async_inflight_requests)", prom_url=prom_url))
         q_depth = int(query_prom("sum(llm_d_async_async_queue_depth)", prom_url=prom_url))
 
-        print(f"[{elapsed:03d}s] Completed: {total_done:3d}/{total_enqueued} ({pct:5.1f}%) | In-Flight: {in_flight:2d} | In-Process Depth: {q_depth:3d} | Redis ZCARD: {q_backlog:3d} | A: {done_a:3d}, B: {done_b:3d}")
+        print(f"[{elapsed:03d}s] Completed: {total_done:3d}/{total_enqueued} ({pct:5.1f}%) | In-Flight: {in_flight:2d} | In-Process Depth: {q_depth:3d} | Redis ZCARD: {q_backlog:3d}")
 
         if total_done >= total_enqueued:
             print(f"\n[+] SUCCESS: All {total_enqueued} requests served and completed in {elapsed}s!")

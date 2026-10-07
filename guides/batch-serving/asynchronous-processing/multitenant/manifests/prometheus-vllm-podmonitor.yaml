@@ -28,4 +28,4 @@ spec:
       interval: 15s
       relabelings:
         - targetLabel: inference_pool
-          replacement: POOL_A
+          replacement: POOL_NAME

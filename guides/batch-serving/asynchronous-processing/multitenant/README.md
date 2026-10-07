@@ -1,16 +1,16 @@
 # Multi-Tenant Async Processing — Quota, Priority & Saturation
 
 An advanced [Async Processor](https://github.com/llm-d/llm-d-async) scenario built on the
-[asynchronous-processing](../README.md) guide, across three dimensions — **team × tier × model**. Each
-**team** gets a per-team quota (reserved vs. overflow) and a priority **tier**; each **model** gets its
-own worker pool with independent **saturation-aware back-off**, observed through self-hosted
+[asynchronous-processing](../README.md) guide, across two dimensions — **team × tier** — for one model served by one llm-d Router
+`InferencePool`. Each **team** gets a per-team quota (reserved vs. overflow) and a priority **tier**; the
+worker pool backs off when the pool saturates (**saturation-aware back-off**), observed through self-hosted
 Prometheus + Grafana (or GCP Cloud Monitoring on the Pub/Sub backend).
 
 The scenario is the point; the **message queue is a pluggable backend** — it runs unchanged on **Redis
 SortedSet** (the default here) or **GCP Pub/Sub**. The gate configuration, worker pools, and scenario
 walkthroughs are identical across both; only the queue wiring and how you publish differ.
 
-![Animated architecture: two models each with their own worker pool and vLLM; within each, three team/tier lanes flow through a reserved/overflow quota gate and the tier-priority merge; model A saturates and its pool parks while model B keeps flowing](diagram/architecture.gif)
+![Animated architecture: three team/tier lanes flow through a reserved/overflow quota gate and the tier-priority merge into one llm-d-async worker pool, which dispatches to one llm-d Router and InferencePool in front of one vLLM model server; as the pool saturates, the worker pool parks](diagram/architecture.gif)
 
 > [!NOTE]
 > Source + regeneration for the diagram: [`diagram/`](diagram/) (`architecture.html` is the editable
@@ -18,47 +18,47 @@ walkthroughs are identical across both; only the queue wiring and how you publis
 
 ## Overview
 
-The demo simulates **two model pipelines** (`model-a`, `model-b`) behind llm-d Router. Each model
-pipeline gets its **own worker pool** in `llm-d-async` — isolating worker concurrency, queue draining, and saturation
-back-off per model — and within each pool three teams contend by **tier** and **quota**. That's **6 queues**
-(3 teams × 2 models) → **2 worker pools**:
+The demo serves **one model** (`Qwen/Qwen3-32B`) behind **one llm-d Router and `InferencePool`** (`llm-d-router`).
+Three teams contend for it by **tier** and **quota** through **3 queues** and **one worker pool** in
+`llm-d-async`:
 
-| Model Pipeline → Worker Pool | Team | Queue (Redis) | Tier | Reserved quota | Quota prefix |
-| :-- | :-- | :-- | :-- | :-- | :-- |
-| **`model-a`** | premium | `team-premium-a` | `interactive` | concurrency **2** | `quota:a:` |
-| | standard | `team-standard-a` | `async` | concurrency **2** | `quota:a:` |
-| | batch | `team-batch-a` | `batch` | concurrency **1** | `quota:a:` |
-| **`model-b`** | premium | `team-premium-b` | `interactive` | concurrency **2** | `quota:b:` |
-| | standard | `team-standard-b` | `async` | concurrency **2** | `quota:b:` |
-| | batch | `team-batch-b` | `batch` | concurrency **1** | `quota:b:` |
+| Worker Pool | Team | Queue (Redis) | Tier | Reserved quota |
+| :-- | :-- | :-- | :-- | :-- |
+| **`teams`** (16 workers) | premium | `team-premium` | `interactive` | concurrency **2** |
+| | standard | `team-standard` | `async` | concurrency **2** |
+| | batch | `team-batch` | `batch` | concurrency **1** |
 
 > [!NOTE]
-> **Single-Router Demo vs. Multi-Model Production:** In a full multi-model production environment, each model is typically served by its own `InferencePool` behind a gateway (e.g. using Gateway API HTTPRoutes with dedicated llm-d Routers). To keep this demo lightweight, the walkthrough deploys a **single llm-d Router instance** and a single vLLM model server (`Qwen/Qwen3-32B` on two GPUs, or `Qwen/Qwen3-8B` on one GPU with the [single-GPU override](#1-install-crds-and-deploy-the-backend-model-server)), with both logical model pipelines (`model-a` and `model-b`) pointing to that shared llm-d Router pool (`POOL_A=llm-d-router`, `POOL_B=llm-d-router`). If your cluster already has multiple `InferencePool`s deployed, you can point `POOL_A` and `POOL_B` to distinct pools for full physical backend isolation.
+> **One llm-d-async, many InferencePools.** This walkthrough uses one model and one pool to stay small, but one
+> `llm-d-async` deployment can feed many `InferencePool`s independently. Give each pool its own worker pool
+> (`workerPools[].id`) and its own queues, with `igw_base_url` pointing at that pool's llm-d Router. Worker
+> concurrency, quota counters (use a distinct quota `prefix` per pool) and saturation gates are all per worker
+> pool, so saturating one `InferencePool` parks only the workers that feed it. Each pool also needs its own set
+> of `InferenceObjective`s (see [step 2](#2-configure-llm-d-router-and-apply-inferenceobjectives)).
 
-The three dimensions:
+How requests are classified:
 
-- **Model → worker pool isolation.** Each model track gets its own `llm-d-async` worker pool (`model-a`, `model-b`), independent concurrency limits, and dedicated saturation gates. In production with multiple `InferencePool`s, saturating one model pool parks only that model's workers without affecting the other. In this single-pool demo environment, both worker pools dispatch through the shared llm-d Router instance while demonstrating the independent queue, quota, and worker isolation mechanisms.
-- **Queue as the serving dimension (tier × model).** A queue represents a **serving tier** for a target model
+- **Queue as the serving dimension (tier).** A queue represents a **serving tier**
   (e.g., interactive latency-sensitive, standard async, or batch throughput), **not a rigid single-tenant silo**.
   In production, multiple distinct teams can publish into the **same queue** concurrently. The request payload
   identifies the team via `metadata.team`.
 - **Team → reservation classification.** The per-team **`redis-quota`** gate runs in **`classifying`**
-  mode (keyed dynamically on `metadata.team`, with a **per-model prefix** such as `quota:a:team:<team>`):
+  mode (keyed dynamically on `metadata.team`, as `quota:team:<team>`):
   each team maintains its own independent concurrency counter in Redis. When multiple teams share a serving queue,
   one team exceeding its quota does not exhaust another team's budget: within quota → `reserved` (org-guaranteed),
   over quota → `overflow` (admitted and deprioritized, **not** nacked).
 - **Tier → priority.** A per-queue `tier` label: `interactive` (premium tier) > `async` (standard tier) > `batch`.
 
 The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/294) runs
-**per pool independently**: within each model it buckets requests into **6 strict lanes** by
+**per worker pool**: it buckets requests into **6 strict lanes** by
 `(classification, tier)`, dispatches them in order, and stamps **`x-llm-d-inference-objective`** via `lane_objectives`.
 
-By defining matching [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router)
+By defining matching [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives)
 resources in the cluster, `llm-d-async` and llm-d Router Flow Control speak the exact same language.
 Requests carry the authoritative objective and tenant identity (`x-llm-d-inference-fairness-id`), allowing
 llm-d Router to enforce multi-tenant fairness and priority band admission:
 
-| Lane | Objective (`lane_objectives`) | Header `x-llm-d-inference-objective` | Router Band Priority | Who (within one model) |
+| Lane | Objective (`lane_objectives`) | Header `x-llm-d-inference-objective` | Router Band Priority | Who |
 | :-- | :-- | :-- | :-- | :-- |
 | reserved + interactive | `reserved-interactive` | `reserved-interactive` | 100 | premium within quota |
 | reserved + async | `reserved-async` | `reserved-async` | 60 | standard within quota |
@@ -67,13 +67,13 @@ llm-d Router to enforce multi-tenant fairness and priority band admission:
 | overflow + async | `overflow-async` | `overflow-async` | 0 | standard over quota |
 | overflow + batch | `overflow-batch` | `overflow-batch` | -10 | batch over quota |
 
-So within each model **all reserved traffic drains before any overflow** (org priority), tier-ordered
-within each class; and the two models are fully independent. On Redis SortedSet, within a lane dispatch
+So **all reserved traffic drains before any overflow** (org priority), tier-ordered within each class.
+On Redis SortedSet, within a lane dispatch
 is earliest-deadline-first (the deadline is the sorted-set score).
 
 ### Priority Values: Flow Control ON vs. Flow Control OFF
 
-Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
+Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
 
 #### With Flow Control ON (llm-d Router)
 When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowControl]` in `flow-control.yaml`):
@@ -128,8 +128,7 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
 
 - **Model Serving Stack & Router.** The walkthrough deploys a single llm-d Router instance (which creates
   the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
-  parallelism 2). In a multi-model
-  environment, you can point `POOL_A` and `POOL_B` to separate `InferencePool`s for physical pool isolation.
+  parallelism 2).
 
 - **Environment.** In addition to the base guide's variables:
 
@@ -144,42 +143,38 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
   export INFRA_PROVIDER=base           # optimized-baseline model server variant: base, or gke on GKE
   export HF_TOKEN=<your Hugging Face token>
 
-  # InferencePool names (saturation-gate scope) and served model names (go in payload.model).
-  # In this single-router demo, both logical model pools point to the deployed llm-d-router instance:
-  export POOL_A=llm-d-router POOL_B=llm-d-router       # InferencePool names (saturation-gate scope)
-  export POOL_NAME=llm-d-router                       # Shared pool name for InferenceObjectives
-  export MODEL_A=Qwen/Qwen3-32B MODEL_B=Qwen/Qwen3-32B # served model names (go in payload.model)
+  export POOL_NAME=llm-d-router        # InferencePool the router creates (objectives, saturation gates)
+  export MODEL=Qwen/Qwen3-32B          # served model name (goes in payload.model)
 
   # Scenario C only: the base URL the saturation gates read PromQL from. The default
   # matches the monitoring setup; override it if your Prometheus lives somewhere else:
   export PROM_URL=http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
 
-  # Scenario C only: concurrent requests per model at which that model's pool counts as
-  # saturated. Must be BELOW the pool's worker count (8 in the overlays) — see Scenario C:
+  # Scenario C only: concurrent requests at which the pool counts as saturated.
+  # Must be BELOW the worker pool's worker count (16 in the overlays) — see Scenario C:
   export SAT_CAP=4
   ```
 
 ## Configuration and Deployment
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_A`, `POOL_B`, `POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, `COORDINATOR_IMAGE`
-in the optional coordinator manifest, and `POOL_A` in the vLLM PodMonitor). Render one for your
+`POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, `COORDINATOR_IMAGE` in the optional
+coordinator manifest, and `POOL_NAME` in the vLLM PodMonitor). Render one for your
 environment before installing:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
   sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-      -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
-      -e "s/POOL_NAME/${POOL_NAME:-${POOL_A}}/g" \
+      -e "s/POOL_NAME/${POOL_NAME}/g" \
       -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
       -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
       -e "s#COORDINATOR_IMAGE#${ROUTER_COORDINATOR_IMAGE}:${ROUTER_COORDINATOR_VERSION}#g" "$1"
 }
 ```
 
-`MODEL_A` / `MODEL_B` are **not** overlay placeholders — they never appear in a value, only in
-comments. The served model names reach the system through `payload.model`, which the `publish()`
-helper below fills in from `${MODEL_A}` / `${MODEL_B}`.
+`MODEL` is **not** an overlay placeholder — it never appears in a value, only in comments. The served
+model name reaches the system through `payload.model`, which the `publish()` helper below fills in from
+`${MODEL}`.
 
 ### 1. Install CRDs and Deploy the Backend Model Server
 
@@ -205,7 +200,7 @@ Instead of maintaining its own model server manifests, this guide renders the
 (`guides/optimized-baseline/modelserver/gpu/vllm/`) as the [flow-control](../../../flow-control/README.md) guide does:
 `sed` swaps in this guide's `llm-d.ai/guide` label, which the router selects on. The model (`Qwen/Qwen3-32B`, two GPUs
 per replica), image, probes and volumes follow that guide. The one change is a single replica instead of eight: the
-router's `maxConcurrency` and the llm-d-async worker pools below are sized so that async work saturates one replica.
+router's `maxConcurrency` and the llm-d-async worker pool below are sized so that async work saturates one replica.
 
 <details>
 <summary><h4>Single GPU</h4></summary>
@@ -215,7 +210,7 @@ On one GPU, serve `Qwen/Qwen3-8B` with tensor parallelism 1 instead (the setup t
 match before publishing, because requests carry it in `payload.model`:
 
 ```bash
-export MODEL_A=Qwen/Qwen3-8B MODEL_B=Qwen/Qwen3-8B
+export MODEL=Qwen/Qwen3-8B
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
@@ -256,9 +251,11 @@ export IP=$(kubectl get service llm-d-router-epp -n ${NAMESPACE} -o jsonpath='{.
 ```
 
 > [!NOTE]
-> **Single Router & InferencePool in Demo:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`. Both `model-a` and `model-b` worker pools dispatch through this shared llm-d Router, so `render` maps `POOL_NAME` to `${POOL_NAME:-${POOL_A}}` (`llm-d-router`), binding all 6 `InferenceObjective`s to this shared pool.
->
-> **Multi-Pool Isolation Architecture:** An `InferenceObjective` resource binds to a single `poolRef.name`, and Kubernetes resource names are unique per namespace. In a production multi-tenant architecture with separate Inference Pools (`POOL_A != POOL_B`), the recommended pattern isolates each pool and router in its own namespace (e.g., `ns-pool-a` and `ns-pool-b`). In that case, apply `manifests/inferenceobjectives.yaml` in each namespace with `POOL_NAME` set to that namespace's respective pool name.
+> **One InferencePool per router:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`
+> (`POOL_NAME`), and `render` binds all 6 `InferenceObjective`s to it. An `InferenceObjective` binds to a single
+> `poolRef.name`, and Kubernetes resource names are unique per namespace, so when one `llm-d-async` feeds several
+> `InferencePool`s, put each pool and its router in its own namespace and apply
+> `manifests/inferenceobjectives.yaml` there with `POOL_NAME` set to that pool.
 
 ### 3. Deploy Redis and llm-d-async
 
@@ -283,7 +280,7 @@ Queues are just sorted-set keys — no per-team resource creation needed; they a
 <summary><b>GCP Pub/Sub backend</b></summary>
 
 Requires a GCP project with the Pub/Sub API enabled and `gcloud` authenticated. `gcp-setup.sh` creates
-the per-`(team, model)` topics + subscriptions, the results topic, and the service account + IAM.
+the per-team topics + subscriptions, the results topic, and the service account + IAM.
 
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -332,7 +329,7 @@ in front of the router. Each request picks a serving mode with the `X-AP-Mode` h
 
 The coordinator's config ([`manifests/coordinator/config.yaml`](manifests/coordinator/config.yaml)) maps
 tenant `realtime` to live interactive traffic (`reserved-interactive`, priority 100), and tenants `standard`
-and `batch` to two coordinator queues, `coord-standard-a` and `coord-batch-a`. Those queues sit beside the team
+and `batch` to two coordinator queues, `coord-standard` and `coord-batch`. Those queues sit beside the team
 queues in their own `coord` worker pool, with 16 workers so that queued traffic alone can fill the model server,
 and share the team queues' quota counters. Installing them replaces the llm-d-async values from step 3 with
 [`values/redis/quota-only-coordinator.yaml`](values/redis/quota-only-coordinator.yaml), which is
@@ -365,12 +362,12 @@ kubectl -n ${NAMESPACE} port-forward svc/llm-d-coordinator 8080:8080 &
 # Live, at interactive priority
 curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
   -H 'X-AP-Mode: passthrough' -H 'X-Team: realtime' \
-  -d "{\"model\":\"${MODEL_A}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+  -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
 
-# Queued on coord-batch-a; the response arrives once llm-d-async has dispatched it
+# Queued on coord-batch; the response arrives once llm-d-async has dispatched it
 curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
   -H 'X-AP-Mode: wait' -H 'X-Team: batch' \
-  -d "{\"model\":\"${MODEL_A}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+  -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
 ```
 
 A client that disconnects while its `wait` request is still queued cancels it before dispatch. The coordinator
@@ -383,31 +380,30 @@ A request is a JSON body — `id`, `created`, `deadline`, a `payload` (the infer
 With the optional coordinator from step 4, HTTP clients can submit requests instead; the rest of this section uses Redis directly.
 
 ### Queues as Serving Dimensions vs. Team Identity
-- **The Queue is a Serving Dimension:** A queue corresponds to an service tier and model pair (e.g., `interactive` tier for `model-a`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue. 
+- **The Queue is a Serving Dimension:** A queue corresponds to a service tier (e.g., `interactive`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue. 
 - **Multiple Teams in One Queue:** Requests from different teams can be published into the **exact same queue**. The team identity is carried per-request inside `metadata.team` (e.g., `team: "marketing"` vs. `team: "engineering"`).
-- **Per-Team Quota Accounting:** The `redis-quota` gate dynamically reads `metadata.team` on each request and increments/decrements that specific team's counter (`quota:<model>:team:<team>`). If Team A saturates its reserved limit, Team A's excess traffic is deprioritized to `overflow`, while Team B publishing to that same queue continues to receive `reserved` capacity.
+- **Per-Team Quota Accounting:** The `redis-quota` gate dynamically reads `metadata.team` on each request and increments/decrements that specific team's counter (`quota:team:<team>`). If Team A saturates its reserved limit, Team A's excess traffic is deprioritized to `overflow`, while Team B publishing to that same queue continues to receive `reserved` capacity.
 - **Fairness ID:** At dispatch, `llm-d-async` stamps `metadata.team` into the `x-llm-d-inference-fairness-id` header so that llm-d Router's Flow Control fairness policy treats tenants equitably during queue contention.
 
-In this demo walkthrough, queues are labeled with team names (e.g. `team-premium-a`) for clear attribution, but you can pass any team name into `publish <team> <a|b> [count]`:
+In this demo walkthrough, queues are labeled with team names (e.g. `team-premium`) for clear attribution, but you can pass any team name into `publish <team> [count]`:
 
 ```bash
-publish() {                                   # publish <team> <a|b> [count]
-  local team=$1 model=$2 n=${3:-1} ttl=${PUBLISH_TTL:-300} now dl run name i pairs=()
-  [ "$model" = a ] && name="$MODEL_A" || name="$MODEL_B"
+publish() {                                   # publish <team> [count]
+  local team=$1 n=${2:-1} ttl=${PUBLISH_TTL:-300} now dl run i pairs=()
   now=$(date +%s); dl=$((now+ttl)); run="${now}-${RANDOM}"
   # The whole batch goes in one exec — ZADD takes any number of score/member pairs. One exec
-  # per request trickled `publish batch a 100` in over minutes, and the workers drained it as
+  # per request trickled `publish batch 100` in over minutes, and the workers drained it as
   # fast as it arrived: no backlog to classify as overflow. The batch shares a score, so
   # ZPopMin breaks ties on the member string — the zero-padded index makes that publish order.
   for i in $(seq 1 "$n"); do
-    pairs+=("$dl" "$(printf '{"internal":{},"request_kind":"plain","data":{"id":"%s-%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}}' \
-      "$team" "$model" "$run" "$i" "$now" "$dl" "$name" "$team")")
+    pairs+=("$dl" "$(printf '{"internal":{},"request_kind":"plain","data":{"id":"%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}}' \
+      "$team" "$run" "$i" "$now" "$dl" "$MODEL" "$team")")
   done
-  kubectl -n ${NAMESPACE} exec -i deploy/redis -- redis-cli ZADD "team-${team}-${model}" "${pairs[@]}"
+  kubectl -n ${NAMESPACE} exec -i deploy/redis -- redis-cli ZADD "team-${team}" "${pairs[@]}"
 }
-# e.g.  publish premium a 5    # premium team, model A; prints the number enqueued.
-#   PUBLISH_TTL=900 publish batch a 400   # one deadline covers the batch — raise it if a
-#                                         # saturated pool will not drain within 300s.
+# e.g.  publish premium 5     # premium team; prints the number enqueued.
+#   PUBLISH_TTL=900 publish batch 400   # one deadline covers the batch — raise it if a
+#                                       # saturated pool will not drain within 300s.
 # Keep the count in the low thousands: every pair travels in the one exec's argv.
 ```
 
@@ -416,18 +412,17 @@ publish() {                                   # publish <team> <a|b> [count]
 
 <!-- llm-d-cicd:skip start -->
 ```bash
-publish() {                                   # publish <team> <a|b> [count]
-  local team=$1 model=$2 n=${3:-1} ttl=${PUBLISH_TTL:-300} par=${PUBLISH_PAR:-8} now dl run name i
-  [ "$model" = a ] && name="$MODEL_A" || name="$MODEL_B"
+publish() {                                   # publish <team> [count]
+  local team=$1 n=${2:-1} ttl=${PUBLISH_TTL:-300} par=${PUBLISH_PAR:-8} now dl run i
   now=$(date +%s); dl=$((now+ttl)); run="${now}-${RANDOM}"
   # gcloud publishes one message per invocation, so keep `par` of them in flight: serially,
-  # `publish batch a 100` takes minutes and never builds the backlog the scenarios need.
+  # `publish batch 100` takes minutes and never builds the backlog the scenarios need.
   # Each invocation is a fresh Python process — lower PUBLISH_PAR if memory is tight.
   for i in $(seq 1 "$n"); do
-    gcloud pubsub topics publish "team-${team}-${model}-requests" --project "$PROJECT_ID" \
+    gcloud pubsub topics publish "team-${team}-requests" --project "$PROJECT_ID" \
       --attribute "team=${team}" \
-      --message "$(printf '{"id":"%s-%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}' \
-        "$team" "$model" "$run" "$i" "$now" "$dl" "$name" "$team")" >/dev/null &
+      --message "$(printf '{"id":"%s-%s-%04d","created":%s,"deadline":%s,"payload":{"model":"%s","prompt":"summarize this","max_tokens":64},"metadata":{"team":"%s"}}' \
+        "$team" "$run" "$i" "$now" "$dl" "$MODEL" "$team")" >/dev/null &
     (( i % par )) || wait
   done
   wait
@@ -438,7 +433,7 @@ publish() {                                   # publish <team> <a|b> [count]
 
 ### Stress Testing Scripts
 
-Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to drive sustained multi-tenant traffic (team × tier × model) concurrently to test quota, priority lanes, and populate dashboard metrics:
+Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to drive sustained multi-tenant traffic (team × tier) concurrently to test quota, priority lanes, and populate dashboard metrics:
 
 - **GCP Pub/Sub:** [`scripts/stress-test-pubsub.py`](scripts/stress-test-pubsub.py)
   ```bash
@@ -451,48 +446,47 @@ Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to 
 
 ## Scenarios A & B — reserved vs. overflow
 
-**A. Steady state (one model)** — each team within its reserved quota on model A:
+**A. Steady state** — each team within its reserved quota:
 
 ```bash
-for t in premium standard batch; do publish "$t" a 1 & done; wait
+for t in premium standard batch; do publish "$t" 1 & done; wait
 ```
 
 Every request is within its team's quota, so all are `reserved` and dispatched in tier order
-(premium→standard→batch), stamped with their respective lane objectives (`reserved-interactive`, `reserved-async`, `reserved-batch`). Read results from the per-model list:
+(premium→standard→batch), stamped with their respective lane objectives (`reserved-interactive`, `reserved-async`, `reserved-batch`). Read results from the results list:
 
 ```bash
-kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli LRANGE results-a-list 0 -1   # model B -> results-b-list
+kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli LRANGE results-list 0 -1
 ```
 
 > Each result is JSON with `id`, `payload` (the upstream response body), and `status_code` (the upstream
 > HTTP status). Non-HTTP failures carry `status_code: 0` plus `error_code`/`error_message` (e.g.
 > `GATE_DROPPED`, `DEADLINE_EXCEEDED`).
 
-**B. Overflow deprioritization + model isolation** — flood `batch` on **model A** past its reserved
-quota (1) while `premium` on model A and everything on model B run within quota:
+**B. Overflow deprioritization** — flood `batch` past its reserved quota (1) while `premium` runs within
+quota:
 
 ```bash
-publish batch   a 100 &   # far exceeds batch's reserved 1 on A -> excess is overflow (lane 5)
-publish premium a 20  &   # premium reserved on A (lane 0) -> always jumps ahead
-publish premium b 20  &   # model B, unaffected by A's overload
+publish batch   100 &   # far exceeds batch's reserved 1 -> excess is overflow (lane 5)
+publish premium 20  &   # premium reserved (lane 0) -> always jumps ahead
 wait
 ```
 
-- **Priority within model A:** batch's first concurrent request stays `reserved` (lane 2); the rest are
-  `overflow` (lane 5), dispatched only after all reserved and higher-tier overflow. The
-  per-`(team, model)` counter caps at the reserved limit; the excess flows as overflow (not nacked):
+- **Priority:** batch's first concurrent request stays `reserved` (lane 2); the rest are `overflow`
+  (lane 5), dispatched only after all reserved and higher-tier overflow. The per-team counter caps at the
+  reserved limit; the excess flows as overflow (not nacked):
 
   ```bash
-  kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli GET quota:a:team:batch     # <= 1 (model A, batch)
-  kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli GET quota:b:team:premium   # model B counter, independent
+  kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli GET quota:team:batch     # <= 1
+  kubectl -n ${NAMESPACE} exec deploy/redis -- redis-cli GET quota:team:premium   # independent counter
   ```
 
-- **Model isolation:** model B has its own pool and counters, so A's batch overload does not slow B —
-  `results-b-list` keeps filling at model B's own rate.
+- **Team isolation:** premium has its own counter, so batch's overload does not use up premium's reserved
+  quota — premium's 20 requests finish ahead of batch's overflow.
 
 ## Scenario C — priority under saturation
 
-Switch to the saturation overlay (adds the per-pool `wait-on-refuse(prometheus-query)` gates) after
+Switch to the saturation overlay (adds the worker pool's `wait-on-refuse(prometheus-query)` gate) after
 bringing up [self-hosted Prometheus](#observability), then drive sustained load:
 
 ```bash
@@ -515,7 +509,7 @@ kubectl run --rm -i promcheck --image=curlimages/curl --restart=Never -n ${NAMES
 
 # 2. vLLM is actually being scraped (the metric the gates read):
 kubectl run --rm -i promcheck-vllm --image=curlimages/curl --restart=Never -n ${NAMESPACE} -- \
-    curl -sS --max-time 5 --data-urlencode "query=sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})" \
+    curl -sS --max-time 5 --data-urlencode "query=sum(vllm:num_requests_running{inference_pool=\"${POOL_NAME}\"})" \
     "${PROM_URL}/api/v1/query" | head -c 200
 # -> a result with a value; an empty "result":[] means the PodMonitor is not matching
 
@@ -527,34 +521,30 @@ kubectl logs -n ${NAMESPACE} deploy/llm-d-async --tail=200 | grep -i "using fall
 Then drive sustained load:
 
 ```bash
-publish premium a 200 & publish batch a 200 &   # heavy on model A; keep model B light
+publish premium 200 & publish batch 200 &
 wait
 ```
 
-As model A's `InferencePool` saturates, `model-a`'s budget → 0 and its workers **park in-memory
-(`ActionWait`)** — so `model-a` stops pulling new work without churning the backlog, while **`model-b`
-keeps dispatching at full rate** when `POOL_B` points to an independent, unsaturated pool. *(Note: In this
-single-router demo where both `POOL_A` and `POOL_B` point to `llm-d-router`, both gates monitor the shared model
-server; in a multi-pool setup where `POOL_A != POOL_B`, only model A parks.)* As capacity frees, the
-merge policy drains the highest lanes first. Query each model's budget independently:
+As the `InferencePool` saturates, the budget → 0 and the `teams` workers **park in-memory (`ActionWait`)** —
+the pool stops pulling new work without churning the backlog. As capacity frees, the merge policy drains the
+highest lanes first. With several `InferencePool`s, each worker pool's gate reads its own pool, so only the
+workers feeding the saturated pool park. Query the budget:
 
 ```bash
 # Assumes the central Prometheus install from Observability below; point this at
 # whatever ${PROM_URL} resolves to if your Prometheus lives elsewhere.
 kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &
 curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_A}\"})/${SAT_CAP}, 0, 1)"  # model-a budget -> 0
-curl -s localhost:9090/api/v1/query --data-urlencode \
-  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_B}\"})/${SAT_CAP}, 0, 1)"  # model-b budget (~1)
+  "query=clamp(1 - sum(vllm:num_requests_running{inference_pool=\"${POOL_NAME}\"})/${SAT_CAP}, 0, 1)"  # budget -> 0
 
-# Parked workers hold their message instead of dispatching, so model-a's in-flight count
-# hovers near ${SAT_CAP} while model-b's climbs to its 8 workers:
+# Parked workers hold their message instead of dispatching, so the pool's in-flight count
+# hovers near ${SAT_CAP} instead of climbing to its 16 workers:
 curl -s localhost:9090/api/v1/query --data-urlencode \
   "query=sum by (pool_name) (llm_d_async_async_inflight_requests)"
 ```
 
-**What "saturated" should look like:** under this load `model-a`'s budget reaches **exactly `0`** and
-stays there in stretches, while `model-b` sits at `~1`. If `model-a` never reaches 0, the scenario is
+**What "saturated" should look like:** under this load the budget reaches **exactly `0`** and stays there in
+stretches. If it never reaches 0, the scenario is
 not actually happening — nothing parks, and the run still completes and looks healthy. Check `SAT_CAP`
 against the sizing rule below before concluding the gate worked.
 
@@ -562,7 +552,7 @@ against the sizing rule below before concluding the gate worked.
 > **`SAT_CAP` must be smaller than the pool's `workers`.** `prometheus-query` closes its gate at
 > budget `<= 0`, and `clamp(..., 0, 1)` floors the budget at 0 — so the gate closes only once
 > `SAT_CAP` requests are running on that model. Scenario C's load is entirely async, so the only
-> thing driving that count is the pool's own workers (`8` per model in the overlays), and a worker
+> thing driving that count is the pool's own workers (`16` in the overlays), and a worker
 > evaluates the gate while holding a message it has not dispatched yet: at most `workers - 1` of the
 > pool's requests are running at that moment. Set `SAT_CAP` at or above `workers` and the budget can
 > never reach 0. The default `SAT_CAP=4` leaves margin on two counts: `vllm:num_requests_running`
@@ -608,7 +598,7 @@ helm upgrade llm-d-async \
 
 ```bash
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-    -e "s/POOL_A/${POOL_A}/g" -e "s/POOL_B/${POOL_B}/g" \
+    -e "s/POOL_NAME/${POOL_NAME}/g" \
     -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
     ${MT}/values/pubsub/tier-priority-admission.yaml > /tmp/mt-pubsub-tier-priority.yaml
@@ -629,7 +619,7 @@ Verify that the metric is being scraped and that the gate evaluates metrics live
 ```bash
 # 1. Verify Prometheus has scraped the saturation metric from llm-d-router:
 curl -s localhost:9090/api/v1/query --data-urlencode \
-    "query=llm_d_epp_flow_control_pool_saturation{inference_pool=\"${POOL_A}\"}"
+    "query=llm_d_epp_flow_control_pool_saturation{inference_pool=\"${POOL_NAME}\"}"
 
 # 2. Verify the gate initialized with the inner prometheus-saturation source:
 kubectl logs -n ${NAMESPACE} deploy/llm-d-async | grep -i "tier-priority-admission"
@@ -659,8 +649,8 @@ render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl apply -n ${NAME
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
 dashboard shows `async_dispatch_budget`, `async_inflight_requests`, `async_gate_decisions_total`, and
-`async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`model-a` /
-`model-b`) for the per-model view and by **`queue_name`** for the per-team-per-model view.
+`async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`teams`, plus
+`coord` with the optional coordinator) for the per-pool view and by **`queue_name`** for the per-team view.
 `async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates), so it says nothing
 about the per-pool saturation gates. Those report through `async_gate_metric_value` — the value the
 gate last read, i.e. the `clamp(...)` result — against `async_gate_metric_threshold`, which the gate
@@ -668,8 +658,8 @@ closes at (`value <= threshold`, and `prometheus-query` pins the threshold to `0
 by the owning `pool_name`:
 
 ```promql
-llm_d_async_async_gate_metric_value{pool_name="model-a"}       # -> 0 while the pool is parked
-llm_d_async_async_gate_metric_threshold{pool_name="model-a"}   # -> 0
+llm_d_async_async_gate_metric_value{pool_name="teams"}       # -> 0 while the pool is parked
+llm_d_async_async_gate_metric_threshold{pool_name="teams"}   # -> 0
 ```
 
 Their absence is itself a signal: the gauges are only written on a **successful** read, so a missing
@@ -690,8 +680,8 @@ gcloud monitoring dashboards create --project ${PROJECT_ID} \
 # For the gates' in-cluster PromQL reads on Pub/Sub (option A), deploy the GMP query frontend and
 # upgrade to the GMP saturation overlay:
 kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml
-sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/POOL_A/${POOL_A}/g" \
-    -e "s/POOL_B/${POOL_B}/g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
+sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/POOL_NAME/${POOL_NAME}/g" \
+    -e "s/PROJECT_ID/${PROJECT_ID}/g" \
     ${MT}/values/pubsub/saturation-gmp.yaml > /tmp/mt-pubsub-sat.yaml
 helm upgrade llm-d-async oci://ghcr.io/llm-d/charts/llm-d-async \
   -f /tmp/mt-pubsub-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
@@ -711,11 +701,12 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 - **Image / version.** The overlays no longer pin an image tag — the image tracks the chart's
   `appVersion`, selected by `--version ${ASYNC_VERSION}`. Use a release whose app image actually exists
   (v0.7.4+).
-- **Reserved quota vs. pool size (per model).** Each team's quota is its *reserved* capacity (priority
-  lane) in `classifying` mode, not a hard cap — over-quota flows as `overflow`. Within each model pool,
-  keep the **sum** of that model's reserved quotas at or below the pool's worker count.
-- **Per-model quota counters** are keyed `quota:<a|b>:team:<team>`, so a team's reserved capacity on
-  model A is independent of its capacity on model B.
+- **Reserved quota vs. pool size.** Each team's quota is its *reserved* capacity (priority
+  lane) in `classifying` mode, not a hard cap — over-quota flows as `overflow`. Keep the **sum** of the
+  reserved quotas at or below the worker pool's worker count.
+- **Quota counters** are keyed `quota:team:<team>`. When one `llm-d-async` feeds several `InferencePool`s,
+  give each pool's queues a distinct quota `prefix` so a team's reserved capacity on one pool is independent
+  of its capacity on another.
 - **Saturation gate.** The Scenario C overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate (Scenario D) instead expects the EPP metric
   `llm_d_epp_flow_control_pool_saturation`.

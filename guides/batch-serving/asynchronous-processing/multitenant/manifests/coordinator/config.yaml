@@ -7,13 +7,13 @@
 # Tenants are selected with the X-Team header:
 #   * realtime -> no queue: with X-AP-Mode: passthrough the request is stamped
 #     reserved-interactive (priority 100) and forwarded live to the router.
-#   * standard -> queue coord-standard-a, tier async.
-#   * batch    -> queue coord-batch-a, tier batch (the default).
+#   * standard -> queue coord-standard, tier async.
+#   * batch    -> queue coord-batch, tier batch (the default).
 # With X-AP-Mode: enqueue or wait a request is written to its queue; llm-d-async
 # dispatches it to the router like the guide's own queues, with the
 # tier-priority merge policy stamping reserved or overflow objectives. The quota
 # prefix and attribute match the guide's redis-quota gates, so the coordinator
-# and llm-d-async share one counter per (model, team).
+# and llm-d-async share one counter per team.
 log_level: 2
 
 server:
@@ -45,12 +45,12 @@ pipeline:
           - tenant: realtime
             tier: interactive
           - tenant: standard
-            queue: coord-standard-a
+            queue: coord-standard
             tier: async
           - tenant: batch
-            queue: coord-batch-a
+            queue: coord-batch
             tier: batch
-        default_queue: coord-batch-a
+        default_queue: coord-batch
         default_tier: batch
         objectives:
           interactive:
@@ -63,7 +63,7 @@ pipeline:
             reserved: reserved-batch
             overflow: overflow-batch
         quota:
-          prefix: "quota:a:"
+          prefix: "quota:"
           attribute: team
           limits:
             standard: 2

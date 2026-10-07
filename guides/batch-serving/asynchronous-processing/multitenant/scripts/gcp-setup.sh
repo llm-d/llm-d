@@ -15,21 +15,18 @@ PROJECT_ID="${PROJECT_ID:-${1:-}}"
 
 SA_NAME="${SA_NAME:-async-processor}"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-TEAMS=(premium standard batch)
-MODELS=(a b)   # one topic/subscription per (team, model)
+TEAMS=(premium standard batch)   # one topic/subscription per team
 RESULT_TOPIC="results"
 
-echo ">> Request topics + subscriptions (team × model)"
+echo ">> Request topics + subscriptions (one per team)"
 for t in "${TEAMS[@]}"; do
-  for m in "${MODELS[@]}"; do
-    topic="team-${t}-${m}-requests"
-    sub="team-${t}-${m}-requests-sub"
-    gcloud pubsub topics create "$topic" --project "$PROJECT_ID" 2>/dev/null \
-      && echo "  created topic $topic" || echo "  topic $topic already exists"
-    gcloud pubsub subscriptions create "$sub" --topic "$topic" --project "$PROJECT_ID" \
-      --ack-deadline=60 2>/dev/null \
-      && echo "  created subscription $sub" || echo "  subscription $sub already exists"
-  done
+  topic="team-${t}-requests"
+  sub="team-${t}-requests-sub"
+  gcloud pubsub topics create "$topic" --project "$PROJECT_ID" 2>/dev/null \
+    && echo "  created topic $topic" || echo "  topic $topic already exists"
+  gcloud pubsub subscriptions create "$sub" --topic "$topic" --project "$PROJECT_ID" \
+    --ack-deadline=60 2>/dev/null \
+    && echo "  created subscription $sub" || echo "  subscription $sub already exists"
 done
 
 echo ">> Result topic (+ inspection subscription)"
