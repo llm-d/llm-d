@@ -7,14 +7,6 @@ metadata:
 spec:
   spec:
     devices:
-      # dranet needs the rdma profile to hand the pod a RoCE VF rather than a plain netdev.
-      config:
-        - opaque:
-            driver: dra.net
-            parameters:
-              profile: rdma
-          requests:
-            - nic
       requests:
         - name: npu
           exactly:
@@ -48,13 +40,6 @@ metadata:
 spec:
   spec:
     devices:
-      config:
-        - opaque:
-            driver: dra.net
-            parameters:
-              profile: rdma
-          requests:
-            - nic
       requests:
         - name: npu
           exactly:

@@ -104,8 +104,8 @@ cluster without these DeviceClasses. Both need a run on the real hardware.
 **Cluster prerequisites** beyond the [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html):
 
 * A network DRA driver publishing a `dranet` DeviceClass, so each role can claim a RoCE VF
-  alongside its NPUs. The claim requests the `rdma` profile; without an IPv4 on that VF the
-  NIXL side channel cannot bind.
+  alongside its NPUs. The DeviceClass config has to give that VF an IPv4 address (for example
+  `interface.dhcp`); without one the NIXL side channel cannot bind.
 * Kubernetes 1.34 or later for the `resource.k8s.io/v1` DRA APIs.
 
 > [!NOTE]
