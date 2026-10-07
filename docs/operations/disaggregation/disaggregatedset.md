@@ -15,7 +15,7 @@ See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disagg
 
 ## Pinning Slices to Accelerator Domains (Placement Policy)
 
-Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml)):
+Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml)). The P/D guide ships `slices: 1` (one prefill and one decode); placement policy pays off once you raise `slices` to run several copies:
 
 ```yaml
 spec:

@@ -10,11 +10,11 @@ metadata:
     llm-d.ai/engine-type: vllm
     llm-d.ai/model: gpt-oss-120b
 spec:
-  # Two independent copies of the whole P/D topology. Each slice is a complete
-  # 4-prefill + 1-decode set that rolls out and recovers on its own clock, for
-  # 8 x TP=1 prefill and 2 x TP=4 decode in total. Changing slices is a pure
-  # scale operation and never triggers a rollout of existing slices.
-  slices: 2
+  # One copy of the P/D topology: a 1-prefill (TP=1) + 1-decode (TP=4) set
+  # that rolls out and recovers on its own clock. Raise slices for more
+  # independent copies; changing slices is a pure scale operation and never
+  # triggers a rollout of existing slices.
+  slices: 1
 
   # Optionally confine each slice to a single topology domain (rack, NVLink
   # domain, zone, ...) and spread slices across domains, so prefill hands KV
@@ -31,7 +31,7 @@ spec:
   roles:
     - name: prefill
       spec:
-        replicas: 4  # per slice
+        replicas: 1  # per slice
         groupIdentity: Hash
         rolloutStrategy:
           rollingUpdateConfiguration:

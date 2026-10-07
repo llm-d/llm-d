@@ -2,7 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../vllm
+  - ../base
 
 # Override the base GPU-only ResourceClaimTemplates with GPU+NIC aligned versions.
 # The strategic merge patches replace the devices spec to add an RDMA NIC request
