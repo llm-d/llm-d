@@ -136,6 +136,12 @@ router:
               - pluginRef: no-hit-lru-scorer
                 weight: 2
 
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
   modelServers:
     matchLabels:
       llm-d.ai/guide: "p2p-kv-cache-sharing"
