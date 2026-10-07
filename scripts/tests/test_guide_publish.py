@@ -140,6 +140,32 @@ def test_repo_checks_pass_when_consistent(tmp_path):
     assert guide.check_support_repo(_guide(), gdir).ok()
 
 
+def test_repo_checks_nonstandard_workflow_name(tmp_path):
+    # Names outside nightly-e2e-<guide>-<prov>-acc-<acc>-<engine>-x.yaml count
+    # through their accelerator_type / backend_type input defaults.
+    gdir = _repo(tmp_path, ["gpu/vllm", "gpu/sglang", "tpu/vllm"])
+    wf = tmp_path / ".github" / "workflows"
+
+    def write(name, accel, engine):
+        (wf / name).write_text(
+            f"with:\n  accelerator_type: ${{{{ inputs.accelerator_type || '{accel}' }}}}\n"
+            f"  backend_type: ${{{{ inputs.backend_type || '{engine}' }}}}\n"
+        )
+
+    write("nightly-e2e-sup-guide-gke-cpu-gpu-vllm-native.yaml", "gpu", "vllm")
+    write("nightly-e2e-other-guide-gke-cpu-tpu-vllm-native.yaml", "tpu", "vllm")
+    assert guide.check_support_repo(_guide(), gdir).ok()
+
+    write("nightly-e2e-sup-guide-gke-cpu-tpu-vllm-native.yaml", "tpu", "vllm")
+    errs = _errors(guide.check_support_repo(_guide(), gdir))
+    assert any("runs tpu/vllm nightly" in e for e in errs)
+
+
+def test_tiered_prefix_cache_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "tiered-prefix-cache")
+    assert g.check().ok(), _errors(g.check())
+
+
 def test_repo_checks_missing_overlay_and_stray_overlay(tmp_path):
     gdir = _repo(
         tmp_path,

@@ -22,6 +22,10 @@ sections:
         slug: precise-prefix-cache-routing
         title: Enable Precise Prefix-Cache Aware Routing
         position: 3
+      - dir: guides/tiered-prefix-cache
+        slug: tiered-prefix-cache
+        title: Configure a Tiered Prefix Cache
+        position: 4
   models:
     target: well-lit-paths/models
     guides: []

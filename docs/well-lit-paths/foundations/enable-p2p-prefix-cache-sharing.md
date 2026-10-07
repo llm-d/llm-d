@@ -41,7 +41,7 @@ sequenceDiagram
 ```
 
 > [!IMPORTANT]
-> P2P prefix cache sharing builds on the [Tiered Prefix Cache](tiered-prefix-cache.md)
+> P2P prefix cache sharing builds on the [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md)
 > path: peers serve pulls from their CPU offload tier. The shipped
 > configuration uses the same `--block-size`, `PYTHONHASHSEED`, and tensor
 > parallel layout on every peer. Other layouts need a compatible peer
@@ -117,5 +117,5 @@ normal NIXL P/D path transfers the request's KV to the selected decoder.
 - [P2P KV Cache Sharing guide](../../../guides/p2p-kv-cache-sharing) - manifests, verification gates, benchmarking.
 - [Benchmark report: gpt-oss-120b on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/gpt-oss-120b-h200.md) - crossover, shared-prefix pools, document Q&A.
 - [Benchmark report: GLM-5.2 on H200](../../../guides/p2p-kv-cache-sharing/benchmark-results/glm-5.2-h200.md) - C64 policy comparison, four-arm observation, and pull mechanism evidence.
-- [Tiered Prefix Cache](tiered-prefix-cache.md) - the offload tiers P2P serves from.
+- [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md) - the offload tiers P2P serves from.
 - [Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) - the index that selects the pull source.
