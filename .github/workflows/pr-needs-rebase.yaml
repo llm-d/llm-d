@@ -1,7 +1,7 @@
 # Manages rebase and re-approval labels for open PRs:
 # 1. On push to `main`, labels conflicting non-draft PRs with `needs-rebase` and notifies the author.
-# 2. When a PR is updated (or marked ready for review) and conflict-free, removes `needs-rebase`
-#    and adds `re-approve` if the PR was previously approved before the rebase.
+# 2. When a PR is updated (or marked ready for review) and conflict-free, removes `needs-rebase`,
+#    adds `re-approve`, and pings the previous approver(s) if the PR was approved before the rebase.
 # 3. Removes `re-approve` once the PR is re-approved.
 
 name: PR Needs Rebase
@@ -83,6 +83,14 @@ jobs:
             const needsRebaseLabel = 'needs-rebase';
             const reApproveLabel = 're-approve';
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            const isHumanReviewer = (user, prAuthor) =>
+              Boolean(
+                user &&
+                  user.login &&
+                  user.login !== prAuthor &&
+                  user.type !== 'Bot' &&
+                  !user.login.endsWith('[bot]')
+              );
 
             async function ensureLabel(name, color, description) {
               try {
@@ -104,6 +112,7 @@ jobs:
               await sleep(3000 * (attempt + 1));
             }
 
+            const prAuthor = pr.user.login;
             const labels = (pr.labels || []).map((l) => l.name);
             const hasNeedsRebase = labels.includes(needsRebaseLabel);
             const hasReApprove = labels.includes(reApproveLabel);
@@ -134,8 +143,8 @@ jobs:
               const latestByUser = new Map();
               let approvedOnHead = false;
               for (const r of reviews) {
-                const user = r.user && r.user.login;
-                if (!user) continue;
+                if (!isHumanReviewer(r.user, prAuthor)) continue;
+                const user = r.user.login;
                 if (['APPROVED', 'DISMISSED', 'CHANGES_REQUESTED'].includes(r.state)) {
                   latestByUser.set(user, r.state);
                 }
@@ -144,10 +153,17 @@ jobs:
                 }
               }
 
-              const states = Array.from(latestByUser.values());
-              const hasChangesRequested = states.includes('CHANGES_REQUESTED');
-              let wasPreviouslyApproved = states.some((s) => s === 'DISMISSED' || s === 'APPROVED');
+              const priorApprovers = new Set();
+              let hasChangesRequested = false;
+              for (const [user, state] of latestByUser.entries()) {
+                if (state === 'CHANGES_REQUESTED') {
+                  hasChangesRequested = true;
+                } else if (state === 'DISMISSED' || state === 'APPROVED') {
+                  priorApprovers.add(user);
+                }
+              }
 
+              let wasPreviouslyApproved = priorApprovers.size > 0;
               if (!wasPreviouslyApproved) {
                 const events = await github.paginate(github.rest.issues.listEvents, {
                   owner,
@@ -155,12 +171,41 @@ jobs:
                   issue_number: pull_number,
                   per_page: 100,
                 });
-                wasPreviouslyApproved = events.some(
+                const hadApprovalLabelRemoved = events.some(
                   (ev) =>
                     ev.event === 'unlabeled' &&
                     ev.label &&
                     (ev.label.name === 'lgtm' || ev.label.name === 'approved')
                 );
+                if (hadApprovalLabelRemoved) {
+                  wasPreviouslyApproved = true;
+                  for (const ev of events) {
+                    if (
+                      ev.event === 'labeled' &&
+                      ev.label &&
+                      (ev.label.name === 'lgtm' || ev.label.name === 'approved') &&
+                      isHumanReviewer(ev.actor, prAuthor)
+                    ) {
+                      priorApprovers.add(ev.actor.login);
+                    }
+                  }
+                  if (priorApprovers.size === 0) {
+                    const comments = await github.paginate(github.rest.issues.listComments, {
+                      owner,
+                      repo,
+                      issue_number: pull_number,
+                      per_page: 100,
+                    });
+                    for (const c of comments) {
+                      if (
+                        isHumanReviewer(c.user, prAuthor) &&
+                        /(?:^|\s)\/(?:lgtm|approve)\b/i.test(c.body || '')
+                      ) {
+                        priorApprovers.add(c.user.login);
+                      }
+                    }
+                  }
+                }
               }
 
               const hasActiveApprovalLabel = labels.includes('lgtm') || labels.includes('approved');
@@ -176,13 +221,26 @@ jobs:
                   '0e8a16',
                   'PR was rebased after prior approval and needs re-approval'
                 );
+                const mentions = Array.from(priorApprovers)
+                  .map((u) => `@${u}`)
+                  .join(' ');
+                const commentPrefix = mentions ? `${mentions} ` : '';
+                const body = `${commentPrefix}@${prAuthor} has updated/rebased this PR and it is now conflict-free. Since the prior approval was dismissed on push, please take another look and re-approve when ready.`;
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  body,
+                });
                 await github.rest.issues.addLabels({
                   owner,
                   repo,
                   issue_number: pull_number,
                   labels: [reApproveLabel],
                 });
-                console.log(`Added ${reApproveLabel} label to PR #${pull_number}.`);
+                console.log(
+                  `Added ${reApproveLabel} label and pinged (${mentions || 'maintainers'}) on PR #${pull_number}.`
+                );
               }
             } else if (pr.mergeable === false) {
               if (hasReApprove) {
@@ -203,9 +261,8 @@ jobs:
                   'ff578a',
                   'PR has merge conflicts and needs a rebase'
                 );
-                const author = pr.user.login;
                 const body = [
-                  `@${author} This PR has merge conflicts with \`${pr.base.ref}\`. Please rebase on \`${pr.base.ref}\` and push to resolve them:`,
+                  `@${prAuthor} This PR has merge conflicts with \`${pr.base.ref}\`. Please rebase on \`${pr.base.ref}\` and push to resolve them:`,
                   '```bash',
                   `gh pr checkout ${pull_number}`,
                   `git fetch origin ${pr.base.ref}`,
