@@ -355,7 +355,7 @@ Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill 
 
 - **Autoscaled:** starts at 1 replica per role and scales up to `maxReplicas: 4` on the token-aware triggers.
 - **Under-provisioned:** no ScaledObject, fixed at 1 replica per role. Cheap, but it can't absorb a burst.
-- **Over-provisioned:** no ScaledObject, fixed at 4 replicas per role, sized for the peak all the time. This is the common way to protect latency without an autoscaler, and you pay for the peak even when traffic is light.
+- **Over-provisioned:** no ScaledObject, fixed at 4 replicas per role, the same cap as the autoscaler's `maxReplicas`. Both modes have the same maximum capacity: over-provisioned pays for it all the time, autoscaled only while the load needs it. This is the common way to protect latency without an autoscaler.
 
 | Topology | Shape (ISL/OSL) | Mode | Replicas (start → peak) | Peak GPUs | GPU-hours | TTFT p50 | TTFT p99 | Completed / total | Output tok/s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -387,7 +387,9 @@ Measured `peakPrefillThroughput`: P+D 15375–15988. P/D 1154–1450.
 | | P+D prefill-heavy | P+D symmetrical | P+D decode-heavy | P/D prefill-heavy | P/D symmetrical | P/D decode-heavy |
 | --- | --- | --- | --- | --- | --- | --- |
 | GPU-hours saved | **44%** | **75%** | **75%** | **53%** | **50%** | **75%** |
-| TTFT p50 difference | +0.01 s | +0.01 s | 0 | n/a¹ | +0.29 s | +0.05 s |
+| TTFT p50 difference | +0.01 s | +0.01 s | 0 | not comparable² | +0.29 s | +0.05 s |
+
+² Both modes are capped at 4 prefill replicas and time out most requests (818 vs 656 completed), so their TTFT values cover different sets of requests.
 
 **How to read:**
 
@@ -395,7 +397,7 @@ Measured `peakPrefillThroughput`: P+D 15375–15988. P/D 1154–1450.
 - **Light traffic is where over-provisioning wastes most.** P+D symmetrical, P+D decode-heavy and P/D decode-heavy fit on 1 replica per role. The extra GPUs sit idle, and autoscaling saves 75% at the same TTFT.
 - **The trade-off is tail latency during the ramp-up.** On a burst, autoscaling adds 1 pod every 180 s, so p99 is higher while it catches up (P+D prefill-heavy 43.8 s vs 6.4 s, P/D symmetrical 150 s vs 3.2 s). A more aggressive `scaleUp` policy narrows that gap.
 - **Compared with under-provisioning, autoscaling is what keeps bursts usable.** P+D prefill-heavy p50 goes from 225 s to 0.62 s, and P/D symmetrical from 282 s to 1.97 s.
-- **The ceiling still binds.** P/D prefill-heavy needs more than 4 prefill replicas at the shipped rate, so all three modes are overloaded there. Raise `maxReplicas` or lower the rate.
+- **The cap binds both modes.** P/D prefill-heavy needs more than 4 prefill replicas at the shipped rate. Autoscaled and over-provisioned hit the same 4-replica cap, so over-provisioning has no capacity edge there. All failures in both are 600 s client timeouts. Raise `maxReplicas` (and the over-provisioned replica count) or lower the rate.
 
 | | prefill-heavy | symmetrical | decode-heavy |
 | --- | --- | --- | --- |
