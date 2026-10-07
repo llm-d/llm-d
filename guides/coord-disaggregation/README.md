@@ -72,6 +72,63 @@ topology choice:
   (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
   InferencePool.
 
+### When to use the Coordinator
+
+Calling the EPP once per phase cuts both ways. The extra Gateway/EPP round trip is a
+cost paid on every request, and the later decode pick it enables is a benefit only in
+some regimes. The [Benchmark](#benchmark) section measures each in isolation against
+the [P/D Disaggregation](../pd-disaggregation/README.md) sidecar; this is what the
+results come down to.
+
+**The overhead is a few milliseconds of TTFT, and nothing else.** Across every run
+the extra per-phase hop shows up only in time to first token, as a single-digit
+millisecond gap, and never in time per output token or end-to-end request latency.
+Under concurrent load it disappears entirely:
+
+| Setting | TTFT (Coordinator vs. sidecar) | E2E latency / ITL |
+|---|---|---|
+| Single request, text (`gpt-oss-120b`, 1–1,000 input or 100–2,500 output tokens) | median 1.6–4.9% higher | within ±1.5% / ±0.7% |
+| Concurrent spikes, text (`DeepSeek-V2`, 50–500 concurrent) | 10–12% *lower* at ≤100 concurrent, tied above | tied, no consistent edge |
+| Prefill-bound multimodal (`Qwen3-VL-235B`, 1P/3D) | 4–8% higher | tied |
+| Decode-contended multimodal, closed loop (`Qwen3-VL-235B`, 2P/2D, 50–300 concurrent) | p99 within 1–4% | within ~2% |
+
+**The benefit is real but conditional.** With heavy-tailed multimodal requests
+released in bursts against KV-saturated decode pods, the Coordinator delivers 4–10%
+higher throughput and 5–10% lower E2E latency at every burst size, and at the
+heaviest burst cuts p99 TTFT by 15% and mean TPOT by 12%, because its later decode
+pick keeps the decode pods balanced where the sidecar's up-front placement lets them
+drift apart. Under uniform or steady load, or when prefill is the bottleneck, the two
+architectures tie.
+
+**Use the Coordinator when:**
+
+* **You need the pipeline.** Encode / Prefill / Decode topologies, multimodal inputs
+  with a separate encode stage, or any deployment where you want to add, drop, or
+  reorder phases from a `ConfigMap`. The sidecar dispatches a fixed prefill → decode
+  sequence only. This is the primary reason to pick it, and it is independent of the
+  numbers above.
+* **Decode is the contended stage, per-request load is heterogeneous, and arrivals
+  are bursty.** All three together are what deferred decoding needs to pay off (see
+  [When to expect an advantage from deferred decoding](#deferred-decoding-under-heavy-multimodal-load-qwen3-vl-235b-h200)).
+  Expect single- to low-double-digit gains in throughput and tail latency, which more
+  than cover the few milliseconds of TTFT the extra hop costs.
+* **Your EPP scores decode on scraped vLLM metrics** (`queue-scorer`,
+  `kv-cache-utilization-scorer`). Those signals lag and omit requests still in
+  prefill, so the sidecar's early pick is working from staler data than in these
+  benchmarks, and the Coordinator's gap will be larger than measured here.
+
+**Stay with the [P/D Disaggregation](../pd-disaggregation/README.md) sidecar when:**
+
+* **It is text-only P/D and prefill is the bottleneck, or load is uniform and
+  steady.** The decode choice does not matter in that regime, so there is nothing for
+  deferred decoding to improve, and the Coordinator is a small net cost (a few percent
+  of TTFT).
+* **Single-request TTFT is budgeted to the millisecond.** The overhead is small but
+  consistent, and only shows up there.
+* **You need the more mature path.** The Coordinator is experimental and less tested
+  (see the warning in the [Overview](#overview)); the sidecar is the established
+  architecture.
+
 ## Default Configuration
 
 | Parameter          | Value                                                              |
@@ -485,6 +542,24 @@ curl -X POST http://${IP}:${PORT}/v1/chat/completions \
 
 ## Benchmark
 
+The benchmarks in this section answer two separate questions about the Coordinator.
+[When to use the Coordinator](#when-to-use-the-coordinator) in the Overview condenses
+the results into guidance; the sections below hold the full setups and numbers.
+
+1. **What does the Coordinator cost?** Every pipeline phase is its own round trip
+   through the Gateway and EPP, where the sidecar's decode pod calls prefill directly
+   in one hop. [Overhead of the extra per-phase hop](#overhead-of-the-extra-per-phase-hop)
+   measures that cost in isolation: both arms were forced down the same
+   prefill → decode path on every request, so the only difference left was the number
+   of hops.
+2. **What does the Coordinator buy?** It picks the decode pod only after prefill has
+   finished, on the pool's current state, where the sidecar commits prefill and decode
+   together before prefill starts.
+   [Deferred decoding under heavy multimodal load](#deferred-decoding-under-heavy-multimodal-load-qwen3-vl-235b-h200)
+   measures that benefit under a workload chosen to make the later pick matter.
+
+### Overhead of the extra per-phase hop
+
 The Coordinator adds a real architectural cost per request: every pipeline phase
 (`encode`, `prefill`, `decode`) is its own round trip through the Gateway and EPP
 (`conditional-decode` → `encode` → `prefill` → `decode`, each a separate `ext_proc`
@@ -573,10 +648,9 @@ into a performance penalty.
 
 ### Deferred decoding under heavy multimodal load (Qwen3-VL-235B, H200)
 
-The three runs above answer one question: *how much does the Coordinator's extra
-Gateway/EPP round trip per phase cost?* To isolate that, both arms were forced down
-the same prefill → decode path, so the only difference left was the number of hops —
-and the answer was "a few milliseconds, at most a few percent of TTFT".
+The [overhead runs above](#overhead-of-the-extra-per-phase-hop) forced both arms
+down the same prefill → decode path and found the Coordinator's extra Gateway/EPP round
+trip per phase costs a few milliseconds, at most a few percent of TTFT.
 
 This benchmark asks the other question: *is there a benefit to picking the decode pod
 later?* The sidecar picks prefill and decode together, before prefill starts; the
