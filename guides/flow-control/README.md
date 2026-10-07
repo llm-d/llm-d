@@ -231,6 +231,85 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
+### 4. Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate flow control. This section covers what is
+specific to this path. The metric definitions and their labels are in
+[Flow Control → Metrics & Observability](../../docs/architecture/core/router/epp/flow-control.md#metrics--observability),
+ready-to-run queries are in the [PromQL reference](../../docs/operations/observability/promql.md#flow-control),
+and the scrape setup for the EPP's authenticated endpoint is in [Verification step 3](#3-proof-of-queuing).
+
+Flow control is **work-conserving**: while the pool has headroom every request dispatches immediately and
+none of the feature engages, so the queue stays empty and an idle dashboard tells you nothing. The signals
+only become meaningful under contention, and there are two independent protection layers behind them that
+are easy to confuse — the
+[global and per-band queue limits](../../docs/architecture/core/router/epp/flow-control.md#resource-guardrails--memory-isolation)
+that reject requests to protect the **EPP's** memory, and the
+[saturation detector](../../docs/architecture/core/router/epp/flow-control.md#the-dispatch-lifecycle) that
+holds dispatch to protect the **GPUs**. A request that was never queued, one that queued and dispatched
+late, and one that was rejected outright all reach the caller as a slow or failed request, so read the
+queue signals and the rejection counters together before deciding which layer acted.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for flow control | Where to look |
+| ------ | ------------------------------- | ------------- |
+| Queue depth by band (`llm_d_epp_flow_control_queue_size`, split by `priority` and `fairness_id`) | The load-level view of who is waiting. Summing across `priority` hides the thing this feature exists to do, so compare bands rather than the total. A flow's series only appears after its first request queues, so an idle pool legitimately shows none | [PromQL → Flow Control](../../docs/operations/observability/promql.md#flow-control) |
+| Queued bytes against the limit (`llm_d_epp_flow_control_queue_bytes` vs `flowControl.maxBytes`) | This gauge is what the global `maxBytes` is measured against, so it is the leading indicator of an imminent 429. It reflects EPP memory holding request payloads, not GPU pressure — the two are unrelated | [Architecture → Resource Guardrails](../../docs/architecture/core/router/epp/flow-control.md#resource-guardrails--memory-isolation) |
+| Queue wait by band (`llm_d_epp_flow_control_request_queue_duration_seconds`) | The user-facing cost of queuing, and the signal that shows whether priority bands are actually being honored. Read it per band: a long wait in the lowest band while the top band flows is the feature working as designed, not a fault | [PromQL → Flow Control](../../docs/operations/observability/promql.md#flow-control) |
+| Pool saturation (`llm_d_epp_flow_control_pool_saturation`) | The GPU-side gate. `1.0` is the dispatch set point, and above it flow control is actively holding requests — this is the signal to scale against | [PromQL → Flow Control](../../docs/operations/observability/promql.md#flow-control) |
+| Outcomes (`llm_d_epp_flow_control_requests_total` split by `outcome`) | Separates work that was queued and dispatched from work that was shed. `RejectedCapacity` is a capacity-limit rejection, and the response carries the reason in the `x-llm-d-request-dropped-reason` header | [PromQL → Flow Control](../../docs/operations/observability/promql.md#flow-control) |
+| Stale endpoint telemetry (`llm_d_epp_flow_control_stale_endpoints`) | Endpoints whose metrics are missing or past the staleness threshold. Non-zero means the detector is deciding with incomplete information, which presents as saturation but is a scraping problem | [Metrics → Flow Control](../../docs/operations/observability/metrics.md#flow-control-metrics) |
+| Fairness across tenants (`llm_d_epp_program_aware_jains_fairness_index`, `llm_d_epp_program_aware_avg_wait_time_milliseconds`) | The single number for [Use Case 1](#use-case-1-multi-tenancy-model-as-a-service): the index falls toward 0 as one program's wait time dominates its peers, and the per-program mean tells you which one | [Metrics → Flow Control](../../docs/operations/observability/metrics.md#flow-control-metrics) |
+| Model server saturation inputs (`vllm:num_requests_waiting`, `vllm:num_requests_running`, `vllm:kv_cache_usage_perc`) | What the saturation detector consumes, so this is the cross-check on `pool_saturation`. If these are flat while the gate is pinned at 1, the detector is reacting to something other than live model-server load | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+
+> The five revocation and reclaim metrics (`llm_d_epp_flow_control_revocations_issued_total`,
+> `..._revocations_total`, `..._reclaim_target`, `..._pending_reclaim`, `..._revocation_confirmation_seconds`)
+> apply only when `enableEviction: true`, which this guide does not set. If you enable it, read the
+> `timed_out` guidance in the
+> [architecture docs](../../docs/architecture/core/router/epp/flow-control.md#metrics--observability) first —
+> that is the one signal there which indicates reclamation being sized against capacity that may not have returned.
+
+#### Common failure modes
+
+* **Queue depth stays at zero under load**: either nothing actually queued, or the EPP is not in the request
+  path. On the first, remember the system is work-conserving — a sequential or lightly concurrent burst
+  dispatches immediately, which is why [Use Case 2](#use-case-2-backpressure-management) deliberately drives
+  sustained concurrency. If the queue stays flat at genuinely saturating load, check `maxConcurrency` in
+  [router/flow-control.values.yaml](./router/flow-control.values.yaml): set above what the pool can actually
+  serve, the detector never gates. Derive it for your own model and hardware with the
+  [Tuning Guide](tuning.md). On the second, note that the router recipe sets `failureMode: "FailOpen"` in
+  [base.values.yaml](../recipes/router/base.values.yaml), so an unhealthy EPP is bypassed and requests are
+  routed straight to a model server with **no queuing, fairness, or gating** — which looks identical to a
+  healthy idle pool from the queue metrics alone. Confirm the EPP is Ready and that
+  [step 3](#3-proof-of-queuing) returns `200` rather than `401`/`500`.
+* **Callers get 429s while the model servers are idle**: the pool is not the constraint — a queue limit was
+  hit. These are the EPP's memory guardrails, enforced independently of GPU capacity, so compare
+  `llm_d_epp_flow_control_queue_bytes` against the global `maxBytes` (`10Gi` here) and check whether one band
+  exhausted its own `maxRequests`. The `x-llm-d-request-dropped-reason` response header names which limit
+  applied. Raising `maxBytes` moves the memory footprint to the EPP rather than the GPUs, so check the EPP's
+  own memory limit before raising it.
+* **`pool_saturation` pinned at or above `1.0` while the model servers look idle**: the detector is gating on
+  a signal that does not reflect real capacity, which usually means `maxConcurrency` is miscalibrated for this
+  model, hardware, or prompt mix rather than that the pool is genuinely full. Cross-check the vLLM saturation
+  inputs in the table above, then re-derive `maxConcurrency` with the [Tuning Guide](tuning.md).
+* **Queuing happens but priorities do not separate**: confirm each band's series carries the `priority` you
+  expect (`100`, `0`, `-10` for the three bands in this guide) and that the `InferenceObjective` resources
+  are applied with a `poolRef` matching the InferencePool in the namespace. A request with no objective
+  header lands in the default band, so a client that fails to send `x-llm-d-inference-objective` is silently
+  served as Standard. The [step 3](#3-proof-of-queuing) metrics check covers this classification case too.
+* **Waits are uneven between tenants in the same band**: every band in this guide's values file references
+  `round-robin-fairness-policy`, so a low fairness index within a single band points at the flow key rather
+  than the policy — most often clients sharing one `x-llm-d-inference-fairness-id`, or omitting it and
+  collapsing into a single flow. Verify the header is set per tenant and that the trust-boundary stripping
+  described in [Use Case 1](#use-case-1-multi-tenancy-model-as-a-service) injects it rather than passing it through.
+
+The bundled [alerting rules](../../docs/operations/observability/alerting.md) do not cover flow control yet;
+the queries above are the ones worth promoting. `EPPMetricsAbsent` and `EPPNoReadyEndpoints` do apply, and
+between them they catch the FailOpen case where the EPP drops out of the request path.
+
+---
+
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -629,10 +708,6 @@ llmdbenchmark \
 > timeout, see [Troubleshooting in `helpers/benchmark.md`](../../helpers/benchmark.md#troubleshooting)
 > for the StorageClass override (including a GKE Filestore walkthrough) and the
 > [timeout knobs](../../helpers/benchmark.md#timeouts).
-
-## Observability
-
-The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/core/router/epp/flow-control.md) for more details.
 
 ## Cleanup
 
