@@ -551,6 +551,12 @@ to your machine.
 
 - - -
 
+## Connecting Coding Harnesses
+
+Once [`agentic-api`](https://github.com/vllm-project/agentic-api) is reachable at `${AGENTIC_API_BASE_URL}`, you can attach coding harnesses (such as OpenAI Codex CLI or Claude Code) to the deployed endpoint. See the [vllm-project/agentic-api repository](https://github.com/vllm-project/agentic-api) and its [Harness CLI Testing guide](https://github.com/vllm-project/agentic-api/blob/main/docs/guides/harness-cli-testing.md) for supported harnesses, configuration, and usage instructions.
+
+- - -
+
 ## Cleanup
 
 Removing the extension leaves the base guide exactly as it was.
