@@ -5,7 +5,7 @@ This implementation uses GCP Pub/Sub as the backend for the request and result q
 ## Prerequisites
 
 1. **GCP Project**: Ensure you have a GCP project with the Pub/Sub API enabled.
-2. **Workload Identity**: Your Kubernetes service account must have permissions to publish to and subscribe from Pub/Sub topics.
+2. **Workload Identity**: the chart runs the processor under a Kubernetes service account named after the Helm release (`llm-d-async` in the namespace you install into) and does not annotate it. Grant that identity access to Pub/Sub as described in [Grant the processor access to Pub/Sub](#grant-the-processor-access-to-pubsub) below.
 
 ## Topic setup, Configuration and Deployment
 
@@ -55,6 +55,51 @@ gcloud pubsub subscriptions create $SUBSCRIPTION_NAME \
     --max-delivery-attempts=35   \
     --enable-exactly-once-delivery
 ```
+
+Pub/Sub forwards to the dead-letter topic as its own service agent, so that agent must be allowed to publish to the DLQ topic and to subscribe to the request subscription. `gcloud` only warns when these grants are missing, and undeliverable messages are then never dead-lettered:
+
+```bash
+export PROJECT_ID=$(gcloud config get-value project)
+export PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+export PUBSUB_SA="service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com"
+
+gcloud pubsub topics add-iam-policy-binding $DLQ_NAME \
+    --member="serviceAccount:${PUBSUB_SA}" --role=roles/pubsub.publisher
+gcloud pubsub subscriptions add-iam-policy-binding $SUBSCRIPTION_NAME \
+    --member="serviceAccount:${PUBSUB_SA}" --role=roles/pubsub.subscriber
+```
+
+### Grant the processor access to Pub/Sub
+
+The processor needs the following roles:
+
+| Role | Used for |
+| --- | --- |
+| `roles/pubsub.subscriber` | pulling requests from `$SUBSCRIPTION_NAME` |
+| `roles/pubsub.publisher` | publishing results to `$RESULT_TOPIC_NAME` |
+| `roles/pubsub.viewer` | the readiness probe's `GetSubscription` on an idle subscription (a permission-denied answer is tolerated, but a granted viewer role gives you a real probe) |
+| `roles/monitoring.viewer` | the `llm_d_async_async_broker_backlog` gauge, which reads the subscription backlog from Cloud Monitoring; without it the gauge is absent and `llm_d_async_async_broker_backlog_source_available` stays `0` |
+
+With [Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) you grant them to the Kubernetes service account's principal directly; no Google service account or annotation is needed. `NAMESPACE` must be the namespace you pass to `helm install` in the [main README](../README.md#installation):
+
+```bash
+export NAMESPACE=llm-d-async
+export KSA_PRINCIPAL="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${PROJECT_ID}.svc.id.goog/subject/ns/${NAMESPACE}/sa/llm-d-async"
+
+for role in roles/pubsub.subscriber roles/pubsub.publisher roles/pubsub.viewer roles/monitoring.viewer; do
+  gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+      --member="${KSA_PRINCIPAL}" --role="${role}" --condition=None
+done
+```
+
+If you would rather use a Google service account, give it the same roles, bind it with `roles/iam.workloadIdentityUser` for `${PROJECT_ID}.svc.id.goog[${NAMESPACE}/llm-d-async]`, and annotate the Kubernetes service account after the Helm install:
+
+```bash
+kubectl annotate serviceaccount llm-d-async -n ${NAMESPACE} \
+    iam.gke.io/gcp-service-account=<gsa-name>@${PROJECT_ID}.iam.gserviceaccount.com
+```
+
+The multi-tenant guide's [`gcp-setup.sh`](../multitenant/scripts/gcp-setup.sh) scripts this service-account variant.
 
 ## Configuration and Deployment
 
