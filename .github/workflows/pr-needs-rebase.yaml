@@ -1,7 +1,7 @@
 # Manages rebase and re-approval labels for open PRs:
-# 1. On push to `main`, labels conflicting PRs with `needs-rebase` and notifies the author.
-# 2. When a PR is updated and conflict-free, removes `needs-rebase` and adds `re-approve`
-#    if the PR was previously approved before the rebase.
+# 1. On push to `main`, labels conflicting non-draft PRs with `needs-rebase` and notifies the author.
+# 2. When a PR is updated (or marked ready for review) and conflict-free, removes `needs-rebase`
+#    and adds `re-approve` if the PR was previously approved before the rebase.
 # 3. Removes `re-approve` once the PR is re-approved.
 
 name: PR Needs Rebase
@@ -11,7 +11,7 @@ on:
     branches:
       - main
   pull_request_target:
-    types: [synchronize, reopened, labeled]
+    types: [synchronize, reopened, ready_for_review, labeled]
   pull_request_review:
     types: [submitted]
   workflow_dispatch:
@@ -19,11 +19,11 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: write
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || 'main' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   clear-re-approve:
@@ -62,10 +62,14 @@ jobs:
             }
 
   check-single-pr:
-    name: Update needs-rebase and re-approve on PR push
+    name: Update needs-rebase and re-approve on PR update
     if: >-
       github.event_name == 'pull_request_target' &&
-      (github.event.action == 'synchronize' || github.event.action == 'reopened') &&
+      (
+        github.event.action == 'synchronize' ||
+        github.event.action == 'reopened' ||
+        github.event.action == 'ready_for_review'
+      ) &&
       github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
@@ -93,11 +97,11 @@ jobs:
             }
 
             let pr = null;
-            for (let attempt = 0; attempt < 4; attempt++) {
+            for (let attempt = 0; attempt < 6; attempt++) {
               const resp = await github.rest.pulls.get({ owner, repo, pull_number });
               pr = resp.data;
               if (pr.mergeable !== null) break;
-              await sleep(3000);
+              await sleep(3000 * (attempt + 1));
             }
 
             const labels = (pr.labels || []).map((l) => l.name);
@@ -193,6 +197,36 @@ jobs:
                   if (e.status !== 404) throw e;
                 }
               }
+              if (!hasNeedsRebase) {
+                await ensureLabel(
+                  needsRebaseLabel,
+                  'ff578a',
+                  'PR has merge conflicts and needs a rebase'
+                );
+                const author = pr.user.login;
+                const body = [
+                  `@${author} This PR has merge conflicts with \`${pr.base.ref}\`. Please rebase on \`${pr.base.ref}\` and push to resolve them:`,
+                  '```bash',
+                  `gh pr checkout ${pull_number}`,
+                  `git fetch origin ${pr.base.ref}`,
+                  `git rebase origin/${pr.base.ref}`,
+                  '# resolve conflicts',
+                  'git push --force-with-lease',
+                  '```',
+                ].join('\n');
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  body,
+                });
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  labels: [needsRebaseLabel],
+                });
+              }
             }
 
   check-open-prs:
@@ -245,11 +279,11 @@ jobs:
               const hasReApprove = item.labels.some((l) => l.name === reApproveLabel);
 
               let mergeable = null;
-              for (let attempt = 0; attempt < 4; attempt++) {
+              for (let attempt = 0; attempt < 6; attempt++) {
                 const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
                 mergeable = pr.mergeable;
                 if (mergeable !== null) break;
-                await sleep(3000);
+                await sleep(3000 * (attempt + 1));
               }
 
               console.log(`PR #${pull_number} (@${author}): mergeable=${mergeable}, hasLabel=${hasLabel}`);
@@ -268,13 +302,7 @@ jobs:
                   }
                 }
                 if (!hasLabel) {
-                  console.log(`Labeling and notifying PR #${pull_number}`);
-                  await github.rest.issues.addLabels({
-                    owner,
-                    repo,
-                    issue_number: pull_number,
-                    labels: [labelName],
-                  });
+                  console.log(`Notifying and labeling PR #${pull_number}`);
                   const body = [
                     `@${author} This PR has merge conflicts with \`main\`. Please rebase on \`main\` and push to resolve them:`,
                     '```bash',
@@ -290,6 +318,12 @@ jobs:
                     repo,
                     issue_number: pull_number,
                     body,
+                  });
+                  await github.rest.issues.addLabels({
+                    owner,
+                    repo,
+                    issue_number: pull_number,
+                    labels: [labelName],
                   });
                 }
               } else if (mergeable === true && hasLabel) {
