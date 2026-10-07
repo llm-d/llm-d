@@ -20,7 +20,7 @@
 | `plugins` | [][PluginSpec](#pluginspec) <br/> List of plugins to be instantiated (e.g., scorers, adapters, reporters). A plugin must be listed here to be referenced from a profile. Default plugins (picker, profile handler, parsers, saturation detector) are injected when absent. |
 | `schedulingProfiles` | [][SchedulingProfile](#schedulingprofile) <br/> Named profiles that group plugins into routing slots. If omitted, a single `default` profile is created with all listed filters, scorers, and pickers. |
 | `dataLayer` | [DataLayerConfig](#datalayerconfig) <br/> Configures the DataLayer for metadata extraction and processing. |
-| `flowControl` | [FlowControlConfig](#flowcontrolconfig) <br/> Configures global and per-priority admission control. Only respected if the `flowControl` feature gate is enabled. |
+| `flowControl` | [FlowControlConfig](#flowcontrolconfig) <br/> Configures global and per-priority admission control. Most fields are respected only if the `flowControl` feature gate is enabled; `saturationDetector` is honored regardless. |
 | `requestHandler` | [RequestHandlerConfig](#requesthandlerconfig) <br/> Specifies the handling logic used by the EPP to process incoming requests. |
 
 ## PluginSpec
@@ -58,10 +58,14 @@ Configures admission control and queuing.
 | `maxBytes` | `resource.Quantity` <br/> Global maximum aggregate byte size of all active requests. |
 | `maxRequests` | `resource.Quantity` <br/> Global maximum number of concurrent requests. |
 | `defaultRequestTTL` | `duration` <br/> Fallback timeout for queued requests. |
+| `noEndpointRequestTTL` | `duration` <br/> Queue-wait timeout while the candidate pool has no endpoints. If omitted, follows `defaultRequestTTL`. |
 | `defaultPriorityBand` | [PriorityBandConfig](#prioritybandconfig) <br/> Template for priority levels not explicitly configured. |
+| `defaultNegativePriorityBand` | [PriorityBandConfig](#prioritybandconfig) <br/> Template for priority levels below zero. If omitted, negative priorities use `defaultPriorityBand`. |
 | `priorityBands` | [][PriorityBandConfig](#prioritybandconfig) <br/> Explicit policies for specific priority levels. |
 | `usageLimitPolicyPluginRef` | `string` <br/> Reference to a `UsageLimitPolicy` plugin for adaptive capacity management. |
+| `bandSelectionPolicyPluginRef` | `string` <br/> Reference to a `BandSelectionPolicy` plugin that orders priority bands during dispatch. |
 | `saturationDetector` | [SaturationDetectorConfig](#saturationdetectorconfig) <br/> Specifies which saturation detector plugin to use. Defaults to `utilization-detector`. |
+| `enableEviction` | `bool` <br/> Enables eviction of in-flight negative-priority requests to reclaim capacity when higher-priority requests are blocked. Defaults to `false`. |
 
 ## PriorityBandConfig
 
@@ -70,6 +74,7 @@ Configures admission control and queuing.
 | `priority` | `int` <br/> Integer priority level. Higher is more critical. |
 | `maxBytes` | `resource.Quantity` <br/> Max bytes allowed for this priority band. |
 | `maxRequests` | `resource.Quantity` <br/> Max concurrent requests allowed for this band. |
+| `defaultRequestTTL` | `duration` <br/> Queue-wait timeout for this band while the candidate pool has endpoints. If omitted, uses the global `defaultRequestTTL`. |
 | `fairnessPolicyRef` | `string` <br/> Policy governing flow selection (default: `global-strict-fairness-policy`). |
 | `orderingPolicyRef` | `string` <br/> Policy governing request selection within a flow (default: `fcfs-ordering-policy`). |
 
@@ -80,6 +85,7 @@ Configures request handling behavior.
 | Field | Description |
 | --- | --- |
 | `parsers` | [][ParserConfig](#parserconfig) <br/> List of parsing plugins used to process protocol messages. If unspecified, `openai-parser`, `anthropic-parser`, and `vllmhttp-parser` are configured by default. |
+| `propagatePriority` | `bool` <br/> Injects the resolved request priority into the outbound request body for backend-native priority scheduling. Defaults to `false`. |
 
 ## DataLayerConfig
 
