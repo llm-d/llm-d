@@ -29,25 +29,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check mergeability and remove label if conflict-free
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          for attempt in 1 2 3 4; do
-            MERGEABLE=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.mergeable')
-            if [[ "$MERGEABLE" != "null" && -n "$MERGEABLE" ]]; then
-              break
-            fi
-            sleep 3
-          done
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-          if [[ "$MERGEABLE" == "true" ]]; then
-            echo "PR #${PR_NUMBER} is now mergeable; removing needs-rebase label."
-            gh issue edit "$PR_NUMBER" --repo "$REPO" --remove-label "needs-rebase" || true
-          else
-            echo "PR #${PR_NUMBER} mergeable=${MERGEABLE}; keeping needs-rebase label."
-          fi
+            let mergeable = null;
+            for (let attempt = 0; attempt < 4; attempt++) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+              mergeable = pr.mergeable;
+              if (mergeable !== null) break;
+              await sleep(3000);
+            }
+
+            if (mergeable === true) {
+              console.log(`PR #${pull_number} is now mergeable; removing needs-rebase label.`);
+              try {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  name: 'needs-rebase',
+                });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+            } else {
+              console.log(`PR #${pull_number} mergeable=${mergeable}; keeping needs-rebase label.`);
+            }
 
   check-open-prs:
     name: Check open PRs for merge conflicts
@@ -55,55 +67,92 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Scan open PRs targeting main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          gh label create "needs-rebase" \
-            --repo "$REPO" \
-            --color "ff578a" \
-            --description "PR has merge conflicts and needs a rebase" \
-            --force >/dev/null 2>&1 || true
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const labelName = 'needs-rebase';
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-          # Allow GitHub a brief window to invalidate mergeability cache after push to main
-          sleep 5
-
-          PRS=$(gh pr list --repo "$REPO" --base main --state open --limit 100 \
-            --json number,isDraft,author,labels \
-            --jq '.[] | select(.isDraft == false) | @base64')
-
-          for row in $PRS; do
-            _jq() {
-              echo "${row}" | base64 --decode | jq -r "${1}"
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: labelName });
+            } catch (e) {
+              if (e.status === 404) {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: labelName,
+                  color: 'ff578a',
+                  description: 'PR has merge conflicts and needs a rebase',
+                });
+              } else {
+                throw e;
+              }
             }
-            PR_NUMBER=$(_jq '.number')
-            AUTHOR=$(_jq '.author.login')
-            HAS_LABEL=$(echo "${row}" | base64 --decode | jq -r '([.labels[].name] | index("needs-rebase")) != null')
 
-            MERGEABLE="null"
-            for attempt in 1 2 3 4; do
-              MERGEABLE=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.mergeable')
-              if [[ "$MERGEABLE" != "null" && -n "$MERGEABLE" ]]; then
-                break
-              fi
-              sleep 3
-            done
+            // Give GitHub a brief window to invalidate mergeability after a push to main.
+            await sleep(5000);
 
-            echo "PR #${PR_NUMBER} (@${AUTHOR}): mergeable=${MERGEABLE}, has_label=${HAS_LABEL}"
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            });
 
-            if [[ "$MERGEABLE" == "false" && "$HAS_LABEL" == "false" ]]; then
-              echo "Labeling and notifying PR #${PR_NUMBER}"
-              gh issue edit "$PR_NUMBER" --repo "$REPO" --add-label "needs-rebase"
-              gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@${AUTHOR} This PR has merge conflicts with \`main\`. Please rebase on \`main\` and push to resolve them:
-          \`\`\`bash
-          gh pr checkout ${PR_NUMBER}
-          git fetch origin main
-          git rebase origin/main
-          # resolve conflicts
-          git push --force-with-lease
-          \`\`\`"
-            elif [[ "$MERGEABLE" == "true" && "$HAS_LABEL" == "true" ]]; then
-              echo "Removing needs-rebase label from PR #${PR_NUMBER}"
-              gh issue edit "$PR_NUMBER" --repo "$REPO" --remove-label "needs-rebase" || true
-            fi
-          done
+            for (const item of prs) {
+              if (item.draft) continue;
+              const pull_number = item.number;
+              const author = item.user.login;
+              const hasLabel = item.labels.some((l) => l.name === labelName);
+
+              let mergeable = null;
+              for (let attempt = 0; attempt < 4; attempt++) {
+                const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+                mergeable = pr.mergeable;
+                if (mergeable !== null) break;
+                await sleep(3000);
+              }
+
+              console.log(`PR #${pull_number} (@${author}): mergeable=${mergeable}, hasLabel=${hasLabel}`);
+
+              if (mergeable === false && !hasLabel) {
+                console.log(`Labeling and notifying PR #${pull_number}`);
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  labels: [labelName],
+                });
+                const body = [
+                  `@${author} This PR has merge conflicts with \`main\`. Please rebase on \`main\` and push to resolve them:`,
+                  '```bash',
+                  `gh pr checkout ${pull_number}`,
+                  'git fetch origin main',
+                  'git rebase origin/main',
+                  '# resolve conflicts',
+                  'git push --force-with-lease',
+                  '```',
+                ].join('\n');
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  body,
+                });
+              } else if (mergeable === true && hasLabel) {
+                console.log(`Removing ${labelName} from PR #${pull_number}`);
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: pull_number,
+                    name: labelName,
+                  });
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
+            }
