@@ -22,7 +22,7 @@
     "operations/traffic": { "label": "Traffic Management", "position": 3, "collapsed": true },
     "operations/lifecycle": { "label": "Lifecycle", "position": 6, "collapsed": true },
     "operations/observability": { "label": "Observability", "position": 7, "collapsed": true },
-    "operations/integrations": { "label": "Integrations", "position": 8, "collapsed": true },
+    "operations/integrations": { "label": "AI Gateway Integrations", "position": 8, "collapsed": true },
 
     "infrastructure": { "label": "Infrastructure & Environments", "position": 6, "collapsed": true },
     "infrastructure/providers": { "label": "Kubernetes Infrastructure Providers", "position": 1, "collapsed": true },

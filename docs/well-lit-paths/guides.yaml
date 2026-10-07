@@ -141,11 +141,4 @@ sections:
       # position 3: docs/operations/traffic/router.md
   # operations/lifecycle has only docs pages (positions 1-4): graceful-shutdown,
   # readiness-probes, disaggregation-vllm, disaggregation-sglang.
-  operations-integrations:
-    target: operations/integrations
-    guides:
-      # positions 1-2: litellm, kong (docs/operations/integrations/)
-      - dir: guides/rl
-        slug: rl
-        title: RL Rollouts
-        position: 3
+  # operations/integrations (AI Gateway Integrations) has only docs pages: litellm, kong.

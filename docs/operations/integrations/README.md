@@ -1,8 +1,4 @@
-# Integrations
-
-Run llm-d alongside the systems around it: API gateways that front both self-hosted and external model APIs, and reinforcement-learning frameworks that use llm-d for rollout generation.
-
-## Serve External APIs
+# AI Gateway Integrations
 
 Deploy an API gateway or proxy layer on top of **llm-d** to manage traffic across both self-hosted LLM workloads and third-party external model APIs (such as Google Gemini, OpenAI, or Anthropic).
 
@@ -14,7 +10,7 @@ By deploying a unified proxy front-ending your LLM infrastructure, you can:
 
 ---
 
-### Architecture Overview
+## Architecture Overview
 
 In both configurations, the proxy acts as the single external or in-cluster entry point. Requests targeting self-hosted models are routed directly into the **llm-d Optimized Baseline** infrastructure, while requests targeting external models are authenticated and forwarded to cloud API providers.
 
@@ -38,7 +34,7 @@ flowchart TD
     class External ext;
 ```
 
-#### Integration Modes with llm-d
+### Integration Modes with llm-d
 
 Both guides support connecting the external API proxy to **llm-d** via either:
 
@@ -47,13 +43,9 @@ Both guides support connecting the external API proxy to **llm-d** via either:
 
 ---
 
-### Deployment Guides
+## Deployment Guides
 
 Select a guide to proceed with deployment:
 
 - **[LiteLLM Proxy Guide](./litellm.md)**: Deploy LiteLLM with PostgreSQL for virtual API key management, user spend tracking, budget caps, and multi-provider routing.
 - **[Kong AI Gateway Guide](./kong.md)**: Deploy Kong in DB-less mode using Kubernetes Gateway API and custom resources (`KongPlugin`, `HTTPRoute`) for high-performance routing.
-
-## Reinforcement Learning
-
-[Optimize RL Rollouts with llm-d](../../../guides/rl/README.md) delegates rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm (verl integrations).

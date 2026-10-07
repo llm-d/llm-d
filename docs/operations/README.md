@@ -2,7 +2,7 @@
 
 Operational Excellence guidelines focus on overarching Day-2 site reliability engineering, cluster-wide telemetry frameworks, and safe lifecycle rollout strategies for generative AI inference deployments.
 
-While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, and integrations. These capabilities are model-agnostic and layer onto any deployment.
+While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, and AI gateway integrations. These capabilities are model-agnostic and layer onto any deployment.
 
 ## Autoscaling
 
@@ -78,12 +78,8 @@ Engine-specific operations for disaggregated (prefill/decode) serving: dynamic c
 
 End-to-end telemetry setup, OpenTelemetry tracing, standard Prometheus metrics, PromQL dashboards, and monitoring architectures.
 
-## Integrations
+## AI Gateway Integrations
 
 ### Serve External APIs: [LiteLLM](integrations/litellm.md) and [Kong AI Gateway](integrations/kong.md)
 
-Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs. See [Integrations](integrations/README.md) for the architecture and integration modes.
-
-### [RL Rollouts](../../guides/rl/README.md)
-
-Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm (verl integrations).
+Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs. See [AI Gateway Integrations](integrations/README.md) for the architecture and integration modes.
