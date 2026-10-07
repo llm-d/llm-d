@@ -619,6 +619,14 @@ at 125–145 concurrent requests and 85–100% KV. Means of two repeats per leve
 | 360 | 1.01 / **1.06** | 150 / **143** | 55.0 / **52.6** | 115 / **106** | 46.1 / 46.6 |
 | 420 | 1.05 / **1.15** | 171 / **154** | 64.1 / **61.1** | 147 / **124** | 52.1 / **45.7** |
 
+<p float="left">
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_throughput.png" width="45%" />
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_latency.png" width="45%" />
+</p>
+<p float="left">
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_decode_imbalance.png" width="60%" />
+</p>
+
 Throughput is 4–10% higher and E2E latency 5–10% lower at every burst size, and at 420
 requests — the one level where the sidecar's decode pods drift far enough apart to
 exhaust one pod's KV (per-pod running-request gap up to 71, 84 requests queued behind
