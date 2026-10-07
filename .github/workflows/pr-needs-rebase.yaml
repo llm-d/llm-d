@@ -1,5 +1,8 @@
-# Labels open PRs with `needs-rebase` and notifies the author when changes on
-# `main` introduce merge conflicts. Removes `needs-rebase` once resolved.
+# Manages rebase and re-approval labels for open PRs:
+# 1. On push to `main`, labels conflicting PRs with `needs-rebase` and notifies the author.
+# 2. When a PR is updated and conflict-free, removes `needs-rebase` and adds `re-approve`
+#    if the PR was previously approved before the rebase.
+# 3. Removes `re-approve` once the PR is re-approved.
 
 name: PR Needs Rebase
 
@@ -8,7 +11,9 @@ on:
     branches:
       - main
   pull_request_target:
-    types: [synchronize, reopened]
+    types: [synchronize, reopened, labeled]
+  pull_request_review:
+    types: [submitted]
   workflow_dispatch:
 
 permissions:
@@ -17,53 +22,182 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || 'main' }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
 jobs:
-  check-single-pr:
-    name: Clear needs-rebase if resolved
+  clear-re-approve:
+    name: Clear re-approve label on approval
     if: >-
-      github.event_name == 'pull_request_target' &&
-      contains(github.event.pull_request.labels.*.name, 'needs-rebase')
+      (
+        github.event_name == 'pull_request_review' &&
+        github.event.review.state == 'approved' &&
+        contains(github.event.pull_request.labels.*.name, 're-approve')
+      ) ||
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.action == 'labeled' &&
+        (github.event.label.name == 'lgtm' || github.event.label.name == 'approved') &&
+        contains(github.event.pull_request.labels.*.name, 're-approve')
+      )
     runs-on: ubuntu-latest
     steps:
-      - name: Check mergeability and remove label if conflict-free
+      - name: Remove re-approve label
         uses: actions/github-script@v9
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const pull_number = context.payload.pull_request.number;
+            try {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: pull_number,
+                name: 're-approve',
+              });
+              console.log(`Removed re-approve label from PR #${pull_number}.`);
+            } catch (e) {
+              if (e.status !== 404) throw e;
+            }
+
+  check-single-pr:
+    name: Update needs-rebase and re-approve on PR push
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      (github.event.action == 'synchronize' || github.event.action == 'reopened') &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check mergeability and prior approval state
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+            const needsRebaseLabel = 'needs-rebase';
+            const reApproveLabel = 're-approve';
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-            let mergeable = null;
+            async function ensureLabel(name, color, description) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (e) {
+                if (e.status === 404) {
+                  await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                } else {
+                  throw e;
+                }
+              }
+            }
+
+            let pr = null;
             for (let attempt = 0; attempt < 4; attempt++) {
-              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
-              mergeable = pr.mergeable;
-              if (mergeable !== null) break;
+              const resp = await github.rest.pulls.get({ owner, repo, pull_number });
+              pr = resp.data;
+              if (pr.mergeable !== null) break;
               await sleep(3000);
             }
 
-            if (mergeable === true) {
-              console.log(`PR #${pull_number} is now mergeable; removing needs-rebase label.`);
-              try {
-                await github.rest.issues.removeLabel({
+            const labels = (pr.labels || []).map((l) => l.name);
+            const hasNeedsRebase = labels.includes(needsRebaseLabel);
+            const hasReApprove = labels.includes(reApproveLabel);
+
+            if (pr.mergeable === true) {
+              if (hasNeedsRebase) {
+                console.log(`PR #${pull_number} is now mergeable; removing ${needsRebaseLabel}.`);
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: pull_number,
+                    name: needsRebaseLabel,
+                  });
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
+
+              // Check whether the PR had a prior approval that was dismissed or removed by the rebase.
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number,
+                per_page: 100,
+              });
+
+              const latestByUser = new Map();
+              let approvedOnHead = false;
+              for (const r of reviews) {
+                const user = r.user && r.user.login;
+                if (!user) continue;
+                if (['APPROVED', 'DISMISSED', 'CHANGES_REQUESTED'].includes(r.state)) {
+                  latestByUser.set(user, r.state);
+                }
+                if (r.state === 'APPROVED' && r.commit_id === pr.head.sha) {
+                  approvedOnHead = true;
+                }
+              }
+
+              const states = Array.from(latestByUser.values());
+              const hasChangesRequested = states.includes('CHANGES_REQUESTED');
+              let wasPreviouslyApproved = states.some((s) => s === 'DISMISSED' || s === 'APPROVED');
+
+              if (!wasPreviouslyApproved) {
+                const events = await github.paginate(github.rest.issues.listEvents, {
                   owner,
                   repo,
                   issue_number: pull_number,
-                  name: 'needs-rebase',
+                  per_page: 100,
                 });
-              } catch (e) {
-                if (e.status !== 404) throw e;
+                wasPreviouslyApproved = events.some(
+                  (ev) =>
+                    ev.event === 'unlabeled' &&
+                    ev.label &&
+                    (ev.label.name === 'lgtm' || ev.label.name === 'approved')
+                );
               }
-            } else {
-              console.log(`PR #${pull_number} mergeable=${mergeable}; keeping needs-rebase label.`);
+
+              const hasActiveApprovalLabel = labels.includes('lgtm') || labels.includes('approved');
+              if (
+                wasPreviouslyApproved &&
+                !hasChangesRequested &&
+                !approvedOnHead &&
+                !hasActiveApprovalLabel &&
+                !hasReApprove
+              ) {
+                await ensureLabel(
+                  reApproveLabel,
+                  '0e8a16',
+                  'PR was rebased after prior approval and needs re-approval'
+                );
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: pull_number,
+                  labels: [reApproveLabel],
+                });
+                console.log(`Added ${reApproveLabel} label to PR #${pull_number}.`);
+              }
+            } else if (pr.mergeable === false) {
+              if (hasReApprove) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: pull_number,
+                    name: reApproveLabel,
+                  });
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
             }
 
   check-open-prs:
     name: Check open PRs for merge conflicts
-    if: github.event_name != 'pull_request_target'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Scan open PRs targeting main
@@ -73,6 +207,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const labelName = 'needs-rebase';
+            const reApproveLabel = 're-approve';
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
             try {
@@ -107,6 +242,7 @@ jobs:
               const pull_number = item.number;
               const author = item.user.login;
               const hasLabel = item.labels.some((l) => l.name === labelName);
+              const hasReApprove = item.labels.some((l) => l.name === reApproveLabel);
 
               let mergeable = null;
               for (let attempt = 0; attempt < 4; attempt++) {
@@ -118,30 +254,44 @@ jobs:
 
               console.log(`PR #${pull_number} (@${author}): mergeable=${mergeable}, hasLabel=${hasLabel}`);
 
-              if (mergeable === false && !hasLabel) {
-                console.log(`Labeling and notifying PR #${pull_number}`);
-                await github.rest.issues.addLabels({
-                  owner,
-                  repo,
-                  issue_number: pull_number,
-                  labels: [labelName],
-                });
-                const body = [
-                  `@${author} This PR has merge conflicts with \`main\`. Please rebase on \`main\` and push to resolve them:`,
-                  '```bash',
-                  `gh pr checkout ${pull_number}`,
-                  'git fetch origin main',
-                  'git rebase origin/main',
-                  '# resolve conflicts',
-                  'git push --force-with-lease',
-                  '```',
-                ].join('\n');
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: pull_number,
-                  body,
-                });
+              if (mergeable === false) {
+                if (hasReApprove) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner,
+                      repo,
+                      issue_number: pull_number,
+                      name: reApproveLabel,
+                    });
+                  } catch (e) {
+                    if (e.status !== 404) throw e;
+                  }
+                }
+                if (!hasLabel) {
+                  console.log(`Labeling and notifying PR #${pull_number}`);
+                  await github.rest.issues.addLabels({
+                    owner,
+                    repo,
+                    issue_number: pull_number,
+                    labels: [labelName],
+                  });
+                  const body = [
+                    `@${author} This PR has merge conflicts with \`main\`. Please rebase on \`main\` and push to resolve them:`,
+                    '```bash',
+                    `gh pr checkout ${pull_number}`,
+                    'git fetch origin main',
+                    'git rebase origin/main',
+                    '# resolve conflicts',
+                    'git push --force-with-lease',
+                    '```',
+                  ].join('\n');
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: pull_number,
+                    body,
+                  });
+                }
               } else if (mergeable === true && hasLabel) {
                 console.log(`Removing ${labelName} from PR #${pull_number}`);
                 try {
