@@ -64,7 +64,7 @@ llm-d Router to enforce multi-tenant fairness and priority band admission:
 | reserved + async | `reserved-async` | `reserved-async` | 60 | standard within quota |
 | reserved + batch | `reserved-batch` | `reserved-batch` | 30 | batch within quota |
 | overflow + interactive | `overflow-interactive` | `overflow-interactive` | 10 | premium over quota |
-| overflow + async | `overflow-async` | `overflow-async` | 0 | standard over quota |
+| overflow + async | `overflow-async` | `overflow-async` | -5 | standard over quota |
 | overflow + batch | `overflow-batch` | `overflow-batch` | -10 | batch over quota |
 
 So **all reserved traffic drains before any overflow** (org priority), tier-ordered within each class.
@@ -77,20 +77,20 @@ Downstream priority is propagated via lane objective stamping (**`x-llm-d-infere
 
 #### With Flow Control ON (llm-d Router)
 When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowControl]` in `flow-control.yaml`):
-- **Centralized Priority Bands:** When model server capacity saturates (detected in real time via `concurrency-detector` or `utilization-detector`), requests are held in memory across priority bands matching the `InferenceObjective` priority (100, 60, 30, 10, 0, -10).
-- **Strict Band Dispatch:** llm-d router drains highest-priority bands first: all `reserved` bands (100, 60, 30) dispatch before any `overflow` band (10, 0, -10) is admitted.
+- **Centralized Priority Bands:** When model server capacity saturates (detected in real time via `concurrency-detector` or `utilization-detector`), requests are held in memory across priority bands matching the `InferenceObjective` priority (100, 60, 30, 10, -5, -10).
+- **Strict Band Dispatch:** llm-d router drains highest-priority bands first: all `reserved` bands (100, 60, 30) dispatch before any `overflow` band (10, -5, -10) is admitted.
 - **Band Capacity & Drops on Full Bands:** Each priority band enforces isolated buffer limits via `maxRequests` and `maxBytes`. When a priority band reaches capacity, new incoming requests for that band are **dropped immediately (HTTP 429) regardless of that band's priority**. A high priority level does not grant unbounded buffer capacity; an overloaded priority 100 band drops its own incoming traffic rather than evicting queued requests from other bands.
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
-- **In-Flight Eviction (`enableEviction: true`, on in this guide's `flow-control.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`, such as `overflow-batch` at priority `-10`) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
+- **In-Flight Eviction (`enableEviction: true`, on in this guide's `flow-control.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
   This guide enables it because the router can admit more async work than `maxConcurrency` allows; without eviction, interactive requests then wait behind that work for a full request duration ([measurements](https://github.com/llm-d/llm-d-async/issues/468)). The cost is wasted work: evicted requests are retried by `llm-d-async` and redo their generation.
 - For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
 
 #### With Flow Control OFF (Baseline Router with Saturation Detection)
 When llm-d Router operates in standard baseline mode (without the `flowControl` feature gate):
 - **Pass-Through Scheduling:** The router does not maintain priority band queues or tenant fairness buffers.
-- **Immediate Rejection of Sheddable Requests:** When the pool is saturated, **"sheddable" requests (those with negative priority, `priority < 0`) are immediately rejected with HTTP 429 (Too Many Requests)**. All other requests pass directly to the model servers and are scheduled via baseline routing plugins (such as `prefix-cache-scorer` and `queue-scorer`).
+- **Immediate Rejection of Sheddable Requests:** When the pool is saturated, **"sheddable" requests (those with negative priority, `priority < 0`: `overflow-async` and `overflow-batch`) are immediately rejected with HTTP 429 (Too Many Requests)**. All other requests pass directly to the model servers and are scheduled via baseline routing plugins (such as `prefix-cache-scorer` and `queue-scorer`).
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Saturation Telemetry:** The router still exposes real-time pool saturation metrics (`llm_d_epp_flow_control_pool_saturation` or vLLM metrics).
 - **Upstream Priority & Backpressure in `llm-d-async`:** Priority enforcement shifts entirely **upstream to the Async Processor**:
