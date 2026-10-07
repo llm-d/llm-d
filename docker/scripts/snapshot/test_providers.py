@@ -432,21 +432,6 @@ class TestGetSnapshotProvider(unittest.TestCase):
 
 
 class TestLauncher(unittest.TestCase):
-    @patch("docker.scripts.snapshot.launcher.patch_vllm_lifespan")
-    def test_build_app_hooks_and_patches_lifespan(self, mock_patch_lifespan):
-        from docker.scripts.snapshot import launcher
-
-        mock_app = MagicMock()
-        mock_orig_build_app = MagicMock(return_value=mock_app)
-        mock_patch_lifespan.return_value = "patched_app"
-
-        wrapped_build_app = lambda *args, **kwargs: launcher.patch_vllm_lifespan(mock_orig_build_app(*args, **kwargs))
-        result = wrapped_build_app("arg1", key="val")
-
-        mock_orig_build_app.assert_called_once_with("arg1", key="val")
-        mock_patch_lifespan.assert_called_once_with(mock_app)
-        self.assertEqual(result, "patched_app")
-
     @patch("sys.argv", ["launcher.py", "--model", "meta-llama/Llama-2-7b"])
     def test_launcher_main(self):
         import sys

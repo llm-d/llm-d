@@ -33,11 +33,12 @@ def _hook_api_server() -> bool:
     ):
         try:
             target = importlib.import_module(mod_name)
-            if callable(getattr(target, "build_app", None)):
-                break
-            last_err = AttributeError(f"module '{mod_name}' has no callable 'build_app'")
-        except ImportError as err:
+        except Exception as err:
             last_err = err
+            continue
+        if callable(getattr(target, "build_app", None)):
+            break
+        last_err = AttributeError(f"module '{mod_name}' has no callable 'build_app'")
     else:
         logger.warning(
             "vLLM API server is not importable (%s); no snapshot will be taken.",
