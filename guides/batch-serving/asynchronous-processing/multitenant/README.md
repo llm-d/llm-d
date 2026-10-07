@@ -76,19 +76,24 @@ is earliest-deadline-first (the deadline is the sorted-set score).
 Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
 
 #### With Flow Control ON (llm-d Router)
+
 When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowControl]` in the router values under `values/router/`):
+
 - **Centralized Priority Bands:** When model server capacity saturates (detected in real time via `concurrency-detector` or `utilization-detector`), requests are held in memory across priority bands matching the `InferenceObjective` priority (100, 60, 30, 10, -5, -10).
 - **Strict Band Dispatch:** llm-d router drains highest-priority bands first: all `reserved` bands (100, 60, 30) dispatch before any `overflow` band (10, -5, -10) is admitted.
 - **Band Capacity & Drops on Full Bands:** Each priority band enforces isolated buffer limits via `maxRequests` and `maxBytes`. When a priority band reaches capacity, new incoming requests for that band are **dropped immediately (HTTP 429) regardless of that band's priority**. A high priority level does not grant unbounded buffer capacity; an overloaded priority 100 band drops its own incoming traffic rather than evicting queued requests from other bands.
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
-- **In-Flight Eviction (`enableEviction: true`, experimental, in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server. While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation.
-  This guide enables it because the router can admit more async work than `maxConcurrency` allows; without eviction, interactive requests then wait behind that work for a full request duration ([measurements](https://github.com/llm-d/llm-d-async/issues/468)). The cost is wasted work: evicted requests are retried by `llm-d-async` and redo their generation.
+- **Priority Holdback (`priority-holdback-policy`, the default in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
+- **In-Flight Eviction (`enableEviction: true`, experimental, in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
+  While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation. Evicted requests are retried by `llm-d-async` and redo their generation. See [Protecting realtime traffic](#protecting-realtime-traffic).
 - For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
 
 #### With Flow Control OFF (Baseline Router with Saturation Detection)
+
 When llm-d Router operates in standard baseline mode (without the `flowControl` feature gate):
+
 - **Pass-Through Scheduling:** The router does not maintain priority band queues or tenant fairness buffers.
 - **Immediate Rejection of Sheddable Requests:** When the pool is saturated, **"sheddable" requests (those with negative priority, `priority < 0`: `overflow-async` and `overflow-batch`) are immediately rejected with HTTP 429 (Too Many Requests)**. All other requests pass directly to the model servers and are scheduled via baseline routing plugins (such as `prefix-cache-scorer` and `queue-scorer`).
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
@@ -99,7 +104,31 @@ When llm-d Router operates in standard baseline mode (without the `flowControl` 
   - As a result, model servers remain protected against overload even without router-side priority queuing.
 
 #### With Flow Control OFF (Baseline Router without Saturation Detection)
+
 When saturation detection is disabled (no saturation detector configured in llm-d Router) every request is immediately dispatched to available model servers regardless of its assigned priority value.
+
+### Protecting realtime traffic
+
+When realtime (interactive) requests share an `InferencePool` with `llm-d-async` traffic, priority bands alone
+do not keep them fast. Async work fills the pool up to the router's `maxConcurrency` (and, under a backlog,
+past it), so a realtime request that arrives at a full pool waits in flow control until an async request
+finishes: a full request duration
+([measurements](https://github.com/llm-d/llm-d-async/issues/468)). **Either priority holdback or in-flight
+eviction is required to protect realtime traffic mixed with `llm-d-async` traffic.** The guide provides one
+router values file for each:
+
+| | Priority holdback ([`flow-control-holdback.yaml`](values/router/flow-control-holdback.yaml), default) | In-flight eviction ([`flow-control-evictable.yaml`](values/router/flow-control-evictable.yaml), experimental) |
+| :-- | :-- | :-- |
+| **How** | Admits each lower band only up to a ceiling (here falling from 100 % of capacity for priority 100 to 50 % for `overflow-batch`), keeping headroom free for higher bands | Lets async work fill the pool, then cancels in-flight `overflow-async` / `overflow-batch` requests when a higher-priority request is blocked |
+| **Realtime latency** | Protected, as long as the reserved headroom is larger than the router's admission burst (`minCeiling: 0.5`; 0.7 and 0.9 were not enough) | Protected |
+| **Async efficiency** | The headroom stays idle while realtime traffic is quiet: async throughput was 26 % lower (48 % with shared prompt prefixes) | Full async throughput while realtime is quiet; evicted requests are retried and their partial work is lost (6 to 9 % of the tokens processed) |
+| **Maturity** | `priority-holdback-policy` is an Alpha plugin (the values file sets `--allow-experimental-plugins`) | Experimental |
+
+The tradeoff with holdback is between protecting realtime traffic and async efficiency: a lower `minCeiling`
+reserves more headroom, which protects realtime traffic against larger admission bursts but leaves more
+capacity idle when realtime traffic is quiet; a higher one does the opposite. The figures above come from
+[llm-d-async#468](https://github.com/llm-d/llm-d-async/issues/468) (Qwen3-8B on one L4 and Qwen3-32B on two
+H100s, router capacity 10); measure your own traffic before tuning.
 
 > [!NOTE]
 > **Over-quota is deprioritized, not dropped.** In `classifying` mode, requests beyond a team's
@@ -203,7 +232,7 @@ per replica), image, probes and volumes follow that guide. The one change is a s
 router's `maxConcurrency` and the llm-d-async worker pool below are sized so that async work saturates one replica.
 
 <details>
-<summary><h4>Single GPU</h4></summary>
+<summary><b>Single GPU</b></summary>
 
 On one GPU, serve `Qwen/Qwen3-8B` with tensor parallelism 1 instead (the setup the guide's
 [eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used). Set the served model name to
@@ -233,22 +262,39 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 
 ### 2. Configure llm-d-router and Apply InferenceObjectives
 
-Deploy llm-d Router configured with Flow Control and apply the 6 lane `InferenceObjective`s:
+Deploy llm-d Router configured with Flow Control and priority holdback, and apply the 6 lane `InferenceObjective`s:
 
 ```bash
 # 1. Apply InferenceObjectives for the 6 tier-priority lanes
 render ${MT}/manifests/inferenceobjectives.yaml | kubectl apply -f -
 
-# 2. Deploy llm-d-router with Flow Control priority bands
+# 2. Deploy llm-d-router with Flow Control priority bands and priority holdback
 helm upgrade --install llm-d-router \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${MT}/values/router/flow-control-evictable.yaml \
+    -f ${MT}/values/router/flow-control-holdback.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
 # Get router ClusterIP
 export IP=$(kubectl get service llm-d-router-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+
+<details>
+<summary><b>Experimental: in-flight eviction instead of priority holdback</b></summary>
+
+To keep full async throughput while realtime traffic is quiet, at the cost of cancelled and retried async
+work (see [Protecting realtime traffic](#protecting-realtime-traffic)), install the router with the evictable
+values instead:
+
+```bash
+helm upgrade --install llm-d-router \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${MT}/values/router/flow-control-evictable.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
 
 > [!NOTE]
 > **One InferencePool per router:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`
@@ -307,8 +353,10 @@ Workload Identity, follow the printed binding to map the GSA onto the chart's `l
 
 > [!NOTE]
 > **Configuration Updates & Dynamic Reloading:**
+>
 > - **Hot-Reloadable Redis Queue Transport:** When running `llm-d-async` with `--transport redis-sortedset`, `--transport-config-file`, and `--transport-config-watch-interval`, changes to the `queues` array (such as adding, updating, or removing queues and quota parameters) are watched and dynamically reloaded at runtime without dropping in-flight requests or requiring pod restarts.
 > - **Static Helm Configurations:** When using inline Helm values without watch intervals, or when altering immutable transport settings (such as Redis URL, worker pool concurrency, merge policy, or on the GCP Pub/Sub backend), configuration is read once at pod startup. Apply changes with:
+>
 >   ```bash
 >   kubectl rollout restart deploy/llm-d-async -n ${NAMESPACE}
 >   ```
@@ -380,7 +428,8 @@ A request is a JSON body — `id`, `created`, `deadline`, a `payload` (the infer
 With the optional coordinator from step 4, HTTP clients can submit requests instead; the rest of this section uses Redis directly.
 
 ### Queues as Serving Dimensions vs. Team Identity
-- **The Queue is a Serving Dimension:** A queue corresponds to a service tier (e.g., `interactive`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue. 
+
+- **The Queue is a Serving Dimension:** A queue corresponds to a service tier (e.g., `interactive`), not an isolated single-tenant partition although it is used as such in this demo because each team uses a separate queue.
 - **Multiple Teams in One Queue:** Requests from different teams can be published into the **exact same queue**. The team identity is carried per-request inside `metadata.team` (e.g., `team: "marketing"` vs. `team: "engineering"`).
 - **Per-Team Quota Accounting:** The `redis-quota` gate dynamically reads `metadata.team` on each request and increments/decrements that specific team's counter (`quota:team:<team>`). If Team A saturates its reserved limit, Team A's excess traffic is deprioritized to `overflow`, while Team B publishing to that same queue continues to receive `reserved` capacity.
 - **Fairness ID:** At dispatch, `llm-d-async` stamps `metadata.team` into the `x-llm-d-inference-fairness-id` header so that llm-d Router's Flow Control fairness policy treats tenants equitably during queue contention.
@@ -436,10 +485,13 @@ publish() {                                   # publish <team> [count]
 Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to drive sustained multi-tenant traffic (team × tier) concurrently to test quota, priority lanes, and populate dashboard metrics:
 
 - **GCP Pub/Sub:** [`scripts/stress-test-pubsub.py`](scripts/stress-test-pubsub.py)
+
   ```bash
   PROJECT_ID=${PROJECT_ID} ./scripts/stress-test-pubsub.py
   ```
+
 - **Redis SortedSet:** [`scripts/stress-test-redis.py`](scripts/stress-test-redis.py)
+
   ```bash
   NAMESPACE=${NAMESPACE} ./scripts/stress-test-redis.py
   ```
@@ -581,6 +633,7 @@ issues a **three-way verdict** based on saturation × tier × classification:
 | **Saturated** | `overflow` + `async` / `batch` | `ActionRefuse` | Refuses message and re-enqueues for later delivery |
 
 The configurations are provided in:
+
 - **Redis SortedSet:** [`values/redis/tier-priority-admission.yaml`](values/redis/tier-priority-admission.yaml)
 - **GCP Pub/Sub:** [`values/pubsub/tier-priority-admission.yaml`](values/pubsub/tier-priority-admission.yaml)
 
@@ -607,12 +660,13 @@ helm upgrade llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-pubsub-tier-priority.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
+
 </details>
 
 The inner `prometheus-saturation` gate queries the Prometheus server (`${PROM_URL}`) for the metric `llm_d_epp_flow_control_pool_saturation` exported by llm-d Router's EPP `/metrics` endpoint.
 
 > [!IMPORTANT]
-> **Router Metrics Scraping:** `values/router/flow-control-evictable.yaml` configures `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `llm_d_epp_flow_control_pool_saturation`. Without this metric in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
+> **Router Metrics Scraping:** both router values files under `values/router/` configure `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `llm_d_epp_flow_control_pool_saturation`. Without this metric in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
 
 Verify that the metric is being scraped and that the gate evaluates metrics live:
 
