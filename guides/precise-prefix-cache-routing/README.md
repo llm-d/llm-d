@@ -196,6 +196,8 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
+The vLLM model server overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
+
 ### 3. Deploy the Render (Tokenizer) Service
 
 The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v1/*/render` endpoints, so it can look up the exact KV blocks the prompt maps to. This guide serves that endpoint from a Service rather than a per-router sidecar, so render capacity is decoupled from the router.
