@@ -59,7 +59,11 @@ env:
     HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7 only"}
     STORAGE_CLASS: {default: "", comment: "VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default"}
 
-    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the model your accelerator serves (table above)"}
+    # Two sub-variants serve a different model; set MODEL to match or the test
+    # requests fail with 404: ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector
+    # serves Qwen/Qwen3-8B, and ACCELERATOR_TYPE=tpu/v7 + HOST_TYPE=multi-host
+    # serves Qwen/Qwen3-Coder-480B-A35B-Instruct.
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7 multi-host: Qwen/Qwen3-Coder-480B-A35B-Instruct"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
@@ -186,8 +190,10 @@ verify:
       - when: {MODEL_SERVER: [vllm]}
         run: |
           # Offload counters of every model server pod, read through the
-          # Kubernetes API server proxy (no port-forward needed)
-          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+          # Kubernetes API server proxy (no port-forward needed). On TPU
+          # multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+              -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
             echo "== ${pod}"
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
               | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
@@ -195,19 +201,24 @@ verify:
       - when: {MODEL_SERVER: [sglang]}
         run: |
           # HiCache counters of every model server pod, read through the
-          # Kubernetes API server proxy (no port-forward needed)
-          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+          # Kubernetes API server proxy (no port-forward needed). On TPU
+          # multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+              -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
             echo "== ${pod}"
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
               | grep -E '^sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total)' || true
           done
     shared_tier:
-      - when: {VARIANT: [fs], CONNECTOR: [native]}
+      - when: {MODEL_SERVER: [vllm], VARIANT: [fs], CONNECTOR: [native]}
         run: |
           # Prime a new prefix on the first pod, then send it to the second pod,
           # which has never seen it and must load it from the shared filesystem tier
           PODS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'))
           IPS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}'))
+          if [ ${#PODS[@]} -lt 2 ]; then
+            echo "needs at least 2 model server pods, found ${#PODS[@]} (e.g. Intel XPU runs 1): skipping"
+          else
           kubectl run shared-tier-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
@@ -222,7 +233,8 @@ verify:
                 sleep 10
               done'
           kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${PODS[1]}:8000/proxy/metrics" \
-            | grep -E '^(vllm:external_prefix_cache_hits_total|sglang[:_]cached_tokens_total)' || true
+            | grep -E '^vllm:external_prefix_cache_hits_total' || true
+          fi
 
 # skip_in ci on the multi-host and MooncakeStore steps below: same reason as in
 # deploy (no nightly covers them; see the note above deploy:).

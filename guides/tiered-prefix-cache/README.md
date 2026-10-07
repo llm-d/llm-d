@@ -189,7 +189,7 @@ export VARIANT=cpu # options: cpu, fs; offload tier: cpu = CPU RAM, fs = CPU RAM
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export HOST_TYPE=single-host # options: single-host, multi-host; multi-host: ACCELERATOR_TYPE=tpu/v7 only
 export STORAGE_CLASS= # VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default
-export MODEL=Qwen/Qwen3-32B # set to the model your accelerator serves (table above)
+export MODEL=Qwen/Qwen3-32B # set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7 multi-host: Qwen/Qwen3-Coder-480B-A35B-Instruct
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
@@ -433,8 +433,10 @@ kubectl run prefix-test --rm -i --restart=Never \
 <!-- guide:verify.tests.offload_metrics[0] start -->
 ```bash
 # Offload counters of every model server pod, read through the
-# Kubernetes API server proxy (no port-forward needed)
-for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+# Kubernetes API server proxy (no port-forward needed). On TPU
+# multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
+for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+    -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
     | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
@@ -452,8 +454,10 @@ With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the 
 <!-- llm-d-cicd:skip start -->
 ```bash
 # HiCache counters of every model server pod, read through the
-# Kubernetes API server proxy (no port-forward needed)
-for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+# Kubernetes API server proxy (no port-forward needed). On TPU
+# multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
+for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+    -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
     | grep -E '^sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total)' || true
@@ -469,15 +473,18 @@ done
 
 Hits from the offload tier (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang_cached_tokens_total{cache_source="host"}` and `sglang_load_back_tokens_total`) appear once a prefix has been evicted from HBM and is requested again, which happens under real cache pressure rather than with 10 requests.
 
-For vLLM `native` with `VARIANT=fs`, the shared tier makes a hit easy to provoke: **send a new prefix to one pod, then to a second pod** that has never seen it. The second pod loads the blocks the first one wrote to the filesystem, so its `vllm:external_prefix_cache_hits_total` is above zero:
+For vLLM `native` with `VARIANT=fs` and at least two model server pods (Intel XPU runs one, so the check is skipped there), the shared tier makes a hit easy to provoke: **send a new prefix to one pod, then to a second pod** that has never seen it. The second pod loads the blocks the first one wrote to the filesystem, so its `vllm:external_prefix_cache_hits_total` is above zero:
 
 <!-- guide:verify.tests.shared_tier start -->
 ```bash
-# only when VARIANT=fs and CONNECTOR=native:
+# only when MODEL_SERVER=vllm and VARIANT=fs and CONNECTOR=native:
 # Prime a new prefix on the first pod, then send it to the second pod,
 # which has never seen it and must load it from the shared filesystem tier
 PODS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'))
 IPS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}'))
+if [ ${#PODS[@]} -lt 2 ]; then
+  echo "needs at least 2 model server pods, found ${#PODS[@]} (e.g. Intel XPU runs 1): skipping"
+else
 kubectl run shared-tier-test --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
@@ -492,7 +499,8 @@ kubectl run shared-tier-test --rm -i --restart=Never \
       sleep 10
     done'
 kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${PODS[1]}:8000/proxy/metrics" \
-  | grep -E '^(vllm:external_prefix_cache_hits_total|sglang[:_]cached_tokens_total)' || true
+  | grep -E '^vllm:external_prefix_cache_hits_total' || true
+fi
 ```
 <!-- guide:verify.tests.shared_tier end -->
 
