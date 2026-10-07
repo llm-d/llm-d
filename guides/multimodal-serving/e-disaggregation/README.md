@@ -299,6 +299,41 @@ Once the Encode Worker processes a multimodal item, the EC Connector handles the
 This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
 
+### Encoder-Cache Affinity
+
+The vLLM router values for both topologies include the `mm-embeddings-cache-producer` and `mm-embeddings-cache-scorer` plugins. Together they bias the EPP toward routing a request to the encode worker that most recently processed the same media item, so that the encoding result is already in the worker's encoder cache and does not have to be recomputed.
+
+This signal is only useful for workloads where the same image, video frame, or audio clip appears in more than one request. For workloads where every request carries unique media, the scorer has nothing to match and has no effect on routing.
+
+#### Metrics
+
+The producer exposes three metrics on the EPP `/metrics` endpoint under the `llm_d_epp_` subsystem:
+
+| Metric | Labels | Description |
+| ------ | ------ | ----------- |
+| `encoder_cache_queries_total` | `plugin_type`, `plugin_name`, `modality` | Every hash lookup against the per-pod LRU. |
+| `encoder_cache_hits_total` | `plugin_type`, `plugin_name`, `pod`, `modality` | Lookups that found a match on a specific pod. |
+| `encoder_cache_hit_ratio` | `plugin_type`, `plugin_name` | Histogram of matched-items / total-items per request. |
+
+Watch `encoder_cache_hit_ratio` to confirm the scorer is finding matches. On repeated-media workloads the ratio should rise as the per-pod LRUs warm up.
+
+#### Tuning `cacheSizeInMBPerServer`
+
+The `cacheSizeInMBPerServer` parameter controls how many recently-encoded media items the EPP remembers per encode worker pod. The plugin converts it to an entry count using a fixed 2 MiB/item proxy:
+
+```text
+entries per pod = cacheSizeInMBPerServer MiB / 2 MiB
+```
+
+The default is 4096 MiB, giving ~2048 entries per pod. This guide leaves the parameter unset (the default applies) because the vLLM model servers are configured with `num_ec_blocks: 1,000,000`, a large eviction-resistant encoder cache.
+
+`num_ec_blocks` counts vLLM's internal cache blocks, not images. One image occupies multiple blocks depending on model architecture and resolution, so there is no exact formula to convert between the two. Treat the relationship as directional:
+
+* **Larger `num_ec_blocks`** — the server holds more images before evicting; keep `cacheSizeInMBPerServer` at or above the default so the EPP's memory is at least as long-lived as the server's cache.
+* **Smaller `num_ec_blocks`** — the server evicts sooner; lower `cacheSizeInMBPerServer` proportionally to avoid the EPP routing to a pod that already evicted the item (a silent false-hit that forces a re-encode).
+
+If you change `num_ec_blocks` in the model server `--ec-transfer-config`, adjust `cacheSizeInMBPerServer` in the router values in the same direction, then verify with `encoder_cache_hit_ratio`. A low ratio on a repeated-media workload indicates either too few entries (real hits evicted from the LRU before the next matching request) or too many (stale entries pointing at items the server has already evicted).
+
 ### E/PD Request Flow
 
 ```
