@@ -351,33 +351,51 @@ Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscale
 
 ## Benchmarking
 
-Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every shape runs on a fresh, calibrated stack starting at 1 replica per role (`maxReplicas: 4`), with the shipped profile rates. Static is the same stack with no ScaledObject, fixed at 1 replica per role.
+Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every run uses a fresh, calibrated stack and the shipped profile rates. Each shape is compared across three modes:
 
-| Topology | Shape (ISL/OSL) | Mode | Replicas (start → peak) | Peak GPUs | TTFT p50 | TTFT p99 | Completed / total | Output tok/s |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P+D | prefill-heavy (8192/256) | **Autoscaled** | 1 → 3 | 6 | **0.62 s** | **43.8 s** | 2307 / 2316 | **572** |
-| | | Static | 1 | 2 | 225 s | 470 s | 2316 / 2316 | 510 |
-| P+D | symmetrical (2048/2048) | **Autoscaled** | 1 | 2 | 0.20 s | 0.43 s | 1248 / 1248 | 1885 |
-| | | Static | 1 | 2 | 0.21 s | 0.41 s | 1248 / 1248 | 1984 |
-| P+D | decode-heavy (256/4096) | **Autoscaled** | 1 | 2 | 0.09 s | 0.13 s | 624 / 624 | 1785 |
-| | | Static | 1 | 2 | 0.09 s | 0.13 s | 624 / 624 | 1856 |
-| P/D | prefill-heavy (8192/256) | **Autoscaled** | prefill 1 → 4, decode 1 | 6 | 439 s¹ | 593 s¹ | **818** / 2316 | **135** |
-| | | Static | prefill 1, decode 1 | 3 | 303 s¹ | 592 s¹ | 116 / 2316 | 20 |
-| P/D | symmetrical (2048/2048) | **Autoscaled** | prefill 1 → 4, decode 1 → 2 | 8 | **1.97 s** | **150 s** | 1233 / 1248 | **1888** |
-| | | Static | prefill 1, decode 1 | 3 | 282 s | 536 s | 1248 / 1248 | 1353 |
-| P/D | decode-heavy (256/4096) | **Autoscaled** | prefill 1, decode 1 | 3 | 0.33 s | 0.58 s | 624 / 624 | 1790 |
-| | | Static | prefill 1, decode 1 | 3 | 0.27 s | 0.45 s | 624 / 624 | 1950 |
+- **Autoscaled:** starts at 1 replica per role and scales up to `maxReplicas: 4` on the token-aware triggers.
+- **Under-provisioned:** no ScaledObject, fixed at 1 replica per role. Cheap, but it can't absorb a burst.
+- **Over-provisioned:** no ScaledObject, fixed at 4 replicas per role, sized for the peak all the time. This is the common way to protect latency without an autoscaler, and you pay for the peak even when traffic is light.
 
-¹ Over completed requests only.
+| Topology | Shape (ISL/OSL) | Mode | Replicas (start → peak) | Peak GPUs | GPU-hours | TTFT p50 | TTFT p99 | Completed / total | Output tok/s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P+D | prefill-heavy (8192/256) | Under-provisioned | 1 | 2 | 0.78 | 225 s | 470 s | 2316 / 2316 | 510 |
+| | | **Autoscaled** | 1 → 3 | 6 | **1.74** | **0.62 s** | 43.8 s | 2307 / 2316 | 572 |
+| | | Over-provisioned | 4 | 8 | 3.11 | 0.61 s | 6.4 s | 2316 / 2316 | 594 |
+| P+D | symmetrical (2048/2048) | Under-provisioned | 1 | 2 | 0.85 | 0.21 s | 0.41 s | 1248 / 1248 | 1984 |
+| | | **Autoscaled** | 1 | 2 | **0.85** | 0.20 s | 0.43 s | 1248 / 1248 | 1885 |
+| | | Over-provisioned | 4 | 8 | 3.39 | 0.19 s | 0.22 s | 1248 / 1248 | 1988 |
+| P+D | decode-heavy (256/4096) | Under-provisioned | 1 | 2 | 0.91 | 0.09 s | 0.13 s | 624 / 624 | 1856 |
+| | | **Autoscaled** | 1 | 2 | **0.91** | 0.09 s | 0.13 s | 624 / 624 | 1785 |
+| | | Over-provisioned | 4 | 8 | 3.66 | 0.09 s | 0.13 s | 624 / 624 | 1928 |
+| P/D | prefill-heavy (8192/256) | Under-provisioned | P 1, D 1 | 3 | 1.65 | 303 s¹ | 592 s¹ | 116 / 2316 | 20 |
+| | | **Autoscaled** | P 1 → 4, D 1 | 6 | **3.06** | 439 s¹ | 593 s¹ | **818** / 2316 | **135** |
+| | | Over-provisioned | P 4, D 4 | 12 | 6.58 | 302 s¹ | 588 s¹ | 656 / 2316 | 127 |
+| P/D | symmetrical (2048/2048) | Under-provisioned | P 1, D 1 | 3 | 1.32 | 282 s | 536 s | 1248 / 1248 | 1353 |
+| | | **Autoscaled** | P 1 → 4, D 1 → 2 | 8 | **2.62** | 1.97 s | 150 s | 1233 / 1248 | 1888 |
+| | | Over-provisioned | P 4, D 4 | 12 | 5.27 | 1.68 s | 3.2 s | 1248 / 1248 | 2051 |
+| P/D | decode-heavy (256/4096) | Under-provisioned | P 1, D 1 | 3 | 1.37 | 0.27 s | 0.45 s | 624 / 624 | 1950 |
+| | | **Autoscaled** | P 1, D 1 | 3 | **1.37** | 0.33 s | 0.58 s | 624 / 624 | 1790 |
+| | | Over-provisioned | P 4, D 4 | 12 | 5.47 | 0.28 s | 0.36 s | 624 / 624 | 1933 |
 
-Measured `peakPrefillThroughput`: P+D 15375–15569. P/D 1154–1210 autoscaled, 1332–1410 static.
+¹ Over completed requests only. GPU-hours for autoscaled runs come from the replica count every 30 s; for static runs they are the fixed GPU count × the same run length.
+
+Measured `peakPrefillThroughput`: P+D 15375–15988. P/D 1154–1450.
+
+**Autoscaled vs over-provisioned:**
+
+| | P+D prefill-heavy | P+D symmetrical | P+D decode-heavy | P/D prefill-heavy | P/D symmetrical | P/D decode-heavy |
+| --- | --- | --- | --- | --- | --- | --- |
+| GPU-hours saved | **44%** | **75%** | **75%** | **53%** | **50%** | **75%** |
+| TTFT p50 difference | +0.01 s | +0.01 s | 0 | n/a¹ | +0.29 s | +0.05 s |
 
 **How to read:**
 
-- **Load above one replica → autoscaling wins.** P+D prefill-heavy TTFT p50 drops from 225 s to 0.62 s. P/D symmetrical drops from 282 s to 1.97 s with 40% more output. P/D prefill-heavy completes 7× more requests (818 vs 116).
-- **Load within one replica → no change.** The other three stay at 1 replica and match static within noise, at the same GPU count.
-- **GPUs follow load.** Extra replicas (peak 6–8 GPUs vs 2–3) are added only for the shapes that need them, and only for prefill in P/D prefill-heavy.
-- **The ceiling still binds.** P/D prefill-heavy hits `maxReplicas: 4` at the shipped rate. Raise `maxReplicas` or lower the rate to meet a TTFT SLO.
+- **Same median latency, half the GPUs or less.** Autoscaling stays within 0.3 s of over-provisioned TTFT p50 while using 44–75% fewer GPU-hours, because it adds replicas only while the load needs them.
+- **Light traffic is where over-provisioning wastes most.** P+D symmetrical, P+D decode-heavy and P/D decode-heavy fit on 1 replica per role. The extra GPUs sit idle, and autoscaling saves 75% at the same TTFT.
+- **The trade-off is tail latency during the ramp-up.** On a burst, autoscaling adds 1 pod every 180 s, so p99 is higher while it catches up (P+D prefill-heavy 43.8 s vs 6.4 s, P/D symmetrical 150 s vs 3.2 s). A more aggressive `scaleUp` policy narrows that gap.
+- **Compared with under-provisioning, autoscaling is what keeps bursts usable.** P+D prefill-heavy p50 goes from 225 s to 0.62 s, and P/D symmetrical from 282 s to 1.97 s.
+- **The ceiling still binds.** P/D prefill-heavy needs more than 4 prefill replicas at the shipped rate, so all three modes are overloaded there. Raise `maxReplicas` or lower the rate.
 
 | | prefill-heavy | symmetrical | decode-heavy |
 | --- | --- | --- | --- |
@@ -386,11 +404,11 @@ Measured `peakPrefillThroughput`: P+D 15375–15569. P/D 1154–1210 autoscaled,
 
 ### Reproduce
 
-Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) at `def43ab6` or later:
+Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) at `9415d5e1`:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
-cd llm-d-benchmark && source .venv/bin/activate
+cd llm-d-benchmark && git checkout 9415d5e1 && source .venv/bin/activate
 
 SPEC=guides/keda-epp-token-aware                     # P+D
 # SPEC=guides/keda-epp-token-aware-pd-disaggregation # P/D
@@ -404,7 +422,7 @@ for SHAPE in prefill_heavy symmetrical decode_heavy; do
 done
 ```
 
-For the static baseline, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
+For under-provisioned, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`. For over-provisioned, also add `--set=decode.replicas=4`, plus `--set=prefill.replicas=4` for P/D, and pass `--modelservice-deploy-timeout 3600` to `standup`: 4 replicas loading the model at once can exceed the default readiness wait. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
 
 ### Sizing
 
