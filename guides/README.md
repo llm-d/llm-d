@@ -47,7 +47,7 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 
 * [Batch Serving](./batch-serving/README.md) - Deploy batch and asynchronous inference processing using an OpenAI-compatible Batch API or lightweight queue-based dispatchers with dynamic metric gating.
 
-### Rollouts & Lifecycle
+### Rollouts
 
 * [Rollouts](./rollouts/README.md) - Blue-Green updates with HTTPRoute traffic splitting and LoRA adapter rollouts with `InferenceModelRewrite`.
 

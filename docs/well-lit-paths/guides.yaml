@@ -95,7 +95,18 @@ sections:
           - from: asynchronous-processing/multitenant/README.md
             to: async-multitenant
             title: "Async Processing: Multi-Tenant"
-      # positions 5-7: operations/lifecycle, observability, integrations
+      - dir: guides/rollouts
+        slug: rollouts
+        title: Rollouts
+        position: 5
+        pages:
+          - from: blue-green-update.md
+            to: blue-green-update
+            title: Blue-Green Update
+          - from: adapter-rollout.md
+            to: adapter-rollout
+            title: LoRA Adapter Rollout
+      # positions 6-8: operations/lifecycle, observability, integrations (menu-config)
   operations-startup:
     target: operations/startup
     guides:
@@ -128,15 +139,8 @@ sections:
         title: Multi-Model & LoRA Routing
         position: 2
       # position 3: docs/operations/traffic/router.md
-  operations-lifecycle:
-    target: operations/lifecycle
-    guides:
-      - dir: guides/rollouts
-        slug: rollouts
-        title: Blue-Green & LoRA Adapter Rollouts
-        position: 1
-      # positions 2-5: graceful-shutdown, readiness-probes,
-      # disaggregation-vllm, disaggregation-sglang (docs/operations/lifecycle/)
+  # operations/lifecycle has only docs pages (positions 1-4): graceful-shutdown,
+  # readiness-probes, disaggregation-vllm, disaggregation-sglang.
   operations-integrations:
     target: operations/integrations
     guides:

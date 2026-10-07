@@ -52,11 +52,13 @@ Operational best practices, high availability scaling modes, standalone proxy ar
 
 Process offline and latency-insensitive work in front of an existing deployment: the OpenAI-compatible [Batch Gateway](../../guides/batch-serving/batch-gateway/README.md) (`/v1/batches`, `/v1/files`) and queue-based [Asynchronous Processing](../../guides/batch-serving/asynchronous-processing/README.md) with metric-gated dispatch, including Async Processor sizing and scaling.
 
-## Rollouts & Lifecycle
+## Rollouts
 
-### [Blue-Green & LoRA Adapter Rollouts](../../guides/rollouts/README.md)
+### [Rollouts](../../guides/rollouts/README.md)
 
 Production rollout strategies including [Blue-Green updates](../../guides/rollouts/blue-green-update.md) and [live LoRA adapter hot-swapping](../../guides/rollouts/adapter-rollout.md) without dropping active client traffic.
+
+## Lifecycle
 
 ### [Graceful Shutdown & Draining](lifecycle/graceful-shutdown.md)
 
