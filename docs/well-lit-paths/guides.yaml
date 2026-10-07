@@ -18,6 +18,10 @@ sections:
         slug: optimized-baseline
         title: Deploy an Optimized Baseline
         position: 1
+      - dir: guides/predicted-latency-routing
+        slug: predicted-latency
+        title: Route Requests by Predicted Latency
+        position: 2
       - dir: guides/precise-prefix-cache-routing
         slug: precise-prefix-cache-routing
         title: Enable Precise Prefix-Cache Aware Routing
@@ -26,6 +30,10 @@ sections:
         slug: tiered-prefix-cache
         title: Configure a Tiered Prefix Cache
         position: 4
+      - dir: guides/p2p-kv-cache-sharing
+        slug: enable-p2p-prefix-cache-sharing
+        title: Enable P2P Prefix Cache Sharing
+        position: 5
   models:
     target: well-lit-paths/models
     guides: []

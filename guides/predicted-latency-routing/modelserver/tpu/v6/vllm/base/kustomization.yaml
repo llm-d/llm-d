@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Reuse the optimized-baseline guide's TPU v6 model server (Qwen3-32B) unchanged. The
+# latency predictor is EPP-side only, so the model server needs no predictor-specific
+# changes, and the base manifests already carry llm-d.ai/guide=optimized-baseline,
+# matching the router values shipped with this guide with no override.
+resources:
+  - ../../../../../../optimized-baseline/modelserver/tpu/v6/vllm/base
