@@ -169,12 +169,14 @@ ap:
       memory: "2Gi"
 ```
 
+`TARGET_KEY` is the per-queue (`ap.transportConfig.queues[0].igw_base_url`) or per-topic (`ap.transportConfig.topics[0].igw_base_url`) URL key from the [guide](../../../guides/batch-serving/asynchronous-processing/README.md#installation); the global `ap.igwBaseURL` is not applied once `ap.transport` is set.
+
 ```bash
 helm install llm-d-async \
   oci://ghcr.io/llm-d/charts/llm-d-async \
-  -f guides/batch-serving/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
+  -f ${REPO_ROOT}/guides/batch-serving/asynchronous-processing/${MQ_PROVIDER}/values.yaml \
   -f resource_overrides.yaml \
-  --set ap.igwBaseURL=http://${IP}:80 \
+  --set ${TARGET_KEY}=http://${IP}:80 \
   -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
 
