@@ -127,26 +127,6 @@ that is where the threshold belongs. Do not assume a value validated for one
 model, accelerator, or tensor-parallel degree transfers to another; a larger
 model or a smaller GPU saturates at lower concurrency.
 
-### Pending and Warming Pods
-
-A trigger is a PromQL query, so it is not restricted to EPP series: a
-`ScaledObject` can also read the target's replica counts from kube-state-metrics
-and reason about capacity that is provisioned but not yet serving — pods that are
-pending, scheduling, or still loading the model.
-
-The SLO-aware path does this. It reads `kube_deployment_status_replicas`
-(provisioned, `n`) alongside `kube_deployment_status_replicas_ready` (ready,
-`r`), and scales its demand by an in-flight credit `r/n` on the scale-up branch.
-Because the latency signal is measured on ready pods only, those pods
-over-report the post-warmup load while a scale-up is in flight; the credit makes
-each ask cover only the deficit beyond the pods already on their way, instead of
-racing to `maxReplicas` while nothing has become Ready. See
-[SLO-Aware Autoscaling with KEDA](./slo-aware-keda.md) for the derivation.
-
-The simpler per-metric `AverageValue` paths do not carry this term. There, the
-HPA's own stabilization windows and scale-up policies are what keep a
-slow-to-schedule pool from over-asking.
-
 ### Saturation Detector
 
 The saturation detector estimates how loaded the inference pool is. It gates
@@ -207,25 +187,32 @@ lag distorts autoscaling two ways:
    demand signal it was meant to relieve stays high and the HPA keeps asking for more
    replicas. The HPA's external-metric math does not, by itself, credit pods that are
    provisioned but not yet serving.
-2. **Reaction-interval mismatch.** The HPA acts on roughly its polling cadence (about
-   15s, set by `pollingInterval`), while a replica can take minutes to become `Ready`
-   - on pokprod, about 240s for Qwen3-8B at TP1. A reading taken during that gap
-   reflects a replica that has not yet begun to help.
+2. **Reaction-interval mismatch.** For scaling between 1 and N replicas the HPA
+   reconciles on the kube-controller-manager's sync period
+   (`--horizontal-pod-autoscaler-sync-period`, about 15s by default) - not KEDA's
+   `pollingInterval` (default 30s), which controls how often KEDA polls the trigger
+   source and drives scale-to-zero activation. A replica can take minutes to become
+   `Ready` - on the order of 240s for Qwen3-8B at TP1 - so a reading taken during that
+   gap reflects a replica that has not yet begun to help.
 
-The keda-epp guide offers two mitigations, selected by `OVERSHOOT`:
+A trigger is just a PromQL query, so it can also read the target's replica counts from
+kube-state-metrics and credit capacity that is provisioned but not yet serving. The
+[SLO-aware path](./slo-aware-keda.md) does this with an in-flight `r/n` credit on the
+latency signal; the queue path can do the same with a supply-aware formula. Two
+mitigation strategies build on this, trading precision for portability:
 
-- **Stabilization windows (`OVERSHOOT=windows`, the portable default).** The
-  `ScaledObject` sets `scaleUp.stabilizationWindowSeconds: 300` and
-  `scaleDown.stabilizationWindowSeconds: 300`. The scale-up window holds
+- **Stabilization windows (portable).** The `ScaledObject` sets both
+  `scaleUp.stabilizationWindowSeconds` and `scaleDown.stabilizationWindowSeconds` to
+  300s. The scale-up window holds
   recommendations and acts on the most conservative one, so a replica that is still
   loading gets time to become `Ready` and relieve demand before another is added; the
   scale-down window holds capacity across brief dips so the pool does not flap when a
   slow-starting replica finally absorbs a backlog. Size the scale-up window near the
-  target Deployment's measured cold-start time (the 300s default was validated on
-  pokprod against the ~240s Qwen3-8B TP1 cold start). It needs no extra dependencies,
+  target Deployment's measured cold-start time (the 300s default was validated
+  against a ~240s Qwen3-8B TP1 cold start). It needs no extra dependencies,
   but it is blunt: it delays all scale-up equally, not just startup-driven overshoot.
-- **Overshoot guard (`OVERSHOOT=guard`, queue signal only).** The demand-aware
-  alternative. It uses KEDA's
+- **Demand-aware overshoot guard (queue signal only).** The precise alternative. It
+  uses KEDA's
   [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
   to replace the running-requests keep-warm trigger with two supply triggers over
   `kube-state-metrics` - `pending`
@@ -243,9 +230,7 @@ The keda-epp guide offers two mitigations, selected by `OVERSHOOT`:
   single replica instead of failing the `ScaledObject`. It ships for the queue signal
   only: renaming the raw signal to a replica-unit `demand` is correct only when the
   signal's per-pod target is 1, which holds for queue depth but not for the pool-wide
-  saturation ratio. This is the same provisioned-but-not-serving credit described in
-  [Pending and Warming Pods](#pending-and-warming-pods), specialized to the queue
-  signal.
+  saturation ratio.
 
   The guard is more precise but adds cost: it depends on `kube-state-metrics` being
   scraped into the same Prometheus, and the two supply series fail differently. A
@@ -254,15 +239,6 @@ The keda-epp guide offers two mitigations, selected by `OVERSHOOT`:
   `replicas` series makes the formula unevaluable, so after `failureThreshold` polls
   the `fallback` holds a single replica, even mid-burst. Prefer the stabilization
   windows unless you need scale-up faster than a cold-start-sized window allows.
-
-  Exercising the guard needs heavier load than the windows path: it drops the
-  running-requests keep-warm trigger and scales purely on `demand` (queue depth), and
-  that queue only builds once load exceeds a replica's serving capacity - moderate
-  concurrency is absorbed with the queue at zero, so a correctly working guard can
-  look like one that never scales. Raise concurrency and per-request `max_tokens`
-  until `llm_d_epp_flow_control_queue_size` goes non-zero; the load needed to
-  saturate a replica depends on the model, GPU, tensor-parallel degree, and
-  `max-model-len`.
 
 ### Sharing a Contended Accelerator Budget
 
