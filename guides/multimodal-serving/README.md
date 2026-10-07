@@ -430,3 +430,4 @@ kubectl delete namespace ${NAMESPACE}
 - [llm-d Router Disaggregation Docs](https://github.com/llm-d/llm-d-router/blob/main/docs/disaggregation.md)
 - [vLLM: Disaggregated Encoder](https://docs.vllm.ai/en/latest/features/disagg_encoder/)
 - [vLLM: Encoder Disaggregation for Scalable Multimodal Model Serving](https://vllm.ai/blog/vllm-epd)
+- [Serve Omni Models](../omni-serving/README.md), for models that also produce audio or images
