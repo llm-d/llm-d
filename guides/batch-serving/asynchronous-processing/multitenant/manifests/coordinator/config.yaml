@@ -40,6 +40,12 @@ pipeline:
     - type: async-broker
       params:
         redis_url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+        # The request headers this guide documents, set explicitly: the
+        # coordinator's defaults changed to x-llm-d-async-mode and
+        # x-llm-d-tenant (llm-d/llm-d-router#3200), and a request without a
+        # recognized mode header is forwarded untouched, unqueued and without
+        # an objective.
+        mode_header: X-AP-Mode
         tenant_header: X-Team
         routes:
           - tenant: realtime

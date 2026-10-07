@@ -367,7 +367,8 @@ Publishing (below) writes requests straight into Redis. To accept requests over 
 llm-d-router coordinator with its
 [`async-broker` step](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md)
 in front of the router. Each request picks a serving mode with the `X-AP-Mode` header and a tenant with
-`X-Team`:
+`X-Team` (the guide's coordinator config sets both names explicitly; the coordinator's own defaults are
+`x-llm-d-async-mode` and `x-llm-d-tenant`):
 
 | `X-AP-Mode` | Behaviour |
 | :-- | :-- |
