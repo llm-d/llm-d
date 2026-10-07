@@ -20,7 +20,7 @@ router:
     pluginsConfigFile: "multimodal-latency-predictor-plugins.yaml"
     pluginsCustomConfig:
       multimodal-latency-predictor-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         # Multimodal image→token estimation: the predictor features and the
@@ -38,8 +38,8 @@ router:
                   factor: 1024
         - type: approx-prefix-cache-producer
           parameters:
-            # The guide's benchmark workload peaks around ~5K tokens per request
-            # (3×720p images + ~1.3K text), so this window is ample. Raise it to
+            # A workload of 3×720p images + ~1.3K text tokens peaks around ~5K tokens
+            # per request, so this window is ample. Raise it to
             # match your longest prompts.
             maxPrefixTokensToMatch: 131072
         - type: predicted-latency-producer
@@ -69,7 +69,6 @@ router:
         schedulingProfiles:
         - name: default
           plugins:
-          - pluginRef: predicted-latency-producer
           - pluginRef: loose-affinity-filter
           - pluginRef: latency-scorer
           - pluginRef: weighted-random-picker

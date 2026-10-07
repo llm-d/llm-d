@@ -60,7 +60,7 @@ See [`env.sh`](./env.sh) for the full list of variables it provides (Helm chart 
 
 ### Default Container Images
 
-Default model server and sidecar images are defined as [Kustomize Components](./recipes/modelserver/components/images/README.md) under `recipes/modelserver/components/images/`. Guides include the relevant component instead of hardcoding image versions:
+Default model server, sidecar, and coordinator images are defined as [Kustomize Components](./recipes/modelserver/components/images/README.md) under `recipes/modelserver/components/images/`. Guides include the relevant component instead of hardcoding image versions:
 
 ```yaml
 components:
@@ -83,6 +83,8 @@ The following components provide a `nightly` variant (run from `recipes/modelser
 $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$/{print p; print $0}'
 .
 ├── amd-vllm
+│   ├── nightly
+├── coordinator
 │   ├── nightly
 ├── gpu-sglang
 │   ├── nightly
@@ -111,6 +113,12 @@ Guides are two files — a machine-readable `guide.yaml` and a human-readable `R
 See **[`guides/templates/README.md`](./templates/README.md)** for the templates, the
 quickstart, and the full authoring reference. It is the single source for those
 instructions — deliberately not repeated here, so the two cannot drift apart.
+
+See **[`GUIDES-POLICY.md`](./GUIDES-POLICY.md)** for what counts as a guide, the
+production-readiness tiers, and how a guide is placed, promoted or retired.
+
+CI dry-runs every deployable overlay in this directory. See
+**[`CI-DRY-RUN.md`](./CI-DRY-RUN.md)** for what it checks and how to exclude a guide.
 
 ## Supporting Guides
 

@@ -66,8 +66,8 @@ on:
 #    branches:
 #      - main
 
-#  schedule:
-#    - cron: '0 20 * * *'  # 20:00 UTC daily (clear of the other ROCm nightlies)
+  schedule:
+    - cron: '0 14 * * *'  # 14:00 UTC daily
 
 permissions:
   contents: write

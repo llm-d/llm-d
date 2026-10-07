@@ -139,8 +139,9 @@ H100s, router capacity 10); measure your own traffic before tuning.
 ## Prerequisites
 
 This guide layers on the base [asynchronous-processing](../README.md) guide — complete its
-[Prerequisites](../README.md#prerequisites) first (client tools, cluster, GAIE CRDs,
-[`guides/env.sh`](../../../env.sh), the HF-token secret), then add the following.
+[Prerequisites](../README.md#prerequisites) first (through the
+[optimized-baseline](../../../optimized-baseline/README.md) guide they cover the client tools, the cluster,
+the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh), then add the following.
 
 - **llm-d router with Flow Control.** This guide uses llm-d Router configured with **Flow Control**
   enabled rather than the standard baseline router. Flow Control assigns incoming requests to priority bands
@@ -344,9 +345,8 @@ helm install llm-d-async \
 ```
 <!-- llm-d-cicd:skip end -->
 
-`gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber` + `pubsub.publisher`
-
-- `pubsub.viewer` (the readiness probe's `GetSubscription`) + `monitoring.viewer` (broker backlog). With
+`gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber`, `pubsub.publisher`,
+`pubsub.viewer` (the readiness probe's `GetSubscription`) and `monitoring.viewer` (broker backlog). With
 Workload Identity, follow the printed binding to map the GSA onto the chart's `llm-d-async` KSA.
 
 </details>
@@ -754,8 +754,8 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 ## Notes & gotchas
 
 - **Image / version.** The overlays no longer pin an image tag — the image tracks the chart's
-  `appVersion`, selected by `--version ${ASYNC_VERSION}`. Use a release whose app image actually exists
-  (v0.7.4+).
+  `appVersion`, selected by `--version ${ASYNC_VERSION}`. Use a release whose chart is published to
+  `ghcr.io/llm-d/charts` (v0.8.0+).
 - **Reserved quota vs. pool size.** Each team's quota is its *reserved* capacity (priority
   lane) in `classifying` mode, not a hard cap — over-quota flows as `overflow`. Keep the **sum** of the
   reserved quotas at or below the worker pool's worker count.

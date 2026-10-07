@@ -267,6 +267,9 @@ export INFRA_PROVIDER=base # base | coreweave | gke | cks-mooncake
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
 ```
 
+> [!WARNING]
+> **SGLang P/D disaggregates every request.** An SGLang decode worker has no local-prefill path and rejects a request that arrives without bootstrap fields with HTTP `400`. The router must therefore be configured with `always-disagg-pd-decider` (as `pd-disaggregation.values.yaml` is); `prefix-based-pd-decider` is **not** supported, and a Coordinator pipeline used with `kv-sglang` must not include the `conditional-decode` step. This also removes the TTFT win those options exist to capture, so short or prefix-cached prompts pay the full disaggregation cost. See [Unconditional Disaggregation](../../docs/operations/disaggregation/sglang.md#unconditional-disaggregation).
+
 SGLang-specific notes:
 
 * **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
@@ -281,6 +284,7 @@ SGLang-specific notes:
 > * Disaggregation lives in the llm-d Router (EPP) and is engine-agnostic, so SGLang P/D composes with the same prefix-cache-aware and load-aware routing as vLLM.
 > * SGLang P/D is **validated each release** on NVIDIA GPU but is not yet part of the nightly E2E CI that covers the vLLM path (the badges above).
 > * The SGLang P/D overlays are **NVIDIA GPU only** today; the AMD overlay (`modelserver/amd/vllm/`) and MetaX overlay (`modelserver/metax/vllm/`) provide vLLM P/D only.
+> * SGLang disaggregates **unconditionally**: `prefix-based-pd-decider` and the Coordinator's `conditional-decode` step, which skip remote prefill when it would cost more than it saves, cannot be used. See [Unconditional Disaggregation](../../docs/operations/disaggregation/sglang.md#unconditional-disaggregation).
 > * On the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts. See the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md).
 
 <details>
@@ -357,7 +361,7 @@ kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-dynamic-slice/
 ```
 
-Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/README.md).
+Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/README.md#2-deploy-the-model-server).
 
 > [!NOTE]
 > The dynamic-slice variant is not in the nightly e2e matrix: an end-to-end run requires one full TPU7x `4x4x4` sub-block (64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.

@@ -1,9 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# The configuration this guide's benchmarks were measured on: the base
-# overlay plus an InfiniBand device on every model server, so NIXL/UCX uses
-# RDMA instead of falling back to TCP.
+# INFRA_PROVIDER=rdma: the base overlay plus an InfiniBand device on every
+# model server, so NIXL/UCX uses RDMA instead of falling back to TCP. This is
+# the configuration the guide's crossover was measured on and the recommended
+# one for production GPU clusters that expose RDMA.
 #
 # The transport does not decide whether the pull works - it decides where the
 # pull-versus-recompute crossover sits, and therefore `minCachedTokenDelta`.

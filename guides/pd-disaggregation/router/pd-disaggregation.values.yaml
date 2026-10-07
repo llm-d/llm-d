@@ -14,7 +14,7 @@ router:
     pluginsConfigFile: "pd-config.yaml"
     pluginsCustomConfig:
       pd-config.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: always-disagg-pd-decider

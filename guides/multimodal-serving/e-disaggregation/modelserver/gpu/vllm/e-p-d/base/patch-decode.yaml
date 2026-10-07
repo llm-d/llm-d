@@ -13,7 +13,7 @@ spec:
             - --kv-connector=nixlv2
             - --ec-connector=ec-nixl
             - --zap-log-level=1
-            - --secure-proxy=false
+            - --secure-serving=false
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
@@ -42,12 +42,10 @@ spec:
               cpu: "16"
               memory: 256Gi
               nvidia.com/gpu: "2"
-              rdma/ib: "1"
             requests:
               cpu: "16"
               memory: 256Gi
               nvidia.com/gpu: "2"
-              rdma/ib: "1"
           volumeMounts:
             - mountPath: /dev/shm
               name: shm
