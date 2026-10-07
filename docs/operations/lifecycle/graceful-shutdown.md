@@ -17,7 +17,7 @@ Handling termination gracefully spans **two layers**:
 This guide covers graceful shutdown for **general (non-disaggregated) serving**.
 For prefill/decode disaggregation, where in-flight requests span multiple servers
 and KV caches are held across instances, see
-[Disaggregated Serving Operations (vLLM)](disaggregation-vllm.md).
+[Disaggregated Serving Operations (vLLM)](../disaggregation/vllm.md).
 
 ## The Kubernetes Pod Termination Sequence
 
@@ -72,7 +72,7 @@ finishes on its own.
 
 For the disaggregated case — where a cancelled request may have KV blocks held on
 a separate prefill instance — see
-[Request Cancellation](disaggregation-vllm.md#request-cancellation).
+[Request Cancellation](../disaggregation/vllm.md#request-cancellation).
 
 ## Draining the Routing Layer (EPP)
 
@@ -173,7 +173,7 @@ Expected behavior with `--shutdown-timeout` set:
 
 ## Additional Resources
 
-- [Disaggregated Serving Operations (vLLM)](disaggregation-vllm.md)
+- [Disaggregated Serving Operations (vLLM)](../disaggregation/vllm.md)
 - [Readiness Probes](readiness-probes.md)
 - [Router Operations](../components/router.md)
 - [Flow Control](../../architecture/core/router/epp/flow-control.md)

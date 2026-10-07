@@ -138,6 +138,6 @@ sections:
         slug: multi-model-routing
         title: Multi-Model & LoRA Routing
         position: 2
-  # operations/lifecycle has only docs pages (positions 1-4): graceful-shutdown,
-  # readiness-probes, disaggregation-vllm, disaggregation-sglang.
+  # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
+  # operations/disaggregation has only docs pages: vllm, sglang.
   # operations/integrations (AI Gateway Integrations) has only docs pages: litellm, kong.

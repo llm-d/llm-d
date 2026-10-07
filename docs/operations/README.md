@@ -64,7 +64,9 @@ Draining in-flight requests during scale-down, rolling updates, and node drains 
 
 Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are only marked Ready when models are fully loaded.
 
-### Disaggregation Day-2: [vLLM](lifecycle/disaggregation-vllm.md) and [SGLang](lifecycle/disaggregation-sglang.md)
+## Disaggregation
+
+### [Disaggregated Serving Operations](disaggregation/README.md): [vLLM](disaggregation/vllm.md) and [SGLang](disaggregation/sglang.md)
 
 Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/advanced/disaggregation/README.md).
 
