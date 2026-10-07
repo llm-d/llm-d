@@ -214,31 +214,50 @@ mitigation strategies build on this, trading precision for portability:
 - **Demand-aware overshoot guard (queue signal only).** The precise alternative. It
   uses KEDA's
   [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
-  to replace the running-requests keep-warm trigger with two supply triggers over
-  `kube-state-metrics` - `pending`
+  to combine the two demand triggers (queue depth and running requests) with two
+  supply triggers over `kube-state-metrics` - `pending`
   (`kube_deployment_status_replicas_unavailable`, pods created but not yet `Ready`)
-  and `replicas` (current replica count) - and a formula that discounts demand by the
-  pods already coming up:
+  and `replicas` (current replica count) - in one formula that reproduces the windows
+  path's demand and then discounts it by the pods already coming up:
 
   ```
+  let queue_per_replica = 1;
+  let running_per_replica = 16;
+  let demand = max(queue / queue_per_replica, running / running_per_replica);
   demand <= replicas ? demand : max(demand - (pending ?? 0), replicas)
   ```
+
+  `demand` is the same quantity the windows path derives by racing its two
+  `AverageValue` triggers (the HPA takes the larger per-trigger desired count):
+  `max(queue / 1, running / 16)` is that max expressed in replica units. The
+  per-replica targets are named constants in the formula, not trigger thresholds,
+  because KEDA passes the formula each trigger's raw metric value and ignores its
+  `threshold` - so the normalization has to live in the formula. Expressing `demand`
+  in replica units is what makes comparing it to `replicas` meaningful, and it holds
+  only when each signal's per-replica target is a constant the formula divides by; the
+  guard ships for the queue signal, not the pool-wide saturation ratio.
 
   Because the formula, not a time window, absorbs overshoot, the guard sets
   `scaleUp.stabilizationWindowSeconds: 0` for immediate scale-up and adds a `fallback`
   (`behavior: static`, `replicas: 1`) so a formula that cannot evaluate degrades to a
-  single replica instead of failing the `ScaledObject`. It ships for the queue signal
-  only: renaming the raw signal to a replica-unit `demand` is correct only when the
-  signal's per-pod target is 1, which holds for queue depth but not for the pool-wide
-  saturation ratio.
+  single replica instead of failing the `ScaledObject`.
 
   The guard is more precise but adds cost: it depends on `kube-state-metrics` being
-  scraped into the same Prometheus, and the two supply series fail differently. A
-  missing `pending` series is read as zero (`pending ?? 0`), so the guard keeps
-  scaling but loses overshoot protection (demand-only scaling); a missing `demand` or
-  `replicas` series makes the formula unevaluable, so after `failureThreshold` polls
-  the `fallback` holds a single replica, even mid-burst. Prefer the stabilization
-  windows unless you need scale-up faster than a cold-start-sized window allows.
+  scraped into the same Prometheus, and it treats an absent signal differently from a
+  failing one. An absent-but-healthy series - the lazily-created queue gauge at idle,
+  or a supply gauge with no series - reads as zero, because KEDA's `ignoreNullValues`
+  defaults to true, so the formula still evaluates with that term contributing zero
+  (this is why the guard rests at the minimum when idle rather than failing). A
+  trigger whose scaler keeps erroring (Prometheus or `kube-state-metrics` unreachable)
+  for more than `failureThreshold` polls is injected into the formula as nil instead,
+  and the terms are guarded unevenly. Only `pending` is guarded: `pending ?? 0` turns a
+  failing `pending` into zero so the guard keeps scaling on demand, losing only the
+  overshoot discount. The other terms are not, so a nil `queue`, `running`, or
+  `replicas` makes the formula error and that poll's recommendation is skipped; if the
+  failure persists across the `ScaledObject`, KEDA's own `fallback` (`behavior: static`,
+  `replicas: 1`) takes over after `failureThreshold` polls and holds a single replica
+  until the scalers recover, even mid-burst. Prefer the stabilization windows unless you
+  need scale-up faster than a cold-start-sized window allows.
 
 ### Sharing a Contended Accelerator Budget
 

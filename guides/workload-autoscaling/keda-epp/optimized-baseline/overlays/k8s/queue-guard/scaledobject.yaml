@@ -1,0 +1,132 @@
+# KEDA ScaledObject - Generic Kubernetes, queue signal, demand-aware overshoot
+# guard.
+#
+# Same queue + running-requests demand as overlays/k8s/queue, but overshoot is
+# absorbed by a scalingModifiers formula instead of a stabilization window, so
+# scale-up can be immediate (scaleUp stabilizationWindowSeconds: 0). The formula
+# combines four triggers:
+#   - queue    unmet demand (flow-control queue depth)
+#   - running  active concurrency
+#   - pending  replicas created but not yet Ready (kube-state-metrics)
+#   - replicas current replica count (kube-state-metrics)
+#
+# demand is the SAME two-signal demand the windows path races, reproduced in one
+# formula as max(queue / queue_per_replica, running / running_per_replica). KEDA
+# hands the formula the RAW metric value and ignores each trigger's `threshold`,
+# so the per-replica targets (1 for queue, 16 for running) are named in the
+# formula, NOT carried by the trigger thresholds. demand is then in replica units,
+# so comparing it to `replicas` is unit-consistent. The guard discounts demand by
+# `pending` (pods already coming to relieve demand), floored at `replicas` so the
+# discount never scales down mid-scale-up. KEDA reads an absent-but-healthy series as
+# 0 (ignoreNullValues defaults to true); if the pending scaler instead keeps failing
+# (> fallback.failureThreshold polls) KEDA injects nil, and `pending ?? 0` turns that
+# into demand-only scaling rather than breaking the formula.
+#
+# This guard ships for the queue signal only: converting the signal to a
+# replica-unit demand is correct only when its per-replica target is 1 (queue
+# depth), not for the pool-wide saturation ratio. The guard depends on
+# kube-state-metrics being scraped into the same Prometheus; a `fallback` holds a
+# single replica if the composite metric cannot be evaluated.
+#
+# Triggers scrape the bundled kube-prometheus-stack over plain in-cluster HTTP
+# (no client auth); see overlays/k8s/queue for the CA-only caveat (PR #2571). On
+# OpenShift use overlays/ocp/queue-guard.
+#
+# ${...} placeholders are rendered by envsubst at apply time (see the guide).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-keda-epp
+  namespace: ${NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${TARGET_DEPLOYMENT}
+  pollingInterval: 15
+  # Applies to scale-to-zero. The generated HPA behavior below controls ordinary
+  # scale-down while minReplicaCount is 1 or greater.
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: keda-hpa-optimized-baseline
+      behavior:
+        scaleUp:
+          # 0: the scalingModifiers formula (not a time window) absorbs overshoot
+          # by discounting demand by the pods already booting (pending), so
+          # scale-up can react immediately.
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+    scalingModifiers:
+      # queue_per_replica / running_per_replica are the per-replica targets (same
+      # values as the windows path's trigger thresholds), named here because KEDA
+      # feeds the formula raw metric values and ignores the trigger thresholds.
+      # max(queue/1, running/16) reproduces the windows path's raced demand; the
+      # rest discounts by pending and floors at replicas (see the file header).
+      formula: >-
+        let queue_per_replica = 1;
+        let running_per_replica = 16;
+        let demand = max(queue / queue_per_replica, running / running_per_replica);
+        demand <= replicas
+        ? demand
+        : max(demand - (pending ?? 0), replicas)
+      target: "1"
+      metricType: AverageValue
+  triggers:
+    - type: prometheus
+      name: queue
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_flow_control_queue_size{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        # Inert for the formula (KEDA ignores trigger thresholds for scalingModifiers
+        # inputs). Kept schema-valid and equal to the formula's queue_per_replica so
+        # the two cannot drift.
+        threshold: "1"
+    - type: prometheus
+      name: running
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_request_running{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        # Inert for the formula; kept equal to the formula's running_per_replica.
+        threshold: "16"
+    - type: prometheus
+      name: pending
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          max(kube_deployment_status_replicas_unavailable{namespace="${NAMESPACE}",deployment="${TARGET_DEPLOYMENT}"})
+        threshold: "1"
+    - type: prometheus
+      name: replicas
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          max(kube_deployment_status_replicas{namespace="${NAMESPACE}",deployment="${TARGET_DEPLOYMENT}"})
+        threshold: "1"
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+    # `static` scales the target to `replicas` when the composite metric is
+    # unreadable failureThreshold times; the valid set is static /
+    # currentReplicas / currentReplicasIfHigher / currentReplicasIfLower.
+    # `behavior` picks how `replicas` is read, not which scaler runs, so
+    # scalingModifiers still drives normal scaling; this only takes over when the
+    # composite metric is unreadable failureThreshold times.
+    behavior: static

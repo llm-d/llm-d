@@ -44,7 +44,7 @@ env:
     # sit Pending). `windows` = HPA stabilization windows (the portable default):
     # a 300s scaleUp stabilization window smooths the decision so the HPA does not
     # keep requesting capacity that is already in flight. `guard` = pending-aware
-    # scalingModifiers (components/overshoot-guard): the formula subtracts Pending
+    # scalingModifiers (in the queue-guard overlay's scaledobject.yaml): the formula subtracts Pending
     # pods from demand, which moves that protection into the metric and lets the
     # scaleUp stabilization window drop to 0 for immediate scale-up. `guard` ships
     # for the queue signal only (k8s/queue-guard, ocp/queue-guard); the saturation
@@ -141,15 +141,16 @@ verify:
           # window is 0, so scale-up is near-immediate and finishes well inside the
           # ceiling; the nightly lowers these windows in its overlay and can
           # override the timeouts shorter.
-          # Under OVERSHOOT=guard the defaults below are also too light: the guard
-          # drops the running-requests trigger and scales purely on queue depth,
-          # which only forms once load exceeds a replica's serving capacity
-          # (moderate concurrency is absorbed with the queue at zero). Raise
-          # SCALE_CONCURRENCY and SCALE_MAX_TOKENS until llm_d_epp_flow_control_
-          # queue_size goes non-zero; the threshold depends on the model, GPU,
-          # tensor-parallel degree, and max-model-len (a larger model queues at
-          # lower concurrency), so climb from a few hundred concurrent requests
-          # rather than assuming a fixed value.
+          # Under OVERSHOOT=guard the defaults below exercise scale-up the same way
+          # as the windows path: the guard combines queue depth and running requests
+          # in its formula, so moderate concurrency drives scale-up through the
+          # running-request term before any queue forms. To exercise the formula's
+          # queue-driven branch specifically, raise SCALE_CONCURRENCY and
+          # SCALE_MAX_TOKENS until llm_d_epp_flow_control_queue_size goes non-zero;
+          # the queue only forms once load exceeds a replica's serving capacity, and
+          # the threshold depends on the model, GPU, tensor-parallel degree, and
+          # max-model-len (a larger model queues at lower concurrency), so climb from
+          # a few hundred concurrent requests rather than assuming a fixed value.
           : "${SCALE_CONCURRENCY:=30}" "${SCALE_TOTAL:=400}" "${SCALE_MAX_TOKENS:=512}" "${SCALE_UP_TIMEOUT:=360}" "${SCALE_DOWN_TIMEOUT:=360}"
           MIN=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.minReplicas}' 2>/dev/null); MIN=${MIN:-1}
           HOST=$(kubectl get service optimized-baseline-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}'):80

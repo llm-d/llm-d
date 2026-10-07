@@ -1,26 +1,22 @@
 # KEDA TriggerAuthentication for OpenShift Thanos Querier (bearer + CA).
 #
-# Identical to components/ocp-auth/triggerauthentication.yaml. kustomize forbids a
-# component from referencing a resource file outside its own directory ("security;
-# file is not in or below"), so the guard leaves carry their own copy rather than
-# sharing ocp-auth's. Keep the two in sync.
-#
 # Thanos Querier rejects unauthorized queries (401 when unauthenticated, 403 when
-# the ServiceAccount lacks cluster-monitoring-view). The trigger then errors; the
-# guard's fallback degrades to a single replica rather than failing silently. This
+# the ServiceAccount lacks cluster-monitoring-view). The trigger then errors; on
+# the guard overlay the fallback degrades to a single replica, on the windows
+# overlays the ScaledObject goes Ready=False with KEDAScalerFailed events. This
 # points KEDA at the metrics-reader ServiceAccount token Secret provisioned by
 # recipes/autoscaling/metrics-reader: `token` is the bearer token, and
 # `service-ca.crt` is the CA that signs the Thanos serving cert (the service-ca
 # operator injects it into the token Secret automatically).
 #
-# Generic Kubernetes does NOT use this: the base talks to the bundled Prometheus
-# over plain in-cluster HTTP with no client auth.
+# Generic Kubernetes does NOT use this: the k8s overlays talk to the bundled
+# Prometheus over plain in-cluster HTTP with no client auth.
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
   name: keda-prometheus-auth
-  # Must live in the same namespace as the ScaledObject it serves; rendered by
-  # envsubst at apply time (NAMESPACE), same as the ScaledObject.
+  # Must live in the same namespace as the ScaledObject it serves; set by the OCP
+  # overlay's namespace transformer (rendered from NAMESPACE by envsubst).
   namespace: ${NAMESPACE}
 spec:
   secretTargetRef:

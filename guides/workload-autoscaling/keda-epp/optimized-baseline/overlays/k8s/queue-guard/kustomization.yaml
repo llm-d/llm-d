@@ -1,16 +1,8 @@
-# Generic Kubernetes + queue signal + overshoot guard. Base is plain in-cluster
-# HTTP (no auth); trigger-queue inserts the queue-size signal, then overshoot-guard
-# converts it to replica-unit demand and adds the pending-pod-aware scalingModifiers
-# formula (see components/overshoot-guard). Apply on non-OpenShift clusters; use
-# overlays/ocp/queue-guard on OpenShift. Apply with the envsubst pipe (see the
-# guide): the base and components carry ${...} placeholders rendered at apply time.
-#
-# Component order matters: trigger-queue (inserts signal) BEFORE overshoot-guard
-# (rewrites the trigger list).
+# Generic Kubernetes + queue signal + demand-aware overshoot guard. The full
+# ScaledObject is in scaledobject.yaml; this overlay only makes it a kustomize
+# target so the guide's apply command is uniform across platforms. Apply on
+# non-OpenShift clusters; use overlays/ocp/queue-guard on OpenShift.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../base
-components:
-  - ../../../components/trigger-queue
-  - ../../../components/overshoot-guard
+  - scaledobject.yaml
