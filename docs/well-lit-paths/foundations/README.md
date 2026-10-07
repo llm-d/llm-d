@@ -19,3 +19,8 @@ These guides teach single architectural capabilities that you can configure inde
 
 - **[Prefill/Decode Disaggregation](pd-disaggregation.md)**: Separating prefill (compute-bound) and decode (memory-bandwidth-bound) phases for optimized performance.
 - **[Wide Expert-Parallelism](wide-expert-parallelism.md)**: Scaling KV cache space for massive MoE models like DeepSeek-R1 using DP/EP deployment patterns.
+
+### Multimodal and Omni Models
+
+- **[Serve Multimodal Models](../../../guides/multimodal-serving/README.md)**: Routing image, video, and audio requests on prefix-cache affinity that covers the media as well as the text, with aggregated serving or dedicated Encode workers (E/PD, E/P/D).
+- **[Serve Omni Models](../../../guides/omni-serving/README.md)**: Serving a model that answers in text and audio (or generates images) from one vLLM-Omni pool behind the llm-d Router.

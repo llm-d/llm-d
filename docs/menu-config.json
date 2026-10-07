@@ -48,7 +48,6 @@
     "well-lit-paths/foundations/wide-expert-parallelism": { "position": 7, "label": "Scale MoE Models with Wide Expert Parallelism" },
 
     "well-lit-paths/workloads/agentic-serving": { "position": 1, "label": "Serve Agentic Workloads" },
-    "well-lit-paths/workloads/multimodal-serving": { "position": 2, "label": "Serve Multimodal Workloads" },
 
     "architecture/core/inferencepool": { "position": 1 },
     "architecture/core/model-servers": { "position": 3 },
