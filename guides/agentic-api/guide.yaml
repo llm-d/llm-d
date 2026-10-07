@@ -143,25 +143,28 @@ deploy:
 verify:
   endpoint:
     standalone:
-      - run: |
-          kubectl port-forward -n ${NAMESPACE} svc/agentic-api 9000:9000 &
+      - when: {MODE: [standalone]}
+        run: |
+          kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} svc/agentic-api 9000:9000 &
           PF_PID=$!
           sleep 3
+          kill -0 ${PF_PID}
           export AGENTIC_API_BASE_URL=http://127.0.0.1:9000
     gateway:
       gke:
-        - when: {PROVIDER_NAME: [gke]}
+        - when: {MODE: [gateway], PROVIDER_NAME: [gke]}
           run: |
             # GATEWAY_IP is an external LoadBalancer IP, reachable directly.
             export AGENTIC_API_BASE_URL=http://${GATEWAY_IP}
       clusterip:
-        - when: {PROVIDER_NAME: [none, agentgateway, istio]}
+        - when: {MODE: [gateway], PROVIDER_NAME: [none, agentgateway, istio]}
           run: |
             # The Gateway Service is ClusterIP, so reach it through a port-forward.
             # GATEWAY_SVC was resolved in deploy.gateway_address above.
-            kubectl port-forward -n ${NAMESPACE} svc/${GATEWAY_SVC} 8080:80 &
+            kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} svc/${GATEWAY_SVC} 8080:80 &
             PF_PID=$!
             sleep 3
+            kill -0 ${PF_PID}
             export AGENTIC_API_BASE_URL=http://127.0.0.1:8080
   tests:
     standalone:
