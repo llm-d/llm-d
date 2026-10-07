@@ -45,13 +45,17 @@ sections:
   # regular docs pages of the same category. Files of these guides that are
   # not listed are not published; links to them resolve to GitHub.
   # Operations guides may be README-only (no guide.yaml).
+  # Category order (positions): 1 observability, 2 autoscaling, 3 startup,
+  # 4 lifecycle, 5 rollouts, 6 disaggregation, 7 traffic, 8 batch-serving,
+  # 9 integrations, 10 components. Guide categories take their position here;
+  # docs/operations/<sub>/ categories take theirs from docs/menu-config.json.
   operations:
     target: operations
     guides:
       - dir: guides/workload-autoscaling
         slug: autoscaling
-        title: Autoscaling
-        position: 1
+        title: Autoscale Inference Pools
+        position: 2
         pages:
           - from: keda-epp/README.md
             to: keda-epp
@@ -74,11 +78,10 @@ sections:
           - from: promadapter.md
             to: prometheus-adapter
             title: Prometheus Adapter (Deprecated)
-      # position 2: operations/startup, 3: operations/traffic (menu-config)
       - dir: guides/batch-serving
         slug: batch-serving
-        title: Batch & Async Processing
-        position: 4
+        title: Process Batch and Async Requests
+        position: 8
         pages:
           - from: batch-gateway/README.md
             to: batch-gateway
@@ -97,7 +100,7 @@ sections:
             title: "Async Processing: Multi-Tenant"
       - dir: guides/rollouts
         slug: rollouts
-        title: Rollouts
+        title: Roll Out Updates Safely
         position: 5
         pages:
           - from: blue-green-update.md
@@ -106,7 +109,6 @@ sections:
           - from: adapter-rollout.md
             to: adapter-rollout
             title: LoRA Adapter Rollout
-      # positions 6-8: operations/lifecycle, observability, integrations (menu-config)
   operations-startup:
     target: operations/startup
     guides:
@@ -140,4 +142,4 @@ sections:
         position: 2
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
   # operations/disaggregation has only docs pages: vllm, sglang.
-  # operations/integrations (AI Gateway Integrations) has only docs pages: litellm, kong.
+  # operations/integrations (Integrate an AI Gateway) has only docs pages: litellm, kong.
