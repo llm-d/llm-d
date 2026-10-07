@@ -2,11 +2,11 @@
 
 This page lists the llm-d release artifacts and dependencies:
 
-1. [**CRDs**](#1-crds) — the Kubernetes Custom Resource Definitions used by llm-d
+1. [**CRDs**](#1-gaie-crds) — the Kubernetes Custom Resource Definitions used by llm-d
 2. [**llm-d Router**](#2-llm-d-router) — the Helm chart and container images for the routing layer
 3. [**Model Servers and Extensions**](#3-model-servers-and-extensions) — the inference engine images and extensions for advanced functionality
 4. [**Well-Lit Path Guides**](#4-well-lit-path-guides) — deployment manifests and benchmark scripts for key user stories
-5. [**Gateway Recipes**](#5-gateway-recipes) — optional recipes for installing Gateways and integrating them with llm-d
+5. [**Gateway Recipes**](#5-gateways) — optional recipes for installing Gateways and integrating them with llm-d
 6. [**Async Processor**](#6-async-processor) — the Helm chart and container image for asynchronous, queue-based request processing
 
 > [!IMPORTANT]
