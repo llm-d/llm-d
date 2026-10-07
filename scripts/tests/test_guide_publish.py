@@ -387,3 +387,44 @@ def test_env_comment_renders_inline():
     )
     assert lines[0][2] == "export MODEL=m # set me"
     assert lines[1][2] == "export ENGINE=a # options: a, b; pick one"
+
+
+# --------------------------------------------------------------------------
+# check-manifest: Operations sub-category sections
+# --------------------------------------------------------------------------
+
+
+def _ops_manifest(**entry):
+    m = _manifest(**entry)
+    m["sections"] = {"operations-scaling": {"target": "operations/scaling",
+                                            "guides": m["sections"]["foundations"]["guides"]}}
+    return m
+
+
+def test_manifest_operations_subsection_readme_only(tmp_path):
+    root = _manifest_repo(tmp_path)
+    (root / "guides" / "a" / "guide.yaml").unlink()
+    assert guide.check_manifest(_ops_manifest(), root).ok()
+    # Foundations guides still need guide.yaml.
+    errs = _errors(guide.check_manifest(_manifest(), root))
+    assert any("guides/a/guide.yaml does not exist" in e for e in errs)
+
+
+def test_manifest_section_names(tmp_path):
+    root = _manifest_repo(tmp_path)
+    m = _ops_manifest()
+    m["sections"]["ops-misc"] = m["sections"].pop("operations-scaling")
+    assert any("unknown section" in e for e in _errors(guide.check_manifest(m, root)))
+
+
+def test_manifest_slug_unique_across_sections(tmp_path):
+    root = _manifest_repo(tmp_path)
+    (root / "guides" / "b").mkdir()
+    (root / "guides" / "b" / "README.md").write_text("# B\n")
+    m = _ops_manifest()
+    m["sections"]["operations-traffic"] = {
+        "target": "operations/traffic",
+        "guides": [{"dir": "guides/b", "slug": "a", "title": "B", "position": 1}],
+    }
+    errs = _errors(guide.check_manifest(m, root))
+    assert any("unique across sections" in e for e in errs)
