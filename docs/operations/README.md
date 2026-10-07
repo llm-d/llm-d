@@ -42,10 +42,6 @@ Intelligent request queuing in the EPP: priority bands, per-tenant fairness, and
 
 Serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
 
-### [Router Operations](traffic/router.md)
-
-Operational best practices, high availability scaling modes, standalone proxy architectures, and container resource sizing for llm-d Router deployments.
-
 ## Batch & Async Processing
 
 ### [Batch & Async Processing](../../guides/batch-serving/README.md)
@@ -71,6 +67,18 @@ Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are
 ### Disaggregation Day-2: [vLLM](lifecycle/disaggregation-vllm.md) and [SGLang](lifecycle/disaggregation-sglang.md)
 
 Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/advanced/disaggregation/README.md).
+
+## Component Operations
+
+Sizing, high availability, and scaling guidance for running individual llm-d components in production.
+
+### [Router Operations](components/router.md)
+
+Operational best practices, high availability scaling modes, standalone proxy architectures, and container resource sizing for llm-d Router deployments.
+
+### [Async Processor Operations](components/async-processor.md)
+
+Concurrency selection, container resource sizing, and horizontal scaling for the Async Processor dispatch agent.
 
 ## Observability
 

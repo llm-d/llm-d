@@ -97,7 +97,7 @@ Both batch solutions dispatch inference requests to an existing llm-d serving st
 
 1. **Deploy the Inference Stack**: Ensure you have a running model server and llm-d Router deployed via the [Optimized Baseline](../optimized-baseline/README.md) or related workload guides.
 2. **Configure Environment Variables**: Source [`guides/env.sh`](../env.sh) for shared environment variables and Helm repository configurations.
-3. **Review Operations Guidance**: For sizing, scaling, and production deployment patterns of the Async Processor, see [Production Sizing and Scaling](./asynchronous-processing/README.md#production-sizing-and-scaling) in the Asynchronous Processing guide.
+3. **Review Operations Guidance**: For sizing, scaling, and production deployment patterns of the Async Processor, see [Async Processor Operations](../../docs/operations/components/async-processor.md).
 
 ---
 
