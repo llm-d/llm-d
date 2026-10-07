@@ -7,7 +7,7 @@ These guides teach single architectural capabilities that you can configure inde
 ### Intelligent Routing
 
 - **[Optimized Baseline](../../../guides/optimized-baseline/README.md)**: Strategies for handling the unique challenges of LLM request scheduling, moving beyond traditional round-robin approaches.
-- **[Predicted Latency-Based Routing](predicted-latency.md)**: Using online-trained machine learning models to predict latency and optimize scheduling.
+- **[Predicted Latency-Based Routing](../../../guides/predicted-latency-routing/README.md)**: Using online-trained machine learning models to predict latency and optimize scheduling.
 - **[Multi-Model Routing](multi-model-routing.md)**: Serving multiple LLMs and LoRA adapters behind a single Gateway endpoint using the Inference Payload Processor (IPP).
 
 ### Advanced KV-Cache Management

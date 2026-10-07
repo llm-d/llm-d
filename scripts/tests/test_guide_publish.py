@@ -373,6 +373,11 @@ def test_p2p_kv_cache_sharing_matrix_matches_repo():
     assert g.check().ok(), _errors(g.check())
 
 
+def test_predicted_latency_routing_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "predicted-latency-routing")
+    assert g.check().ok(), _errors(g.check())
+
+
 def test_env_comment_renders_inline():
     lines = guide._env_static_lines(
         {

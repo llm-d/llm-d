@@ -16,6 +16,27 @@ Every completed request becomes a training sample, so the model tracks the live 
 
 The reference deployment reuses the Optimized Baseline model servers (on NVIDIA GPU, two `Qwen/Qwen3-32B` replicas with tensor parallelism 2 and a RoPE-scaled 131,072-token context) and deploys the router with the latency predictor sidecars enabled. Two replicas is the smallest pool in which the router has a choice to make. For how the component works internally (the plugin pipeline, the ML model, scaling characteristics, the full metric list), see the [Latency Predictor architecture](../../docs/architecture/advanced/latency-predictor.md).
 
+### Architecture
+
+<p align="center">
+  <picture>
+    <img src="../../docs/assets/latency-predictor.svg" alt="Latency Predictor">
+  </picture>
+</p>
+
+The router (EPP) pod runs two latency predictor sidecars next to the scheduler:
+
+- **Training server**: trains the XGBoost TTFT and TPOT models on the latencies of completed requests and periodically publishes them.
+- **Prediction server**: loads the latest models and predicts each request's TTFT and TPOT on every candidate server from that server's current state.
+
+During the request flow:
+
+1. A request arrives at the proxy, which forwards it to the router.
+2. The router queries the prediction server for every candidate server.
+3. The `latency-scorer` (and, with `SLO_AWARE=true`, the `slo-headroom-tier-filter`) picks the server from the predictions.
+4. The proxy forwards the request to that model server, which processes it and returns the response.
+5. The router sends the observed latencies to the training server, which adds them to its training set for the next model update.
+
 ### When to use this path
 
 Pick it when:
@@ -46,6 +67,7 @@ The predictor runs entirely in the router pod, so it composes with other model s
 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves exactly one model:
 
+<!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · vLLM runs a RoPE-scaled 131,072-token context · `INFRA_PROVIDER`: `base`, `gke` |
@@ -54,7 +76,8 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · `INFRA_PROVIDER`: `base`, `gke` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · `INFRA_PROVIDER`: `base`, `gke` |
 
-✅ validated: covered by a nightly E2E workflow · 🟡 community: not covered by nightly E2E · — no configuration.
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
 
 The latency predictor is engine-agnostic: it reads the same server state the router already collects. The SGLang overlay is the Optimized Baseline's NVIDIA GPU SGLang model server, without the long-context patch.
 
