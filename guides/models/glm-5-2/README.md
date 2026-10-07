@@ -26,7 +26,7 @@ best earlier main-agent turn). Each layer addresses a specific pressure of that 
   about half on this workload (see [Benchmark Results](#benchmark-results)).
 
 The guide composes the [wide expert parallelism](../../wide-ep/README.md),
-[P/D disaggregation](../../../docs/well-lit-paths/foundations/pd-disaggregation.md) and
+[P/D disaggregation](../../pd-disaggregation/README.md) and
 [tiered prefix cache](../../tiered-prefix-cache/README.md) foundations. Serving uses the
 DeepGemm MoE backend with tool-calling (`glm47`) and reasoning (`glm45`) parsers. Tested on
 CoreWeave (CKS) with InfiniBand networking.

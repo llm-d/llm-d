@@ -1,5 +1,59 @@
 name: pd-disaggregation
 
+# Accelerator x model server support. A cell is `validated` (a nightly E2E
+# workflow covers it), `community` (the overlay exists but no nightly runs
+# it), or {status: unsupported, issue: <url>} for a tracked gap. `model:`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+support:
+  engines: {vllm: vLLM, sglang: SGLang}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H200 reference · 1 prefill (TP=1) + 1 decode (TP=4), 5 GPUs · `INFRA_PROVIDER`: `base`, `gke`, `gke/a4x`, `gke/a4xmax`, `coreweave`, `aws`, `cks-mooncake` (MooncakeConnector, vLLM only) · SGLang: 1 prefill (TP=2) + 1 decode (TP=2)"
+      model: openai/gpt-oss-120b
+      engines: {vllm: validated, sglang: validated}
+    amd:
+      label: AMD GPU
+      notes: "1 prefill (TP=1) + 1 decode (TP=4) · `INFRA_PROVIDER`: `base`, `amd-ci`, `oci`, `tensorwave`; MoRIIOConnector: `moriio/base`, `moriio/amd-ci`, `moriio/amd-ci-1p1d-tp8` (serve `Qwen/Qwen3-32B`)"
+      model: amd/Llama-3.3-70B-Instruct-FP8-KV
+      engines: {vllm: validated}
+    xpu:
+      label: Intel XPU
+      notes: "1 prefill + 1 decode × 1 GPU via DRA · `INFRA_PROVIDER`: `base`, `rdma` (NIXL over RDMA)"
+      model: Qwen/Qwen3-0.6B
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE only (`INFRA_PROVIDER=gke`) · 1 prefill + 1 decode × 8 chips (`2x4`, TP=8) · `TPUConnector`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "GKE only (`INFRA_PROVIDER=gke`) · 1 prefill + 1 decode × 4 chips (`2x2x1`, TP=8) · `TPUConnectorHMA` · vLLM 0.26"
+      model: Qwen/Qwen3.5-397B-A17B-FP8
+      engines: {vllm: community}
+    "tpu/v7-dynamic-slice":
+      label: Google TPU v7 (dynamic slicing)
+      notes: "GKE only (`INFRA_PROVIDER=gke`) · dynamic slicing + Kueue · 1 prefill + 1 decode, one `2x2x1` sub-slice each; see [below](#dynamic-sub-slices-tpu7x)"
+      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      engines: {vllm: community}
+    iluvatar:
+      label: Iluvatar GPU
+      notes: "BI-V150 · 1 prefill + 1 decode × 2 boards (TP=4) · `IluNixlConnector`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+    metax:
+      label: MetaX GPU
+      notes: "C500X · 1 prefill (TP=2) + 1 decode (TP=4) · NIXL over TCP"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+    npu:
+      label: Rebellions NPU
+      notes: "1 prefill (PP=4) + 1 decode (DP=4, EP) × 4 NPUs + 1 RoCE VF via DRA; see [below](#rebellions-npu)"
+      model: MiniMaxAI/MiniMax-M2.7
+      engines: {vllm: community}
+
 env:
   static:
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))

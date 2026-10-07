@@ -44,8 +44,6 @@
     "getting-started/quickstart": { "position": 1 },
     "getting-started/accelerators": { "position": 2, "label": "Supported Accelerators" },
 
-    "well-lit-paths/foundations/pd-disaggregation": { "position": 6, "label": "Deploy Prefill/Decode Disaggregation" },
-
     "architecture/core/inferencepool": { "position": 1 },
     "architecture/core/model-servers": { "position": 3 },
     "architecture/core/router/proxy": { "position": 1 },

@@ -23,6 +23,43 @@ How the two pools are deployed depends on the accelerator:
 - **NVIDIA GPU** (vLLM and SGLang): one LWS [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang`) with a `prefill` and a `decode` role, in a single slice. The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
 - **All other accelerators** (AMD, Intel XPU, Google TPU, Iluvatar, MetaX, Rebellions NPU): a prefill and a decode `Deployment` (`LeaderWorkerSet` groups for TPU7x dynamic sub-slices).
 
+### Why P/D disaggregation
+
+LLM inference has two computationally distinct phases:
+
+- **Prefill** processes the entire input prompt in a single forward pass - it is compute-bound, bottlenecked by the GPU flops available.
+- **Decode** generates output tokens one at a time from the KV-cache - it is memory-bandwidth-bound, bottlenecked by how fast data moves from HBM to on-chip memory.
+
+For long context workloads (10:1 ISL:OSL) and medium-to-large models, separating prefill and decode into separate instances enables:
+
+- Improved throughput via specialization of prefill and decode
+- Improved quality of service, as long context prefills will not block decode work
+
+### Architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/pd-disaggregation.svg" alt="P/D Disaggregation">
+  </picture>
+</p>
+
+The model server overlay creates a prefill and a decode role (all pods are part of the same `InferencePool`): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU, two `Deployments` on the other accelerators.
+
+- The **prefill** role runs the prefill instances, labeled with `llm-d.ai/role=prefill`.
+- The **decode** role runs the decode instances, labeled with `llm-d.ai/role=decode`. These pods have a routing proxy sidecar in front of the engine.
+
+During the standard request flow:
+
+- Request arrives at the proxy, which forwards the request to the router (EPP)
+- The router schedules the request with P/D disaggregation, using the labels to detect the decode and prefill pods
+- Request is routed to the decode pod's sidecar, which forwards the request to the selected prefill instance
+- Prefill instance processes the prompt, returning metadata about how to retrieve the KV blocks
+- Decode instance pulls the KVs with the KV transfer connector (NIXL by default, over RDMA such as IB, RoCE or EFA where available)
+- Decode instance processes the decodes
+
+See [PD Architecture](../../docs/architecture/advanced/disaggregation/README.md) for more details.
+
 ### P/D Best Practices
 
 P/D disaggregation provides more flexibility in navigating the trade-off between throughput and interactivity ([ref](https://arxiv.org/html/2506.05508v1)).
@@ -50,6 +87,7 @@ As a result, as you tune your P/D deployments, we suggest focusing on the follow
 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves one model; `INFRA_PROVIDER` selects the platform overlay and, where an accelerator offers more than one, the KV transfer connector:
 
+<!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `openai/gpt-oss-120b` | ✅ validated | ✅ validated | Default. H200 reference · 1 prefill (TP=1) + 1 decode (TP=4), 5 GPUs · `INFRA_PROVIDER`: `base`, `gke`, `gke/a4x`, `gke/a4xmax`, `coreweave`, `aws`, `cks-mooncake` (MooncakeConnector, vLLM only) · SGLang: 1 prefill (TP=2) + 1 decode (TP=2) |
@@ -62,7 +100,8 @@ This guide includes configurations for the following accelerator and model serve
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1 prefill (TP=2) + 1 decode (TP=4) · NIXL over TCP |
 | Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 1 prefill (PP=4) + 1 decode (DP=4, EP) × 4 NPUs + 1 RoCE VF via DRA; see [below](#rebellions-npu) |
 
-✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · — no configuration.
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (smaller models, fewer accelerators) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -264,9 +303,12 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 **(NVIDIA GPU only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
 
 <!-- guide:prerequisites.lws start -->
+<!-- variants:start -->
+<details open data-when="ACCELERATOR_TYPE=gpu">
+<summary><b>NVIDIA GPU</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when ACCELERATOR_TYPE=gpu:
 helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
   --version=0.11.1 \
   --namespace lws-system --create-namespace \
@@ -274,6 +316,9 @@ helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
   --wait --timeout 300s
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:prerequisites.lws end -->
 
 **Install the Gateway API Inference Extension CRDs:**
@@ -339,12 +384,18 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 **(Rebellions NPU only) Layer the NPU router values**, which list every decode rank port:
 
 <!-- guide:deploy.accelerator_values start -->
+<!-- variants:start -->
+<details data-when="ACCELERATOR_TYPE=npu">
+<summary><b>Rebellions NPU</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when ACCELERATOR_TYPE=npu:
 export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:deploy.accelerator_values end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
@@ -368,12 +419,18 @@ For model sources, caching, and startup optimization, see the [Model Loading and
 **(TPU v7 dynamic slicing only) Create the Kueue `LocalQueue`** in the guide namespace (see [Dynamic sub-slices](#dynamic-sub-slices-tpu7x) below):
 
 <!-- guide:deploy.localqueue start -->
+<!-- variants:start -->
+<details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
+<summary><b>Google TPU v7 (dynamic slicing)</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when ACCELERATOR_TYPE=tpu/v7-dynamic-slice:
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:deploy.localqueue end -->
 
 **Apply the Kustomize overlay** for your backend. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`, with the routing sidecar in front of the engine): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU, two `Deployments` elsewhere. See [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers) for the `INFRA_PROVIDER` values of each accelerator:
@@ -527,7 +584,22 @@ done
 
 On Rebellions NPU the decode pod runs one API server per data-parallel rank (ports 8200-8203); the loop reads rank 0, which serves a share of the requests.
 
-What to expect on vLLM: the prefill pods' `vllm:request_success_total` counts the requests (prefill runs them with `max_tokens=1`), and the decode pods' `vllm:external_prefix_cache_hits_total` grows by roughly the prompt length of each request: those tokens were loaded through the KV transfer connector instead of being recomputed. On SGLang, `sglang:num_requests_total` grows on both the prefill and the decode pods.
+What to expect:
+
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
+The prefill pods' `vllm:request_success_total` counts the requests (prefill runs them with `max_tokens=1`), and the decode pods' `vllm:external_prefix_cache_hits_total` grows by roughly the prompt length of each request: those tokens were loaded through the KV transfer connector instead of being recomputed.
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+`sglang:num_requests_total` and `sglang:prompt_tokens_total` grow on both the prefill and the decode pods: the prefill pod computes each prompt, and the decode pod receives its KV cache over NIXL.
+
+</details>
+<!-- tabs:end -->
 
 If the prefill pods count no requests, the router is not disaggregating: check that the pods carry the `llm-d.ai/role` labels (on NVIDIA GPU, also that the DisaggregatedSet's LeaderWorkerSets are ready: `kubectl get leaderworkerset -n ${NAMESPACE}`) and the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`). If prefill counts the requests but decode reports no external prefix-cache hits, the KV transfer is failing and decode recomputes the prompt: check the decode pod's logs for connector errors.
 

@@ -34,6 +34,10 @@ sections:
         slug: enable-p2p-prefix-cache-sharing
         title: Enable P2P Prefix Cache Sharing
         position: 5
+      - dir: guides/pd-disaggregation
+        slug: pd-disaggregation
+        title: Deploy Prefill/Decode Disaggregation
+        position: 6
       - dir: guides/wide-ep
         slug: wide-expert-parallelism
         title: Scale MoE Models with Wide Expert Parallelism
