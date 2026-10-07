@@ -8,7 +8,7 @@ namePrefix: e-p-d-disaggregation-nvidia-gpu-vllm-
 
 components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
-  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/ec-connector
+  - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/release
 
 labels:
   - pairs:

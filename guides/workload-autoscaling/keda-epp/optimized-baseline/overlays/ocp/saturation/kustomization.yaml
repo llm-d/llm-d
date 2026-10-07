@@ -1,0 +1,27 @@
+# OpenShift + saturation signal (windows overshoot solution). See overlays/ocp/queue
+# for the component-ordering rationale and the ClusterRoleBinding name/subject patch.
+# The namespace transformer is rendered from ${NAMESPACE} by envsubst at apply time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ${NAMESPACE}
+
+resources:
+  - ../../../base
+
+components:
+  - ../../../components/trigger-saturation
+  - ../../../components/ocp-auth
+  - ../../../../../../recipes/autoscaling/metrics-reader
+
+patches:
+  - target:
+      kind: ClusterRoleBinding
+      name: keda-epp-metrics-reader-monitoring-view
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: keda-epp-metrics-reader-monitoring-view-${NAMESPACE}
+      - op: replace
+        path: /subjects/0/namespace
+        value: ${NAMESPACE}

@@ -44,9 +44,27 @@ scaling decisions. The HPA remains visible for inspection, but KEDA owns it.
    Confirm that Prometheus is scraping the EPP metrics endpoint before
    configuring autoscaling.
 
-Set the guide environment variables. `TRIGGER` selects the scaling signal
+Set the guide environment variables. `SIGNAL` selects the scaling signal
 (`queue` or `saturation`) and `ENV` selects the platform (`existing` or `ocp`);
-together they name the overlay you apply:
+together they name the overlay you apply.
+
+The deployment-specific variables are rendered into the overlay with `envsubst`
+at apply time, so install `envsubst` (shipped with GNU gettext; `brew install
+gettext` on macOS, where it is not present by default). The defaults below match
+the stock optimized-baseline deployment, so if you followed that guide unchanged
+you can leave them as-is.
+When adapting the guide to your own deployment you typically change only two of
+them, `NAMESPACE` and `MODEL`; the other three follow from the Helm release
+name (and accelerator) you chose at install time:
+
+- `NAMESPACE` - the namespace you deployed into.
+- `MODEL` - the model you serve; must match the `model_name` label on the EPP
+  metrics.
+- `EPP_SERVICE` - the EPP service name, `<release>-epp`.
+- `INFERENCE_POOL` - the InferencePool name, which equals `<release>`.
+- `TARGET_DEPLOYMENT` - the decode Deployment the ScaledObject targets,
+  `<release>-<accelerator>-vllm-decode` (for the stock release,
+  `optimized-baseline-nvidia-gpu-vllm-decode`).
 
 <!-- guide:env.static start -->
 ```bash
@@ -59,8 +77,11 @@ export MODEL=Qwen/Qwen3-32B
 export TARGET_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
 export SCALEDOBJECT_NAME=optimized-baseline-keda-epp
 export HPA_NAME=keda-hpa-optimized-baseline
-export TRIGGER=queue # options: queue, saturation
+export EPP_SERVICE=optimized-baseline-epp
+export INFERENCE_POOL=optimized-baseline
+export SIGNAL=queue # options: queue, saturation
 export ENV=existing # options: existing, ocp
+export OVERSHOOT=windows # options: windows, guard
 export OVERLAY_ROOT=${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline
 ```
 <!-- guide:env.static end -->
@@ -197,35 +218,41 @@ kubectl port-forward -n ${MONITORING_NAMESPACE} \
 
 OpenShift environments use the Custom Metrics Autoscaler Operator (KEDA) and
 cluster monitoring through Thanos Querier. The OpenShift leaf overlays
-([`ocp-queue`](optimized-baseline/ocp-queue/) and
-[`ocp-saturation`](optimized-baseline/ocp-saturation/)) configure this for you -
-apply one of them instead of the `k8s-*` leaves:
+([`overlays/ocp/queue`](optimized-baseline/overlays/ocp/queue/) and
+[`overlays/ocp/saturation`](optimized-baseline/overlays/ocp/saturation/)) configure
+this for you - apply one of them instead of the `overlays/k8s/*` leaves:
 
 - Points both triggers at `thanos-querier.openshift-monitoring.svc.cluster.local:9091`
-  and enables `authModes: bearer`. Thanos rejects unauthenticated queries with a
-  401, and KEDA silently serves `fallback` replicas when a trigger errors, so
-  unauthenticated autoscaling looks healthy while doing nothing.
+  and enables `authModes: bearer`. Without it Thanos rejects the query (401 when
+  unauthenticated, 403 when the ServiceAccount lacks `cluster-monitoring-view`), the
+  trigger errors, and the ScaledObject goes `Ready=False` with `KEDAScalerFailed`
+  events. No `fallback` is configured, so autoscaling fails visibly rather than
+  looking healthy while doing nothing.
 - Provisions a dedicated `keda-epp-metrics-reader` ServiceAccount granted the
   `cluster-monitoring-view` ClusterRole, and adds a `keda-prometheus-auth`
   `TriggerAuthentication` pointing at that SA's token Secret. On OpenShift the
   service-ca operator injects `service-ca.crt` (the CA that signs Thanos's serving
   certificate) into the token Secret automatically, so **no CA copy is required**.
 
-Before applying, edit the PromQL label selectors in the triggers to match your
-EPP service, namespace, and model (the namespace transformer cannot rewrite the
-opaque query strings). When deploying this guide to multiple namespaces on a
-shared cluster, give the `keda-epp-metrics-reader-monitoring-view`
-ClusterRoleBinding a namespace-unique name so the bindings do not collide.
+The overlays carry `${...}` placeholders for the namespace, model, target
+deployment, EPP service, and inference pool, so you set those as environment
+variables and the apply step renders them with `envsubst` - no manual YAML edits.
+The OCP leaf also renders the metrics-reader ClusterRoleBinding subject namespace
+from `${NAMESPACE}`, so the binding follows your deployment namespace. Because the
+ClusterRoleBinding is cluster-scoped, the OCP leaf also renders its name as
+`keda-epp-metrics-reader-monitoring-view-${NAMESPACE}`, so deploying to multiple
+namespaces on a shared cluster does not make the bindings collide - no manual
+rename is needed.
 
 ## Choosing a Scaling Signal
 
 This guide ships two scaling signals as overlays. Pick one; do not apply both to
 the same Deployment (two ScaledObjects on one Deployment make conflicting HPAs).
 
-- **Queue depth (default)** - `k8s-queue` / `ocp-queue`. Scales on requests
-  waiting in EPP Flow Control plus running-request concurrency. The mature,
-  recommended path; it carries the OCP scale-event nightly.
-- **Pool saturation** - `k8s-saturation` / `ocp-saturation`. Scales on the EPP
+- **Queue depth (default)** - `overlays/k8s/queue` / `overlays/ocp/queue`. Scales
+  on requests waiting in EPP Flow Control plus running-request concurrency. The
+  mature, recommended path; it carries the OCP scale-event nightly.
+- **Pool saturation** - `overlays/k8s/saturation` / `overlays/ocp/saturation`. Scales on the EPP
   pool-saturation gauge plus running-request concurrency; it reacts before
   requests queue. Uses `maxReplicaCount: 10`.
 
@@ -237,8 +264,41 @@ the same Deployment (two ScaledObjects on one Deployment make conflicting HPAs).
   > in production.
 
 Both signals originate in the EPP flow-control subsystem, so both require the
-flow-control feature gate enabled by this guide's `router.values.yaml`. Detailed
-threshold guidance for flow control on vs. off is added in a later revision.
+flow-control feature gate enabled by this guide's `router.values.yaml`. How that
+subsystem shapes each signal, and how to set thresholds when flow control is off,
+is covered in [Flow control on vs. off](#flow-control-on-vs-off) below. For the
+subsystem itself, see
+[EPP Flow Control](../../../docs/architecture/core/router/epp/flow-control.md).
+
+> [!NOTE]
+> This guide is validated with vLLM model servers. The flow-control signals are
+> emitted by the EPP and are engine-agnostic, but the default thresholds are tuned
+> for vLLM; validate them before relying on the guide with another engine.
+
+### Saturation detector
+
+The saturation detector estimates how loaded the inference pool is. It gates
+dispatch under flow control and feeds the pool-saturation gauge, so it shapes
+both signals this guide can scale on. The two detectors EPP ships define
+"loaded" differently, which is exactly why the choice matters:
+
+- **`utilization-detector` (default, recommended)** - a closed-loop detector that
+  reacts to real-time telemetry (queue depth and KV-cache pressure), so it
+  reflects actual memory pressure rather than just request counts. It is the EPP
+  default, so this guide's `router.values.yaml` uses it without setting
+  `flowControl.saturationDetector`. It has known limitations under sudden bursts
+  and in heterogeneous pools; see the linked reference for those and the full
+  tradeoff.
+- **`concurrency-detector`** - an open-loop detector based on in-flight request
+  accounting. It reacts instantly, but treats load as a raw request count, so
+  high concurrency does not necessarily mean the pool is full - with prefix
+  caching, for example, many concurrent requests can be cheap cache hits. It is
+  also blind to KV-cache pressure, which makes it a less reliable autoscaling
+  signal; prefer the default unless you have a specific reason to pin it.
+
+See
+[Saturation Detectors](../../../docs/architecture/core/router/epp/flow-control.md#saturation-detectors)
+for the full comparison and each detector's tuning knobs.
 
 ## Configuration
 
@@ -255,6 +315,8 @@ this guide:
 | Running-request threshold | 16 | Decrease to scale earlier on active concurrency; increase if each replica can safely handle more concurrent requests within latency objectives. |
 | Polling interval | 15s | Controls how often KEDA polls triggers while the target is at zero replicas. |
 | Cooldown period | 300s | Controls the delay before KEDA scales the target to zero after triggers become inactive. |
+| Scale-up stabilization window | 300s | Holds scale-up recommendations so a still-loading replica is not counted as unmet demand. Size near the target Deployment's cold-start time. See [Startup-time mitigation](#startup-time-mitigation). |
+| Scale-down stabilization window | 300s | Holds capacity across brief demand dips before scaling in, avoiding flapping once a slow-starting replica goes Ready. See [Startup-time mitigation](#startup-time-mitigation). |
 
 ## Choosing Scaling Thresholds
 
@@ -285,17 +347,123 @@ parallel configuration, or request distribution apply to another deployment.
 Future benchmarking can provide more specific recommendations for validated
 model and hardware combinations.
 
+### Flow control on vs. off
+
+This guide enables EPP flow control, and the default thresholds assume it. Flow
+control changes *where* unmet demand accumulates, which changes what each trigger
+can see:
+
+- **Flow control on (this guide).** When the pool saturates, EPP pauses dispatch
+  and buffers requests in its own priority queues. Unmet demand surfaces as
+  `llm_d_epp_flow_control_queue_size`, so the queue-size trigger is the primary
+  scale-up signal and a low threshold (the default `1`) reacts promptly. Dispatch
+  is gated per endpoint, so each replica admits only a bounded number of concurrent
+  requests, and that per-endpoint ceiling sits close to the running-request
+  threshold (`16`). Aggregate running requests still grow as replicas are added, but
+  a single replica rarely exceeds the threshold, so the running-request trigger
+  seldom trips scale-up on its own - the queue-size trigger is what drives scaling.
+  Treat the running-request trigger as a keep-warm and anti-flap floor, not the
+  driver.
+- **Flow control off.** This guide enables flow control, so this case applies only
+  if you turn it off. Both signals this guide scales on -
+  `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_pool_saturation` -
+  are exposed *only* when the `flowControl` feature gate is on. With it off the
+  series are not emitted at all, so the queue and saturation triggers resolve to
+  no data and KEDA reports the metric as unavailable. The running-request
+  trigger this guide already ships (`llm_d_epp_request_running`) is not gated by
+  flow control and keeps working, so scaling degrades to running-requests only;
+  tune its threshold accordingly, or drive scaling from a vLLM-native signal such
+  as `vllm:num_requests_waiting`.
+
+Confirm which mode you are in before tuning:
+
+```bash
+kubectl logs deployment/optimized-baseline-epp -n ${NAMESPACE} | grep "Flow Control enabled"
+```
+
+## Startup-time mitigation
+
+Model-server pods take minutes to load a model and become `Ready`, and this
+startup lag distorts autoscaling. While a new replica is still starting it does
+not serve traffic, so the demand signal it was meant to relieve stays elevated.
+Two problems follow: the HPA can keep scaling up and overshoot (the starting
+replica is not yet reducing the signal), and then, once the pod goes `Ready` and
+demand drops sharply, the HPA can scale back in immediately and flap.
+
+The checked-in `ScaledObject` mitigates both with HPA stabilization windows in
+its `behavior` block, so no extra metrics or dependencies are required:
+
+- **`scaleUp.stabilizationWindowSeconds: 300`** holds scale-up recommendations
+  over the window and acts on the most conservative one, so a replica that is
+  still loading is given time to become `Ready` and relieve demand before the HPA
+  adds another. Size this near the target Deployment's cold-start time: too low
+  and the HPA stacks replicas while one is still coming up; too high and it reacts
+  slowly to genuine sustained bursts.
+- **`scaleDown.stabilizationWindowSeconds: 300`** holds capacity across brief
+  demand dips, so the pool does not scale in the moment a slow-starting replica
+  finally absorbs a backlog and the signal drops.
+
+Measure your model's cold-start time (from pod scheduling to the first served
+request) and set `scaleUp.stabilizationWindowSeconds` to roughly that value.
+
+### Overshoot guard
+
+Stabilization windows are deliberately blunt: they delay all scale-up equally,
+not just startup-driven overshoot. The overshoot guard (`OVERSHOOT=guard`,
+queue signal only) is the demand-aware alternative. It uses KEDA's
+[`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
+to replace the running-requests keep-warm trigger with two supply triggers over
+`kube-state-metrics` - `pending` (`kube_deployment_status_replicas_unavailable`,
+pods created but not yet `Ready`) and `replicas` (current replica count) - and a
+formula that discounts demand by the pods already coming up:
+
+```
+demand <= replicas ? demand : max(demand - (pending ?? 0), replicas)
+```
+
+Because the formula, not a time window, now absorbs overshoot, the guard sets
+`scaleUp.stabilizationWindowSeconds: 0` for immediate scale-up and adds a
+`fallback` (`behavior: static`, `replicas: 1`) so a formula that cannot evaluate
+degrades to a single replica instead of failing the `ScaledObject`. It ships for
+the queue signal only: renaming the raw signal to a replica-unit `demand` is
+correct only when the signal's per-pod target is 1, which holds for queue depth
+but not for the pool-wide saturation ratio.
+
+The guard is more precise but adds cost: it depends on `kube-state-metrics` being
+scraped into the same Prometheus, and the two supply series fail differently. A
+missing `pending` series is read as zero (`pending ?? 0`), so the guard keeps
+scaling but loses its overshoot protection (demand-only scaling). A missing
+`demand` or `replicas` series makes the formula unevaluable, so after
+`failureThreshold` polls the `fallback` takes over and holds a single replica,
+even mid-burst. Prefer the stabilization windows above unless you need scale-up
+faster than a cold-start-sized window allows.
+
+Exercising the guard needs heavier load than the windows path. The guard drops
+the running-requests keep-warm trigger and scales purely on `demand` (queue
+depth), and that queue only builds once load exceeds vLLM's continuous-batching
+capacity - moderate concurrency is absorbed with the queue at zero, so the guard
+reads no demand and does not scale. In the [Generate Bounded
+Load](#generate-bounded-load) step, raise concurrency and per-request
+`max_tokens` until `llm_d_epp_flow_control_queue_size` (the `demand` signal) goes
+non-zero; that gauge, not a fixed request count, is the thing to drive, because
+the load needed to saturate the batch depends on the model, GPU, tensor-parallel
+degree, and `max-model-len`. A larger model leaves less KV-cache headroom and
+queues at lower concurrency, a smaller one at higher - as a rough starting point
+try a few hundred concurrent requests with `max_tokens` in the low thousands and
+climb until the gauge moves. Otherwise a guard that is working correctly looks
+like one that never scales.
+
 ## Apply the KEDA ScaledObject
 
 Review the base
 [`scaledobject.yaml`](optimized-baseline/base/scaledobject.yaml) and your
-chosen trigger component before applying. At minimum, verify these
-deployment-specific fields:
+chosen trigger component before applying. The namespace, target deployment, and
+the PromQL label selectors are rendered from the environment variables in the
+export block above by `envsubst` at apply time, so the fields to review and
+adjust directly in the YAML are:
 
-- `metadata.namespace`
-- `spec.scaleTargetRef.name`
-- Prometheus `serverAddress`
-- The PromQL label selectors
+- Prometheus `serverAddress` (the bundled kube-prometheus-stack on generic
+  Kubernetes; the OCP overlay repoints it at Thanos Querier)
 - The trigger thresholds
 
 This walkthrough intentionally begins with one target replica so that a 1-to-N
@@ -309,29 +477,42 @@ kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout
 ```
 <!-- guide:deploy.prepare end -->
 
-Apply the leaf overlay for your `TRIGGER` and `ENV`. On a generic Kubernetes
-cluster with the bundled kube-prometheus-stack (plain in-cluster HTTP, no auth
-secret), use the `k8s-*` leaf.
+Apply the leaf overlay for your `SIGNAL` and `ENV`. Each apply builds the leaf,
+renders its `${...}` placeholders with `envsubst`, and pipes the result to
+`kubectl apply`. On a generic Kubernetes cluster with the bundled
+kube-prometheus-stack (plain in-cluster HTTP, no auth secret), use the
+`overlays/k8s/*` leaf.
 
 Queue signal (default):
 
 <!-- guide:deploy.apply_k8s_queue start -->
 ```bash
-# only when TRIGGER=queue and ENV=existing:
-kubectl apply -k ${OVERLAY_ROOT}/k8s-queue
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=windows:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_queue end -->
+
+Queue signal with the overshoot guard (`OVERSHOOT=guard`): same signal, but the
+pending-aware `scalingModifiers` formula replaces the scale-up stabilization
+window (see [Overshoot guard](#overshoot-guard)).
+
+<!-- guide:deploy.apply_k8s_queue_guard start -->
+```bash
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+```
+<!-- guide:deploy.apply_k8s_queue_guard end -->
 
 Saturation signal (experimental):
 
 <!-- guide:deploy.apply_k8s_saturation start -->
 ```bash
-# only when TRIGGER=saturation and ENV=existing:
-kubectl apply -k ${OVERLAY_ROOT}/k8s-saturation
+# only when SIGNAL=saturation and ENV=existing:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_saturation end -->
 
-On OpenShift, use the `ocp-*` leaf instead (see the [OpenShift](#openshift)
+On OpenShift, use the `overlays/ocp/<signal>` leaf instead (see the [OpenShift](#openshift)
 note - it points both triggers at Thanos Querier and bearer-authenticates via a
 dedicated ServiceAccount; no CA copy is needed).
 
@@ -339,17 +520,28 @@ Queue signal (default):
 
 <!-- guide:deploy.apply_ocp_queue start -->
 ```bash
-# only when TRIGGER=queue and ENV=ocp:
-kubectl apply -k ${OVERLAY_ROOT}/ocp-queue
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=windows:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_queue end -->
+
+Queue signal with the overshoot guard (`OVERSHOOT=guard`): the guard rewrites the
+trigger list, so this leaf bearer-authenticates all three triggers against Thanos
+(see [Overshoot guard](#overshoot-guard)).
+
+<!-- guide:deploy.apply_ocp_queue_guard start -->
+```bash
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+```
+<!-- guide:deploy.apply_ocp_queue_guard end -->
 
 Saturation signal (experimental):
 
 <!-- guide:deploy.apply_ocp_saturation start -->
 ```bash
-# only when TRIGGER=saturation and ENV=ocp:
-kubectl apply -k ${OVERLAY_ROOT}/ocp-saturation
+# only when SIGNAL=saturation and ENV=ocp:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_saturation end -->
 
@@ -506,17 +698,23 @@ available, and the generated HPA has no scaling-limited conditions.
 
 <!-- guide:cleanup start -->
 ```bash
-# only when TRIGGER=queue and ENV=existing:
-kubectl delete -k ${OVERLAY_ROOT}/k8s-queue --ignore-not-found=true
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=windows:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when TRIGGER=saturation and ENV=existing:
-kubectl delete -k ${OVERLAY_ROOT}/k8s-saturation --ignore-not-found=true
+# only when SIGNAL=queue and ENV=existing and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when TRIGGER=queue and ENV=ocp:
-kubectl delete -k ${OVERLAY_ROOT}/ocp-queue --ignore-not-found=true
+# only when SIGNAL=saturation and ENV=existing:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when TRIGGER=saturation and ENV=ocp:
-kubectl delete -k ${OVERLAY_ROOT}/ocp-saturation --ignore-not-found=true
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=windows:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+
+# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=guard:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+
+# only when SIGNAL=saturation and ENV=ocp:
+kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 ```
 <!-- guide:cleanup end -->
 

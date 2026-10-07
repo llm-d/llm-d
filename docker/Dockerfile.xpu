@@ -2,21 +2,32 @@
 # Override at build time via --build-arg BASE_IMAGE=...
 # The default value here is informational only; the workflow always passes
 # BASE_IMAGE explicitly from docker/common-versions (VLLM_XPU_BASE_IMAGE).
-ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.26.0
-
+ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.30.0
 FROM ${BASE_IMAGE}
 
-# PyTorch XPU needs UMF at runtime; upstream's setvars.sh adds this path.
-ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
-
+# Invalidate subsequent layers to make sure builds are fresh
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
     fi;
 
+SHELL ["/bin/bash", "-c"]
+# vLLM no longer ships the oneAPI development environment, but LMCache's
+# SYCL extension still needs icpx. Match the PyTorch 2.13 XPU toolchain.
+ARG ONEAPI_COMPILER_VERSION=2026.0.0-947
+RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | \
+        gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+        > /etc/apt/sources.list.d/oneAPI.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        intel-oneapi-compiler-dpcpp-cpp-2026.0=${ONEAPI_COMPILER_VERSION} && \
+    rm -rf /var/lib/apt/lists/*
+# Keep UMF available at runtime, when setvars.sh has not been sourced.
+ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
+
 RUN source /opt/intel/oneapi/setvars.sh --force && \
     git clone https://github.com/LMCache/LMCache.git -b v0.5.0 && \
     cd LMCache && pip install -r requirements/build.txt && \
     BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .
-
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]

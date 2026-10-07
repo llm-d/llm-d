@@ -63,7 +63,7 @@ By default, the EPP uses a `global-strict` policy. Because the system is **work-
 
 ### Supported Hardware Backends
 
-Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-hardware-backends). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
+Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-accelerators-and-model-servers). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
 
 The steps below default to NVIDIA GPU. See the "Intel XPU" details under [Deploy the Model Server](#2-deploy-the-model-server) for the one other backend with a documented, dynamically-rendered path today. Other accelerators listed in the Optimized Baseline guide can be substituted the same way: swap the kustomize path in that step, then, if the target overlay's model or replica count differs from the [Default Configuration](#default-configuration) table above, adjust the benchmarking/verification steps accordingly.
 

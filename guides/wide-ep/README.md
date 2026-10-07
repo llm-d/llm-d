@@ -138,6 +138,17 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
+For AMD Instinct, add the AMD router override:
+
+```bash
+helm install ${GUIDE_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/amd.values.yaml \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
 <details>
 <summary><b>Gateway Mode</b></summary>
 
@@ -187,6 +198,15 @@ please re-verify against the parser source if you touch this section.
 export MODEL=deepseek-ai/DeepSeek-V2-Lite-Chat
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
 ```
+
+**AMD Instinct:**
+
+```bash
+export INFRA_PROVIDER=base # options: base, amd-ci
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/amd/vllm-deepseek-v3/${INFRA_PROVIDER}
+```
+
+The decode routing sidecar reaches its MoRI-IO peers by their LeaderWorkerSet pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
 **NVIDIA GPU:**
 
@@ -281,6 +301,8 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
 # Intel XPU
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm
+# AMD Instinct (any INFRA_PROVIDER: the AMD overlays only patch base)
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/amd/vllm-deepseek-v3/base --ignore-not-found
 # NVIDIA GPU
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 ```

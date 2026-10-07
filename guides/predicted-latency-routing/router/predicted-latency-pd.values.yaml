@@ -69,14 +69,12 @@ router:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: predicted-latency-producer
           - pluginRef: loose-affinity-filter
           - pluginRef: ttft-scorer
           - pluginRef: weighted-random-picker
         - name: decode
           plugins:
           - pluginRef: decode-filter
-          - pluginRef: predicted-latency-producer
           - pluginRef: tpot-scorer
           - pluginRef: weighted-random-picker
 

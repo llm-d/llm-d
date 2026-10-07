@@ -1,8 +1,9 @@
 # KEDA TriggerAuthentication for OpenShift Thanos Querier (bearer + CA).
 #
-# Thanos Querier rejects unauthenticated queries with 401, and KEDA silently
-# serves `fallback` replicas when a trigger errors, so an unauthenticated trigger
-# looks healthy while autoscaling does nothing. This points KEDA at the
+# Thanos Querier rejects unauthorized queries (401 when unauthenticated, 403 when
+# the ServiceAccount lacks cluster-monitoring-view). The trigger then errors and the
+# ScaledObject goes Ready=False with KEDAScalerFailed events; no `fallback` is
+# configured, so autoscaling fails visibly rather than silently. This points KEDA at the
 # metrics-reader ServiceAccount token Secret provisioned by
 # recipes/autoscaling/metrics-reader: `token` is the bearer token, and
 # `service-ca.crt` is the CA that signs the Thanos serving cert (the service-ca
@@ -14,7 +15,9 @@ apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
   name: keda-prometheus-auth
-  namespace: llm-d-optimized-baseline
+  # Must live in the same namespace as the ScaledObject it serves; rendered by
+  # envsubst at apply time (NAMESPACE), same as the ScaledObject.
+  namespace: ${NAMESPACE}
 spec:
   secretTargetRef:
     - parameter: bearerToken

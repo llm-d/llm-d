@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# AMD CI cluster (MI355X, Pensando AINIC, rail-isolated RoCE fabric).
+resources:
+  - ../base
+
+# The patches match roles, containers, and env entries by name via the DisaggregatedSet schema
+# the base declares, so they are independent of the order base/ writes them in.
+patches:
+  - path: patch-amd-ci.yaml
+  - path: patch-amd-ci-fabric.yaml
+  - path: patch-amd-ci-lws-v0.9.yaml

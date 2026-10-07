@@ -112,6 +112,12 @@ See **[`guides/templates/README.md`](./templates/README.md)** for the templates,
 quickstart, and the full authoring reference. It is the single source for those
 instructions — deliberately not repeated here, so the two cannot drift apart.
 
+See **[`GUIDES-POLICY.md`](./GUIDES-POLICY.md)** for what counts as a guide, the
+production-readiness tiers, and how a guide is placed, promoted or retired.
+
+CI dry-runs every deployable overlay in this directory. See
+**[`CI-DRY-RUN.md`](./CI-DRY-RUN.md)** for what it checks and how to exclude a guide.
+
 ## Supporting Guides
 
 Our supporting guides address common operational challenges with model serving at scale:

@@ -1,0 +1,11 @@
+# Generic Kubernetes + queue signal (windows overshoot solution). Base is plain
+# in-cluster HTTP (no auth); the trigger-queue component inserts the queue-size
+# trigger. Apply on non-OpenShift clusters; use overlays/ocp/queue on OpenShift.
+# Apply with the envsubst pipe (see the guide): the base and components carry
+# ${...} placeholders rendered at apply time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base
+components:
+  - ../../../components/trigger-queue

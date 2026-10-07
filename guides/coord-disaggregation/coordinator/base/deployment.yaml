@@ -57,7 +57,7 @@ spec:
       # Runs the pipeline's "render" step (multimodal input normalization) as a
       # local CPU vLLM instance the coordinator container talks to over localhost.
       - name: vllm-render
-        image: vllm/vllm-openai-cpu:v0.26.0
+        image: vllm/vllm-openai-cpu:v0.30.0
         imagePullPolicy: IfNotPresent
         # "vllm launch render" runs only the preprocessing/postprocessing HTTP layer
         # (no GPU/engine warmup, no encoder-cache profiling) -- "vllm serve" boots

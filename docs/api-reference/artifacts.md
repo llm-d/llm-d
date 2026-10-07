@@ -60,9 +60,8 @@ llm-d releases the core EPP image as well as additional sidecar images for advan
 | Image | Description | Version |
 |-------|-------------|---------|
 | `ghcr.io/llm-d/llm-d-router-endpoint-picker` | Core EPP image | main |
-| `ghcr.io/llm-d/llm-d-router-disagg-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | v0.10.0 |
-| `registry.k8s.io/gateway-api-inference-extension/latency-training-server` | Optional sidecar for EPP, for predicted-latency model training | v1.5.0 |
-| `registry.k8s.io/gateway-api-inference-extension/latency-prediction-server` | Optional sidecar for EPP, for predicted-latency scheduling | v1.5.0 |
+| `ghcr.io/llm-d/llm-d-router-disagg-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | main |
+
 
 > [!IMPORTANT]
 > The EPP image was renamed from `ghcr.io/llm-d/llm-d-inference-scheduler`
@@ -89,15 +88,15 @@ We recommend using the upstream images for most guides:
 
 | Engine        | Image             | Tag       |
 |---------------|-------------------|-----------|
-| **vLLM**             | `docker.io/vllm/vllm-openai`            | `v0.26.0`     |
-| **vLLM Omni**        | `docker.io/vllm/vllm-omni`              | `v0.26.0`     |
-| **vLLM TPU**         | `docker.io/vllm/vllm-tpu`               | `v0.26.0`     |
-| **vLLM XPU**         | `docker.io/vllm/vllm-openai-xpu`        | `v0.26.0`     |
-| **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.26.0`     |
-| **vLLM ROCM Omni**   | `docker.io/vllm/vllm-omni-rocm`         | `v0.24.1`     |
-| **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.26.0`     |
-| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.19`   |
-| **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc23`   |
+| **vLLM**             | `docker.io/vllm/vllm-openai`            | `v0.30.0`     |
+| **vLLM Omni**        | `docker.io/vllm/vllm-omni`              | `v0.28.0`     |
+| **vLLM TPU**         | `docker.io/vllm/vllm-tpu`               | `v0.29.0`     |
+| **vLLM XPU**         | `docker.io/vllm/vllm-openai-xpu`        | `v0.30.0`     |
+| **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.30.0`     |
+| **vLLM ROCM Omni**   | `docker.io/vllm/vllm-omni-rocm`         | `v0.28.0`     |
+| **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.30.0`     |
+| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.20`   |
+| **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc28`   |
 
 ### Custom Images
 
@@ -109,12 +108,12 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
-| `ghcr.io/llm-d/llm-d-cuda` (deprecated) | `v0.9.0` | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws` (deprecated)  | `v0.9.0` | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`              | `v0.9.0` | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`               | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu-sglang`        | `v0.9.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu`               | `v0.9.0` | CPU | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-cuda` (deprecated) | - | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-aws` (deprecated)  | - | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm`              | `v0.10.0` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu`               | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu-sglang`        | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu`               | `v0.10.0` | CPU | RHEL UBI9 | amd64 |
 
 ## 4. Well-Lit Path Guides
 

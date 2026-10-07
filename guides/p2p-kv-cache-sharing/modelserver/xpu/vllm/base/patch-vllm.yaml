@@ -27,6 +27,9 @@ spec:
           args:
             - Qwen/Qwen3-0.6B
             - --port=8200
+            # vLLM 0.30 gates /v1/*/render behind this flag. The router's
+            # token-producer needs that endpoint on the model servers.
+            - --enable-scale-out
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             # The offloading config below omits `block_size`, so it defaults to
             # this engine block size. Keep it identical across all P2P peers.

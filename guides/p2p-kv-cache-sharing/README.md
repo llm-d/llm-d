@@ -137,19 +137,15 @@ runs it against two live pods and prints the recommended value.
   `ze_copy` DMA-BUF-export issue:
   [openucx/ucx#11902](https://github.com/openucx/ucx/pull/11902) and
   [#11903](https://github.com/openucx/ucx/pull/11903).
-  > [!WARNING]
-  > `ghcr.io/llm-d/llm-d-xpu:v0.9.0` (vLLM 0.26.0, the `llm-d` component
-  > used by every other guide's XPU overlay) has no `remote_kv_source`
-  > handling in its `OffloadingConnector`, so the P2P pull this guide
-  > exists to demonstrate cannot work on it. This overlay therefore
-  > pins the `nightly` xpu-vllm component
-  > (`docker.io/vllm/vllm-openai-xpu:nightly`, vLLM main) instead —
-  > verified end-to-end on real Intel Arc Pro B60 hardware (a
-  > 4096-token prefix pulled with a 100% hit rate, reproduced twice).
-  > `nightly` is not a stable/reproducible tag; switch this overlay's
-  > component back to `llm-d` once `ghcr.io/llm-d/llm-d-xpu` is rebuilt
-  > against a vLLM release that carries
-  > `vllm/v1/kv_offload/tiering/p2p/`.
+  > [!NOTE]
+  > This overlay uses the `llm-d` xpu-vllm component
+  > (`ghcr.io/llm-d/llm-d-xpu:v0.10.0`, vLLM 0.30.0), whose
+  > `OffloadingConnector` carries the P2P tier
+  > (`vllm/v1/kv_offload/tiering/p2p/`). Earlier `llm-d-xpu` images
+  > (v0.9.0 and before, vLLM 0.26.0) lack `remote_kv_source` handling and
+  > cannot perform the P2P pull. On vLLM 0.30.0, `vllm serve` also needs
+  > `--enable-scale-out` to expose `/v1/*/render` for the router's
+  > `token-producer`; the XPU overlay sets this flag.
 
 Every benchmark in this guide was measured with `rdma/ib` exposed to the
 model-server containers, and that is the recommended configuration. RDMA
@@ -255,8 +251,8 @@ your own transport.
     ([vllm#47636](https://github.com/vllm-project/vllm/pull/47636),
     [vllm#47987](https://github.com/vllm-project/vllm/pull/47987)).
 * The render Service (`render/`) fronts the model servers themselves:
-  vLLM serves `/v1/*/render` natively, so render capacity scales with
-  the serving fleet
+  the modelserver overlays expose vLLM's `/v1/*/render`, so render
+  capacity scales with the serving fleet
   ([llm-d#2188](https://github.com/llm-d/llm-d/pull/2188)). The Service
   targets the vLLM port directly; the pods' port 8000 belongs to the
   routing-proxy sidecar, which does not serve `/render`. When serving

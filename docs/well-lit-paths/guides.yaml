@@ -1,0 +1,30 @@
+# Guides published on llm-d.ai.
+#
+# Each guide lives once, under guides/<dir>/, as a guide.yaml + README.md pair
+# that renders on GitHub. The website (llm-d/llm-d.github.io) reads this file
+# at sync time and publishes each listed README as the page
+# docs/<target>/<slug>/ (the URL a docs page at <target>/<slug>.md used to
+# have), with optional child pages (`pages: [{from, to, title}]`, paths relative
+# to the guide dir). Grouping into sections lives here only;
+# the guides/ tree stays flat.
+#
+# Validate with: python3 scripts/guide.py check-manifest
+version: 1
+sections:
+  foundations:
+    target: well-lit-paths/foundations
+    guides:
+      - dir: guides/optimized-baseline
+        slug: optimized-baseline
+        title: Deploy an Optimized Baseline
+        position: 1
+      - dir: guides/precise-prefix-cache-routing
+        slug: precise-prefix-cache-routing
+        title: Enable Precise Prefix-Cache Aware Routing
+        position: 3
+  models:
+    target: well-lit-paths/models
+    guides: []
+  operations:
+    target: operations
+    guides: []

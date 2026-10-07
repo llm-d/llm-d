@@ -145,3 +145,7 @@ per llm-d release tag against the release image and record the result.
 ## CPU Inferencing
 
 CPU-only inference is supported for deployments without GPU accelerators. This expects 4th Gen Intel Xeon processors (Sapphire Rapids) or later, or equivalent AMD processors. Each replica requires a minimum of 64 CPU cores and 64GB RAM.
+
+**Set `MODEL` when running the guide's steps.** The CPU overlay serves
+`meta-llama/Llama-3.2-3B-Instruct`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
+`MODEL=meta-llama/Llama-3.2-3B-Instruct` so the validation and benchmark steps address the served model.

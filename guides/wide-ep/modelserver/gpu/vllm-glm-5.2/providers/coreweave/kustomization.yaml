@@ -15,7 +15,7 @@ patches:
       apiVersion: disaggregatedset.x-k8s.io/v1
       kind: DisaggregatedSet
       metadata:
-        name: wide-ep-nvidia-gpu-vllm-glm-5-2
+        name: wide-ep-vllm-glm-5-2
       spec:
         roles:
           - name: prefill

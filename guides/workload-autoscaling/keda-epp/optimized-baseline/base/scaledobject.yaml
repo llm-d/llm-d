@@ -17,13 +17,15 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: optimized-baseline-keda-epp
-  namespace: llm-d-optimized-baseline
+  # Rendered by `envsubst` at apply time (see the guide's apply step). Defaults to
+  # the optimized-baseline example; set NAMESPACE for your own deployment.
+  namespace: ${NAMESPACE}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    # Optimized Baseline example; replace with the Deployment to scale.
-    name: optimized-baseline-nvidia-gpu-vllm-decode
+    # Deployment to scale; rendered by envsubst (TARGET_DEPLOYMENT).
+    name: ${TARGET_DEPLOYMENT}
   pollingInterval: 15
   # Applies to scale-to-zero. The generated HPA behavior below controls
   # ordinary scale-down while minReplicaCount is 1 or greater.
@@ -33,9 +35,20 @@ spec:
   advanced:
     horizontalPodAutoscalerConfig:
       name: keda-hpa-optimized-baseline
+      # Startup-time mitigation. Model-server pods take minutes to load a model
+      # and become Ready. While a new replica is still starting it does not serve
+      # traffic, so the demand signal stays elevated (risking scale-up overshoot)
+      # and then collapses once the pod goes Ready (risking scale-down flapping).
+      # Both stabilization windows damp that. Size scaleUp near the target
+      # Deployment's cold-start time so the HPA waits for a starting replica to
+      # relieve demand before adding another; size scaleDown to hold capacity
+      # across brief demand dips. See "Startup-time mitigation" in the README.
       behavior:
         scaleUp:
-          stabilizationWindowSeconds: 0
+          # Was 0. Hold scale-up recommendations for the pod cold-start window so
+          # a still-loading replica is not counted as unmet demand. Lower it if
+          # your model loads quickly and you need faster reaction to bursts.
+          stabilizationWindowSeconds: 300
           policies:
             - type: Percent
               value: 100
@@ -55,5 +68,5 @@ spec:
         # replace when the Prometheus service, protocol, or auth setup differs.
         serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
         query: >-
-          sum(llm_d_epp_request_running{namespace="llm-d-optimized-baseline",service="optimized-baseline-epp",model_name="Qwen/Qwen3-32B"})
+          sum(llm_d_epp_request_running{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
         threshold: "16"
