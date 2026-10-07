@@ -53,7 +53,7 @@ The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/2
 **per pool independently**: within each model it buckets requests into **6 strict lanes** by
 `(classification, tier)`, dispatches them in order, and stamps **`x-llm-d-inference-objective`** via `lane_objectives`.
 
-By defining matching [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router)
+By defining matching [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives)
 resources in the cluster, `llm-d-async` and llm-d Router Flow Control speak the exact same language.
 Requests carry the authoritative objective and tenant identity (`x-llm-d-inference-fairness-id`), allowing
 llm-d Router to enforce multi-tenant fairness and priority band admission:
@@ -73,7 +73,7 @@ is earliest-deadline-first (the deadline is the sorted-set score).
 
 ### Priority Values: Flow Control ON vs. Flow Control OFF
 
-Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
+Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
 
 #### With Flow Control ON (llm-d Router)
 When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowControl]` in `flow-control.yaml`):

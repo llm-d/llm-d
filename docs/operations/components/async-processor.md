@@ -1,4 +1,4 @@
-# llm-d Async Processor Operations Guide
+# Async Processor Operations
 
 This guide covers operational best practices, scaling behavior, and container sizing recommendations for the [Async Processor](https://github.com/llm-d/llm-d-async).
 
@@ -14,7 +14,7 @@ The Async Processor is a **lightweight dispatch agent**, not an inference engine
 Understanding how the processor scales is a prerequisite to sizing it.
 
 - **Workers are the unit of in-flight concurrency.** Each worker pulls one request, dispatches it, and blocks until the Router returns a result (or the deadline expires). The total number of requests the processor can have in flight at once is the sum of its worker counts.
-- **The bottleneck is downstream, not the processor.** Dispatch rate is ultimately limited by inference-server capacity and the [dispatch gates](../architecture/advanced/batch/async-processor.md#dispatch-gates), not by the processor's CPU. Adding workers beyond what the inference pool can absorb only grows queue backlog and memory, not throughput.
+- **The bottleneck is downstream, not the processor.** Dispatch rate is ultimately limited by inference-server capacity and the [dispatch gates](../../architecture/advanced/batch/async-processor.md#dispatch-gates), not by the processor's CPU. Adding workers beyond what the inference pool can absorb only grows queue backlog and memory, not throughput.
 - **Scaling is horizontal and stateless.** The processor is a pull-based consumer. Running N replicas against the same queue multiplies effective concurrency: `total in-flight = replicas × workers-per-replica`. Queue backends distribute messages across all consumers, so no leader election or coordination is required.
 
 ### Concurrency Configuration
@@ -40,7 +40,7 @@ When `workerPools` is set, the per-pool `workers` value overrides the global `co
 
 Concurrency is the single highest-impact knob. The default of `64` is a sane starting point — enough to keep a modest pool busy — but it is **not** automatically right for yours: a single large GPU still has headroom above it, and high-throughput or long-output workloads need considerably more. The sizing rule is Little's Law:
 
-```
+```text
 required_workers ≈ target_throughput (req/s) × avg_request_latency (s)
 ```
 
@@ -109,7 +109,7 @@ Memory is the dimension most likely to require tuning, and it scales predictably
 
 - **Per-request buffering dominates.** Each in-flight worker buffers its request body and the result payload in memory. A rough model:
 
-  ```
+  ```text
   memory ≈ baseline (~128 MiB) + (concurrency × peak payload size × buffering factor ~2)
   ```
 
@@ -169,7 +169,7 @@ ap:
       memory: "2Gi"
 ```
 
-`TARGET_KEY` is the per-queue (`ap.transportConfig.queues[0].igw_base_url`) or per-topic (`ap.transportConfig.topics[0].igw_base_url`) URL key from the [guide](../../guides/batch-serving/asynchronous-processing/README.md#installation); the global `ap.igwBaseURL` is not applied once `ap.transport` is set.
+`TARGET_KEY` is the per-queue (`ap.transportConfig.queues[0].igw_base_url`) or per-topic (`ap.transportConfig.topics[0].igw_base_url`) URL key from the [guide](../../../guides/batch-serving/asynchronous-processing/README.md#installation); the global `ap.igwBaseURL` is not applied once `ap.transport` is set.
 
 ```bash
 helm install llm-d-async \
@@ -180,11 +180,8 @@ helm install llm-d-async \
   -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
 ```
 
----
-
 ## Related
 
-- [Asynchronous Processing Well-Lit Path](../well-lit-paths/workloads/batch-serving/asynchronous-processing.md) — overview and use cases.
-- [Asynchronous Processing Guide](../../guides/batch-serving/asynchronous-processing/README.md) — deployment instructions for Redis and GCP Pub/Sub.
-- [Async Processor Architecture](../architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
+- [Asynchronous Processing guide](../../../guides/batch-serving/asynchronous-processing/README.md) — deploy the Async Processor with Redis or GCP Pub/Sub.
+- [Async Processor Architecture](../../architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
 - [llm-d Router Operations Guide](router.md) — sizing for the Router/EPP and standalone proxy.

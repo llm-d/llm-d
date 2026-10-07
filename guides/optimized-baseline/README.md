@@ -219,7 +219,7 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
 **Apply the Kustomize overlays** for your specific backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere):
 

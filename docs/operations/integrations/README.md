@@ -1,6 +1,6 @@
-# Serve External APIs
+# AI Gateway Integrations
 
-This section covers how to deploy an API gateway or proxy layer on top of **llm-d** to manage traffic across both self-hosted LLM workloads and third-party external model APIs (such as Google Gemini, OpenAI, or Anthropic).
+Deploy an API gateway or proxy layer on top of **llm-d** to manage traffic across both self-hosted LLM workloads and third-party external model APIs (such as Google Gemini, OpenAI, or Anthropic).
 
 By deploying a unified proxy front-ending your LLM infrastructure, you can:
 

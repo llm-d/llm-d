@@ -39,7 +39,7 @@ Before installing WVA, ensure you have:
     > WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../../docs/operations/observability/setup.md), ensure to enable HTTPS/TLS support.
 
     > [!NOTE]
-    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-optional-enable-monitoring).
+    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-observability--troubleshooting).
 
 1. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
 

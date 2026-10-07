@@ -8,7 +8,6 @@ These guides teach single architectural capabilities that you can configure inde
 
 - **[Optimized Baseline](../../../guides/optimized-baseline/README.md)**: Strategies for handling the unique challenges of LLM request scheduling, moving beyond traditional round-robin approaches.
 - **[Predicted Latency-Based Routing](../../../guides/predicted-latency-routing/README.md)**: Using online-trained machine learning models to predict latency and optimize scheduling.
-- **[Multi-Model Routing](multi-model-routing.md)**: Serving multiple LLMs and LoRA adapters behind a single Gateway endpoint using the Inference Payload Processor (IPP).
 
 ### Advanced KV-Cache Management
 
@@ -20,9 +19,3 @@ These guides teach single architectural capabilities that you can configure inde
 
 - **[Prefill/Decode Disaggregation](pd-disaggregation.md)**: Separating prefill (compute-bound) and decode (memory-bandwidth-bound) phases for optimized performance.
 - **[Wide Expert-Parallelism](wide-expert-parallelism.md)**: Scaling KV cache space for massive MoE models like DeepSeek-R1 using DP/EP deployment patterns.
-
-### Traffic Control & Autoscaling
-
-- **[Flow Control](flow-control.md)**: Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
-- **[Workload Autoscaling](workload-autoscaling.md)**: From simple Kubernetes autoscaling supplemented by EPP load metrics to advanced, SLO-aware capacity optimization for heterogeneous pools via the Workload Variant Autoscaler.
-- **[Fast Model Actuation](fast-model-actuation.md)**: Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.

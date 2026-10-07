@@ -4,6 +4,15 @@
 
 ## Overview
 
+### When to Pick This Path
+
+- You have **offline inference workloads** (such as evaluations, embeddings, dataset processing) that don't need real-time responses.
+- You want to **utilize idle accelerator capacity** for batch work while protecting interactive traffic from interference.
+- Your clients expect an **OpenAI-compatible Batch API** (`/v1/batches`, `/v1/files`) for job submission, tracking and management.
+- You need **multi-tenant isolation** — each tenant's jobs, files, and results are separated.
+
+For queue-based asynchronous inference of individual requests, see the complementary [Asynchronous Processing](../asynchronous-processing/README.md) path. For components, data flow, and the processing pipeline, see the [Batch Gateway Architecture](../../../docs/architecture/advanced/batch/batch-gateway.md).
+
 ### Key Features
 
 - **Process large-scale batch jobs**: Process batch jobs with up to 50,000 (configurable) inference requests per job, with progress tracking and job management capabilities.

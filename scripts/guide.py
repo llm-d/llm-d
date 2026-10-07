@@ -1936,12 +1936,26 @@ def _cmd_set_branch(args: argparse.Namespace) -> int:
 
 DEFAULT_MANIFEST = "docs/well-lit-paths/guides.yaml"
 MANIFEST_SECTIONS = ("foundations", "models", "operations")
+# Sections whose guides may be published from a README alone (no guide.yaml):
+# Operations guides are not held to the Foundations/Models guide.yaml rules.
+README_ONLY_SECTIONS = ("operations",)
+
+
+def _manifest_pillar(name: str) -> str | None:
+    """The pillar a section belongs to: ``<pillar>`` itself, or
+    ``<pillar>-<sub-category>`` (e.g. ``operations-scaling``, published under
+    a nested target such as ``operations/scaling``)."""
+    for pillar in MANIFEST_SECTIONS:
+        if name == pillar or re.fullmatch(rf"{pillar}-[a-z0-9][a-z0-9-]*", name):
+            return pillar
+    return None
 
 
 def check_manifest(data: Any, repo_root: Path) -> Findings:
     """Validate the llm-d.ai publish manifest: every guide directory exists
-    with a ``guide.yaml`` and ``README.md``, slugs are unique per target, child
-    pages exist, and titles are present."""
+    with a ``README.md`` (and a ``guide.yaml``, except in Operations
+    sections), slugs are unique across sections, child pages exist, and
+    titles are present."""
     f = Findings()
     if not isinstance(data, dict) or not isinstance(data.get("sections"), dict):
         f.error("manifest: must be a map with `sections:`")
@@ -1949,10 +1963,15 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
     if data.get("version") != 1:
         f.error("manifest: `version: 1` is required")
     seen_dirs: dict[str, str] = {}
+    seen_slugs: dict[str, str] = {}
     for name, section in data["sections"].items():
         p = f"sections.{name}"
-        if name not in MANIFEST_SECTIONS:
-            f.error(f"{p}: unknown section (allowed: {list(MANIFEST_SECTIONS)})")
+        pillar = _manifest_pillar(name)
+        if pillar is None:
+            f.error(
+                f"{p}: unknown section (allowed: {list(MANIFEST_SECTIONS)}, "
+                "or <section>-<sub-category>)"
+            )
         if not isinstance(section, dict):
             f.error(f"{p}: must be a map with `target:` and `guides:`")
             continue
@@ -1963,6 +1982,7 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
         if not isinstance(guides, list):
             f.error(f"{p}.guides: must be a list")
             continue
+        required = (GUIDE_MD,) if pillar in README_ONLY_SECTIONS else (GUIDE_YAML, GUIDE_MD)
         slugs: set[str] = set()
         for i, entry in enumerate(guides):
             gp = f"{p}.guides[{i}]"
@@ -1976,8 +1996,14 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
                 f.error(f"{gp}.slug: required, lowercase letters, digits and dashes")
             elif slug in slugs:
                 f.error(f"{gp}.slug: duplicate slug {slug!r} in {name}")
+            elif slug in seen_slugs:
+                f.error(
+                    f"{gp}.slug: {slug!r} is already used by {seen_slugs[slug]} "
+                    "(slugs must be unique across sections)"
+                )
             else:
                 slugs.add(slug)
+                seen_slugs[slug] = gp
             if not isinstance(d, str) or not d.startswith("guides/"):
                 f.error(f"{gp}.dir: required, a repo-relative path under guides/")
                 continue
@@ -1985,7 +2011,7 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
                 f.error(f"{gp}.dir: {d} is already published by {seen_dirs[d]}")
             seen_dirs[d] = gp
             gdir = repo_root / d
-            for req in (GUIDE_YAML, GUIDE_MD):
+            for req in required:
                 if not (gdir / req).is_file():
                     f.error(f"{gp}.dir: {d}/{req} does not exist")
             if "position" in entry and not isinstance(entry["position"], int):

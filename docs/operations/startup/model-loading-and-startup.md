@@ -2,13 +2,13 @@
 
 Use this guide to optimize model startup time in existing llm-d deployments, covering model-file retrieval, weight loading, compilation, and other engine initialization.
 
-File caches reduce repeated downloads, JIT caches reuse compiled artifacts, and ModelExpress accelerates weight transfer; backend-specific settings are noted below. These caches are separate from [KV-cache management](../architecture/advanced/kv-management/README.md).
+File caches reduce repeated downloads, JIT caches reuse compiled artifacts, and ModelExpress accelerates weight transfer; backend-specific settings are noted below. These caches are separate from [KV-cache management](../../architecture/advanced/kv-management/README.md).
 
 ## Loading from Hugging Face Hub
 
 In `modelserver`, pass a Hub model ID (e.g. `Qwen/Qwen3-0.6B`) to [`vllm serve`](https://docs.vllm.ai/en/latest/configuration/engine_args/). For [SGLang](https://docs.sglang.ai/advanced_features/server_arguments.html), use `--model-path` instead. Both support `--served-model-name` for the API model name. Pin `--revision` to a commit SHA; for vLLM, also pin `--tokenizer-revision` and `--code-revision` when applicable.
 
-Gated or private models require [access and a token](../../helpers/hf-token.md). For public models, remove the `llm-d-hf-token` Secret reference or mark it optional:
+Gated or private models require [access and a token](../../../helpers/hf-token.md). For public models, remove the `llm-d-hf-token` Secret reference or mark it optional:
 
 ```yaml
 - name: HF_TOKEN
@@ -52,16 +52,16 @@ This reuses downloads on one node, but not across nodes or after node replacemen
 
 ### PVC Cache
 
-Use the [model-cache component](../../guides/recipes/modelserver/components/model-cache/kustomization.yaml) to persist and share Hugging Face downloads on an RWX PVC. It patches the first container of each `Deployment`; use a model-server overlay where that container is `modelserver`. Run from the repository root with your guide's `NAMESPACE`, model configuration, and credentials.
+Use the [model-cache component](../../../guides/recipes/modelserver/components/model-cache/kustomization.yaml) to persist and share Hugging Face downloads on an RWX PVC. It patches the first container of each `Deployment`; use a model-server overlay where that container is `modelserver`. Run from the repository root with your guide's `NAMESPACE`, model configuration, and credentials.
 
-1. **Create `model-pvc`.** Adjust the [example](../../guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml) for capacity and an RWX-capable StorageClass:
+1. **Create `model-pvc`.** Adjust the [example](../../../guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml) for capacity and an RWX-capable StorageClass:
 
    ```bash
    kubectl -n "${NAMESPACE}" apply \
      -f guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
    ```
 
-2. **Add the component to your existing overlay.** In its `kustomization.yaml`, add the [model-cache component](../../guides/recipes/modelserver/components/model-cache/kustomization.yaml) to `components`, using the component directory's path relative to your overlay directory. Preserve existing resources, components, and patches. The [AMD CI overlay](../../guides/optimized-baseline/modelserver/amd/vllm/amd-ci/kustomization.yaml) is a reference for component inclusion, not the deployment target for this example.
+2. **Add the component to your existing overlay.** In its `kustomization.yaml`, add the [model-cache component](../../../guides/recipes/modelserver/components/model-cache/kustomization.yaml) to `components`, using the component directory's path relative to your overlay directory. Preserve existing resources, components, and patches. The [AMD CI overlay](../../../guides/optimized-baseline/modelserver/amd/vllm/amd-ci/kustomization.yaml) is a reference for component inclusion, not the deployment target for this example.
 
 3. **Render and verify.** Set `MODEL_SERVER_OVERLAY` to your modified overlay directory:
 
@@ -69,7 +69,7 @@ Use the [model-cache component](../../guides/recipes/modelserver/components/mode
    kubectl kustomize "${MODEL_SERVER_OVERLAY}"
    ```
 
-   Check `modelserver` for `HF_HOME=/model-cache` and a `/model-cache` mount backed by `model-pvc`, without duplicate entries. Keep the remote model ID; follow your guide to deploy, then verify cache write access and [inference](../../guides/optimized-baseline/README.md#verification).
+   Check `modelserver` for `HF_HOME=/model-cache` and a `/model-cache` mount backed by `model-pvc`, without duplicate entries. Keep the remote model ID; follow your guide to deploy, then verify cache write access and [inference](../../../guides/optimized-baseline/README.md#verification).
 
 ### Self-Hosted Registry with MatrixHub
 
@@ -88,21 +88,21 @@ This example assumes anonymous access on a trusted network. Remove the inherited
 
 ### Compilation Cache Reuse
 
-vLLM's compilation cache (JIT cache) stores compiled artifacts, not model weights, to reduce compilation overhead on later starts. Point `VLLM_CACHE_ROOT` to a persistent, writable directory. The Wide EP [cache configuration](../../guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/base/disaggregatedset.yaml) places it under `/var/cache/vllm`; the [CoreWeave overlay](../../guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/coreweave/kustomization.yaml) persists that mount using node-local `hostPath` storage.
+vLLM's compilation cache (JIT cache) stores compiled artifacts, not model weights, to reduce compilation overhead on later starts. Point `VLLM_CACHE_ROOT` to a persistent, writable directory. The Wide EP [cache configuration](../../../guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/base/disaggregatedset.yaml) places it under `/var/cache/vllm`; the [CoreWeave overlay](../../../guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/coreweave/kustomization.yaml) persists that mount using node-local `hostPath` storage.
 
 With an empty cache, the first startup still compiles and populates it; later compatible starts can reuse the results. Configuration or code changes may trigger recompilation, so persistence does not guarantee compilation-free startup. A node-local cache is reusable only on that node. See [vLLM's compilation-cache documentation](https://docs.vllm.ai/en/latest/design/torch_compile/#compilation-cache).
 
 ### ModelExpress
 
-[ModelExpress](../../guides/modelexpress-p2p/README.md) transfers weights from a seed replica over NIXL/RDMA using vLLM's `--load-format=mx`. The seed needs a checkpoint source; use the guide's image and follow its version, CRD, GPU, and fabric requirements.
+[ModelExpress](../../../guides/modelexpress-p2p/README.md) transfers weights from a seed replica over NIXL/RDMA using vLLM's `--load-format=mx`. The seed needs a checkpoint source; use the guide's image and follow its version, CRD, GPU, and fabric requirements.
 
-The guide also covers [checkpoint pre-staging](../../guides/modelexpress-p2p/measuring-storage-paths.md#1-prewarm-the-checkpoint-onto-nfs-once) (ordinary files, not an `HF_HOME` cache), [compilation-cache distribution via P2P transfer or a shared RWX PVC](../../guides/modelexpress-p2p/compile-cache.md), and storage-backed alternatives to P2P using [fastsafetensors on NFS or local NVMe](../../guides/modelexpress-p2p/measuring-storage-paths.md); follow each path's prerequisites.
+The guide also covers [checkpoint pre-staging](../../../guides/modelexpress-p2p/measuring-storage-paths.md#1-prewarm-the-checkpoint-onto-nfs-once) (ordinary files, not an `HF_HOME` cache), [compilation-cache distribution via P2P transfer or a shared RWX PVC](../../../guides/modelexpress-p2p/compile-cache.md), and storage-backed alternatives to P2P using [fastsafetensors on NFS or local NVMe](../../../guides/modelexpress-p2p/measuring-storage-paths.md); follow each path's prerequisites.
 
-For process reuse, see [FMA sleep/wake](../../guides/fast-model-actuation-base/README.md) and follow the guide's prerequisites.
+For process reuse, see [FMA sleep/wake](../../../guides/fast-model-actuation-base/README.md) and follow the guide's prerequisites.
 
 ### Pod Snapshots
 
-[Pod snapshots](../../guides/pod-snapshot/README.md) capture a model server's initialized state so subsequent Pods can restore it instead of repeating model downloads and engine initialization. The linked guide covers single-GPU vLLM on GKE using GKE Pod Snapshots, GKE Sandbox (gVisor), and Google Cloud Storage. Follow the guide's prerequisites and wait for the first snapshot to be ready before scaling out.
+[Pod snapshots](../../../guides/pod-snapshot/README.md) capture a model server's initialized state so subsequent Pods can restore it instead of repeating model downloads and engine initialization. The linked guide covers single-GPU vLLM on GKE using GKE Pod Snapshots, GKE Sandbox (gVisor), and Google Cloud Storage. Follow the guide's prerequisites and wait for the first snapshot to be ready before scaling out.
 
 ## When Hugging Face Access Is Limited
 
@@ -114,9 +114,9 @@ For [vLLM](https://docs.vllm.ai/en/latest/models/supported_models/#modelscope), 
 
 ## Verification and Troubleshooting
 
-Check model-server startup logs to confirm loading completed. After changing the model name or routing, [test a request through llm-d](../../guides/optimized-baseline/README.md#verification).
+Check model-server startup logs to confirm loading completed. After changing the model name or routing, [test a request through llm-d](../../../guides/optimized-baseline/README.md#verification).
 
-Compare cold starts, warm-cache restarts, and scale-outs with fixed model revision, image, hardware, and parallelism. Record weight-loading, compilation, and total time to all target Pods Ready, noting cache state and whether downloads or pre-staging are timed. Keep compilation settings fixed when comparing [storage paths](../../guides/modelexpress-p2p/measuring-storage-paths.md).
+Compare cold starts, warm-cache restarts, and scale-outs with fixed model revision, image, hardware, and parallelism. Record weight-loading, compilation, and total time to all target Pods Ready, noting cache state and whether downloads or pre-staging are timed. Keep compilation settings fixed when comparing [storage paths](../../../guides/modelexpress-p2p/measuring-storage-paths.md).
 
 ### Hugging Face Rate Limiting
 
@@ -141,7 +141,7 @@ For failures specific to the `hf-xet` download backend, try `HF_HUB_DISABLE_XET=
 
 Check Pod events and startup logs to confirm that failed startup probes, rather than a process crash, are causing restarts. If initialization is still progressing, size `startupProbe.failureThreshold * startupProbe.periodSeconds` to cover the measured worst-case cold startup, including downloads, weight loading, compilation, and engine initialization, with a margin.
 
-Preserve the existing probe handler when adjusting these fields. This avoids premature container restarts; it does not accelerate startup. See the [probe configuration guide](readiness-probes.md#recommended-probe-configuration) for a complete example.
+Preserve the existing probe handler when adjusting these fields. This avoids premature container restarts; it does not accelerate startup. See the [probe configuration guide](../lifecycle/readiness-probes.md#recommended-probe-configuration) for a complete example.
 
 ### Cache Storage Errors
 

@@ -23,13 +23,37 @@ We currently offer the following:
 * [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
 * [Wide Expert-Parallelism](./wide-ep/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
 
-## Operational Excellence
+## Operations
 
-* [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
+Fleet operations that layer onto any deployment above. See [Operations](../docs/operations/README.md) for the full section, including the hand-written operations pages.
+
+### Autoscale Inference Pools
+
 * [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
+
+### Speed Up Model Startup
+
 * [Fast Model Actuation](./fast-model-actuation-base/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
 * [Fast Model Actuation + KEDA Autoscaling](./fast-model-actuation-keda/README.md) - saturation-based KEDA autoscaling on top of Fast Model Actuation: scale the GPU-reserving requester Deployment on EPP flow-control metrics, bringing vLLM instances online via hot start (wake a sleeping instance) or warm start (new instance on an existing launcher).
 * [Pod Snapshots](./pod-snapshot/README.md) - checkpoint and restore single-GPU vLLM model servers to eliminate cold-start model download and initialization latencies, currently implemented on GKE with GKE Sandbox (gVisor) and GCS snapshots.
+* [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) - load one model replica from storage and transfer weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.
+
+### Roll Out Updates Safely
+
+* [Rollouts](./rollouts/README.md) - Blue-Green updates with HTTPRoute traffic splitting and LoRA adapter rollouts with `InferenceModelRewrite`.
+
+### Manage Traffic and Tenants
+
+* [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
+* [Multi-Model Routing](./multi-model-routing/README.md) - serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
+
+### Process Batch and Async Requests
+
+* [Batch Serving](./batch-serving/README.md) - Deploy batch and asynchronous inference processing using an OpenAI-compatible Batch API or lightweight queue-based dispatchers with dynamic metric gating.
+
+### Integrations
+
+* [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
 
 ## Workloads
 
@@ -38,8 +62,6 @@ Workload-centric guides — each provides the recommended, cohesive deployment f
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
 * [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
 * [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
-* [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
-* [Batch Serving](./batch-serving/README.md) - Deploy batch and asynchronous inference processing using an OpenAI-compatible Batch API or lightweight queue-based dispatchers with dynamic metric gating.
 
 ## Experimental Guides
 
@@ -125,4 +147,3 @@ CI dry-runs every deployable overlay in this directory. See
 Our supporting guides address common operational challenges with model serving at scale:
 
 * [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
-* [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) loads one model replica from storage and transfers weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.

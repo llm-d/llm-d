@@ -208,7 +208,7 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
 **With `INFRA_PROVIDER=rdma`, check the RDMA resource name** your nodes expose. The overlay requests `rdma/ib`; yours may differ (`rdma/hca`, `nvidia.com/rdma`, ...), in which case edit [`modelserver/gpu/vllm/rdma/patch-rdma.yaml`](modelserver/gpu/vllm/rdma/patch-rdma.yaml) to match:
 

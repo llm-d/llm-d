@@ -128,8 +128,9 @@ For alert rules covering the model-server and EPP signals, see [Alerting](../../
 ## Kueue-Based Replica Rebalancing (Experimental)
 
 When several models share one GPU budget, their HPAs scale independently and
-none of them knows what the others are consuming. The [Kueue-Based Replica
-Rebalancing guide](./kueue-rebalancing/README.md) enforces that shared budget
+none of them knows what the others are consuming. The
+[Kueue-Based Replica Rebalancing guide](./kueue-rebalancing/README.md)
+enforces that shared budget
 with [Kueue](https://kueue.sigs.k8s.io/). Each model gets a `ClusterQueue` with
 a guaranteed GPU floor in a shared cohort, and replica pods are admitted only
 when quota is free — so an idle model's GPUs are lent to a busy one and
