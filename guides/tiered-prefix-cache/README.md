@@ -388,6 +388,23 @@ kubectl get pvc llm-d-kv-cache-storage -n ${NAMESPACE}
 ```
 <!-- guide:verify.tests.pvc end -->
 
+**Check that `MODEL` matches the model the servers load** (the step fails and prints the right value if it does not):
+
+<!-- guide:verify.tests.model start -->
+```bash
+# Fail fast if MODEL does not match the model the servers load (two
+# sub-variants serve a different model; see the MODEL comment above).
+# `false` (not `exit 1`) fails the step without closing an interactive shell.
+POD=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+    -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}' | awk '{print $1}')
+SERVED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${POD}:8000/proxy/v1/models" \
+  | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+echo "model servers serve: ${SERVED}"
+[ "${SERVED}" = "${MODEL}" ] \
+  || { echo "MODEL=${MODEL} does not match the served model: export MODEL=${SERVED}" >&2; false; }
+```
+<!-- guide:verify.tests.model end -->
+
 **Send a completion request from a temporary pod inside the cluster:**
 
 <!-- guide:verify.tests.request start -->
@@ -445,6 +462,25 @@ done
 <!-- guide:verify.tests.offload_metrics[0] end -->
 
 With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total` (and `lmcache:local_cache_usage` for LMCache).
+
+For `CONNECTOR=native` on GPU, AMD, and Intel XPU, **assert that blocks were offloaded**; the step fails if the stored bytes are still zero:
+
+<!-- guide:verify.tests.offload_gate start -->
+```bash
+# only when MODEL_SERVER=vllm and CONNECTOR=native and ACCELERATOR_TYPE=gpu or amd or xpu:
+# Gate: the native OffloadingConnector writes every computed block to
+# the offload tier, so after the burst above the bytes stored, summed
+# over all model server pods, must be above zero.
+STORED=0
+for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+  STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+    | awk -v s="${STORED}" '/^vllm:kv_offload_store_bytes_total/ {s += $NF} END {print s + 0}')
+done
+echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
+awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
+  || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
+```
+<!-- guide:verify.tests.offload_gate end -->
 
 </details>
 <details>
