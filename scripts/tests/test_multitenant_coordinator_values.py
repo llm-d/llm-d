@@ -65,8 +65,8 @@ def test_coordinator_config_routes_to_overlay_queues() -> None:
     assert config["server"]["secure_serving"] is False  # the router and clients speak plain HTTP to it
     # The headers the README documents, pinned so a change in the coordinator's
     # defaults cannot silently turn every request into unclassified passthrough.
-    assert params["mode_header"] == "X-AP-Mode"
-    assert params["tenant_header"] == "X-Team"
+    assert params["mode_header"] == "x-llm-d-async-mode"
+    assert params["tenant_header"] == "x-llm-d-tenant"
 
 
 def test_coordinator_manifest_has_one_image_placeholder() -> None:

@@ -4,12 +4,12 @@
 # llm-d-coordinator-config ConfigMap. Parameters:
 # https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md
 #
-# Tenants are selected with the X-Team header:
-#   * realtime -> no queue: with X-AP-Mode: passthrough the request is stamped
+# Tenants are selected with the x-llm-d-tenant header:
+#   * realtime -> no queue: with x-llm-d-async-mode: passthrough the request is stamped
 #     reserved-interactive (priority 100) and forwarded live to the router.
 #   * standard -> queue coord-standard, tier async.
 #   * batch    -> queue coord-batch, tier batch (the default).
-# With X-AP-Mode: enqueue or wait a request is written to its queue; llm-d-async
+# With x-llm-d-async-mode: enqueue or wait a request is written to its queue; llm-d-async
 # dispatches it to the router like the guide's own queues, with the
 # tier-priority merge policy stamping reserved or overflow objectives. The quota
 # prefix and attribute match the guide's redis-quota gates, so the coordinator
@@ -40,13 +40,12 @@ pipeline:
     - type: async-broker
       params:
         redis_url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
-        # The request headers this guide documents, set explicitly: the
-        # coordinator's defaults changed to x-llm-d-async-mode and
-        # x-llm-d-tenant (llm-d/llm-d-router#3200), and a request without a
+        # The request headers this guide documents (the coordinator's defaults
+        # since llm-d/llm-d-router#3200), set explicitly: a request without a
         # recognized mode header is forwarded untouched, unqueued and without
-        # an objective.
-        mode_header: X-AP-Mode
-        tenant_header: X-Team
+        # an objective, so a change of default must not pass silently.
+        mode_header: x-llm-d-async-mode
+        tenant_header: x-llm-d-tenant
         routes:
           - tenant: realtime
             tier: interactive

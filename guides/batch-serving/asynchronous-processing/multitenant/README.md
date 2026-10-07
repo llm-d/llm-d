@@ -366,11 +366,10 @@ Workload Identity, follow the printed binding to map the GSA onto the chart's `l
 Publishing (below) writes requests straight into Redis. To accept requests over HTTP instead, deploy the
 llm-d-router coordinator with its
 [`async-broker` step](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md)
-in front of the router. Each request picks a serving mode with the `X-AP-Mode` header and a tenant with
-`X-Team` (the guide's coordinator config sets both names explicitly; the coordinator's own defaults are
-`x-llm-d-async-mode` and `x-llm-d-tenant`):
+in front of the router. Each request picks a serving mode with the `x-llm-d-async-mode` header and a tenant
+with `x-llm-d-tenant`:
 
-| `X-AP-Mode` | Behaviour |
+| `x-llm-d-async-mode` | Behaviour |
 | :-- | :-- |
 | `passthrough` | Forwarded live to the router, stamped with the tenant's objective (streaming works as usual) |
 | `wait` | Written to an llm-d-async queue; the connection is held until the result is back |
@@ -410,17 +409,17 @@ kubectl -n ${NAMESPACE} port-forward svc/llm-d-coordinator 8080:8080 &
 
 # Live, at interactive priority
 curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
-  -H 'X-AP-Mode: passthrough' -H 'X-Team: realtime' \
+  -H 'x-llm-d-async-mode: passthrough' -H 'x-llm-d-tenant: realtime' \
   -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
 
 # Queued on coord-batch; the response arrives once llm-d-async has dispatched it
 curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
-  -H 'X-AP-Mode: wait' -H 'X-Team: batch' \
+  -H 'x-llm-d-async-mode: wait' -H 'x-llm-d-tenant: batch' \
   -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
 ```
 
 A client that disconnects while its `wait` request is still queued cancels it before dispatch. The coordinator
-trusts `X-Team` as sent, like the rest of the llm-d serving path, so put it behind your own authentication when
+trusts `x-llm-d-tenant` as sent, like the rest of the llm-d serving path, so put it behind your own authentication when
 tenants matter.
 
 ## Publishing requests
