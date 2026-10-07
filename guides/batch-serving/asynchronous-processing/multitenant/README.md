@@ -229,7 +229,7 @@ Instead of maintaining its own model server manifests, this guide renders the
 [optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay
 (`guides/optimized-baseline/modelserver/gpu/vllm/`) as the [flow-control](../../../flow-control/README.md) guide does:
 `sed` swaps in this guide's `llm-d.ai/guide` label, which the router selects on. The model (`Qwen/Qwen3-32B`, two GPUs
-per replica), image, probes and volumes follow that guide. The one change is a single replica instead of eight: the
+per replica), image, probes and volumes follow that guide. The one change is a single replica instead of optimized-baseline's two: the
 router's `maxConcurrency` and the llm-d-async worker pool below are sized so that async work saturates one replica.
 
 <details>
@@ -765,7 +765,7 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 - **Saturation gate.** The Scenario C overlays use `prometheus-query` over `vllm:num_requests_running`. The
   `prometheus-saturation` gate (Scenario D) instead expects the EPP metric
   `llm_d_epp_flow_control_pool_saturation`.
-- **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which a model counts as
+- **Saturation divisor vs. pool size.** `SAT_CAP` is the concurrency at which the pool counts as
   saturated, and the gate closes only when the budget hits 0 — i.e. only once `SAT_CAP` requests are
   running. Keep it **below** that pool's `workers`, or async load alone can never close the gate; see
   [Scenario C](#scenario-c--priority-under-saturation).
