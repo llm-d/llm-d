@@ -17,7 +17,7 @@ Handling termination gracefully spans **two layers**:
 This guide covers graceful shutdown for **general (non-disaggregated) serving**.
 For prefill/decode disaggregation, where in-flight requests span multiple servers
 and KV caches are held across instances, see
-[Disaggregated Serving Operations (vLLM)](disaggregation/vllm.md).
+[Disaggregated Serving Operations (vLLM)](disaggregation-vllm.md).
 
 ## The Kubernetes Pod Termination Sequence
 
@@ -72,7 +72,7 @@ finishes on its own.
 
 For the disaggregated case — where a cancelled request may have KV blocks held on
 a separate prefill instance — see
-[Request Cancellation](disaggregation/vllm.md#request-cancellation).
+[Request Cancellation](disaggregation-vllm.md#request-cancellation).
 
 ## Draining the Routing Layer (EPP)
 
@@ -87,7 +87,7 @@ These retryable semantics only apply while the EPP is still reachable over its
 by the `InferencePool`'s
 [`failureMode`](../../architecture/core/inferencepool.md). For high-availability
 Router configurations and `failOpen` behavior during leader teardown, see
-[Router Operations](router.md).
+[Router Operations](../traffic/router.md).
 
 For the full set of flow-control outcome codes, see
 [Flow Control](../../architecture/core/router/epp/flow-control.md).
@@ -173,8 +173,8 @@ Expected behavior with `--shutdown-timeout` set:
 
 ## Additional Resources
 
-- [Disaggregated Serving Operations (vLLM)](disaggregation/vllm.md)
+- [Disaggregated Serving Operations (vLLM)](disaggregation-vllm.md)
 - [Readiness Probes](readiness-probes.md)
-- [Router Operations](router.md)
+- [Router Operations](../traffic/router.md)
 - [Flow Control](../../architecture/core/router/epp/flow-control.md)
 - [Kubernetes Pod Termination](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination)

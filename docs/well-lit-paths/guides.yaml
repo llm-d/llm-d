@@ -37,17 +37,20 @@ sections:
   models:
     target: well-lit-paths/models
     guides: []
-  # Operations: one section per sidebar sub-category of docs/operations/
-  # (operations-<sub>, target operations/<sub>; the category labels live in
-  # docs/menu-config.json). Positions interleave with the regular docs pages
-  # of the same category. Operations guides may be README-only (no
-  # guide.yaml).
-  operations-scaling:
-    target: operations/scaling
+  # Operations: the sidebar is at most two levels deep (Operations > category
+  # > page). Two guides are categories themselves (section `operations`,
+  # target `operations`) and keep their child pages; the other sections map
+  # to the docs/operations/<sub>/ categories (labels in docs/menu-config.json)
+  # and publish README-only leaf pages whose positions interleave with the
+  # regular docs pages of the same category. Files of these guides that are
+  # not listed are not published; links to them resolve to GitHub.
+  # Operations guides may be README-only (no guide.yaml).
+  operations:
+    target: operations
     guides:
       - dir: guides/workload-autoscaling
-        slug: workload-autoscaling
-        title: Autoscale your Inference Pool
+        slug: autoscaling
+        title: Autoscaling
         position: 1
         pages:
           - from: keda-epp/README.md
@@ -71,72 +74,11 @@ sections:
           - from: promadapter.md
             to: prometheus-adapter
             title: Prometheus Adapter (Deprecated)
-      - dir: guides/fast-model-actuation-base
-        slug: fast-model-actuation
-        title: Speed Up Scale-Up with Fast Model Actuation
-        position: 2
-      - dir: guides/fast-model-actuation-keda
-        slug: fast-model-actuation-keda
-        title: Autoscale Fast Model Actuation with KEDA
-        position: 3
-        pages:
-          - from: benchmark-results/qwen3-14b-h100/README.md
-            to: benchmark-qwen3-14b-h100
-            title: "Benchmark: Qwen3-14B on H100"
-          - from: benchmark-results/qwen3-32b-h100/README.md
-            to: benchmark-qwen3-32b-h100
-            title: "Benchmark: Qwen3-32B on H100"
-      - dir: guides/pod-snapshot
-        slug: pod-snapshot
-        title: Restore Model Servers from Pod Snapshots
-        position: 4
-        pages:
-          - from: benchmark-results/vllm-qwen3-32b-h100.md
-            to: benchmark-vllm-qwen3-32b-h100
-            title: "Benchmark: Qwen3-32B on vLLM (1×H100)"
-      - dir: guides/modelexpress-p2p
-        slug: modelexpress-p2p
-        title: Transfer Weights GPU-to-GPU with ModelExpress
-        position: 5
-        pages:
-          - from: compile-cache.md
-            to: compile-cache
-            title: Reuse JIT Compile Caches
-          - from: security.md
-            to: security
-            title: Lock Down the Metadata Broker
-          - from: measuring-storage-paths.md
-            to: measuring-storage-paths
-            title: Measure Storage-Backed Loading Paths
-          - from: benchmark-results/h200-ib-gpt-oss-120b.md
-            to: benchmark-h200-ib-gpt-oss-120b
-            title: "Observations: gpt-oss-120b on H200 + InfiniBand"
-          - from: benchmark-results/gke-a3u-roce-gpt-oss-120b.md
-            to: benchmark-gke-a3u-roce-gpt-oss-120b
-            title: "Observations: gpt-oss-120b on GKE A3 Ultra"
-          - from: benchmark-results/coreweave-h200-llama-3.3-70b.md
-            to: benchmark-coreweave-h200-llama-3-3-70b
-            title: "Observations: Llama-3.3-70B on CoreWeave H200"
-      # position 6: docs/operations/scaling/model-loading-and-startup.md
-  operations-traffic:
-    target: operations/traffic
-    guides:
-      - dir: guides/flow-control
-        slug: flow-control
-        title: Apply Flow Control and Fairness
-        position: 1
-        pages:
-          - from: tuning.md
-            to: tuning
-            title: "Production Tuning: maxConcurrency"
-      - dir: guides/multi-model-routing
-        slug: multi-model-routing
-        title: Multi-Model Routing
-        position: 2
+      # position 2: operations/startup, 3: operations/traffic (menu-config)
       - dir: guides/batch-serving
         slug: batch-serving
-        title: Serve Batch Workloads
-        position: 3
+        title: Batch & Async Processing
+        position: 4
         pages:
           - from: batch-gateway/README.md
             to: batch-gateway
@@ -153,34 +95,53 @@ sections:
           - from: asynchronous-processing/multitenant/README.md
             to: async-multitenant
             title: "Async Processing: Multi-Tenant"
+      # positions 5-7: operations/lifecycle, observability, integrations
+  operations-startup:
+    target: operations/startup
+    guides:
+      # position 1: docs/operations/startup/model-loading-and-startup.md
+      - dir: guides/fast-model-actuation-base
+        slug: fast-model-actuation
+        title: Fast Model Actuation
+        position: 2
+      - dir: guides/fast-model-actuation-keda
+        slug: fast-model-actuation-keda
+        title: FMA with KEDA
+        position: 3
+      - dir: guides/pod-snapshot
+        slug: pod-snapshot
+        title: Pod Snapshots
+        position: 4
+      - dir: guides/modelexpress-p2p
+        slug: modelexpress-p2p
+        title: ModelExpress P2P Weight Transfer
+        position: 5
+  operations-traffic:
+    target: operations/traffic
+    guides:
+      - dir: guides/flow-control
+        slug: flow-control
+        title: Flow Control & Fairness
+        position: 1
+      - dir: guides/multi-model-routing
+        slug: multi-model-routing
+        title: Multi-Model & LoRA Routing
+        position: 2
+      # position 3: docs/operations/traffic/router.md
   operations-lifecycle:
     target: operations/lifecycle
     guides:
       - dir: guides/rollouts
         slug: rollouts
-        title: Rollouts
+        title: Blue-Green & LoRA Adapter Rollouts
         position: 1
-        pages:
-          - from: blue-green-update.md
-            to: blue-green-update
-            title: Blue-Green Update
-          - from: adapter-rollout.md
-            to: adapter-rollout
-            title: LoRA Adapter Rollout
-      # positions 2-5: graceful-shutdown, readiness-probes, disaggregation/,
-      # router (docs/operations/lifecycle/)
+      # positions 2-5: graceful-shutdown, readiness-probes,
+      # disaggregation-vllm, disaggregation-sglang (docs/operations/lifecycle/)
   operations-integrations:
     target: operations/integrations
     guides:
-      # position 1: docs/operations/integrations/serve-external-apis/
+      # positions 1-2: litellm, kong (docs/operations/integrations/)
       - dir: guides/rl
         slug: rl
-        title: Optimize RL Rollouts with llm-d
-        position: 2
-        pages:
-          - from: llm-d-verl-integration.md
-            to: llm-d-verl-integration
-            title: llm-d verl Integration (EPP Routing)
-          - from: py-scheduler-verl-integration.md
-            to: py-scheduler-verl-integration
-            title: verl Integration via py-inference-scheduler
+        title: RL Rollouts
+        position: 3

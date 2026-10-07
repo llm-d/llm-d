@@ -4,15 +4,25 @@ Operational Excellence guidelines focus on overarching Day-2 site reliability en
 
 While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, and integrations. These capabilities are model-agnostic and layer onto any deployment.
 
-## Scaling & Fast Model Actuation
+## Autoscaling
 
-### [Workload Autoscaling](../../guides/workload-autoscaling/README.md)
+### [Autoscaling](../../guides/workload-autoscaling/README.md)
 
 Autoscale the inference pool on proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight requests, token backlog, KV-cache pressure, or predicted latency — using KEDA and EPP metrics.
 
+## Startup & Fast Actuation
+
+### [Model Loading & Startup](startup/model-loading-and-startup.md)
+
+Model sources, persistent caches, and startup optimization options for llm-d deployments.
+
 ### [Fast Model Actuation](../../guides/fast-model-actuation-base/README.md)
 
-Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool. [Fast Model Actuation + KEDA](../../guides/fast-model-actuation-keda/README.md) adds scale-from-zero autoscaling on EPP flow-control metrics.
+Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
+
+### [FMA with KEDA](../../guides/fast-model-actuation-keda/README.md)
+
+Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
 
 ### [Pod Snapshots](../../guides/pod-snapshot/README.md)
 
@@ -22,45 +32,43 @@ Checkpoint and restore single-GPU vLLM model servers to eliminate model download
 
 Load one replica from storage and transfer weights to peer replicas over GPU-to-GPU NIXL/RDMA for faster cold scale-outs.
 
-### [Model Loading and Startup Acceleration](scaling/model-loading-and-startup.md)
+## Traffic Management
 
-Model sources, persistent caches, and startup optimization options for llm-d deployments.
+### [Flow Control & Fairness](../../guides/flow-control/README.md)
 
-## Traffic, Multi-Tenancy & Batch
+Intelligent request queuing in the EPP: priority bands, per-tenant fairness, and saturation detection for multi-tenant deployments and traffic spikes. [Production Tuning](../../guides/flow-control/tuning.md) covers sizing `maxConcurrency`.
 
-### [Flow Control](../../guides/flow-control/README.md)
-
-Intelligent request queuing in the EPP: priority bands, per-tenant fairness, and saturation detection for multi-tenant deployments and traffic spikes.
-
-### [Multi-Model Routing](../../guides/multi-model-routing/README.md)
+### [Multi-Model & LoRA Routing](../../guides/multi-model-routing/README.md)
 
 Serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
 
-### [Batch Serving](../../guides/batch-serving/README.md)
+### [Router Operations](traffic/router.md)
+
+Operational best practices, high availability scaling modes, standalone proxy architectures, and container resource sizing for llm-d Router deployments.
+
+## Batch & Async Processing
+
+### [Batch & Async Processing](../../guides/batch-serving/README.md)
 
 Process offline and latency-insensitive work in front of an existing deployment: the OpenAI-compatible [Batch Gateway](../../guides/batch-serving/batch-gateway/README.md) (`/v1/batches`, `/v1/files`) and queue-based [Asynchronous Processing](../../guides/batch-serving/asynchronous-processing/README.md) with metric-gated dispatch, including Async Processor sizing and scaling.
 
 ## Rollouts & Lifecycle
 
-### [Zero-Downtime Rollouts](../../guides/rollouts/README.md)
+### [Blue-Green & LoRA Adapter Rollouts](../../guides/rollouts/README.md)
 
-Production rollout strategies including Blue-Green updates and live LoRA adapter hot-swapping without dropping active client traffic.
+Production rollout strategies including [Blue-Green updates](../../guides/rollouts/blue-green-update.md) and [live LoRA adapter hot-swapping](../../guides/rollouts/adapter-rollout.md) without dropping active client traffic.
 
-### [Graceful Shutdown & Request Draining](lifecycle/graceful-shutdown.md)
+### [Graceful Shutdown & Draining](lifecycle/graceful-shutdown.md)
 
 Draining in-flight requests during scale-down, rolling updates, and node drains for general serving: the Kubernetes termination sequence, vLLM `--shutdown-timeout`, request cancellation on client disconnect, and EPP flow-control drain semantics.
 
-### [Model-Aware Readiness Probes](lifecycle/readiness-probes.md)
+### [Readiness Probes](lifecycle/readiness-probes.md)
 
 Kubernetes HTTP probe configurations using vLLM API endpoints to ensure pods are only marked Ready when models are fully loaded.
 
-### [Disaggregated Serving Operations](lifecycle/disaggregation/README.md)
+### Disaggregation Day-2: [vLLM](lifecycle/disaggregation-vllm.md) and [SGLang](lifecycle/disaggregation-sglang.md)
 
-Operational considerations and engine-specific guides (vLLM and SGLang) for dynamic connections, request cancellation, fault tolerance, and safe rollouts.
-
-### [Router Operations](lifecycle/router.md)
-
-Operational best practices, high availability scaling modes, standalone proxy architectures, and container resource sizing for llm-d Router deployments.
+Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/advanced/disaggregation/README.md).
 
 ## Observability
 
@@ -68,12 +76,12 @@ Operational best practices, high availability scaling modes, standalone proxy ar
 
 End-to-end telemetry setup, OpenTelemetry tracing, standard Prometheus metrics, PromQL dashboards, and monitoring architectures.
 
-## External APIs & Framework Integrations
+## Integrations
 
-### [Serve External APIs](integrations/serve-external-apis/README.md)
+### Serve External APIs: [LiteLLM](integrations/litellm.md) and [Kong AI Gateway](integrations/kong.md)
 
-Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs.
+Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs. See [Integrations](integrations/README.md) for the architecture and integration modes.
 
-### [Reinforcement Learning](../../guides/rl/README.md)
+### [RL Rollouts](../../guides/rl/README.md)
 
 Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm (verl integrations).

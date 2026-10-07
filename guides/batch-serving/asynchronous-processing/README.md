@@ -298,4 +298,4 @@ helm install llm-d-async \
 ### Related
 
 - [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
-- [llm-d Router Operations Guide](../../../docs/operations/lifecycle/router.md) — sizing for the Router/EPP and standalone proxy.
+- [llm-d Router Operations Guide](../../../docs/operations/traffic/router.md) — sizing for the Router/EPP and standalone proxy.
