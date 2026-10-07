@@ -13,6 +13,11 @@ spec:
   # and anything reading Deployment conditions calls the rollout degraded.
   progressDeadlineSeconds: 7215
   template:
+    metadata:
+      annotations:
+        # The pool's targetPorts (router/npu.rbln.values.yaml) are 8000-8003 for
+        # decode's four DP ranks; pipeline-parallel prefill serves 8000 alone.
+        llm-d.ai/active-ports: "8000"
     spec:
       # The two roles want separate nodes when the cluster has them, and still
       # co-locate on a single-node cluster because this is only a preference.
@@ -40,7 +45,6 @@ spec:
             - "--pipeline-parallel-size=4"
             - "--block-size=4096"
             - "--max-num-batched-tokens=512"
-            - "--enable-prefix-caching"
             - "--prefix-caching-hash-algo=sha256_cbor"
             - "--safetensors-load-strategy=prefetch"
             - "--trust-remote-code"
@@ -48,8 +52,8 @@ spec:
             - "--tool-call-parser=minimax_m2"
             - '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
             # A pp4 rank holds one stage rather than all layers, so KV per block is a
-            # quarter of dp4's. 200 = max-num-seqs x the floor of 50.
-            - "--num-gpu-blocks-override=200"
+            # quarter of dp4's. 201 = max-num-seqs x 50, plus the null block.
+            - "--num-gpu-blocks-override=201"
             - "--max-num-seqs=4"
             - '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
           env:

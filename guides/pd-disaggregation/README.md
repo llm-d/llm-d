@@ -64,14 +64,15 @@ This guide includes configuration for the following accelerators:
 #### Rebellions NPU Configuration
 
 The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMaxAI/MiniMax-M2.7)
-with heterogeneous parallelism across the two roles:
+with heterogeneous parallelism across the two roles. Prefill uses pipeline parallelism because it
+measured faster per prefill chunk than data parallelism on the same four NPUs.
 
 | Parameter | Prefill | Decode |
 | --- | --- | --- |
 | Parallelism | Pipeline, 4 stages | Data, 4 ranks, expert parallel on |
 | NPUs | 4 | 4 |
 | API servers per pod | 1 (port 8000) | 4 (ports 8200-8203, fronted by the sidecar on 8000-8003) |
-| `--num-gpu-blocks-override` | 200 | 50 |
+| `--num-gpu-blocks-override` | 201 | 51 |
 | `--max-num-seqs` | 4 | 4 |
 
 Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler.
@@ -86,14 +87,6 @@ there is no expert group to split.
 Because the decode role runs one API server per data-parallel rank, the EPP must be given every
 rank port. Layer [`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own
 values file when installing the router.
-
-**This path needs an endpoint picker that skips endpoints it cannot reach.** Those rank ports
-apply to the whole pool, which selects both roles, so the EPP can offer a prefill endpoint on a
-port a pipeline-parallel prefill never opens. The picker the router chart installs by default
-probes such an endpoint and leaves it out, and 40 requests through it all returned 200. Pinning
-the chart to `v0.10.0` instead pins the picker to the same release, and 30 of those 40 came back
-502 — the decode sidecar reporting a refused connection to the prefill. Earlier releases are
-untested here. Take the chart default unless you have measured otherwise.
 
 **NUMA alignment.** Each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over
 that VF. The claim constrains all five devices to one NUMA node on

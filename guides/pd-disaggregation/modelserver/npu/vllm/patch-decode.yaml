@@ -70,16 +70,15 @@ spec:
             - "--enable-expert-parallel"
             - "--block-size=4096"
             - "--max-num-batched-tokens=512"
-            - "--enable-prefix-caching"
             - "--prefix-caching-hash-algo=sha256_cbor"
             - "--safetensors-load-strategy=prefetch"
             - "--trust-remote-code"
             - "--enable-auto-tool-choice"
             - "--tool-call-parser=minimax_m2"
             - '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
-            # A dp4 rank holds every layer, so its KV per block is four times a pp4
-            # rank's. 50 = max-num-seqs x one full context.
-            - "--num-gpu-blocks-override=50"
+            # One max-length request is 204800 / 4096 = 50 blocks; the block pool
+            # also reserves a null block, hence 51.
+            - "--num-gpu-blocks-override=51"
             - "--max-num-seqs=4"
             - '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
           ports:
