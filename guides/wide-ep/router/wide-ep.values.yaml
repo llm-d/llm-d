@@ -12,7 +12,7 @@ router:
     pluginsConfigFile: "wide-ep-config.yaml"
     pluginsCustomConfig:
       wide-ep-config.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         # Pin each request to a single DisaggregatedSet revision during

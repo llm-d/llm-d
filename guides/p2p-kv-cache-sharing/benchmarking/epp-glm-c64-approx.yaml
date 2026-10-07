@@ -1,5 +1,5 @@
 # C64 complete-policy baseline: calibrated approximate routing without P2P.
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
   - type: always-disagg-pd-decider

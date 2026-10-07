@@ -20,7 +20,7 @@ router:
     pluginsConfigFile: "flow-control-plugins.yaml"
     pluginsCustomConfig:
       flow-control-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         featureGates:
         - flowControl

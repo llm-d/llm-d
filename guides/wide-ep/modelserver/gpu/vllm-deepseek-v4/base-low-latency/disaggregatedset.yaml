@@ -279,7 +279,7 @@ spec:
                   - --port=8000
                   - --kv-connector=nixlv2
                   - --zap-log-level=1
-                  - --secure-proxy=false
+                  - --secure-serving=false
                   - --enable-prefiller-sampling
                 imagePullPolicy: Always
                 ports:

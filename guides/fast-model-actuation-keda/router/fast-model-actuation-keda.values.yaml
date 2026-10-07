@@ -15,7 +15,7 @@ router:
     pluginsConfigFile: "fast-model-actuation-keda-plugins.yaml"
     pluginsCustomConfig:
       fast-model-actuation-keda-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         featureGates:
           - flowControl
