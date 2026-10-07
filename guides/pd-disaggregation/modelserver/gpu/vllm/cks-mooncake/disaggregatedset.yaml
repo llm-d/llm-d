@@ -135,9 +135,9 @@ spec:
                   imagePullPolicy: Always
                   args:
                     - --port=8000
-                    - --connector=mooncake
+                    - --kv-connector=mooncake
                     - --zap-log-level=1
-                    - --secure-proxy=false
+                    - --secure-serving=false
                   ports:
                     - containerPort: 8000
                       name: sidecar

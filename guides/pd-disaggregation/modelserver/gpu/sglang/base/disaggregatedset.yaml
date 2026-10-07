@@ -149,7 +149,7 @@ spec:
                     - --port=8000
                     - --kv-connector=sglang
                     - --zap-log-level=1
-                    - --secure-proxy=false
+                    - --secure-serving=false
                   ports:
                     - containerPort: 8000
                       name: sidecar
