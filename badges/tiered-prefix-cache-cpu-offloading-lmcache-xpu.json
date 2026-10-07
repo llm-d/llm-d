@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM XPU",
-  "message": "passing",
-  "color": "brightgreen"
+  "message": "prereqs-error",
+  "color": "black"
 }
