@@ -1,4 +1,4 @@
-# Single DisaggregatedSet managing the prefill and decode roles. Requires LWS v0.11.0+ with the
+# Single DisaggregatedSet managing the prefill and decode roles. Requires LWS v0.11.1+ with the
 # DisaggregatedSet CRD.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
