@@ -117,11 +117,11 @@ Async Processor metrics are registered under the `llm_d_async` subsystem, so the
 | ------ | -------------------------------- | ------------- |
 | Broker backlog (`llm_d_async_async_broker_backlog`) | Work waiting in Redis or Pub/Sub that the processor has not pulled yet. A zero is only trustworthy when `llm_d_async_async_broker_backlog_source_available` is `1` | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
 | In-process queue (`llm_d_async_async_queue_depth`) and queue time (`llm_d_async_async_queue_residence_time_millis`) | Requests already pulled from the broker and waiting for a worker. This is the delay the async layer itself adds | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
-| Worker utilization (`llm_d_async_async_inflight_requests` / `llm_d_async_async_pool_worker_limit`) | Near 1.0 means the worker limit, not the model servers, caps throughput | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| Worker utilization (`sum by (pool_name) (llm_d_async_async_inflight_requests) / llm_d_async_async_pool_worker_limit`) | Near 1.0 means the worker limit, not the model servers, caps throughput. Inflight requests are per-queue, so aggregate to pool first; the limit is already per-pool | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
 | Dispatch budget (`llm_d_async_async_dispatch_budget`) and gate decisions (`llm_d_async_async_gate_decisions_total` by `reason`) | The gate deliberately holds work back when the pool is busy. A budget of 0 with `gate_closed` decisions is the gate doing its job; `error` decisions are not | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
 | Gate input (`llm_d_async_async_gate_metric_value` vs `llm_d_async_async_gate_metric_threshold`, with `llm_d_async_async_gate_metric_source_available`) | What a metric-based gate actually read, such as `llm_d_epp_flow_control_pool_saturation` or `vllm:num_requests_running`. When the source is unavailable the gate falls back to its configured default | [Asynchronous processing guide](./asynchronous-processing/README.md) |
 | Inference time (`llm_d_async_async_inference_latency_time_millis`) | Time spent in the router and model servers, measured per attempt. Read it against queue time to see which side the delay is on | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
-| Outcomes (`llm_d_async_async_successful_requests_total`, `_failed_requests_total`, `_shedded_requests_total`, `_exceeded_deadline_requests_total`, `_request_retries_total`) | Shed requests were refused with 429 or a capacity error; deadline-exceeded requests aged out before finishing | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| Outcomes (`llm_d_async_async_successful_requests_total`, `_failed_requests_total`, `_shedded_requests_total`, `_exceeded_deadline_requests_total`, `_request_retries_total`) | Shed requests were refused with HTTP 429; deadline-exceeded requests aged out before finishing. 5xx errors from the router or model servers drive retries and failures instead of shedding | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
 
 #### Common failure modes
 
@@ -130,7 +130,7 @@ Async Processor metrics are registered under the `llm_d_async` subsystem, so the
 - **High queue time, normal inference time**: requests wait inside the processor, not in the model servers. Check worker utilization and the gate before scaling the pool.
 - **Rising inference time with the gate open**: the model servers are the slow side. Diagnose them with the router and vLLM signals in the [metric reference](../../docs/operations/observability/metrics.md).
 - **Deadline-exceeded requests climbing**: the drain rate cannot meet the requested deadlines. On the `redis-sortedset` broker, `llm_d_async_async_deadline_proximity_millis` shows how close queued items are to their deadlines before they expire. It is a per-poll snapshot, so read it with `histogram_quantile` rather than `rate()`.
-- **Shed requests climbing**: the router or model servers are refusing requests with 429 or capacity errors. Retries (`_request_retries_total`) will rise alongside them.
+- **Shed requests climbing**: the router or model servers are refusing requests with HTTP 429 (over capacity). 5xx errors instead drive retries and failures: watch `_request_retries_total` and `_failed_requests_total`.
 
 ### Batch Gateway
 
@@ -149,7 +149,7 @@ Batch Gateway metric names carry no prefix (`jobs_processed_total`, `active_work
 
 #### Common failure modes
 
-- **Queue wait rising with workers saturated**: the worker pool is too small for the submission rate (`BatchGatewayWorkersSaturated`, `BatchGatewayHighQueueWait`). Raise `NumWorkers` or add processor replicas, as long as the inference pool has headroom.
+- **Queue wait rising with workers saturated**: the worker pool is too small for the submission rate (`BatchGatewayWorkersSaturated`, `BatchGatewayHighQueueWait`). Raise `num_workers` (processor config) / `processor.config.numWorkers` (Helm chart) or add processor replicas, as long as the inference pool has headroom.
 - **Queue wait rising with workers not saturated and the AIMD limit falling**: the backend is pushing back. `batch_processor_aimd_decreases_total` by `signal` shows whether it is 429s (capacity) or 5xx (errors). Adding workers will not help; the fix is on the inference side.
 - **Expired jobs** (`BatchGatewayExpiredJobsDetected`): jobs aged out before execution. Treat it as a capacity or completion-window problem, not a job failure.
 - **Failed jobs** (`BatchGatewayHighJobFailureRate`): check `request_errors_by_model_total` to see whether one model accounts for them, and `file_storage_operations_total{status="exhausted"}` for jobs that failed on input or output storage.
