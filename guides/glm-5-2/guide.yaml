@@ -29,8 +29,10 @@ env:
 
     ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
     MODEL_SERVER: {default: vllm, values: [vllm]}
-    # default = p3w2d1w2 + tiered KV offloading; the others are the raw
-    # topologies (see Scaling and Alternative Topologies)
+    ROUTING: {default: approximate, values: [approximate, precise]}
+    # default = p3w2d1w2 + tiered KV offloading; ROUTING=precise sets
+    # p2w1d1w1-precise; the others are the raw topologies (see Scaling and
+    # Alternative Topologies)
     DEPLOYMENT:
       default: default
       values:
@@ -39,6 +41,7 @@ env:
         - p1w1d1w2
         - p1w2d1w2
         - p2w1d1w1
+        - p2w1d1w1-precise
         - p2w1d1w2
         - p2w2d1w2
         - p2w2d2w2
@@ -72,12 +75,28 @@ prerequisites:
 
 deploy:
   router_values:
-    - run: |
-        # Paths to values files: the wide-EP router values, then the GLM-5.2
-        # dual GPU+CPU prefix-cache scoring overrides on top
-        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
-        export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+    approximate:
+      - when: {ROUTING: [approximate]}
+        run: |
+          # Paths to values files: the wide-EP router values, then the GLM-5.2
+          # dual GPU+CPU prefix-cache scoring overrides on top
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+          export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+    precise:
+      - when: {ROUTING: [precise]}
+        # ROUTING is not a variant dimension (ACCELERATOR_TYPE/MODEL_SERVER), so
+        # guide.py does not wrap it in cicd:skip; README-parsing nightlies run
+        # the default approximate mode only.
+        skip_in: [ci]
+        run: |
+          # Paths to values files: the wide-EP router values, then the GLM-5.2
+          # precise KV-event-backed prefix-cache routing overrides on top
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+          export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/precise-routing.values.yaml"
+          # Precise routing needs the kv-events + render overlay
+          export DEPLOYMENT=p2w1d1w1-precise
 
   monitoring_values:
     - when: {MONITORING: ["true"]}
@@ -128,6 +147,37 @@ verify:
               echo "${R}" | grep -q "\"model\":\"${MODEL}\"" && echo "${R}" | grep -q "\"choices\"" \
                 && echo "OK: ${MODEL} served through the router" \
                 || { echo "FAIL: ${R}"; exit 1; }'
+    precise_routing:
+      # skip_in: ROUTING is not a variant dimension (see deploy.router_values.precise)
+      - when: {ROUTING: [precise]}
+        skip_in: [ci]
+        run: |
+          # The render Service must return token IDs for MODEL
+          kubectl run render-check --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://wide-ep-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}"'
+      - when: {ROUTING: [precise]}
+        skip_in: [ci]
+        run: |
+          # Each engine pod must hold 8 established ZMQ subscriptions (ports 5557-5564) from the EPP
+          EPP_IP=$(kubectl -n ${NAMESPACE} get endpointslices \
+            -l kubernetes.io/service-name=${GUIDE_NAME}-epp \
+            -o jsonpath='{.items[0].endpoints[0].addresses[0]}')
+          ZMQ_FAILED=0
+          for POD in $(kubectl -n ${NAMESPACE} get pods \
+            -l llm-d.ai/inference-serving=true -o name); do
+            N=$(kubectl -n ${NAMESPACE} exec "${POD}" -c vllm -- python3 -c "
+          hx=''.join(f'{int(o):02X}' for o in reversed('${EPP_IP}'.split('.')))
+          print(sum(1 for line in open('/proc/net/tcp')
+                    if len(line.split()) > 3 and line.split()[3] == '01'
+                    and line.split()[2].split(':')[0] == hx
+                    and 5000 <= int(line.split()[1].split(':')[1], 16) < 6000))")
+            if [ "${N:-0}" -ge 8 ]; then echo "OK: ${POD} ${N} subscriptions"
+            else echo "FAIL: ${POD} ${N:-0} subscriptions (want 8)"; ZMQ_FAILED=1; fi
+          done
+          [ "${ZMQ_FAILED}" = 0 ]
 
 cleanup:
   modelserver:

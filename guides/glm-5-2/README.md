@@ -57,11 +57,19 @@ If your SLO target is throughput rather than TTFT, `p2w2d2w2` (2 prefill + 2 dec
 the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` — is in
 [Scaling and Alternative Topologies](#scaling-and-alternative-topologies).
 
-### Variants
+### Routing Modes
 
-- [Precise prefix-cache routing](README.precise-prefix-cache-routing.md) (experimental) —
-  replaces the approximate prefix index with exact KV-event-backed routing on a 3-node
-  `p2w1d1w1` topology.
+This guide supports two prefix-cache routing modes (`ROUTING`), selected with tabs in
+[Deploy the llm-d Router](#1-deploy-the-llm-d-router):
+
+- **Approximate prefix routing (`ROUTING=approximate`, default)** — scores GPU- and CPU-resident
+  prefix caches heuristically (`glm-5.2-overrides.values.yaml`), paired with the `default`
+  (`p3w2d1w2` + tiered offloading) or any raw topology overlay.
+- **Precise prefix-cache routing (`ROUTING=precise`, experimental)** — replaces the approximate
+  prefix index with exact KV-event-backed routing (`precise-routing.values.yaml`) on the 3-node
+  `p2w1d1w1-precise` deployment (24 GPUs, 64-token KV blocks, `wide-ep-render` tokenizer Service,
+  and per-rank ZMQ KV-event subscriptions), validated on three 8-GPU H200 nodes with InfiniBand
+  on CoreWeave.
 
 ## Supported Accelerators and Model Servers
 
@@ -78,6 +86,11 @@ This guide includes configurations for the following accelerator and model serve
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+
+- Use a Gateway API Inference Extension bundle >= `v1.5.0-rc.2` (required because the
+  `InferencePool` exposes all eight DP rank ports as `targetPorts`). For `ROUTING=precise`, use an
+  EPP build with per-rank KV-event attribution
+  ([llm-d-router#2233](https://github.com/llm-d/llm-d-router/pull/2233)).
 
 - Deploy the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1`
   or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the
@@ -107,7 +120,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 ### Configure the environment
 
-**Set the guide-specific environment variables** (`DEPLOYMENT` picks the recommended `default` overlay or one of the [alternative topologies](#scaling-and-alternative-topologies)):
+**Set the guide-specific environment variables** (`DEPLOYMENT` picks the recommended `default` overlay or one of the [alternative topologies](#scaling-and-alternative-topologies); `ROUTING=precise` overrides it with `p2w1d1w1-precise` in the router step):
 
 <!-- guide:env.static start -->
 ```bash
@@ -118,7 +131,8 @@ export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu
 export MODEL_SERVER=vllm # options: vllm
-export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2
+export ROUTING=approximate # options: approximate, precise
+export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w1-precise, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2
 export MODEL=zai-org/GLM-5.2-FP8 # the model every deployment serves
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -158,30 +172,52 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-The router layers the GLM-5.2 overrides
-([`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml)) on the wide-EP router
-values ([`glm-5-2.values.yaml`](router/glm-5-2.values.yaml): P/D-aware scheduling profiles over
-the multi-port DP model servers), replacing the single prefix-cache scorer with dual
-prefix-cache scoring for P/D routing:
+All 8 DP rank ports (8000-8007) are exposed as `targetPorts` on the `InferencePool` (`glm-5-2.values.yaml`) for per-rank routing. Select the Helm values overrides for your routing mode (`ROUTING`):
+
+<!-- tabs:start group=routing -->
+<details open>
+<summary><b>Approximate Prefix Routing (Default)</b></summary>
+
+Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), replacing the single prefix-cache scorer with dual prefix-cache scoring for P/D routing:
 
 - **GPU prefix-cache scorer** (weight 5) — auto-tuned, tracks GPU-resident prefix blocks.
-- **CPU prefix-cache scorer** (weight 2) — fixed LRU capacity (200k entries per server),
-  tracks CPU-offloaded prefix blocks.
+- **CPU prefix-cache scorer** (weight 2) — fixed LRU capacity (200k entries per server), tracks CPU-offloaded prefix blocks.
 - **Active-request scorer** (weight 1 prefill, 3 decode) — load balancing.
 
-All 8 DP rank ports (8000-8007) are exposed as `targetPorts` for per-rank routing.
-
-**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below):
-
-<!-- guide:deploy.router_values start -->
+<!-- guide:deploy.router_values.approximate start -->
 ```bash
+# only when ROUTING=approximate:
 # Paths to values files: the wide-EP router values, then the GLM-5.2
 # dual GPU+CPU prefix-cache scoring overrides on top
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
 ```
-<!-- guide:deploy.router_values end -->
+<!-- guide:deploy.router_values.approximate end -->
+
+</details>
+<details>
+<summary><b>Precise Prefix-Cache Routing (Experimental)</b></summary>
+
+Layers [`precise-routing.values.yaml`](router/precise-routing.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), replacing the approximate prefix index with exact KV-event-backed routing (`precise-prefix-cache-producer` + `prefix-cache-affinity-filter` + `token-load-scorer`). It also sets `DEPLOYMENT=p2w1d1w1-precise`, the only overlay that publishes per-rank KV events and deploys the `wide-ep-render` Service.
+
+<!-- guide:deploy.router_values.precise start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when ROUTING=precise:
+# Paths to values files: the wide-EP router values, then the GLM-5.2
+# precise KV-event-backed prefix-cache routing overrides on top
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/precise-routing.values.yaml"
+# Precise routing needs the kv-events + render overlay
+export DEPLOYMENT=p2w1d1w1-precise
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.router_values.precise end -->
+
+</details>
+<!-- tabs:end -->
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
@@ -212,8 +248,7 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-**Apply the Kustomize overlay** for your deployment. The `default` overlay is the recommended
-deployment (`p3w2d1w2` + tiered offloading):
+**Apply the Kustomize overlay** for your deployment (`DEPLOYMENT=default` deploys `p3w2d1w2` + tiered offloading for approximate routing; `ROUTING=precise` set `DEPLOYMENT=p2w1d1w1-precise` in the router step, which includes per-rank KV-event publishing and the `wide-ep-render` Service):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -287,6 +322,45 @@ kubectl run serve-check --rm -i --restart=Never \
 ```
 <!-- guide:verify.tests.served_model end -->
 
+### 3. Verify Precise Prefix-Cache Routing (`ROUTING=precise`)
+
+When running `ROUTING=precise` with `DEPLOYMENT=p2w1d1w1-precise`, verify that the `wide-ep-render` Service returns token IDs and that each engine pod maintains eight active ZMQ subscriptions (`5557`–`5564`) to the EPP:
+
+<!-- guide:verify.tests.precise_routing start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when ROUTING=precise:
+# The render Service must return token IDs for MODEL
+kubectl run render-check --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -X POST "http://wide-ep-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}"'
+
+# only when ROUTING=precise:
+# Each engine pod must hold 8 established ZMQ subscriptions (ports 5557-5564) from the EPP
+EPP_IP=$(kubectl -n ${NAMESPACE} get endpointslices \
+  -l kubernetes.io/service-name=${GUIDE_NAME}-epp \
+  -o jsonpath='{.items[0].endpoints[0].addresses[0]}')
+ZMQ_FAILED=0
+for POD in $(kubectl -n ${NAMESPACE} get pods \
+  -l llm-d.ai/inference-serving=true -o name); do
+  N=$(kubectl -n ${NAMESPACE} exec "${POD}" -c vllm -- python3 -c "
+hx=''.join(f'{int(o):02X}' for o in reversed('${EPP_IP}'.split('.')))
+print(sum(1 for line in open('/proc/net/tcp')
+          if len(line.split()) > 3 and line.split()[3] == '01'
+          and line.split()[2].split(':')[0] == hx
+          and 5000 <= int(line.split()[1].split(':')[1], 16) < 6000))")
+  if [ "${N:-0}" -ge 8 ]; then echo "OK: ${POD} ${N} subscriptions"
+  else echo "FAIL: ${POD} ${N:-0} subscriptions (want 8)"; ZMQ_FAILED=1; fi
+done
+[ "${ZMQ_FAILED}" = 0 ]
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.precise_routing end -->
+
+Send the same long prompt twice: the second request routes to the same prefill rank, with `vllm:prefix_cache_hits_total` increasing by the prompt length aligned to 64-token blocks.
+
 ## Scaling and Alternative Topologies
 
 Every topology below is a Kustomize overlay under `modelserver/gpu/vllm/deployments/`: set
@@ -298,6 +372,7 @@ Every topology below is a Kustomize overlay under `modelserver/gpu/vllm/deployme
 | `p1w1d1w2` | 1 replica, 1 node, DEP8    | 1 replica, 2 nodes, DEP16    | 3 / 24       |
 | `p1w2d1w2` | 1 replica, 2 nodes, DEP16  | 1 replica, 2 nodes, DEP16    | 4 / 32       |
 | `p2w1d1w1` | 2 replicas, 1 node, DEP8   | 1 replica, 1 node, DEP8      | 3 / 24       |
+| `p2w1d1w1-precise` | 2 replicas, 1 node, DEP8 (`kv-events` + `render`) | 1 replica, 1 node, DEP8 (`kv-events`) | 3 / 24 |
 | `p2w1d1w2` | 2 replicas, 1 node, DEP8   | 1 replica, 2 nodes, DEP16    | 4 / 32       |
 | `p2w2d1w2` | 2 replicas, 2 nodes, DEP16 | 1 replica, 2 nodes, DEP16    | 6 / 48       |
 | `p2w2d2w2` | 2 replicas, 2 nodes, DEP16 | 2 replicas, 2 nodes, DEP16   | 8 / 64       |
@@ -318,7 +393,7 @@ entries merge by name, so their values replace the base defaults.
 | `offloading-cpu` | prefill only | CPU-only KV cache offloading (`OFFLOADING_MODE=cpu`) |
 | `offloading-tiered` | prefill only | CPU + NVMe tiered KV cache offloading (`OFFLOADING_MODE=tiered`) |
 | `no-mtp` | prefill + decode | Disables MTP speculative decoding (`ENABLE_MTP=0`) |
-| `kv-events` | prefill + decode | KV-event publishing for the [precise prefix-cache routing variant](README.precise-prefix-cache-routing.md) |
+| `kv-events` | prefill + decode | KV-event publishing for the [precise prefix-cache routing mode](#1-deploy-the-llm-d-router) |
 
 ## Manifest Reference
 
@@ -386,6 +461,14 @@ dataset due to some entries containing close to 1M tokens. See the
 analysis and figures. An `inference-perf` preset via
 [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) is not yet published for this
 deployment.
+
+For a quick synthetic throughput run, [`inference-perf.yaml`](inference-perf.yaml) runs an
+[`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) job (2K input / 2K output
+tokens, 2048 concurrent requests, 8192 total) against the standalone `glm-5-2-epp` Service:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/inference-perf.yaml
+```
 
 ### Benchmark Overlays
 

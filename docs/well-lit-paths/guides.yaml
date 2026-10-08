@@ -55,10 +55,6 @@ sections:
         slug: glm-5-2
         title: GLM-5.2
         position: 2
-        pages:
-          - from: README.precise-prefix-cache-routing.md
-            to: precise-prefix-cache-routing
-            title: Precise Prefix-Cache Routing (Experimental)
       - dir: guides/nemotron-3-ultra
         slug: nemotron-3-ultra
         title: NVIDIA Nemotron 3 Ultra

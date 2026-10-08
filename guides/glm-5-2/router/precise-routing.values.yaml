@@ -3,8 +3,7 @@
 # (precise-prefix-cache-producer) plus load-gated affinity. Apply after
 # glm-5-2.values.yaml; targetPorts and matchLabels are inherited from it.
 #
-# Prerequisites beyond the base guide (see
-# ../README.precise-prefix-cache-routing.md):
+# Prerequisites beyond the default routing mode (see ../README.md):
 # - modelserver deployed with the kv-events component, so every rank
 #   publishes KV-cache events on its compensated ZMQ port.
 # - the render Service from ../render/, which fronts the prefill pods'
