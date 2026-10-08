@@ -84,9 +84,27 @@ Serve multiple base models and LoRA adapters behind a single endpoint using the 
 
 ## Process Batch and Async Requests
 
-### [Batch & Async Processing](../../guides/batch-serving/README.md)
+Process offline and latency-insensitive work in front of an existing deployment. [Choosing between the two approaches](../../guides/batch-serving/README.md) compares them.
 
-Process offline and latency-insensitive work in front of an existing deployment: the OpenAI-compatible [Batch Gateway](../../guides/batch-serving/batch-gateway/README.md) (`/v1/batches`, `/v1/files`) and queue-based [Asynchronous Processing](../../guides/batch-serving/asynchronous-processing/README.md) with metric-gated dispatch, including Async Processor sizing and scaling.
+### [Run Batch Jobs (Batch Gateway)](../../guides/batch-serving/batch-gateway/README.md)
+
+Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggable metadata and file storage and a processor that dispatches requests to the llm-d Router.
+
+### [Queue Async Requests (Async Processor)](../../guides/batch-serving/asynchronous-processing/README.md)
+
+Consume requests from a message queue and dispatch them with metric-gated back-off based on live model server saturation, including Async Processor sizing and scaling.
+
+### [Use Redis as the Async Queue](../../guides/batch-serving/asynchronous-processing/redis/README.md)
+
+Configure the Async Processor with a Redis or Valkey sorted set.
+
+### [Use GCP Pub/Sub as the Async Queue](../../guides/batch-serving/asynchronous-processing/gcp-pubsub/README.md)
+
+Configure the Async Processor with Google Cloud Pub/Sub topics and subscriptions.
+
+### [Enforce Tenant Quotas and Priorities](../../guides/batch-serving/asynchronous-processing/multitenant/README.md)
+
+Share async queues across teams with reserved quotas, tier-priority dispatch, and saturation back-off across inference pools.
 
 ## Integrate an AI Gateway
 
