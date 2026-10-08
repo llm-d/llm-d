@@ -39,6 +39,7 @@ A Blue-Green Update creates a second complete InferencePool and uses HTTPRoute t
 **How it works:**
 
 - Deploy a complete new InferencePool alongside the existing one
+- Optionally mirror live requests to the new pool first, if your gateway supports percentage mirroring (`HTTPRouteRequestPercentageMirror`) to an InferencePool
 - Use HTTPRoute to gradually shift traffic (e.g., 1% → 5% → 10% → 50% → 100%)
 - Instant rollback by adjusting HTTPRoute weights
 
