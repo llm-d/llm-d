@@ -69,6 +69,7 @@
     "architecture/advanced/batch/async-processor": { "position": 2 },
 
     "operations/startup/model-loading-and-startup": { "position": 1, "label": "Model Loading & Startup" },
+    "operations/traffic/flow-control-tuning": { "position": 2, "label": "Tune Flow Control Concurrency" },
     "operations/lifecycle/graceful-shutdown": { "position": 1, "label": "Graceful Shutdown & Draining" },
     "operations/lifecycle/readiness-probes": { "position": 2, "label": "Readiness Probes" },
     "operations/disaggregation/vllm": { "position": 1, "label": "vLLM" },

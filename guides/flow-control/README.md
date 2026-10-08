@@ -69,7 +69,7 @@ When the `flowControl` feature gate is enabled, the EPP uses the following polic
 > [!NOTE]
 >
 > * Beneath the flow control layer, this guide uses the exact same `prefix-cache-scorer` and `load-aware` routing policies established in the [Optimized Baseline](../optimized-baseline/README.md). Flow control acts as an intelligent ingress layer that holds saturated traffic *before* it passes to the scheduler.
-> * While `utilization-detector` is the out-of-the-box system default listed here, production deployments should switch to `concurrency-detector` to avoid telemetry lag risks, as detailed in the [Tuning Guide](tuning.md).
+> * While `utilization-detector` is the out-of-the-box system default listed here, production deployments should switch to `concurrency-detector` to avoid telemetry lag risks, as detailed in the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 
 By default, the EPP uses a `global-strict` policy. Because the system is **work-conserving**, it will never artificially throttle traffic if GPUs have spare capacity. However, enforcing strict fairness (like Round-Robin) during periods of saturation constrains the scheduler's ability to pick the globally optimal request for batching or cache reuse, thereby bounding the maximum explorable latency-throughput frontier. The default prioritizes absolute global throughput, while this guide overrides it to prioritize tenant equity.
 
@@ -544,7 +544,7 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 > [!IMPORTANT]
 > The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) is empirically tuned **only** for the default reference workload (Qwen3-32B on 16 H100s). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
 
-For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tuning Guide](tuning.md).
+For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 
 ## Benchmarking
 

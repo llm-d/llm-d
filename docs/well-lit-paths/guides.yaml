@@ -133,18 +133,19 @@ sections:
     guides:
       - dir: guides/flow-control
         slug: flow-control
-        title: Flow Control & Fairness
+        title: Queue and Prioritize Requests (Flow Control)
         position: 1
+      # position 2: docs/operations/traffic/flow-control-tuning.md
       # Lives under guides/workload-autoscaling/ (referenced from there), but
       # adding InferencePools is a traffic/tenancy topic, so it is published here.
       - dir: guides/workload-autoscaling/multi-inference-pool
         slug: multi-inference-pool
         title: Deploy Multiple Inference Pools
-        position: 2
+        position: 3
       - dir: guides/multi-model-routing
         slug: multi-model-routing
-        title: Multi-Model & LoRA Routing
-        position: 3
+        title: Route to Multiple Models and LoRA Adapters
+        position: 4
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
   # operations/disaggregation has only docs pages: vllm, sglang.
   # operations/integrations (Integrate an AI Gateway) has only docs pages: litellm, kong.
