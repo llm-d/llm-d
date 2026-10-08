@@ -40,6 +40,11 @@ ap:
   transportConfig:
     urlSecret:
       url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+    # Results go to the destination a request carries (the optional coordinator
+    # gives each request its own result key) or, for requests published straight
+    # to Redis, to this list. A per-queue result_queue_name would override both
+    # and break the coordinator's wait and enqueue modes. result_ttl_seconds
+    # expires result keys nobody collects.
     result_queue_name: "results-list"
     poll_interval_ms: 500
     batch_size: 10
@@ -49,7 +54,7 @@ ap:
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-list"
+        result_ttl_seconds: 3600
         labels: {tier: "interactive"}
         gate_type: "redis-quota"
         gate_params:
@@ -63,7 +68,7 @@ ap:
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-list"
+        result_ttl_seconds: 3600
         labels: {tier: "async"}
         gate_type: "redis-quota"
         gate_params:
@@ -77,7 +82,7 @@ ap:
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-list"
+        result_ttl_seconds: 3600
         labels: {tier: "batch"}
         gate_type: "redis-quota"
         gate_params:

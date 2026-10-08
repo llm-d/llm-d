@@ -1,67 +1,89 @@
-"""The multitenant guide's optional coordinator files stay consistent with the guide.
+"""The multitenant guide's optional coordinator stays consistent with the guide.
 
-values/redis/quota-only-coordinator.yaml is a full llm-d-async overlay (Helm
-replaces lists, so it cannot be layered on quota-only.yaml). These tests keep it
-identical to quota-only.yaml apart from the coordinator queues and pool, and keep
-the coordinator config pointing at those queues with the guide's quota scheme.
+The coordinator (README step 4) is one more producer of llm-d-async traffic:
+its queued tenants are written to the guide's own team queues and must be
+treated exactly like requests published there directly. These tests keep the
+coordinator config pointing at those queues with matching tiers and quota
+gates, and keep the team queues able to return results to the coordinator.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 MT = ROOT / "guides/batch-serving/asynchronous-processing/multitenant"
-COORD_QUEUES = {"coord-standard", "coord-batch"}
+REDIS_VALUES = ["quota-only.yaml", "saturation-prometheus.yaml", "tier-priority-admission.yaml"]
 
 
 def _load(path: Path):
     return yaml.safe_load(path.read_text())
 
 
-def _split(values: dict) -> tuple[dict, list, list]:
-    queues = values["ap"]["transportConfig"]["queues"]
-    pools = values["ap"]["workerPools"]
-    return values, [q for q in queues if q["queue_name"] in COORD_QUEUES], [p for p in pools if p["id"] == "coord"]
-
-
-def test_coordinator_overlay_is_quota_only_plus_coordinator_entries() -> None:
-    base = _load(MT / "values/redis/quota-only.yaml")
-    coord = _load(MT / "values/redis/quota-only-coordinator.yaml")
-    _, coord_queues, coord_pools = _split(coord)
-    assert {q["queue_name"] for q in coord_queues} == COORD_QUEUES
-    assert len(coord_pools) == 1 and coord_pools[0]["workers"] > 10  # above the router's maxConcurrency
-
-    stripped = yaml.safe_load(yaml.safe_dump(coord))
-    stripped["ap"]["transportConfig"]["queues"] = [
-        q for q in stripped["ap"]["transportConfig"]["queues"] if q["queue_name"] not in COORD_QUEUES]
-    stripped["ap"]["workerPools"] = [p for p in stripped["ap"]["workerPools"] if p["id"] != "coord"]
-    assert stripped == base
-
-
-def test_coordinator_queues_shape() -> None:
-    _, coord_queues, _ = _split(_load(MT / "values/redis/quota-only-coordinator.yaml"))
-    team_gate = next(q for q in _load(MT / "values/redis/quota-only.yaml")["ap"]["transportConfig"]["queues"]
-                     if q["queue_name"] == "team-batch")["gate_params"]
-    for q in coord_queues:
-        assert q["worker_pool_id"] == "coord"
-        assert "result_queue_name" not in q  # results go to each message's own mailbox
-        assert q["result_ttl_seconds"] > 0
-        for key in ("address", "attribute", "mode", "gating_mode", "prefix"):
-            assert q["gate_params"][key] == team_gate[key], key
-
-
-def test_coordinator_config_routes_to_overlay_queues() -> None:
+def _broker() -> dict:
     config = _load(MT / "manifests/coordinator/config.yaml")
     step = config["pipeline"]["steps"][0]
     assert step["type"] == "async-broker"
-    params = step["params"]
-    routed = {r["queue"] for r in params["routes"] if "queue" in r} | {params["default_queue"]}
-    assert routed == COORD_QUEUES
-    team_gate = _load(MT / "values/redis/quota-only.yaml")["ap"]["transportConfig"]["queues"][0]["gate_params"]
-    assert params["quota"]["prefix"] == team_gate["prefix"]
-    assert params["quota"]["attribute"] == team_gate["attribute"]
+    return step["params"]
+
+
+def _team_queues(values_file: str = "quota-only.yaml") -> dict[str, dict]:
+    values = _load(MT / "values/redis" / values_file)
+    return {q["queue_name"]: q for q in values["ap"]["transportConfig"]["queues"]}
+
+
+def test_queued_tenants_use_the_team_queues_with_matching_tiers() -> None:
+    params = _broker()
+    queues = _team_queues()
+    routed = {r["tenant"]: r for r in params["routes"] if "queue" in r}
+    assert routed, "the coordinator routes no tenant to a queue"
+    for tenant, route in routed.items():
+        assert route["queue"] in queues, f"{tenant} routes to {route['queue']}, not a team queue"
+        assert queues[route["queue"]]["labels"]["tier"] == route["tier"], tenant
+    assert params["default_queue"] in queues
+    assert queues[params["default_queue"]]["labels"]["tier"] == params["default_tier"]
+    # Every team queue is reachable over HTTP, so the coordinator covers the same tiers.
+    assert {r["queue"] for r in routed.values()} == set(queues)
+
+
+def test_coordinator_quota_matches_the_team_queue_gates() -> None:
+    params = _broker()
+    queues = _team_queues()
+    quota = params["quota"]
+    for route in params["routes"]:
+        if "queue" not in route:
+            continue
+        gate = queues[route["queue"]]["gate_params"]
+        assert quota["prefix"] == gate["prefix"]
+        assert quota["attribute"] == gate["attribute"]
+        assert str(quota["limits"][route["tenant"]]) == gate["limit"], route["tenant"]
+
+
+def test_realtime_tenant_is_live_only_and_never_overflow() -> None:
+    params = _broker()
+    realtime = next(r for r in params["routes"] if r["tenant"] == "realtime")
+    assert "queue" not in realtime and realtime["tier"] == "interactive"
+    assert "realtime" not in params["quota"]["limits"]  # no quota, so always reserved
+
+
+@pytest.mark.parametrize("values_file", REDIS_VALUES)
+def test_team_queues_return_results_to_the_coordinator(values_file: str) -> None:
+    # A per-queue result_queue_name takes precedence over the result key each
+    # coordinator request carries, so its wait and enqueue modes would never see
+    # a result. Requests published straight to Redis carry none and fall back to
+    # the transport-level list.
+    transport = _load(MT / "values/redis" / values_file)["ap"]["transportConfig"]
+    assert transport["result_queue_name"] == "results-list"
+    for name, q in _team_queues(values_file).items():
+        assert "result_queue_name" not in q, f"{values_file}: {name}"
+        assert q["result_ttl_seconds"] > 0, f"{values_file}: {name}"
+
+
+def test_coordinator_config_shape() -> None:
+    config = _load(MT / "manifests/coordinator/config.yaml")
+    params = _broker()
     assert config["server"]["secure_serving"] is False  # the router and clients speak plain HTTP to it
     # The headers the README documents, pinned so a change in the coordinator's
     # defaults cannot silently turn every request into unclassified passthrough.

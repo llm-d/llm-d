@@ -4,16 +4,18 @@
 # llm-d-coordinator-config ConfigMap. Parameters:
 # https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md
 #
-# Tenants are selected with the x-llm-d-tenant header:
-#   * realtime -> no queue: with x-llm-d-async-mode: passthrough the request is stamped
-#     reserved-interactive (priority 100) and forwarded live to the router.
-#   * standard -> queue coord-standard, tier async.
-#   * batch    -> queue coord-batch, tier batch (the default).
-# With x-llm-d-async-mode: enqueue or wait a request is written to its queue; llm-d-async
-# dispatches it to the router like the guide's own queues, with the
-# tier-priority merge policy stamping reserved or overflow objectives. The quota
-# prefix and attribute match the guide's redis-quota gates, so the coordinator
-# and llm-d-async share one counter per team.
+# Tenants are selected with the x-llm-d-tenant header. The coordinator is one
+# more producer of llm-d-async traffic: with x-llm-d-async-mode: enqueue or wait
+# a request is written to its team's queue and treated exactly like a request
+# published there directly (same tier, quota gate and worker pool):
+#   * premium  -> queue team-premium, tier interactive.
+#   * standard -> queue team-standard, tier async.
+#   * batch    -> queue team-batch, tier batch (the default).
+#   * realtime -> no queue: live traffic only. With x-llm-d-async-mode:
+#     passthrough it is stamped reserved-interactive (priority 100; no quota, so
+#     never overflow) and forwarded to the router.
+# The quota limits, prefix and attribute match the team queues' redis-quota
+# gates, so passthrough requests are classified against the same counters.
 log_level: 2
 
 server:
@@ -49,13 +51,16 @@ pipeline:
         routes:
           - tenant: realtime
             tier: interactive
+          - tenant: premium
+            queue: team-premium
+            tier: interactive
           - tenant: standard
-            queue: coord-standard
+            queue: team-standard
             tier: async
           - tenant: batch
-            queue: coord-batch
+            queue: team-batch
             tier: batch
-        default_queue: coord-batch
+        default_queue: team-batch
         default_tier: batch
         objectives:
           interactive:
@@ -71,6 +76,7 @@ pipeline:
           prefix: "quota:"
           attribute: team
           limits:
+            premium: 2
             standard: 2
             batch: 1
         timeouts:

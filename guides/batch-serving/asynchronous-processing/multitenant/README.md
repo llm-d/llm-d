@@ -375,26 +375,20 @@ with `x-llm-d-tenant`:
 | `wait` | Written to an llm-d-async queue; the connection is held until the result is back |
 | `enqueue` | Written to an llm-d-async queue; answers `202` with an id, and the result is fetched later from `GET /v1/requests/{id}` |
 
-The coordinator's config ([`manifests/coordinator/config.yaml`](manifests/coordinator/config.yaml)) maps
-tenant `realtime` to live interactive traffic (`reserved-interactive`, priority 100), and tenants `standard`
-and `batch` to two coordinator queues, `coord-standard` and `coord-batch`. Those queues sit beside the team
-queues in their own `coord` worker pool, with 16 workers so that queued traffic alone can fill the model server,
-and share the team queues' quota counters. Installing them replaces the llm-d-async values from step 3 with
-[`values/redis/quota-only-coordinator.yaml`](values/redis/quota-only-coordinator.yaml), which is
-`quota-only.yaml` plus the two queues and the pool.
+The coordinator is one more producer of llm-d-async traffic. Its config
+([`manifests/coordinator/config.yaml`](manifests/coordinator/config.yaml)) writes queued requests from tenants
+`premium`, `standard` and `batch` to the team queues from step 3 (`team-premium`, `team-standard` and
+`team-batch`), where they are treated exactly like requests published there directly: same tier, quota gate and
+worker pool. Tenant `realtime` is live traffic only, stamped `reserved-interactive` (priority 100) and never
+counted against a quota. The llm-d-async values from step 3 need no change: the team queues leave the result
+destination to each request, so the coordinator gets its results back while requests published straight to
+Redis still land on `results-list`.
 
 The guide's Redis (`manifests/redis.yaml`) starts with keyspace notifications enabled
 (`--notify-keyspace-events Kl`), so held `wait` requests wake up as soon as their result lands instead of polling.
 
 ```bash
-# 1. llm-d-async with the coordinator queues
-render ${MT}/values/redis/quota-only-coordinator.yaml > /tmp/mt-redis-coordinator.yaml
-helm upgrade --install llm-d-async \
-    oci://ghcr.io/llm-d/charts/llm-d-async \
-    -f /tmp/mt-redis-coordinator.yaml \
-    -n ${NAMESPACE} --version ${ASYNC_VERSION}
-
-# 2. The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
+# The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
 render ${MT}/manifests/coordinator/config.yaml > /tmp/coordinator.yaml
 kubectl -n ${NAMESPACE} create configmap llm-d-coordinator-config \
     --from-file=coordinator.yaml=/tmp/coordinator.yaml --dry-run=client -o yaml | kubectl apply -f -
@@ -412,7 +406,7 @@ curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
   -H 'x-llm-d-async-mode: passthrough' -H 'x-llm-d-tenant: realtime' \
   -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
 
-# Queued on coord-batch; the response arrives once llm-d-async has dispatched it
+# Queued on team-batch; the response arrives once llm-d-async has dispatched it
 curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
   -H 'x-llm-d-async-mode: wait' -H 'x-llm-d-tenant: batch' \
   -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
@@ -703,8 +697,8 @@ render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl apply -n ${NAME
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
 dashboard shows `async_dispatch_budget`, `async_inflight_requests`, `async_gate_decisions_total`, and
-`async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`teams`, plus
-`coord` with the optional coordinator) for the per-pool view and by **`queue_name`** for the per-team view.
+`async_broker_backlog{queue_name,pool_name}`. Break panels down by **`pool_name`** (`teams`) for the per-pool view and by **`queue_name`** for the per-team
+view.
 `async_dispatch_budget` is the **queue** gates' budget (the per-team quota gates), so it says nothing
 about the per-pool saturation gates. Those report through `async_gate_metric_value` — the value the
 gate last read, i.e. the `clamp(...)` result — against `async_gate_metric_threshold`, which the gate
