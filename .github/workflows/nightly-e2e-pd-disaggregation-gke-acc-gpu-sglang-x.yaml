@@ -61,6 +61,16 @@ on:
         required: false
         default: '32/64Gi'
         type: 'string'
+      cluster_name:
+        description: 'GKE cluster name'
+        required: false
+        default: 'llm-d-e2e-us-east5-2'
+        type: 'string'
+      cluster_zone:
+        description: 'GKE cluster zone or region'
+        required: false
+        default: 'us-east5'
+        type: 'string'
 
   schedule:
     - cron: '30 15 * * *'  # 15:30 UTC daily (staggered 90m after optimized-baseline SGLang at 14:00 and distinct from vLLM P/D nightlies at 03:00)
@@ -87,8 +97,8 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-gke-gpu-sglang' }}
-      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
-      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
+      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-east5-2' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-east5' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke-sglang' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke-sglang' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}

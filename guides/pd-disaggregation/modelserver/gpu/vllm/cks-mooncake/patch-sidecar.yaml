@@ -9,6 +9,6 @@ spec:
         - name: routing-proxy
           args:
             - --port=8000
-            - --connector=mooncake
+            - --kv-connector=mooncake
             - --zap-log-level=1
-            - --secure-proxy=false
+            - --secure-serving=false

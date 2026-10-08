@@ -11,6 +11,8 @@ data:
       # (llm-d-router#2805); keep it plaintext -- every caller in this guide
       # (kubelet probes, the Gateway's backendRef, the GKE HealthCheckPolicy)
       # speaks plain HTTP to it.
+      # TODO: Rename to secure_serving with the first release after v0.11.0.
+      # llm-d-router#2908 renamed the key, and v0.11.0 does not contain it.
       secure_coordinator: false
       read_timeout: 30s
       # Matches the Gateway/HTTPRoute request timeout (coordinator/httproute.yaml,
@@ -43,7 +45,11 @@ data:
             max_concurrent_downloads: 10
         - type: render
           params:
-            address: "http://localhost:8000"
+            # The render Service from ../render/, which fronts the prefill
+            # model server pods. The ".svc" suffix matches NO_PROXY in
+            # ../multimedia-downloader/patch-coordinator-ca.yaml, so render
+            # calls never go through the media proxy.
+            address: "http://coord-disaggregation-render.${NAMESPACE}.svc:8000"
             timeout: 30s
         - type: conditional-decode
         - type: encode
