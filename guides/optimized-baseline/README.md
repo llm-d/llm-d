@@ -38,7 +38,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16 |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | vLLM: Data Center GPU Max 1550+ · 2 replicas × 1 XPU via DRA · fp16 |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
@@ -55,6 +55,8 @@ This guide includes configurations for the following accelerator and model serve
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
 - Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+
+- For DRA-based overlays, install the accelerator's resource driver and verify its DeviceClass before deployment.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -413,7 +415,7 @@ kubectl run prefix-test --rm -i --restart=Never \
 for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
 done
 ```
 <!-- guide:verify.tests.pod_metrics end -->
@@ -430,7 +432,10 @@ One pod reports most of the 10 requests in `vllm:request_success_total`, and its
 <details>
 <summary><b>SGLang</b></summary>
 
-One pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+One pod reports most of the requests in `sglang:num_requests_total`. Check
+that `sglang:cached_tokens_total{cache_source="device"}` increases after
+requests with a shared prefix (or check `sglang:cache_hit_rate` on images
+that expose a reliable nonzero ratio).
 
 </details>
 <details>
