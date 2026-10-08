@@ -54,7 +54,7 @@ For details on these metrics, see:
 
 - [EPP Request Handling Metrics](../../../docs/architecture/core/router/epp/request-handling.md)
 - [EPP Scheduling Metrics](../../../docs/architecture/core/router/epp/scheduling.md)
-- [Metric reference](../../../docs/operations/observability/metrics.md) and [PromQL reference](../../../docs/operations/observability/promql.md)
+- [Metric reference](../../../docs/operations/observability/metrics.md#metric-reference) and [PromQL reference](../../../docs/operations/observability/promql.md)
 
 ### Endpoint-removal note for older EPP images
 

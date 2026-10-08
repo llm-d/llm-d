@@ -243,7 +243,7 @@ Optional. Requires Prometheus and Grafana — see [Observability Setup](../../..
    kubectl get podmonitors,servicemonitors,prometheusrules -n ${NAMESPACE}
    ```
 
-For what the metrics mean and how to query them, see the [Batch Gateway metric reference](../../../docs/operations/observability/metrics.md#key-batch-gateway-metrics).
+For what the metrics mean and how to query them, see the [Batch Gateway metric reference](../../../docs/operations/observability/batch-gateway-metrics.md).
 
 ## Cleanup
 
