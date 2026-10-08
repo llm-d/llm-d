@@ -10,7 +10,9 @@
 #
 # Render it and apply it into the model server's namespace: with no
 # namespaceSelector it watches only its own namespace. The Prometheus from
-# install-prometheus-grafana.sh picks up PodMonitors in every namespace.
+# install-prometheus-grafana.sh picks up PodMonitors in every namespace in its
+# default (central) mode; in its namespace-scoped mode (-i) the PodMonitor and
+# its namespace also need the monitoring-ns=<monitoring namespace> label.
 # Adjust selector / port for your own model server.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor

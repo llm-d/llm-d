@@ -168,10 +168,9 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
   export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
+  export GUIDE_NAME=async-multitenant  # constant: the llm-d.ai/guide label the router values and PodMonitor select on
   export ASYNC_VERSION=v0.10.0         # llm-d-async release (supports lane_objectives & tier-priority)
-  export GUIDE_NAME=async-multitenant  # model server label the router selects on
   export INFRA_PROVIDER=base           # optimized-baseline model server variant: base, or gke on GKE
-  export HF_TOKEN=<your Hugging Face token>
 
   export POOL_NAME=llm-d-router        # InferencePool the router creates (objectives, saturation gates)
   export MODEL=Qwen/Qwen3-32B          # served model name (goes in payload.model)
@@ -189,7 +188,7 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
 
 The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
 `POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, `COORDINATOR_IMAGE` in the optional
-coordinator manifest, and `POOL_NAME` in the vLLM PodMonitor). Render one for your
+coordinator manifest, `POOL_NAME` in the vLLM PodMonitor, and `PROJECT_ID` on the GCP paths). Render one for your
 environment before installing:
 
 ```bash
@@ -198,7 +197,8 @@ render() {   # render <overlay-path> -> stdout
       -e "s/POOL_NAME/${POOL_NAME}/g" \
       -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
       -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
-      -e "s#COORDINATOR_IMAGE#${ROUTER_COORDINATOR_IMAGE}:${ROUTER_COORDINATOR_VERSION}#g" "$1"
+      -e "s#COORDINATOR_IMAGE#${ROUTER_COORDINATOR_IMAGE}:${ROUTER_COORDINATOR_VERSION}#g" \
+      -e "s/PROJECT_ID/${PROJECT_ID}/g" "$1"
 }
 ```
 
@@ -208,17 +208,32 @@ model name reaches the system through `payload.model`, which the `publish()` hel
 
 ### 1. Install CRDs and Deploy the Backend Model Server
 
-Install the `InferenceObjective` CRD and deploy the vLLM model server:
+Create the namespace and install the `InferenceObjective` CRD:
 
 ```bash
 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-# 1. Install InferenceObjective CRD (ROUTER_RELEASE_URL exported from guides/env.sh)
+# ROUTER_RELEASE_URL exported from guides/env.sh
 kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
+```
 
-# 2. Deploy the vLLM model server, which reads the Hugging Face token from llm-d-hf-token
-kubectl create secret generic llm-d-hf-token --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+Create the `llm-d-hf-token` secret the model server reads its [Hugging Face token](../../../../helpers/hf-token.md)
+from. The model server runs in this guide's namespace, so it needs its own copy even if optimized-baseline's
+namespace already has one:
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export HF_TOKEN=<your Hugging Face token>
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- llm-d-cicd:skip end -->
+
+Deploy the vLLM model server:
+
+```bash
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
@@ -228,7 +243,7 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 Instead of maintaining its own model server manifests, this guide renders the
 [optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay
 (`guides/optimized-baseline/modelserver/gpu/vllm/`) as the [flow-control](../../../flow-control/README.md) guide does:
-`sed` swaps in this guide's `llm-d.ai/guide` label, which the router selects on. The model (`Qwen/Qwen3-32B`, two GPUs
+`sed` swaps in this guide's `llm-d.ai/guide` label, `${GUIDE_NAME}`. It is a constant, `async-multitenant`, because both router values files and the vLLM PodMonitor select on that value. The model (`Qwen/Qwen3-32B`, two GPUs
 per replica), image, probes and volumes follow that guide. The one change is a single replica instead of optimized-baseline's two: the
 router's `maxConcurrency` and the llm-d-async worker pool below are sized so that async work saturates one replica.
 
@@ -239,6 +254,7 @@ On one GPU, serve `Qwen/Qwen3-8B` with tensor parallelism 1 instead (the setup t
 [eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used). Set the served model name to
 match before publishing, because requests carry it in `payload.model`:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export MODEL=Qwen/Qwen3-8B
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
@@ -252,6 +268,7 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
       | .resources.limits.memory = "40Gi" | .resources.requests.memory = "20Gi")' \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
+<!-- llm-d-cicd:skip end -->
 
 `--max-model-len=4000` keeps the KV cache within a 24 GB GPU such as an L4. The pods keep optimized-baseline's
 `llm-d.ai/model: Qwen3-32B` label, which only identifies the overlay they came from.
@@ -287,6 +304,7 @@ To keep full async throughput while realtime traffic is quiet, at the cost of ca
 work (see [Protecting realtime traffic](#protecting-realtime-traffic)), install the router with the evictable
 values instead:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 helm upgrade --install llm-d-router \
     ${ROUTER_STANDALONE_CHART} \
@@ -294,6 +312,7 @@ helm upgrade --install llm-d-router \
     -f ${MT}/values/router/flow-control-evictable.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- llm-d-cicd:skip end -->
 
 </details>
 
@@ -727,10 +746,8 @@ gcloud monitoring dashboards create --project ${PROJECT_ID} \
 
 # For the gates' in-cluster PromQL reads on Pub/Sub (option A), deploy the GMP query frontend and
 # upgrade to the GMP saturation overlay:
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml
-sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/POOL_NAME/${POOL_NAME}/g" \
-    -e "s/PROJECT_ID/${PROJECT_ID}/g" \
-    ${MT}/values/pubsub/saturation-gmp.yaml > /tmp/mt-pubsub-sat.yaml
+render ${MT}/manifests/gmp-frontend.yaml | kubectl apply -n ${NAMESPACE} -f -
+render ${MT}/values/pubsub/saturation-gmp.yaml > /tmp/mt-pubsub-sat.yaml
 helm upgrade llm-d-async oci://ghcr.io/llm-d/charts/llm-d-async \
   -f /tmp/mt-pubsub-sat.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
