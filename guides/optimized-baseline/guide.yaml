@@ -26,7 +26,7 @@ support:
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated, sglang: community}
+      engines: {vllm: validated, sglang: validated}
     xpu:
       label: Intel XPU
       notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16"
