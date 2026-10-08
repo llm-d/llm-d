@@ -403,6 +403,20 @@ def test_omni_serving_matrix_matches_repo():
     assert g.check().ok(), _errors(g.check())
 
 
+def test_wide_ep_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "wide-ep")
+    assert g.check().ok(), _errors(g.check())
+    # Every INFRA_PROVIDER the support table documents per accelerator resolves
+    # to an overlay, and every accelerator has the router/<ACCELERATOR>.values.yaml
+    # that deploy.router_values layers on router/wide-ep.values.yaml.
+    root = REPO_ROOT / "guides" / "wide-ep"
+    providers = {"gpu": ("base", "gke", "coreweave"), "amd": ("base", "amd-ci"), "xpu": ("base",)}
+    overlays = [root / "modelserver" / a / "vllm" / p for a, ps in providers.items() for p in ps]
+    missing = [str(o) for o in overlays if not (o / "kustomization.yaml").is_file()]
+    missing += [str(root / "router" / f"{a}.values.yaml") for a in providers if not (root / "router" / f"{a}.values.yaml").is_file()]
+    assert not missing, missing
+
+
 def test_env_comment_renders_inline():
     lines = guide._env_static_lines(
         {

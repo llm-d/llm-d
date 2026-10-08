@@ -86,7 +86,7 @@ This example assumes anonymous access on a trusted network. Remove the inherited
 
 ## Reuse the Compilation Cache
 
-vLLM's compilation cache (JIT cache) stores compiled artifacts, not model weights, to reduce compilation overhead on later starts. Point `VLLM_CACHE_ROOT` to a persistent, writable directory. The Wide EP [cache configuration](../../../guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/base/disaggregatedset.yaml) places it under `/var/cache/vllm`; the [CoreWeave overlay](../../../guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/coreweave/kustomization.yaml) persists that mount using node-local `hostPath` storage.
+vLLM's compilation cache (JIT cache) stores compiled artifacts, not model weights, to reduce compilation overhead on later starts. Point `VLLM_CACHE_ROOT` to a persistent, writable directory. The Wide EP [cache configuration](../../../guides/wide-ep/modelserver/gpu/vllm/base/disaggregatedset.yaml) places it under `/var/cache/vllm`; the [CoreWeave overlay](../../../guides/wide-ep/modelserver/gpu/vllm/coreweave/kustomization.yaml) persists that mount using node-local `hostPath` storage.
 
 With an empty cache, the first startup still compiles and populates it; later compatible starts can reuse the results. Configuration or code changes may trigger recompilation, so persistence does not guarantee compilation-free startup. A node-local cache is reusable only on that node. See [vLLM's compilation-cache documentation](https://docs.vllm.ai/en/latest/design/torch_compile/#compilation-cache).
 
