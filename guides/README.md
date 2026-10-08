@@ -27,6 +27,16 @@ We currently offer the following:
 
 * [Serve Multimodal Models](./multimodal-serving/README.md) - Serve image, video, and audio input (e.g. `Qwen/Qwen3-VL-32B-Instruct`) with prefix-cache aware routing that matches media as well as text, in an aggregated topology or with dedicated Encode workers (E/PD, E/P/D).
 * [Serve Omni Models](./omni-serving/README.md) - Serve a model that answers in text and audio (e.g. `Qwen/Qwen3-Omni-30B-A3B-Instruct`) from one vLLM-Omni pool behind the llm-d Router.
+* [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
+
+## Models
+
+Benchmarked, fully tuned recipes for serving a specific state-of-the-art model on a specific accelerator, each composing several of the guides above.
+
+* [DeepSeek-V4](./models/deepseek-v4/README.md) - `deepseek-ai/DeepSeek-V4-Pro` on GB200 NVL72: wide expert-parallel P/D disaggregation over cross-node NVLink, with operating points from low latency to maximum throughput.
+* [GLM-5.2](./models/glm-5-2/README.md) - `zai-org/GLM-5.2-FP8` on H200, optimized for agentic workloads: wide expert-parallel P/D disaggregation with MTP, dual-tier prefix-cache routing, and CPU+NVMe KV offloading.
+* [NVIDIA Nemotron 3 Ultra](./models/nemotron-3-ultra/README.md) - `NVIDIA-Nemotron-3-Ultra-550B` on H200, optimized for agentic code generation: P/D disaggregation with CPU KV offloading and coding-agent client configs.
+* [Qwen3-Coder-480B](./models/qwen3-coder-480b/README.md) - `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` on TPU 7x, optimized for agentic code generation: prefix-aware routing and CPU KV offloading.
 
 ## Operations
 
@@ -60,16 +70,9 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 
 * [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
 
-## Workloads
-
-Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/well-lit-paths/workloads/README.md) for overviews.
-
-* [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
-* [Agentic API](./agentic-api/README.md) (Experimental) - an extension to any guide that deploys the router with a vLLM model server, rather than a deployment of its own: adds the OpenAI-compatible Responses API (stateful multi-turn conversations, webhook tool loops, WebSocket streaming) via `vllm/agentic-api` and a PostgreSQL state store, and additive `HTTPRoute`s that put it in front of the existing `InferencePool`.
-* [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
-
 ## Experimental Guides
 
+* [Agentic API](./agentic-api/README.md) (Experimental) - an extension to any guide that deploys the router with a vLLM model server, rather than a deployment of its own: adds the OpenAI-compatible Responses API (stateful multi-turn conversations, webhook tool loops, WebSocket streaming) via `vllm/agentic-api` and a PostgreSQL state store, and additive `HTTPRoute`s that put it in front of the existing `InferencePool`.
 * [Encode Disaggregation](./multimodal-serving/e-disaggregation/README.md) - Offload multimodal encoding (images, video, audio) to dedicated workers via E/PD or E/P/D topologies, freeing prefill/decode resources for text computation.
 * [Coordinator Disaggregation](./coord-disaggregation/README.md) - Drive an Encode/Prefill/Decode pipeline through a standalone Coordinator service instead of a per-pod routing sidecar, so the pipeline (which phases run, and in what order) is a configurable list of steps rather than fixed logic, and each phase's pod is picked only when that phase is about to run.
 

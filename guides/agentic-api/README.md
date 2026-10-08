@@ -65,7 +65,7 @@ second time. The parsers are per-model, and not every overlay sets them:
 | Model | Flags | Already set by |
 | --- | --- | --- |
 | `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/patch-prefill.yaml) (both topologies), [`optimized-baseline/.../gpt-oss`](../optimized-baseline/modelserver/gpu/vllm/gpt-oss/patch-vllm.yaml), [`tiered-prefix-cache`](../tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm-gpt-oss-120b.yaml) |
-| `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra`](../agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra/gke/patch-prefill.yaml) |
+| `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`nemotron-3-ultra/modelserver/gpu/vllm`](../models/nemotron-3-ultra/modelserver/gpu/vllm/gke/patch-prefill.yaml) |
 
 > [!IMPORTANT]
 > Most model manifests in the repo still omit these flags — see
