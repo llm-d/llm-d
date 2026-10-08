@@ -5,7 +5,6 @@
     "well-lit-paths": { "label": "Well-Lit Paths", "position": 2, "collapsed": false },
     "well-lit-paths/foundations": { "label": "Foundations", "position": 1, "collapsed": false },
     "well-lit-paths/models": { "label": "Models", "position": 2, "collapsed": false },
-    "well-lit-paths/workloads": { "label": "Workloads", "position": 3, "collapsed": false },
 
     "architecture": { "label": "Concepts (Architecture)", "position": 4, "collapsed": true },
     "architecture/core": { "label": "Core", "position": 1, "collapsed": true },
@@ -47,8 +46,6 @@
 
     "well-lit-paths/foundations/pd-disaggregation": { "position": 6, "label": "Deploy Prefill/Decode Disaggregation" },
     "well-lit-paths/foundations/wide-expert-parallelism": { "position": 7, "label": "Scale MoE Models with Wide Expert Parallelism" },
-
-    "well-lit-paths/workloads/agentic-serving": { "position": 1, "label": "Serve Agentic Workloads" },
 
     "architecture/core/inferencepool": { "position": 1 },
     "architecture/core/model-servers": { "position": 3 },

@@ -1,8 +1,8 @@
 # Qwen3-Coder-480B on TPU 7x
 
 This recipe is optimized for agentic code generation; see the
-[Agentic Serving workload page](../../docs/well-lit-paths/workloads/agentic-serving.md) for the
-workload framing, and the [GLM-5.2](../glm-5-2/README.md) and
+[agentic workloads section of the Models overview](../../docs/well-lit-paths/models/README.md#agentic-workloads)
+for the workload framing, and the [GLM-5.2](../glm-5-2/README.md) and
 [NVIDIA-Nemotron-3-Ultra](../nemotron-3-ultra/README.md) guides for the other models benchmarked
 against the same workload.
 
