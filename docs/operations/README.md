@@ -18,25 +18,29 @@ Autoscale the inference pool on proactive, SLO-aware signals that reflect the tr
 
 ## Speed Up Model Startup
 
-### [Model Loading & Startup](startup/model-loading-and-startup.md)
+### [Load and Cache Model Weights](startup/model-loading-and-startup.md)
 
-Model sources, persistent caches, and startup optimization options for llm-d deployments.
+Model sources, node-local and PVC weight caches, self-hosted registries, and compilation-cache reuse for llm-d deployments.
 
-### [Fast Model Actuation](../../guides/fast-model-actuation-base/README.md)
+### [Transfer Weights Peer-to-Peer (ModelExpress)](../../guides/modelexpress-p2p/README.md)
 
-Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
+Load one replica from storage and transfer weights to peer replicas over GPU-to-GPU NIXL/RDMA for faster cold scale-outs.
 
-### [FMA with KEDA](../../guides/fast-model-actuation-keda/README.md)
-
-Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
-
-### [Pod Snapshots](../../guides/pod-snapshot/README.md)
+### [Restore from Pod Snapshots](../../guides/pod-snapshot/README.md)
 
 Checkpoint and restore single-GPU vLLM model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
 
-### [ModelExpress P2P Weight Transfer](../../guides/modelexpress-p2p/README.md)
+### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation-base/README.md)
 
-Load one replica from storage and transfer weights to peer replicas over GPU-to-GPU NIXL/RDMA for faster cold scale-outs.
+Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
+
+### [Scale from Zero with FMA and KEDA](../../guides/fast-model-actuation-keda/README.md)
+
+Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
+
+### [Troubleshoot Model Startup](startup/troubleshooting.md)
+
+Measure cold and warm starts, and fix Hugging Face rate limits and timeouts, startup-probe restarts, and cache storage errors.
 
 ## Manage Inference Pool Lifecycle
 

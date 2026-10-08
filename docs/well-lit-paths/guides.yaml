@@ -112,21 +112,22 @@ sections:
     target: operations/startup
     guides:
       # position 1: docs/operations/startup/model-loading-and-startup.md
-      - dir: guides/fast-model-actuation-base
-        slug: fast-model-actuation
-        title: Fast Model Actuation
-        position: 2
-      - dir: guides/fast-model-actuation-keda
-        slug: fast-model-actuation-keda
-        title: FMA with KEDA
-        position: 3
-      - dir: guides/pod-snapshot
-        slug: pod-snapshot
-        title: Pod Snapshots
-        position: 4
+      # position 6: docs/operations/startup/troubleshooting.md
       - dir: guides/modelexpress-p2p
         slug: modelexpress-p2p
-        title: ModelExpress P2P Weight Transfer
+        title: Transfer Weights Peer-to-Peer (ModelExpress)
+        position: 2
+      - dir: guides/pod-snapshot
+        slug: pod-snapshot
+        title: Restore from Pod Snapshots
+        position: 3
+      - dir: guides/fast-model-actuation-base
+        slug: fast-model-actuation
+        title: Reuse Warm Model Servers (FMA)
+        position: 4
+      - dir: guides/fast-model-actuation-keda
+        slug: fast-model-actuation-keda
+        title: Scale from Zero with FMA and KEDA
         position: 5
   operations-traffic:
     target: operations/traffic
