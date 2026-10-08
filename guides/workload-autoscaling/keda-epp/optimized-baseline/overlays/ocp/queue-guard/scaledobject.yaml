@@ -1,18 +1,18 @@
 # KEDA ScaledObject - OpenShift, queue signal, demand-aware overshoot guard.
 #
-# Same guard as overlays/k8s/queue-guard (four triggers - queue, running, pending,
-# replicas - combined by a scalingModifiers formula that reproduces the windows
-# path's raced demand as max(queue/queue_per_replica, running/running_per_replica),
-# then discounts by pending and floors at replicas; scaleUp window 0; fallback to a
-# single replica). See the k8s file header for the full formula rationale and why
-# the per-replica targets are named in the formula rather than carried by the
-# trigger thresholds.
+# Same guard as overlays/k8s/queue-guard (four triggers - queue, running,
+# unavailableReplicas, replicas - combined by a scalingModifiers formula that
+# reproduces the windows path's demand as required_replicas = max of each signal
+# divided by its per-replica target, then discounts by unavailableReplicas and floors
+# at replicas; scaleUp window 0; fallback to a single replica). See the k8s file
+# header for the full formula rationale and why the per-replica targets are named in
+# the formula rather than carried by the trigger thresholds.
 #
 # The difference here is platform auth: triggers query the OpenShift Thanos Querier
 # over HTTPS with authModes:bearer and authenticationRef:keda-prometheus-auth. The
 # TriggerAuthentication and the metrics-reader RBAC it needs are added by this
 # overlay's kustomization.yaml. kube-state-metrics must be scraped into the same
-# monitoring stack for the pending/replicas triggers.
+# monitoring stack for the unavailableReplicas/replicas triggers.
 #
 # ${...} placeholders are rendered by envsubst at apply time (see the guide).
 apiVersion: keda.sh/v1alpha1
@@ -56,10 +56,12 @@ spec:
       formula: >-
         let queue_per_replica = 1;
         let running_per_replica = 16;
-        let demand = max(queue / queue_per_replica, running / running_per_replica);
-        demand <= replicas
-        ? demand
-        : max(demand - (pending ?? 0), replicas)
+        let queue_replicas = queue / queue_per_replica;
+        let running_replicas = running / running_per_replica;
+        let required_replicas = max(queue_replicas, running_replicas);
+        required_replicas <= replicas
+        ? required_replicas
+        : max(required_replicas - (unavailableReplicas ?? 0), replicas)
       target: "1"
       metricType: AverageValue
   triggers:
@@ -89,7 +91,9 @@ spec:
       authenticationRef:
         name: keda-prometheus-auth
     - type: prometheus
-      name: pending
+      # Name matches the Deployment status field (status.unavailableReplicas); the
+      # formula references it as unavailableReplicas.
+      name: unavailableReplicas
       metricType: AverageValue
       metadata:
         serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091

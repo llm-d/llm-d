@@ -262,8 +262,8 @@ For how flow-control on/off changes which trigger sees demand, see [Flow Control
 
 New replicas take minutes to load a model, so scale-up can overshoot. The default
 `OVERSHOOT=windows` smooths this with HPA stabilization windows. To opt into the
-demand-aware guard (queue signal only), set `OVERSHOOT=guard`, which credits pending
-pods against demand and lets scale-up act immediately. To learn how each works and
+demand-aware guard (queue signal only), set `OVERSHOOT=guard`, which credits the
+not-yet-Ready replicas against demand and lets scale-up act immediately. To learn how each works and
 when to pick which, see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
 
 ## Apply the KEDA ScaledObject
@@ -317,7 +317,7 @@ kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MOD
 <!-- guide:deploy.apply_k8s_queue end -->
 
 Queue signal with the overshoot guard (`OVERSHOOT=guard`): same signal, but the
-pending-aware `scalingModifiers` formula replaces the scale-up stabilization
+overshoot-aware `scalingModifiers` formula replaces the scale-up stabilization
 window (see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation)).
 
 <!-- guide:deploy.apply_k8s_queue_guard start -->

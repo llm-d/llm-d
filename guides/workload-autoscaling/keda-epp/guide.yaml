@@ -43,9 +43,10 @@ env:
     # Overshoot solution (how scale-up avoids over-provisioning while new pods
     # sit Pending). `windows` = HPA stabilization windows (the portable default):
     # a 300s scaleUp stabilization window smooths the decision so the HPA does not
-    # keep requesting capacity that is already in flight. `guard` = pending-aware
-    # scalingModifiers (in the queue-guard overlay's scaledobject.yaml): the formula subtracts Pending
-    # pods from demand, which moves that protection into the metric and lets the
+    # keep requesting capacity that is already in flight. `guard` = overshoot-aware
+    # scalingModifiers (in the queue-guard overlay's scaledobject.yaml): the formula subtracts the
+    # not-yet-Ready (unavailable) replicas from the required replica count, which moves
+    # that protection into the metric and lets the
     # scaleUp stabilization window drop to 0 for immediate scale-up. `guard` ships
     # for the queue signal only (k8s/queue-guard, ocp/queue-guard); the saturation
     # signal always uses `windows`. Selects which leaf the deploy step names; it
