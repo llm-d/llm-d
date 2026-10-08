@@ -194,6 +194,7 @@ export POD_SELECTOR=llm-d.ai/guide=aggregation
 <summary><b>E/PD and E/P/D</b></summary>
 
 <!-- guide:deploy.topology.disaggregation start -->
+<!-- llm-d-cicd:skip start -->
 ```bash
 # only when TOPOLOGY=e-pd or e-p-d:
 export TOPOLOGY_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}/e-disaggregation"
@@ -203,6 +204,7 @@ export MONITORING_COMPONENT=monitoring-pd
 # The pods the InferencePool selects (matchLabels in the router values)
 export POD_SELECTOR=llm-d.ai/guide=e-disaggregation
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.topology.disaggregation end -->
 
 </details>

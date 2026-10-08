@@ -86,8 +86,13 @@ deploy:
           export MONITORING_COMPONENT=monitoring
           # The pods the InferencePool selects (matchLabels in the router values)
           export POD_SELECTOR=llm-d.ai/guide=aggregation
+    # guide.py only wraps non-default ACCELERATOR_TYPE / MODEL_SERVER variants in
+    # cicd:skip markers. TOPOLOGY is not one of them, so the non-default branch
+    # also carries skip_in: [ci]; otherwise running the README's unskipped bash
+    # blocks in order would overwrite the aggregation variables set above.
     disaggregation:
       - when: {TOPOLOGY: [e-pd, e-p-d]}
+        skip_in: [ci]
         run: |
           export TOPOLOGY_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}/e-disaggregation"
           export ROUTER_VALUES="${TOPOLOGY_DIR}/router/${MODEL_SERVER}/${TOPOLOGY}-disaggregation.values.yaml"
