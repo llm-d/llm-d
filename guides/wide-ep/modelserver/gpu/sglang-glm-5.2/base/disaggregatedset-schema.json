@@ -1,0 +1,100 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "DisaggregatedSet strategic-merge-patch schema for kustomize",
+    "version": "v1"
+  },
+  "definitions": {
+    "io.x-k8s.disaggregatedset.v1.DisaggregatedSet": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "type": "object",
+          "properties": {
+            "roles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/io.x-k8s.disaggregatedset.v1.Role"
+              },
+              "x-kubernetes-patch-merge-key": "name",
+              "x-kubernetes-patch-strategy": "merge"
+            }
+          }
+        }
+      },
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "disaggregatedset.x-k8s.io",
+          "kind": "DisaggregatedSet",
+          "version": "v1"
+        }
+      ]
+    },
+    "io.x-k8s.disaggregatedset.v1.Role": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "spec": {
+          "type": "object",
+          "properties": {
+            "leaderWorkerTemplate": {
+              "type": "object",
+              "properties": {
+                "workerTemplate": {
+                  "$ref": "#/definitions/io.x-k8s.disaggregatedset.v1.PodTemplateSpec"
+                },
+                "leaderTemplate": {
+                  "$ref": "#/definitions/io.x-k8s.disaggregatedset.v1.PodTemplateSpec"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "io.x-k8s.disaggregatedset.v1.PodTemplateSpec": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "type": "object",
+          "properties": {
+            "containers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/io.x-k8s.disaggregatedset.v1.Container"
+              },
+              "x-kubernetes-patch-merge-key": "name",
+              "x-kubernetes-patch-strategy": "merge"
+            },
+            "volumes": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              },
+              "x-kubernetes-patch-merge-key": "name",
+              "x-kubernetes-patch-strategy": "merge,retainKeys"
+            }
+          }
+        }
+      }
+    },
+    "io.x-k8s.disaggregatedset.v1.Container": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        }
+      }
+    }
+  }
+}

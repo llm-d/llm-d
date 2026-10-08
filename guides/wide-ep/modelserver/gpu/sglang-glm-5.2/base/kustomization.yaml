@@ -1,0 +1,37 @@
+# Single DisaggregatedSet managing the SGLang prefill and decode roles.
+# Requires LWS v0.10.0+ with the DisaggregatedSet CRD and controller installed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic
+# merge patches anywhere in a build composing this base match roles,
+# containers, volumes, and env entries by name instead of array index.
+openapi:
+  path: disaggregatedset-schema.json
+
+components:
+  # The Rust frontend, node-local per-rank ports, and per-rank P/D bootstrap
+  # landed in SGLang main during September 2026 (sgl-project/sglang#34430,
+  # #36234); no release tag contains them yet, so track the nightly image.
+  - ../../../../../recipes/modelserver/components/images/gpu-sglang/nightly
+  # The sidecar routes SGLang /generate through the P/D handler since
+  # llm-d/llm-d-router#2525, which is only in the main image so far.
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.2-FP8
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/engine-type: sglang
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true

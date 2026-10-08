@@ -1,0 +1,170 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+
+# GKE-specific configuration (A3 Ultra H200, RoCE). GPUs and RDMA NICs are
+# allocated through DRA (GKE managed DRANET): each pod requests eight
+# gke-rdma-template claims, one GPU+NIC pair per rank, matched on PCIe root.
+# The disable-gke-nccl-tuner-patch component only targets Deployment and
+# LeaderWorkerSet, so the equivalent env vars are set in the patch below.
+components:
+  - ../../../../../../recipes/modelserver/components/gke-rdma
+
+# The patch below matches roles, containers, volumes, and env entries by
+# name via the DisaggregatedSet schema the base declares. The common pod
+# spec is written once under the prefill role (&gke-common) and merged into
+# the decode role (<<: *gke-common), which overrides only the affinity block.
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-sglang-glm-5-2
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec: &gke-common
+                    # Prefer the same block and subblock. Subblock affinity
+                    # cannot guarantee all pods in the replica are in the same
+                    # subblock, but is better than random spreading.
+                    affinity:
+                      podAffinity:
+                        preferredDuringSchedulingIgnoredDuringExecution:
+                          - weight: 2
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: prefill
+                                  llm-d.ai/engine-type: sglang
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-block
+                          - weight: 1
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: prefill
+                                  llm-d.ai/engine-type: sglang
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-subblock
+                    # DRA node pools taint GPU nodes; the nvidia.com/gpu extended
+                    # resource no longer grants the implicit toleration once GPUs
+                    # come from claims.
+                    tolerations:
+                      - key: nvidia.com/gpu
+                        operator: Exists
+                        effect: NoSchedule
+                    # One GPU+NIC DRA claim per rank, eight per pod.
+                    resourceClaims:
+                      - name: gke-rdma-claim-0
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-1
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-2
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-3
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-4
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-5
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-6
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-7
+                        resourceClaimTemplateName: gke-rdma-template
+                    containers:
+                      - name: sglang
+                        # Privileged is required on GKE for GPU-initiated RDMA
+                        # (DeepEP over NVSHMEM IBGDA). See
+                        # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+                        securityContext:
+                          privileged: true
+                        resources:
+                          # GPUs are allocated through the claims below.
+                          limits:
+                            nvidia.com/gpu: null
+                          requests:
+                            nvidia.com/gpu: null
+                          claims:
+                            - name: gke-rdma-claim-0
+                            - name: gke-rdma-claim-1
+                            - name: gke-rdma-claim-2
+                            - name: gke-rdma-claim-3
+                            - name: gke-rdma-claim-4
+                            - name: gke-rdma-claim-5
+                            - name: gke-rdma-claim-6
+                            - name: gke-rdma-claim-7
+                        env:
+                          # Disable GKE's built-in NCCL tuner and net plugin
+                          # (same env vars as the disable-gke-nccl-tuner-patch
+                          # component sets for Deployment/LWS).
+                          - name: NCCL_TUNER_PLUGIN
+                            value: "none"
+                          - name: NCCL_NET_PLUGIN
+                            value: ""
+                          # GCP pairs GPU NICs to PCIe bridges
+                          # (https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth#h200-gpus),
+                          # which can lead to NVSHMEM's automatic distance
+                          # assignment algorithm selecting NICs inefficiently.
+                          # Instead, instruct NVSHMEM to select the NIC that
+                          # aligns to the index of the GPU on the node. Relies
+                          # on https://github.com/deepseek-ai/DeepEP/pull/466
+                          - name: DEEP_EP_DEVICE_TO_HCA_MAPPING
+                            value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
+                          # This is recommended on gke.
+                          # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
+                          - name: NVSHMEM_DISABLE_GDRCOPY
+                            value: "true"
+                          # NIXL/UCX: allow RoCE reachability across all
+                          # subnet interfaces for the P/D KV transfer.
+                          - name: UCX_IB_ROCE_REACHABILITY_MODE
+                            value: "all"
+                          # Disable HF XET when loading from the shared host
+                          # cache.
+                          - name: HF_HUB_DISABLE_XET
+                            value: "1"
+                    # We add the volume for different providers since the
+                    # hostPath can be different. The HF hub cache path is
+                    # shared with the vLLM guides so downloaded weights are
+                    # reused across engines on the same node.
+                    volumes:
+                      - name: hf-cache
+                        hostPath:
+                          path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-hf-cache/
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        hostPath:
+                          path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/sglang-jit-cache/
+                          type: DirectoryOrCreate
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    <<: *gke-common
+                    affinity:
+                      podAffinity:
+                        preferredDuringSchedulingIgnoredDuringExecution:
+                          - weight: 2
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: decode
+                                  llm-d.ai/engine-type: sglang
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-block
+                          - weight: 1
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: decode
+                                  llm-d.ai/engine-type: sglang
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-subblock

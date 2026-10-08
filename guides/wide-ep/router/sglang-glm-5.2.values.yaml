@@ -1,0 +1,51 @@
+# SGLang GLM-5.2 overrides for wide-ep.values.yaml. Apply after
+# wide-ep.values.yaml; targetPorts (the 8 per-rank ports) and matchLabels
+# are inherited from it.
+#
+# The SGLang Rust frontend serves the native /generate API on every DP rank,
+# so the EPP parses /generate bodies (pre-tokenized input_ids) with the
+# sglanghttp-parser. The explicit parser list means other paths are rejected
+# with 400 rather than forwarded to a listener that does not serve them.
+#
+# The Rust listeners expose no /metrics endpoint yet (llm-d/llm-d#2198), so
+# only signals the EPP computes itself are used: the approximate prefix-cache
+# scorer (from the token IDs it parsed) and the active-request scorer. The
+# queue and KV-cache utilization scorers would have no data.
+router:
+  modelServers:
+    type: sglang
+  epp:
+    flags:
+      # The Rust listeners have no /metrics; the default 50ms scrape of every
+      # rank port only produces 404s and floods the SGLang access logs.
+      refresh-metrics-interval: 10s
+    pluginsCustomConfig:
+      wide-ep-config.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: sglanghttp-parser
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+        requestHandler:
+          parsers:
+          - pluginRef: sglanghttp-parser
