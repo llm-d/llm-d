@@ -13,6 +13,13 @@ done
 printf 'command=%s kubeconfig=[%s] args=%s\n' \
   "$command_name" "${KUBECONFIG-<unset>}" "$arguments" >> "$STUB_LOG"
 
+# `kubectl apply -f -` reads the manifest from stdin. Drain it, otherwise this
+# stub can exit while the upstream `helm show crds` is still writing, and the
+# SIGPIPE there fails the installer's pipeline under `set -o pipefail`.
+if [[ "${*: -1}" == "-" ]]; then
+  cat >/dev/null
+fi
+
 record_mutation() {
   printf 'command=%s kubeconfig=[%s] args=%s\n' \
     "$command_name" "${KUBECONFIG-<unset>}" "$arguments" >> "$STUB_MUTATIONS"
