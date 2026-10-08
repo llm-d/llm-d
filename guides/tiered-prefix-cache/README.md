@@ -294,6 +294,9 @@ The connectors do not evict data from the shared tier. Capacity is managed by th
 
 For `CONNECTOR=mooncake-store`, **deploy the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service**, and for `VARIANT=fs` the Mooncake Client. The Client allocates its CPU DRAM and SSD pool at startup and registers it with the Master, so sizing is set before deployment (this overlay raises the [helper defaults](../../helpers/mooncake-client/) of 40 GB DRAM and 500 GB SSD to 80 GB DRAM and 1 TB SSD per node):
 
+> [!NOTE]
+> Both variants use RDMA. The model server pods (and the Mooncake Client for `fs`) request `rdma/ib: 1`, so nodes must expose that resource or the pods stay `Pending`. See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md).
+
 <!-- guide:deploy.mooncake start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
