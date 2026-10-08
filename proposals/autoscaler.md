@@ -14,7 +14,7 @@ Variant AutoScaler Proposal
 > [Workload Variant Autoscaling](../docs/architecture/advanced/autoscaling/wva.md)
 > and the [Autoscaling overview](../docs/architecture/advanced/autoscaling/README.md).
 > The HPA/KEDA companion path is documented in
-> [HPA + KEDA](../docs/architecture/advanced/autoscaling/hpa-keda.md). The text below
+> [HPA + KEDA](../docs/architecture/advanced/autoscaling/keda-epp.md). The text below
 > is preserved as the original design proposal.
 
 ## Summary
