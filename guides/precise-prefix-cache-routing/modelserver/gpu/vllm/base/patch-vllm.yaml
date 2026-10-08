@@ -18,6 +18,9 @@ spec:
             - "--block-size=64"
             - "--kv-events-config"
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+            # Drain in-flight requests on SIGTERM. Sized with the grace period in
+            # recipes/modelserver/components/graceful-shutdown; raise both together.
+            - "--shutdown-timeout=45"
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
