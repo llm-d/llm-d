@@ -1,5 +1,8 @@
 # E-Disaggregation (Encode Disaggregation)
 
+> [!NOTE]
+> This page is the Encode-disaggregated scenario that the multimodal nightly E2E workflow deploys. The published well-lit path, which covers aggregated serving and Encode disaggregation (E/PD, E/P/D) with mechanism verification, is [Multimodal Model Serving](../README.md).
+
 ## Overview
 
 This experimental guide deploys encode-disaggregated multimodal inference workloads. Encode disaggregation offloads the multimodal encoding stage (converting raw images, video, or audio into embeddings) to dedicated workers. The resulting embeddings are consumed by prefill/decode workers alongside text tokens. When a request contains multiple multimodal entries, different Encode workers can process them concurrently.

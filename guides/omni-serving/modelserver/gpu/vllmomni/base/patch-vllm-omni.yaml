@@ -13,10 +13,12 @@ spec:
       containers:
       - name: modelserver
         command: ["vllm", "serve"]
+        # --omni loads vLLM-Omni's default Qwen3-Omni deploy config: the
+        # thinker stage on GPU 0, the talker and code2wav stages on GPU 1.
+        # Explicit CLI flags override it, so don't add --tensor-parallel-size.
         args:
-        - "Qwen/Qwen3-Omni"
+        - "Qwen/Qwen3-Omni-30B-A3B-Instruct"
         - "--omni"
-        - "--tensor-parallel-size=2"
         - "--trust-remote-code"
         - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
         - "--log-stats"
@@ -31,8 +33,7 @@ spec:
           limits:
             cpu: '16'
             memory: 128Gi
-            # Adjust GPU count based on model requirements.
-            # Qwen3-Omni requires at least 2 GPUs.
+            # Qwen3-Omni's default deploy config uses 2 GPUs (devices 0 and 1).
             nvidia.com/gpu: 2
           requests:
             cpu: '8'

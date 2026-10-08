@@ -378,6 +378,31 @@ def test_predicted_latency_routing_matrix_matches_repo():
     assert g.check().ok(), _errors(g.check())
 
 
+def test_multimodal_serving_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "multimodal-serving")
+    assert g.check().ok(), _errors(g.check())
+    # The guide has no top-level modelserver/, so check() cannot see the
+    # overlays: assert every TOPOLOGY / accelerator / provider the README
+    # documents resolves to an overlay (the paths deploy.topology exports).
+    root = REPO_ROOT / "guides" / "multimodal-serving"
+    agg = root / "aggregation" / "modelserver"
+    edisagg = root / "e-disaggregation" / "modelserver"
+    overlays = [agg / "gpu" / "vllm" / p for p in ("base", "gke")]
+    overlays += [agg / "xpu" / "vllm" / "base", agg / "tpu" / "v7" / "vllm" / "gke"]
+    overlays += [
+        edisagg / "gpu" / "vllm" / t / p
+        for t in ("e-pd", "e-p-d")
+        for p in ("base", "gke", "coreweave")
+    ]
+    missing = [str(o) for o in overlays if not (o / "kustomization.yaml").is_file()]
+    assert not missing, missing
+
+
+def test_omni_serving_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "omni-serving")
+    assert g.check().ok(), _errors(g.check())
+
+
 def test_env_comment_renders_inline():
     lines = guide._env_static_lines(
         {

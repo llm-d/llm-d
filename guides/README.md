@@ -23,6 +23,11 @@ We currently offer the following:
 * [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
 * [Wide Expert-Parallelism](./wide-ep/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
 
+## Multimodal and Omni Models
+
+* [Serve Multimodal Models](./multimodal-serving/README.md) - Serve image, video, and audio input (e.g. `Qwen/Qwen3-VL-32B-Instruct`) with prefix-cache aware routing that matches media as well as text, in an aggregated topology or with dedicated Encode workers (E/PD, E/P/D).
+* [Serve Omni Models](./omni-serving/README.md) - Serve a model that answers in text and audio (e.g. `Qwen/Qwen3-Omni-30B-A3B-Instruct`) from one vLLM-Omni pool behind the llm-d Router.
+
 ## Operations
 
 Fleet operations that layer onto any deployment above. See [Operations](../docs/operations/README.md) for the full section, including the hand-written operations pages.
@@ -61,7 +66,6 @@ Workload-centric guides — each provides the recommended, cohesive deployment f
 
 * [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
 * [Agentic API](./agentic-api/README.md) (Experimental) - an extension to any guide that deploys the router with a vLLM model server, rather than a deployment of its own: adds the OpenAI-compatible Responses API (stateful multi-turn conversations, webhook tool loops, WebSocket streaming) via `vllm/agentic-api` and a PostgreSQL state store, and additive `HTTPRoute`s that put it in front of the existing `InferencePool`.
-* [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
 * [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
 
 ## Experimental Guides

@@ -34,6 +34,14 @@ sections:
         slug: enable-p2p-prefix-cache-sharing
         title: Enable P2P Prefix Cache Sharing
         position: 5
+      - dir: guides/multimodal-serving
+        slug: serve-multimodal-models
+        title: Serve Multimodal Models
+        position: 8
+      - dir: guides/omni-serving
+        slug: serve-omni-models
+        title: Serve Omni Models
+        position: 9
   models:
     target: well-lit-paths/models
     guides: []

@@ -1,0 +1,145 @@
+name: omni-serving
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# No nightly E2E workflow covers this guide yet, so every cell is community.
+support:
+  engines: {vllmomni: vLLM-Omni}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "H100 80 GB reference · 1 replica × 2 GPUs (thinker on GPU 0, talker + code2wav on GPU 1) · `INFRA_PROVIDER=base`"
+      model: Qwen/Qwen3-Omni-30B-A3B-Instruct
+      engines: {vllmomni: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: omni-serving
+    NAMESPACE: llm-d-omni-serving
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    MODEL_SERVER: {default: vllmomni, values: [vllmomni]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    INFRA_PROVIDER: {default: base, values: [base]}
+
+    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the overlay serves (table above)"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+  monitoring_values:
+    - when: {MONITORING: ["true"]}
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    chat:
+      - run: |
+          # Text in, text out
+          kubectl run chat-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
+              -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"What can you do, in one sentence?\"}], \"modalities\": [\"text\"], \"max_tokens\": 64}" \
+              | jq -r ".choices[0].message.content"'
+    chat_audio:
+      - run: |
+          # Text in, text and speech out: the thinker writes the answer, the
+          # talker and code2wav stages turn it into audio (base64 WAV)
+          kubectl run chat-audio-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
+              -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"Say hello to llm-d in one short sentence.\"}], \"modalities\": [\"text\", \"audio\"]}" \
+              | jq -r ".choices[] | if .message.audio then \"audio: \(.message.audio.data | length) base64 characters\" else \"text: \(.message.content)\" end"'
+    endpoints:
+      - run: |
+          # One request per OpenAI endpoint path the pool fronts; the status
+          # code comes from whichever component answered
+          kubectl run endpoints-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -o /dev/null -w "/v1/audio/speech: HTTP %{http_code}\n" -X POST "http://${IP}/v1/audio/speech" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"input\": \"llm-d routes omni requests.\", \"response_format\": \"wav\"}"
+              curl -sS -o /dev/null -w "/v1/images/generations: HTTP %{http_code}\n" -X POST "http://${IP}/v1/images/generations" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"a red apple on a wooden table\", \"size\": \"512x512\", \"n\": 1}"'
+    pod_logs:
+      - run: |
+          # The model server's access log: every request above, by endpoint
+          # path and status, on the pods of the Omni pool
+          kubectl logs -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -c modelserver --tail=-1 --prefix \
+            | grep -E '"POST /v1/(chat/completions|audio/speech|images/generations) HTTP' || true
+
+cleanup:
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}
