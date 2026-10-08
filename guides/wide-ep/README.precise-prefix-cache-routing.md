@@ -111,7 +111,10 @@ helm install ${GUIDE_NAME} \
 #### Deploy using LeaderWorkerSet
 
 The overlay contains the complete tested modelserver and render-Service
-configuration:
+configuration. Its `render-endpoints` component sets
+`VLLM_ENABLE_SCALE_OUT_ENDPOINTS=1` on the prefill pods: vLLM serves the
+`/v1/*/render` endpoints only when that is set, and the render Service has no
+pods of its own, so without it every `token-producer` call returns 404:
 
 ```bash
 kubectl apply -n ${NAMESPACE} \
@@ -175,7 +178,9 @@ curl -X POST http://${IP}/v1/completions \
 
 ### 3. Verify Precise Routing
 
-The render Service must return token IDs:
+The render Service must return token IDs. A 404 here means the model server
+is not exposing vLLM's scale-out endpoints, so precise routing is inert while
+requests still return 200 from the remaining scorers:
 
 ```bash
 kubectl run render-check --rm -i --restart=Never \
