@@ -5,7 +5,7 @@ The `EndpointPickerConfig` is the central configuration for the Endpoint Picker 
 The configuration text has the following form:
 
 ```yaml
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 plugins:
 - ....
@@ -25,6 +25,8 @@ dataLayer:
 
 > [!IMPORTANT]
 > While the configuration syntax looks like a Kubernetes Custom Resource, it is **not** a Kubernetes CRD. The configuration is not reconciled by a controller and is only read on startup. Updating the configuration requires a restart of the EPP.
+
+Use `apiVersion: llm-d.ai/v1` for new configurations. The router still accepts `llm-d.ai/v1alpha1`, but reports it as deprecated at startup and plans to remove support in a later release. When migrating, move `dataLayer.discovery.pluginRef` to `dataLayer.discovery.endpoints.pluginRef`. Rename `dataLayer.crossReplicaSyncerPluginRef` to `dataLayer.crossReplica.syncerPluginRef`, `dataLayer.crossReplicaSyncInterval` to `dataLayer.crossReplica.syncInterval`, and `dataLayer.crossReplicaPublishTimeout` to `dataLayer.crossReplica.publishTimeout`.
 
 - **Metadata**: The first two lines of the configuration are constant (`apiVersion` and `kind`) and must appear as is.
 - **Plugins**: Defines the set of plugins that will be instantiated and their parameters.
@@ -101,7 +103,7 @@ spec:
         ...
         - --config-text
         - |
-          apiVersion: llm-d.ai/v1alpha1
+          apiVersion: llm-d.ai/v1
           kind: EndpointPickerConfig
           plugins:
           - type: prefix-cache-scorer
@@ -223,7 +225,7 @@ When flow control is enabled (via the `FlowControl` feature gate), incoming requ
 The following example demonstrates a complete `EndpointPickerConfig` with flow control enabled, showing how to configure the `featureGates`, `plugins`, and `flowControl` sections (including the nested `saturationDetector`) to work together.
 
 ```yaml
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 
 featureGates:

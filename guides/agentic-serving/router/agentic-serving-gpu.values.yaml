@@ -18,7 +18,7 @@ router:
     pluginsConfigFile: "agentic-serving-gpu-plugins.yaml"
     pluginsCustomConfig:
       agentic-serving-gpu-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: always-disagg-pd-decider
