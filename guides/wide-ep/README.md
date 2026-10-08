@@ -20,6 +20,10 @@ This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggre
 >
 > We plan to migrate to the upstream vLLM images in an upcoming release
 
+Looking for DeepSeek-V4 or GLM-5.2? Their tuned wide-EP recipes live in the Models guides:
+[DeepSeek-V4-Pro on GB200](../deepseek-v4/README.md) and
+[GLM-5.2-FP8 on H200](../glm-5-2/README.md).
+
 ## Default Configuration
 
 | Parameter | Value |
@@ -278,7 +282,7 @@ curl -X POST http://${IP}/v1/completions \
 ## Precise prefix-cache routing
 
 For KV-event-backed prefix routing with multi-port DP model servers (useful for active-active HA routing),
-follow the [Wide Expert Parallelism with Precise Prefix-Cache Routing](README.precise-prefix-cache-routing.md)
+see the [GLM-5.2 with Precise Prefix-Cache Routing](../glm-5-2/README.precise-prefix-cache-routing.md)
 variant.
 
 ## Benchmarking

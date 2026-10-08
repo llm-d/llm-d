@@ -50,15 +50,42 @@ stack differently:
 - **Reasoning-heavy generation** (long internal reasoning before answering): shifts work to
   decode and grows per-request KV footprint.
 
+## The Optimization Stack
+
+The reference workload llm-d optimizes for today is **long-horizon loops** (agentic code
+generation): deep multi-turn sessions over large, repository-scale contexts with tool-call pauses
+between turns. Three behaviors drive every choice — prefill-heavy/decode-light (a 160K-token
+context dominates TTFT), high reusable locality (cache hit rate, not FLOPs, sets throughput), and
+bursty/stateful arrivals (tool pauses leave sessions idle, then resume in bursts).
+
+The recommended deployments compose llm-d's foundations into one stack, each layer relieving a
+specific pressure of the agentic workload:
+
+| Layer | What it does for the workload |
+| :--- | :--- |
+| **[Optimized baseline](../../../guides/optimized-baseline/README.md)** — routing foundation | Prefix-cache scorer routes a turn to the replica already holding its prefix; load-aware scorers keep bursts off hot replicas. The foundation every deployment builds on. |
+| **[Tiered KV offloading](../../../guides/tiered-prefix-cache/README.md)** | Offload KV cache beyond accelerator memory across tiers, so idle sessions restore on resume instead of recomputing prefill. |
+| **[Precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md)** — advanced | An exact, global view of cache state, enabling session-centric orchestration and non-naive (beyond-LRU) KV-cache offloading & retention. |
+| **[P/D disaggregation](../foundations/pd-disaggregation.md)** — large models / interactivity | Separate prefill and decode pools so heavy prefill never stalls token generation, stabilizing ITL. |
+
 ## Deploy
 
-The [agentic-serving guide](../../../guides/agentic-serving) is the operational counterpart. It
-composes llm-d's existing well-lit paths into a deployment stack — the
-[optimized baseline](../../../guides/optimized-baseline/README.md) for prefix- and load-aware routing,
-[tiered KV-cache offloading](../../../guides/tiered-prefix-cache/README.md) to keep idle sessions resident,
-[precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md) for exact KV-state visibility, and [P/D disaggregation](../foundations/pd-disaggregation.md) for interactivity under load — into
-the recommended deployment, realized per accelerator and benchmarked against a shared, realistic
-agentic workload. See the guide for how each layer maps to the workload.
+The stack is realized per model and accelerator as Model guides,
+each benchmarked against an agentic code-generation workload with large reused contexts and
+bursty, locality-heavy traffic. Pick by hardware, then by topology:
+
+- [GLM-5.2-FP8 on H200](../../../guides/glm-5-2/README.md) — wide expert-parallel P/D-disaggregated serving with MTP and tiered KV-offloading; the default uses 8 H200 nodes, with alternatives from 2 to 10 nodes. See the [GLM-5.2 blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d) for the benchmark analysis.
+- [NVIDIA-Nemotron-3-Ultra-550B on H200](../../../guides/nemotron-3-ultra/README.md) — P/D-disaggregated serving (TP=8) on 8× H200, with CPU KV-offloading and ready-to-use coding-agent client configs.
+- [Qwen3-Coder-480B on TPU 7x](../../../guides/qwen3-coder-480b/README.md) — routing + CPU KV-offloading on 8× TPU 7x (2x2x1).
+
+The Nemotron and Qwen deployments are benchmarked with
+[`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) through
+[`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark); GLM-5.2 uses
+[`aiperf`](https://github.com/ai-dynamo/aiperf) on production agentic traces. Workload details
+and metrics differ by model, accelerator, and topology, so compare results within each guide.
+The guides report request-level throughput, TTFT, and ITL, plus session or task metrics where
+the benchmark provides them; replaying complete agent dependency graphs with tool timing and
+sub-agent fan-out remains a separate evaluation mode.
 
 ## Direction
 

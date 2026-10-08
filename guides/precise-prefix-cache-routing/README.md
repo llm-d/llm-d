@@ -65,7 +65,7 @@ This guide includes configurations for the following accelerator and model serve
 > - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together.
 > - **Model.** The `token-producer` `modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) is `Qwen/Qwen3-32B`. On an accelerator that serves another model, set it to `MODEL` before deploying the router: with the default render Service the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 
-For wide-EP LWS deployments (multi-port DP model servers), use the [`wide-ep` precise routing variant](../wide-ep/README.precise-prefix-cache-routing.md) instead of the manifests here.
+For wide-EP LWS deployments (multi-port DP model servers), use the [GLM-5.2 precise routing variant](../glm-5-2/README.precise-prefix-cache-routing.md) instead of the manifests here.
 
 > [!NOTE]
 > The router runs as a **single replica**: the `token-load-scorer`'s in-flight token accounting is local to each router process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index itself is HA-safe (each replica converges independently via pod discovery), so active-active HA (`--set router.epp.replicas=2`) can return once in-flight state is shared.
