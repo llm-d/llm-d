@@ -33,3 +33,7 @@ This Code of Conduct applies both within project spaces and in public spaces whe
 This Code of Conduct is adapted from the Contributor Covenant, version 1.4, available at <https://www.contributor-covenant.org/version/1/4/code-of-conduct.html>
 
 For answers to common questions about this code of conduct, see <https://www.contributor-covenant.org/faq>
+
+## CNCF Compliance
+
+This Code of Conduct fully incorporates all parts of the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md) and it's provisions and reporting methods as well
