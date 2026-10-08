@@ -29,11 +29,11 @@ support:
       engines: {vllm: validated, sglang: community}
     xpu:
       label: Intel XPU
-      notes: "Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16"
+      notes: "vLLM: Data Center GPU Max 1550+ · 2 replicas × 1 XPU via DRA · fp16"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: community}
     "tpu/v6":
       label: Google TPU v6e
       notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8)"
@@ -220,7 +220,7 @@ verify:
           for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
             echo "== ${pod}"
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
           done
 
 cleanup:
