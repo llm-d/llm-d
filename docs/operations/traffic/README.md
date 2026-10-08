@@ -6,6 +6,10 @@ Control how requests reach the inference pool when several tenants, priorities, 
 
 Intelligent request queuing in the EPP: priority bands, per-tenant fairness, and saturation detection for multi-tenant deployments and traffic spikes. [Production Tuning](../../../guides/flow-control/tuning.md) covers sizing `maxConcurrency`.
 
+## [Deploy Multiple Inference Pools](../../../guides/workload-autoscaling/multi-inference-pool/README.md)
+
+Add InferencePools, each with its own EPP and model server Deployment, to an existing deployment so several models or tenants are served side by side.
+
 ## [Multi-Model & LoRA Routing](../../../guides/multi-model-routing/README.md)
 
 Serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
