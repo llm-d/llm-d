@@ -7,35 +7,67 @@
 
 ## Overview
 
-This guide demonstrates how to deploy DeepSeek-R1-0528 using vLLM's P/D disaggregation support with NIXL in a wide expert parallel pattern with DP-aware scheduling. The NVIDIA GPU configurations deploy a single `DisaggregatedSet` that manages the prefill and decode roles together; the Intel XPU configuration uses plain `LeaderWorkerSet`. It has been validated on:
+This guide demonstrates how to deploy a large Mixture-of-Experts model using vLLM's P/D
+disaggregation support in a wide expert parallel pattern with DP-aware scheduling. It ships
+exactly one configuration per hardware platform:
 
-* a 32xH200 cluster with InfiniBand networking
-* a 32xH200 cluster on GKE with RoCE networking
-* a 32xB200 cluster on GKE with RoCE networking
+| Hardware | Model | Directory | Infrastructure providers (`INFRA_PROVIDER`) |
+| --- | --- | --- | --- |
+| [NVIDIA GPU](#nvidia-gpu-deepseek-r1-0528) | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) | `modelserver/gpu/vllm-deepseek-r1-0528/` | `gke`, `coreweave`, `base` |
+| [AMD Instinct](#amd-instinct-deepseek-v3) | [DeepSeek-V3](https://huggingface.co/deepseek-ai/DeepSeek-V3) | `modelserver/amd/vllm-deepseek-v3/` | `base`, `amd-ci` |
+| [Intel XPU](#intel-xpu-deepseek-v2-lite) | [DeepSeek-V2-Lite-Chat](https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite-Chat) | `modelserver/xpu/vllm/` | — |
+
+The NVIDIA GPU and AMD configurations deploy a single `DisaggregatedSet` that manages the
+prefill and decode roles together; the Intel XPU configuration uses plain `LeaderWorkerSet`.
 
 > [!NOTE]
-> This guide uses a custom vLLM image built by llm-d to solve two issues:
-> A) NVSHMEM bug on RoCE impacting DeepEP HT - llm-d vendors a custom patch
-> B) vLLM v0.23.0-v0.24.0 bug with DP supervisor - llm-d builds a custom image
+> NVIDIA GPU and AMD backends use an RDMA all-to-all backend (DeepEP, MoRI) for inter-node EP
+> and require All-to-All RDMA connectivity. Every NIC on a host must be able to communicate with
+> every NIC on all other hosts. Networks restricted to communicating only between matching NIC
+> IDs (rail-only connectivity) will fail. The Intel XPU backend uses XCCL and
+> `allgather_reducescatter`; it does not use DeepEP, but still requires full-mesh pod network
+> connectivity between decode and prefill workers.
 >
-> We plan to migrate to the upstream vLLM images in an upcoming release
+> See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
+> for how the networking stack (NIXL/UCX, InfiniBand/RoCE) fits together and what
+> the cluster must provide, and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md)
+> for cross-node setup.
 
-Looking for DeepSeek-V4 or GLM-5.2? Their tuned wide-EP recipes live in the Models guides:
-[DeepSeek-V4-Pro on GB200](../deepseek-v4/README.md) and
-[GLM-5.2-FP8 on H200](../glm-5-2/README.md).
-
-## Default Configuration
+### NVIDIA GPU: DeepSeek-R1-0528
 
 | Parameter | Value |
 | --- | --- |
 | Model | [DeepSeek-R1-0528](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528) |
 | Prefill Data Parallelism | 16 |
 | Decode Data Parallelism | 16 |
-| Total GPUs | 32 |
+| Total GPUs | 32 (H200) |
+| All2All backend | DeepEP (high-throughput prefill, low-latency decode) |
+| KV transfer | NIXL |
 
-### Intel XPU Configuration
+Validated on a 32xH200 cluster with InfiniBand networking (`coreweave`) and a 32xH200 cluster on
+GKE with RoCE networking (`gke`). `base` is the provider-neutral overlay the others patch.
 
-The Intel XPU configuration uses the validated DeepSeek-V2-Lite shape:
+> [!NOTE]
+> This configuration uses a custom vLLM image built by llm-d to solve two issues:
+> A) NVSHMEM bug on RoCE impacting DeepEP HT - llm-d vendors a custom patch
+> B) vLLM v0.23.0-v0.24.0 bug with DP supervisor - llm-d builds a custom image
+>
+> We plan to migrate to the upstream vLLM images in an upcoming release
+
+### AMD Instinct: DeepSeek-V3
+
+| Parameter | Value |
+| --- | --- |
+| Model | [DeepSeek-V3](https://huggingface.co/deepseek-ai/DeepSeek-V3) |
+| Prefill | 1 replica, 2 nodes, DP16 (TP=1) |
+| Decode | 1 replica, 2 nodes, DP16 (TP=1) |
+| Total GPUs | 32 (MI355X) |
+| All2All backend | `mori_high_throughput` |
+| KV transfer | MoRI-IO |
+
+`amd-ci` adapts `base` to the AMD CI cluster (MI355X, Pensando AINIC, rail-isolated RoCE fabric).
+
+### Intel XPU: DeepSeek-V2-Lite
 
 | Parameter | Value |
 | --- | --- |
@@ -47,30 +79,6 @@ The Intel XPU configuration uses the validated DeepSeek-V2-Lite shape:
 | All2All backend | `allgather_reducescatter` |
 | KV transfer | NIXL with `kv_buffer_device=xpu` |
 | UCX transport | `tcp,ze_copy` for the validated non-RDMA configuration |
-
-### Tested Hardware Backends
-
-This guide includes configurations for the following accelerators:
-
-| Backend | Directory | Notes |
-| --- | --- | --- |
-| NVIDIA GPU (GKE) | `modelserver/gpu/vllm-deepseek-r1-0528/gke/` | GKE deployment (H200) |
-| NVIDIA GPU (CoreWeave) | `modelserver/gpu/vllm-deepseek-r1-0528/coreweave/` | CoreWeave deployment |
-| NVIDIA GPU (GB200) | `modelserver/gpu/vllm-deepseek-r1-0528/dgx-cloud-gb200/` | DGX Cloud GB200 deployment |
-| Intel XPU (vLLM) | `modelserver/xpu/vllm/` | DeepSeek-V2-Lite-Chat, DRA `gpu.intel.com`, XCCL, NIXL XPU KV buffers |
-
-> [!NOTE]
-> NVIDIA GPU backends that use DeepEP for inter-node EP require All-to-All RDMA
-> connectivity. Every NIC on a host must be able to communicate with every NIC
-> on all other hosts. Networks restricted to communicating only between matching
-> NIC IDs (rail-only connectivity) will fail. The Intel XPU backend uses XCCL
-> and `allgather_reducescatter`; it does not use DeepEP, but still requires
-> full-mesh pod network connectivity between decode and prefill workers.
->
-> See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)
-> for how the networking stack (NIXL/UCX, InfiniBand/RoCE) fits together and what
-> the cluster must provide, and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md)
-> for cross-node setup.
 
 ## Prerequisites
 
@@ -217,7 +225,7 @@ The decode routing sidecar reaches its MoRI-IO peers by their LeaderWorkerSet po
 The NVIDIA GPU path deploys a single `DisaggregatedSet` that manages the prefill and decode roles together.
 
 ```bash
-export INFRA_PROVIDER=gke # options: base, gke, coreweave, dgx-cloud-gb200
+export INFRA_PROVIDER=gke # options: base, gke, coreweave
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm-deepseek-r1-0528/${INFRA_PROVIDER}
 ```
 
@@ -278,12 +286,6 @@ curl -X POST http://${IP}/v1/completions \
         \"prompt\": \"How are you today?\"
     }" | jq
 ```
-
-## Precise prefix-cache routing
-
-For KV-event-backed prefix routing with multi-port DP model servers (useful for active-active HA routing),
-see the [GLM-5.2 with Precise Prefix-Cache Routing](../glm-5-2/README.precise-prefix-cache-routing.md)
-variant.
 
 ## Benchmarking
 
