@@ -4,7 +4,7 @@ KV-Cache offloading extends the effective cache capacity beyond GPU HBM by movin
 
 llm-d works with any KV-cache connector compatible with vLLM or SGLang. Two integration patterns are supported:
 
-- **Native (vLLM `OffloadingConnector`)** — vLLM's built-in offloading path. Targets CPU RAM directly, and a shared filesystem via the [llm-d FS backend](https://github.com/llm-d/llm-d-kv-cache).
+- **Native (vLLM `OffloadingConnector`)** — vLLM's built-in offloading path. Offloads to CPU RAM and, through multi-tier offloading, to secondary tiers such as a shared filesystem, an object store, or remote peers.
 - **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake), [NVIDIA KVBM](https://docs.nvidia.com/dynamo/latest/kvbm/)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage.
 
 > [!NOTE]
@@ -26,52 +26,49 @@ The two integration patterns map to distinct architectures.
 
 ### Native (vLLM OffloadingConnector)
 
-The native path lives entirely inside the vLLM stack. The `OffloadingConnector` dispatches blocks to either the CPU tier or the shared-storage tier:
+The native path lives entirely inside the vLLM stack. The `OffloadingConnector` supports two offloading specs:
 
-```
+- **`CPUOffloadingSpec`** (default) — a single CPU RAM tier.
+- **`TieringOffloadingSpec`** — multi-tier offloading: a CPU RAM primary tier plus an ordered list of secondary tiers.
+
+Only the CPU primary tier has direct GPU access. All transfers between GPU and a secondary tier are staged through the CPU tier:
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                            vLLM                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                      V1 Connector API                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Offloading Connector                         │
-│        ┌───────────┐   ┌───────────┐   ┌───────────┐            │
-│        │ Scheduler │   │  Worker   │   │  Metrics  │            │
-│        └───────────┘   └───────────┘   └───────────┘            │
-├─────────────────────────────────────────────────────────────────┤
-│                       Offloading API                            │
-├───────────────────────────────┬─────────────────────────────────┤
-│             CPU               │            Storage              │
-│  ┌─────────┐   ┌──────────┐   │  ┌─────────┐   ┌─────────────┐  │
-│  │ Manager │   │  Worker  │   │  │ Manager │   │   Worker    │  │
-│  │         │   │          │   │  │         │   │             │  │
-│  │ ┌─────┐ │   │┌────────┐│   │  │┌───────┐│   │┌───────────┐│  │
-│  │ │ LRU │ │   ││Transfer││   │  ││Lookup ││   ││Thread-Pool││  │
-│  │ └─────┘ │   ││GPU-CPU ││   │  │└───────┘│   │├───────────┤│  │
-│  │         │   │└────────┘│   │  │         │   ││Transfer   ││  │
-│  │         │   │          │   │  │         │   ││GPU-CPU    ││  │
-│  │         │   │          │   │  │         │   │├───────────┤│  │
-│  │         │   │          │   │  │         │   ││POSIX API  ││  │
-│  │         │   │          │   │  │         │   │└───────────┘│  │
-│  └─────────┘   └──────────┘   │  └─────────┘   └─────────────┘  │
-└───────────────────────────────┴─────────────────────────────────┘
+└────────────────────────────────┬────────────────────────────────┘
+                                 │  GPU DMA (async)
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   CPU RAM (primary tier)                        │
+│             pinned host memory, LRU / ARC eviction              │
+└──────────┬──────────────────────┬──────────────────────┬────────┘
+           │                      │                      │
+           ▼                      ▼                      ▼
+   ┌──────────────┐       ┌──────────────┐       ┌──────────────┐
+   │  Filesystem  │       │ Object Store │       │     P2P      │  ...
+   │     (fs)     │       │    (obj)     │       │    (p2p)     │
+   └──────────────┘       └──────────────┘       └──────────────┘
+                     secondary tiers (ordered)
 ```
 
-| Target | Latency | Capacity | Scope | Best For |
+| Tier | Latency | Capacity | Scope | Best For |
 | :--- | :--- | :--- | :--- | :--- |
 | CPU RAM | Low | ~250GB/GPU | Per-node | High-frequency reuse, preemption recovery |
-| Shared Storage | Higher | TB+ | Cross-cluster | Cross-node sharing, persistence, massive scale |
+| Shared filesystem / object store | Higher | TB+ | Cross-cluster | Cross-node sharing, persistence, massive scale |
+| P2P | Network-bound | Peers' CPU RAM | Cross-node | Reusing blocks cached on other replicas, P/D disaggregation |
 
-Today, the two targets operate as independent options — choose one offloading target based on your workload requirements.
-
-> [!NOTE]
-> **Hierarchical KV-cache offloading** — where blocks flow GPU → CPU → Storage as a unified tiered hierarchy — is under active development in the native path.
+For the design and benchmarks, see the vLLM blog post [Tiered KV Cache Offloading in vLLM](https://vllm-project.github.io/2026/09/10/tiered-kv-offloading.html).
 
 ### Out-of-tree Connectors
 
 Third-party connectors (see [Other Connectors](#other-connectors)) adapt an external KV-cache engine to the model server through its KV-cache connector API. The same pattern is present across major serving stacks — vLLM's V1 Connector API, SGLang's HiCache, and TensorRT-LLM's KV Cache Connector API. Unlike the native path, the cache logic — indexing, memory management, tiering, eviction, and remote storage — lives in a separate engine, often a distinct process or service:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │               Model Server (vLLM / SGLang / TRT-LLM)            │
 ├─────────────────────────────────────────────────────────────────┤
@@ -117,23 +114,25 @@ CPU offloading requires no external infrastructure. The simplest way to enable i
 
 Equivalent to passing `--kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both",...}'` directly — the top-level flags are a convenience wrapper around the connector JSON.
 
-### llm-d Filesystem Connector
+### vLLM Multi-Tier Offloading
 
-The `llmd_fs_backend` is a storage backend that plugs into vLLM's OffloadingConnector. It stores KV blocks as files on a shared filesystem and loads them back on demand, using the filesystem directory as the index of cached blocks.
+`TieringOffloadingSpec` extends native offloading beyond CPU RAM. The CPU tier stays the primary tier, and blocks flow from it to one or more secondary tiers, listed in the `secondary_tiers` config in lookup order. On a hit in a secondary tier, the block is promoted back through CPU RAM to the GPU.
 
-Key properties:
+Built-in secondary tiers:
 
-- **Filesystem agnostic** — Relies on standard POSIX file operations, works with any filesystem (CephFS, Lustre, IBM Storage Scale, local NVMe)
-- **KV sharing across instances and nodes** — Multiple vLLM servers reuse cached prefixes by accessing the same shared path
-- **Persistence across restarts** — KV data survives pod restarts, rescheduling, and node failures
-- **Fully asynchronous I/O** — Reads and writes run without blocking the inference path
-- **High throughput via parallelism** — I/O operations parallelized across worker threads with NUMA-aware scheduling
-- **Minimal GPU interference** — Uses GPU DMA by default, reducing interference with compute kernels
+- **Filesystem (`fs`)** — Stores KV blocks as files under a directory, typically a shared ReadWriteMany PVC. It works with any POSIX filesystem (CephFS, Lustre, IBM Storage Scale, AWS EFS, local NVMe). Multiple vLLM instances that share the directory reuse each other's cached prefixes, and the cache persists across pod restarts. I/O is asynchronous, with separate read and write thread pools.
+- **Object store (`obj`)** — Stores KV blocks in an S3-compatible bucket through the NIXL OBJ backend.
+- **P2P (`p2p`)** — Pulls KV blocks directly from other vLLM instances' CPU tiers over RDMA via NIXL. The router decides which peer to pull from; the same tier also implements prefill/decode (P/D) disaggregation. See the [P2P KV-Cache Sharing guide](../../../../guides/p2p-kv-cache-sharing).
+
+Custom tiers can be plugged in out-of-tree, with no vLLM changes, by implementing vLLM's `SecondaryTierManager` interface and setting `module_path` in the tier config.
 
 > [!NOTE]
-> The storage connector does not handle cleanup or eviction. Storage capacity management must be handled by the underlying storage system or an external controller. A reference implementation, the [PVC Evictor](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/pvc_evictor), can automatically clean up old KV-cache files when storage thresholds are exceeded.
+> The filesystem tier does not evict data. Storage capacity must be managed by the underlying storage system or an external controller. A reference implementation, the [PVC Evictor](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/pvc_evictor), can automatically clean up old KV-cache files when storage thresholds are exceeded.
 
-For implementation details and advanced configuration, see the [llm-d FS backend documentation](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
+For the full configuration reference of each tier, see the [vLLM KV Offloading Usage Guide](https://docs.vllm.ai/en/stable/features/kv_offloading_usage/).
+
+> [!IMPORTANT]
+> The filesystem tier supersedes the standalone **llm-d FS backend** (`llmd_fs_backend`). `llmd-fs-connector==0.23` (llm-d v0.8 / vLLM v0.23) was its final release. New deployments should use `TieringOffloadingSpec` with an `fs` tier.
 
 ### MooncakeStoreConnector
 
@@ -281,15 +280,27 @@ For deployment recipes, see the [Tiered Prefix Cache Guide](../../../../guides/t
 
 For advanced use and older vLLM releases, the equivalent `--kv-transfer-config` JSON form is supported. See the [vLLM offloading connector blog](https://vllm.ai/blog/kv-offloading-connector) for details.
 
-### Storage Offloading (llm-d FS Backend)
+### Multi-Tier Offloading (vLLM Native)
+
+Multi-tier offloading is configured through `--kv-transfer-config`. Key `kv_connector_extra_config` fields:
 
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `shared_storage_path` | string | `/tmp/shared-kv` | Base path for KV-cache files |
-| `block_size` | integer | `256` | Tokens per file (must be multiple of GPU block size) |
-| `threads_per_gpu` | integer | `64` | I/O worker threads per GPU |
+| `spec_name` | string | `CPUOffloadingSpec` | Set to `TieringOffloadingSpec` for multi-tier offloading |
+| `cpu_bytes_to_use` | integer | (required) | CPU tier size in bytes (per vLLM instance, across all workers) |
+| `block_size` | integer | GPU block size | Tokens per offloaded block (must be a multiple of the GPU block size) |
+| `eviction_policy` | string | `lru` | CPU tier eviction policy (`lru` or `arc`) |
+| `secondary_tiers` | list | `[]` | Ordered list of secondary tier configs, each with a `type` field (`fs`, `obj`, `p2p`) |
 
-For the full configuration reference including GDS modes and environment variables, see the [llm-d FS backend README](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend).
+Filesystem tier (`type: fs`) fields:
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `root_dir` | string | (required) | Base directory for KV-cache files |
+| `n_read_threads` | integer | `16` | I/O threads for loads |
+| `n_write_threads` | integer | `16` | I/O threads for stores |
+
+For the full reference, including the object-store and P2P tiers, see the [vLLM KV Offloading Usage Guide](https://docs.vllm.ai/en/stable/features/kv_offloading_usage/).
 
 ## Examples
 
@@ -303,31 +314,37 @@ args:
   - "--kv-offloading-size=100"
 ```
 
-### Storage Offloading with llm-d FS Backend
+### Multi-Tier Offloading to a Shared Filesystem with vLLM
 
 ```yaml
 args:
   - "--model=Qwen/Qwen3-32B"
   - "--tensor-parallel-size=2"
-  - "--block-size=16"
-  - "--distributed-executor-backend=mp"
   - "--kv-transfer-config"
   - |
     {
       "kv_connector": "OffloadingConnector",
       "kv_role": "kv_both",
       "kv_connector_extra_config": {
-        "spec_name": "SharedStorageOffloadingSpec",
-        "spec_module_path": "llmd_fs_backend.spec",
-        "shared_storage_path": "/mnt/kv-cache/",
+        "spec_name": "TieringOffloadingSpec",
+        "cpu_bytes_to_use": 107374182400,
         "block_size": 256,
-        "threads_per_gpu": 64
+        "secondary_tiers": [
+          {
+            "type": "fs",
+            "root_dir": "/mnt/files-storage",
+            "n_read_threads": 16,
+            "n_write_threads": 16
+          }
+        ]
       }
     }
 volumeMounts:
-  - name: kv-cache
-    mountPath: /mnt/kv-cache
+  - name: files-storage
+    mountPath: /mnt/files-storage
 ```
+
+For an end-to-end deployment, see the [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache) with `VARIANT=fs`.
 
 ### Distributed Offloading with MooncakeStoreConnector
 
@@ -350,7 +367,11 @@ For the full `mooncake_config.json` reference, see [MooncakeStoreConnector — m
 
 ## Metrics
 
-The FS backend populates vLLM's built-in offloading metrics (`vllm:kv_offload_*`) for transfer bytes, time, and size distribution. See the [llm-d FS backend documentation](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend#metrics) for the full metrics reference.
+vLLM's native offloading exposes Prometheus metrics under the `vllm:kv_offload_*` prefix, for example:
+
+- **GPU ↔ CPU transfers** — `vllm:kv_offload_load_bytes`, `vllm:kv_offload_store_bytes`, `vllm:kv_offload_load_time`, `vllm:kv_offload_store_time`
+- **CPU tier usage** — `vllm:kv_offload_cpu_cache_usage_perc`
+- **Multi-tier offloading** (`vllm:kv_offload_tiering_*`) — secondary-tier hit rate (`vllm:kv_offload_tiering_chunk_queries`, `vllm:kv_offload_tiering_chunk_hits`), secondary-tier I/O (`vllm:kv_offload_tiering_read_bytes`, `vllm:kv_offload_tiering_write_bytes`), and promotion and cascade job failures
 
 ## Performance Considerations
 
@@ -358,7 +379,7 @@ The FS backend populates vLLM's built-in offloading metrics (`vllm:kv_offload_*`
 
 **Storage offloading:** Best when cache working set exceeds single-node capacity, when cross-node sharing is valuable (repeated system prompts across replicas, agentic workflows), or when persistence across restarts matters. Storage offloading is most effective when the storage network is fast enough to allow low-latency loads and stores.
 
-**Storage selection:** The FS backend works with any POSIX-compliant filesystem and is not tied to a specific vendor. Your choice trades off:
+**Storage selection:** The filesystem tier works with any POSIX-compliant filesystem and is not tied to a specific vendor. Your choice trades off:
 
 - **Sharing scope** — local media (e.g., NVMe SSDs) are per-node only; networked or distributed filesystems (e.g., NFS, CephFS, Lustre, IBM Storage Scale, Weka, cloud file services) enable cross-node reuse.
 - **Throughput and latency** — depend on the underlying hardware, network, and filesystem configuration rather than the KV-cache layer; parallel and distributed filesystems generally scale best for large deployments.
@@ -373,7 +394,9 @@ Any POSIX filesystem is a candidate; the best choice for a given deployment depe
 
 - [Tiered Prefix Cache Guide](../../../../guides/tiered-prefix-cache) — Step-by-step deployment guides
 - [llm-d KV-Disaggregation Roadmaps](https://github.com/llm-d/llm-d-kv-cache/issues?q=is%3Aissue%20state%3Aopen%20label%3Aroadmap) — Planned features and improvements across offloading and KV-cache management
-- [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
+- [P2P KV-Cache Sharing Guide](../../../../guides/p2p-kv-cache-sharing) — Sharing KV blocks between replicas through the P2P tier
+- [vLLM KV Offloading Usage Guide](https://docs.vllm.ai/en/stable/features/kv_offloading_usage/) — Full configuration reference for native offloading and all secondary tiers
+- [Tiered KV Cache Offloading in vLLM](https://vllm-project.github.io/2026/09/10/tiered-kv-offloading.html) — Design and benchmarks of multi-tier offloading
 - [vLLM KV Offloading Connector](https://vllm.ai/blog/kv-offloading-connector) — Deep dive into vLLM's native offloading
 - [Mooncake Store](https://github.com/kvcache-ai/Mooncake) — Upstream Mooncake project and documentation
 - [vLLM MooncakeStoreConnector Usage Guide](https://docs.vllm.ai/en/v0.23.0/features/mooncake_store_connector_usage/) — vLLM-side configuration reference
