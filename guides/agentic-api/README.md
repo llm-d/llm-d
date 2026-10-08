@@ -64,7 +64,7 @@ second time. The parsers are per-model, and not every overlay sets them:
 
 | Model | Flags | Already set by |
 | --- | --- | --- |
-| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/patch-prefill.yaml) (both topologies), [`optimized-baseline/.../gpt-oss`](../optimized-baseline/modelserver/gpu/vllm/gpt-oss/patch-vllm.yaml), [`tiered-prefix-cache`](../tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm-gpt-oss-120b.yaml) |
+| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml), [`optimized-baseline/.../gpt-oss`](../optimized-baseline/modelserver/gpu/vllm/gpt-oss/patch-vllm.yaml), [`tiered-prefix-cache`](../tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm-gpt-oss-120b.yaml) |
 | `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`nemotron-3-ultra/modelserver/gpu/vllm`](../models/nemotron-3-ultra/modelserver/gpu/vllm/gke/patch-prefill.yaml) |
 
 > [!IMPORTANT]
@@ -83,7 +83,7 @@ re-applying the overlay, which is what the base guide's own instructions tell yo
 three flags to the model manifest, next to the other `vllm serve` args:
 
 ```bash
-# e.g. guides/pd-disaggregation/modelserver/gpu/vllm/base/patch-{prefill,decode}.yaml
+# e.g. guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml (both roles)
 #            - "--block-size=128"
 #   +        - "--enable-auto-tool-choice"
 #   +        - "--tool-call-parser=openai"

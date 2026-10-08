@@ -22,8 +22,8 @@ spec:
   # LeaderWorkerSet is created, so enabling this takes effect on the next
   # rollout. ExclusiveTopology additionally guarantees at most one slice per
   # domain across all DisaggregatedSets.
-  # See the "Pinning Slices to Accelerator Domains" section of the README for
-  # per-platform topology label keys.
+  # See docs/operations/disaggregation/disaggregatedset.md for per-platform
+  # topology label keys.
   # placementPolicy:
   #   type: ExclusiveSlice
   #   topology: topology.kubernetes.io/zone

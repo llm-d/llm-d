@@ -166,5 +166,5 @@ sections:
         title: Route to Multiple Models and LoRA Adapters
         position: 4
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
-  # operations/disaggregation has only docs pages: vllm, sglang.
+  # operations/disaggregation has only docs pages: vllm, sglang, disaggregatedset.
   # operations/integrations (Integrate an AI Gateway) has only docs pages: litellm, kong.
