@@ -64,7 +64,8 @@ second time. The parsers are per-model, and not every overlay sets them:
 
 | Model | Flags | Already set by |
 | --- | --- | --- |
-| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/patch-prefill.yaml) (both topologies), [`optimized-baseline/.../gpt-oss`](../optimized-baseline/modelserver/gpu/vllm/gpt-oss/patch-vllm.yaml), [`tiered-prefix-cache`](../tiered-prefix-cache/modelserver/gpu/vllm/base/patch-vllm-gpt-oss-120b.yaml) |
+| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/patch-prefill.yaml) — all GPU overlays (`base`, `aws`, `cks-mooncake`, `gke/a4x`, `gke/a4xmax`) and the [`vllm-ds` `DisaggregatedSet`](../pd-disaggregation/modelserver/gpu/vllm-ds/base/disaggregatedset.yaml). `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
+| `Qwen/Qwen3-32B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`optimized-baseline`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) (its default GPU overlay). `pd-disaggregation`'s TPU overlays serve the same model and set **no** parsers |
 | `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra`](../agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra/gke/patch-prefill.yaml) |
 
 > [!IMPORTANT]
@@ -74,24 +75,31 @@ second time. The parsers are per-model, and not every overlay sets them:
 > it reports the missing flags by name rather than a bare assertion — and the pre-flight check at the
 > end of this section reports it before you deploy anything.
 
-For `pd-disaggregation` + `gpt-oss-120b`, the flags are added by
-[llm-d#2641](https://github.com/llm-d/llm-d/pull/2641). Until that merges, or for any other
-model, use one of the two workarounds below.
+The two guides this one is most often layered on already ship the flags on their GPU overlays:
+`pd-disaggregation` with `gpt-oss-120b`, `optimized-baseline` with `Qwen3-32B`. Deploy either of
+those unchanged and there is nothing to do here. For any other model or overlay — including
+`pd-disaggregation` on TPU, which serves Qwen models with no parsers set (see
+[that guide's note](../pd-disaggregation/README.md#tpu)) — use one of the two workarounds below.
 
 **Workaround A — edit the overlay before deploying the base guide (preferred).** This survives
 re-applying the overlay, which is what the base guide's own instructions tell you to do. Add the
 three flags to the model manifest, next to the other `vllm serve` args:
 
 ```bash
-# e.g. guides/pd-disaggregation/modelserver/gpu/vllm/base/patch-{prefill,decode}.yaml
-#            - "--block-size=128"
-#   +        - "--enable-auto-tool-choice"
-#   +        - "--tool-call-parser=openai"
-#   +        - "--reasoning-parser=openai_gptoss"
-#
-# Or take llm-d#2641 directly:
-git fetch https://github.com/roytman/llm-d.git feat/pd-gpt-oss-tool-calling
-git cherry-pick FETCH_HEAD
+# e.g. guides/pd-disaggregation/modelserver/tpu/v6/vllm/patch-{prefill,decode}.yaml (Qwen3-32B)
+#              - "Qwen/Qwen3-32B"
+#   +          - "--enable-auto-tool-choice"
+#   +          - "--tool-call-parser=hermes"
+#   +          - "--reasoning-parser=qwen3"
+```
+
+Overlays that redefine the whole `args` list do not inherit flags added to a base patch — the list
+has no merge key, so it is replaced wholesale. Check the overlay you actually deploy:
+
+```bash
+# <overlay> is the path the base guide tells you to apply, e.g.
+# ${REPO_ROOT}/guides/pd-disaggregation/modelserver/tpu/${TPU_VARIANT}/vllm
+kubectl kustomize <overlay> | grep -c -- --enable-auto-tool-choice  # expect one per model-server role
 ```
 
 **Workaround B — patch an already-running deployment.** Faster if the base guide is already up,
@@ -123,6 +131,10 @@ echo "Patching:"; echo "${targets}"
 # Piped into `while read` rather than `for d in ${targets}`: zsh does not word-split
 # unquoted expansions by default, so a `for` loop would pass both Deployments to
 # kubectl as one argument ("resource/name form may not have more than one slash").
+
+# The two parser values below are gpt-oss-120b's. Replace them with the ones for YOUR
+# model from the table above before running this; --enable-auto-tool-choice is the only
+# flag of the three that is model-independent.
 printf '%s\n' "${targets}" | while read -r d; do
   [ -n "$d" ] || continue
   kubectl patch -n "${NAMESPACE}" "$d" --type=json -p '[
@@ -141,9 +153,8 @@ kubectl rollout status -n "${NAMESPACE}" deploy -l llm-d.ai/engine-type=vllm --t
 > and use Workaround A if you want the args to stay clean.
 
 > [!WARNING]
-> Both workarounds use the `gpt-oss` parser names. Substitute the parsers for **your** model from
-> the table above; a wrong parser is worse than none, because vLLM then tries to parse tool calls
-> with the wrong grammar.
+> A wrong parser is worse than none: vLLM starts, accepts the request, and then tries to parse
+> tool calls with the wrong grammar.
 
 #### Gateway Mode: the Gateway comes from the base guide
 
