@@ -45,7 +45,6 @@
     "getting-started/accelerators": { "position": 2, "label": "Supported Accelerators" },
 
     "well-lit-paths/foundations/pd-disaggregation": { "position": 6, "label": "Deploy Prefill/Decode Disaggregation" },
-    "well-lit-paths/foundations/wide-expert-parallelism": { "position": 7, "label": "Scale MoE Models with Wide Expert Parallelism" },
 
     "architecture/core/inferencepool": { "position": 1 },
     "architecture/core/model-servers": { "position": 3 },
