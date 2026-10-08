@@ -1,4 +1,4 @@
-# Observability Setup
+# Set Up the Monitoring Stack
 
 This page explains how to set up Prometheus, Grafana, and distributed tracing for an llm-d deployment. All guides reference this page — set this up once and it works across every guide.
 
@@ -148,12 +148,6 @@ Targets should show `"health": "up"`. Then proceed to Step 2 for dashboards.
 ./guides/recipes/observability/load-llm-d-dashboards.sh
 ```
 
-Verify dashboards were imported:
-
-```bash
-kubectl get configmaps -n llm-d-monitoring -l grafana_dashboard=1
-```
-
 Then access Grafana:
 
 ```bash
@@ -161,18 +155,7 @@ kubectl port-forward -n llm-d-monitoring svc/llmd-grafana 3000:80
 # Open http://localhost:3000  (login: admin / admin)
 ```
 
-Available dashboards:
-
-| Dashboard | What it shows |
-| ----------- | -------------- |
-| `llm-d-vllm-overview` | General vLLM metrics overview |
-| `llm-d-sglang-overview` | General SGLang metrics overview |
-| `llm-d-tpu-overview` | GKE TPU exporter health and hardware metrics; requires the [TPU recipe](../../../guides/recipes/observability/tpu/) |
-| `llm-d-failure-saturation-dashboard` | Key failure and saturation indicators |
-| `llm-d-diagnostic-drilldown-dashboard` | Detailed diagnostic metrics for troubleshooting |
-| `llm-d-performance-kv-cache` | KV cache utilization and performance |
-| `llm-d-pd-coordinator-metrics` | Prefill/decode disaggregation metrics |
-| `llm-d-inference-gateway` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
+For the list of dashboards and how to verify the import, see [Use Grafana Dashboards](./dashboards.md).
 
 ## Step 3: Install Distributed Tracing (Optional)
 
@@ -189,7 +172,7 @@ kubectl port-forward -n ${NAMESPACE} svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
 
-For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Distributed Tracing](./tracing.md).
+For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 
 ## Cleanup
 
@@ -214,24 +197,8 @@ The autoscaler is configured for HTTPS but Prometheus is serving HTTP. Enable TL
 
 ### Metrics not appearing in Prometheus
 
-1. Check that PodMonitors and ServiceMonitors exist:
-
-   ```bash
-   kubectl get podmonitors,servicemonitors -n ${NAMESPACE}
-   ```
-
-2. Open `http://localhost:9090/targets` (after port-forwarding Prometheus) and check that vLLM and EPP targets show `UP`
-
-3. Confirm pods expose metrics:
-
-   ```bash
-   VLLM_POD=$(kubectl get pods -n ${NAMESPACE} -l app=my-model -o jsonpath='{.items[0].metadata.name}')
-   kubectl port-forward -n ${NAMESPACE} ${VLLM_POD} 8000:8000
-   curl http://localhost:8000/metrics | head -20
-   ```
+See [Collect Metrics → Troubleshooting](./metrics.md#troubleshooting).
 
 ### Grafana dashboards show "No data"
 
-1. Verify the Grafana datasource points to the correct Prometheus URL
-2. Check that metrics are flowing in Prometheus first
-3. If using TLS, ensure the Grafana datasource is configured for HTTPS with the correct CA certificate
+See [Use Grafana Dashboards → Troubleshooting](./dashboards.md#troubleshooting).

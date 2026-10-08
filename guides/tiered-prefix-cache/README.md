@@ -344,7 +344,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 3. Observability & Troubleshooting
 
-Once monitoring is enabled, use the signals below to operate tiered prefix caching. Metric definitions are in the [metric reference](../../docs/operations/observability/metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
+Once monitoring is enabled, use the signals below to operate tiered prefix caching. Metric definitions are in the [metric reference](../../docs/operations/observability/model-server-metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
 
 Offloading only pays off when blocks evicted from HBM are loaded back later instead of recomputed. Two views need to agree: the router keeps a separate prefix index per tier (`gpu-prefix-cache-producer` and `cpu-prefix-cache-producer` in this guide's router values), and the model server reports what it actually stored and loaded. Most problems show up as a gap between the two.
 

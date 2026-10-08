@@ -67,25 +67,16 @@ sections:
         pages:
           - from: keda-epp/README.md
             to: keda-epp
-            title: KEDA + EPP Metrics
+            title: Scale on Queue Depth and Saturation
           - from: keda-epp-token-aware/README.md
             to: token-aware
-            title: Token-Aware Autoscaling
+            title: Scale on Token Backlog (Experimental)
           - from: slo-aware/README.md
             to: slo-aware
-            title: SLO-Aware Autoscaling
-          - from: multi-inference-pool/README.md
-            to: multi-inference-pool
-            title: Multi-Inference Pool Setup
+            title: Scale to Latency SLOs
           - from: kueue-rebalancing/README.md
             to: kueue-rebalancing
-            title: Kueue-Based Replica Rebalancing
-          - from: wva/README.md
-            to: wva
-            title: Workload Variant Autoscaler (Deprecated)
-          - from: promadapter.md
-            to: prometheus-adapter
-            title: Prometheus Adapter (Deprecated)
+            title: Share a GPU Budget Across Models (Experimental)
       - dir: guides/batch-serving
         slug: batch-serving
         title: Process Batch and Async Requests
@@ -93,19 +84,19 @@ sections:
         pages:
           - from: batch-gateway/README.md
             to: batch-gateway
-            title: Batch Gateway
+            title: Run Batch Jobs (Batch Gateway)
           - from: asynchronous-processing/README.md
             to: asynchronous-processing
-            title: Asynchronous Processing
+            title: Queue Async Requests (Async Processor)
           - from: asynchronous-processing/redis/README.md
             to: async-redis
-            title: "Async Processing: Redis Sorted Set"
+            title: Use Redis as the Async Queue
           - from: asynchronous-processing/gcp-pubsub/README.md
             to: async-gcp-pubsub
-            title: "Async Processing: GCP Pub/Sub"
+            title: Use GCP Pub/Sub as the Async Queue
           - from: asynchronous-processing/multitenant/README.md
             to: async-multitenant
-            title: "Async Processing: Multi-Tenant"
+            title: Enforce Tenant Quotas and Priorities
       - dir: guides/rollouts
         slug: rollouts
         title: Roll Out Updates Safely
@@ -121,33 +112,41 @@ sections:
     target: operations/startup
     guides:
       # position 1: docs/operations/startup/model-loading-and-startup.md
-      - dir: guides/fast-model-actuation-base
-        slug: fast-model-actuation
-        title: Fast Model Actuation
-        position: 2
-      - dir: guides/fast-model-actuation-keda
-        slug: fast-model-actuation-keda
-        title: FMA with KEDA
-        position: 3
-      - dir: guides/pod-snapshot
-        slug: pod-snapshot
-        title: Pod Snapshots
-        position: 4
+      # position 6: docs/operations/startup/troubleshooting.md
       - dir: guides/modelexpress-p2p
         slug: modelexpress-p2p
-        title: ModelExpress P2P Weight Transfer
+        title: Transfer Weights Peer-to-Peer (ModelExpress)
+        position: 2
+      - dir: guides/pod-snapshot
+        slug: pod-snapshot
+        title: Restore from Pod Snapshots
+        position: 3
+      - dir: guides/fast-model-actuation-base
+        slug: fast-model-actuation
+        title: Reuse Warm Model Servers (FMA)
+        position: 4
+      - dir: guides/fast-model-actuation-keda
+        slug: fast-model-actuation-keda
+        title: Scale from Zero with FMA and KEDA
         position: 5
   operations-traffic:
     target: operations/traffic
     guides:
       - dir: guides/flow-control
         slug: flow-control
-        title: Flow Control & Fairness
+        title: Queue and Prioritize Requests (Flow Control)
         position: 1
+      # position 2: docs/operations/traffic/flow-control-tuning.md
+      # Lives under guides/workload-autoscaling/ (referenced from there), but
+      # adding InferencePools is a traffic/tenancy topic, so it is published here.
+      - dir: guides/workload-autoscaling/multi-inference-pool
+        slug: multi-inference-pool
+        title: Deploy Multiple Inference Pools
+        position: 3
       - dir: guides/multi-model-routing
         slug: multi-model-routing
-        title: Multi-Model & LoRA Routing
-        position: 2
+        title: Route to Multiple Models and LoRA Adapters
+        position: 4
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
   # operations/disaggregation has only docs pages: vllm, sglang.
   # operations/integrations (Integrate an AI Gateway) has only docs pages: litellm, kong.
