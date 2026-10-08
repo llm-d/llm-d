@@ -4,7 +4,8 @@
 
 ## Overview
 
-This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation-base/README.md) with **scale-from-zero autoscaling via KEDA**. A KEDA `ScaledObject` scales the FMA `server-requesting` Deployment on Endpoint Picker (EPP) flow-control metrics — all the way down to **zero** when the pool is idle, and back up on the first queued request. Each requesting pod reserves a GPU and drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**; scaling to zero releases the GPU and puts the vLLM to sleep. (See the [FMA guide](../fast-model-actuation-base/README.md#overview) for what hot and warm start mean.)
+This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation-base/README.md) with **scale-from-zero autoscaling via KEDA**. A KEDA `ScaledObject` scales the FMA `server-requesting` Deployment on Endpoint Picker (EPP) flow-control metrics — all the way down to **zero** when the pool is idle, and back up on the first queued request. Each requesting pod reserves a GPU and drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**; scaling to zero releases the GPU and puts the vLLM to sleep.
+(See the [FMA guide](../fast-model-actuation-base/README.md#actuation-paths) for what hot and warm start mean.)
 
 ## Configuration
 
@@ -206,7 +207,7 @@ Apply the KEDA layer — the `ScaledObject`, its `TriggerAuthentication`, and th
 metrics-reader ServiceAccount + token — from the `ocp` overlay, then wait for the
 `ScaledObject` to reconcile `Ready`. KEDA then creates the HPA and owns the
 requester's replica count from here on. The overlay follows the
-[`keda-epp-queue`](../workload-autoscaling/keda-epp-queue) guide, pointing the
+[`keda-epp`](../workload-autoscaling/keda-epp) guide, pointing the
 queue-depth trigger at Thanos Querier; on OpenShift the service-ca operator
 injects the Thanos CA into the token Secret, so **no `prometheus-token` copy is
 required**.
@@ -295,7 +296,7 @@ kubectl get deployment/fma-requester -n ${NAMESPACE} -w
 <!-- llm-d-cicd:skip end -->
 
 > [!NOTE]
-> This scale-up should trigger a [hot start](../fast-model-actuation-base/README.md#overview) — the fast path, waking the vLLM instance that step 6 put to sleep. For a `Qwen/Qwen3-32B` it takes 4.0 s mean pod startup against 85.3 s for a warm start ([benchmark results](./benchmark-results/qwen3-32b-h100/README.md#queue-based-autoscaling)). Which path you get depends on GPU assignment; see [wake latency](../fast-model-actuation-base/README.md#3-demonstrate-sleepwake) in the FMA guide.
+> This scale-up should trigger a [hot start](../fast-model-actuation-base/README.md#actuation-paths) — the fast path, waking the vLLM instance that step 6 put to sleep. For a `Qwen/Qwen3-32B` it takes 4.0 s mean pod startup against 85.3 s for a warm start ([benchmark results](./benchmark-results/qwen3-32b-h100/README.md#queue-based-autoscaling)). Which path you get depends on GPU assignment; see [wake latency](../fast-model-actuation-base/README.md#3-demonstrate-sleepwake) in the FMA guide.
 
 ## Benchmarking
 

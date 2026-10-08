@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 10
+  replicas: 2
   template:
     spec:
       containers:
@@ -13,4 +13,4 @@ spec:
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=2"
             - "--max-model-len=131072"
-            - "--hf-overrides={\"rope_scaling\":{\"rope_type\":\"yarn\",\"factor\":3.2,\"original_max_position_embeddings\":40960}}"
+            - "--hf-overrides={\"max_position_embeddings\":131072,\"rope_parameters\":{\"rope_type\":\"yarn\",\"factor\":3.2,\"original_max_position_embeddings\":40960,\"rope_theta\":1000000}}"

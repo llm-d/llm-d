@@ -6,9 +6,10 @@
 ## override is needed here; the EPP `token-producer` plugin tokenizes prompts
 ## over HTTP against that Service (see its `vllm.url` below).
 ##
-## That Service has no pods of its own — it fronts the vLLM model servers, which
-## already expose `/v1/*/render`. Render capacity therefore scales with
-## the model server fleet rather than with a separately-scheduled renderer pool,
+## That Service has no pods of its own — it fronts the vLLM model servers, whose
+## overlays expose `/v1/*/render` (with --enable-scale-out on vLLM 0.30).
+## Render capacity therefore scales with the model server fleet rather than
+## with a separately-scheduled renderer pool,
 ## which keeps render latency more contained at higher QPS. Backends without
 ## vLLM's render endpoints (SGLang) apply `../render/standalone/` instead; it
 ## publishes the same Service name, so this `vllm.url` is unchanged either way.
@@ -40,7 +41,7 @@ router:
     pluginsConfigFile: "precise-prefix-cache-routing-plugins.yaml"
     pluginsCustomConfig:
       precise-prefix-cache-routing-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
           - type: token-producer

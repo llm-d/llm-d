@@ -14,6 +14,10 @@ This page covers how to enable and interpret metrics from an llm-d deployment. F
 - A running llm-d deployment with an InferencePool and model servers — see the [quickstart](../../getting-started/quickstart.md) if needed
 - Prometheus and Grafana installed — see [Observability Setup](./setup.md)
 
+> [!NOTE]
+> TPU hardware metrics require the [GKE TPU monitoring recipe](../../../guides/recipes/observability/tpu/), which scrapes the GKE device-plugin exporter rather than the model server.
+> [GKE TPU Observability](./tpu.md) documents metric names, units, labels, and environment checks. Metric availability depends on the GKE runtime and TPU type; the vLLM image version alone does not determine that interface.
+
 ## Step 1: Enable Model Server Metrics
 
 Model server metrics are enabled by default. Configuration varies by deployment method.
@@ -49,7 +53,7 @@ prefill-podmonitor      5m
 ### Key vLLM Metrics
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `vllm:num_requests_running` | Active requests being processed | High values indicate GPU saturation; new requests will queue. Watch for sustained spikes |
 | `vllm:num_requests_waiting` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
 | `vllm:kv_cache_usage_perc` | KV cache utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full and requests may get preempted or rejected |
@@ -65,7 +69,7 @@ prefill-podmonitor      5m
 When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for the KV cache transfers between workers. See the [vLLM NixlConnector usage guide](https://docs.vllm.ai/en/latest/features/nixl_connector_usage/) for configuration details.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| -------- | ------------------ | ---------------- |
 | `vllm:nixl_xfer_time_seconds` (histogram) | Time from posting a transfer until the backend reports completion, including submission and data movement | High tail latency can indicate network congestion, large transfers, or backend delays |
 | `vllm:nixl_post_time_seconds` (histogram) | Synchronous time spent submitting a transfer to the backend | A high value with otherwise normal transfer time points to descriptor setup or submission overhead |
 | `vllm:nixl_bytes_transferred` (histogram) | Bytes moved per transfer observation | Shows transfer size and KV cache data volume |
@@ -77,10 +81,27 @@ When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for
 > [!NOTE]
 > With tensor parallelism, vLLM pools transfer observations from all TP ranks before exporting them. Histogram counts therefore represent rank-level transfer observations, not inference requests, and byte values do not represent the total size of one request across all ranks. These are aggregate Prometheus metrics and are not correlated with individual request or trace IDs.
 
+#### vLLM KV Offloading Metrics
+
+When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), it exports metrics for KV blocks moved between the GPU and the offload tiers. The names below are available in vLLM v0.26.0 and later.
+
+| Metric | What it measures | Why it matters |
+|--------|------------------|----------------|
+| `vllm:external_prefix_cache_queries_total` | Prompt tokens looked up through the KV connector | Denominator for the offload tier hit rate |
+| `vllm:external_prefix_cache_hits_total` | Prompt tokens the connector reported as cached at scheduling time | Offload tier hits. Counted before the load finishes, so read it together with load bytes |
+| `vllm:kv_offload_store_bytes_total` | Bytes stored from GPU to the offload tier | Eviction traffic into the tier |
+| `vllm:kv_offload_load_bytes_total` | Bytes loaded from the offload tier back to GPU | Confirms offloaded blocks are being reused |
+| `vllm:kv_offload_store_time_total`, `vllm:kv_offload_load_time_total` | Total store and load time in seconds | Divide bytes by time for effective transfer speed |
+| `vllm:kv_offload_allocation_failure_total` | Store attempts that could not allocate offload blocks | Sustained increases mean the CPU tier has too few free or evictable blocks |
+| `vllm:kv_offload_cpu_cache_usage_perc` | Fraction of the CPU tier pinned by in-flight transfers (0.0 to 1.0) | This is not occupancy. Sustained values near 1.0 mean stores may be dropped |
+
+> [!NOTE]
+> Older dashboards may use `vllm:kv_offload_total_bytes_total`, `vllm:kv_offload_total_time_total`, and `vllm:kv_offload_size` with a `transfer_type` label (`GPU_to_CPU`, `CPU_to_GPU`). vLLM still emits them for `CPUOffloadingSpec` and its subclasses, which covers both the CPU RAM and filesystem paths, but they are deprecated in favor of the series above.
+
 ### Key SGLang Metrics
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `sglang_num_running_reqs` | Active requests being processed | High values indicate GPU saturation; new requests will queue |
 | `sglang_num_queue_reqs` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
 | `sglang_token_usage` | KV cache token utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full |
@@ -89,6 +110,19 @@ When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for
 | `sglang_inter_token_latency_seconds` (histogram) | Time between consecutive generated tokens (ITL) | Affects streaming response speed. Use `histogram_quantile()` to query percentiles |
 | `sglang_prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod |
 | `sglang_generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput |
+
+#### SGLang HiCache Metrics
+
+When HiCache is enabled (the SGLang path in the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), SGLang exports metrics for the host (CPU) tier.
+
+| Metric | What it measures | Why it matters |
+|--------|------------------|----------------|
+| `sglang_hicache_host_used_tokens` | Tokens currently held in the host KV cache | Divide by `sglang_hicache_host_total_tokens` for host tier occupancy |
+| `sglang_hicache_host_total_tokens` | Host KV cache capacity in tokens | Denominator for host tier occupancy |
+| `sglang_evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
+| `sglang_load_back_tokens_total` | Tokens loaded from host back to GPU | Confirms host tier blocks are being reused |
+| `sglang_load_back_duration_seconds` (histogram) | Time to load KV cache from host back to GPU | Slow load-back cuts into the TTFT gain from offloading |
+| `sglang_cached_tokens_total` | Cached prompt tokens by `cache_source` (`device`, `host`, `storage_<backend>`, or `total` when unsplit) | Attributes prefix cache hits to each tier |
 
 ## Step 3: Enable EPP Metrics
 
@@ -114,7 +148,7 @@ The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix.
 #### Request and Latency
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_request_total` | Total request count per flow ID and priority | Baseline for calculating error rate and throughput per model |
 | `llm_d_epp_request_error_total` | Error count per flow ID and priority | Rising errors signal backend failures. Alert when error rate exceeds 5% |
 | `llm_d_epp_request_duration_seconds` | Response latency distribution per flow ID and priority | The SLO metric. Tracks full round-trip time from request to response |
@@ -132,7 +166,7 @@ The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix.
 #### Inference Pool
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_ready_endpoints` | Number of ready endpoints in the pool | If this drops below expected count, pods are crashing or not scheduling |
 | `llm_d_epp_average_kv_cache_utilization` | Mean KV cache utilization across the pool | High average utilization signals the pool is nearing memory capacity |
 | `llm_d_epp_average_queue_size` | Mean queue depth across model servers | Primary signal for pool saturation and autoscaling decisions |
@@ -145,7 +179,7 @@ The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix.
 #### Scheduler, Plugins & Processing Overhead
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_scheduler_attempts_total` | Scheduling attempt counts and outcomes | Track failed scheduling attempts. High failure rate indicates filter/scorer misconfiguration |
 | `llm_d_epp_scheduler_e2e_duration_seconds` | End-to-end scheduling latency distribution | Tracks latency spent within the EPP scheduling cycle |
 | `llm_d_epp_plugin_duration_seconds` | Per-plugin processing latency distribution | Identifies slow or bottlenecked scheduling plugins |
@@ -158,14 +192,14 @@ The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix.
 #### In-Flight Load
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_inflight_requests` | Requests currently in flight on each endpoint | Per-replica queue depth for load-aware routing and capacity analysis |
 | `llm_d_epp_inflight_tokens` | Tokens currently in flight on each endpoint | Per-replica token pressure, a finer load signal than request count |
 
 #### Disaggregation & Rollout
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_disagg_decision_total` | Routing decisions across disaggregation stages | Tracks breakdown of decode-only, prefill-decode, encode-decode, and full pipeline decisions |
 | `llm_d_epp_pd_decision_total` | Prefill/decode disaggregation decisions (deprecated handler) | Backward-compatible counter for P/D routing decisions |
 | `llm_d_epp_disaggregatedset_strict_header_no_match_total` | Strict header selections that matched no endpoint | Surfaces strict selector misconfigurations that fail closed |
@@ -176,7 +210,7 @@ The EPP exposes Prometheus metrics under the `llm_d_epp_` prefix.
 When flow control is enabled (`flowControl` feature gate), these additional metrics are exposed:
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_flow_control_queue_size` | Queued request count per flow ID and priority | Growing queue means the pool cannot keep up. Consider scaling or adjusting priority bands |
 | `llm_d_epp_flow_control_queue_bytes` | Queued payload size in bytes per flow ID and priority | Large queued payloads can exhaust EPP memory. Monitor alongside `maxBytes` config |
 | `llm_d_epp_flow_control_request_queue_duration_seconds` | Queuing duration distribution per flow ID and priority | Directly impacts user-perceived latency. High values mean flow control is holding requests too long |
@@ -197,7 +231,7 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 #### Prefix & Multimodal Cache
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_prefix_indexer_size` | Entries in the approximate prefix index | Tracks index memory footprint |
 | `llm_d_epp_prefix_indexer_hit_ratio` | Prefix-match hit ratio distribution | High hit ratio indicates effective prefix caching |
 | `llm_d_epp_prefix_indexer_hit_bytes` | Bytes matched per prefix lookup | Quantifies data reused from cache |
@@ -208,7 +242,7 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 #### Predicted Latency & SLO
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_request_predicted_ttft_seconds` | Predicted TTFT distribution | Used by latency-based scheduling to evaluate candidates |
 | `llm_d_epp_request_ttft_prediction_duration_seconds` | Time spent computing TTFT predictions | Measures overhead of the predictor sidecar |
 | `llm_d_epp_request_predicted_tpot_seconds` | Predicted TPOT distribution | Evaluates token generation latency across backends |
@@ -219,7 +253,7 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 #### ext_proc Streams & Data Layer Errors
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `llm_d_epp_extproc_streams_inflight` | Number of open ext_proc gRPC streams (opt-in) | Monitors Envoy↔EPP gRPC stream connections |
 | `llm_d_epp_extproc_stream_duration_seconds` | Duration ext_proc gRPC streams stay open | Sudden short durations indicate stream reconnect churn |
 | `llm_d_epp_extproc_streams_total` | Completed ext_proc gRPC streams by status code | Surfaces abnormal stream disconnects and errors |
@@ -233,7 +267,7 @@ Only relevant if you deployed the [Batch Gateway guide](../../../guides/batch-se
 Unlike the EPP and vLLM metrics above, these names carry no `llm_d_` prefix, so scope queries by `namespace` to avoid picking up unrelated workloads.
 
 | Metric | What it measures | Why it matters |
-|--------|-----------------|----------------|
+| -------- | ----------------- | ---------------- |
 | `http_requests_total` | API server requests by method, path, and status | Baseline for API-side error rate — batch submission failures show up here, not in job metrics |
 | `http_request_duration_seconds` | API server request latency distribution | Submission and status-poll responsiveness |
 | `jobs_processed_total` | Jobs processed by `result` (`success`, `failed`, `skipped`, `re_enqueued`, `expired`) and `reason` | The primary outcome signal. `expired` means jobs aged out before running, which is a capacity problem rather than a failure |
@@ -330,9 +364,10 @@ llm-d-inference-cost                              1      30s
 Or import individual dashboard JSON files manually from `guides/recipes/observability/grafana/dashboards/`:
 
 | Dashboard | What it shows |
-|-----------|--------------|
+| ----------- | -------------- |
 | `llm-d-vllm-overview.json` | General vLLM metrics overview |
 | `llm-d-sglang-overview.json` | General SGLang metrics overview |
+| `llm-d-tpu-overview.json` | GKE TPU exporter health and hardware metrics; see the [TPU recipe](../../../guides/recipes/observability/tpu/) |
 | `llm-d-failure-saturation-dashboard.json` | Failure and saturation indicators |
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |

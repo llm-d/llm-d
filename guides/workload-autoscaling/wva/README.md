@@ -8,10 +8,10 @@
 > `ghcr.io/llm-d/llm-d-workload-variant-autoscaler:v0.9.0`. This guide is kept
 > for existing deployments only; it will not gain new features.
 >
-> New deployments should use a KEDA + EPP path instead — see
-> [Saturation-based Autoscaling](../keda-epp-saturation/README.md), the closest
-> replacement for WVA's saturation signal, or the other paths in the
-> [autoscaling overview](../README.md#paths).
+> New deployments should use a KEDA + EPP path instead — see the
+> [KEDA + EPP Metrics guide](../keda-epp/README.md) and its saturation signal
+> overlay, the closest replacement for WVA's saturation signal, or the other
+> paths in the [autoscaling overview](../README.md#paths).
 >
 > The VariantAutoscaling CRD was already deprecated in llm-d 0.8.0 in favor of
 > an HPA driven by the `wva_desired_replicas` external metric, which is the
@@ -39,7 +39,7 @@ Before installing WVA, ensure you have:
     > WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../../docs/operations/observability/setup.md), ensure to enable HTTPS/TLS support.
 
     > [!NOTE]
-    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-optional-enable-monitoring).
+    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-observability--troubleshooting).
 
 1. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
 
@@ -190,7 +190,7 @@ The manifests follow the same `${PLATFORM}` split as the WVA install above:
 - [`keda/base`](optimized-baseline/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
 - [`keda/ocp`](optimized-baseline/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
 
-The ScaledObject in `keda/base` is named and labelled for the NVIDIA model server. On AMD, layer the [`keda/components/amd`](optimized-baseline/keda/components/amd/kustomization.yaml) component onto your overlay to retarget it at the ROCm model server and MI355X; [`scripts/nightly-deploy-amd.sh`](../scripts/nightly-deploy-amd.sh) shows it in use.
+The ScaledObject in `keda/base` is named and labelled for the NVIDIA model server. On AMD, layer the [`keda/components/amd`](optimized-baseline/keda/components/amd/kustomization.yaml) component onto your overlay to retarget it at the ROCm model server and MI355X.
 
 Before applying, update `serverAddress` and the `namespace` in the trigger query to match your cluster.
 

@@ -102,13 +102,21 @@ patches:
                             - name: gke-rdma-claim-6
                             - name: gke-rdma-claim-7
                         env:
-                          # Disable GKE's built-in NCCL tuner and net plugin
-                          # (same env vars as the disable-gke-nccl-tuner-patch
+                          # Disable GKE's built-in NCCL tuner plugin
+                          # (same env var as the disable-gke-nccl-tuner-patch
                           # component sets for Deployment/LWS).
                           - name: NCCL_TUNER_PLUGIN
                             value: "none"
-                          - name: NCCL_NET_PLUGIN
-                            value: ""
+                          # DeepEP v2 uses NCCL for inter-node expert communication. On GKE A3 Ultra
+                          # nodes, force NCCL to use Google's gIB GPUDirect RDMA network backend.
+                          - name: NCCL_NET
+                            value: "gIB"
+                          # Mount GKE's host-provided gIB/NVIDIA libraries and source set_nccl_env.sh so
+                          # NCCL can discover and initialize the A3 Ultra GPUDirect RDMA environment.
+                          - name: LD_LIBRARY_PATH
+                            value: "/usr/local/gib/lib64:/usr/local/nvidia/lib64"
+                          - name: BASH_ENV
+                            value: "/usr/local/gib/scripts/set_nccl_env.sh"
                           # GCP pairs GPU NICs to PCIe bridges
                           # (https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth#h200-gpus),
                           # which can lead to NVSHMEM's automatic distance
@@ -120,11 +128,20 @@ patches:
                             value: "0:mlx5_0:1,1:mlx5_1:1,2:mlx5_2:1,3:mlx5_3:1,4:mlx5_4:1,5:mlx5_5:1,6:mlx5_6:1,7:mlx5_7:1"
                           # This is recommended on gke.
                           # https://github.com/llm-d/llm-d/tree/main/docs/infrastructure/providers/gke#configuring-support-for-rdma-on-gke-workload-pods
-                          - name: NVSHMEM_DISABLED_GDRCOPY
+                          - name: NVSHMEM_DISABLE_GDRCOPY
                             value: "true"
+                          - name: UCX_IB_ROCE_REACHABILITY_MODE
+                            value: "all"
+                        volumeMounts:
+                          - name: gib
+                            mountPath: /usr/local/gib
                     # We add the volume for different providers since the
                     # hostPath can be different.
                     volumes:
+                      - name: gib
+                        hostPath:
+                          path: /home/kubernetes/bin/gib
+                          type: DirectoryOrCreate
                       - name: hf-cache
                         emptyDir: null
                         hostPath:

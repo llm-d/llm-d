@@ -8,7 +8,7 @@ While disaggregated serving can offer superior performance, it introduces additi
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the vLLM image
 - [Known NIXL Connector Issues and Limitations](#known-nixl-connector-issues-and-limitations) - current gaps and bugs in the NIXL connector to plan around
 
-This page documents architectural considerations that impact these common operations flows.
+This page documents architectural considerations that impact these common operations flows. For the SGLang counterpart see the [SGLang page](sglang.md), and for the architecture, request flow orchestration, and KV cache transfer fundamentals see the [Disaggregated Serving Concepts](../../architecture/advanced/disaggregation/README.md) page.
 
 ## Dynamic Connections
 

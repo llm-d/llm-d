@@ -3,10 +3,12 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # 16 aggregated replicas, one GPU each. Every pod is both a puller and a
-  # source: it serves its own requests and answers peer pulls from its CPU
-  # tier.
-  replicas: 16
+  # 2 aggregated replicas, one GPU each: the smallest fleet in which a pod
+  # can pull a prefix that its peer computed. Every pod is both a puller and
+  # a source: it serves its own requests and answers peer pulls from its CPU
+  # tier. Scale up with `kubectl scale`; see the README's Best Practices
+  # (podCacheSize) when going past 16 pods.
+  replicas: 2
   template:
     spec:
       containers:

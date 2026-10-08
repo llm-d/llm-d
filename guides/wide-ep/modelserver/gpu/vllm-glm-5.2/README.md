@@ -23,7 +23,7 @@ Tested on CoreWeave (CKS) with InfiniBand networking. This recipe reuses the
 | DP model                | Supervisor (`--data-parallel-multi-port-external-lb`)                              |
 | Prefill parallelism     | TP=1, DP=8, EP=8 (DEP8) — 1 node                                                  |
 | Decode parallelism      | TP=1, DP=16, EP=16 (DEP16, wide) — 2 nodes                                        |
-| All-to-all (prefill)    | `deepep_high_throughput`                                                           |
+| All-to-all (prefill)    | `deepep_v2`                                                           |
 | All-to-all (decode)     | `deepep_low_latency` (IBGDA + NVSHMEM)                                            |
 | MoE backend             | DeepGemm                                                                           |
 | KV transfer             | NixlConnector                                                                      |

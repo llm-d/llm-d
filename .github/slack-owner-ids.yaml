@@ -1,0 +1,30 @@
+---
+# Map lowercase GitHub logins from guides/**/OWNERS to Slack member IDs.
+# Add new guide owners here; blank values need their Slack member IDs.
+# Comment out owners without a Slack account.
+aavarghese: U08TVV0D26L
+ahg-g: U08T96KL76C
+asm582: U08TH0SJNE4
+diegocastanibm: U08TFAA377U
+dumb0002: U08T9F0C47N
+ezrasilvera: ""
+gregory-pereira: U08SRL77021
+jimcadden: U08TM2NR9PT
+kaushikmitr: U08TL1QQZ7B
+kfirtoledo: U08T964F108
+lionelvillard: U08T96ELJGY
+lioraron: ""
+liu-cong: U08SU74E1PW
+lukeavandrie: U08T993CYN6
+# mamy-cs: no Slack account
+mikespreitzer: U08T2K88E7Q
+nicolexin: U0994PH8TT6
+niliguy: U08T960GYGY
+robertgshaw2-redhat: U08RU1APTTQ
+# rubambiza: no Slack account
+ryanrosario: ""
+shimib: U09N7HY3ZGD
+tlrmchlsmth: U08SV8ZNSUS
+vmaroon: U08SZMWS0QZ
+waltforme: U08T8Q1DDM0
+wseaton: U08SZL47AUW

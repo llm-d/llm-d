@@ -1,0 +1,365 @@
+{
+  "id": null,
+  "uid": "llmd-gke-tpu-overview",
+  "title": "llm-d GKE TPU Overview",
+  "description": "Reference dashboard for the GKE TPU device-plugin exporter. Metric availability depends on runtime and hardware.",
+  "tags": [
+    "llm-d",
+    "TPU"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "refresh": 1
+      },
+      {
+        "name": "job",
+        "label": "Exporter job",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(up, job)",
+        "query": {
+          "query": "label_values(up, job)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "selected": true,
+          "text": "kube-system/tpu-metrics-exporter",
+          "value": "kube-system/tpu-metrics-exporter"
+        }
+      },
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(up{job=\"$job\"}, instance)",
+        "query": {
+          "query": "label_values(up{job=\"$job\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "tpu_model",
+        "label": "TPU model",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values({job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\"}, model)",
+        "query": {
+          "query": "label_values({job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\"}, model)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "topology",
+        "label": "Topology",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values({job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\"}, tpu_topology)",
+        "query": {
+          "query": "label_values({job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\"}, tpu_topology)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "GKE TPU exporter reference",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Select the Prometheus data source and exporter **job** (default: `kube-system/tpu-metrics-exporter`). Start with instance, model, and topology set to **All**. Check scrape health first; a successful scrape does not guarantee every hardware metric is available. Duty-cycle and memory metrics are optional. **No data** does not mean zero utilization. See [GKE TPU Observability](https://github.com/llm-d/llm-d/blob/main/docs/operations/observability/tpu.md#check-the-exporter) to check available metrics and troubleshoot empty panels."
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Exporter scrape health",
+      "description": "1 = successful scrape; 0 = failed scrape; no series = target absent or filters do not match. Does not prove hardware metrics are present. Model/topology filters intentionally do not apply.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"$job\",instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "TensorCore utilization",
+      "description": "TensorCore utilization (0–100%). Uses workload-associated samples, not the separate *_node series.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tensorcore_utilization{job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\",tpu_topology=~\"$topology\"}",
+          "legendFormat": "tensorcore_utilization | {{instance}} | {{accelerator_id}} | {{model}} | {{tpu_topology}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HBM bandwidth utilization",
+      "description": "HBM bandwidth utilization (0–100%). This is bandwidth utilization, not memory capacity used.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "memory_bandwidth_utilization{job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\",tpu_topology=~\"$topology\"}",
+          "legendFormat": "memory_bandwidth_utilization | {{instance}} | {{accelerator_id}} | {{model}} | {{tpu_topology}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Duty cycle",
+      "description": "Active processing time (0–100%). Requires the optional duty_cycle runtime gauge. If empty while scrape health is 1, check exporter metric availability using the guide linked above.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "duty_cycle{job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\",tpu_topology=~\"$topology\"}",
+          "legendFormat": "duty_cycle | {{instance}} | {{accelerator_id}} | {{model}} | {{tpu_topology}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HBM memory",
+      "description": "Used and allocatable memory in bytes, shown independently. Requires the optional memory_used and memory_total runtime gauges; either may be absent. No capacity is inferred from the TPU model. Check metric availability using the guide linked above.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "memory_used{job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\",tpu_topology=~\"$topology\"}",
+          "legendFormat": "memory_used | {{instance}} | {{accelerator_id}} | {{model}} | {{tpu_topology}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "memory_total{job=\"$job\",instance=~\"$instance\",make=\"cloud-tpu\",model=~\"$tpu_model\",tpu_topology=~\"$topology\"}",
+          "legendFormat": "memory_total | {{instance}} | {{accelerator_id}} | {{model}} | {{tpu_topology}}",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

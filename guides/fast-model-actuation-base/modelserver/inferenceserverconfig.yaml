@@ -10,6 +10,6 @@ spec:
       VLLM_LOGGING_LEVEL: "INFO"
       HF_HOME: "/tmp/hf_cache"
     labels:
-      llm-d.ai/guide: "fast-model-actuation"
+      llm-d.ai/guide: "fast-model-actuation-base"
       llm-d.ai/model: "qwen3-0.6b"
   launcherConfigName: "fma-launcher"

@@ -82,12 +82,14 @@ spec:
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
                   --port 8000 \
+                  --enforce-eager \
                   --gpu-memory-utilization 0.80 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port 8008 \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
+                  --max-num-batched-tokens 2048 \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
@@ -97,7 +99,7 @@ spec:
                                           "kv_role":"kv_producer",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm \
-                  --all2all-backend deepep_high_throughput
+                  --all2all-backend deepep_v2
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -110,8 +112,6 @@ spec:
                     key: HF_TOKEN
               - name: VLLM_ENGINE_READY_TIMEOUT_S
                 value: '3000'
-              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
-                value: '1'
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: '1'
               - name: DP_SIZE_LOCAL
@@ -124,12 +124,6 @@ spec:
                 value: '1'
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: NVSHMEM_REMOTE_TRANSPORT
-                value: ibgda
-              - name: NVSHMEM_IB_ENABLE_IBGDA
-                value: 'true'
-              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-                value: eth0
               - name: GLOO_SOCKET_IFNAME
                 value: eth0
               - name: NCCL_SOCKET_IFNAME
@@ -257,7 +251,7 @@ spec:
               - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1
-              - --secure-proxy=false
+              - --secure-serving=false
               - --enable-prefiller-sampling
               image: REPLACE_ROUTING_SIDECAR_IMAGE
               imagePullPolicy: Always
@@ -344,9 +338,7 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
-                  --enable-dbo \
-                  --dbo-decode-token-threshold 32 \
-                  --all2all-backend deepep_low_latency \
+                  --all2all-backend deepep_v2 \
                   --moe-backend deep_gemm
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -375,14 +367,6 @@ spec:
                 value: '1'
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: NVSHMEM_SYMMETRIC_SIZE
-                value: 16G
-              - name: NVSHMEM_REMOTE_TRANSPORT
-                value: ibgda
-              - name: NVSHMEM_IB_ENABLE_IBGDA
-                value: 'true'
-              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-                value: eth0
               - name: GLOO_SOCKET_IFNAME
                 value: eth0
               - name: NCCL_SOCKET_IFNAME

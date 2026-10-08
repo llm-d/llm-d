@@ -17,8 +17,8 @@ credentials KEDA needs:
 - its token Secret (OpenShift injects both the bearer `token` and the
   `service-ca.crt` that verifies Thanos's serving certificate).
 
-Guides that run **no** WVA controller — `keda-epp-queue` and `keda-epp-saturation`
-— include this component from their OCP overlay:
+Guides that run **no** WVA controller — the `keda-epp` guide's overlays —
+include this component from their OCP overlay:
 
 ```yaml
 # <guide>/optimized-baseline/ocp/kustomization.yaml

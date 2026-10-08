@@ -11,3 +11,5 @@ Individual functional features, sophisticated routing algorithms, and physical i
 ### [Workloads](workloads/README.md)
 
 Cohesive, production-grade deployment guides that compose our capability building blocks into one horizontal stack tuned for a use case.
+
+Fleet operations that apply to any well-lit path — autoscaling, fast model actuation, flow control, multi-model routing, batch serving, and rollouts — live under [Operations](../operations/README.md).

@@ -43,12 +43,19 @@ CLI
     guide.py emit guides/flow-control env prerequisites.crds \
         --context ci --var NAMESPACE=my-ns          # bash on stdout, for tooling
 
+    guide.py check-manifest                         # llm-d.ai publish manifest
+    guide.py set-branch release-0.8 guides/*/       # pin BRANCH, re-render
+
 ``render`` validates before it writes and refuses to render an invalid guide,
 so a normal authoring loop only ever needs ``guide.py render <dir>``.
 
 ``emit`` assembles an executable bash script from guide.yaml sections, so
 deployment tooling (e.g. the nightly deploy scripts) consumes the guide's
 commands instead of copying them.
+
+``check-manifest`` validates ``docs/well-lit-paths/guides.yaml``, the list of
+guides llm-d.ai publishes; ``set-branch`` is the release-cut helper that pins
+each guide's clone step to the release branch it is published from.
 
 Library
 -------
@@ -297,10 +304,32 @@ def _line_of(text: str, offset: int) -> int:
 # --------------------------------------------------------------------------
 
 TOP_REQUIRED = {"name", "env", "deploy"}
-TOP_OPTIONAL = {"_lists", "prerequisites", "verify", "benchmark", "cleanup"}
+TOP_OPTIONAL = {"_lists", "prerequisites", "verify", "benchmark", "cleanup", "support"}
 STEP_KEYS = {"run", "when", "skip_in"}
 ENV_KEYS = {"static", "source", "derive"}
-ENV_VAR_KEYS = {"default", "values", "sensitive"}
+ENV_VAR_KEYS = {"default", "values", "sensitive", "comment"}
+
+# Step-list sections walked when cross-checking `when:` filters against the
+# support matrix.
+STEP_SECTIONS = ("prerequisites", "deploy", "verify", "benchmark", "cleanup")
+
+# --- Support matrix (accelerator × engine) ---------------------------------
+#
+# A guide may declare which ACCELERATOR_TYPE × MODEL_SERVER pairings it
+# supports. When present, the matrix is (1) validated against the declared
+# variable vocabularies, the guide's `when:` filters, the model-server overlays
+# on disk and the nightly E2E workflows; (2) rendered into the README as the
+# support table (`<!-- guide:support -->`); and (3) used
+# to render sibling `when:` steps as GitHub-collapsible variant groups that the
+# llm-d.ai site turns into a page-level accelerator/engine selector.
+ACCEL_VAR = "ACCELERATOR_TYPE"
+ENGINE_VAR = "MODEL_SERVER"
+VARIANT_VARS = (ACCEL_VAR, ENGINE_VAR)
+SUPPORT_KEYS = {"engines", "accelerators"}
+SUPPORT_ACCEL_KEYS = {"label", "model", "notes", "engines"}
+SUPPORT_CELL_KEYS = {"status", "issue"}
+SUPPORT_STATUSES = ("validated", "community", "unsupported")
+SUPPORTED_STATUSES = {"validated", "community"}
 
 
 def _check_step(step: Any, path: str, declared: set[str], f: Findings) -> None:
@@ -502,6 +531,285 @@ def _check_benchmark(node: Any, modes: list[str], declared: set[str], f: Finding
         _check_step_list(node["execute"], "benchmark.execute", declared, f)
 
 
+def _declared_values(guide: Any, var: str) -> list[str]:
+    """The ``values:`` vocabulary of an ``env.static`` variable, as strings."""
+    env = guide.get("env") if isinstance(guide, dict) else None
+    static = env.get("static") if isinstance(env, dict) else None
+    spec = static.get(var) if isinstance(static, dict) else None
+    if isinstance(spec, dict) and isinstance(spec.get("values"), list):
+        return [str(v) for v in spec["values"]]
+    return []
+
+
+def _declared_default(guide: Any, var: str) -> str | None:
+    env = guide.get("env") if isinstance(guide, dict) else None
+    static = env.get("static") if isinstance(env, dict) else None
+    spec = static.get(var) if isinstance(static, dict) else None
+    if isinstance(spec, dict) and "default" in spec:
+        return str(spec["default"])
+    return None
+
+
+def _cell_status(cell: Any) -> tuple[str | None, str | None]:
+    """``(status, issue)`` for one support-matrix cell (string or map form)."""
+    if isinstance(cell, str):
+        return cell, None
+    if isinstance(cell, dict):
+        status = cell.get("status")
+        issue = cell.get("issue")
+        return (str(status) if status is not None else None), (str(issue) if issue else None)
+    return None, None
+
+
+def support_status(guide: Any, accel: str, engine: str) -> str:
+    """Status of an accelerator/engine pairing; a missing cell is unsupported."""
+    sup = guide.get("support") if isinstance(guide, dict) else None
+    accels = sup.get("accelerators") if isinstance(sup, dict) else None
+    spec = accels.get(accel) if isinstance(accels, dict) else None
+    engines = spec.get("engines") if isinstance(spec, dict) else None
+    if not isinstance(engines, dict) or engine not in engines:
+        return "unsupported"
+    status, _issue = _cell_status(engines[engine])
+    return status or "unsupported"
+
+
+def is_supported(guide: Any, accel: str, engine: str) -> bool:
+    return support_status(guide, accel, engine) in SUPPORTED_STATUSES
+
+
+def _iter_steps(node: Any, path: str) -> Iterator[tuple[str, dict]]:
+    """Every step under a section, whatever its nesting (lists, named
+    sub-groups, mode maps). Tolerant of malformed input — schema errors are
+    reported elsewhere."""
+    if isinstance(node, dict) and "run" in node:
+        yield path, node
+    elif isinstance(node, list):
+        for i, step in enumerate(node):
+            yield from _iter_steps(step, f"{path}[{i}]")
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            yield from _iter_steps(v, f"{path}.{k}")
+
+
+def _check_support(guide: dict, f: Findings) -> None:
+    """Schema + consistency checks for the ``support:`` matrix that need only
+    the YAML: vocabularies, cell statuses, the default pairing, and that no
+    ``when:`` filter targets a pairing the matrix marks unsupported."""
+    sup = guide.get("support")
+    if not isinstance(sup, dict):
+        f.error("support: must be a map with `engines:` and `accelerators:`")
+        return
+    for k in sup:
+        if k not in SUPPORT_KEYS:
+            f.error(f"support: unknown key {k!r} (allowed: {sorted(SUPPORT_KEYS)})")
+
+    accel_values = _declared_values(guide, ACCEL_VAR)
+    engine_values = _declared_values(guide, ENGINE_VAR)
+    if not accel_values or not engine_values:
+        f.error(
+            f"support: requires env.static.{ACCEL_VAR} and env.static.{ENGINE_VAR} "
+            f"to declare `values:`"
+        )
+        return
+
+    engines = sup.get("engines")
+    if not isinstance(engines, dict):
+        f.error("support.engines: must map each MODEL_SERVER value to a display label")
+        engines = {}
+    for eng in engines:
+        if str(eng) not in engine_values:
+            f.error(f"support.engines.{eng}: not in env.static.{ENGINE_VAR}.values {engine_values}")
+    for eng in engine_values:
+        if eng not in engines:
+            f.error(f"support.engines: missing label for {ENGINE_VAR} value {eng!r}")
+
+    accels = sup.get("accelerators")
+    if not isinstance(accels, dict):
+        f.error("support.accelerators: must be a map keyed by ACCELERATOR_TYPE value")
+        return
+    declared_accels = set(accel_values)
+    listed_accels = {str(a) for a in accels}
+    for a in sorted(declared_accels - listed_accels):
+        f.error(f"support.accelerators: missing entry for {ACCEL_VAR} value {a!r}")
+    for a in sorted(listed_accels - declared_accels):
+        f.error(f"support.accelerators.{a}: not in env.static.{ACCEL_VAR}.values {accel_values}")
+
+    for accel, spec in accels.items():
+        p = f"support.accelerators.{accel}"
+        if not isinstance(spec, dict):
+            f.error(f"{p}: must be a map with `label:` and `engines:`")
+            continue
+        for k in spec:
+            if k not in SUPPORT_ACCEL_KEYS:
+                f.error(f"{p}: unknown key {k!r} (allowed: {sorted(SUPPORT_ACCEL_KEYS)})")
+        if not isinstance(spec.get("label"), str):
+            f.error(f"{p}.label: must be a string")
+        if "model" in spec and not isinstance(spec["model"], str):
+            f.error(f"{p}.model: must be a string")
+        if "notes" in spec and not isinstance(spec["notes"], str):
+            f.error(f"{p}.notes: must be a string")
+        elif "|" in str(spec.get("notes", "")) or "\n" in str(spec.get("notes", "")).strip():
+            f.error(f"{p}.notes: must be a single line without '|' (it is a table cell)")
+        cells = spec.get("engines")
+        if not isinstance(cells, dict):
+            f.error(f"{p}.engines: must map MODEL_SERVER values to a status")
+            continue
+        for eng, cell in cells.items():
+            cp = f"{p}.engines.{eng}"
+            if str(eng) not in engine_values:
+                f.error(f"{cp}: not in env.static.{ENGINE_VAR}.values {engine_values}")
+            if isinstance(cell, dict):
+                for k in cell:
+                    if k not in SUPPORT_CELL_KEYS:
+                        f.error(f"{cp}: unknown key {k!r} (allowed: {sorted(SUPPORT_CELL_KEYS)})")
+            elif not isinstance(cell, str):
+                f.error(f"{cp}: must be a status string or a map with `status:`/`issue:`")
+                continue
+            status, issue = _cell_status(cell)
+            if status not in SUPPORT_STATUSES:
+                f.error(f"{cp}: status must be one of {list(SUPPORT_STATUSES)}, got {status!r}")
+            if status == "unsupported" and not issue:
+                f.error(f"{cp}: unsupported pairings must link a tracking `issue:`")
+
+    d_acc, d_eng = _declared_default(guide, ACCEL_VAR), _declared_default(guide, ENGINE_VAR)
+    if d_acc and d_eng and not is_supported(guide, d_acc, d_eng):
+        f.error(f"support: the default pairing {d_acc}/{d_eng} must be supported")
+
+    # `when:` filters must not target pairings the matrix rules out.
+    for section in STEP_SECTIONS:
+        for path, step in _iter_steps(guide.get(section), section):
+            when = step.get("when")
+            if not isinstance(when, dict):
+                continue
+            accs = [str(v) for v in when.get(ACCEL_VAR, [])] if ACCEL_VAR in when else None
+            engs = [str(v) for v in when.get(ENGINE_VAR, [])] if ENGINE_VAR in when else None
+            if accs is not None and engs is not None:
+                bad = [f"{a}/{e}" for a in accs for e in engs if not is_supported(guide, a, e)]
+                if bad:
+                    f.error(f"{path}: when: targets unsupported pairing(s) {', '.join(bad)}")
+            elif accs is not None:
+                bad = [a for a in accs if not any(is_supported(guide, a, e) for e in engine_values)]
+                if bad:
+                    f.error(f"{path}: when: targets accelerator(s) with no supported engine: {', '.join(bad)}")
+            elif engs is not None:
+                bad = [e for e in engs if not any(is_supported(guide, a, e) for a in accel_values)]
+                if bad:
+                    f.error(f"{path}: when: targets engine(s) supported on no accelerator: {', '.join(bad)}")
+
+
+_WORKFLOW_ACCEL = re.compile(
+    r"accelerator_type:\s*\$\{\{\s*inputs\.accelerator_type\s*\|\|\s*'([^']+)'\s*\}\}"
+)
+_WORKFLOW_BACKEND = re.compile(
+    r"backend_type:\s*\$\{\{\s*inputs\.backend_type\s*\|\|\s*'([^']+)'\s*\}\}"
+)
+
+
+def _find_repo_root(start: Path) -> Path | None:
+    for p in [start, *start.parents]:
+        if (p / ".git").exists():
+            return p
+    return None
+
+
+def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = None) -> Findings:
+    """Cross-check the support matrix against the repository:
+
+    * every supported cell has a ``modelserver/<accel>/<engine>/`` overlay, and
+      every engine overlay on disk is a supported cell;
+    * every ``validated`` cell has a nightly E2E workflow, and every nightly
+      workflow for this guide runs a ``validated`` cell.
+
+    Skipped (empty) when the guide has no ``support:`` matrix.
+    """
+    f = Findings()
+    if not isinstance(guide, dict) or not isinstance(guide.get("support"), dict):
+        return f
+    accels = guide["support"].get("accelerators")
+    if not isinstance(accels, dict):
+        return f
+    engine_values = set(_declared_values(guide, ENGINE_VAR))
+
+    ms_dir = guide_dir / "modelserver"
+    if ms_dir.is_dir():
+        for accel, spec in accels.items():
+            cells = spec.get("engines") if isinstance(spec, dict) else None
+            for eng in (cells or {}):
+                status = support_status(guide, str(accel), str(eng))
+                if status in SUPPORTED_STATUSES and not (ms_dir / str(accel) / str(eng)).is_dir():
+                    f.error(
+                        f"support.accelerators.{accel}.engines.{eng}: marked {status} but "
+                        f"there is no overlay at modelserver/{accel}/{eng}/"
+                    )
+        for eng_dir in sorted(p for p in ms_dir.rglob("*") if p.is_dir() and p.name in engine_values):
+            accel = eng_dir.parent.relative_to(ms_dir).as_posix()
+            if accel == "." or eng_dir.parent == ms_dir:
+                continue
+            if accel not in {str(a) for a in accels}:
+                f.error(
+                    f"overlay modelserver/{accel}/{eng_dir.name}/ exists but {accel!r} is not "
+                    f"in support.accelerators (nor in env.static.{ACCEL_VAR}.values)"
+                )
+            elif not is_supported(guide, accel, eng_dir.name):
+                f.error(
+                    f"overlay modelserver/{accel}/{eng_dir.name}/ exists but support marks "
+                    f"{accel}/{eng_dir.name} as {support_status(guide, accel, eng_dir.name)}"
+                )
+
+    root = repo_root or _find_repo_root(guide_dir.resolve())
+    # nightly-e2e-<guide>-<provider>-acc-<acc>-<engine>-x.yaml; the provider
+    # may itself contain hyphens (e.g. amd-ci).
+    wf_dir = root / ".github" / "workflows" if root else None
+    name = guide.get("name")
+    if wf_dir and wf_dir.is_dir() and isinstance(name, str):
+        pat = re.compile(
+            rf"^nightly-e2e-{re.escape(name)}-[a-z0-9-]+?-acc-(?P<acc>[a-z0-9]+)-(?P<engine>[a-z0-9]+)-x\.ya?ml$"
+        )
+        nightly: set[tuple[str, str]] = set()
+        for wf in sorted(wf_dir.iterdir()):
+            m = pat.match(wf.name)
+            if m:
+                eng, acc = m.group("engine"), m.group("acc")
+            else:
+                # Workflows named another way (e.g. nightly-e2e-<guide>-<prov>-
+                # <tier>-<acc>-<engine>-<connector>.yaml) count when they declare
+                # both accelerator_type and backend_type input defaults.
+                if not re.match(rf"^nightly-e2e-{re.escape(name)}-.+\.ya?ml$", wf.name):
+                    continue
+                text = wf.read_text(errors="replace")
+                bm = _WORKFLOW_BACKEND.search(text)
+                if not bm or not _WORKFLOW_ACCEL.search(text):
+                    continue
+                eng, acc = bm.group(1), ""
+            if eng not in engine_values:
+                f.error(
+                    f"workflow {wf.name} targets engine {eng!r} which is not in "
+                    f"env.static.{ENGINE_VAR}.values ({sorted(engine_values)})"
+                )
+                continue
+            am = _WORKFLOW_ACCEL.search(wf.read_text(errors="replace"))
+            accel = am.group(1) if am else acc
+            pair = (accel, eng)
+            nightly.add(pair)
+            status = support_status(guide, *pair)
+            if status != "validated":
+                f.error(
+                    f"workflow {wf.name} runs {pair[0]}/{pair[1]} nightly but support marks it "
+                    f"{status} — set it to `validated`"
+                )
+        for accel, spec in accels.items():
+            cells = spec.get("engines") if isinstance(spec, dict) else None
+            for eng in (cells or {}):
+                if support_status(guide, str(accel), str(eng)) == "validated" and (
+                    str(accel), str(eng)
+                ) not in nightly:
+                    f.error(
+                        f"support.accelerators.{accel}.engines.{eng}: marked validated but no "
+                        f"nightly-e2e-{name}-*-acc-*-{eng}-x.yaml workflow runs it"
+                    )
+    return f
+
+
 def check_yaml(guide: Any) -> Findings:
     """Validate a parsed guide.yaml against the well-lit-path schema."""
     f = Findings()
@@ -543,6 +851,8 @@ def check_yaml(guide: Any) -> Findings:
         _check_benchmark(guide["benchmark"], modes, declared, f)
     if "cleanup" in guide:
         _check_step_list(guide["cleanup"], "cleanup", declared, f)
+    if "support" in guide:
+        _check_support(guide, f)
 
     return f
 
@@ -598,12 +908,27 @@ def check_markers(text: str) -> Findings:
     return f
 
 
+VARIANTS_START = "<!-- variants:start -->"
+VARIANTS_END = "<!-- variants:end -->"
+# Markup render_steps emits around variant groups (see _render_variant_group).
+VARIANT_MARKUP = re.compile(
+    r"<!--\s*variants:(?:start|end)\s*-->"
+    r"|<details(?:\s+open)?\s+data-when=\"[^\"]*\">"
+    r"|<summary>.*?</summary>"
+    r"|</details>",
+    re.DOTALL,
+)
+# Marker paths whose body is generated markdown rather than ```bash fences.
+MARKDOWN_PATHS = {"support"}
+
+
 def _is_valid_body(body: str) -> bool:
-    """Valid if, after stripping cicd:skip comments and every ```bash fence,
-    only whitespace remains. Admits both the single-fence case and multi-fence
-    bodies with CI-skip wrappers around individual fences."""
-    stripped = CICD_SKIP_MARKER.sub("", body)
-    stripped = BASH_FENCE.sub("", stripped)
+    """Valid if, after stripping cicd:skip comments, variant-group markup and
+    every ```bash fence, only whitespace remains. Admits both the single-fence
+    case and multi-fence bodies with CI-skip wrappers around individual fences."""
+    stripped = BASH_FENCE.sub("", body)
+    stripped = CICD_SKIP_MARKER.sub("", stripped)
+    stripped = VARIANT_MARKUP.sub("", stripped)
     return stripped.strip() == ""
 
 
@@ -629,6 +954,8 @@ def check_md(text: str, guide: Any = None) -> Findings:
             found, _value, msg = resolve_path(guide, path)
             if not found:
                 f.error(f"guide:{path} — {msg}", source="md", line=line)
+        if path in MARKDOWN_PATHS:
+            continue
         if not _is_valid_body(m.group("body")):
             f.error(
                 f"guide:{path} — body between markers must be one or more fenced "
@@ -670,8 +997,13 @@ def _env_static_lines(node: Any) -> list[tuple[str, bool, str]]:
                 out.append((var, True, f"export {var}={spec['default']}"))
             elif "default" in spec:
                 line = f"export {var}={spec['default']}"
+                notes = []
                 if spec.get("values"):
-                    line += " # options: " + ", ".join(str(v) for v in spec["values"])
+                    notes.append("options: " + ", ".join(str(v) for v in spec["values"]))
+                if spec.get("comment"):
+                    notes.append(str(spec["comment"]))
+                if notes:
+                    line += " # " + "; ".join(notes)
                 out.append((var, False, line))
             else:
                 raise GuideError(
@@ -682,7 +1014,7 @@ def _env_static_lines(node: Any) -> list[tuple[str, bool, str]]:
     return out
 
 
-def _render_env_static(node: Any) -> str:
+def _render_env_static(node: Any, source: Any = None) -> str:
     """Fenced markdown for ``env.static``.
 
     Variables marked ``sensitive: true`` render into their own fence wrapped in
@@ -697,10 +1029,18 @@ def _render_env_static(node: Any) -> str:
     """
     groups: list[tuple[bool, list[str]]] = []
     for _var, sensitive, line in _env_static_lines(node):
+        lines = [line]
         if groups and groups[-1][0] == sensitive:
-            groups[-1][1].append(line)
+            groups[-1][1].extend(lines)
         else:
-            groups.append((sensitive, [line]))
+            groups.append((sensitive, lines))
+
+    if source:
+        src_lines = _env_source_body(source).splitlines()
+        if groups and not groups[-1][0]:
+            groups[-1][1].extend(src_lines)
+        else:
+            groups.append((False, src_lines))
 
     parts: list[str] = []
     for sensitive, lines in groups:
@@ -753,40 +1093,214 @@ def _flatten_steps(node: Any) -> list[dict]:
     raise GuideError(f"don't know how to render node of type {type(node).__name__}")
 
 
-def render_steps(node: Any) -> str:
-    """Markdown for a step list — one or more ```bash fences, with contiguous
-    ``skip_in: [ci]`` steps wrapped in cicd:skip markers so a README-parsing CI
-    tool can skip them."""
-    steps = _flatten_steps(node)
-    if not steps:
-        return _fence("")
-
+def _plain_fences(steps: list[dict], *, force_skip: bool = False) -> list[str]:
+    """Fences for consecutive steps, contiguous ``skip_in: [ci]`` runs (or all
+    of them, with ``force_skip``) wrapped in cicd:skip markers."""
     groups: list[tuple[bool, list[str]]] = []
     for step in steps:
         rendered = _render_step_body(step)
-        ci_skip = "ci" in (step.get("skip_in") or [])
+        ci_skip = force_skip or "ci" in (step.get("skip_in") or [])
         if groups and groups[-1][0] == ci_skip:
             groups[-1][1].append(rendered)
         else:
             groups.append((ci_skip, [rendered]))
-
     parts: list[str] = []
     for ci_skip, bodies in groups:
         fence = _fence("\n\n".join(bodies))
         parts.append(f"{CICD_SKIP_START}\n{fence}\n{CICD_SKIP_END}" if ci_skip else fence)
+    return parts
+
+
+def _is_variant_step(step: dict, guide: Any) -> bool:
+    """A step is a variant when the guide has a support matrix and its
+    ``when:`` filter keys only off ACCELERATOR_TYPE / MODEL_SERVER."""
+    when = step.get("when")
+    return (
+        isinstance(guide, dict)
+        and isinstance(guide.get("support"), dict)
+        and isinstance(when, dict)
+        and bool(when)
+        and set(when) <= set(VARIANT_VARS)
+    )
+
+
+def _variant_label(when: dict, guide: dict) -> str:
+    sup = guide["support"]
+    parts: list[str] = []
+    if ACCEL_VAR in when:
+        accels = sup.get("accelerators") or {}
+        labels = [
+            str((accels.get(str(a)) or {}).get("label", a)) if isinstance(accels.get(str(a)), dict) else str(a)
+            for a in when[ACCEL_VAR]
+        ]
+        parts.append(" / ".join(labels))
+    if ENGINE_VAR in when:
+        engines = sup.get("engines") or {}
+        parts.append(" / ".join(str(engines.get(str(e), e)) for e in when[ENGINE_VAR]))
+    return " · ".join(parts)
+
+
+def _data_when(when: dict) -> str:
+    return ";".join(
+        f"{var}={','.join(str(v) for v in when[var])}" for var in VARIANT_VARS if var in when
+    )
+
+
+def _when_matches_defaults(when: dict, guide: dict) -> bool:
+    for var in VARIANT_VARS:
+        if var in when:
+            default = _declared_default(guide, var)
+            if default is None or not _in_values(default, when[var]):
+                return False
+    return True
+
+
+def _render_variant_group(steps: list[dict], guide: dict) -> str:
+    """A run of sibling variant steps as GitHub-collapsible ``<details>`` blocks.
+
+    Steps with identical ``when:`` filters share one block (in first-seen
+    order). The block matching the declared defaults is ``open``; every other
+    block's fences are wrapped in cicd:skip markers so a README-parsing runner
+    executes only the default path — exactly the commands that used to be
+    commented out with "comment out the above and uncomment the below".
+    The llm-d.ai preprocessor turns the group into a page-level
+    accelerator/engine selector using ``data-when``.
+    """
+    order: list[str] = []
+    by_key: dict[str, tuple[dict, list[dict]]] = {}
+    for step in steps:
+        key = _data_when(step["when"])
+        if key not in by_key:
+            order.append(key)
+            by_key[key] = (step["when"], [])
+        by_key[key][1].append(step)
+
+    parts = [VARIANTS_START]
+    for key in order:
+        when, group = by_key[key]
+        is_default = _when_matches_defaults(when, guide)
+        fences = _plain_fences(
+            [{k: v for k, v in s.items() if k != "when"} for s in group],
+            force_skip=not is_default,
+        )
+        parts.append(
+            f"<details{' open' if is_default else ''} data-when=\"{key}\">\n"
+            f"<summary><b>{_variant_label(when, guide)}</b></summary>\n\n"
+            + "\n".join(fences)
+            + "\n\n</details>"
+        )
+    parts.append(VARIANTS_END)
     return "\n".join(parts)
 
 
-def render_path(guide: Any, path: str) -> str:
+def render_steps(node: Any, guide: Any = None) -> str:
+    """Markdown for a step list — one or more ```bash fences, with contiguous
+    ``skip_in: [ci]`` steps wrapped in cicd:skip markers so a README-parsing CI
+    tool can skip them.
+
+    When ``guide`` declares a ``support:`` matrix, consecutive steps whose
+    ``when:`` keys only off ACCELERATOR_TYPE / MODEL_SERVER render as a variant
+    group (see :func:`_render_variant_group`) instead of ``# only when``
+    comments. Guides without a matrix render exactly as before."""
+    steps = _flatten_steps(node)
+    if not steps:
+        return _fence("")
+
+    # A marker that points at one variant step (e.g. `deploy.render[1]`) is
+    # placed by the author in its own context — typically an engine tab — so
+    # render a bare fence rather than a one-entry variant group. Non-default
+    # variants stay wrapped in cicd:skip markers, as in a variant group.
+    if isinstance(node, dict) and "run" in node and _is_variant_step(node, guide):
+        return "\n".join(
+            _plain_fences(
+                [{k: v for k, v in node.items() if k != "when"}],
+                force_skip=not _when_matches_defaults(node["when"], guide),
+            )
+        )
+
+    segments: list[tuple[bool, list[dict]]] = []
+    for step in steps:
+        variant = _is_variant_step(step, guide)
+        if segments and segments[-1][0] == variant:
+            segments[-1][1].append(step)
+        else:
+            segments.append((variant, [step]))
+
+    parts: list[str] = []
+    for i, (variant, group) in enumerate(segments):
+        if variant:
+            block = _render_variant_group(group, guide)
+            # GFM ends an HTML block (opened by `</details>`) only at a blank
+            # line; without one, a following fence would be swallowed as HTML.
+            parts.append(block + "\n" if i < len(segments) - 1 else block)
+        else:
+            parts.extend(_plain_fences(group))
+    return "\n".join(parts)
+
+
+_STATUS_CELL = {
+    "validated": "✅ validated",
+    "community": "🟡 community",
+}
+
+
+def render_support_table(guide: Any) -> str:
+    """GFM table for the ``<!-- guide:support -->`` marker: one row per
+    accelerator, one column per engine, plus the served model and, when any
+    accelerator sets `notes:`, a trailing Notes column."""
+    if not isinstance(guide, dict) or not isinstance(guide.get("support"), dict):
+        raise GuideError("guide:support marker needs a `support:` matrix in guide.yaml")
+    sup = guide["support"]
+    engines = _declared_values(guide, ENGINE_VAR)
+    labels = sup.get("engines") or {}
+    accels = sup.get("accelerators") or {}
+    with_notes = any(isinstance(v, dict) and v.get("notes") for v in accels.values())
+    header = ["Accelerator", f"`{ACCEL_VAR}`", "Served model", *[str(labels.get(e, e)) for e in engines]]
+    if with_notes:
+        header.append("Notes")
+    rows = ["| " + " | ".join(header) + " |", "| " + " | ".join("---" for _ in header) + " |"]
+    for accel in _declared_values(guide, ACCEL_VAR):
+        spec = accels.get(accel) if isinstance(accels.get(accel), dict) else {}
+        cells_map = spec.get("engines") if isinstance(spec.get("engines"), dict) else {}
+        model = spec.get("model")
+        row = [str(spec.get("label", accel)), f"`{accel}`", f"`{model}`" if model else "—"]
+        for eng in engines:
+            if eng not in cells_map:
+                row.append("—")
+                continue
+            status, issue = _cell_status(cells_map[eng])
+            if status == "unsupported":
+                row.append(f"❌ [not supported]({issue})" if issue else "❌ not supported")
+            else:
+                row.append(_STATUS_CELL.get(status or "", str(status)))
+        if with_notes:
+            row.append(str(spec.get("notes", "")).strip())
+        rows.append("| " + " | ".join(row) + " |")
+    legend = (
+        "\n\n✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the "
+        "hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in "
+        "the linked issue · — no configuration."
+    )
+    return "\n".join(rows) + legend
+
+
+def render_path(guide: Any, path: str, *, include_env_source: bool = False) -> str:
     """Markdown (already fenced) for one marker path."""
     found, value, msg = resolve_path(guide, path)
     if not found:
         raise GuideError(msg)
     if path == "env.static":
-        return _render_env_static(value)
+        src = (
+            guide.get("env", {}).get("source")
+            if include_env_source and isinstance(guide, dict) and isinstance(guide.get("env"), dict)
+            else None
+        )
+        return _render_env_static(value, src)
     if path == "env.source":
         return _fence(_env_source_body(value))
-    return render_steps(value)
+    if path == "support":
+        return render_support_table(guide)
+    return render_steps(value, guide)
 
 
 def render_md(guide: Any, text: str) -> str:
@@ -796,10 +1310,13 @@ def render_md(guide: Any, text: str) -> str:
     if not markers.ok():
         raise GuideError("README markers are malformed — cannot render", markers)
 
+    inline_src = "env.source" not in marker_paths(text)
+
     def replace(match: re.Match) -> str:
         # render_path returns markdown that already carries its own ```bash
         # fence(s) and cicd:skip wrappers — inject it between the marker pair.
-        return f"{match.group(1)}\n{render_path(guide, match.group('path'))}\n{match.group(4)}"
+        body = render_path(guide, match.group("path"), include_env_source=inline_src)
+        return f"{match.group(1)}\n{body}\n{match.group(4)}"
 
     return MARKER_PAIR.sub(replace, text)
 
@@ -979,7 +1496,8 @@ class Guide:
     one.
 
     Construct from disk with :meth:`load` or from memory with :meth:`from_text`.
-    Nothing touches the filesystem except :meth:`load` and :meth:`write`.
+    Nothing touches the filesystem except :meth:`load`, :meth:`write`, and the
+    read-only support-matrix cross-check in :meth:`check_yaml`.
     """
 
     def __init__(
@@ -1121,12 +1639,20 @@ class Guide:
     # -- validation --------------------------------------------------------
 
     def check_yaml(self) -> Findings:
-        """Validate the YAML alone. Empty when no YAML is loaded."""
+        """Validate the YAML alone. Empty when no YAML is loaded.
+
+        When the YAML was loaded from disk and declares a ``support:`` matrix,
+        this also cross-checks it against the repository (overlays on disk,
+        nightly E2E workflows) — see :func:`check_support_repo`. This is the
+        one read outside :meth:`load`, and it only reads."""
         if not self.has_yaml:
             return Findings()
         if self._parse_error is not None:
             return Findings([self._parse_error])
-        return check_yaml(self.data)
+        findings = check_yaml(self.data)
+        if findings.ok() and self.yaml_path is not None and self.yaml_path.is_file():
+            findings.extend(check_support_repo(self.data, self.yaml_path.parent))
+        return findings
 
     def check_md(self) -> Findings:
         """Validate the markdown. Resolves ``guide:<path>`` markers against the
@@ -1361,6 +1887,166 @@ def _cmd_emit(args: argparse.Namespace) -> int:
     return 0
 
 
+# -- set-branch --------------------------------------------------------------
+
+_BRANCH_VAR = re.compile(r"^(?P<indent>[ \t]+)BRANCH:[ \t]*\S.*$", re.MULTILINE)
+_BRANCH_EXPORT = re.compile(r"(export BRANCH=)\S+")
+_REF = re.compile(r"^[A-Za-z0-9._/-]+$")
+
+
+def set_branch_text(yaml_text: str, ref: str) -> str:
+    """Pin ``env.static.BRANCH`` and every ``export BRANCH=…`` in a guide.yaml
+    to ``ref``. Text-level so comments and layout survive; the caller
+    re-renders the README afterwards."""
+    if not _REF.match(ref):
+        raise GuideError(f"invalid ref {ref!r}")
+    out = _BRANCH_VAR.sub(lambda m: f"{m.group('indent')}BRANCH: {ref}", yaml_text)
+    return _BRANCH_EXPORT.sub(lambda m: f"{m.group(1)}{ref}", out)
+
+
+def _cmd_set_branch(args: argparse.Namespace) -> int:
+    failed = seen = 0
+    for target in _iter_targets(args.targets):
+        seen += 1
+        g = Guide.load(target)
+        if g.yaml_path is None:
+            print(f"error: {g.label}: no {GUIDE_YAML}", file=sys.stderr)
+            failed += 1
+            continue
+        text = g.yaml_path.read_text()
+        new = set_branch_text(text, args.ref)
+        if new != text:
+            g.yaml_path.write_text(new)
+        g = Guide.load(target)
+        findings = g.check()
+        if not findings.ok():
+            _report_failure(g, findings)
+            failed += 1
+            continue
+        if g.has_md:
+            g.write()
+        print(f"{g.label}: BRANCH={args.ref}")
+    if not seen:
+        print("no guides matched", file=sys.stderr)
+        return 1
+    return 1 if failed else 0
+
+
+# -- check-manifest ----------------------------------------------------------
+
+DEFAULT_MANIFEST = "docs/well-lit-paths/guides.yaml"
+MANIFEST_SECTIONS = ("foundations", "models", "operations")
+# Sections whose guides may be published from a README alone (no guide.yaml):
+# Operations guides are not held to the Foundations/Models guide.yaml rules.
+README_ONLY_SECTIONS = ("operations",)
+
+
+def _manifest_pillar(name: str) -> str | None:
+    """The pillar a section belongs to: ``<pillar>`` itself, or
+    ``<pillar>-<sub-category>`` (e.g. ``operations-scaling``, published under
+    a nested target such as ``operations/scaling``)."""
+    for pillar in MANIFEST_SECTIONS:
+        if name == pillar or re.fullmatch(rf"{pillar}-[a-z0-9][a-z0-9-]*", name):
+            return pillar
+    return None
+
+
+def check_manifest(data: Any, repo_root: Path) -> Findings:
+    """Validate the llm-d.ai publish manifest: every guide directory exists
+    with a ``README.md`` (and a ``guide.yaml``, except in Operations
+    sections), slugs are unique across sections, child pages exist, and
+    titles are present."""
+    f = Findings()
+    if not isinstance(data, dict) or not isinstance(data.get("sections"), dict):
+        f.error("manifest: must be a map with `sections:`")
+        return f
+    if data.get("version") != 1:
+        f.error("manifest: `version: 1` is required")
+    seen_dirs: dict[str, str] = {}
+    seen_slugs: dict[str, str] = {}
+    for name, section in data["sections"].items():
+        p = f"sections.{name}"
+        pillar = _manifest_pillar(name)
+        if pillar is None:
+            f.error(
+                f"{p}: unknown section (allowed: {list(MANIFEST_SECTIONS)}, "
+                "or <section>-<sub-category>)"
+            )
+        if not isinstance(section, dict):
+            f.error(f"{p}: must be a map with `target:` and `guides:`")
+            continue
+        target = section.get("target")
+        if not isinstance(target, str) or not target or target.startswith("/") or ".." in target:
+            f.error(f"{p}.target: must be a relative docs path")
+        guides = section.get("guides") or []
+        if not isinstance(guides, list):
+            f.error(f"{p}.guides: must be a list")
+            continue
+        required = (GUIDE_MD,) if pillar in README_ONLY_SECTIONS else (GUIDE_YAML, GUIDE_MD)
+        slugs: set[str] = set()
+        for i, entry in enumerate(guides):
+            gp = f"{p}.guides[{i}]"
+            if not isinstance(entry, dict):
+                f.error(f"{gp}: must be a map")
+                continue
+            d, slug = entry.get("dir"), entry.get("slug")
+            if not isinstance(entry.get("title"), str) or not entry["title"].strip():
+                f.error(f"{gp}.title: required")
+            if not isinstance(slug, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+                f.error(f"{gp}.slug: required, lowercase letters, digits and dashes")
+            elif slug in slugs:
+                f.error(f"{gp}.slug: duplicate slug {slug!r} in {name}")
+            elif slug in seen_slugs:
+                f.error(
+                    f"{gp}.slug: {slug!r} is already used by {seen_slugs[slug]} "
+                    "(slugs must be unique across sections)"
+                )
+            else:
+                slugs.add(slug)
+                seen_slugs[slug] = gp
+            if not isinstance(d, str) or not d.startswith("guides/"):
+                f.error(f"{gp}.dir: required, a repo-relative path under guides/")
+                continue
+            if d in seen_dirs:
+                f.error(f"{gp}.dir: {d} is already published by {seen_dirs[d]}")
+            seen_dirs[d] = gp
+            gdir = repo_root / d
+            for req in required:
+                if not (gdir / req).is_file():
+                    f.error(f"{gp}.dir: {d}/{req} does not exist")
+            if "position" in entry and not isinstance(entry["position"], int):
+                f.error(f"{gp}.position: must be an integer")
+            for j, page in enumerate(entry.get("pages") or []):
+                pp = f"{gp}.pages[{j}]"
+                if not isinstance(page, dict):
+                    f.error(f"{pp}: must be a map with `from:`, `to:`, `title:`")
+                    continue
+                src, to = page.get("from"), page.get("to")
+                if not isinstance(src, str) or not (gdir / src).is_file():
+                    f.error(f"{pp}.from: {d}/{src} does not exist")
+                if not isinstance(to, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", to or ""):
+                    f.error(f"{pp}.to: required, lowercase letters, digits and dashes")
+                if not isinstance(page.get("title"), str) or not page["title"].strip():
+                    f.error(f"{pp}.title: required")
+    return f
+
+
+def _cmd_check_manifest(args: argparse.Namespace) -> int:
+    path = Path(args.manifest)
+    if not path.is_file():
+        print(f"error: no such file: {path}", file=sys.stderr)
+        return 1
+    root = _find_repo_root(path.resolve().parent) or Path.cwd()
+    data, err = parse_guide_yaml(path.read_text())
+    findings = Findings([err]) if err else check_manifest(data, root)
+    if findings.ok():
+        print(f"{path}: OK")
+        return 0
+    findings.report()
+    print(f"{len(findings.errors)} error(s) — {path}\n", file=sys.stderr)
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="guide.py",
@@ -1382,6 +2068,10 @@ def build_parser() -> argparse.ArgumentParser:
             "emit needs the YAML half only:\n"
             "  guide.py emit guides/my-guide env deploy.standalone\n"
             "  guide.py emit guides/my-guide env deploy --context ci --var NAMESPACE=ns\n"
+            "\n"
+            "publishing on llm-d.ai:\n"
+            "  guide.py check-manifest                    validate docs/well-lit-paths/guides.yaml\n"
+            "  guide.py set-branch release-0.8 guides/*/  pin BRANCH and re-render (release cut)\n"
         ),
     )
     sub = ap.add_subparsers(dest="command", required=True)
@@ -1469,6 +2159,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit without validating first (escape hatch; not for CI)",
     )
     e.set_defaults(func=_cmd_emit)
+
+    sb = sub.add_parser(
+        "set-branch",
+        help="pin BRANCH in guide.yaml to a ref and re-render (release cuts)",
+        description=(
+            "Rewrite env.static.BRANCH and every `export BRANCH=` in each "
+            "guide.yaml to REF, validate, and re-render the README. Run on a "
+            "release branch so a guide's clone step checks out the release it "
+            "is published with on llm-d.ai."
+        ),
+    )
+    sb.add_argument("ref", metavar="REF", help="branch or tag, e.g. release-0.8")
+    sb.add_argument("targets", nargs="+", metavar="TARGET", help="guide directory; repeatable")
+    sb.set_defaults(func=_cmd_set_branch)
+
+    cm = sub.add_parser(
+        "check-manifest",
+        help="validate the llm-d.ai guide publish manifest",
+        description=(
+            "Validate the manifest listing which guides llm-d.ai publishes and "
+            "where: guide dirs exist with guide.yaml + README.md, slugs are "
+            "unique per section, child pages exist, titles are present."
+        ),
+    )
+    cm.add_argument(
+        "manifest",
+        nargs="?",
+        default=DEFAULT_MANIFEST,
+        metavar="PATH",
+        help=f"manifest path (default: {DEFAULT_MANIFEST})",
+    )
+    cm.set_defaults(func=_cmd_check_manifest)
 
     return ap
 

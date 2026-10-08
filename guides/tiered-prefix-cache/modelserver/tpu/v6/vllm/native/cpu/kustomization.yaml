@@ -1,0 +1,6 @@
+# Kept for the nightly E2E workflow, which passes an empty INFRA_PROVIDER for
+# TPU v6 and so applies this directory. Same as ./base (and ./gke).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./base

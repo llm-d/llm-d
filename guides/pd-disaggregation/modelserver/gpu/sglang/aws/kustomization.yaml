@@ -3,11 +3,12 @@ kind: Kustomization
 resources:
   - ../base
 
-# TODO(#1894): Align AWS ECR sglang version with centralized gpu-sglang (v0.5.13.post1).
+# TODO(#1894): Remove override once upstream sglang images support EFA.
+# Keep the version in step with gpu-sglang/release.
 images:
   - name: docker.io/lmsysorg/sglang
-    newName: 763104351884.dkr.ecr.us-east-1.amazonaws.com/sglang
-    newTag: 0.5.12-gpu-py312-cu130-ubuntu24.04-ec2
+    newName: public.ecr.aws/deep-learning-containers/sglang
+    newTag: 0.5.20-gpu-py312-cu130-ubuntu24.04-ec2
 
 patches:
   - path: patch-decode.yaml

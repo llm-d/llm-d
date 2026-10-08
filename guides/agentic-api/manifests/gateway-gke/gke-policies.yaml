@@ -1,0 +1,39 @@
+# GKE-only backend and health-check policies for Service/agentic-api.
+#
+# The matching policies for InferencePool/wide-ep are NOT here: the llm-d router
+# chart renders them itself when installed with `provider.name=gke` (see the
+# Gateway Mode step in README.md). Only the agentic-api Service is invisible to
+# the chart, so only its policies live in this file.
+#
+# These are networking.gke.io CRDs -- apply this file on GKE only.
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: agentic-api
+spec:
+  targetRef:
+    group: ""
+    kind: Service
+    name: agentic-api
+  default:
+    timeoutSec: 300
+    logging:
+      enabled: true
+---
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: agentic-api
+spec:
+  targetRef:
+    group: ""
+    kind: Service
+    name: agentic-api
+  default:
+    timeoutSec: 2
+    checkIntervalSec: 5
+    config:
+      type: HTTP
+      httpHealthCheck:
+        requestPath: /health
+        port: 9000
