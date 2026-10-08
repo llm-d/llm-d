@@ -8,7 +8,7 @@ router:
     pluginsConfigFile: "optimized-baseline-keda-epp-plugins.yaml"
     pluginsCustomConfig:
       optimized-baseline-keda-epp-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         featureGates:
         - flowControl

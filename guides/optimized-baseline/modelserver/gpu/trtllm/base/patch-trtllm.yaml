@@ -3,8 +3,8 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # Mirrors the vLLM/SGLang variants: 8 replicas × TP=2 = 16 GPUs total.
-  replicas: 8
+  # Mirrors the vLLM/SGLang variants: 2 replicas × TP=2 = 4 GPUs total.
+  replicas: 2
   template:
     spec:
       containers:
@@ -29,6 +29,14 @@ spec:
                   key: HF_TOKEN
             - name: HF_HOME
               value: /hf-cache
+            # TensorRT-LLM 1.3.0rc27+ images ship Open MPI 5, whose PMIx builds a
+            # singleton id "singleton.<hostname>.<pid>" that must fit a 50-byte
+            # buffer. Pod names here are ~60 characters, so every MpiPoolSession
+            # spawn fails and trtllm-serve never opens its port. PMIX_HOSTNAME only
+            # changes the name PMIx sees; any short string works. See
+            # NVIDIA/TensorRT-LLM#19607 and the installation guide's known limitations.
+            - name: PMIX_HOSTNAME
+              value: trtllm-node
             # Overriding the container command (above) bypasses the image entrypoint
             # that normally sets up the dynamic linker path, so set it explicitly:
             #   tensorrt/lib  -> libnvonnxparser.so.10 etc. (tensorrt is imported even

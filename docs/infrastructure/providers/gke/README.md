@@ -177,7 +177,7 @@ For GKE A4X (NVIDIA GB200) clusters, deploy model servers using the `gke/a4x` ov
 
 When deploying large-scale model inference on GKE clusters (such as multi-replica prefill and decode deployments), concurrent model weight downloads across multiple pods can trigger Hugging Face HTTP 429 Rate Limiting errors, leading to container startup timeouts.
 
-For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../../operations/model-loading-and-startup.md).
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../../operations/startup/model-loading-and-startup.md).
 
 ### Google Cloud Storage Integration (Recommended for Production)
 

@@ -1,0 +1,145 @@
+# Guides published on llm-d.ai.
+#
+# Each guide lives once, under guides/<dir>/, as a guide.yaml + README.md pair
+# that renders on GitHub. The website (llm-d/llm-d.github.io) reads this file
+# at sync time and publishes each listed README as the page
+# docs/<target>/<slug>/ (the URL a docs page at <target>/<slug>.md used to
+# have), with optional child pages (`pages: [{from, to, title}]`, paths relative
+# to the guide dir). Grouping into sections lives here only;
+# the guides/ tree stays flat.
+#
+# Validate with: python3 scripts/guide.py check-manifest
+version: 1
+sections:
+  foundations:
+    target: well-lit-paths/foundations
+    guides:
+      - dir: guides/optimized-baseline
+        slug: optimized-baseline
+        title: Deploy an Optimized Baseline
+        position: 1
+      - dir: guides/predicted-latency-routing
+        slug: predicted-latency
+        title: Route Requests by Predicted Latency
+        position: 2
+      - dir: guides/precise-prefix-cache-routing
+        slug: precise-prefix-cache-routing
+        title: Enable Precise Prefix-Cache Aware Routing
+        position: 3
+      - dir: guides/tiered-prefix-cache
+        slug: tiered-prefix-cache
+        title: Configure a Tiered Prefix Cache
+        position: 4
+      - dir: guides/p2p-kv-cache-sharing
+        slug: enable-p2p-prefix-cache-sharing
+        title: Enable P2P Prefix Cache Sharing
+        position: 5
+  models:
+    target: well-lit-paths/models
+    guides: []
+  # Operations: the sidebar is at most two levels deep (Operations > category
+  # > page). Two guides are categories themselves (section `operations`,
+  # target `operations`) and keep their child pages; the other sections map
+  # to the docs/operations/<sub>/ categories (labels in docs/menu-config.json)
+  # and publish README-only leaf pages whose positions interleave with the
+  # regular docs pages of the same category. Files of these guides that are
+  # not listed are not published; links to them resolve to GitHub.
+  # Operations guides may be README-only (no guide.yaml).
+  # Category order (positions): 1 observability, 2 autoscaling, 3 startup,
+  # 4 lifecycle, 5 rollouts, 6 disaggregation, 7 traffic, 8 batch-serving,
+  # 9 integrations, 10 components. Guide categories take their position here;
+  # docs/operations/<sub>/ categories take theirs from docs/menu-config.json.
+  operations:
+    target: operations
+    guides:
+      - dir: guides/workload-autoscaling
+        slug: autoscaling
+        title: Autoscale Inference Pools
+        position: 2
+        pages:
+          - from: keda-epp/README.md
+            to: keda-epp
+            title: KEDA + EPP Metrics
+          - from: keda-epp-token-aware/README.md
+            to: token-aware
+            title: Token-Aware Autoscaling
+          - from: slo-aware/README.md
+            to: slo-aware
+            title: SLO-Aware Autoscaling
+          - from: multi-inference-pool/README.md
+            to: multi-inference-pool
+            title: Multi-Inference Pool Setup
+          - from: kueue-rebalancing/README.md
+            to: kueue-rebalancing
+            title: Kueue-Based Replica Rebalancing
+          - from: wva/README.md
+            to: wva
+            title: Workload Variant Autoscaler (Deprecated)
+          - from: promadapter.md
+            to: prometheus-adapter
+            title: Prometheus Adapter (Deprecated)
+      - dir: guides/batch-serving
+        slug: batch-serving
+        title: Process Batch and Async Requests
+        position: 8
+        pages:
+          - from: batch-gateway/README.md
+            to: batch-gateway
+            title: Batch Gateway
+          - from: asynchronous-processing/README.md
+            to: asynchronous-processing
+            title: Asynchronous Processing
+          - from: asynchronous-processing/redis/README.md
+            to: async-redis
+            title: "Async Processing: Redis Sorted Set"
+          - from: asynchronous-processing/gcp-pubsub/README.md
+            to: async-gcp-pubsub
+            title: "Async Processing: GCP Pub/Sub"
+          - from: asynchronous-processing/multitenant/README.md
+            to: async-multitenant
+            title: "Async Processing: Multi-Tenant"
+      - dir: guides/rollouts
+        slug: rollouts
+        title: Roll Out Updates Safely
+        position: 5
+        pages:
+          - from: blue-green-update.md
+            to: blue-green-update
+            title: Blue-Green Update
+          - from: adapter-rollout.md
+            to: adapter-rollout
+            title: LoRA Adapter Rollout
+  operations-startup:
+    target: operations/startup
+    guides:
+      # position 1: docs/operations/startup/model-loading-and-startup.md
+      - dir: guides/fast-model-actuation-base
+        slug: fast-model-actuation
+        title: Fast Model Actuation
+        position: 2
+      - dir: guides/fast-model-actuation-keda
+        slug: fast-model-actuation-keda
+        title: FMA with KEDA
+        position: 3
+      - dir: guides/pod-snapshot
+        slug: pod-snapshot
+        title: Pod Snapshots
+        position: 4
+      - dir: guides/modelexpress-p2p
+        slug: modelexpress-p2p
+        title: ModelExpress P2P Weight Transfer
+        position: 5
+  operations-traffic:
+    target: operations/traffic
+    guides:
+      - dir: guides/flow-control
+        slug: flow-control
+        title: Flow Control & Fairness
+        position: 1
+      - dir: guides/multi-model-routing
+        slug: multi-model-routing
+        title: Multi-Model & LoRA Routing
+        position: 2
+  # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
+  # operations/disaggregation has only docs pages: vllm, sglang.
+  # operations/integrations (Integrate an AI Gateway) has only docs pages: litellm, kong.

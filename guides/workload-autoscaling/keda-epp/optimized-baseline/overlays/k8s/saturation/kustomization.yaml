@@ -1,0 +1,11 @@
+# Generic Kubernetes + saturation signal (windows overshoot solution). Base is
+# plain in-cluster HTTP (no auth); the trigger-saturation component inserts the
+# pool-saturation trigger and raises the replica cap to 10. Use
+# overlays/ocp/saturation on OpenShift. Apply with the envsubst pipe (see the
+# guide): the base and components carry ${...} placeholders rendered at apply time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base
+components:
+  - ../../../components/trigger-saturation

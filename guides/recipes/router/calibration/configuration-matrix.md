@@ -23,7 +23,6 @@ rows because the serving engine changes prefill throughput.
 |---|---|---|---|---|---|
 | `gpu/vllm`         | NVIDIA H100 80 GB · vLLM   | v0.23.0              | 2 | Qwen3-32B               | **15928** |
 | `gpu/vllm` (multimodal-serving) | NVIDIA H200 141 GB · vLLM | v0.23.0    | 2 | Qwen3-VL-32B-Instruct   | **15751** |
-| `gpu/vllm/gpt-oss` | NVIDIA H100 80 GB · vLLM   | v0.22.0              | 1 | gpt-oss-120B            | **39065** |
 | `gpu/sglang`       | NVIDIA H100 80 GB · SGLang | v0.5.13.post1        | 2 | Qwen3-32B               | **30720** |
 | `amd/vllm`    | AMD GPU · vLLM             | rocm v0.7.0          | 2 | Qwen3-32B               | 15928 ‡ |
 | `amd/sglang`  | AMD GPU · SGLang          | v0.5.13.post1 (rocm) | 2 | Qwen3-32B               | 30720 ‡ |
@@ -39,9 +38,6 @@ rows because the serving engine changes prefill throughput.
 - **30720** — measured for `gpu/sglang` (Qwen3-32B, same H100 80 GB / TP=2): SGLang reaches
   ~1.9× the vLLM prefill throughput on identical hardware, which is exactly why the serving
   engine is its own row.
-- **39065** — measured for `gpu/vllm/gpt-oss` (gpt-oss-120B, H100 TP=1): the highest in the table
-  despite the largest model, because gpt-oss is a sparse MoE (~5B active params) in MXFP4, so a
-  prefill step touches few weights.
 - **1970** — measured for `cpu/vllm` (Llama-3.2-3B) on **GCP C3 (Intel Sapphire Rapids, AMX)**,
   bf16. The `llm-d-cpu` image runs the model in bf16, which **requires AMX or AVX512-BF16**.
   Calibrated at `CHUNK_SIZE=2048` (the CPU vLLM chunked-prefill default), not 8192.
@@ -57,8 +53,8 @@ rows because the serving engine changes prefill throughput.
   quantization, or `--max-model-len` — those move the number more than the model identity does.
 - **`npu/vllm`** — gpt-oss-120B on one Rebellions NPU at dp1 and `--max-num-seqs=1`,
   `--max-num-batched-tokens=512`, so calibrate this path with `CHUNK_SIZE=512`. This path
-  does not borrow a proxy: the closest measured row (`gpu/vllm/gpt-oss`, 39065) is an H100
-  MXFP4 number and applying it here would open the saturation gate when it should stay shut.
+  does not borrow a proxy: the closest measured value (gpt-oss-120B on H100 at TP=1, 39065, from
+  the since-retired `gpu/vllm/gpt-oss` overlay) is an H100 MXFP4 number and applying it here would open the saturation gate when it should stay shut.
 - **‡ proxy, not measured** — these paths are not yet calibrated, so they borrow the closest
   measured value as a starting point: the **AMD** paths use the same-engine H100 values
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the

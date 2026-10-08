@@ -53,7 +53,7 @@ The [**tier-priority merge policy**](https://github.com/llm-d/llm-d-async/pull/2
 **per pool independently**: within each model it buckets requests into **6 strict lanes** by
 `(classification, tier)`, dispatches them in order, and stamps **`x-llm-d-inference-objective`** via `lane_objectives`.
 
-By defining matching [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router)
+By defining matching [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives)
 resources in the cluster, `llm-d-async` and llm-d Router Flow Control speak the exact same language.
 Requests carry the authoritative objective and tenant identity (`x-llm-d-inference-fairness-id`), allowing
 llm-d Router to enforce multi-tenant fairness and priority band admission:
@@ -73,7 +73,7 @@ is earliest-deadline-first (the deadline is the sorted-set score).
 
 ### Priority Values: Flow Control ON vs. Flow Control OFF
 
-Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#1-apply-inferenceobjectives-and-deploy-flow-control-router) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
+Downstream priority is propagated via lane objective stamping (**`x-llm-d-inference-objective`**), which maps each request to a Kubernetes [`InferenceObjective`](#2-configure-llm-d-router-and-apply-inferenceobjectives) resource where **higher numerical values represent higher scheduling priority** (100 down to -10).
 
 #### With Flow Control ON (llm-d Router)
 When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowControl]` in `flow-control.yaml`):
@@ -109,8 +109,9 @@ When saturation detection is disabled (no saturation detector configured in llm-
 ## Prerequisites
 
 This guide layers on the base [asynchronous-processing](../README.md) guide — complete its
-[Prerequisites](../README.md#prerequisites) first (client tools, cluster, GAIE CRDs,
-[`guides/env.sh`](../../../env.sh), the HF-token secret), then add the following.
+[Prerequisites](../README.md#prerequisites) first (through the
+[optimized-baseline](../../../optimized-baseline/README.md) guide they cover the client tools, the cluster,
+the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh), then add the following.
 
 - **llm-d router with Flow Control.** This guide uses llm-d Router configured with **Flow Control**
   enabled rather than the standard baseline router. Flow Control assigns incoming requests to priority bands
@@ -251,9 +252,8 @@ helm install llm-d-async \
 ```
 <!-- llm-d-cicd:skip end -->
 
-`gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber` + `pubsub.publisher`
-
-- `pubsub.viewer` (the readiness probe's `GetSubscription`) + `monitoring.viewer` (broker backlog). With
+`gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber`, `pubsub.publisher`,
+`pubsub.viewer` (the readiness probe's `GetSubscription`) and `monitoring.viewer` (broker backlog). With
 Workload Identity, follow the printed binding to map the GSA onto the chart's `llm-d-async` KSA.
 
 </details>
@@ -597,8 +597,8 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 ## Notes & gotchas
 
 - **Image / version.** The overlays no longer pin an image tag — the image tracks the chart's
-  `appVersion`, selected by `--version ${ASYNC_VERSION}`. Use a release whose app image actually exists
-  (v0.7.4+).
+  `appVersion`, selected by `--version ${ASYNC_VERSION}`. Use a release whose chart is published to
+  `ghcr.io/llm-d/charts` (v0.8.0+).
 - **Reserved quota vs. pool size (per model).** Each team's quota is its *reserved* capacity (priority
   lane) in `classifying` mode, not a hard cap — over-quota flows as `overflow`. Within each model pool,
   keep the **sum** of that model's reserved quotas at or below the pool's worker count.

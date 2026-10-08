@@ -9,7 +9,7 @@ router:
     pluginsConfigFile: agentic-serving-plugins.yaml
     pluginsCustomConfig:
       agentic-serving-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: token-load-scorer

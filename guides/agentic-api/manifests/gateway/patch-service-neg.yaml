@@ -1,0 +1,9 @@
+# GKE-only: exposes this Service as a NEG so the GKE Gateway can target it.
+# Ignored by Istio and every other Gateway provider, so it is applied in all of
+# Gateway Mode rather than gated behind ./gke.
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentic-api
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
