@@ -23,8 +23,8 @@ on:
 #    branches:
 #      - main
 
-#  schedule:
-#    - cron: '0 10 * * *'  # 10:00 UTC daily
+  schedule:
+    - cron: '0 16 * * *'  # 16:00 UTC daily (after the 14:00 UTC nightly)
 
 jobs:
   check_for_success:

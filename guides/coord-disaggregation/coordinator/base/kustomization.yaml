@@ -6,6 +6,12 @@ resources:
 - deployment.yaml
 - httproute.yaml
 
+# release (llm-d-router v0.11.0): the config in configmap.yaml uses the key
+# names of this release (server.secure_coordinator). The nightly component
+# needs server.secure_serving instead, see llm-d-router#2908.
+components:
+- ../../../recipes/modelserver/components/images/coordinator/release
+
 # patch-pd-only.yaml is deliberately not listed here: it's applied with
 # `kubectl patch` after the deploy, not built into either overlay. See the PD-only
 # note in ../../README.md's Installation Instructions.

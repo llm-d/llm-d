@@ -12,7 +12,7 @@ spec:
             - --port=8000
             - --kv-connector=nixlv2
             - --zap-log-level=4
-            - --secure-proxy=false
+            - --secure-serving=false
           env:
             - name: OTEL_SDK_DISABLED
               value: "true"

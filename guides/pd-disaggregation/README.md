@@ -61,6 +61,54 @@ This guide includes configuration for the following accelerators:
 | Intel XPU           | `modelserver/xpu/vllm/`    | Intel Data Center GPU Max 1550+, community contributed   |
 | Intel XPU + RDMA    | `modelserver/xpu/vllm-rdma/` | Intel XPU with RDMA via UCX (`ib,rc,ze_copy`), requires RDMA DRA driver |
 | Iluvatar GPU        | `modelserver/iluvatar/vllm/base/` | Iluvatar BI-V150 (dual-die), community contributed; Qwen3-32B on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode); vendor-fork `IluNixlConnector` with `kv_buffer_device=cuda` |
+| Rebellions NPU      | `modelserver/npu/vllm/`  | Rebellions NPUs with RoCE via DRA, community contributed. See [Rebellions NPU Configuration](#rebellions-npu-configuration) |
+
+#### Rebellions NPU Configuration
+
+The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMaxAI/MiniMax-M2.7)
+with heterogeneous parallelism across the two roles. Prefill uses pipeline parallelism because it
+measured faster per prefill chunk than data parallelism on the same four NPUs.
+
+| Parameter | Prefill | Decode |
+| --- | --- | --- |
+| Parallelism | Pipeline, 4 stages | Data, 4 ranks, expert parallel on |
+| NPUs | 4 | 4 |
+| API servers per pod | 1 (port 8000) | 4 (ports 8200-8203, fronted by the sidecar on 8000-8003) |
+| `--num-gpu-blocks-override` | 201 | 51 |
+| `--max-num-seqs` | 4 | 4 |
+
+Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler.
+Neither sets `--max-model-len`, since the model already declares its 204800-token context.
+Neither sets `--kv-cache-dtype` either: the runtime accepts `fp8` here, but the
+`--num-gpu-blocks-override` counts below were measured at the backend default, and halving the
+bytes per block would leave them describing something else.
+KV transfer uses NIXL with `kv_buffer_device=rbln`.
+Expert parallelism is on for decode only: a pipeline-parallel prefill rank holds one stage, so
+there is no expert group to split.
+
+Because the decode role runs one API server per data-parallel rank, the EPP must be given every
+rank port. Layer [`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own
+values file when installing the router.
+
+**NUMA alignment.** Each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over
+that VF. The claim constrains all five devices to one NUMA node on
+`resource.kubernetes.io/numaNode`, which both the NPU driver and dranet advertise. Without that
+constraint the scheduler may pair a NUMA-1 NPU with a NUMA-0 VF: the pods reach ready and the
+transfer is what fails, with `no usable data-plane RoCE NIC on numa=1`.
+
+Confirm the host can place four NPUs and a VF on a single NUMA node before deploying — the
+constraint requires all five devices in a role to agree, and a pod whose node cannot supply
+them stays Pending on `0/3 nodes are available: 1 cannot allocate all claims`.
+
+Neither the DRA allocation nor the NIXL transfer can be checked by a server dry-run against a
+cluster without these DeviceClasses. Both need a run on the real hardware.
+
+**Cluster prerequisites** beyond the [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html):
+
+* A network DRA driver publishing a `dranet` DeviceClass, so each role can claim a RoCE VF
+  alongside its NPUs. The DeviceClass config has to give that VF an IPv4 address (for example
+  `interface.dhcp`); without one the NIXL side channel cannot bind.
+* Kubernetes 1.34 or later for the `resource.k8s.io/v1` DRA APIs.
 
 > [!NOTE]
 > Some hardware variants use reduced configurations (fewer replicas, smaller models) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
@@ -271,6 +319,9 @@ export INFRA_PROVIDER=base # base | coreweave | gke | cks-mooncake
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
 ```
 
+> [!WARNING]
+> **SGLang P/D disaggregates every request.** An SGLang decode worker has no local-prefill path and rejects a request that arrives without bootstrap fields with HTTP `400`. The router must therefore be configured with `always-disagg-pd-decider` (as `pd-disaggregation.values.yaml` is); `prefix-based-pd-decider` is **not** supported, and a Coordinator pipeline used with `kv-sglang` must not include the `conditional-decode` step. This also removes the TTFT win those options exist to capture, so short or prefix-cached prompts pay the full disaggregation cost. See [Unconditional Disaggregation](../../docs/operations/disaggregation/sglang.md#unconditional-disaggregation).
+
 SGLang-specific notes:
 
 * **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
@@ -285,6 +336,7 @@ SGLang-specific notes:
 > * Disaggregation lives in the llm-d Router (EPP) and is engine-agnostic, so SGLang P/D composes with the same prefix-cache-aware and load-aware routing as vLLM.
 > * SGLang P/D is **validated each release** on NVIDIA GPU but is not yet part of the nightly E2E CI that covers the vLLM path (the badges above).
 > * SGLang P/D overlays exist for NVIDIA GPU (`modelserver/gpu/sglang/`) and Moore Threads S5000 (`modelserver/mthreads/sglang/`); the AMD overlay (`modelserver/amd/vllm/`), MetaX overlay (`modelserver/metax/vllm/`), and MThreads vLLM overlay (`modelserver/mthreads/vllm/`) provide vLLM P/D only.
+> * SGLang disaggregates **unconditionally**: `prefix-based-pd-decider` and the Coordinator's `conditional-decode` step, which skip remote prefill when it would cost more than it saves, cannot be used. See [Unconditional Disaggregation](../../docs/operations/disaggregation/sglang.md#unconditional-disaggregation).
 > * On the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts. See the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md).
 
 <details>
@@ -428,6 +480,9 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/t
 > [!NOTE]
 > The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
 
+> [!NOTE]
+> The GPU overlays enable tool calling and reasoning parsing with `--enable-auto-tool-choice --tool-call-parser=openai --reasoning-parser=openai_gptoss`. Those parser names are properties of `gpt-oss-120b`, not of the deployment, so the TPU overlays do not set them and tool calling is unavailable there. To enable it for the Qwen models above, add `--enable-auto-tool-choice` together with the tool parser for your variant from vLLM's [tool-calling docs](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md#automatic-function-calling) (`hermes` per [Qwen's own guidance](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm), `qwen3_xml` for Qwen3-Coder) and `--reasoning-parser=qwen3` for the Qwen3 series ([reasoning outputs](https://github.com/vllm-project/vllm/blob/main/docs/features/reasoning_outputs.md)). Tracked in #2640.
+
 In the [Verification](#verification) and [Benchmarking](#benchmarking) sections, replace `openai/gpt-oss-120b` with `${MODEL_NAME}` in the completion request body and in the `llmdbenchmark --model` flag.
 
 Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again. The TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
@@ -446,7 +501,7 @@ kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm-dynamic-slice/
 ```
 
-Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/modelserver/tpu/v7/vllm-dynamic-slice/README.md).
+Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/README.md#2-deploy-the-model-server).
 
 > [!NOTE]
 > The dynamic-slice variant is not in the nightly e2e matrix: an end-to-end run requires one full TPU7x `4x4x4` sub-block (64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.

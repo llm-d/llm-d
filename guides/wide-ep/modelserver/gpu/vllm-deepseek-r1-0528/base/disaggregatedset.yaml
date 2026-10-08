@@ -89,6 +89,7 @@ spec:
                   --data-parallel-supervisor-port 8008 \
                   --enable-expert-parallel \
                   --tensor-parallel-size $TP_SIZE \
+                  --max-num-batched-tokens 2048 \
                   --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
                   --data-parallel-size-local $DP_SIZE_LOCAL \
                   --data-parallel-address ${LWS_LEADER_ADDRESS} \
@@ -250,7 +251,7 @@ spec:
               - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1
-              - --secure-proxy=false
+              - --secure-serving=false
               - --enable-prefiller-sampling
               image: REPLACE_ROUTING_SIDECAR_IMAGE
               imagePullPolicy: Always
@@ -337,9 +338,7 @@ spec:
                   --kv_transfer_config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
-                  --enable-dbo \
-                  --dbo-decode-token-threshold 32 \
-                  --all2all-backend deepep_low_latency \
+                  --all2all-backend deepep_v2 \
                   --moe-backend deep_gemm
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -368,14 +367,6 @@ spec:
                 value: '1'
               - name: NVIDIA_GDRCOPY
                 value: enabled
-              - name: NVSHMEM_SYMMETRIC_SIZE
-                value: 16G
-              - name: NVSHMEM_REMOTE_TRANSPORT
-                value: ibgda
-              - name: NVSHMEM_IB_ENABLE_IBGDA
-                value: 'true'
-              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-                value: eth0
               - name: GLOO_SOCKET_IFNAME
                 value: eth0
               - name: NCCL_SOCKET_IFNAME

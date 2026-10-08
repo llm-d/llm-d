@@ -10,7 +10,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
-| Google | [TPU](../infrastructure/providers/gke/README.md#llm-d-on-google-kubernetes-engine-gke) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
+| Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
 | MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
@@ -108,12 +108,12 @@ paths. The device plugin must expose `mthreads.com/gpu`.
 
 **vLLM**
 
-- **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm`](../../guides/optimized-baseline/modelserver/mthreads/vllm/) — Qwen3-32B, TP=8.
+- **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
 - **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
 
 **SGLang**
 
-- **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/sglang`](../../guides/optimized-baseline/modelserver/mthreads/sglang/) — Prefill and Decode in one process (`--tp 8 --ep 8`).
+- **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/sglang/base`](../../guides/optimized-baseline/modelserver/mthreads/sglang/base/) — Prefill and Decode in one process (`--tp 8 --ep 8`).
 - **P/D disaggregation** (two 8-GPU nodes): [`guides/pd-disaggregation/modelserver/mthreads/sglang/base`](../../guides/pd-disaggregation/modelserver/mthreads/sglang/base/) — 1P+1D, each TP=8, Mooncake KV transfer.
 
 See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) and the [optimized-baseline guide](../../guides/optimized-baseline/README.md).
@@ -163,3 +163,7 @@ per llm-d release tag against the release image and record the result.
 ## CPU Inferencing
 
 CPU-only inference is supported for deployments without GPU accelerators. This expects 4th Gen Intel Xeon processors (Sapphire Rapids) or later, or equivalent AMD processors. Each replica requires a minimum of 64 CPU cores and 64GB RAM.
+
+**Set `MODEL` when running the guide's steps.** The CPU overlay serves
+`meta-llama/Llama-3.2-3B-Instruct`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
+`MODEL=meta-llama/Llama-3.2-3B-Instruct` so the validation and benchmark steps address the served model.

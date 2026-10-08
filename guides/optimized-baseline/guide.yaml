@@ -1,37 +1,91 @@
 name: optimized-baseline
 
-_lists:
-  non_gpu: &non_gpu [amd, xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu, mthreads]
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+support:
+  engines: {vllm: vLLM, sglang: SGLang, trtllm: TensorRT-LLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated, sglang: validated, trtllm: community}
+    amd:
+      label: AMD GPU
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci`"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated, sglang: community}
+    xpu:
+      label: Intel XPU
+      notes: "Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16"
+      model: Qwen/Qwen3-0.6B
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8)"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8)"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+    "tpu/v7-dynamic-slice":
+      label: Google TPU v7 (dynamic slicing)
+      notes: "GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server)"
+      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      engines: {vllm: community}
+    npu:
+      label: Rebellions NPU
+      notes: "RBLN-CR series · 2 replicas × 1 NPU via DRA"
+      model: openai/gpt-oss-120b
+      engines: {vllm: community}
+    cpu:
+      label: CPU
+      notes: "x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model)"
+      model: meta-llama/Llama-3.2-3B-Instruct
+      engines: {vllm: community}
+    iluvatar:
+      label: Iluvatar GPU
+      notes: "BI-V150 (dual-die) · 1 replica × 4 GPUs"
+      model: deepseek-ai/DeepSeek-V4-Flash
+      engines: {vllm: community}
+    metax:
+      label: MetaX GPU
+      notes: "2 replicas × TP=8 (16 GPUs)"
+      model: deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+      engines: {vllm: community}
+    mthreads:
+      label: Moore Threads GPU
+      notes: "MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD)"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community, sglang: community}
 
 env:
   static:
-    BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
     GUIDE_NAME: optimized-baseline
     NAMESPACE: llm-d-optimized-baseline
 
-    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
-
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
 
-    PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, hpu, "tpu/v6", "tpu/v7", npu, cpu, mthreads]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", npu, cpu, iluvatar, metax, mthreads]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
-    INFRA_PROVIDER: {default: base, values: [base, gke]}
+    # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*, cpu); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
+    INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
+    TPU_SLICE_TOPOLOGY: {default: 2x2x1, values: [2x2x1, 2x2x2]} # only for ACCELERATOR_TYPE=tpu/v7-dynamic-slice
 
-    MODEL: {default: "Qwen/Qwen3-32B"}
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the Served model for your accelerator (table above)"}
 
-    # VERIFICATION
-    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
-
-    # BENCHMARK
-    BENCHMARK_REF: main
-    HARNESS: inference-perf
-    WORKLOAD: guide_optimized-baseline_1.yaml
-    GATEWAY_CLASS: {default: epponly, values: [epponly, gke, agentgateway, istio]} # Benchmark specific epponly = standalone - TODO to fix in llmdbenchmark
-
-  source: ["${REPO_ROOT}/guides/env.sh"]
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
 prerequisites:
   clone:
@@ -63,22 +117,13 @@ deploy:
     - when: {MODEL_SERVER: [vllm, sglang]}
       run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
+    # trtllm-serve needs its own values: modelServers.type and the /prometheus/metrics path.
     - when: {MODEL_SERVER: [trtllm]}
-      run: |
-        #
-        # Comment out the above `ROUTER_VALUES` and uncomment the below for TensorRT-LLM (trtllm-serve)
-        #
-        # export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 
   monitoring_values:
-    - run: |
-        #
-        # Uncomment the below to enable Prometheus monitoring on the llm-d router
-        #
-        # Unlike the ROUTER_*_VALUES paths above, this variable carries its own
-        # -f flag: it is empty by default, so the helm commands expand it as-is.
-        #
-        # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    - when: {MONITORING: ["true"]}
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 
   standalone:
     - run: |
@@ -92,33 +137,34 @@ deploy:
 
   gateway:
     - run: |
+        export GW_PROVIDER_NAME=none # options: none, gke, agentgateway, istio
         helm install ${GUIDE_NAME} \
           ${ROUTER_GATEWAY_CHART} \
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
           -f ${ROUTER_VALUES} \
-          --set provider.name=${PROVIDER_NAME} \
+          --set provider.name=${GW_PROVIDER_NAME} \
           --set httpRoute.create=true \
           --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
-    - when: {ACCELERATOR_TYPE: [gpu]}
-      run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    standard:
+      - run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
-    - when: {ACCELERATOR_TYPE: *non_gpu}
-      run: |
-        #
-        # Comment out the above `kubectl apply` and uncomment the below to run on `NON GPU` accelerators
-        #
-        # kubectl apply -n ${NAMESPACE} \
-        #  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
-        #
+    dynamic_slice:
+      - skip_in: [ci]
+        run: |
+          # One sub-slice of shape TPU_SLICE_TOPOLOGY per replica, admitted by Kueue
+          kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TPU_SLICE_TOPOLOGY}/
 
   monitoring:
-    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
   endpoint:
@@ -127,48 +173,47 @@ verify:
     gateway:
       - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
   tests:
-    - run: |
-        kubectl run curl-test --rm -i --restart=Never \
-          --image=${CURL_TEST_IMAGE} \
-          --namespace="${NAMESPACE}" \
-          --env="IP=${IP}" \
-          --env="MODEL=${MODEL}" \
-          -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
-
-benchmark:
-  setup:
-    - run: curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/${BENCHMARK_REF}/install.sh | bash
-    - run: cd llm-d-benchmark
-    - run: source .venv/bin/activate
-    - run: llmdbenchmark --version
-  endpoint:
-    standalone:
-      - run: export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
-    gateway:
-      - run: export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
-  execute:
-    - run: |
-        llmdbenchmark \
-          --spec           guides/${GUIDE_NAME} \
-          run \
-          --endpoint-url   "${ENDPOINT_URL}" \
-          --gateway-class  "${GATEWAY_CLASS}" \
-          --model          "${MODEL}" \
-          --namespace      "${NAMESPACE}" \
-          --harness        "${HARNESS}" \
-          --workload       "${WORKLOAD}" \
-          --analyze
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    shared_prefix:
+      - run: |
+          # 10 requests that share a ~2k-token prefix and differ only in the last sentence
+          kubectl run prefix-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 100); do printf "The llm-d router keeps a conversation on the server that already caches its prefix. "; done)
+              for i in $(seq 1 10); do
+                curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+              done'
+    pod_metrics:
+      - run: |
+          # Prefix-cache and request counters of every model server pod, read
+          # through the Kubernetes API server proxy (no port-forward needed)
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            echo "== ${pod}"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+          done
 
 cleanup:
-  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-  - when: {ACCELERATOR_TYPE: [gpu]}
-    run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
-  - when: {ACCELERATOR_TYPE: *non_gpu}
-    run: |
-      #
-      # Comment out the above `kubectl delete` and uncomment the below to run on `NON GPU` accelerators
-      #
-      # kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
-  - skip_in: [ci]
-    run: kubectl delete namespace ${NAMESPACE}
+  modelserver:
+    standard:
+      - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+    dynamic_slice:
+      - skip_in: [ci]
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TPU_SLICE_TOPOLOGY}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

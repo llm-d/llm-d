@@ -6,16 +6,28 @@
 
 Flow Control enables intelligent request queuing at the llm-d Router level. Traditional load balancing falls short for LLMs because resource consumption varies wildly per request. Shifting queuing to the Router enables:
 
-* **Multi-Tenancy**: Prevent noisy neighbors from starving others and enforce fairness between tenants.
-* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck.
+* **Multi-Tenancy**: Prevent noisy neighbors from starving others and enforce fairness between tenants. Compared to a single-workload deployment, operators of multi-tenant workloads have additional considerations:
+  * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid).
+  * Certain requests have **different SLOs** than others (e.g. batch vs online).
+  * Certain tenants are more active than others, so **fairness** between them matters.
+* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource.
 
 ### How it Works
 
-Incoming requests are classified by a `FlowKey` (Fairness ID + Priority). EPP maintains separate in-memory queues for each flow and dispatches them based on:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/flow-control.svg" alt="Flow Control">
+  </picture>
+</p>
+
+Requests arrive at the proxy with headers expressing their tenant ID and traffic priority. The EPP classifies each request by a `FlowKey` (Fairness ID + Priority), maintains separate in-memory queues for each flow, and assigns each flow to a `PriorityBand` (several tenants can share the same priority). In each scheduling cycle it dispatches based on:
 
 1. **Priority**: Servicing highest priority bands first.
-2. **Fairness**: Cycling through tenants within a band.
-3. **Ordering**: Ordering requests within a flow.
+2. **Fairness**: Cycling through tenants within a band, as decided by the **Fairness Policy**.
+3. **Ordering**: Ordering requests within a flow, as decided by the **Ordering Policy** (e.g. FCFS or SLO-aware).
+
+In the background, the EPP monitors the model servers for saturation; while it detects saturation, requests stay queued until it subsides.
 
 *While Backpressure protects the physical hardware from overload, the Multi-Tenancy policies dictate exactly how that delayed traffic is ordered and distributed among your users.*
 
@@ -63,7 +75,7 @@ By default, the EPP uses a `global-strict` policy. Because the system is **work-
 
 ### Supported Hardware Backends
 
-Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-hardware-backends). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
+Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-accelerators-and-model-servers). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
 
 The steps below default to NVIDIA GPU. See the "Intel XPU" details under [Deploy the Model Server](#2-deploy-the-model-server) for the one other backend with a documented, dynamically-rendered path today. Other accelerators listed in the Optimized Baseline guide can be substituted the same way: swap the kustomize path in that step, then, if the target overlay's model or replica count differs from the [Default Configuration](#default-configuration) table above, adjust the benchmarking/verification steps accordingly.
 

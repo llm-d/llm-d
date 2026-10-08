@@ -9,7 +9,7 @@ router:
     pluginsConfigFile: "e-pd-config.yaml"
     pluginsCustomConfig:
       e-pd-config.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         # Token-based routing, matching the optimized-baseline reference stack.
         # Prefill and decode are colocated on the `decode` profile, so it is routed

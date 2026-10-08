@@ -40,7 +40,6 @@ channels:
     - nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
     - nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml
-    - nightly-e2e-optimized-baseline-gke-acc-gpu-trtllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml
@@ -80,6 +79,7 @@ channels:
     - nightly-e2e-wide-ep-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-wide-ep-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-wide-ep-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml
     - nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml
 
 # Nightly workflows deliberately NOT notified. Every entry needs a reason:
