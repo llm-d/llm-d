@@ -26,7 +26,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 
-from github_api import api
+from github_api import ApiError, api
 
 DEFAULT_REPO = "llm-d/llm-d"
 
@@ -213,6 +213,7 @@ def main() -> int:
     pulls = graphql_nodes(token, args.repo, PULLS_QUERY, "pullRequests")
     now = datetime.now(timezone.utc)
 
+    failures = 0
     for issue in issues:
         action = decide(issue, pulls, args.repo, now)
         if not action:
@@ -221,8 +222,12 @@ def main() -> int:
         assignees = assignee_logins(issue)
         print(f"#{number}: {action} {' '.join(assignees)}" + (" (dry run)" if args.dry_run else ""))
         if not args.dry_run:
-            ACTIONS[action](args.repo, token, number, assignees)
-    return 0
+            try:
+                ACTIONS[action](args.repo, token, number, assignees)
+            except ApiError as exc:
+                failures += 1
+                print(f"#{number}: {action} failed: {exc}", file=sys.stderr)
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

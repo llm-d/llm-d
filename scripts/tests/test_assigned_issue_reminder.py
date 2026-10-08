@@ -224,8 +224,8 @@ def test_unassign_labels_removes_assignees_then_comments(monkeypatch):
     assert air.REMINDER_MARKER not in fake.calls[2][2]["body"]
 
 
-def run_main(monkeypatch, argv, issues):
-    fake = FakeApi()
+def run_main(monkeypatch, argv, issues, fake=None, code=0):
+    fake = fake or FakeApi()
     monkeypatch.setattr(air, "api", fake)
     monkeypatch.setattr(
         air,
@@ -234,7 +234,7 @@ def run_main(monkeypatch, argv, issues):
     )
     monkeypatch.setenv("GITHUB_TOKEN", "t")
     monkeypatch.setattr(sys, "argv", ["assigned-issue-reminder.py", *argv])
-    assert air.main() == 0
+    assert air.main() == code
     return fake
 
 
@@ -248,6 +248,20 @@ def test_main_acts_on_quiet_issues_only(monkeypatch):
     issues = [issue([comment(40)], number=1), issue([comment(2)], number=2)]
     fake = run_main(monkeypatch, [], issues)
     assert [path for _, path, _ in fake.calls] == [f"/repos/{REPO}/issues/1/comments"]
+
+
+def test_main_continues_past_an_api_error_and_fails_at_the_end(monkeypatch, capsys):
+    class FailFirst(FakeApi):
+        def __call__(self, method, path, token, payload=None):
+            super().__call__(method, path, token, payload)
+            if "/issues/1/" in path:
+                raise air.ApiError(422, method, path, "locked")
+            return {}
+
+    issues = [issue([comment(40)], number=1), issue([comment(40)], number=2)]
+    fake = run_main(monkeypatch, [], issues, fake=FailFirst(), code=1)
+    assert f"/repos/{REPO}/issues/2/comments" in [path for _, path, _ in fake.calls]
+    assert "#1: remind failed" in capsys.readouterr().err
 
 
 def test_main_requires_a_token(monkeypatch):
