@@ -70,7 +70,7 @@ specific pressure of the agentic workload:
 
 ## Deploy
 
-The stack is realized per model and accelerator as Model guides,
+The stack is realized per model and accelerator as [Models](../models/README.md) guides,
 each benchmarked against an agentic code-generation workload with large reused contexts and
 bursty, locality-heavy traffic. Pick by hardware, then by topology:
 

@@ -42,9 +42,32 @@ sections:
         slug: serve-omni-models
         title: Serve Omni Models
         position: 9
+  # Models: benchmarked recipes for one model on one accelerator. Model guides
+  # may be README-only (no guide.yaml) until they adopt the guide.yaml
+  # support-matrix treatment.
   models:
     target: well-lit-paths/models
-    guides: []
+    guides:
+      - dir: guides/deepseek-v4
+        slug: deepseek-v4
+        title: DeepSeek-V4
+        position: 1
+      - dir: guides/glm-5-2
+        slug: glm-5-2
+        title: GLM-5.2
+        position: 2
+        pages:
+          - from: README.precise-prefix-cache-routing.md
+            to: precise-prefix-cache-routing
+            title: Precise Prefix-Cache Routing (Experimental)
+      - dir: guides/nemotron-3-ultra
+        slug: nemotron-3-ultra
+        title: NVIDIA Nemotron 3 Ultra
+        position: 3
+      - dir: guides/qwen3-coder-480b
+        slug: qwen3-coder-480b
+        title: Qwen3-Coder-480B
+        position: 4
   # Operations: the sidebar is at most two levels deep (Operations > category
   # > page). Two guides are categories themselves (section `operations`,
   # target `operations`) and keep their child pages; the other sections map
