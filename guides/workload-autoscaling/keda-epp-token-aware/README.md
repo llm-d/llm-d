@@ -351,61 +351,6 @@ Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscale
 
 ## Benchmarking
 
-Qwen/Qwen3-32B on H100-80GB, vLLM v0.30.0, EPP v0.11.0. P+D: TP=2. P/D: prefill TP=1, decode TP=2. Every run uses a fresh, calibrated stack and the shipped profile rates. Each shape is compared across three modes:
-
-- **Autoscaled:** starts at 1 replica per role and scales up to `maxReplicas: 4` on the token-aware triggers.
-- **Under-provisioned:** no ScaledObject, fixed at 1 replica per role. Cheap, but it can't absorb a burst.
-- **Over-provisioned:** no ScaledObject, fixed at 4 replicas per role, the same cap as the autoscaler's `maxReplicas`. Both modes have the same maximum capacity: over-provisioned pays for it all the time, autoscaled only while the load needs it. This is the common way to protect latency without an autoscaler.
-
-| Topology | Shape (ISL/OSL) | Mode | Replicas (start → peak) | Peak GPUs | GPU-hours | TTFT p50 | TTFT p99 | Completed / total | Output tok/s |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P+D | prefill-heavy (8192/256) | Under-provisioned | 1 | 2 | 0.78 | 225 s | 470 s | 2316 / 2316 | 510 |
-| | | **Autoscaled** | 1 → 3 | 6 | **1.74** | **0.62 s** | 43.8 s | 2307 / 2316 | 572 |
-| | | Over-provisioned | 4 | 8 | 3.11 | 0.61 s | 6.4 s | 2316 / 2316 | 594 |
-| P+D | symmetrical (2048/2048) | Under-provisioned | 1 | 2 | 0.85 | 0.21 s | 0.41 s | 1248 / 1248 | 1984 |
-| | | **Autoscaled** | 1 | 2 | **0.85** | 0.20 s | 0.43 s | 1248 / 1248 | 1885 |
-| | | Over-provisioned | 4 | 8 | 3.39 | 0.19 s | 0.22 s | 1248 / 1248 | 1988 |
-| P+D | decode-heavy (256/4096) | Under-provisioned | 1 | 2 | 0.91 | 0.09 s | 0.13 s | 624 / 624 | 1856 |
-| | | **Autoscaled** | 1 | 2 | **0.91** | 0.09 s | 0.13 s | 624 / 624 | 1785 |
-| | | Over-provisioned | 4 | 8 | 3.66 | 0.09 s | 0.13 s | 624 / 624 | 1928 |
-| P/D | prefill-heavy (8192/256) | Under-provisioned | P 1, D 1 | 3 | 1.65 | 303 s¹ | 592 s¹ | 116 / 2316 | 20 |
-| | | **Autoscaled** | P 1 → 4, D 1 | 6 | **3.06** | 439 s¹ | 593 s¹ | **818** / 2316 | **135** |
-| | | Over-provisioned | P 4, D 4 | 12 | 6.58 | 302 s¹ | 588 s¹ | 656 / 2316 | 127 |
-| P/D | symmetrical (2048/2048) | Under-provisioned | P 1, D 1 | 3 | 1.32 | 282 s | 536 s | 1248 / 1248 | 1353 |
-| | | **Autoscaled** | P 1 → 4, D 1 → 2 | 8 | **2.62** | 1.97 s | 150 s | 1233 / 1248 | 1888 |
-| | | Over-provisioned | P 4, D 4 | 12 | 5.27 | 1.68 s | 3.2 s | 1248 / 1248 | 2051 |
-| P/D | decode-heavy (256/4096) | Under-provisioned | P 1, D 1 | 3 | 1.37 | 0.27 s | 0.45 s | 624 / 624 | 1950 |
-| | | **Autoscaled** | P 1, D 1 | 3 | **1.37** | 0.33 s | 0.58 s | 624 / 624 | 1790 |
-| | | Over-provisioned | P 4, D 4 | 12 | 5.47 | 0.28 s | 0.36 s | 624 / 624 | 1933 |
-
-¹ Over completed requests only. GPU-hours for autoscaled runs come from the replica count every 30 s; for static runs they are the fixed GPU count × the same run length.
-
-Measured `peakPrefillThroughput`: P+D 15375–15988. P/D 1154–1450.
-
-**Autoscaled vs over-provisioned:**
-
-| | P+D prefill-heavy | P+D symmetrical | P+D decode-heavy | P/D prefill-heavy | P/D symmetrical | P/D decode-heavy |
-| --- | --- | --- | --- | --- | --- | --- |
-| GPU-hours saved | **44%** | **75%** | **75%** | **53%** | **50%** | **75%** |
-| TTFT p50 difference | +0.01 s | +0.01 s | 0 | not comparable² | +0.29 s | +0.05 s |
-
-² Both modes are capped at 4 prefill replicas and time out most requests (818 vs 656 completed), so their TTFT values cover different sets of requests.
-
-**How to read:**
-
-- **Same median latency, half the GPUs or less.** Autoscaling stays within 0.3 s of over-provisioned TTFT p50 while using 44–75% fewer GPU-hours, because it adds replicas only while the load needs them.
-- **Light traffic is where over-provisioning wastes most.** P+D symmetrical, P+D decode-heavy and P/D decode-heavy fit on 1 replica per role. The extra GPUs sit idle, and autoscaling saves 75% at the same TTFT.
-- **The trade-off is tail latency during the ramp-up.** On a burst, autoscaling adds 1 pod every 180 s, so p99 is higher while it catches up (P+D prefill-heavy 43.8 s vs 6.4 s, P/D symmetrical 150 s vs 3.2 s). A more aggressive `scaleUp` policy narrows that gap.
-- **Compared with under-provisioning, autoscaling is what keeps bursts usable.** P+D prefill-heavy p50 goes from 225 s to 0.62 s, and P/D symmetrical from 282 s to 1.97 s.
-- **The cap binds both modes.** P/D prefill-heavy needs more than 4 prefill replicas at the shipped rate. Autoscaled and over-provisioned hit the same 4-replica cap, so over-provisioning has no capacity edge there. All failures in both are 600 s client timeouts. Raise `maxReplicas` (and the over-provisioned replica count) or lower the rate.
-
-| | prefill-heavy | symmetrical | decode-heavy |
-| --- | --- | --- | --- |
-| P+D | ![P+D prefill-heavy replicas](benchmark-results/pd-colocated_prefill_heavy_replicas.png) | ![P+D symmetrical replicas](benchmark-results/pd-colocated_symmetrical_replicas.png) | ![P+D decode-heavy replicas](benchmark-results/pd-colocated_decode_heavy_replicas.png) |
-| P/D | ![P/D prefill-heavy replicas](benchmark-results/pd-disaggregated_prefill_heavy_replicas.png) | ![P/D symmetrical replicas](benchmark-results/pd-disaggregated_symmetrical_replicas.png) | ![P/D decode-heavy replicas](benchmark-results/pd-disaggregated_decode_heavy_replicas.png) |
-
-### Reproduce
-
 Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) at `9415d5e1`:
 
 ```bash
@@ -424,7 +369,7 @@ for SHAPE in prefill_heavy symmetrical decode_heavy; do
 done
 ```
 
-For under-provisioned, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`. For over-provisioned, also add `--set=decode.replicas=4`, plus `--set=prefill.replicas=4` for P/D, and pass `--modelservice-deploy-timeout 3600` to `standup`: 4 replicas loading the model at once can exceed the default readiness wait. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
+To run a static baseline without autoscaling, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`; the stack stays at 1 replica per role. To fix it at 4 replicas per role instead, also add `--set=decode.replicas=4`, plus `--set=prefill.replicas=4` for P/D, and pass `--modelservice-deploy-timeout 3600` to `standup`: 4 replicas loading the model at once can exceed the default readiness wait. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
 
 ### Sizing
 
