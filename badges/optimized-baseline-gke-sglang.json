@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "SGLANG GPU",
-  "message": "prereqs-error",
-  "color": "black"
+  "message": "passing",
+  "color": "brightgreen"
 }
