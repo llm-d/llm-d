@@ -352,7 +352,6 @@ the per-team topics + subscriptions, the results topic, and the service account 
 ```bash
 export PROJECT_ID=your-project
 ${MT}/scripts/gcp-setup.sh                       # topics, subscriptions, results topic, SA + IAM
-kubectl create namespace ${NAMESPACE}
 kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml   # still needed for the quota counters
 
 sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
@@ -500,14 +499,23 @@ Two end-to-end stress testing scripts are provided in [`scripts/`](scripts/) to 
 - **GCP Pub/Sub:** [`scripts/stress-test-pubsub.py`](scripts/stress-test-pubsub.py)
 
   ```bash
-  PROJECT_ID=${PROJECT_ID} ./scripts/stress-test-pubsub.py
+  PROJECT_ID=${PROJECT_ID} ${MT}/scripts/stress-test-pubsub.py
   ```
 
 - **Redis SortedSet:** [`scripts/stress-test-redis.py`](scripts/stress-test-redis.py)
 
   ```bash
-  NAMESPACE=${NAMESPACE} ./scripts/stress-test-redis.py
+  NAMESPACE=${NAMESPACE} ${MT}/scripts/stress-test-redis.py
   ```
+
+[`scripts/benchmark-heavy-redis.py`](scripts/benchmark-heavy-redis.py) enqueues 600 requests across the three team
+queues and reports how they drain. It reads in-flight and queue-depth gauges from Prometheus at `BENCH_PROM_URL`
+(default `http://localhost:9090`, port-forwarded to the central Prometheus automatically), not the in-cluster
+`PROM_URL` the gates use:
+
+```bash
+NAMESPACE=${NAMESPACE} ${MT}/scripts/benchmark-heavy-redis.py
+```
 
 ## Scenarios A & B — reserved vs. overflow
 
@@ -657,21 +665,23 @@ render ${MT}/values/redis/tier-priority-admission.yaml > /tmp/mt-tier-priority-a
 helm upgrade llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-tier-priority-admission.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
+# Worker pools ship in a ConfigMap the processor reads at startup; this upgrade changes only the
+# pools, so restart the processor to pick up the new gate.
+kubectl rollout restart deploy/llm-d-async -n ${NAMESPACE}
+kubectl rollout status deploy/llm-d-async -n ${NAMESPACE}
 ```
 
 <details>
 <summary><b>GCP Pub/Sub deployment</b></summary>
 
 ```bash
-sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-    -e "s/POOL_NAME/${POOL_NAME}/g" \
-    -e "s/PROJECT_ID/${PROJECT_ID}/g" \
-    -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
-    ${MT}/values/pubsub/tier-priority-admission.yaml > /tmp/mt-pubsub-tier-priority.yaml
+render ${MT}/values/pubsub/tier-priority-admission.yaml > /tmp/mt-pubsub-tier-priority.yaml
 
 helm upgrade llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-pubsub-tier-priority.yaml -n ${NAMESPACE} --version ${ASYNC_VERSION}
+kubectl rollout restart deploy/llm-d-async -n ${NAMESPACE}   # pick up the new worker pool gate
+kubectl rollout status deploy/llm-d-async -n ${NAMESPACE}
 ```
 
 </details>
@@ -688,7 +698,8 @@ Verify that the metric is being scraped and that the gate evaluates metrics live
 curl -s localhost:9090/api/v1/query --data-urlencode \
     "query=llm_d_epp_flow_control_pool_saturation{inference_pool=\"${POOL_NAME}\"}"
 
-# 2. Verify the gate initialized with the inner prometheus-saturation source:
+# 2. Verify the gate initialized with the inner prometheus-saturation source. Empty output means
+#    the processor is still running the previous gate: restart it as above.
 kubectl logs -n ${NAMESPACE} deploy/llm-d-async | grep -i "tier-priority-admission"
 
 # 3. Check gate evaluation and verify source availability (must report 1, not 0):

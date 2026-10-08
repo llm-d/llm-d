@@ -19,7 +19,9 @@ import urllib.request
 NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
 REDIS_DEPLOY = os.environ.get("REDIS_DEPLOY", "deploy/redis")
 MODEL = os.environ.get("MODEL", "Qwen/Qwen3-32B")
-PROM_URL = os.environ.get("PROM_URL", "http://localhost:9090")
+# Read from this machine, not from inside the cluster: the guide's PROM_URL is the in-cluster address
+# the gates use, which is unreachable from here. A localhost URL is port-forwarded automatically.
+PROM_URL = os.environ.get("BENCH_PROM_URL", "http://localhost:9090")
 MONITORING_NAMESPACE = os.environ.get("MONITORING_NAMESPACE", "llm-d-monitoring")
 TTL = 3600  # 1 hour deadline
 
@@ -161,7 +163,8 @@ def main():
     parser = argparse.ArgumentParser(description="Heavy multi-tenant Redis benchmark")
     parser.add_argument("--tokens", type=int, default=80, help="Max completion tokens per request")
     parser.add_argument("--timeout", type=int, default=600, help="Max wait duration in seconds")
-    parser.add_argument("--prom-url", type=str, default=PROM_URL, help="Prometheus base URL (default: http://localhost:9090)")
+    parser.add_argument("--prom-url", type=str, default=PROM_URL,
+                        help="Prometheus base URL reachable from this machine (default: $BENCH_PROM_URL or http://localhost:9090)")
     args = parser.parse_args()
 
     pf_proc = None

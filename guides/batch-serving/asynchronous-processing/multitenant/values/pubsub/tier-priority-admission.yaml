@@ -103,3 +103,13 @@ ap:
 
   metrics:
     enabled: true
+  podMonitor:
+    enabled: true
+    interval: "15s"
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: true
+  grafana:
+    dashboards:
+      enabled: true

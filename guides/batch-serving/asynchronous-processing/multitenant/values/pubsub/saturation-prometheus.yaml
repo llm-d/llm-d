@@ -43,7 +43,6 @@ ap:
       # ---------- team queues (pool teams, payload.model = MODEL) ----------
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-requests-sub"
         worker_pool_id: "teams"
-        inference_objective: "latency"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
         labels: {tier: "interactive"}
@@ -70,7 +69,6 @@ ap:
           prefix: "quota:"
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-requests-sub"
         worker_pool_id: "teams"
-        inference_objective: "throughput"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
         labels: {tier: "batch"}
