@@ -19,7 +19,7 @@ Examples of unacceptable behavior by participants include:
 * The use of sexualized language or imagery and unwelcome sexual attention or advances
 * Trolling, insulting/derogatory comments, and personal or political attacks
 * Public or private harassment
-* Soliciting community members, either publicly, via Slack DM or email is strictly forbidden.
+* Unsolicited commercial offers or recruitment messages to community members, whether publicly, via Slack DM, or by email, are strictly forbidden.
 * Publishing others' private information, such as a physical or electronic address, without explicit permission
 * Other conduct which could reasonably be considered inappropriate in a professional setting
 
