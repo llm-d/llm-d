@@ -180,7 +180,7 @@ patches:
   # ClusterRoleBindings are cluster-scoped; suffix a namespace hash so concurrent
   # deployments do not collide. The subject namespace is pinned too, or the
   # binding grants the wrong namespace and KEDA's Thanos queries get 401/403.
-  # Match by kind only: the leaf already renamed the binding.
+  # Match the leaf's already renamed binding by name prefix.
   - patch: |-
       - op: replace
         path: /metadata/name
@@ -190,6 +190,7 @@ patches:
         value: ${NAMESPACE}
     target:
       kind: ClusterRoleBinding
+      name: keda-epp-metrics-reader-monitoring-view.*
   - path: patch-vllm.yaml
     target:
       kind: Deployment
@@ -198,7 +199,7 @@ EOF
 
 echo "==> Validating kustomization"
 RENDERED="$(kubectl kustomize "${OUTPUT_DIR}")"
-if grep -nF '${' <<<"${RENDERED}" >&2; then
+if grep -nE '\$\{[A-Z_][A-Z0-9_]*\}' <<<"${RENDERED}" >&2; then
   echo "ERROR: unresolved \${...} placeholders in the rendered manifests." >&2
   exit 1
 fi
