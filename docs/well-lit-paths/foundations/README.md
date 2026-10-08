@@ -18,7 +18,7 @@ These guides teach single architectural capabilities that you can configure inde
 ### Serving Large Models
 
 - **[Prefill/Decode Disaggregation](pd-disaggregation.md)**: Separating prefill (compute-bound) and decode (memory-bandwidth-bound) phases for optimized performance.
-- **[Wide Expert-Parallelism](wide-expert-parallelism.md)**: Scaling KV cache space for massive MoE models like DeepSeek-R1 using DP/EP deployment patterns.
+- **[Wide Expert-Parallelism](../../../guides/wide-ep/README.md)**: Scaling KV cache space for massive MoE models like DeepSeek-R1 using DP/EP deployment patterns.
 
 ### Multimodal and Omni Models
 
