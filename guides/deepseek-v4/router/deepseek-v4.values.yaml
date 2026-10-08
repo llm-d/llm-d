@@ -20,7 +20,7 @@ router:
         - type: disaggregatedset-rollout-screener
           parameters:
             scope:
-              labelSelector: "disaggregatedset.x-k8s.io/name=wide-ep-nvidia-gpu-vllm"
+              labelSelector: "disaggregatedset.x-k8s.io/name=wide-ep-vllm-dsv4"
             revisionGating:
               mode: max-role
               requiredRoles: [prefill, decode]

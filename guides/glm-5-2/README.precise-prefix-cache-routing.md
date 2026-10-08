@@ -83,29 +83,8 @@ helm install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
-<details>
-<summary><b>Gateway Mode</b></summary>
-
-To use a Kubernetes Gateway managed proxy, follow these steps instead of the
-standalone Helm command:
-
-1. Deploy a Kubernetes Gateway by following one of the
-   [gateway guides](../../docs/infrastructure/gateway).
-2. Deploy the llm-d Router and HTTPRoute:
-
-```bash
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
-helm install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5-2.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/precise-routing.values.yaml \
-    --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
-
-</details>
+To front the router with a Kubernetes Gateway instead, see Gateway Mode in the
+[Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 ### 2. Deploy the Model Server
 
@@ -134,20 +113,9 @@ kubectl apply -n ${NAMESPACE} \
 
 ### 1. Get the IP of the Proxy
 
-#### Standalone Mode
-
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
-
-<details>
-<summary><b>Gateway Mode</b></summary>
-
-```bash
-export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
-```
-
-</details>
 
 ### 2. Send a Test Request
 

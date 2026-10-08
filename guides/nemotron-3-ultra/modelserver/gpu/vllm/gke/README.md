@@ -106,7 +106,7 @@ gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-mode
 
 ## Deploy the Model Server
 
-Once the model is stored in your GCS, please refer back to the [NVIDIA-Nemotron-3-Ultra guide](../../../../README.md#2-deploy-the-model-server-gpus) to continue the deployment.
+Once the model is stored in your GCS, please refer back to the [NVIDIA-Nemotron-3-Ultra guide](../../../../README.md#2-deploy-the-model-server) to continue the deployment.
 
 > [!NOTE]
 > Please set `INFRA_PROVIDER` = `gke` to leverage this deployment.

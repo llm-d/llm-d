@@ -1937,9 +1937,8 @@ def _cmd_set_branch(args: argparse.Namespace) -> int:
 DEFAULT_MANIFEST = "docs/well-lit-paths/guides.yaml"
 MANIFEST_SECTIONS = ("foundations", "models", "operations")
 # Sections whose guides may be published from a README alone (no guide.yaml):
-# Operations guides are not held to the Foundations guide.yaml rules, and Model
-# guides are README-only until they adopt the guide.yaml support matrix.
-README_ONLY_SECTIONS = ("operations", "models")
+# Operations guides are not held to the Foundations/Models guide.yaml rules.
+README_ONLY_SECTIONS = ("operations",)
 
 
 def _manifest_pillar(name: str) -> str | None:
@@ -1954,8 +1953,8 @@ def _manifest_pillar(name: str) -> str | None:
 
 def check_manifest(data: Any, repo_root: Path) -> Findings:
     """Validate the llm-d.ai publish manifest: every guide directory exists
-    with a ``README.md`` (and a ``guide.yaml``, except in Operations and
-    Models sections), slugs are unique across sections, child pages exist, and
+    with a ``README.md`` (and a ``guide.yaml``, except in Operations
+    sections), slugs are unique across sections, child pages exist, and
     titles are present."""
     f = Findings()
     if not isinstance(data, dict) or not isinstance(data.get("sections"), dict):

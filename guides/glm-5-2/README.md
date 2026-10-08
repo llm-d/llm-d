@@ -57,62 +57,102 @@ If your SLO target is throughput rather than TTFT, `p2w2d2w2` (2 prefill + 2 dec
 the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` — is in
 [Scaling and Alternative Topologies](#scaling-and-alternative-topologies).
 
-### Supported Hardware Backends
-
-| Backend           | Directory                 | Notes                                                       |
-| ----------------- | ------------------------- | ----------------------------------------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`   | H200, P/D disaggregated; default overlay `deployments/default/` |
-
 ### Variants
 
 - [Precise prefix-cache routing](README.precise-prefix-cache-routing.md) (experimental) —
   replaces the approximate prefix index with exact KV-event-backed routing on a 3-node
   `p2w1d1w1` topology.
 
+## Supported Accelerators and Model Servers
+
+This guide includes configurations for the following accelerator and model server combinations:
+
+<!-- guide:support start -->
+| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
+| --- | --- | --- | --- | --- |
+| NVIDIA H200 | `gpu` | `zai-org/GLM-5.2-FP8` | 🟡 community | CoreWeave H200 (8 GPUs per node), InfiniBand · default 8 nodes / 64 GPUs (`p3w2d1w2` + tiered KV offloading); 2 to 10 nodes by `DEPLOYMENT` · P/D disaggregated wide-EP; needs an all-to-all RDMA fabric |
+
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
+
 ## Prerequisites
 
-- Installed proper client tools (kubectl, helm).
-- Set the following environment variables:
-
-  ```bash
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-  source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="glm-5-2"
-  export NAMESPACE=llm-d-glm-5-2
-  export MODEL=zai-org/GLM-5.2-FP8
-  ```
-
-- Install the Gateway API Inference Extension CRDs:
-
-  ```bash
-  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
-  ```
-
-- Create a target namespace for the installation:
-
-  ```bash
-  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  ```
-
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
-<!-- llm-d-cicd:skip start -->
-  ```bash
-  export HF_TOKEN=<your HuggingFace token>
-  kubectl create secret generic llm-d-hf-token \
-    --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    --namespace "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  ```
-<!-- llm-d-cicd:skip end -->
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
 - Deploy the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1`
   or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the
   `DisaggregatedSet` validating webhook and RBAC used by the model server.
+
 - Provide H200 nodes on an all-to-all RDMA fabric: DeepEP requires every NIC on a host to reach
   every NIC on all other hosts (rail-only networks fail). See
   [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md) and the
   [multi-node deployment guide](../../docs/infrastructure/multi-node.md).
+
+- Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
+
+- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+
+### Get the guide
+
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the manifests, Helm values, and Kustomize overlays it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
+
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
+
+### Configure the environment
+
+**Set the guide-specific environment variables** (`DEPLOYMENT` picks the recommended `default` overlay or one of the [alternative topologies](#scaling-and-alternative-topologies)):
+
+<!-- guide:env.static start -->
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export GUIDE_NAME=glm-5-2
+export NAMESPACE=llm-d-glm-5-2
+export MONITORING=false # options: false, true
+export MONITORING_VALUES=
+export ACCELERATOR_TYPE=gpu # options: gpu
+export MODEL_SERVER=vllm # options: vllm
+export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2
+export MODEL=zai-org/GLM-5.2-FP8 # the model every deployment serves
+source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
+```
+<!-- guide:env.static end -->
+
+**Install the Gateway API Inference Extension CRDs:**
+
+<!-- guide:prerequisites.gaie start -->
+```bash
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+```
+<!-- guide:prerequisites.gaie end -->
+
+**Create a target namespace for the installation:**
+
+<!-- guide:prerequisites.namespace start -->
+```bash
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
+
+**Create the `llm-d-hf-token` secret** in your target namespace with the key [`HF_TOKEN`](../../helpers/hf-token.md) matching a valid HuggingFace token to pull models:
+
+<!-- guide:prerequisites.secrets start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 ## Installation Instructions
 
@@ -131,50 +171,56 @@ prefix-cache scoring for P/D routing:
 
 All 8 DP rank ports (8000-8007) are exposed as `targetPorts` for per-rank routing.
 
-#### Standalone Mode
+**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below):
 
-This deploys the llm-d Router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
+<!-- guide:deploy.router_values start -->
+```bash
+# Paths to values files: the wide-EP router values, then the GLM-5.2
+# dual GPU+CPU prefix-cache scoring overrides on top
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+```
+<!-- guide:deploy.router_values end -->
 
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+
+<!-- guide:deploy.monitoring_values start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+<!-- guide:deploy.monitoring_values end -->
+
+**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+
+<!-- guide:deploy.standalone start -->
 ```bash
 helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5-2.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${ROUTER_BASE_VALUES} \
+  ${MONITORING_VALUES} \
+  -f ${ROUTER_VALUES} \
+  -f ${ROUTER_OVERRIDES_VALUES} \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
-<details>
-<summary><b>Gateway Mode</b></summary>
-
-To use a Kubernetes Gateway managed proxy rather than the standalone version (the published
-[benchmarks](#aiperf-command) ran through an Istio Gateway), follow these steps instead of
-applying the previous Helm chart:
-
-1. *Deploy a Kubernetes Gateway* by following one of [the gateway guides](../../docs/infrastructure/gateway).
-2. *Deploy the llm-d Router and an HTTPRoute* that connects it to the Gateway as follows:
-
-```bash
-export PROVIDER_NAME=istio # options: none, gke, agentgateway, istio
-helm install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5-2.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml \
-    --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
-
-</details>
+> [!NOTE]
+> The published [benchmarks](#aiperf-command) ran through an Istio Gateway (Gateway Mode with
+> `provider.name=istio`) rather than the standalone proxy.
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlay for the recommended deployment (`p3w2d1w2` + tiered offloading):
+**Apply the Kustomize overlay** for your deployment. The `default` overlay is the recommended
+deployment (`p3w2d1w2` + tiered offloading):
 
+<!-- guide:deploy.modelserver start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/deployments/default
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
 ```
+<!-- guide:deploy.modelserver end -->
 
 Two hardware notes: prefill workers request `1500Gi` DRAM for the CPU offload tier, and the
 NVMe tier uses a host-path volume at `/mnt/local/kv-cache`. On nodes without local NVMe, swap
@@ -187,46 +233,64 @@ minutes):
 kubectl get pods -n ${NAMESPACE} -l llm-d.ai/model=GLM-5.2-FP8 -w
 ```
 
+**(Optional) Deploy the monitoring resources for model servers** (requires the Prometheus
+Operator from the monitoring stack mentioned in [Prerequisites](#prerequisites)): PodMonitors
+that scrape each DP rank's port (`rank0`-`rank7`). See [Monitoring](#monitoring-optional) for
+node-exporter sidecars and the plain-Prometheus alternative.
+
+<!-- guide:deploy.monitoring start -->
+```bash
+# only when MONITORING=true:
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
+```
+<!-- guide:deploy.monitoring end -->
+
 ## Verification
 
 ### 1. Get the IP of the Proxy
 
+<!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:verify.endpoint.standalone end -->
 
 ### 2. Send Test Requests
 
-Open a temporary interactive shell inside the cluster:
+**Send a completion request from a temporary pod inside the cluster:**
 
+<!-- guide:verify.tests.request start -->
 ```bash
-kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
-    --env="IP=$IP" \
-    --env="NAMESPACE=$NAMESPACE" \
-    -- /bin/bash
+kubectl run curl-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"Explain how a simple agent loop works in 3 sentences.\"}"'
 ```
+<!-- guide:verify.tests.request end -->
 
-Send a completion request:
+**Check that the router reaches a model server that serves `MODEL`:** the response must name the model and carry generated tokens:
 
+<!-- guide:verify.tests.served_model start -->
 ```bash
-curl -X POST http://${IP}/v1/completions \
-    -H 'Content-Type: application/json' \
-    -d '{
-        "model": "zai-org/GLM-5.2-FP8",
-        "prompt": "Explain how a simple agent loop works in 3 sentences."
-    }' | jq
+# The router must reach a model server that serves MODEL and returns tokens
+kubectl run serve-check --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'R=$(curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"Say hello.\", \"max_tokens\": 16}")
+    echo "${R}" | grep -q "\"model\":\"${MODEL}\"" && echo "${R}" | grep -q "\"choices\"" \
+      && echo "OK: ${MODEL} served through the router" \
+      || { echo "FAIL: ${R}"; exit 1; }'
 ```
+<!-- guide:verify.tests.served_model end -->
 
 ## Scaling and Alternative Topologies
 
-Every topology below is a Kustomize overlay under `modelserver/gpu/vllm/deployments/`, applied
-the same way as the default:
-
-```bash
-kubectl apply -n ${NAMESPACE} \
-    -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/deployments/<deployment>
-```
+Every topology below is a Kustomize overlay under `modelserver/gpu/vllm/deployments/`: set
+`DEPLOYMENT` to its name and apply it with the [model server step](#2-deploy-the-model-server).
 
 | Deployment | Prefill                    | Decode                        | Nodes / GPUs |
 | ---------- | -------------------------- | ----------------------------- | ------------ |
@@ -306,12 +370,8 @@ retransmission metrics. Merge the per-DP-rank Prometheus scrape configs into an 
 NAMESPACE=${NAMESPACE} bash ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring/apply-scrape-configs.sh
 ```
 
-If you run the Prometheus Operator instead, apply the PodMonitors that scrape each DP rank's
-port (`rank0`-`rank7`):
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring
-```
+If you run the Prometheus Operator instead, apply the PodMonitors with `MONITORING=true` in the
+[model server step](#2-deploy-the-model-server).
 
 DCGM custom metrics: `modelserver/gpu/vllm/base/dcgm-custom-metrics.yaml`.
 
@@ -379,8 +439,10 @@ patches:
 
 Every reported number comes from the same [aiperf](https://github.com/ai-dynamo/aiperf) `profile`
 invocation, run from inside the cluster against the Kubernetes Gateway Service
-(`llm-d-inference-gateway-istio`, from the [Gateway Mode](#1-deploy-the-llm-d-router) router
-installation with `PROVIDER_NAME=istio`) and swept across concurrency. The dataset used is the
+(`llm-d-inference-gateway-istio`, from a Gateway Mode router installation with
+`provider.name=istio`; see the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router))
+and swept across concurrency. Against the standalone proxy, use `http://${GUIDE_NAME}-epp:80/v1`
+instead. The dataset used is the
 `semianalysis_cc_traces_weka_with_subagents` aiperf preset, backed by
 [`semianalysisai/cc-traces-weka-062126`](https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126)
 on HuggingFace.
@@ -447,15 +509,23 @@ GPU+CPU prefix-cache routing:
 
 ## Cleanup
 
-To clean up resources:
+To remove the deployed components:
 
+<!-- guide:cleanup.modelserver start -->
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
+```
+<!-- guide:cleanup.modelserver end -->
+
+<!-- guide:cleanup.rest start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/deployments/default
-```
 
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring --ignore-not-found=true
+```
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:cleanup.rest end -->

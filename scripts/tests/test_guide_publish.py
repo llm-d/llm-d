@@ -435,19 +435,6 @@ def test_manifest_operations_subsection_readme_only(tmp_path):
     assert any("guides/a/guide.yaml does not exist" in e for e in errs)
 
 
-def test_manifest_models_readme_only(tmp_path):
-    root = _manifest_repo(tmp_path)
-    (root / "guides" / "a" / "guide.yaml").unlink()
-    m = _manifest()
-    m["sections"] = {"models": {"target": "well-lit-paths/models",
-                                "guides": m["sections"]["foundations"]["guides"]}}
-    assert guide.check_manifest(m, root).ok()
-    # The README itself is still required.
-    (root / "guides" / "a" / "README.md").unlink()
-    errs = _errors(guide.check_manifest(m, root))
-    assert any("guides/a/README.md does not exist" in e for e in errs)
-
-
 def test_manifest_section_names(tmp_path):
     root = _manifest_repo(tmp_path)
     m = _ops_manifest()

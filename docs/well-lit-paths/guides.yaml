@@ -42,9 +42,8 @@ sections:
         slug: serve-omni-models
         title: Serve Omni Models
         position: 9
-  # Models: benchmarked recipes for one model on one accelerator. Model guides
-  # may be README-only (no guide.yaml) until they adopt the guide.yaml
-  # support-matrix treatment.
+  # Models: benchmarked recipes for one model on one accelerator, each with a
+  # guide.yaml support matrix like the Foundations guides.
   models:
     target: well-lit-paths/models
     guides:

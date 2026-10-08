@@ -24,133 +24,194 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 | Topology           | 2x2x1                                                                                      |
 | TP size / EP size  | TP=8, EP enabled                                                                           |
 
-### Supported Hardware Backends
+## Supported Accelerators and Model Servers
 
-| Backend             | Directory                      | Notes                       |
-| ------------------- | ------------------------------ | --------------------------- |
-| Google TPU (vLLM)   | `modelserver/tpu/vllm/`        | TPU 7x / tpu7x 2x2x1 (nightly) |
-| Google TPU (vLLM, P/D) | `modelserver/tpu/vllm-disaggregated/` | Experimental: 2 prefill + 6 decode |
+This guide includes configurations for the following accelerator and model server combinations:
+
+<!-- guide:support start -->
+| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
+| --- | --- | --- | --- | --- |
+| Google TPU v7x | `tpu` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | GKE only · 8 replicas × 4 chips (`tpu7x` `2x2x1`, TP=8) with CPU KV offloading · `TOPOLOGY=disaggregated` (experimental): 2 prefill + 6 decode |
+
+✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
+<!-- guide:support end -->
+
+Set `TOPOLOGY` to pick the serving topology: `unified` (default) runs one pool of 8 replicas
+with CPU KV offloading; `disaggregated` is the experimental Prefill/Decode configuration
+(2 prefill + 6 decode, see [Prefill/Decode Disaggregated Results](#prefilldecode-disaggregated-results)).
 
 ## Prerequisites
 
-- Installed proper client tools (kubectl, helm).
-- Set the following environment variables:
+- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-  ```bash
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-  source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="qwen3-coder-480b"
-  export NAMESPACE=llm-d-qwen3-coder-480b
-  ```
+- A GKE cluster with a TPU v7x (`tpu7x`, `2x2x1`) node pool large enough for 8 replicas
+  (4 chips each).
 
-- Install the Gateway API Inference Extension CRDs:
+- Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-  ```bash
-  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
-  ```
+### Get the guide
 
-- Create a target namespace for the installation:
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the manifests, Helm values, and Kustomize overlays it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
 
-  ```bash
-  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  ```
-
-- [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+<!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
-  ```bash
-  export HF_TOKEN=<your HuggingFace token>
-  kubectl create secret generic llm-d-hf-token \
-    --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    --namespace "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  ```
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
+
+### Configure the environment
+
+**Set the guide-specific environment variables:**
+
+<!-- guide:env.static start -->
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export GUIDE_NAME=qwen3-coder-480b
+export NAMESPACE=llm-d-qwen3-coder-480b
+export ACCELERATOR_TYPE=tpu # options: tpu
+export MODEL_SERVER=vllm # options: vllm
+export TOPOLOGY=unified # options: unified, disaggregated
+export MODEL=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 # the model both topologies serve
+source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
+```
+<!-- guide:env.static end -->
+
+**Install the Gateway API Inference Extension CRDs:**
+
+<!-- guide:prerequisites.gaie start -->
+```bash
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+```
+<!-- guide:prerequisites.gaie end -->
+
+**Create a target namespace for the installation:**
+
+<!-- guide:prerequisites.namespace start -->
+```bash
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
+
+**Create the `llm-d-hf-token` secret** in your target namespace with the key [`HF_TOKEN`](../../helpers/hf-token.md) matching a valid HuggingFace token to pull models:
+
+<!-- guide:prerequisites.secrets start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 ## Installation Instructions
 
 ### 1. Deploy the llm-d Router
 
-For the default unified serving configuration, deploy the router using:
+**Prepare the paths to the `helm` values files** for the `llm-d` router. The P/D disaggregated
+topology uses its own router values
+([`router/qwen3-coder-480b-disagg.values.yaml`](router/qwen3-coder-480b-disagg.values.yaml)):
 
+<!-- guide:deploy.router_values start -->
 ```bash
-helm install ${GUIDE_NAME} \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+
+# only when TOPOLOGY=unified:
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+# only when TOPOLOGY=disaggregated:
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-disagg.values.yaml"
 ```
+<!-- guide:deploy.router_values end -->
 
-*(Note: If you are deploying the experimental P/D disaggregated configuration instead, use `router/qwen3-coder-480b-disagg.values.yaml` in place of `router/${GUIDE_NAME}.values.yaml` above).*
-
-> **Note — `peakPrefillThroughput` is hardware/model-specific.** The router values set
+> [!NOTE]
+> **`peakPrefillThroughput` is hardware/model-specific.** The router values set
 > `peakPrefillThroughput: 16444`, calibrated for Qwen3-Coder-480B-FP8 on TPU 7x. If you
 > deploy a different model or hardware, measure your own value and update
 > `router/qwen3-coder-480b.values.yaml`. See the shared
 > [router calibration tool](../recipes/router/calibration/README.md).
 
-### 2. Deploy the Model Server (TPUs)
+**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
-For the default unified serving configuration (with CPU KV offloading), apply the Kustomize overlays:
-
+<!-- guide:deploy.standalone start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
+helm install ${GUIDE_NAME} \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${ROUTER_BASE_VALUES} \
+  -f ${ROUTER_VALUES} \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
-Wait for the deployment to become ready:
+### 2. Deploy the Model Server
+
+**Apply the Kustomize overlay** for your topology (the unified overlay enables CPU KV offloading):
+
+<!-- guide:deploy.modelserver start -->
+```bash
+# only when TOPOLOGY=unified:
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+
+# only when TOPOLOGY=disaggregated:
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
+```
+<!-- guide:deploy.modelserver end -->
+
+Wait for the deployment to become ready (with `TOPOLOGY=disaggregated`, also wait for
+`deployment/agentic-serving-tpu-vllm-prefill`):
 
 ```bash
 kubectl rollout status deployment/agentic-serving-tpu-vllm-decode -n ${NAMESPACE}
 ```
-
-<details>
-<summary><b><i>Click</i></b> here for the experimental Prefill/Decode (P/D) disaggregated deployment instructions</summary>
-
-If you want to evaluate the experimental P/D disaggregated configuration, apply the disaggregated overlays instead:
-
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm-disaggregated/
-```
-
-Wait for both the prefill and decode deployments to become ready:
-
-```bash
-kubectl rollout status deployment/agentic-serving-tpu-vllm-prefill -n ${NAMESPACE}
-kubectl rollout status deployment/agentic-serving-tpu-vllm-decode -n ${NAMESPACE}
-```
-
-</details>
 
 ## Verification
 
 ### 1. Get the IP of the Proxy
 
+<!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:verify.endpoint.standalone end -->
 
 ### 2. Send Test Requests
 
-Open a temporary interactive shell inside the cluster:
+**Send a completion request from a temporary pod inside the cluster:**
 
+<!-- guide:verify.tests.request start -->
 ```bash
-kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
-    --env="IP=$IP" \
-    --env="NAMESPACE=$NAMESPACE" \
-    -- /bin/bash
+kubectl run curl-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"Explain how a simple agent loop works in 3 sentences.\"}"'
 ```
+<!-- guide:verify.tests.request end -->
 
-Send a completion request:
+**Check that the router reaches a model server that serves `MODEL`:** the response must name the model and carry generated tokens:
 
+<!-- guide:verify.tests.served_model start -->
 ```bash
-curl -X POST http://${IP}/v1/completions \
-    -H 'Content-Type: application/json' \
-    -d '{
-        "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
-        "prompt": "Explain how a simple agent loop works in 3 sentences."
-    }' | jq
+# The router must reach a model server that serves MODEL and returns tokens
+kubectl run serve-check --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'R=$(curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"Say hello.\", \"max_tokens\": 16}")
+    echo "${R}" | grep -q "\"model\":\"${MODEL}\"" && echo "${R}" | grep -q "\"choices\"" \
+      && echo "OK: ${MODEL} served through the router" \
+      || { echo "FAIL: ${R}"; exit 1; }'
 ```
+<!-- guide:verify.tests.served_model end -->
 
 ## Benchmarking
 
@@ -202,7 +263,7 @@ envsubst < guide.yaml > config.yaml
 
 > [!TIP]
 > **Tuning Prefill-to-Decode Ratios:**
-> The default `vllm-disaggregated` overlay deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
+> The `vllm-disaggregated` overlay (`TOPOLOGY=disaggregated`) deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
 >
 > ```bash
 > kubectl scale deployment/agentic-serving-tpu-vllm-prefill --replicas=5 -n ${NAMESPACE}
@@ -265,21 +326,25 @@ This guide and performance numbers will be updated as further optimizations beco
 
 ## Cleanup
 
-To clean up resources:
+To remove the deployed components:
 
+<!-- guide:cleanup.modelserver start -->
+```bash
+# only when TOPOLOGY=unified:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+
+# only when TOPOLOGY=disaggregated:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
+```
+<!-- guide:cleanup.modelserver end -->
+
+<!-- guide:cleanup.rest start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-
-# Delete the model server (for the default unified configuration):
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm/
-
-# Or if you deployed the experimental disaggregated configuration:
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/vllm-disaggregated/
-
 ```
-
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:cleanup.rest end -->
