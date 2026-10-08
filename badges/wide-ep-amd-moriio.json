@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM ROCM MORI WIDE-EP",
-  "message": "prereqs-error",
-  "color": "black"
+  "message": "benchmark-error",
+  "color": "yellow"
 }
