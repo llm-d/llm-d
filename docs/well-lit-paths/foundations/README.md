@@ -23,4 +23,4 @@ These guides teach single architectural capabilities that you can configure inde
 ### Multimodal and Omni Models
 
 - **[Serve Multimodal Models](../../../guides/multimodal-serving/README.md)**: Routing image, video, and audio requests on prefix-cache affinity that covers the media as well as the text, with aggregated serving or dedicated Encode workers (E/PD, E/P/D).
-- **[Serve Omni Models](../../../guides/omni-serving/README.md)**: Serving a model that answers in text and audio (or generates images) from one vLLM-Omni pool behind the llm-d Router.
+- **[Serve Omni Models](../../../guides/omni-serving/README.md)**: Serving a model that answers in text and audio from one vLLM-Omni pool behind the llm-d Router, or a text-to-image, image-to-image, or text-to-speech model on vLLM-Omni or SGLang.

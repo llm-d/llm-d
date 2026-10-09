@@ -3,17 +3,15 @@ kind: Kustomization
 resources:
   - ../../../../../../recipes/modelserver/base/single-host/default
 
-namespace: llm-d-diffusion-i2i
-
-namePrefix: diffusion-serving-i2i-nvidia-gpu-sglang-
+namePrefix: omni-serving-t2i-nvidia-gpu-sglang-
 
 components:
   - ../../../../../../recipes/modelserver/components/images/gpu-sglang/release
 
 labels:
   - pairs:
-      llm-d.ai/guide: diffusion-serving-i2i
-      llm-d.ai/model: Qwen-Image-Edit-2511
+      llm-d.ai/guide: omni-serving
+      llm-d.ai/model: Qwen-Image
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
       llm-d.ai/engine-type: sglang

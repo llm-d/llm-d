@@ -538,6 +538,28 @@ def test_multimodal_serving_matrix_matches_repo():
 def test_omni_serving_matrix_matches_repo():
     g = guide.Guide.load(REPO_ROOT / "guides" / "omni-serving")
     assert g.check().ok(), _errors(g.check())
+    # Every TASK resolves to an overlay per engine that serves it and per
+    # INFRA_PROVIDER (modelserver/gpu/<engine>/<TASK>/<provider>/), and to the
+    # router/<TASK>.values.yaml its deploy.router_values step exports.
+    root = REPO_ROOT / "guides" / "omni-serving"
+    tasks = {
+        "vllmomni": ("omni", "text-to-image", "image-to-image", "text-to-speech"),
+        "sglang": ("text-to-image", "image-to-image"),
+    }
+    overlays = [
+        root / "modelserver" / "gpu" / e / t / p
+        for e, ts in tasks.items()
+        for t in ts
+        for p in ("base", "gke")
+    ]
+    missing = [str(o) for o in overlays if not (o / "kustomization.yaml").is_file()]
+    missing += [
+        str(root / "router" / f"{t}.values.yaml")
+        for t in tasks["vllmomni"]
+        if not (root / "router" / f"{t}.values.yaml").is_file()
+    ]
+    assert not missing, missing
+    assert g.data["env"]["static"]["TASK"]["values"] == list(tasks["vllmomni"])
 
 
 def test_wide_ep_matrix_matches_repo():

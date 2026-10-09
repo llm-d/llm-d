@@ -1,3 +1,13 @@
+## omni-serving guide overrides for the llm-d router, TASK=text-to-image (/v1/images/generations).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Load-based routing: a generation request's cost does not follow its
+## prompt length and leaves no prefix or KV cache to match, so the router
+## prefers the endpoint with the fewest requests it has dispatched and not
+## yet seen complete (active-request-scorer). The router tracks those
+## counts itself, so the data layer scrapes no model server metrics
+## (injectDefaults: false): SGLang's diffusion backend publishes none.
+
 router:
   extraServicePorts:
     - name: http
@@ -29,5 +39,5 @@ router:
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: "diffusion-serving-t2i"
+      llm-d.ai/guide: "omni-serving"
     protocol: http
