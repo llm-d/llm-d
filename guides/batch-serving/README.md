@@ -20,9 +20,7 @@ For the broader architectural context and design principles, see the [Batch Arch
 ## Guide Index
 
 - **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggable metadata storage (PostgreSQL/Redis), file storage (S3/RWX PVC), and a batch processor that dispatches requests to the llm-d Router.
-- **[Asynchronous Processing Guide](./asynchronous-processing/README.md)**: Deploy the lightweight Async Processor to consume requests from message queues with metric-based dispatch gating.
-  - **[GCP Pub/Sub Backend](./asynchronous-processing/gcp-pubsub/README.md)**: Configure Async Processor with Google Cloud Pub/Sub.
-  - **[Redis Sorted Set Backend](./asynchronous-processing/redis/README.md)**: Configure Async Processor with Redis / Valkey.
+- **[Asynchronous Processing Guide](./asynchronous-processing/README.md)**: Deploy the lightweight Async Processor to consume requests from a message queue (GCP Pub/Sub or a Redis Sorted Set) with metric-based dispatch gating.
   - **[Multi-Tenant Async Processing](./asynchronous-processing/multitenant/README.md)**: Advanced multi-tenant setup with team quotas, tier-priority dispatch, and saturation back-off across inference pools.
 
 ---

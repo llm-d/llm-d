@@ -92,15 +92,7 @@ Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggabl
 
 ### [Queue Async Requests (Async Processor)](../../guides/batch-serving/asynchronous-processing/README.md)
 
-Consume requests from a message queue and dispatch them with metric-gated back-off based on live model server saturation, including Async Processor sizing and scaling.
-
-### [Use Redis as the Async Queue](../../guides/batch-serving/asynchronous-processing/redis/README.md)
-
-Configure the Async Processor with a Redis or Valkey sorted set.
-
-### [Use GCP Pub/Sub as the Async Queue](../../guides/batch-serving/asynchronous-processing/gcp-pubsub/README.md)
-
-Configure the Async Processor with Google Cloud Pub/Sub topics and subscriptions.
+Consume requests from a message queue (GCP Pub/Sub or a Redis Sorted Set) and dispatch them with metric-gated back-off based on live model server saturation, including Async Processor sizing and scaling.
 
 ### [Enforce Tenant Quotas and Priorities](../../guides/batch-serving/asynchronous-processing/multitenant/README.md)
 
