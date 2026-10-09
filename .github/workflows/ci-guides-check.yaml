@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/ci-guides-check.yaml
+      - .github/scripts/e2e/async-multitenant/**
       - guides/**
       - docs/well-lit-paths/guides.yaml
       - .github/workflows/nightly-e2e-*.yaml
@@ -58,4 +59,4 @@ jobs:
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
 
       - name: Run Python tests
-        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ helpers/smoke-test/tests/ -v
+        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ helpers/smoke-test/tests/ .github/scripts/e2e/async-multitenant/ -v
