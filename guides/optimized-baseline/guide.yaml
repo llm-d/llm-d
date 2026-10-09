@@ -22,11 +22,10 @@ support:
       engines: {vllm: validated, sglang: validated, trtllm: community}
     amd:
       label: AMD GPU
-      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci`"
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-        - {name: amd-ci, label: "AMD CI"}
       engines: {vllm: validated, sglang: community}
     xpu:
       label: Intel XPU

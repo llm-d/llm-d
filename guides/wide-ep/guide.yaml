@@ -23,11 +23,10 @@ support:
       engines: {vllm: validated}
     amd:
       label: AMD GPU
-      notes: "32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci`"
+      notes: "32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO"
       model: deepseek-ai/DeepSeek-V3
       providers:
         - {name: base, label: "Kubernetes (base)"}
-        - {name: amd-ci, label: "AMD CI"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
