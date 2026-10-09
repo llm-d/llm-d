@@ -182,5 +182,5 @@ sections:
       # position 2: docs/operations/integrations/kong.md
       - dir: guides/agentic-api
         slug: agentic-api
-        title: Serve the Responses API with Agentic API (Experimental)
+        title: Agentic API
         position: 3
