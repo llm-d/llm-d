@@ -20,8 +20,9 @@ The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 pref
 
 How the two pools are deployed depends on the accelerator:
 
-- **NVIDIA GPU** (vLLM and SGLang) **and Google TPU7x dynamic sub-slices**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices) with a `prefill` and a `decode` role, in a single slice. The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
-- **All other accelerators** (AMD, Intel XPU, Google TPU v6e and TPU7x on static node pools, Iluvatar, MetaX, Rebellions NPU): a prefill and a decode `Deployment`.
+- **All accelerators except Google TPU v6e and TPU7x on static node pools**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
+  The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
+- **Google TPU v6e and TPU7x on static node pools**: a prefill and a decode `Deployment`.
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/advanced/disaggregation/README.md).
 
@@ -84,7 +85,7 @@ Both engines run on NVIDIA GPU with the same router configuration and move KV ca
 
 - (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
-- For NVIDIA GPU and TPU7x dynamic sub-slices, the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it for `ACCELERATOR_TYPE=gpu`; skip that step if your cluster already runs it.
+- For all accelerators except Google TPU v6e and TPU7x on static node pools, the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it; skip that step if your cluster already runs it.
   For TPU7x dynamic sub-slices, install or upgrade it through the [GKE dynamic slicing](../../docs/infrastructure/providers/gke/dynamic-slicing/README.md) cluster preparation instead, whose GKE-documented minimum LWS version is older.
 
 - Prepare the cluster for your platform (`INFRA_PROVIDER`). `base`, `amd-ci`, `moriio/base`, and the TPU and community accelerators need nothing beyond the accelerator's device plugin (see the [model server tabs](#2-deploy-the-model-server)); the other platforms need:
@@ -151,12 +152,12 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 ```
 <!-- guide:env.static end -->
 
-**(NVIDIA GPU only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
+**Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (all accelerators except TPU; skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
 
 <!-- guide:prerequisites.lws start -->
 <!-- variants:start -->
-<details open data-when="ACCELERATOR_TYPE=gpu">
-<summary><b>NVIDIA GPU</b></summary>
+<details open data-when="ACCELERATOR_TYPE=gpu,amd,xpu,iluvatar,metax,npu">
+<summary><b>NVIDIA GPU / AMD GPU / Intel XPU / Iluvatar GPU / MetaX GPU / Rebellions NPU</b></summary>
 
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -493,7 +494,7 @@ For alert rules covering these signals, see [Alerting](../../docs/operations/obs
 
 ## Operating the DisaggregatedSet
 
-The NVIDIA GPU overlays run prefill and decode as one [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm`, or `pd-disagg-sglang` for SGLang) with `groupIdentity: Hash`.
+Every overlay except TPU v6e and TPU7x on static node pools runs prefill and decode as one [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-<accelerator>` elsewhere) with `groupIdentity: Hash`.
 This guide ships `slices: 1` with one prefill and one decode replica; each role of each slice runs as its own LeaderWorkerSet (of size 1 here, so every pod is a leader).
 Raise the per-role `replicas` to change the xPyD ratio, or `slices` to add complete, independently rolled copies of the topology.
 Scaling, rollouts, placement policy, router slice affinity, and per-role autoscaling are covered in [Disaggregated Serving: Operations (DisaggregatedSet)](../../docs/operations/disaggregation/disaggregatedset.md).
@@ -587,7 +588,7 @@ The prefill pods' `vllm:request_success_total` counts the requests (prefill runs
 </details>
 <!-- tabs:end -->
 
-If the prefill pods count no requests, the router is not disaggregating: check that the pods carry the `llm-d.ai/role` labels (on NVIDIA GPU and TPU7x dynamic sub-slices, also that the DisaggregatedSet's LeaderWorkerSets are ready: `kubectl get leaderworkerset -n ${NAMESPACE}`) and the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`). If prefill counts the requests but decode reports no external prefix-cache hits, the KV transfer is failing and decode recomputes the prompt: check the decode pod's logs for connector errors.
+If the prefill pods count no requests, the router is not disaggregating: check that the pods carry the `llm-d.ai/role` labels (on DisaggregatedSet paths, also that its LeaderWorkerSets are ready: `kubectl get leaderworkerset -n ${NAMESPACE}`) and the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`). If prefill counts the requests but decode reports no external prefix-cache hits, the KV transfer is failing and decode recomputes the prompt: check the decode pod's logs for connector errors.
 
 **(Optional) Read the router's P/D decisions** (`MONITORING=true` only: without the monitoring values the router's metrics endpoint requires authentication). Each request disaggregated by the router counts under `decision_type="prefill-decode"`:
 
@@ -612,7 +613,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 ```
 <!-- guide:cleanup.modelserver end -->
 
-On NVIDIA GPU and TPU7x dynamic sub-slices, deleting the DisaggregatedSet cascades to its LeaderWorkerSets, their pods, and per-slice Services. For TPU dynamic sub-slices, delete the overlay before removing any node pools so that Kueue releases the `Slice` resources it created.
+On DisaggregatedSet paths, deleting the set cascades to its LeaderWorkerSets, their pods, and per-slice Services. For TPU dynamic sub-slices, delete the overlay before removing any node pools so that Kueue releases the `Slice` resources it created.
 
 <!-- guide:cleanup.rest start -->
 ```bash
