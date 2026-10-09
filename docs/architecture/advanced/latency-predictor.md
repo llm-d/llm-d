@@ -51,6 +51,20 @@ In the EPP, latency-based scheduling is implemented as a series of composable EP
 
 If the prediction server is unreachable or fails to return a prediction, the latency scorer falls back to a composite score built from KV cache utilization, queue depth, and prefix cache match — so a predictor outage degrades to baseline heuristic routing rather than dropping traffic.
 
+### Request Flow
+
+<p align="center">
+  <picture>
+    <img src="../../assets/latency-predictor.svg" alt="Latency Predictor request flow">
+  </picture>
+</p>
+
+1. A request arrives at the proxy, which forwards it to the EPP.
+2. The EPP queries the prediction server for the request's TTFT and TPOT on every candidate endpoint.
+3. The filters and the `latency-scorer` pick an endpoint from the predictions (see [Scheduling Strategy](#scheduling-strategy)).
+4. The proxy forwards the request to that model server, which processes it and returns the response.
+5. The EPP sends the observed latencies to the training server, which adds them to its training set for the next model update.
+
 ### ML Model
 
 The prediction model is an **XGBoost** regression one trained in realtime. Two models are maintained — one for TTFT, one for TPOT — and retrained on a sliding window of completed requests.
@@ -127,6 +141,13 @@ Three plugins handle scoring and final selection.
 - **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)** rejects *sheddable* requests (priority < 0) when no endpoint can meet the SLO, rather than wasting capacity on a guaranteed miss. No-op when SLO headers are absent.
 
 - **[`weighted-random-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/weightedrandom/README.md)** selects an endpoint via weighted random selection over the scores. This spreads load while still favoring better-scoring endpoints, and avoids the "everyone piles onto the current best pod" failure mode of pure arg-max selection.
+
+## Composing with Other Topologies
+
+Because the predictor and its plugins run entirely in the EPP pod, predicted latency-based scheduling layers onto other model server topologies without changing them; only the EPP configuration differs. The [Predicted Latency well-lit path](../../../guides/predicted-latency-routing/README.md#composing-with-other-paths) ships values files for two of them:
+
+- **P/D disaggregation.** The prefill scheduling profile is scored purely on predicted TTFT and the decode profile purely on predicted TPOT; prefix-cache affinity runs on prefill only. Scoring decode on TPOT requires `streamingMode: true`.
+- **Multimodal (aggregated).** The multimodal `token-producer` stays in the pipeline to estimate the token count of image inputs, the affinity threshold is lowered to fit the smaller cacheable fraction of multimodal prompts, and the predictor trains on end-to-end latency (`streamingMode: false`).
 
 ## Observability
 

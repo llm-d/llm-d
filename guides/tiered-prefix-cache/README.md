@@ -10,125 +10,21 @@
 
 ## Overview
 
-Given the multi-turn nature of agentic workloads, prefix-cache re-use is a critical factor for high performance inference.
+This guide extends each model server's prefix cache beyond accelerator HBM: instead of discarding evicted KV blocks, the model servers offload them to CPU RAM and, optionally, a shared filesystem, and load them back when a follow-on request (a multi-turn or agentic conversation) reuses the prefix, rather than recomputing its prefill.
 
-Model servers hold KV-caches in GPU RAM with an LRU eviction scheme. Once space runs out from other requests consuming the resources, the KV caches are evicted. Follow on requests then must recompute the prefill. However, rather than evicting KV caches from GPU memory, we can instead leverage other system resources such as CPU RAM, local NVMe drives, and network storage systems to hold the evicted KVs - pulling them back into GPU RAM on demand.
+It builds on the [Optimized Baseline](../optimized-baseline/README.md): the router keeps the same prefix- and load-aware scoring and adds a second prefix-cache scorer that tracks what each model server holds in its CPU tier, so a request also prefers the pod that can load its prefix from CPU RAM.
 
-This increases the **KV-working set size**, growing the **receptive-field** (the amount of time KV caches are retained in the system).
-
-- Without KV offloading:
-
-```text
-   ┌───────┐           ┌─────────┐            ┌───────────┐
-   │user A │           │ user A  │            │  user A   │
-   │  req  │           │   KV    │            │ follow-on │
-   │       │           │ evicted │            │    req    │
-   └───┬───┘           └────┬────┘            └─────┬─────┘
-       │                    │                       │
-───────●────────────────────●───────────────────────●───────▶ time
-       │                    │                       │
-       t                   t+a                     t+b
-       │                    │                       │
-       │◄───── KV live ────►│ ✗                     │
-                                                    ▼
-                                              ┌────────────┐
-                                              │ RECOMPUTE  │
-                                              │  PREFILL   │
-                                              └────────────┘
-```
-
-- With KV offloading:
-
-```text
-   ┌───────┐           ┌─────────┐            ┌───────────┐
-   │user A │           │ user A  │            │  user A   │
-   │  req  │           │   KV    │            │ follow-on │
-   │       │           │ offload │            │    req    │
-   └───┬───┘           └────┬────┘            └─────┬─────┘
-       │                    │                       │
-───────●────────────────────●───────────────────────●───────▶ time
-       │                    │                       │
-       t                   t+a                     t+b
-       │                    │                       │
-       │◄─────────────── KV live ──────────────────►│ ✓
-                                                    ▼
-                                              ┌────────────┐
-                                              │ PULL FROM  │
-                                              │  CPU RAM   │
-                                              └────────────┘
-```
-
-> [!IMPORTANT]
-> CPU KV Cache offloading is low overhead and introduces ~no additional complexity. It can be enabled in almost all deployments. Storage offloading requires additional consideration.
-
-### Storage tiers
-
-Offloaded KV caches can live on several tiers, ordered by read/write latency: frequently accessed caches stay closest to the accelerator, while larger or colder caches move to slower, higher-capacity tiers. We recommend always enabling the HBM and CPU RAM tiers, and adding a filesystem tier when the working set grows beyond HBM + CPU RAM.
-
-- **CPU RAM** — Low operational overhead and typically far larger than accelerator HBM, making it the default offload target. Loading from CPU RAM is faster than recomputing prefill in most cases, and asynchronous offload adds little overhead.
-- **Local disk** — Increases capacity further, but is slower than CPU RAM. Suitable when the workload tolerates the added latency and local capacity is sufficient.
-- **Shared (remote) storage** — Provides capacity independent of deployment size, KV-cache sharing across replicas, fast scale-up (new replicas reuse existing cache), and persistence across restarts and failures. Latency and throughput depend on the underlying system, so evaluate that the transfer cost does not outweigh the savings. Mature enterprise systems (for example CephFS, GCP Lustre, IBM Storage Scale, AWS EFS) integrate through standard POSIX file access.
-- **P2P sharing** — Inference replicas can share caches in CPU memory over a peer-to-peer network, extending sharing without additional storage resources. See [Enable P2P Prefix Cache Sharing](../p2p-kv-cache-sharing/README.md).
-
-This guide deploys the CPU RAM tier and, optionally, a shared filesystem tier. It builds on the [Optimized Baseline](../optimized-baseline/README.md): the router keeps the same prefix- and load-aware scoring and adds a second prefix-cache scorer that tracks what each model server holds in its CPU tier, so a request also prefers the pod that can load its prefix from CPU RAM.
-
-### Choosing an offloading path
-
-Each path is one offloading implementation, selected with `CONNECTOR`, and one tier, selected with `VARIANT` (`cpu`: HBM → CPU RAM; `fs`: HBM → CPU RAM → shared filesystem):
+The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas at tensor parallelism 2, each offloading to CPU RAM through vLLM's native `OffloadingConnector` (`CONNECTOR=native`, `VARIANT=cpu`). The offloading implementation is selected with `CONNECTOR` and the tier with `VARIANT` (`cpu`: HBM → CPU RAM; `fs`: HBM → CPU RAM → a shared ReadWriteMany filesystem, see [Filesystem tier](#filesystem-tier)):
 
 | `CONNECTOR` | Implementation | `VARIANT` | Model servers and accelerators |
 | --- | --- | --- | --- |
-| `native` | vLLM [`OffloadingConnector`](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) (`fs` adds a filesystem tier through `TieringOffloadingSpec`); SGLang HiCache; the vLLM TPU offload connector | `cpu`, `fs` (TPU: `cpu`) | vLLM on NVIDIA GPU, AMD GPU, Intel XPU, Google TPU; SGLang on NVIDIA GPU |
+| `native` (recommended) | vLLM [`OffloadingConnector`](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) (`fs` adds a filesystem tier through `TieringOffloadingSpec`); SGLang HiCache; the vLLM TPU offload connector | `cpu`, `fs` (TPU: `cpu`) | vLLM on NVIDIA GPU, AMD GPU, Intel XPU, Google TPU; SGLang on NVIDIA GPU |
 | `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
 | `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
 
-We recommend each model server's **native** offloading path: the `OffloadingConnector` on vLLM and HiCache, its equivalent, on SGLang. Native offloading is low-overhead, needs no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for another connector only when you need a capability the native path does not provide yet.
+Use `native` unless you need a capability it does not provide yet. The vLLM native overlays give each replica a 100 GB CPU tier (`cpu_bytes_to_use`), SGLang uses `--hicache-size=200`, LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE`, and the TPU connector uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`. Keep the CPU tier within the pod's memory limit when you change it. Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/advanced/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
 
-The vLLM native overlays give each replica a 100 GB CPU tier (`cpu_bytes_to_use`), SGLang uses `--hicache-size=200`, LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE`, and the TPU connector uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`. Keep the CPU tier within the pod's memory limit when you change it.
-
-> [!IMPORTANT]
-> **Serving models with mismatched attention head dimensions (e.g. Gemma 4) under KV offloading:**
-> enabling the vLLM native `OffloadingConnector` disables vLLM's Hybrid KV Cache Manager (HMA). Most
-> models still run fine because their attention layers share one KV spec and collapse into a single
-> unified group: this includes sliding-window + full-attention models (e.g. `gpt-oss-120b`) and Mamba +
-> attention hybrids (e.g. `Nemotron`, whose attention layers are uniform and whose SSM state uses a separate
-> cache). **Gemma 4 does not:** its sliding-window and full-attention layers use *different* head
-> dimensions, so their KV specs cannot be unified and the server fails to start. To serve
-> such a model, add `--no-disable-hybrid-kv-cache-manager` to the vLLM args to keep HMA enabled.
-
-### Architecture
-
-llm-d leverages the following architectures for offloading.
-
-#### CPU KV Cache Offloading
-
-Each model server offloads to host CPU memory through its own native mechanism: vLLM uses the `OffloadingConnector`, and SGLang uses HiCache. Pods are configured with the connector enabled and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../docs/assets/cpu-offloading.svg" alt="CPU KV Cache Offloading">
-  </picture>
-</p>
-
-#### Tiered Offloading to Filesystem
-
-vLLM's `OffloadingConnector` natively supports a multi-tier hierarchy: HBM → CPU RAM → filesystem. Configured with `TieringOffloadingSpec` and a `secondary_tiers` entry of `type: fs`, evicted blocks spill from CPU RAM to a ReadWriteMany PVC mounted at `/mnt/files-storage` (backed by Lustre, CephFS, IBM Storage Scale, AWS EFS, or similar). I/O is asynchronous and uses GPU DMA, parallelized across read/write threads. Because the tier is shared, newly scaled pods read existing cache immediately and the cache persists across pod restarts; capacity is bounded only by the storage system.
-
-The connector does not evict data from the shared tier -- capacity is managed by the storage system or by an external controller (a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache)).
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../docs/assets/fs-offloading.svg" alt="Tiered Offloading to Filesystem">
-  </picture>
-</p>
-
-Further reading:
-
-- [vLLM KV offloading connector](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) — design of the native `OffloadingConnector` and its tiering.
-- [Multi-tier KV offloading RFC](https://github.com/vllm-project/vllm/issues/38260) — the upstream tiering design.
-- [LMCache](https://lmcache.ai) and [SGLang HiCache](https://github.com/sgl-project/sglang) — alternative offloading implementations supported by this path.
+For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/advanced/kv-management/kv-offloader.md).
 
 ## Supported Accelerators and Model Servers
 

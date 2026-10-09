@@ -1,4 +1,4 @@
-# Architecture
+# Concepts
 
 High-level guide to llm-d architecture. Start here, then dive into specific guides.
 
@@ -33,7 +33,7 @@ llm-d provides a comprehensive ecosystem for managing and reusing the KV cache a
 - [Prefix-Cache Aware Routing](advanced/kv-management/prefix-cache-aware-routing.md): Heuristic and precise techniques to maximize cache hits.
 - [KV-Cache Indexing](advanced/kv-management/kv-indexer.md): Event-driven tracking of cache state across all model servers.
 - [KV Offloading](advanced/kv-management/kv-offloader.md): Tiered storage hierarchy (CPU, SSD) for extending cache capacity.
-- [P2P Prefix Cache Sharing](../../guides/p2p-kv-cache-sharing/README.md): Pulling cached prefix KV blocks from a peer's CPU tier instead of recomputing them.
+- [P2P KV-Cache Sharing](advanced/kv-management/p2p-kv-cache-sharing.md): Pulling cached prefix KV blocks from a peer's CPU tier instead of recomputing them.
 
 See [KV Cache Management](advanced/kv-management/README.md) for an overview of how these components compose.
 
@@ -42,6 +42,12 @@ See [KV Cache Management](advanced/kv-management/README.md) for an overview of h
 In disaggregated serving, a single inference request is split into multiple phases (e.g., Prefill and Decode) handled by specialized workers. The llm-d Router orchestrates this flow by selecting both a prefill and a decode endpoint and coordinating the KV-cache transfer between them.
 
 See [Disaggregation](advanced/disaggregation/README.md) for complete details.
+
+### Wide Expert Parallelism
+
+Very large Mixture-of-Experts models are served across many nodes by running attention data-parallel and the experts expert-parallel (DP/EP), combined with P/D disaggregation, multi-node `LeaderWorkerSet` groups and DP-aware routing that lets the llm-d Router pick an individual DP rank.
+
+See [Wide Expert Parallelism](advanced/wide-expert-parallelism.md) for complete details.
 
 ### Predicted Latency-Based Routing
 

@@ -10,42 +10,13 @@
 
 This guide routes each inference request to the model server predicted to serve it fastest. It is the well-lit path for **long-generation workloads**, such as agentic and long-horizon coding or reasoning-heavy decode, where output lengths vary by orders of magnitude between requests and the number of queued or running requests says little about how long a server will take to serve the next one.
 
-The [Optimized Baseline](../optimized-baseline/README.md) scores servers with heuristics: prefix-cache affinity and token load, combined with fixed weights. Predicted latency-based routing replaces the heuristic score with a learned one. For every candidate server, the llm-d Router asks an online-trained XGBoost model for the request's **time to first token (TTFT)** and **time per output token (TPOT)** on that server, given its current state (KV-cache utilization, queue depth, running requests, prefix-cache match), and routes on those predictions.
+Where the [Optimized Baseline](../optimized-baseline/README.md) scores servers with fixed-weight heuristics (prefix-cache affinity and token load), this path has the llm-d Router ask an online-trained model for each request's predicted **TTFT** and **TPOT** on every candidate server and route on those predictions, optionally enforcing per-request latency SLOs.
 
-Every completed request becomes a training sample, so the model tracks the live workload rather than a calibration done ahead of time. Optionally, clients attach per-request TTFT/TPOT SLOs and the router only places a request on a server predicted to meet them.
+Skip it when the pool is heterogeneous (mixed accelerators, model variants or serving configurations): the predictor assumes a single pod shape.
 
-The reference deployment reuses the Optimized Baseline model servers (on NVIDIA GPU, two `Qwen/Qwen3-32B` replicas with tensor parallelism 2 and a RoPE-scaled 131,072-token context) and deploys the router with the latency predictor sidecars enabled. Two replicas is the smallest pool in which the router has a choice to make. For how the component works internally (the plugin pipeline, the ML model, scaling characteristics, the full metric list), see the [Latency Predictor architecture](../../docs/architecture/advanced/latency-predictor.md).
+The reference deployment reuses the Optimized Baseline model servers (on NVIDIA GPU, two `Qwen/Qwen3-32B` replicas with tensor parallelism 2 and a RoPE-scaled 131,072-token context) and deploys the router with the latency predictor's training and prediction sidecars in the router (EPP) pod. Two replicas is the smallest pool in which the router has a choice to make.
 
-### Architecture
-
-<p align="center">
-  <picture>
-    <img src="../../docs/assets/latency-predictor.svg" alt="Latency Predictor">
-  </picture>
-</p>
-
-The router (EPP) pod runs two latency predictor sidecars next to the scheduler:
-
-- **Training server**: trains the XGBoost TTFT and TPOT models on the latencies of completed requests and periodically publishes them.
-- **Prediction server**: loads the latest models and predicts each request's TTFT and TPOT on every candidate server from that server's current state.
-
-During the request flow:
-
-1. A request arrives at the proxy, which forwards it to the router.
-2. The router queries the prediction server for every candidate server.
-3. The `latency-scorer` (and, with `SLO_AWARE=true`, the `slo-headroom-tier-filter`) picks the server from the predictions.
-4. The proxy forwards the request to that model server, which processes it and returns the response.
-5. The router sends the observed latencies to the training server, which adds them to its training set for the next model update.
-
-### When to use this path
-
-Pick it when:
-
-- Your workload has **high variance in prompt and completion length**: long generations next to short ones, so queue depth alone is a poor proxy for true load.
-- Your clients can express **per-request latency SLOs** (interactive vs. batch) and you want the router to enforce them.
-- Static weight tuning between cache affinity and load has become **fragile** as traffic shifts.
-
-Skip it when your pool is **heterogeneous**: mixed accelerator types, model variants, or serving configurations in the same pool produce inaccurate predictions, because the predictor assumes a single pod shape.
+For why predicted latency helps, how the predictor is trained and queried on the request path, and the filters and scorers it drives, see [Latency Predictor](../../docs/architecture/advanced/latency-predictor.md).
 
 ### Scheduling modes
 
@@ -53,15 +24,19 @@ Two router configurations ship with this guide, selected with `SLO_AWARE`:
 
 | `SLO_AWARE` | Values file | Behavior |
 | --- | --- | --- |
-| `false` (default) | [`router/predicted-latency.values.yaml`](router/predicted-latency.values.yaml) | Routing only: a loose prefix-cache affinity filter gated on predicted TTFT, then the `latency-scorer` and a weighted-random pick. The predictor trains on end-to-end request latency (`streamingMode: false`), so it works for streaming and non-streaming clients. No request headers are needed. |
-| `true` | [`router/predicted-latency-slo.values.yaml`](router/predicted-latency-slo.values.yaml) | SLO-aware: requests carry `x-llm-d-slo-ttft-ms` and/or `x-llm-d-slo-tpot-ms`, and the `slo-headroom-tier-filter` prefers servers predicted to meet them. Sheddable requests (priority < 0) are rejected at admission when no server can meet the SLO, rather than routed to a guaranteed miss. Enforcing a TPOT SLO means predicting TPOT, which is trained from the inter-token gaps of streamed responses, so this file sets `streamingMode: true` and **every request must be sent with `"stream": true`**. |
+| `false` (default) | [`router/predicted-latency.values.yaml`](router/predicted-latency.values.yaml) | Routing only, no request headers needed. Trains on end-to-end latency (`streamingMode: false`), so it works for streaming and non-streaming clients. |
+| `true` | [`router/predicted-latency-slo.values.yaml`](router/predicted-latency-slo.values.yaml) | SLO-aware: requests carry `x-llm-d-slo-ttft-ms` and/or `x-llm-d-slo-tpot-ms`; sheddable requests (priority < 0) that no server can meet are rejected at admission. Sets `streamingMode: true`, so **every request must be sent with `"stream": true`**. |
+
+The [Latency Predictor](../../docs/architecture/advanced/latency-predictor.md#scheduling-strategy) page describes the plugins behind each mode and when to use each [streaming mode](../../docs/architecture/advanced/latency-predictor.md#streaming-mode).
 
 ### Composing with other paths
 
-The predictor runs entirely in the router pod, so it composes with other model server topologies without changing them. Two more values files ship with this guide for that purpose; they are not part of this guide's deployment:
+The predictor runs entirely in the router pod, so it layers onto other model server topologies unchanged. Two more values files ship with this guide for that purpose; they are not part of this guide's deployment. To use one, deploy the other guide's model servers and install the router with the file in place of `ROUTER_VALUES`:
 
-- [`router/predicted-latency-pd.values.yaml`](router/predicted-latency-pd.values.yaml) layers predicted latency on the [P/D disaggregation](../pd-disaggregation/README.md) pipeline: the prefill profile is scored purely on predicted TTFT and the decode profile purely on predicted TPOT, and prefix-cache affinity runs on prefill only. It targets pods labeled `llm-d.ai/guide=pd-disaggregation` and sets `streamingMode: true`. To use it, deploy the P/D guide's model servers and install the router with this file in place of `ROUTER_VALUES`.
-- [`router/predicted-latency-multimodal.values.yaml`](router/predicted-latency-multimodal.values.yaml) does the same for the [multimodal serving](../multimodal-serving/README.md) aggregated pool. It keeps the multimodal `token-producer` (image to token-count estimation), lowers the affinity threshold to fit multimodal cacheable fractions, and trains on end-to-end latency. It targets pods labeled `llm-d.ai/guide=multimodal-aggregation`.
+- [`router/predicted-latency-pd.values.yaml`](router/predicted-latency-pd.values.yaml) for the [P/D disaggregation](../pd-disaggregation/README.md) pods (`llm-d.ai/guide=pd-disaggregation`).
+- [`router/predicted-latency-multimodal.values.yaml`](router/predicted-latency-multimodal.values.yaml) for the [multimodal serving](../multimodal-serving/README.md) aggregated pool (`llm-d.ai/guide=multimodal-aggregation`).
+
+How the scoring changes in each is described in [Composing with other topologies](../../docs/architecture/advanced/latency-predictor.md#composing-with-other-topologies).
 
 ## Supported Accelerators and Model Servers
 

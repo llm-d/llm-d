@@ -2,70 +2,24 @@
 
 ## Overview
 
-This guide deploys peer-to-peer KV-cache sharing: any vLLM instance pulls cached prefix KV blocks directly from a peer's CPU offload tier instead of recomputing them. The transfer is CPU-to-CPU over NIXL (UCX, over RDMA when available). The source pod's GPU is never touched, so serving a pull costs the source no prefill capacity.
+This guide deploys peer-to-peer KV-cache sharing: any vLLM instance pulls cached prefix KV blocks directly from a peer's CPU offload tier, CPU-to-CPU over NIXL, instead of recomputing them. For how the pull works and when it pays, see [P2P KV-Cache Sharing](../../docs/architecture/advanced/kv-management/p2p-kv-cache-sharing.md).
 
 The deployment composes three llm-d capabilities:
 
-- the vLLM `OffloadingConnector` with a P2P secondary tier: each pod is both a puller and a source;
+- the vLLM `OffloadingConnector` with a P2P secondary tier on port `7777`: each pod is both a puller and a source;
 - the llm-d Router's precise (KV-event-fed) prefix index from [Precise Prefix Cache Routing](../precise-prefix-cache-routing/README.md), which the source decision consumes;
-- the `p2p-source-producer`, which selects a CPU-tier source from peers within one index block of the largest cached prefix while accounting for source queue depth. The routing sidecar injects `kv_transfer_params.remote_kv_source` and the engine pulls instead of recomputing.
+- the `p2p-source-producer`, which selects a CPU-tier source and sets the KV cache source header; the routing sidecar injects `kv_transfer_params.remote_kv_source` and the engine pulls instead of recomputing.
 
-The reference deployment is two aggregated `openai/gpt-oss-120b` replicas, one GPU each: the smallest fleet in which one pod can pull a prefix its peer computed. A P/D variant (pull on the prefill leg) is described in [P/D variant](#pd-variant-p2p-over-nixl-disaggregation).
-
-### Why P2P sharing
-
-Prefix caches are per-pod, but their content is often fleet-wide: shared system prompts, common documents, session histories. Prefix-aware routing sends each request to the pod that caches its prefix, but routing cannot always follow the cache: a hot prefix's owner saturates, a working set outgrows any single pod, a session is rebalanced. Those requests recompute KV tensors that already exist on a peer.
-
-The pull fires when a request shares a prefix with an earlier one but is scheduled to a different pod. Two requests share a prefix whenever they begin with the same tokens: the next turn of a conversation, another question against the same document, another session on a shared system prompt. The first request's pod is the **KV cache source**: it computed the prefix and holds a copy in its CPU tier. When the router schedules a prefix-sharing request to a different pod, it names the source on the request, and the scheduled pod (the **consumer**) pulls the prefix instead of recomputing it:
-
-```mermaid
-sequenceDiagram
-    participant R as llm-d router
-    participant S as KV cache source pod<br/>(serves request 1, caches the prefix)
-    participant C as consumer pod<br/>(serves request 2, prefix missing)
-    R->>S: request 1
-    Note over S: computes the prefix KV, caches it,<br/>offloads a copy to its CPU tier
-    Note over R: request 2 arrives sharing request 1's prefix,<br/>but placement picks a different pod
-    R->>C: request 2 + header naming the source pod
-    alt without P2P prefix cache sharing
-        Note over C: recomputes the full shared prefix
-    else with P2P prefix cache sharing
-        C->>S: request the prefix blocks
-        S-->>C: prefix KV blocks, CPU tier to CPU tier over NIXL
-        Note over C: computes only the remainder<br/>(request 2's unshared tokens)
-    end
-```
+The default deployment is two aggregated `openai/gpt-oss-120b` replicas, one GPU each: the smallest fleet in which one pod can pull a prefix its peer computed. `INFRA_PROVIDER=base` carries the pull over TCP; `INFRA_PROVIDER=rdma` (GPU only) carries it over RDMA. A P/D variant (pull on the prefill leg) is described in [P/D variant](#pd-variant-p2p-over-nixl-disaggregation).
 
 > [!IMPORTANT]
 > P2P sharing builds on the [Tiered Prefix Cache](../tiered-prefix-cache/README.md): peers serve pulls from their CPU offload tier. Every peer must use the same `--block-size`, `PYTHONHASHSEED`, and tensor-parallel layout, and the CPU tier must be sized to retain useful blocks. [Best Practices](#best-practices) covers each requirement, its sizing rule, and its failure mode.
 
 ### When to use this path
 
-Recompute cost grows with prefix length; the CPU-to-CPU pull grows much more slowly. The crossover is model-, hardware-, and transport-specific, so the router requests a pull only when the selected source holds at least `minCachedTokenDelta` more prefix tokens than the scheduled pod (see [Calibrate `minCachedTokenDelta`](#4-optional-calibrate-mincachedtokendelta)).
-
-P2P sharing pays wherever routing cannot, or should not, send every request to the pod that already caches its prefix:
-
-- **Load must spread.** A hot shared prefix saturates its cache owner under affinity routing. Load-aware routing plus the pull spreads the work while preserving cache reuse.
-- **The working set exceeds any single pod's cache.** With N pods each caching 1/N of the prefix pool, cross-pod requests either recompute or pull.
-- **Many concurrent sessions pinned to owner pods.** Sessions queue behind a busy owner or spill to a colder pod that recomputes, even when aggregate GPU capacity has room.
-- **Long prefixes.** Pull time grows much more slowly with prefix length than recompute; route pulls only above the measured crossover.
-- **Multi-turn sessions on P/D disaggregation.** Decode generates the session history, so on every turn the prefill worker faces KV it never computed and no routing decision can make local. The pull lets prefill fetch decode's generated KV directly (see [P/D variant](#pd-variant-p2p-over-nixl-disaggregation)).
-
-What the pull is worth depends on the placement in front of it:
-
-- **Affinity + P2P** (the shipped default) sends each request to the pod that already holds its prefix, so the pull rarely fires: it is a fallback for the requests placement displaces, not a throughput feature, and it does not recover a restarted router (the prefix index loses the pre-restart cache map).
-- **Load-aware + P2P** deliberately scatters requests, and the pull is what makes scattering affordable. It wins when many concurrent sessions contend on their owner pods; when nothing contends, affinity stays ahead because a local hit is free. To try it, drop the `prefix-cache-scorer` and `no-hit-lru-scorer` from the scheduling profile in the [router values](router/p2p-kv-cache-sharing.values.yaml) and replace the `max-score-picker` with the `weighted-random-picker`.
-- **P/D + P2P** addresses KV that no placement decision could have made local.
-- **GPU KV capacity is the bottleneck**: cache co-location uses capacity more efficiently, because concurrent same-prefix requests on one pod share one copy of the blocks, while spreading pays a per-pod copy whether the prefix is pulled or recomputed.
-
-Re-measure both placements on your own workload before assuming either generalizes. Performance benchmarks are not part of this guide.
-
-### Architecture
-
-1. **Model server pods publish KV-cache events** and run vLLM's `OffloadingConnector` with a CPU tier plus a P2P secondary tier (port `7777`): every pod both offloads computed KV to CPU and serves it to peers.
-2. **The router builds the precise prefix index** from the KV events, so it knows which pods hold which prefix blocks, on which tier.
-3. **The `p2p-source-producer` selects a source** from the CPU-tier holders within one index block of the largest cached prefix, weighted to avoid concentrating pulls on a queued source. After scheduling, it sets the KV cache source header only when that source leads the computing pod by at least `minCachedTokenDelta` tokens.
-4. **The routing sidecar injects `kv_transfer_params.remote_kv_source`** from the header, and the engine pulls the prefix blocks from the peer's CPU tier over NIXL. Hits load as normal cache hits; a failed lookup is reported as a miss and the scheduled pod computes the missing prefix locally, so a request whose peer does not have the blocks degrades to baseline behavior rather than failing.
+- **Long shared prefixes.** The router requests a pull only when the source holds at least `minCachedTokenDelta` more prefix tokens than the scheduled pod; the crossover is model-, hardware-, and transport-specific (see [Calibrate `minCachedTokenDelta`](#4-optional-calibrate-mincachedtokendelta)).
+- **Placement.** The shipped router values use affinity placement, so pulls are a fallback for requests placement displaces and fire rarely. To trade locality for load spreading, drop the `prefix-cache-scorer` and `no-hit-lru-scorer` from the scheduling profile in the [router values](router/p2p-kv-cache-sharing.values.yaml) and replace the `max-score-picker` with the `weighted-random-picker`. Re-measure both placements on your own workload; performance benchmarks are not part of this guide.
+- **Multi-turn sessions on P/D disaggregation.** Use the [P/D variant](#pd-variant-p2p-over-nixl-disaggregation) so the prefill worker pulls the session history decode generated.
 
 ## Supported Accelerators and Model Servers
 
