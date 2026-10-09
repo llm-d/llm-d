@@ -58,6 +58,7 @@
     "architecture/advanced/kv-management/prefix-cache-aware-routing": { "position": 1 },
     "architecture/advanced/kv-management/kv-indexer": { "position": 2 },
     "architecture/advanced/kv-management/kv-offloader": { "position": 3 },
+    "architecture/advanced/kv-management/p2p-kv-cache-sharing": { "position": 4, "label": "P2P KV-Cache Sharing" },
     "architecture/advanced/autoscaling/keda-epp": { "position": 1, "label": "KEDA + EPP Metrics" },
     "architecture/advanced/autoscaling/slo-aware-keda": { "position": 2, "label": "SLO-Aware Autoscaling" },
     "architecture/advanced/autoscaling/wva": { "position": 3, "label": "Workload Variant Autoscaler (Deprecated)" },
