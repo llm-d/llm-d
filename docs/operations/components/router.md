@@ -13,8 +13,8 @@ When deploying the Endpoint Picker (EPP) in either **Standalone** or **Gateway**
 When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`), its behavior depends on the configured HA mode:
 
 1. **Active-Passive**: Traffic routes to a single primary replica set while standby replicas remain available for failover.
-   - **Leader Election with Fail-Open**: Uses Kubernetes `coordination.k8s.io/Lease` coordination so only the elected leader serves inference extension requests. Standby pods remain idle until acquiring the lease. If the active leader fails, the proxy operates in fail-open mode, routing traffic directly to model servers until a standby acquires leadership.
-   - **Priority Routing**: Available when proxy mode is set to service (`router.proxy.mode: service`). Uses Envoy Priority Routing and outlier detection to route traffic to Primary EPP replicas (Priority 0) and shift traffic to Standby EPP replicas (Priority 1) upon primary failure. See [Priority Routing](#priority-routing) for configuration details.
+   - **Priority Routing (Recommended)**: Available when proxy mode is set to service (`router.proxy.mode: service`). Uses Envoy Priority Routing and outlier detection to route traffic to Primary EPP replicas (Priority 0) and shift traffic to warm Standby EPP replicas (Priority 1) upon primary failure. This reduces failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP routing. In GKE Gateway mode, `provider.gke.preferredBackends.enabled: true` provides equivalent primary/standby tiering via GKE Preferred Backends. See [Priority Routing](#priority-routing) for configuration details.
+   - **Leader Election with Fail-Open (Default)**: Uses Kubernetes `coordination.k8s.io/Lease` coordination so only the elected leader serves inference extension requests while standby pods remain idle until acquiring the lease. If the active leader fails, fail-open mode prevents dropped requests by routing traffic directly to backend model servers, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized** (falling back to basic proxy load balancing without KV-cache, prefix, or load-aware scoring).
 2. **Active-Active**: Multiple EPP replicas run concurrently and share load across all instances. Suitable when scheduling algorithms and plugins do not require unified state across pods or a synchronization mechanism is in place.
 
 #### Active-Passive Mode: Leader Election and Fail-Open (Default)
@@ -24,6 +24,7 @@ In multi-replica deployments without priority routing (`router.epp.replicas > 1`
 - **Leader Coordination**: EPP replicas contend for a `coordination.k8s.io/Lease`. The `--ha-enable-leader-election` flag enables leader election in EPP (automatically injected by Helm when `router.epp.replicas > 1`). The elected leader responds to active gRPC extension requests on Port 9002, while standby replicas answer readiness probes with `NOT_SERVING` so they remain out of Service endpoints.
 - **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the single active leader replica handles external processing requests.
 - **Fail-Open Resiliency**: With `router.proxy.failOpen: true` (the default in standalone Envoy mode) or `router.inferencePool.failureMode: FailOpen` (the default in Gateway mode), if the active leader crashes or restarts, the proxy passes requests directly to backend model servers without dropping traffic during the lease transition period.
+- **Switchover Disadvantage (10-30s Unoptimized Routing Window)**: When the active leader fails, Kubernetes lease expiration (`--ha-lease-duration`, default `15s`), standby readiness probe transition, and Service endpoint propagation take **10 to 30 seconds** before a standby replica begins serving traffic. Although fail-open prevents dropped requests during this 10 to 30 second window, EPP is unavailable and **routing is purely unoptimized** (requests bypass KV-cache affinity, prefix-cache scoring, load-aware scheduling, and flow control). To avoid this unoptimized routing window and reduce switchover time to **sub-second** (`< 1s`), use [Priority Routing](#priority-routing) as the recommended Active-Passive setup.
 
 ```yaml
 router:
@@ -116,7 +117,7 @@ router:
         memory: 16Gi
 ```
 
-Custom HPA v2 metrics can be supplied via `router.epp.autoscaling.metrics` to replace auto-generated CPU and memory metrics (target percentage fields remain range-validated if defined).
+See `router.epp.autoscaling` in `config/charts/routerlib/values.yaml` for all fields and defaults. Custom HPA v2 metrics can be supplied via `router.epp.autoscaling.metrics` to replace auto-generated CPU and memory metrics (target percentage fields remain range-validated if defined).
 
 ### Container Resource Sizing
 
@@ -131,8 +132,8 @@ Custom HPA v2 metrics can be supplied via `router.epp.autoscaling.metrics` to re
 
 - **Inflight Concurrency**: Memory footprint is stable with small output token requests, and scales directly with concurrent inflight requests and output decode length.
 - **Flow Control Queues**: With flow control enabled, requests that cannot dispatch under saturation are buffered in EPP memory, including their request bodies.
-  The buffered volume is bounded per priority band by `priorityBands[].maxRequests` (default `5000`) and `maxBytes` (default `1G`), which `defaultPriorityBand` sets as a template for bands you do not list; budget for the sum of the per-band `maxBytes` limits of the priority levels your traffic uses, on top of the inflight-request sizing below.
-  The global `flowControl.maxRequests` / `maxBytes` caps default to unlimited, so set a global `maxBytes` under the container memory limit: at the per-band default, a handful of bands clears the sizing guidance below before any band cap engages.
+  The buffered volume is bounded per priority band by `priorityBands[].maxRequests` (default `5000`) and `maxBytes` (default `1G`), which `defaultPriorityBand` sets as a template for bands you do not list; budget for the sum of the per-band `maxBytes` limits of the priority levels your traffic uses, on top of the inflight-request memory budget.
+  The global `flowControl.maxRequests` / `maxBytes` caps default to unlimited, so set a global `maxBytes` under the container memory limit: at the per-band default, a handful of bands exceeds the baseline memory sizing before any band cap engages.
   Lower these limits (or set a shorter `defaultRequestTTL`) to trade queueing for earlier shedding.
   A `noEndpointRequestTTL` sized for a cold start holds bodies for that whole budget while the pool is empty, so the band caps bound queue memory during a scale-from-zero.
 - **Sizing Guidelines**:
@@ -194,7 +195,7 @@ helm install my-standalone-router ./config/charts/llm-d-router-standalone \
 
 By default, in service mode, fail open is enabled. To disable it, set `router.proxy.failOpen=false`.
 
-Empirical benchmark reference data for Qwen/Qwen2.5-1.5B-Instruct simulation across 2 model server replicas with forceful and graceful Leader EPP pod termination. Across various Envoy proxy replica counts, `router.proxy.failOpen=true` maintains high request availability during leader pod teardown. Residual errors occur during socket teardown at the exact moment of pod termination.
+Empirical benchmark reference data for Qwen/Qwen2.5-1.5B-Instruct simulation across 2 model server replicas with forceful and graceful Leader EPP pod termination. Across various Envoy proxy replica counts, `router.proxy.failOpen=true` maintains high request availability during leader pod teardown. Residual errors occur during socket teardown at the exact moment of pod termination. Because lease-based leader switchover takes 10 to 30 seconds, requests served via fail-open during that transition bypass EPP scheduling and receive unoptimized routing until the new leader is ready.
 
 | Scenario | Envoy Replicas | EPP Replicas | Total Requests | Successful Requests (Throughput) | Errors |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -209,16 +210,18 @@ Empirical benchmark reference data for Qwen/Qwen2.5-1.5B-Instruct simulation acr
 
 #### Priority Routing
 
-Priority Routing is available in standalone service mode (`router.proxy.mode: service`). When priority routing is enabled (`router.proxy.priorityRouting.enabled: true`), the router uses [Envoy Priority Routing](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/priority) to organize EPP endpoints into distinct priority tiers:
+Priority Routing is the recommended Active-Passive configuration in standalone service mode (`router.proxy.mode: service`). Unlike lease-based leader election, where leader failover takes 10 to 30 seconds and falls back to unoptimized fail-open routing while EPP is unavailable, Priority Routing keeps standby EPP pods warm and reduces switchover time to **sub-second** (`< 1s`) so requests continue to receive optimized EPP scheduling.
+
+When priority routing is enabled (`router.proxy.priorityRouting.enabled: true`), the router uses [Envoy Priority Routing](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/priority) to organize EPP endpoints into distinct priority tiers:
 
 - **Priority 0 (Primary / Active)**: Handles 100% of steady-state scheduling traffic.
-- **Priority 1 (Standby / Passive)**: Warm standby pods ready to accept failover traffic upon primary pod failure.
+- **Priority 1 (Standby / Passive)**: Warm standby pods with synced model-server state ready to accept failover traffic immediately upon primary pod failure.
 
 ##### Architecture and Failover Mechanics
 
 1. **Deterministic Endpoint Discovery**: EPP pods run as a StatefulSet with a headless Service (`publishNotReadyAddresses: true`). Envoy targets individual pod DNS entries (`<release>-epp-0`, `<release>-epp-1`, etc.) mapped to distinct priority levels.
 2. **Active Health Probing**: Envoy actively probes EPP Port 9002 via gRPC health check (`grpc.health.v1.Health`).
-3. **Outlier Detection Failover**: When priority routing is enabled, if a primary pod fails or crashes, Envoy's Outlier Detection detects TCP connection failure and ejects the primary host, shifting traffic to Priority 1 standbys in sub-second time without lease expiration delays.
+3. **Outlier Detection Failover**: When priority routing is enabled, if a primary pod fails or crashes, Envoy's Outlier Detection detects TCP connection failure (`connectTimeout: 0.250s`) and ejects the primary host, shifting traffic to Priority 1 standbys in sub-second time without lease expiration delays.
 4. **Graceful Pod Termination**: EPP pods include a native `lifecycle.preStop.sleep` hook (5 seconds) during planned deletion or rollout on Kubernetes 1.30+ with `PodLifecycleSleepAction` enabled. This gives Envoy active health checks time to detect pod shutdown and redirect new traffic to standby endpoints before SIGTERM, allowing in-flight gRPC streams to drain.
 5. **Safe Failback**: When a replacement primary pod is rescheduled, the health check `healthy_threshold` requires consecutive passing health probes before Envoy restores traffic to Priority 0, ensuring the replacement EPP pod has finished syncing model server state and inference pools.
 
@@ -279,7 +282,7 @@ router:
         memory: 16Gi
 ```
 
-Custom HPA v2 metrics can be supplied via `router.proxy.autoscaling.metrics` to replace auto-generated CPU and memory metrics (target percentage fields remain range-validated if defined).
+See `router.proxy.autoscaling` in `config/charts/llm-d-router-standalone/values.yaml` for all fields and defaults. Custom HPA v2 metrics can be supplied via `router.proxy.autoscaling.metrics` to replace auto-generated CPU and memory metrics (target percentage fields remain range-validated if defined).
 
 ### Proxy Container Resource Sizing
 
