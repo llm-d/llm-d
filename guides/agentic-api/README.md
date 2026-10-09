@@ -64,8 +64,8 @@ second time. The parsers are per-model, and not every overlay sets them:
 
 | Model | Flags | Already set by |
 | --- | --- | --- |
-| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml) — all GPU overlays (`base`, `aws`, `cks-mooncake`, `gke/a4x`, `gke/a4xmax`). `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
-| `Qwen/Qwen3-32B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`optimized-baseline`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) (its default GPU overlay). `pd-disaggregation`'s TPU overlays serve the same model and set **no** parsers |
+| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml) — every `gpu/vllm` overlay. `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
+| `Qwen/Qwen3-32B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`optimized-baseline`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) (its default GPU overlay). `pd-disaggregation`'s `tpu/v6` overlay serves the same model and sets **no** parsers; its `tpu/v7` and `tpu/v7-dynamic-slice` overlays serve different models (`Qwen/Qwen3.5-397B-A17B-FP8` and `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`), which need their own parsers rather than this row's |
 | `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`nemotron-3-ultra/modelserver/gpu/vllm`](../models/nemotron-3-ultra/modelserver/gpu/vllm/gke/patch-prefill.yaml) |
 
 > [!IMPORTANT]
@@ -102,10 +102,32 @@ has no merge key, so it is replaced wholesale. Check the overlay you actually de
 kubectl kustomize <overlay> | grep -c -- --enable-auto-tool-choice  # expect one per model-server role
 ```
 
+Some overlays run the model server as `command: ["/bin/bash", "-c"]` with the `vllm serve` call
+inside a shell script. Under `pd-disaggregation` these are `gpu/vllm/cks-mooncake`, `tpu/v7/vllm`
+and `tpu/v7-dynamic-slice/vllm`; under `tiered-prefix-cache` its `native/*`, `mooncake-store/*` and
+XPU overlays. `kubectl kustomize <overlay> | grep -c /bin/bash` tells you which kind you have. On
+these, the flags go inside the script, on the `vllm serve` line, because the script never forwards
+positional parameters:
+
+```bash
+# e.g. guides/pd-disaggregation/modelserver/tpu/v7/vllm/base/patch-{prefill,decode}.yaml
+#              exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+#   +            --enable-auto-tool-choice \
+#   +            --tool-call-parser=<parser for this model> \
+#   +            --reasoning-parser=<parser for this model> \
+#                --host "${HOST_ADDR}" \
+```
+
+The `grep -c` above counts the flag wherever it lands in the rendered manifest, including places
+vLLM never reads, so on these overlays confirm the match is inside the script.
+
 **Workaround B — patch an already-running deployment.** Faster if the base guide is already up,
 but `kubectl apply -k` of the base overlay reverts it, and it only covers `Deployment`-based
 topologies (not the `DisaggregatedSet` manifests of `pd-disaggregation` on NVIDIA GPU or `wide-ep`, which
-need Workaround A).
+need Workaround A). It is also a silent no-op wherever the model server runs
+`command: ["/bin/bash", "-c"]`: appended `args` entries become the script's positional parameters,
+which it never passes to `vllm serve`. The flags show up in the pod spec and the rollout succeeds
+with tool calling still disabled, so use Workaround A on those overlays, identified above.
 Rolls the model servers, so weights reload:
 
 ```bash
