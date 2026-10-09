@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
-| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci` |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16 |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |

@@ -24,7 +24,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
-| AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci` |
+| AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO |
 | Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.

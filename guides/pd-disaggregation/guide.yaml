@@ -30,12 +30,9 @@ support:
       model: amd/Llama-3.3-70B-Instruct-FP8-KV
       providers:
         - {name: base, label: "Kubernetes (base)"}
-        - {name: amd-ci, label: "AMD CI"}
         - {name: oci, label: "OCI"}
         - {name: tensorwave, label: "TensorWave"}
         - {name: moriio/base, label: "MoRI-IO (base)"}
-        - {name: moriio/amd-ci, label: "MoRI-IO (AMD CI)"}
-        - {name: moriio/amd-ci-1p1d-tp8, label: "MoRI-IO (AMD CI, 1P1D TP8)"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU

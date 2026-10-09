@@ -22,11 +22,10 @@ support:
       engines: {vllm: validated, sglang: validated}
     amd:
       label: AMD GPU
-      notes: "2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` · `INFRA_PROVIDER`: `base`, `amd-ci`"
+      notes: "2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector`"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-        - {name: amd-ci, label: "AMD CI"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU

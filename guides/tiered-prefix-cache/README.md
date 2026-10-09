@@ -34,7 +34,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache) |
-| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` · `INFRA_PROVIDER`: `base`, `amd-ci` |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU) |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct` |
