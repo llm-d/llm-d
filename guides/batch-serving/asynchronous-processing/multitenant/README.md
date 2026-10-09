@@ -85,8 +85,8 @@ When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowCon
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
-- **Priority Holdback (`priority-holdback-policy`, the default in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
-- **In-Flight Eviction (`enableEviction: true`, experimental, in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
+- **Priority Holdback (`priority-holdback-policy`, in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
+- **In-Flight Eviction (`enableEviction: true`, the default in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
   While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation. Evicted requests are retried by `llm-d-async` and redo their generation. See [Protecting realtime traffic](#protecting-realtime-traffic).
 - For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
 
@@ -117,12 +117,11 @@ finishes: a full request duration
 eviction is required to protect realtime traffic mixed with `llm-d-async` traffic.** The guide provides one
 router values file for each:
 
-| | Priority holdback ([`flow-control-holdback.yaml`](values/router/flow-control-holdback.yaml), default) | In-flight eviction ([`flow-control-evictable.yaml`](values/router/flow-control-evictable.yaml), experimental) |
+| | In-flight eviction ([`flow-control-evictable.yaml`](values/router/flow-control-evictable.yaml), default, recommended) | Priority holdback ([`flow-control-holdback.yaml`](values/router/flow-control-holdback.yaml)) |
 | :-- | :-- | :-- |
-| **How** | Admits each lower band only up to a ceiling (here falling from 100 % of capacity for priority 100 to 50 % for `overflow-batch`), keeping headroom free for higher bands | Lets async work fill the pool, then cancels in-flight `overflow-async` / `overflow-batch` requests when a higher-priority request is blocked |
-| **Realtime latency** | Protected, as long as the reserved headroom is larger than the router's admission burst (`minCeiling: 0.5`; 0.7 and 0.9 were not enough) | Protected |
-| **Async efficiency** | The headroom stays idle while realtime traffic is quiet: async throughput was 26 % lower (48 % with shared prompt prefixes) | Full async throughput while realtime is quiet; evicted requests are retried and their partial work is lost (6 to 9 % of the tokens processed) |
-| **Maturity** | `priority-holdback-policy` is an Alpha plugin (the values file sets `--allow-experimental-plugins`) | Experimental |
+| **How** | Lets async work fill the pool, then cancels in-flight `overflow-async` / `overflow-batch` requests when a higher-priority request is blocked | Admits each lower band only up to a ceiling (here falling from 100 % of capacity for priority 100 to 50 % for `overflow-batch`), keeping headroom free for higher bands |
+| **Realtime latency** | Protected | Protected, as long as the reserved headroom is larger than the router's admission burst (`minCeiling: 0.5`; 0.7 and 0.9 were not enough) |
+| **Async efficiency** | Full async throughput while realtime is quiet; evicted requests are retried and their partial work is lost (6 to 9 % of the tokens processed) | The headroom stays idle while realtime traffic is quiet: async throughput was 26 % lower (48 % with shared prompt prefixes) |
 
 The tradeoff with holdback is between protecting realtime traffic and async efficiency: a lower `minCeiling`
 reserves more headroom, which protects realtime traffic against larger admission bursts but leaves more
@@ -171,7 +170,7 @@ export NAMESPACE=llm-d-async
 export ASYNC_VERSION=v0.10.0 # llm-d-async release (supports lane_objectives & tier-priority)
 export INFRA_PROVIDER=base # options: base, gke; model server overlay variant
 export GPUS=2 # options: 2, 1; GPUs for the model server; 1 serves Qwen/Qwen3-8B instead
-export FLOW_CONTROL=holdback # options: holdback, evictable; router values: priority holdback, or experimental in-flight eviction
+export FLOW_CONTROL=evictable # options: evictable, holdback; router values: in-flight eviction (recommended), or priority holdback
 export QUEUE_BACKEND=redis # options: redis, pubsub
 export POOL_NAME=llm-d-router # constant: the router release and its InferencePool (objectives, PodMonitor, saturation gates)
 export MODEL=Qwen/Qwen3-32B # served model name (goes in payload.model)
@@ -300,14 +299,14 @@ selectors differ.
 
 ### 2. Configure llm-d-router and Apply InferenceObjectives
 
-Deploy llm-d Router configured with Flow Control and priority holdback, and apply the 6 lane `InferenceObjective`s:
+Deploy llm-d Router configured with Flow Control and in-flight eviction, and apply the 6 lane `InferenceObjective`s:
 
 <!-- guide:deploy.router start -->
 ```bash
 # 1. Apply InferenceObjectives for the 6 tier-priority lanes
 kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/objectives
 
-# 2. Deploy llm-d-router with Flow Control priority bands and priority holdback (or eviction)
+# 2. Deploy llm-d-router with Flow Control priority bands and in-flight eviction (or priority holdback)
 helm upgrade --install ${POOL_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -318,15 +317,15 @@ helm upgrade --install ${POOL_NAME} \
 <!-- guide:deploy.router end -->
 
 <details>
-<summary><b>Experimental: in-flight eviction instead of priority holdback</b></summary>
+<summary><b>Priority holdback instead of in-flight eviction</b></summary>
 
-To keep full async throughput while realtime traffic is quiet, at the cost of cancelled and retried async
-work (see [Protecting realtime traffic](#protecting-realtime-traffic)), install the router with the evictable
-values instead: set `FLOW_CONTROL` and run the step above again.
+To protect realtime traffic without cancelling async work that is already running, at the cost of idle
+headroom while realtime traffic is quiet (see [Protecting realtime traffic](#protecting-realtime-traffic)),
+install the router with the holdback values instead: set `FLOW_CONTROL` and run the step above again.
 
 <!-- llm-d-cicd:skip start -->
 ```bash
-export FLOW_CONTROL=evictable   # router values: values/router/flow-control-evictable.yaml
+export FLOW_CONTROL=holdback   # router values: values/router/flow-control-holdback.yaml
 ```
 <!-- llm-d-cicd:skip end -->
 

@@ -1,5 +1,5 @@
 # Router values for Multi-Tenant Async Processing using Flow Control with
-# priority holdback (the guide's default).
+# priority holdback (the alternative to the default, flow-control-evictable.yaml).
 #
 # priority-holdback-policy protects realtime traffic that shares the pool with
 # llm-d-async traffic by reserving headroom: as the pool saturates, each lower

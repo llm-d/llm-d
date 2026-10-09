@@ -1,6 +1,5 @@
 # Router values for Multi-Tenant Async Processing using Flow Control with
-# in-flight eviction. EXPERIMENTAL: eviction cancels requests that are
-# already running on the model server, and its behavior may change.
+# in-flight eviction (the guide's default).
 #
 # Eviction protects realtime traffic that shares the pool with llm-d-async
 # traffic: when a higher-priority request is blocked by saturation, the router
