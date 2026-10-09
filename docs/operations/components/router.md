@@ -128,7 +128,7 @@ The following operational guidelines and proxy scaling architectures apply **exc
 
 ### Horizontally Scalable Proxy Service (Service Mode)
 
-By default, the standalone chart deploys the proxy as a sidecar container inside the EPP pod (`router.proxy.mode: sidecar`). To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service` (with static `replicas` or HPA via `router.proxy.autoscaling.enabled: true`).
+By default, the standalone chart deploys the proxy as a sidecar container inside the EPP pod (`router.proxy.mode: sidecar`). To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service`.
 
 In this decoupled architecture, the proxy communicates with EPP over the in-cluster EPP Service. If EPP undergoes active-passive leader failover or momentary pod restarts, the proxy fails open by default (`router.proxy.failOpen: true`), preserving uninterrupted client request processing. To disable fail-open, set `router.proxy.failOpen: false`.
 
@@ -140,6 +140,21 @@ router:
     mode: service
     replicas: 3
     failOpen: true
+```
+
+#### Standalone Proxy Autoscaling (Service Mode)
+
+When running in `service` mode (`router.proxy.mode: service`), the standalone proxy Deployment can be autoscaled independently from EPP via HorizontalPodAutoscaler (HPA v2) by setting `router.proxy.autoscaling.enabled: true`:
+
+```yaml
+router:
+  proxy:
+    mode: service
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 80
 ```
 
 ### Proxy Container Resource Sizing
