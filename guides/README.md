@@ -68,6 +68,7 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 ### Integrations
 
 * [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
+* [Runtime AI Inventory](./runtime-inventory/README.md) - Generate an auditable CycloneDX ML-BOM of the models and runtimes actually serving in any well-lit path deployment, via the unprivileged k8s-aibom controller.
 
 ## Experimental Guides
 
