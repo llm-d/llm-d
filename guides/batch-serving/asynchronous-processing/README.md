@@ -12,34 +12,13 @@ Two guides are available:
 
 ## Overview
 
-Async Processor integrates with llm-d to:
+This guide deploys the Async Processor (Helm chart `llm-d-async`) in front of an existing [optimized baseline](../../optimized-baseline/README.md) stack. It consumes requests from one message queue — GCP Pub/Sub by default, or a Redis Sorted Set — and dispatches them to the llm-d Router, either directly to the router Service (Standalone mode) or through the Gateway (Gateway mode).
 
-- **Decouple submission from execution**: Clients submit requests to a queue and retrieve results later.
-- **Optimize resource utilization**: Fill idle accelerator time with background tasks.
-- **Provide Resilience**: Automatic retries for failed requests without impacting real-time traffic.
+Clients enqueue work and read results from the result topic or list later instead of holding an HTTP connection open, and retries happen without touching real-time traffic. Dispatch gates, set in the Helm values, decide when queued work is released — for example only while the model servers have spare capacity.
 
-It decouples request submission from execution, allowing clients to submit large volumes of work without maintaining a long-lived HTTP connection.
+For how the processor works — dispatch gates, worker pools, merge policies, retries and deadlines, and queue semantics — see the [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md).
 
-### Architecture
-
-The **Async Processor** is a lightweight dispatch agent that pulls requests from a message queue and forwards them to the llm-d Router.
-
-To prevent background tasks from impacting real-time traffic, the Async Processor uses **Dispatch Gates**. These gates regulate the flow of requests based on system metrics:
-
-- **Prometheus Gating**: Queries model server saturation (e.g., KV cache pressure, queue depth) and only dispatches when the system has available "slack" capacity.
-- **Budget Gating**: Uses a pre-calculated budget to control throughput.
-- **Priority & Deadlines**: Requests can be prioritized, and the processor enforces deadlines to ensure stale work is abandoned.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../../docs/assets/async-processor.svg" alt="Async Processor Architecture">
-  </picture>
-</p>
-
-Transient failures (like rate limits or network issues) are automatically re-queued with exponential backoff, and configurable worker pools tune the degree of parallelism for background processing (see [Async Processor Operations](../../../docs/operations/components/async-processor.md)). See the [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md) for more details on the internal mechanics.
-
-### Use Cases
+### When to Use This Path
 
 - **Batch Inference**: Processing large datasets where completion time is measured in minutes or hours rather than milliseconds.
 - **Slack Capacity Filling**: Using idle GPU cycles between real-time request spikes to perform background tasks like document summarization or embedding generation.
