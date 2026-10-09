@@ -96,7 +96,8 @@ git cherry-pick FETCH_HEAD
 
 **Workaround B — patch an already-running deployment.** Faster if the base guide is already up,
 but `kubectl apply -k` of the base overlay reverts it, and it only covers `Deployment`-based
-topologies (not the `vllm-ds` or `wide-ep` `DisaggregatedSet` manifests, which need Workaround A).
+topologies (not the `DisaggregatedSet` manifests of `pd-disaggregation` on NVIDIA GPU or `wide-ep`, which
+need Workaround A).
 Rolls the model servers, so weights reload:
 
 ```bash
@@ -149,7 +150,8 @@ kubectl rollout status -n "${NAMESPACE}" deploy -l llm-d.ai/engine-type=vllm --t
 
 Nothing extra to do: a base guide deployed in Gateway Mode has already created the
 `llm-d-inference-gateway` Gateway, because its own instructions say to (see
-[`pd-disaggregation`](../pd-disaggregation/README.md#gateway-mode), which points at
+Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router),
+which [`pd-disaggregation`](../pd-disaggregation/README.md) links to and which points at
 [the gateway guides](../../docs/infrastructure/gateway) and
 [`guides/recipes/gateway/<provider>`](../recipes/gateway)). The `Gateway` is namespaced, so one
 exists per namespace and every llm-d guide there shares it, each contributing its own `HTTPRoute`.

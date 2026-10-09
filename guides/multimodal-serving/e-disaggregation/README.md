@@ -51,7 +51,8 @@ Encode disaggregation is most beneficial for workloads with:
 Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
-* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section. That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
+* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in
+  [When to use P/D and how to tune it](../../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it). That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/operations/disaggregation/vllm.md#prefill-tp--decode-tp-is-not-supported)
   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/operations/disaggregation/vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
 
@@ -184,7 +185,7 @@ helm install ${RELEASE_NAME} \
 Apply the Kustomize overlays for your chosen topology:
 
 Choose the overlay matching your infrastructure provider:
-- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [Cluster Pre-provisioning](../../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma).
+- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma).
 - **CoreWeave**: Deploys on CoreWeave.
 
 ```bash

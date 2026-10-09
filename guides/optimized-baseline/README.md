@@ -273,7 +273,7 @@ kubectl get pods -n ${NAMESPACE}
 Notes:
 
 * Increasing `spec.replicas` on the `LeaderWorkerSet` scales out one sub-slice per replica; replicas are formed from any sub-block with healthy partitions of the requested shape.
-* Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7/vllm-dynamic-slice/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
+* Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/base/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
 

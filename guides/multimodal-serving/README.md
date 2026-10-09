@@ -54,7 +54,7 @@ The request flows, the EC Connector, and the vLLM version it needs are described
 Choose **aggregated** serving when media inputs are small (low-resolution images), the model is small, you have a good prefix-cache hit rate (which already avoids repeated encoding), or you do not want to run multi-tier networking (NIXL/ZMQ) between pods.
 
 Choose **E/PD** when requests often carry large or many media items (document parsing with dozens of images, high-definition video, long audio), the vision encoder is heavy enough to stall decoding on the pods that run it, or you want to scale encoding separately.
-Choose **E/P/D** when, in addition, prefill and decode need separate scaling or parallelism: see [P/D Best Practices](../pd-disaggregation/README.md#pd-best-practices), and note that [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) apply to its P/D stage.
+Choose **E/P/D** when, in addition, prefill and decode need separate scaling or parallelism: see [When to use P/D and how to tune it](../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it), and note that [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) apply to its P/D stage.
 
 ## Supported Accelerators and Model Servers
 
@@ -98,7 +98,7 @@ The `aggregation/modelserver/tpu/v7/vllm/gemma4/` overlay serves `google/gemma-4
 
 - Ensure your cluster has enough accelerators for your configuration (see the Notes column above; NVIDIA GPUs with 141 GB of HBM, e.g. H200, for the reference sizing).
 
-- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [Cluster Pre-provisioning](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma).
+- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 

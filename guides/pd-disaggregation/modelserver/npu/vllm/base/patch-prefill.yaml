@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: prefill
 spec:
-  replicas: 2
+  replicas: 1
   # A rolling update keeps the old and the new pod of a replica both holding a
   # claim, so neither becomes ready where there is no spare accelerator.
   strategy:

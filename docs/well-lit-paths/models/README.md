@@ -33,7 +33,7 @@ composes the same stack, one layer per pressure:
 | **[Optimized baseline](../../../guides/optimized-baseline/README.md)** | Prefix-cache scoring routes a turn to the replica already holding its prefix; load-aware scorers keep bursts off hot replicas. |
 | **[Tiered KV offloading](../../../guides/tiered-prefix-cache/README.md)** | KV cache beyond accelerator memory, so idle sessions restore on resume instead of recomputing prefill. |
 | **[Precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md)** | An exact, global view of cache state for session-centric routing and smarter KV retention. |
-| **[P/D disaggregation](../foundations/pd-disaggregation.md)** | Separate prefill and decode pools so heavy prefill never stalls token generation. |
+| **[P/D disaggregation](../../../guides/pd-disaggregation/README.md)** | Separate prefill and decode pools so heavy prefill never stalls token generation. |
 
 Nemotron 3 Ultra and Qwen3-Coder-480B are benchmarked with
 [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) through

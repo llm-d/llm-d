@@ -1,5 +1,5 @@
-# Two independent copies of the whole P/D topology. Each slice is 1 prefill and
-# 1 decode that roll out and recover on their own clock, for 2 of each in total.
+# One copy of the P/D topology: 1 prefill and 1 decode that roll out and
+# recover on their own clock. Raise slices for more independent copies.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
@@ -12,7 +12,7 @@ metadata:
     llm-d.ai/model: gpt-oss-120b
     llm-d.ai/inference-serving: "true"
 spec:
-  slices: 2
+  slices: 1
   roles:
     - name: prefill
       spec:

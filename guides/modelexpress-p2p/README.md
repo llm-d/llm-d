@@ -59,7 +59,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 ## Prerequisites
 
 * Install the [required client tools on your local system](../../helpers/client-setup/README.md) to use this guide.
-* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200). Fabric access comes either from a device plugin that exposes `rdma/ib` (the `coreweave` overlay; adjust the resource name for your fabric's equivalent, see Step 3), or on GKE from GPU DRA + DRANet (the `gke` overlay) — to pre-provision a GKE cluster with DRA & RDMA/RoCE, follow the [same setup as the P/D guide](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce).
+* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200). Fabric access comes either from a device plugin that exposes `rdma/ib` (the `coreweave` overlay; adjust the resource name for your fabric's equivalent, see Step 3), or on GKE from GPU DRA + DRANet (the `gke` overlay) — to pre-provision a GKE cluster with DRA & RDMA/RoCE, follow the [same setup as the P/D guide](../pd-disaggregation/README.md#prerequisites).
 
 * Checkout llm-d repo:
 

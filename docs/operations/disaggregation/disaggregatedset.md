@@ -7,7 +7,7 @@ kubectl get leaderworkerset -n ${NAMESPACE} -l disaggregatedset.x-k8s.io/name=pd
 ```
 
 * Scaling `slices` adds or removes complete P/D copies at the current revision, without touching existing slices.
-* Role `replicas` apply per slice, so the xPyD ratio (see [P/D Best Practices](../../../guides/pd-disaggregation/README.md#pd-best-practices)) holds in every slice.
+* Role `replicas` apply per slice, so the xPyD ratio (see [When to use P/D and how to tune it](../../architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it)) holds in every slice.
 * Rolling updates proceed independently per slice.
 * Changing either role's template rolls both roles; one revision covers all roles.
 
@@ -15,7 +15,7 @@ See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disagg
 
 ## Pinning Slices to Accelerator Domains (Placement Policy)
 
-Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml)):
+Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml)). The P/D guide ships `slices: 1` (one prefill and one decode); placement policy pays off once you raise `slices` to run several copies:
 
 ```yaml
 spec:

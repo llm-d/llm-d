@@ -9,7 +9,7 @@ Wide-EP spans multiple nodes over GB200's cross-node NVLink (MNNVL) fabric, prov
 an NVIDIA DRA `ComputeDomain`.
 
 It composes the [wide expert parallelism](../../wide-ep/README.md)
-and [P/D disaggregation](../../../docs/well-lit-paths/foundations/pd-disaggregation.md) foundations
+and [P/D disaggregation](../../pd-disaggregation/README.md) foundations
 with P/D-aware, prefix-cache-aware routing, and ships a range of prefill : decode operating
 points, from a 16-GPU low-latency layout up to a 56-GPU high-throughput layout.
 
