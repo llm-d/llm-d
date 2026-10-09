@@ -13,9 +13,39 @@ When deploying the Endpoint Picker (EPP) in either **Standalone** or **Gateway**
 When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`), its behavior depends on the configured HA mode:
 
 1. **Active-Passive**: Traffic routes to a single primary replica set while standby replicas remain available for failover.
-   - **Priority Routing (Recommended)**: Available in standalone service mode (`router.proxy.mode: service`). Uses Envoy Priority Routing and outlier detection to route traffic to Primary EPP replicas (Priority 0) and shift traffic to warm Standby EPP replicas (Priority 1) upon primary failure, reducing failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. In GKE Gateway mode, `provider.gke.preferredBackends.enabled: true` provides equivalent primary/standby tiering via GKE Preferred Backends. See [Priority Routing](#priority-routing) for configuration.
+   - **Priority Routing (Recommended)**: Routes traffic to primary EPP replicas (Priority 0) and shifts traffic to warm standby EPP replicas (Priority 1) upon primary failure, reducing failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. Supported in standalone service mode (`router.proxy.priorityRouting.enabled: true`) and GKE Gateway mode (`provider.gke.preferredBackends.enabled: true`).
    - **Leader Election with Fail-Open (Default)**: Uses Kubernetes `coordination.k8s.io/Lease` coordination so only the elected leader serves inference extension requests while standby pods remain idle. If the active leader fails, fail-open mode prevents dropped requests by routing traffic directly to backend model servers, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
 2. **Active-Active**: Multiple EPP replicas run concurrently and share load across all instances. Suitable when scheduling algorithms and plugins do not require unified state across pods or a synchronization mechanism is in place.
+
+#### Active-Passive Mode: Priority Routing (Recommended)
+
+Priority Routing keeps standby EPP pods warm with synced model-server state and shifts traffic in **sub-second** time (`< 1s`) upon primary failure, avoiding the 10 to 30 second unoptimized fail-open window of lease-based leader election.
+
+- **Standalone Service Mode (`llm-d-router-standalone`)**:
+
+  ```yaml
+  router:
+    proxy:
+      mode: service
+      priorityRouting:
+        enabled: true
+        primaryReplicas: 1
+        standbyReplicas: 1
+  ```
+
+- **GKE Gateway Mode (`llm-d-router-gateway`)**:
+
+  ```yaml
+  provider:
+    name: gke
+    gke:
+      preferredBackends:
+        enabled: true
+        preferredReplicas: 1
+        defaultReplicas: 1
+  ```
+
+See [Priority Routing](#priority-routing) for standalone proxy details and the [`llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#priority-routing) for failover mechanics and tuning parameters.
 
 #### Active-Passive Mode: Leader Election and Fail-Open (Default)
 
@@ -23,7 +53,7 @@ By default, multi-replica EPP deployments without priority routing automatically
 
 - **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the single active leader replica handles external processing requests.
 - **Fail-Open Resiliency**: With `router.proxy.failOpen: true` (default in standalone Envoy mode) or `router.inferencePool.failureMode: FailOpen` (default in Gateway mode), client requests are passed directly to backend model servers and are not dropped if the active leader restarts or fails.
-- **Switchover Disadvantage (10-30s Unoptimized Routing Window)**: When the active leader fails, Kubernetes lease expiration (`--ha-lease-duration`, default `15s`), standby readiness transition, and Service endpoint propagation take **10 to 30 seconds** before a standby replica begins serving traffic. Although fail-open prevents dropped requests during this window, EPP is unavailable and **routing is purely unoptimized** (requests bypass KV-cache affinity, prefix-cache scoring, load-aware scheduling, and flow control). To reduce switchover time to **sub-second** (`< 1s`) and keep optimized routing active across failovers, use [Priority Routing](#priority-routing) as the recommended Active-Passive setup.
+- **Switchover Disadvantage (10-30s Unoptimized Routing Window)**: When the active leader fails, Kubernetes lease expiration (`--ha-lease-duration`, default `15s`), standby readiness transition, and Service endpoint propagation take **10 to 30 seconds** before a standby replica begins serving traffic. Although fail-open prevents dropped requests during this window, EPP is unavailable and **routing is purely unoptimized** (requests bypass KV-cache affinity, prefix-cache scoring, load-aware scheduling, and flow control). Use [Priority Routing](#active-passive-mode-priority-routing-recommended) to reduce switchover time to sub-second (`< 1s`).
 
 ```yaml
 router:
@@ -32,11 +62,23 @@ router:
     flags:
       ha-enable-leader-election: true
   proxy:
-    failOpen: true
+    failOpen: true # Standalone Envoy mode
+  inferencePool:
+    failureMode: FailOpen # Gateway mode
 ```
 
-> [!NOTE]
-> Because standby replicas stay `NotReady` under leader election, `helm --wait` and Flux upgrades can block on Deployment availability with the default `Recreate` strategy. Configure a `RollingUpdate` strategy with `maxUnavailable: 1` (`>= replicas - 1`) and `maxSurge: 0`, or see the [`llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#multi-replica-epp-and-helm---wait).
+- **Multi-Replica EPP with `helm --wait`**: Because standby replicas stay `NotReady` under leader election, configure a `RollingUpdate` strategy with `maxUnavailable >= replicas - 1` and `maxSurge: 0` so `helm --wait` and Flux upgrades do not block on standby readiness:
+
+```yaml
+router:
+  epp:
+    replicas: 2
+    deploymentStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 1 # >= replicas - 1
+        maxSurge: 0
+```
 
 #### Active-Active Mode
 
@@ -127,9 +169,19 @@ The following operational guidelines and proxy scaling architectures apply **exc
 
 ### Horizontally Scalable Proxy Service (Service Mode)
 
-By default, the standalone chart deploys the proxy as a `sidecar` container inside the EPP pod. To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service` (with static `router.proxy.replicas` or HPA via `router.proxy.autoscaling.enabled: true`).
+By default, the standalone chart deploys the proxy as a `sidecar` container inside the EPP pod (`router.proxy.mode: sidecar`). To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service`.
 
 In `service` mode, the proxy communicates with EPP over the in-cluster EPP Service. If EPP undergoes active-passive leader failover or momentary pod restarts, the Envoy proxy fails open by default (`router.proxy.failOpen: true`), preserving uninterrupted client request processing. (`router.proxy.failOpen` applies to `proxyType: envoy` only; `agentgateway` fails closed when EPP is unreachable.)
+
+```yaml
+router:
+  inferencePool:
+    create: false
+  proxy:
+    mode: service
+    replicas: 3
+    failOpen: true
+```
 
 ```bash
 helm install my-standalone-router ./config/charts/llm-d-router-standalone \
@@ -171,6 +223,23 @@ router:
 ```
 
 For failover mechanics and health-check tuning parameters, see [Priority Routing in the `llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#priority-routing).
+
+#### Standalone Proxy Autoscaling (Service Mode)
+
+When running in `service` mode (`router.proxy.mode: service`), the standalone proxy Deployment can be autoscaled independently from EPP via HPA v2 (`router.proxy.autoscaling.enabled: true`):
+
+```yaml
+router:
+  proxy:
+    mode: service
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 80
+```
+
+For drain windows and custom HPA metric options, see [Standalone Proxy Autoscaling in the `llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#standalone-proxy-autoscaling-service-mode).
 
 ### Proxy Container Resource Sizing
 
