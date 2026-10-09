@@ -35,7 +35,7 @@ support:
       engines: {vllm: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
-      notes: "GKE only (`INFRA_PROVIDER=gke`) · dynamic slicing + Kueue · 1 prefill + 1 decode, one `2x2x1` sub-slice each; see [below](#dynamic-sub-slices-tpu7x)"
+      notes: "GKE only (`INFRA_PROVIDER=gke`) · dynamic slicing + Kueue · 1 prefill + 1 decode, one `2x2x1` sub-slice each; see [below](#2-deploy-the-model-server)"
       model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
       engines: {vllm: community}
     iluvatar:
@@ -50,7 +50,7 @@ support:
       engines: {vllm: community}
     npu:
       label: Rebellions NPU
-      notes: "1 prefill (PP=4) + 1 decode (DP=4, EP) × 4 NPUs + 1 RoCE VF via DRA; see [below](#rebellions-npu)"
+      notes: "1 prefill (PP=4) + 1 decode (DP=4, EP) × 4 NPUs + 1 RoCE VF via DRA; see [below](#2-deploy-the-model-server)"
       model: MiniMaxAI/MiniMax-M2.7
       engines: {vllm: community}
 
@@ -149,18 +149,38 @@ deploy:
           ${ACCELERATOR_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
-  # Dynamic sub-slices are admitted by Kueue: the LocalQueue must exist in the
-  # guide namespace before the overlay is applied. No nightly covers this
-  # accelerator (it needs a full TPU7x 4x4x4 sub-block), hence skip_in: [ci].
-  localqueue:
-    - when: {ACCELERATOR_TYPE: ["tpu/v7-dynamic-slice"]}
-      skip_in: [ci]
-      run: kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
-
+  # Model server variants, one README tab each (as in the Optimized Baseline).
+  # `standard` is the default tab and the only command the README-parsing
+  # nightlies run; the accelerator variants render with cicd:skip.
   modelserver:
-    - run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    # `standard` lists the remaining accelerators so that `guide.py emit`
+    # runs exactly one apply (and, for dynamic slicing, the LocalQueue first).
+    standard:
+      - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, iluvatar, metax]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    tpu:
+      - when: {ACCELERATOR_TYPE: ["tpu/v6", "tpu/v7"]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    # Dynamic sub-slices are admitted by Kueue: the LocalQueue must exist in
+    # the guide namespace before the overlay is applied. No nightly covers this
+    # accelerator (it needs a full TPU7x 4x4x4 sub-block), hence skip_in: [ci].
+    dynamic_slice:
+      - when: {ACCELERATOR_TYPE: ["tpu/v7-dynamic-slice"]}
+        skip_in: [ci]
+        run: |
+          # Prefill and decode as LeaderWorkerSet groups, one 2x2x1 sub-slice per replica, admitted by Kueue
+          kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    npu:
+      - when: {ACCELERATOR_TYPE: [npu]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
   monitoring:
     - when: {MONITORING: ["true"]}
