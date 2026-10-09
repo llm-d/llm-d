@@ -2,11 +2,11 @@
   "categories": {
     "getting-started": { "label": "Getting Started", "position": 1, "collapsed": false },
 
-    "well-lit-paths": { "label": "Well-Lit Paths", "position": 2, "collapsed": false },
+    "well-lit-paths": { "label": "Well-Lit Paths", "position": 3, "collapsed": false },
     "well-lit-paths/foundations": { "label": "Foundations", "position": 1, "collapsed": false },
     "well-lit-paths/models": { "label": "Models", "position": 2, "collapsed": false },
 
-    "architecture": { "label": "Concepts (Architecture)", "position": 4, "collapsed": true },
+    "architecture": { "label": "Concepts", "position": 2, "collapsed": true },
     "architecture/core": { "label": "Core", "position": 1, "collapsed": true },
     "architecture/core/router": { "label": "Router", "position": 2 },
     "architecture/core/router/epp": { "label": "EPP", "position": 2 },
