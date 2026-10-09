@@ -85,26 +85,25 @@ As a result, as you tune your P/D deployments, we suggest focusing on the follow
 
 ## Supported Accelerators and Model Servers
 
-This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves one model; `INFRA_PROVIDER` selects the platform overlay and, where an accelerator offers more than one, the KV transfer connector:
+This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves one model; its platform overlays are selected with `INFRA_PROVIDER` (see [Configure the environment](#configure-the-environment)):
 
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `openai/gpt-oss-120b` | ✅ validated | ✅ validated | Default. H200 reference · 1 prefill (TP=1) + 1 decode (TP=4), 5 GPUs · `INFRA_PROVIDER`: `base`, `gke`, `gke/a4x`, `gke/a4xmax`, `coreweave`, `aws`, `cks-mooncake` (MooncakeConnector, vLLM only) · SGLang: 1 prefill (TP=2) + 1 decode (TP=2) |
-| AMD GPU | `amd` | `amd/Llama-3.3-70B-Instruct-FP8-KV` | ✅ validated | — | 1 prefill (TP=1) + 1 decode (TP=4) · `INFRA_PROVIDER`: `base`, `amd-ci`, `oci`, `tensorwave`; MoRIIOConnector: `moriio/base`, `moriio/amd-ci`, `moriio/amd-ci-1p1d-tp8` (serve `Qwen/Qwen3-32B`) |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | 1 prefill + 1 decode × 1 GPU via DRA · `INFRA_PROVIDER`: `base`, `rdma` (NIXL over RDMA) |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only (`INFRA_PROVIDER=gke`) · 1 prefill + 1 decode × 8 chips (`2x4`, TP=8) · `TPUConnector` |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only (`INFRA_PROVIDER=gke`) · 1 prefill + 1 decode × 4 chips (`2x2x1`, TP=8) · `TPUConnectorHMA` · vLLM 0.26 |
-| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | GKE only (`INFRA_PROVIDER=gke`) · dynamic slicing + Kueue · 1 prefill + 1 decode, one `2x2x1` sub-slice each; see [below](#2-deploy-the-model-server) |
-| Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1 prefill + 1 decode × 2 boards (TP=4) · `IluNixlConnector` |
-| MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1 prefill (TP=2) + 1 decode (TP=4) · NIXL over TCP |
-| Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 1 prefill (PP=4) + 1 decode (DP=4, EP) × 4 NPUs + 1 RoCE VF via DRA; see [below](#2-deploy-the-model-server) |
+| NVIDIA GPU | `gpu` | `openai/gpt-oss-120b` | ✅ validated | ✅ validated | H200 · 1P (TP=1) + 1D (TP=4), 5 GPUs; SGLang 1P (TP=2) + 1D (TP=2) · NIXL |
+| AMD GPU | `amd` | `amd/Llama-3.3-70B-Instruct-FP8-KV` | ✅ validated | — | AMD Instinct · 1P (TP=1) + 1D (TP=4) · NIXL |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | `2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA |
+| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
+| Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
+| MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
+| Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-> [!NOTE]
-> Some hardware variants use reduced configurations (smaller models, fewer accelerators) to enable CI testing for compatibility and regression checks. These configurations are maintained by their respective hardware vendors and are not guaranteed as production-ready examples. Users deploying on non-default hardware should review and adjust the configurations for their environment.
+Community rows are compatibility configurations maintained by their hardware vendors, often with reduced sizing (smaller models, fewer accelerators); review and adjust them for your environment before production use.
 
 ### KV Transfer Connectors
 
@@ -112,92 +111,26 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 
 | Connector | Overlays | Transport | Notes |
 | --------- | -------- | --------- | ----- |
-| NixlConnector | default on NVIDIA GPU, AMD GPU, Intel XPU, MetaX and Rebellions NPU | UCX (RDMA / TCP) | Supports heterogeneous TP across P/D. |
-| MooncakeConnector | `gpu/vllm/cks-mooncake` | RDMA via Mooncake Transfer Engine | CKS with InfiniBand. See the details below. |
+| NixlConnector | default on NVIDIA GPU, AMD GPU, Intel XPU and MetaX | UCX (RDMA / TCP) | Supports heterogeneous TP across P/D. |
+| RblnNixlConnector | `npu/vllm/base` | NIXL over a RoCE VF | Rebellions' NIXL connector with `kv_buffer_device=rbln`. See the [Rebellions NPU tab](#2-deploy-the-model-server). |
+| MooncakeConnector | `gpu/vllm/cks-mooncake` | RDMA via Mooncake Transfer Engine | CKS with InfiniBand. See [CKS with MooncakeConnector](#prerequisites) in Prerequisites. |
 | MoRIIOConnector | `amd/vllm/moriio/*` | RDMA via MoRI-IO | AMD GPU. |
 | TPUConnector / TPUConnectorHMA | `tpu/*` | TPU ICI / DCN | From `tpu_inference`; HMA on TPU7x. |
-| IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the note below. |
+| IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
 
-> [!IMPORTANT]
-> NIXL supports TCP transfer, but high-bandwidth networking (IB, RoCE, EFA) is **highly recommended** for production usage.
+NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production.
 
-**MetaX C500X** is a compatibility configuration over `NixlConnector` and the llm-d routing sidecar, not a production xPyD sizing example:
+### vLLM vs SGLang
 
-- It needs the MetaX device plugin exposing `metax-tech.com/gpu` and the public MetaX vLLM image (`ghcr.io/project-hami/vllm-metax`; air-gapped sites can retag it from a private registry).
-- The pod network must allow Prefill↔Decode **TCP 5600** (NIXL side channel) in addition to HTTP 8000/8200. There is no RDMA requirement; TCP is enough for functional validation.
-- UCX on this path is `maca_ipc,maca_copy,tcp`. Do not copy NVIDIA `cuda_ipc` / `cuda_copy` values.
-- `kv_load_failure_policy=fail` makes a failed KV pull error out instead of decode silently recomputing the prompt (which looks like HTTP 200 without a real P/D transfer).
-- Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`.
+Both engines run on NVIDIA GPU with the same router configuration and move KV cache over NIXL, but they disaggregate differently:
 
-> [!NOTE]
-> **Iluvatar fork (`IluNixlConnector`)**: The `iluvatar` overlay uses Iluvatar's fork of vLLM's `NixlConnector` — `IluNixlConnector` — with `kv_buffer_device=cuda` (KV stays in VRAM). It requires CUDA-aware UCX transports (`UCX_TLS=cuda_copy,cuda_ipc,tcp,self,posix,sysv` plus `UCX_CUDA_IPC_ENABLE_SAME_PROCESS=y`); without them UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
->
-> Each BI-V150 board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board). With the default ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards; vLLM `--tensor-parallel-size` counts CUDA devices (2 per board). The overlay requests 2 boards per role (4 CUDA devices, TP=4) and expands `IX_VISIBLE_DEVICES` from `ixsmi`. Decode sets `VLLM_ENFORCE_CUDA_GRAPH=1` so `--compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}'` is not overridden to eager. Prefill keeps `max-model-len` / `block-size` aligned with decode and does not enable `FULL_DECODE_ONLY`.
-
-<details>
-<summary><b>MooncakeConnector details</b></summary>
-
-The `cks-mooncake` overlay uses [Mooncake Transfer Engine](https://github.com/kvcache-ai/Mooncake) as the KV transfer backend. Mooncake provides point-to-point RDMA-based transfer of KV cache blocks between prefill and decode workers. It is used here as a transport layer — llm-d remains responsible for routing, orchestration, and scheduling.
-
-> [!IMPORTANT]
-> This overlay configures `MooncakeConnector` for P/D KV transfer only. It does **not** configure Mooncake Store (`MooncakeStoreConnector`), which provides distributed KV storage for tiered cache offloading and is a separate integration.
-
-**Constraints:**
-
-- `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
-
-**CKS / RDMA prerequisites:**
-
-- NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
-- InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
-- RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
-
-Validate RDMA from inside a test pod before deploying:
-
-<!-- llm-d-cicd:skip start -->
-```bash
-kubectl run rdma-test --rm -it \
-    --image=mellanox/rping-test \
-    --overrides='{"spec":{"containers":[{"name":"rdma-test","image":"mellanox/rping-test","command":["ibv_devinfo"],"resources":{"limits":{"rdma/ib":"1"}}}]}}' \
-    -- ibv_devinfo
-```
-<!-- llm-d-cicd:skip end -->
-
-**Request flow:** client request → llm-d routing → vLLM prefill (`kv_producer`) → MooncakeConnector (RDMA) → vLLM decode (`kv_consumer`) → response.
-
-**kv-transfer-config reference:**
-
-| Field | Prefill | Decode | Description |
-| :---- | :------ | :----- | :---------- |
-| `kv_connector` | `MooncakeConnector` | `MooncakeConnector` | Selects Mooncake Transfer Engine |
-| `kv_role` | `kv_producer` | `kv_consumer` | Prefill produces KV blocks, decode consumes |
-| `kv_connector_extra_config.mooncake_protocol` | `rdma` | `rdma` | Transport protocol |
-
-**Environment variables:**
-
-| Variable | Default | Description |
-| :------- | :------ | :---------- |
-| `VLLM_MOONCAKE_BOOTSTRAP_PORT` | `8998` | Mooncake bootstrap server port. Must be unique per instance if co-located. |
-| `VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT` | `480` | Seconds before a prefiller releases KV cache if the decoder does not acknowledge. |
-
-**Troubleshooting:**
-
-- **No RDMA in pod**: Check that `rdma/ib` appears in `kubectl describe node` allocatable resources and that the RDMA device plugin is running.
-- **MooncakeConnector fails to init**: Verify `mooncake-transfer-engine` is installed (`pip show mooncake-transfer-engine` inside the pod) and the bootstrap port is free.
-- **KV transfer failures**: Confirm prefill and decode can reach each other over the RDMA network.
-
-</details>
-
-### SGLang
-
-The SGLang overlays (NVIDIA GPU, `INFRA_PROVIDER`: `base`, `gke`, `coreweave`, `aws`) run the same router configuration:
-
-- **Topology**: one slice of 1 prefill (TP=2) and 1 decode (TP=2) in the `pd-disagg-sglang` DisaggregatedSet (the `aws` overlay runs prefill at TP=4).
-- **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
-- **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
-- **Unconditional disaggregation**: SGLang P/D disaggregates every request (`always-disagg-pd-decider`); `prefix-based-pd-decider` and the Coordinator's `conditional-decode` step cannot be used because an SGLang decode worker has no local-prefill path. See [Unconditional Disaggregation](../../docs/operations/disaggregation/sglang.md#unconditional-disaggregation).
-- **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/operations/disaggregation/sglang.md).
-- **Known limitation**: on the NIXL transfer backend, SGLang has no explicit prefill-side free-notification (as vLLM does) and no prefill-side reclaim timeout, so a request cancelled before the decode initiates the transfer can strand KV cache on the prefill until the pod restarts.
+| Aspect | vLLM | SGLang |
+| --- | --- | --- |
+| P/D decider | Can disaggregate conditionally (`prefix-based-pd-decider`); this guide's router uses `always-disagg-pd-decider` | Must use `always-disagg-pd-decider`: a decode worker has no local-prefill path. See [Unconditional Disaggregation](../../docs/operations/disaggregation/sglang.md#unconditional-disaggregation) |
+| Peer discovery | NIXL side-channel handshake (TCP 5600) | Prefill bootstrap server on port `8998`. To change it, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the engine so the two match |
+| Request cancellation | Prefill-side free notification releases the KV cache | No prefill-side free notification or reclaim timeout: a request cancelled before decode pulls the KV cache can strand it on the prefill until the pod restarts |
+| Engine flags | `--kv-transfer-config` (see above) | `--disaggregation-mode={prefill,decode}`, `--disaggregation-transfer-backend=nixl`; the decode routing sidecar runs with `--kv-connector=sglang` |
+| Operations | [Disaggregated Serving: Operations (vLLM)](../../docs/operations/disaggregation/vllm.md) | [Disaggregated Serving: Operations (SGLang)](../../docs/operations/disaggregation/sglang.md) |
 
 ## Prerequisites
 
@@ -210,6 +143,37 @@ The SGLang overlays (NVIDIA GPU, `INFRA_PROVIDER`: `base`, `gke`, `coreweave`, `
 - (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 - For NVIDIA GPU, the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it for `ACCELERATOR_TYPE=gpu`; skip that step if your cluster already runs it.
+
+<details>
+<summary><b>CKS with MooncakeConnector (<code>INFRA_PROVIDER=cks-mooncake</code>)</b></summary>
+
+The `cks-mooncake` overlay uses [Mooncake Transfer Engine](https://github.com/kvcache-ai/Mooncake) as the KV transfer backend. Mooncake provides point-to-point RDMA-based transfer of KV cache blocks between prefill and decode workers. It is used here as a transport layer — llm-d remains responsible for routing, orchestration, and scheduling.
+
+> [!IMPORTANT]
+> This overlay configures `MooncakeConnector` for P/D KV transfer only. It does **not** configure Mooncake Store (`MooncakeStoreConnector`), which provides distributed KV storage for tiered cache offloading and is a separate integration.
+
+**Image requirement:** `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
+
+**CKS / RDMA prerequisites:**
+
+- NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
+- InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
+- RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
+
+The Mooncake bootstrap server listens on `VLLM_MOONCAKE_BOOTSTRAP_PORT` (default `8998`), which must be unique per instance if instances are co-located on a node.
+
+Validate RDMA from inside a test pod before deploying:
+
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl run rdma-test --rm -it \
+    --image=mellanox/rping-test \
+    --overrides='{"spec":{"containers":[{"name":"rdma-test","image":"mellanox/rping-test","command":["ibv_devinfo"],"resources":{"limits":{"rdma/ib":"1"}}}]}}' \
+    -- ibv_devinfo
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
 
 ### GKE: Cluster Pre-provisioning (with DRA & RDMA/RoCE)
 
@@ -235,6 +199,24 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 ### Configure the environment
 
+`INFRA_PROVIDER` selects the platform overlay for your `ACCELERATOR_TYPE` and, where an accelerator offers more than one, the KV transfer connector. Valid values per accelerator:
+
+| `ACCELERATOR_TYPE` | `INFRA_PROVIDER` values |
+| --- | --- |
+| `gpu` | `base`, `gke`, `gke/a4x`, `gke/a4xmax`, `coreweave`, `aws`, `cks-mooncake` (SGLang: `base`, `gke`, `coreweave`, `aws`) |
+| `amd` | `base`, `amd-ci`, `oci`, `tensorwave`, `moriio/base`, `moriio/amd-ci`, `moriio/amd-ci-1p1d-tp8` |
+| `xpu` | `base`, `rdma` |
+| `tpu/v6`, `tpu/v7`, `tpu/v7-dynamic-slice` | `gke` |
+| `iluvatar`, `metax`, `npu` | `base` |
+
+- `base`: generic Kubernetes cluster.
+- `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see [GKE: Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
+- `coreweave`: CoreWeave with `rdma/ib`. `aws`: AWS with EFA.
+- `cks-mooncake`: CoreWeave CKS with `MooncakeConnector` over InfiniBand, vLLM only (see [CKS with MooncakeConnector](#prerequisites)).
+- `amd-ci`: the AMD CI cluster. `oci`: OCI OKE `BM.GPU.MI300X.8` with SR-IOV RDMA VFs. `tensorwave`: TensorWave.
+- `moriio/*`: `MoRIIOConnector` instead of NIXL, serving `Qwen/Qwen3-32B` (set `MODEL` accordingly); `moriio/amd-ci-1p1d-tp8` runs TP=8 for both roles.
+- `rdma` (Intel XPU): NIXL over RDMA instead of TCP.
+
 **Set the guide-specific environment variables:**
 
 <!-- guide:env.static start -->
@@ -248,7 +230,7 @@ export ACCELERATOR_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma; valid values per accelerator: table above
-export MODEL=openai/gpt-oss-120b # set to the model your accelerator serves (table above); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B
+export MODEL=openai/gpt-oss-120b # set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
@@ -369,11 +351,11 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
-**Apply the Kustomize overlay** for your accelerator and model server. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`, with the routing sidecar in front of the engine): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU, two `Deployments` elsewhere. See [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers) for the `INFRA_PROVIDER` values of each accelerator.
+**Apply the Kustomize overlay** for your accelerator and model server. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`, with the routing sidecar in front of the engine): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU, two `Deployments` elsewhere. See [Configure the environment](#configure-the-environment) for the `INFRA_PROVIDER` values of each accelerator.
 
 <!-- tabs:start group=modelserver -->
 <details open>
-<summary><b>Default</b></summary>
+<summary><b>Default (NVIDIA GPU, AMD, Intel XPU)</b></summary>
 
 <!-- guide:deploy.modelserver.standard[0] start -->
 ```bash
@@ -397,19 +379,26 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.tpu[0] end -->
 
-The TPU overlays use the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`, and run on GKE only (`INFRA_PROVIDER=gke`). The [GKE cluster pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce) step (GPU DRA / DRANet) does not apply. Node pool requirements:
+The TPU overlays use the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`, and run on GKE only (`INFRA_PROVIDER=gke`). The [GKE cluster pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce) step (GPU DRA / DRANet) does not apply.
+
+**Requirements:**
 
 - **TPU v6e**: nodes with `2x4` topology (`tpu-v6e-slice`, 8 chips per node, 1 core per chip). Each prefill and decode pod requests all 8 chips (`google.com/tpu: 8`).
 - **TPU7x**: nodes with `2x2x1` topology (`tpu7x`, 4 chips per node, 2 cores per chip). Each prefill and decode pod requests 4 chips (`google.com/tpu: 4`).
+- **Boot disk**: the TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
+
+**Configuration notes:**
+
+- Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again.
+
+**Known issues:**
 
 > [!NOTE]
 > The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
 
-The GPU overlays' `--tool-call-parser=openai` and `--reasoning-parser=openai_gptoss` are properties of `gpt-oss-120b`, not of the deployment, so the TPU overlays do not set them and tool calling is unavailable there.
-To enable it for the Qwen models these overlays serve, add `--enable-auto-tool-choice` together with the tool parser for your variant from vLLM's [tool-calling docs](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md#automatic-function-calling) (`hermes` per [Qwen's own guidance](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm), `qwen3_xml` for Qwen3-Coder) and `--reasoning-parser=qwen3` for the Qwen3 series ([reasoning outputs](https://github.com/vllm-project/vllm/blob/main/docs/features/reasoning_outputs.md)).
-Tracked in #2640.
-
-Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again. The TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
+- Tool calling is unavailable: the GPU overlays' `--tool-call-parser=openai` and `--reasoning-parser=openai_gptoss` are properties of `gpt-oss-120b`, not of the deployment, so the TPU overlays do not set them.
+  To enable it for the Qwen models these overlays serve, add `--enable-auto-tool-choice` together with the tool parser for your variant from vLLM's [tool-calling docs](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md#automatic-function-calling) (`hermes` per [Qwen's own guidance](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm), `qwen3_xml` for Qwen3-Coder)
+  and `--reasoning-parser=qwen3` for the Qwen3 series ([reasoning outputs](https://github.com/vllm-project/vllm/blob/main/docs/features/reasoning_outputs.md)). Tracked in #2640.
 
 </details>
 <details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
@@ -428,12 +417,76 @@ kubectl apply -n ${NAMESPACE} \
 
 `ACCELERATOR_TYPE=tpu/v7-dynamic-slice` deploys `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` (`TP=8` per `2x2x1` sub-slice) with prefill and decode as `LeaderWorkerSet` groups. Kueue Topology-Aware Scheduling places each replica on a sub-slice that [GKE dynamic slicing](../../docs/infrastructure/providers/gke/dynamic-slicing/README.md) forms on demand from pre-provisioned `4x4x4` sub-blocks, instead of a statically provisioned `2x2x1` node pool.
 
-Cluster preparation, the cluster-scoped Kueue resources, the per-pod workload requirements, and the mapping from slice shape to LWS `size` and maximum TP are documented in that provider page. After those prerequisites are in place and the router is deployed, the command above creates the `LocalQueue` and applies the overlay.
+**Requirements:**
 
-Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/README.md#2-deploy-the-model-server).
+- Pre-provisioned TPU7x `4x4x4` sub-blocks to form the sub-slices from.
+- Cluster preparation, the cluster-scoped Kueue resources, and the per-pod workload requirements from the [GKE dynamic slicing](../../docs/infrastructure/providers/gke/dynamic-slicing/README.md) provider page, which also maps each slice shape to the LWS `size` and maximum TP.
 
-> [!NOTE]
-> The dynamic-slice variant is not in the nightly e2e matrix: an end-to-end run requires one full TPU7x `4x4x4` sub-block (64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.
+**Configuration notes:**
+
+- Once those prerequisites are in place and the router is deployed, the command above creates the `LocalQueue` and applies the overlay.
+- Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`).
+- Adjust `spec.replicas` of the `prefill` and `decode` LeaderWorkerSets independently for other xPyD ratios; each replica receives its own `2x2x1` sub-slice. For a worked multi-host (`2x2x2`) example, see the [aggregated dynamic-slice recipes](../optimized-baseline/README.md#2-deploy-the-model-server).
+
+**Known issues:**
+
+- The dynamic-slice variant is not in the nightly e2e matrix: an end-to-end run requires one full TPU7x `4x4x4` sub-block (64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation, which is not available to llm-d CI. The manifests are validated by kustomize dry-run in CI and were load tested on internal Google Cloud capacity during the dynamic-slicing beta.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=iluvatar">
+<summary><b>Iluvatar</b></summary>
+
+<!-- guide:deploy.modelserver.iluvatar[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.iluvatar[0] end -->
+
+The `iluvatar` overlay runs vLLM on Iluvatar BI-V150 with `IluNixlConnector`, Iluvatar's fork of vLLM's `NixlConnector`, and `kv_buffer_device=cuda` (KV stays in VRAM).
+
+**Requirements:**
+
+- The Iluvatar device plugin (ix-device-plugin) exposing `iluvatar.com/gpu`. With its default `splitboard: false`, `iluvatar.com/gpu` counts boards.
+- CUDA-aware UCX transports: `UCX_TLS=cuda_copy,cuda_ipc,tcp,self,posix,sysv` plus `UCX_CUDA_IPC_ENABLE_SAME_PROCESS=y`, set by the overlay. Without them UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
+
+**Configuration notes:**
+
+- Each BI-V150 board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board), and vLLM `--tensor-parallel-size` counts CUDA devices (2 per board). The overlay requests 2 boards per role (4 CUDA devices, TP=4) and expands `IX_VISIBLE_DEVICES` from `ixsmi`.
+- Decode sets `VLLM_ENFORCE_CUDA_GRAPH=1` so `--compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}'` is not overridden to eager.
+- Prefill keeps `max-model-len` / `block-size` aligned with decode and does not enable `FULL_DECODE_ONLY`.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=metax">
+<summary><b>MetaX</b></summary>
+
+<!-- guide:deploy.modelserver.metax[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.metax[0] end -->
+
+The `metax` overlay runs vLLM on MetaX C500X over `NixlConnector` and the llm-d routing sidecar. It is a compatibility configuration, not a production xPyD sizing example.
+
+**Requirements:**
+
+- The MetaX device plugin exposing `metax-tech.com/gpu`.
+- The public MetaX vLLM image (`ghcr.io/project-hami/vllm-metax`); air-gapped sites can retag it from a private registry.
+- A pod network that allows Prefill↔Decode **TCP 5600** (NIXL side channel) in addition to HTTP 8000/8200. There is no RDMA requirement; TCP is enough for functional validation.
+
+**Configuration notes:**
+
+- UCX on this path is `maca_ipc,maca_copy,tcp`. Do not copy NVIDIA `cuda_ipc` / `cuda_copy` values.
+- `kv_load_failure_policy=fail` makes a failed KV pull error out instead of decode silently recomputing the prompt (which looks like HTTP 200 without a real P/D transfer).
+
+**Known issues:**
+
+- Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`.
 
 </details>
 <details data-when="ACCELERATOR_TYPE=npu">
@@ -448,9 +501,16 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.npu[0] end -->
 
-The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMaxAI/MiniMax-M2.7)
-with heterogeneous parallelism across the two roles. Prefill uses pipeline parallelism because it
-measured faster per prefill chunk than data parallelism on the same four NPUs.
+The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMaxAI/MiniMax-M2.7) with heterogeneous parallelism across the two roles. Prefill uses pipeline parallelism because it measured faster per prefill chunk than data parallelism on the same four NPUs.
+
+**Requirements:**
+
+- The [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html).
+- A network DRA driver publishing a `dranet` DeviceClass, so each role can claim a RoCE VF alongside its NPUs. The DeviceClass config has to give that VF an IPv4 address (for example `interface.dhcp`); without one the NIXL side channel cannot bind.
+- Kubernetes 1.34 or later for the `resource.k8s.io/v1` DRA APIs.
+- Nodes that can place four NPUs and one RoCE VF on a single NUMA node. A pod whose node cannot supply them stays Pending on `0/3 nodes are available: 1 cannot allocate all claims`.
+
+**Configuration notes:**
 
 | Parameter | Prefill | Decode |
 | --- | --- | --- |
@@ -460,38 +520,15 @@ measured faster per prefill chunk than data parallelism on the same four NPUs.
 | `--num-gpu-blocks-override` | 201 | 51 |
 | `--max-num-seqs` | 4 | 4 |
 
-Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler.
-Neither sets `--max-model-len`, since the model already declares its 204800-token context.
-Neither sets `--kv-cache-dtype` either: the runtime accepts `fp8` here, but the
-`--num-gpu-blocks-override` counts below were measured at the backend default, and halving the
-bytes per block would leave them describing something else.
-KV transfer uses NIXL with `kv_buffer_device=rbln`.
-Expert parallelism is on for decode only: a pipeline-parallel prefill rank holds one stage, so
-there is no expert group to split.
+- Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler. Neither sets `--max-model-len`, since the model already declares its 204800-token context.
+- Neither sets `--kv-cache-dtype` either: the runtime accepts `fp8` here, but the `--num-gpu-blocks-override` counts above were measured at the backend default, and halving the bytes per block would leave them describing something else.
+- KV transfer uses `RblnNixlConnector` (NIXL) with `kv_buffer_device=rbln`. Expert parallelism is on for decode only: a pipeline-parallel prefill rank holds one stage, so there is no expert group to split.
+- Because the decode role runs one API server per data-parallel rank, the router must be given every rank port: with `ACCELERATOR_TYPE=npu`, the [router step](#1-deploy-the-llm-d-router) layers [`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own values file.
+- **NUMA alignment**: each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over that VF. The claim constrains all five devices to one NUMA node on `resource.kubernetes.io/numaNode`, which both the NPU driver and dranet advertise. Without that constraint the scheduler may pair a NUMA-1 NPU with a NUMA-0 VF: the pods reach ready and the transfer is what fails, with `no usable data-plane RoCE NIC on numa=1`.
 
-Because the decode role runs one API server per data-parallel rank, the router must be given every
-rank port: with `ACCELERATOR_TYPE=npu`, the [router step](#1-deploy-the-llm-d-router) layers
-[`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own values file.
+**Known issues:**
 
-**NUMA alignment.** Each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over
-that VF. The claim constrains all five devices to one NUMA node on
-`resource.kubernetes.io/numaNode`, which both the NPU driver and dranet advertise. Without that
-constraint the scheduler may pair a NUMA-1 NPU with a NUMA-0 VF: the pods reach ready and the
-transfer is what fails, with `no usable data-plane RoCE NIC on numa=1`.
-
-Confirm the host can place four NPUs and a VF on a single NUMA node before deploying — the
-constraint requires all five devices in a role to agree, and a pod whose node cannot supply
-them stays Pending on `0/3 nodes are available: 1 cannot allocate all claims`.
-
-Neither the DRA allocation nor the NIXL transfer can be checked by a server dry-run against a
-cluster without these DeviceClasses. Both need a run on the real hardware.
-
-**Cluster prerequisites** beyond the [RBLN NPU Operator](https://docs.rbln.ai/latest/software/system_management/kubernetes/about_npu_operator.html):
-
-- A network DRA driver publishing a `dranet` DeviceClass, so each role can claim a RoCE VF
-  alongside its NPUs. The DeviceClass config has to give that VF an IPv4 address (for example
-  `interface.dhcp`); without one the NIXL side channel cannot bind.
-- Kubernetes 1.34 or later for the `resource.k8s.io/v1` DRA APIs.
+- Neither the DRA allocation nor the NIXL transfer can be checked by a server dry-run against a cluster without these DeviceClasses. Both need a run on the real hardware.
 
 </details>
 <!-- tabs:end -->
@@ -530,6 +567,9 @@ In a P/D deployment the prefill and decode pools scale and fail independently, a
 - **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect NIXL transfer (see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
 - **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode role needs more replicas or a larger TP degree.
 - **Both pools underutilized but latency high** — routing problem. Check the P/D decision ratio and EPP scheduler e2e latency before touching the model servers.
+- **`cks-mooncake`: no RDMA in pod** — check that `rdma/ib` appears in the node's allocatable resources (`kubectl describe node`) and that the RDMA device plugin is running.
+- **`cks-mooncake`: MooncakeConnector fails to initialize** — verify that `mooncake-transfer-engine` is installed in the image (`pip show mooncake-transfer-engine` inside the pod) and that the bootstrap port is free.
+- **`cks-mooncake`: KV transfer failures** — confirm that the prefill and decode pods can reach each other over the RDMA network.
 
 For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
 

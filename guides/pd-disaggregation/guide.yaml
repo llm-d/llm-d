@@ -10,47 +10,47 @@ support:
   accelerators:
     gpu:
       label: NVIDIA GPU
-      notes: "Default. H200 reference · 1 prefill (TP=1) + 1 decode (TP=4), 5 GPUs · `INFRA_PROVIDER`: `base`, `gke`, `gke/a4x`, `gke/a4xmax`, `coreweave`, `aws`, `cks-mooncake` (MooncakeConnector, vLLM only) · SGLang: 1 prefill (TP=2) + 1 decode (TP=2)"
+      notes: "H200 · 1P (TP=1) + 1D (TP=4), 5 GPUs; SGLang 1P (TP=2) + 1D (TP=2) · NIXL"
       model: openai/gpt-oss-120b
       engines: {vllm: validated, sglang: validated}
     amd:
       label: AMD GPU
-      notes: "1 prefill (TP=1) + 1 decode (TP=4) · `INFRA_PROVIDER`: `base`, `amd-ci`, `oci`, `tensorwave`; MoRIIOConnector: `moriio/base`, `moriio/amd-ci`, `moriio/amd-ci-1p1d-tp8` (serve `Qwen/Qwen3-32B`)"
+      notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4) · NIXL"
       model: amd/Llama-3.3-70B-Instruct-FP8-KV
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "1 prefill + 1 decode × 1 GPU via DRA · `INFRA_PROVIDER`: `base`, `rdma` (NIXL over RDMA)"
+      notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL"
       model: Qwen/Qwen3-0.6B
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only (`INFRA_PROVIDER=gke`) · 1 prefill + 1 decode × 8 chips (`2x4`, TP=8) · `TPUConnector`"
+      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector"
       model: Qwen/Qwen3-32B
       engines: {vllm: validated}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only (`INFRA_PROVIDER=gke`) · 1 prefill + 1 decode × 4 chips (`2x2x1`, TP=8) · `TPUConnectorHMA` · vLLM 0.26"
+      notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA"
       model: Qwen/Qwen3.5-397B-A17B-FP8
       engines: {vllm: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
-      notes: "GKE only (`INFRA_PROVIDER=gke`) · dynamic slicing + Kueue · 1 prefill + 1 decode, one `2x2x1` sub-slice each; see [below](#2-deploy-the-model-server)"
+      notes: "TPU7x sub-slices via dynamic slicing + Kueue · 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA"
       model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
       engines: {vllm: community}
     iluvatar:
       label: Iluvatar GPU
-      notes: "BI-V150 · 1 prefill + 1 decode × 2 boards (TP=4) · `IluNixlConnector`"
+      notes: "BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector"
       model: Qwen/Qwen3-32B
       engines: {vllm: community}
     metax:
       label: MetaX GPU
-      notes: "C500X · 1 prefill (TP=2) + 1 decode (TP=4) · NIXL over TCP"
+      notes: "C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP"
       model: Qwen/Qwen3-32B
       engines: {vllm: community}
     npu:
       label: Rebellions NPU
-      notes: "1 prefill (PP=4) + 1 decode (DP=4, EP) × 4 NPUs + 1 RoCE VF via DRA; see [below](#2-deploy-the-model-server)"
+      notes: "4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector"
       model: MiniMaxAI/MiniMax-M2.7
       engines: {vllm: community}
 
@@ -79,7 +79,7 @@ env:
       values: [base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma]
       comment: "valid values per accelerator: table above"
 
-    MODEL: {default: "openai/gpt-oss-120b", comment: "set to the model your accelerator serves (table above); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B"}
+    MODEL: {default: "openai/gpt-oss-120b", comment: "set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
@@ -156,7 +156,7 @@ deploy:
     # `standard` lists the remaining accelerators so that `guide.py emit`
     # runs exactly one apply (and, for dynamic slicing, the LocalQueue first).
     standard:
-      - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, iluvatar, metax]}
+      - when: {ACCELERATOR_TYPE: [gpu, amd, xpu]}
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
@@ -174,6 +174,16 @@ deploy:
         run: |
           # Prefill and decode as LeaderWorkerSet groups, one 2x2x1 sub-slice per replica, admitted by Kueue
           kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    iluvatar:
+      - when: {ACCELERATOR_TYPE: [iluvatar]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    metax:
+      - when: {ACCELERATOR_TYPE: [metax]}
+        run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     npu:
