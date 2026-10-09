@@ -6,6 +6,9 @@ name: nemotron-3-ultra
 # Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllm: vLLM}
   accelerators:
@@ -13,6 +16,9 @@ support:
       label: NVIDIA H200
       notes: "8 nodes × 8 H200 · P/D disaggregated, 6 prefill + 2 decode replicas × TP=8 · `INFRA_PROVIDER`: `base` (HuggingFace download), `gke` (model from a GCS bucket)"
       model: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
 
 env:

@@ -314,6 +314,10 @@ support:
       label: NVIDIA GPU
       model: Qwen/Qwen3-32B          # optional: model this overlay serves (llm-d.ai sets MODEL from it)
       notes: "Default configuration" # optional, one line: Notes column of the support table
+      providers:                     # optional: INFRA_PROVIDER values on this accelerator (llm-d.ai provider selector)
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: cks-mooncake, label: "CKS + Mooncake", engines: [vllm]}  # engines: subset; default = all supported here
       engines: {vllm: validated, sglang: validated, trtllm: validated}
     tpu/v7:
       label: Google TPU v7
@@ -329,7 +333,10 @@ Statuses: `validated` (a nightly E2E workflow runs it), `community` (an overlay 
 - the keys match the `ACCELERATOR_TYPE` / `MODEL_SERVER` `values:`, and the default pair is supported;
 - no `when:` filter targets an unsupported pairing;
 - every supported cell has an overlay at `modelserver/<accelerator>/<engine>/`, and every engine overlay on disk is a supported cell;
-- every `validated` cell has a `nightly-e2e-<guide>-*-acc-*-<engine>-x.yaml` workflow, and every such workflow runs a `validated` cell.
+- every `validated` cell has a `nightly-e2e-<guide>-*-acc-*-<engine>-x.yaml` workflow, and every such workflow runs a `validated` cell;
+- `providers:` names are unique and in the `INFRA_PROVIDER` `values:`, any `engines:` are supported on that accelerator, and every (accelerator, engine, provider) the site can select has a kustomization under `modelserver/<accelerator>/<engine>/` whose path ends in `/<provider>` (extra levels such as `<connector>/<tier>/` are fine).
+
+`providers:` drives the llm-d.ai provider selector (next to accelerator and engine); its default is the `INFRA_PROVIDER` default when the accelerator lists it, else the first entry. A string entry is a name whose label is the name itself. Keep labels identical across guides (`Kubernetes (base)`, `GKE`, `CoreWeave`, `AMD CI`, ...). `INFRA_PROVIDER` is not a variant dimension of the README — keep its steps as plain `when:` filters (`# only when` comments).
 
 `<!-- guide:support start -->` / `<!-- guide:support end -->` renders the matrix as a table. [`guides/env.sh`](../env.sh) refuses an unsupported pair at `source` time.
 
@@ -602,7 +609,7 @@ cleanup:                        # optional — flat list or map of named sub-gro
 support:                        # optional — accelerator x model-server matrix
   engines: {<engine>: <label>}
   accelerators:
-    <accelerator>: {label: <label>, model: <model>, notes: <one line>, engines: {<engine>: validated|community|{status: unsupported, issue: <url>}}}
+    <accelerator>: {label: <label>, model: <model>, notes: <one line>, providers: [<name> | {name, label, engines}], engines: {<engine>: validated|community|{status: unsupported, issue: <url>}}}
 ```
 
 **Step shape**, valid in any step list:
