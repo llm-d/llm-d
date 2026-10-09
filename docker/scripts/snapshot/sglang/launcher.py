@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import os
 import sys
 from typing import Any, Optional
 
@@ -57,39 +58,46 @@ def _get_snapshot_provider_for_launch(server_args) -> Optional[GKESnapshotProvid
 
 def main() -> None:
     try:
+        from sglang.launch_server import run_server  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
         from sglang.srt.entrypoints.http_server import (  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
             _execute_server_warmup,
             launch_server,
         )
+        from sglang.srt.plugins import load_plugins  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
         from sglang.srt.server_args import prepare_server_args  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+        from sglang.srt.utils import kill_process_tree  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
     except ImportError as err:
         raise RuntimeError(
             "sglang must be installed to run snapshot launcher (python3 -m docker.scripts.snapshot.sglang.launcher)"
         ) from err
 
+    load_plugins()
     server_args = prepare_server_args(sys.argv[1:])
     snapshot_provider = _get_snapshot_provider_for_launch(server_args)
-    if snapshot_provider is None:
-        launch_server(server_args)
-        return
+    try:
+        if snapshot_provider is None:
+            run_server(server_args)
+            return
 
-    # The warmup hook saves the post-warmup server status here; the snapshot callback restores it.
-    held_status: dict[str, Any] = {}
+        # The warmup hook saves the post-warmup server status here; the snapshot callback restores it.
+        held_status: dict[str, Any] = {}
 
-    launch_server(
-        server_args,
-        execute_warmup_func=functools.partial(
-            sglang_warmup_and_hold,
-            execute_warmup_func=_execute_server_warmup,
-            held_status=held_status,
-        ),
-        launch_callback=functools.partial(
-            sglang_snapshot_callback,
-            snapshot_provider=snapshot_provider,
-            server_args=server_args,
-            held_status=held_status,
-        ),
-    )
+        launch_server(
+            server_args,
+            execute_warmup_func=functools.partial(
+                sglang_warmup_and_hold,
+                execute_warmup_func=_execute_server_warmup,
+                held_status=held_status,
+            ),
+            launch_callback=functools.partial(
+                sglang_snapshot_callback,
+                snapshot_provider=snapshot_provider,
+                server_args=server_args,
+                held_status=held_status,
+            ),
+        )
+    finally:
+        kill_process_tree(os.getpid(), include_parent=False)
 
 
 if __name__ == "__main__":

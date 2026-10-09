@@ -13,10 +13,3 @@ __all__ = [
     "SnapshotError",
     "get_snapshot_provider",
 ]
-
-try:
-    from .vllm import patch_vllm_lifespan
-
-    __all__.append("patch_vllm_lifespan")
-except ImportError:
-    pass

@@ -42,6 +42,16 @@ def _wait_for_server(server_url: str, attempts: int = 120) -> None:
             time.sleep(1)
 
 
+def _get_ssl_verify(server_args) -> bool | str:
+    """Return the requests verify= setting from SGLang's ssl_verify_of, falling back to False."""
+    try:
+        from sglang.srt.arg_groups.serving_hook import ssl_verify_of  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+
+        return ssl_verify_of(server_args)
+    except ImportError:
+        return False
+
+
 def sglang_snapshot_callback(
     snapshot_provider: GKESnapshotProvider,
     server_args,
@@ -65,14 +75,12 @@ def sglang_snapshot_callback(
     # launch_callback, leaving a brief window before this reset where /health can see Up.
     prev_status = held_status.get("status", tokenizer_manager.server_status)
     tokenizer_manager.server_status = http_server.ServerStatus.Starting
+    ssl_verify = _get_ssl_verify(server_args)
 
     try:
-        from sglang.srt.arg_groups.serving_hook import ssl_verify_of  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
-
         server_url = server_args.url()
         key = server_args.admin_api_key or server_args.api_key
         headers = {"Authorization": f"Bearer {key}"} if key else {}
-        ssl_verify = ssl_verify_of(server_args)
 
         def post(path: str) -> None:
             # An empty JSON body selects SGLang's default (GPU_MEMORY_ALL_TYPES: weights,

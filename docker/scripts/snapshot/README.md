@@ -17,7 +17,7 @@ This package provides a drop-in launcher and snapshot provider that hooks into v
 5. Restore the container and wake up the engine (`engine.wake_up()`) to re-allocate physical GPU VRAM upon restoration before binding HTTP ports and serving traffic.
 
 > [!NOTE]
-> This README is intended for developers maintaining and integrating this snapshot utility. For a comprehensive user guide on single-GPU deployment, cluster configuration, and verification, see the [Pod Snapshots User Guide](../../../guides/gke-pod-snapshots/README.md).
+> This README is intended for developers maintaining and integrating this snapshot utility. For a comprehensive user guide on single-GPU deployment, cluster configuration, and verification, see the [Pod Snapshots User Guide](../../../guides/pod-snapshot/README.md).
 
 ---
 
@@ -40,7 +40,7 @@ flowchart TD
 
 ```text
 docker/scripts/snapshot/
-├── __init__.py           # Package exports (GKESnapshotProvider, patch_vllm_lifespan, get_snapshot_provider)
+├── __init__.py           # Package exports (GKESnapshotProvider, SnapshotError, get_snapshot_provider)
 ├── launcher.py           # CLI entrypoint wrapping vllm serve
 ├── providers.py          # GKESnapshotProvider and provider factory
 ├── test_providers.py     # Unit test suite
