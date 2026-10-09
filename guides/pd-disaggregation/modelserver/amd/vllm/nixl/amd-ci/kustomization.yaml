@@ -4,6 +4,9 @@ kind: Kustomization
 resources:
   - ../base
 
+components:
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+
 patches:
   - path: patch-amd-ci.yaml
 

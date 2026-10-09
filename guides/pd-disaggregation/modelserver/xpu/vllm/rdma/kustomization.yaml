@@ -1,8 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 resources:
   - ../base
+
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 # Override the base GPU-only ResourceClaimTemplates with GPU+NIC aligned versions.
 # The strategic merge patches replace the devices spec to add an RDMA NIC request
@@ -61,35 +63,48 @@ patches:
                         expression: device.attributes["dra.net"].rdma == true
             constraints:
               - matchAttribute: "resource.kubernetes.io/pcieRoot"
-  # Decode Deployment: switch to RDMA transport and XPU kv buffer
-  - target:
-      kind: Deployment
-      name: decode
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: ib,rc,ze_copy
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: UCX_MEMTYPE_CACHE
-          value: "0"
-      - op: replace
-        path: /spec/template/spec/containers/0/args/5
-        value: '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}'
-  # Prefill Deployment: switch to RDMA transport and XPU kv buffer
-  - target:
-      kind: Deployment
-      name: prefill
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/value
-        value: ib,rc,ze_copy
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: UCX_MEMTYPE_CACHE
-          value: "0"
-      - op: replace
-        path: /spec/template/spec/containers/0/args/5
-        value: '{"kv_connector":"NixlConnector", "kv_role":"kv_producer", "kv_buffer_device":"xpu"}'
+  # Both roles: switch to RDMA transport and the XPU kv buffer.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        args:
+                          - "Qwen/Qwen3-0.6B"
+                          - "--disable-uvicorn-access-log"
+                          - "--tensor-parallel-size=1"
+                          - "--block-size=64"
+                          - "--kv-transfer-config"
+                          - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer", "kv_buffer_device":"xpu"}'
+                          - "--max-model-len=32000"
+                        env: &rdma-env
+                          - name: UCX_TLS
+                            value: ib,rc,ze_copy
+                          - name: UCX_MEMTYPE_CACHE
+                            value: "0"
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        args:
+                          - "Qwen/Qwen3-0.6B"
+                          - "--disable-uvicorn-access-log"
+                          - "--tensor-parallel-size=1"
+                          - "--block-size=64"
+                          - "--kv-transfer-config"
+                          - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}'
+                          - "--max-model-len=32000"
+                          - "--port=8200"
+                        env: *rdma-env

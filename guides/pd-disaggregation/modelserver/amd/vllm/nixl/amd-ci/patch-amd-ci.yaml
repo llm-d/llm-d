@@ -8,80 +8,81 @@
 # GPU/TP count per role: prefill = 1, decode = 4.
 #
 
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
 metadata:
-  name: prefill
+  name: pd-disagg
 spec:
-  template:
-    metadata:
-      annotations:
-        k8s.v1.cni.cncf.io/networks: |
-          [
-            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"}
-          ]
-    spec:
-      hostIPC: true
-      volumes:
-        - name: ucx-kernel-config
-          configMap:
-            name: ucx-kernel-config
-      containers:
-        - name: modelserver
-          volumeMounts:
-            # This system does not expose /boot information.
-            # Provide it for UCX to detect DMABUF support.
-            - name: ucx-kernel-config
-              mountPath: /boot/config-6.8.0-124-generic
-              subPath: config-6.8.0-124-generic
-              readOnly: true
-          resources:
-            limits:
-              amd.com/vnic: "1"
-            requests:
-              amd.com/vnic: "1"
-          env:
-            # Enable DMABUF; necessary for UCX < 1.23.x
-            - { name: UCX_ROCM_COPY_DMABUF,           value: "yes" }
-            - { name: UCX_IB_GPU_DIRECT_RDMA,         value: "try" }
-            - { name: UCX_TLS,                        value: "self,rocm,shm,rc" }
-            - { name: UCX_LOG_LEVEL,                  value: "INFO" }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: decode
-spec:
-  template:
-    metadata:
-      annotations:
-        k8s.v1.cni.cncf.io/networks: |
-          [
-            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
-            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
-            {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
-            {"name":"amd-host-device-nad","namespace":"default","interface":"net4"}
-          ]
-    spec:
-      hostIPC: true
-      volumes:
-        - name: ucx-kernel-config
-          configMap:
-            name: ucx-kernel-config
-      containers:
-        - name: modelserver
-          volumeMounts:
-            - name: ucx-kernel-config
-              mountPath: /boot/config-6.8.0-124-generic
-              subPath: config-6.8.0-124-generic
-              readOnly: true
-          resources:
-            limits:
-              amd.com/vnic: "4"
-            requests:
-              amd.com/vnic: "4"
-          env:
-            - { name: UCX_ROCM_COPY_DMABUF,           value: "yes" }
-            - { name: UCX_IB_GPU_DIRECT_RDMA,         value: "try" }
-            - { name: UCX_TLS,                        value: "self,rocm,shm,rc" }
-            - { name: UCX_LOG_LEVEL,                  value: "INFO" }
+  roles:
+    - name: prefill
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            metadata:
+              annotations:
+                k8s.v1.cni.cncf.io/networks: |
+                  [
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net1"}
+                  ]
+            spec:
+              hostIPC: true
+              volumes:
+                - name: ucx-kernel-config
+                  configMap:
+                    name: ucx-kernel-config
+              containers:
+                - name: modelserver
+                  volumeMounts:
+                    # This system does not expose /boot information.
+                    # Provide it for UCX to detect DMABUF support.
+                    - name: ucx-kernel-config
+                      mountPath: /boot/config-6.8.0-124-generic
+                      subPath: config-6.8.0-124-generic
+                      readOnly: true
+                  resources:
+                    limits:
+                      amd.com/vnic: "1"
+                    requests:
+                      amd.com/vnic: "1"
+                  env:
+                    # Enable DMABUF; necessary for UCX < 1.23.x
+                    - { name: UCX_ROCM_COPY_DMABUF,           value: "yes" }
+                    - { name: UCX_IB_GPU_DIRECT_RDMA,         value: "try" }
+                    - { name: UCX_TLS,                        value: "self,rocm,shm,rc" }
+                    - { name: UCX_LOG_LEVEL,                  value: "INFO" }
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            metadata:
+              annotations:
+                k8s.v1.cni.cncf.io/networks: |
+                  [
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net4"}
+                  ]
+            spec:
+              hostIPC: true
+              volumes:
+                - name: ucx-kernel-config
+                  configMap:
+                    name: ucx-kernel-config
+              containers:
+                - name: modelserver
+                  volumeMounts:
+                    - name: ucx-kernel-config
+                      mountPath: /boot/config-6.8.0-124-generic
+                      subPath: config-6.8.0-124-generic
+                      readOnly: true
+                  resources:
+                    limits:
+                      amd.com/vnic: "4"
+                    requests:
+                      amd.com/vnic: "4"
+                  env:
+                    - { name: UCX_ROCM_COPY_DMABUF,           value: "yes" }
+                    - { name: UCX_IB_GPU_DIRECT_RDMA,         value: "try" }
+                    - { name: UCX_TLS,                        value: "self,rocm,shm,rc" }
+                    - { name: UCX_LOG_LEVEL,                  value: "INFO" }

@@ -1,81 +1,85 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
 metadata:
-  name: decode
+  name: pd-disagg
 spec:
-  replicas: 1
-  template:
-    spec:
-      securityContext:
-        fsGroup: 107
-        supplementalGroups:
-          - 107
-      containers:
-        - name: modelserver
-          command: ["vllm", "serve"]
-          args:
-            - "Qwen/Qwen3-0.6B"
-            - "--disable-uvicorn-access-log"
-            - "--tensor-parallel-size=1"
-            - "--block-size=64"
-            - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"cpu"}'
-            - "--max-model-len=32000"
-            - "--port=8200"
-          env:
-            - name: UCX_TLS
-              value: "tcp"
-            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-              value: "5600"
-            - name: VLLM_USE_V1
-              value: "1"
-            - name: TORCH_LLM_ALLREDUCE
-              value: "1"
-            - name: VLLM_WORKER_MULTIPROC_METHOD
-              value: "spawn"
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-          resources:
-            limits:
-              cpu: "16"
-              memory: 64Gi
-            requests:
-              cpu: "16"
-              memory: 64Gi
-            claims:
-              - name: xpu-decode-claim
-          volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
-            - mountPath: /.cache
-              name: torch-compile-cache
-          startupProbe:
-            initialDelaySeconds: 30
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 60
-          livenessProbe:
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 20
-          readinessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
-      resourceClaims:
-        - name: xpu-decode-claim
-          resourceClaimTemplateName: xpu-decode-claim
-      volumes:
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 16Gi
-        - name: torch-compile-cache
-          emptyDir: {}
+  roles:
+    - name: decode
+      spec:
+        replicas: 1
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              securityContext:
+                fsGroup: 107
+                supplementalGroups:
+                  - 107
+              containers:
+                - name: modelserver
+                  command: ["vllm", "serve"]
+                  args:
+                    - "Qwen/Qwen3-0.6B"
+                    - "--disable-uvicorn-access-log"
+                    - "--tensor-parallel-size=1"
+                    - "--block-size=64"
+                    - "--kv-transfer-config"
+                    - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"cpu"}'
+                    - "--max-model-len=32000"
+                    - "--port=8200"
+                  env:
+                    - name: UCX_TLS
+                      value: "tcp"
+                    - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+                      value: "5600"
+                    - name: VLLM_USE_V1
+                      value: "1"
+                    - name: TORCH_LLM_ALLREDUCE
+                      value: "1"
+                    - name: VLLM_WORKER_MULTIPROC_METHOD
+                      value: "spawn"
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 64Gi
+                    requests:
+                      cpu: "16"
+                      memory: 64Gi
+                    claims:
+                      - name: xpu-decode-claim
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                  startupProbe:
+                    initialDelaySeconds: 30
+                    periodSeconds: 30
+                    timeoutSeconds: 10
+                    failureThreshold: 60
+                  livenessProbe:
+                    periodSeconds: 30
+                    timeoutSeconds: 10
+                    failureThreshold: 20
+                  readinessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 6
+              resourceClaims:
+                - name: xpu-decode-claim
+                  resourceClaimTemplateName: xpu-decode-claim
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 16Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
