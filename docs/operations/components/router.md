@@ -63,7 +63,7 @@ router:
   | 3 | 2.7x |
   | 4 | 3.5x |
 
-- **Flow Control Scope**: Flow control state (queues, fairness accounting, and saturation view) is per replica and not shared, so priority, fairness, and per-band capacity limits apply within each replica's share of traffic.
+- **Flow Control Scope**: Flow control state (queues, fairness accounting, and saturation view) is per EPP replica and not shared, so priority, fairness, and per-band capacity limits apply within each EPP replica's share of traffic.
 - **Warning (Plugin & Prefix Compatibility)**: In active-active mode, you must only use active-active compatible plugins—specifically stateless schedulers (`random-picker`), session affinity (`session-affinity-filter`), or plugins that query backend model servers dynamically for real-time metrics and state (such as queue depth or KV-cache utilization scorers). Avoid approximate prefix caching plugins in active-active mode; because replicas do not share local memory state, prefix routing partitions across replicas and degrades cache hit rates significantly.
 
 #### Horizontal Pod Autoscaling (HPA)
