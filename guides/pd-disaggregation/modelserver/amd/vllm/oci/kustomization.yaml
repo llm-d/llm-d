@@ -7,106 +7,96 @@ kind: Kustomization
 # replicas to fill one node.
 resources:
   - ../base
+
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+
 patches:
-  - target:
-      kind: Deployment
-      name: decode
-    patch: |-
-      - op: add
-        path: /spec/template/metadata/annotations
-        value:
-          # SR-IOV VFs via Multus CNI — 4 interfaces to match tensor parallelism (TP=4).
-          # The SriovNetwork CR "sriov-rdma-vf" is published to namespace "default".
-          k8s.v1.cni.cncf.io/networks: |
-            [
-              {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"},
-              {"name":"sriov-rdma-vf","namespace":"default","interface":"net2"},
-              {"name":"sriov-rdma-vf","namespace":"default","interface":"net3"},
-              {"name":"sriov-rdma-vf","namespace":"default","interface":"net4"}
-            ]
-      # OCI SR-IOV RDMA VFs via NVIDIA Network Operator — 1 VF per GPU in TP group.
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1sriov-rdma-vf
-        value: "4"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1sriov-rdma-vf
-        value: "4"
-      # UCX transport for OCI RoCE via SR-IOV VFs.
-      # rc/ud = RDMA reliable/unreliable connected over RoCE, sm = shared memory, cuda_copy = fallback.
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: UCX_TLS
-          value: "rc,ud,sm,self,cuda_copy"
-      # RoCE v2 GID index — verify with `show_gids` on the host; typically 3 on OCI.
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: UCX_IB_GID_INDEX
-          value: "3"
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          name: dev-infiniband
-          mountPath: /dev/infiniband
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: dev-infiniband
-          hostPath:
-            path: /dev/infiniband
-            type: Directory
-      # IPC_LOCK allows UCX/RDMA to lock memory pages (mlock) — required for SR-IOV RDMA on OCI.
-      - op: add
-        path: /spec/template/spec/containers/0/securityContext
-        value:
-          capabilities:
-            add:
-              - IPC_LOCK
-  - target:
-      kind: Deployment
-      name: prefill
-    patch: |-
-      - op: add
-        path: /spec/template/metadata/annotations
-        value:
-          # SR-IOV VFs via Multus CNI — 1 interface to match tensor parallelism (TP=1).
-          k8s.v1.cni.cncf.io/networks: |
-            [
-              {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"}
-            ]
-      # 1 SR-IOV VF per prefill pod (TP=1 → 1 VF).
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1sriov-rdma-vf
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1sriov-rdma-vf
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: UCX_TLS
-          value: "rc,ud,sm,self,cuda_copy"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: UCX_IB_GID_INDEX
-          value: "3"
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts/-
-        value:
-          name: dev-infiniband
-          mountPath: /dev/infiniband
-      - op: add
-        path: /spec/template/spec/volumes/-
-        value:
-          name: dev-infiniband
-          hostPath:
-            path: /dev/infiniband
-            type: Directory
-      - op: add
-        path: /spec/template/spec/containers/0/securityContext
-        value:
-          capabilities:
-            add:
-              - IPC_LOCK
+  # Settings shared by both roles: written once under prefill and aliased into decode.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg
+      spec:
+        roles:
+          - name: prefill
+            spec: &oci
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        env:
+                          # UCX transport for OCI RoCE via SR-IOV VFs.
+                          # rc/ud = RDMA reliable/unreliable connected over RoCE, sm = shared memory, cuda_copy = fallback.
+                          - name: UCX_TLS
+                            value: "rc,ud,sm,self,cuda_copy"
+                          # RoCE v2 GID index — verify with `show_gids` on the host; typically 3 on OCI.
+                          - name: UCX_IB_GID_INDEX
+                            value: "3"
+                        volumeMounts:
+                          - name: dev-infiniband
+                            mountPath: /dev/infiniband
+                        # IPC_LOCK allows UCX/RDMA to lock memory pages (mlock) — required for SR-IOV RDMA on OCI.
+                        securityContext:
+                          capabilities:
+                            add:
+                              - IPC_LOCK
+                    volumes:
+                      - name: dev-infiniband
+                        hostPath:
+                          path: /dev/infiniband
+                          type: Directory
+          - name: decode
+            spec: *oci
+  # OCI SR-IOV RDMA VFs via NVIDIA Network Operator — 1 VF per GPU in the TP group, and the
+  # matching Multus interfaces. The SriovNetwork CR "sriov-rdma-vf" is published to namespace "default".
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  metadata:
+                    annotations:
+                      # 1 interface to match tensor parallelism (TP=1).
+                      k8s.v1.cni.cncf.io/networks: |
+                        [
+                          {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"}
+                        ]
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            nvidia.com/sriov-rdma-vf: "1"
+                          requests:
+                            nvidia.com/sriov-rdma-vf: "1"
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  metadata:
+                    annotations:
+                      # 4 interfaces to match tensor parallelism (TP=4).
+                      k8s.v1.cni.cncf.io/networks: |
+                        [
+                          {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"},
+                          {"name":"sriov-rdma-vf","namespace":"default","interface":"net2"},
+                          {"name":"sriov-rdma-vf","namespace":"default","interface":"net3"},
+                          {"name":"sriov-rdma-vf","namespace":"default","interface":"net4"}
+                        ]
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            nvidia.com/sriov-rdma-vf: "4"
+                          requests:
+                            nvidia.com/sriov-rdma-vf: "4"

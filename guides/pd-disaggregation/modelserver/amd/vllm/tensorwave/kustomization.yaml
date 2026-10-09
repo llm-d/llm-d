@@ -2,24 +2,30 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+
 patches:
-  - target:
-      kind: Deployment
-      name: decode
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
-  - target:
-      kind: Deployment
-      name: prefill
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
+  # Both roles get one RDMA device: written once under prefill and aliased into decode.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg
+      spec:
+        roles:
+          - name: prefill
+            spec: &tensorwave
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+          - name: decode
+            spec: *tensorwave
