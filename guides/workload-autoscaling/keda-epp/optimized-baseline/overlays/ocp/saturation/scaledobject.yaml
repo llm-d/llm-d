@@ -5,8 +5,6 @@
 # with epp-running-requests per-replica target 16; maxReplicaCount 10; overshoot by
 # the 300s stabilization windows), but the triggers query the OpenShift Thanos
 # Querier over HTTPS with authModes:bearer and authenticationRef:keda-prometheus-auth.
-# The demand-aware guard is NOT offered for this signal (the replica-unit demand
-# conversion is only correct for queue depth, not a pool-wide ratio).
 #
 # ${...} placeholders are rendered by envsubst at apply time (see the guide).
 # inference_pool is the InferencePool name (the EPP's --pool-name), its own

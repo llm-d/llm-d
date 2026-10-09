@@ -6,8 +6,7 @@
 #   - epp-queue-size       unmet demand (flow-control queue depth), per-replica target 1
 #   - epp-running-requests active concurrency, per-replica target 16
 # Overshoot is handled by the 300s stabilization windows: a still-loading replica
-# is not counted as fresh demand. The demand-aware guard variant
-# (overlays/k8s/queue-guard) is the precise alternative to the windows.
+# is not counted as fresh demand.
 #
 # Triggers scrape the bundled kube-prometheus-stack over plain in-cluster HTTP
 # (no client auth). Do NOT enable TLS on the bundled Prometheus for this path:

@@ -56,7 +56,6 @@ export EPP_SERVICE=optimized-baseline-epp
 export INFERENCE_POOL=optimized-baseline
 export SIGNAL=queue # options: queue, saturation
 export ENV=existing # options: existing, ocp
-export OVERSHOOT=windows # options: windows, guard
 export OVERLAY_ROOT=${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline
 ```
 <!-- guide:env.static end -->
@@ -218,14 +217,13 @@ rename is needed.
 
 ## Choose Your Path
 
-Pick one signal and one overshoot strategy, set the matching environment variables,
-and apply the leaf overlay below. Do not apply two `ScaledObject`s to one Deployment.
+Pick one signal, set the matching environment variables, and apply the leaf overlay
+below. Do not apply two `ScaledObject`s to one Deployment.
 
-| `SIGNAL` | `OVERSHOOT` | Leaf overlay | Use when |
-|---|---|---|---|
-| `queue` (default) | `windows` (default) | `overlays/{k8s,ocp}/queue` | Mature, nightly-covered path; portable startup smoothing. |
-| `queue` | `guard` | `overlays/{k8s,ocp}/queue-guard` | You need scaleUp=0 and have `kube-state-metrics` scraped. |
-| `saturation` (experimental) | `windows` | `overlays/{k8s,ocp}/saturation` | Scale before requests queue; validate thresholds first. |
+| `SIGNAL` | Leaf overlay | Use when |
+|---|---|---|
+| `queue` (default) | `overlays/{k8s,ocp}/queue` | Mature, nightly-covered path; portable startup smoothing. |
+| `saturation` (experimental) | `overlays/{k8s,ocp}/saturation` | Scale before requests queue; validate thresholds first. |
 
 Signal background and the saturation-detector choice: [Scaling Signals](../../../docs/architecture/advanced/autoscaling/keda-epp.md#scaling-signals) and [Saturation Detector](../../../docs/architecture/advanced/autoscaling/keda-epp.md#saturation-detector). The saturation signal has no nightly end-to-end coverage yet; validate it against your own load before production use.
 
@@ -258,13 +256,12 @@ For how thresholds are interpreted (per-replica `AverageValue` targets) and how 
 
 For how flow-control on/off changes which trigger sees demand, see [Flow Control On vs. Off](../../../docs/architecture/advanced/autoscaling/keda-epp.md#flow-control-on-vs-off).
 
-## Overshoot While Pods Start (optional)
+## Overshoot While Pods Start
 
-New replicas take minutes to load a model, so scale-up can overshoot. The default
-`OVERSHOOT=windows` smooths this with HPA stabilization windows. To opt into the
-demand-aware guard (queue signal only), set `OVERSHOOT=guard`, which credits the
-not-yet-Ready replicas against demand and lets scale-up act immediately. To learn how each works and
-when to pick which, see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
+New replicas take minutes to load a model, so scale-up can overshoot: the HPA keeps
+seeing demand that in-flight capacity will soon absorb. The overlays smooth this with
+HPA stabilization windows (300s scale-up and scale-down). For how this works, see
+[Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
 
 ## Apply the KEDA ScaledObject
 
@@ -278,8 +275,7 @@ review and adjust directly in the YAML are:
 
 - Prometheus `serverAddress` (the bundled kube-prometheus-stack on generic
   Kubernetes; the OCP overlays point it at Thanos Querier)
-- The trigger thresholds (and, for the guard overlay, the matching per-replica
-  constants in the `scalingModifiers` formula)
+- The trigger thresholds (per-replica `AverageValue` targets)
 
 This walkthrough intentionally begins with one target replica so that a 1-to-N
 scale-up is observable. Scale the target Deployment down before creating the
@@ -311,21 +307,10 @@ Queue signal (default):
 
 <!-- guide:deploy.apply_k8s_queue start -->
 ```bash
-# only when SIGNAL=queue and ENV=existing and OVERSHOOT=windows:
+# only when SIGNAL=queue and ENV=existing:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_queue end -->
-
-Queue signal with the overshoot guard (`OVERSHOOT=guard`): same signal, but the
-overshoot-aware `scalingModifiers` formula replaces the scale-up stabilization
-window (see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation)).
-
-<!-- guide:deploy.apply_k8s_queue_guard start -->
-```bash
-# only when SIGNAL=queue and ENV=existing and OVERSHOOT=guard:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
-```
-<!-- guide:deploy.apply_k8s_queue_guard end -->
 
 Saturation signal (experimental):
 
@@ -346,21 +331,10 @@ Queue signal (default):
 
 <!-- guide:deploy.apply_ocp_queue start -->
 ```bash
-# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=windows:
+# only when SIGNAL=queue and ENV=ocp:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_queue end -->
-
-Queue signal with the overshoot guard (`OVERSHOOT=guard`): the guard rewrites the
-trigger list, so this leaf bearer-authenticates all three triggers against Thanos
-(see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation)).
-
-<!-- guide:deploy.apply_ocp_queue_guard start -->
-```bash
-# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=guard:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
-```
-<!-- guide:deploy.apply_ocp_queue_guard end -->
 
 Saturation signal (experimental):
 
@@ -442,17 +416,14 @@ seq 1 100 | xargs -P 16 -I{} \
 Adjust concurrency only if the reference load does not cross the configured
 threshold. Keep request counts and timeouts bounded while tuning.
 
-With `OVERSHOOT=guard` the reference load above exercises scale-up the same way it
-does for the windows path: the guard combines queue depth and running requests in its
-formula, so moderate concurrency drives scale-up through the running-request term
-before any queue forms. To exercise the formula's queue-driven branch specifically -
-where demand comes from a backlog rather than from concurrency - raise `-P`
-(concurrency) and `max_tokens` until `llm_d_epp_flow_control_queue_size` goes
+The reference load above drives scale-up through the running-request trigger
+(per-replica target 16) before any queue forms. To exercise the queue trigger
+specifically - where demand comes from a backlog rather than from concurrency - raise
+`-P` (concurrency) and `max_tokens` until `llm_d_epp_flow_control_queue_size` goes
 non-zero. The queue only forms once load exceeds a replica's serving capacity, and
 the level needed depends on the model, accelerator, tensor-parallel degree, and
 `max-model-len`, so climb from a few hundred concurrent requests rather than assuming
-a fixed value. See
-[Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
+a fixed value.
 
 ## Verify Scale-Up
 
@@ -545,20 +516,14 @@ available, and the generated HPA has no scaling-limited conditions.
 
 <!-- guide:cleanup start -->
 ```bash
-# only when SIGNAL=queue and ENV=existing and OVERSHOOT=windows:
+# only when SIGNAL=queue and ENV=existing:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
-
-# only when SIGNAL=queue and ENV=existing and OVERSHOOT=guard:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=existing:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
-# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=windows:
+# only when SIGNAL=queue and ENV=ocp:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
-
-# only when SIGNAL=queue and ENV=ocp and OVERSHOOT=guard:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue-guard | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=ocp:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
