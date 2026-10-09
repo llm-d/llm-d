@@ -26,8 +26,7 @@ We currently offer the following:
 ## Multimodal and Omni Models
 
 * [Serve Multimodal Models](./multimodal-serving/README.md) - Serve image, video, and audio input (e.g. `Qwen/Qwen3-VL-32B-Instruct`) with prefix-cache aware routing that matches media as well as text, in an aggregated topology or with dedicated Encode workers (E/PD, E/P/D).
-* [Serve Omni Models](./omni-serving/README.md) - Serve a model that answers in text and audio (e.g. `Qwen/Qwen3-Omni-30B-A3B-Instruct`) from one vLLM-Omni pool behind the llm-d Router.
-* [Diffusion Serving](./diffusion-serving/README.md) - serve media generation models (text-to-image, image-to-image, text-to-speech) on vLLM-Omni or SGLang.
+* [Serve Omni Models](./omni-serving/README.md) - Serve a model that answers in text and audio (e.g. `Qwen/Qwen3-Omni-30B-A3B-Instruct`) from one vLLM-Omni pool behind the llm-d Router, or a single-endpoint text-to-image, image-to-image, or text-to-speech model on vLLM-Omni or SGLang.
 
 ## Models
 

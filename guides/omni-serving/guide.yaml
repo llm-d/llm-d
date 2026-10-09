@@ -10,16 +10,19 @@ name: omni-serving
 # `providers` lists the INFRA_PROVIDER values the accelerator takes (each
 # needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
 # narrows one to a subset); llm-d.ai turns it into the provider selector.
+# Overlays are modelserver/<acc>/<engine>/<TASK>/<provider>/; SGLang serves
+# the two image tasks only.
 support:
-  engines: {vllmomni: vLLM-Omni}
+  engines: {vllmomni: vLLM-Omni, sglang: SGLang}
   accelerators:
     gpu:
       label: NVIDIA GPU
-      notes: "H100 80 GB reference · 1 replica × 2 GPUs (thinker on GPU 0, talker + code2wav on GPU 1) · `INFRA_PROVIDER=base`"
+      notes: "Served model is `TASK=omni`'s (others in the Overview table) · H100 80 GB reference · `omni`: 1 replica × 2 GPUs · `text-to-image`, `image-to-image`, `text-to-speech`: 3 replicas × 1 GPU · SGLang: `text-to-image` and `image-to-image` only"
       model: Qwen/Qwen3-Omni-30B-A3B-Instruct
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllmomni: community}
+        - {name: gke, label: "GKE"}
+      engines: {vllmomni: community, sglang: community}
 
 env:
   static:
@@ -33,12 +36,15 @@ env:
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
 
+    # What the pool serves: `omni` = one omni checkpoint answering several
+    # endpoints; the others = one single-endpoint generator per pool.
+    TASK: {default: omni, values: [omni, text-to-image, image-to-image, text-to-speech]}
     ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
-    MODEL_SERVER: {default: vllmomni, values: [vllmomni]}
-    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    INFRA_PROVIDER: {default: base, values: [base]}
+    MODEL_SERVER: {default: vllmomni, values: [vllmomni, sglang]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<TASK>/<INFRA_PROVIDER>/.
+    INFRA_PROVIDER: {default: base, values: [base, gke]}
 
-    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the overlay serves (table above)"}
+    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image, image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
@@ -65,10 +71,22 @@ prerequisites:
 
 deploy:
   router_values:
-    - run: |
-        # Paths to values files
-        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+    base:
+      - run: |
+          # Paths to values files
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+    omni:
+      - when: {TASK: [omni]}
+        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/omni.values.yaml"
+    text-to-image:
+      - when: {TASK: [text-to-image]}
+        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-image.values.yaml"
+    image-to-image:
+      - when: {TASK: [image-to-image]}
+        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/image-to-image.values.yaml"
+    text-to-speech:
+      - when: {TASK: [text-to-speech]}
+        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}
@@ -84,9 +102,26 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
-    - run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    omni:
+      - when: {TASK: [omni]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/omni/${INFRA_PROVIDER}/
+    text-to-image:
+      - when: {TASK: [text-to-image]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-image/${INFRA_PROVIDER}/
+    image-to-image:
+      - when: {TASK: [image-to-image]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/image-to-image/${INFRA_PROVIDER}/
+    text-to-speech:
+      - when: {TASK: [text-to-speech]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}/
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -97,52 +132,95 @@ verify:
     standalone:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
-    chat:
-      - run: |
-          # Text in, text out
-          kubectl run chat-test --rm -i --restart=Never \
+    omni:
+      chat:
+        - when: {TASK: [omni]}
+          run: |
+            # Text in, text out
+            kubectl run chat-test --rm -i --restart=Never \
+              --image=${CURL_TEST_IMAGE} \
+              --namespace="${NAMESPACE}" \
+              --env="IP=${IP}" \
+              --env="MODEL=${MODEL}" \
+              -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"What can you do, in one sentence?\"}], \"modalities\": [\"text\"], \"max_tokens\": 64}" \
+                | jq -r ".choices[0].message.content"'
+      chat_audio:
+        - when: {TASK: [omni]}
+          run: |
+            # Text in, text and speech out: the thinker writes the answer, the
+            # talker and code2wav stages turn it into audio (base64 WAV)
+            kubectl run chat-audio-test --rm -i --restart=Never \
+              --image=${CURL_TEST_IMAGE} \
+              --namespace="${NAMESPACE}" \
+              --env="IP=${IP}" \
+              --env="MODEL=${MODEL}" \
+              -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"Say hello to llm-d in one short sentence.\"}], \"modalities\": [\"text\", \"audio\"]}" \
+                | jq -r ".choices[] | if .message.audio then \"audio: \(.message.audio.data | length) base64 characters\" else \"text: \(.message.content)\" end"'
+    text-to-image:
+      - when: {TASK: [text-to-image]}
+        run: |
+          # Text in, image out: report the format of the returned image
+          # (PNG from vLLM-Omni, JPEG from SGLang) and its size
+          kubectl run t2i-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
-              -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"What can you do, in one sentence?\"}], \"modalities\": [\"text\"], \"max_tokens\": 64}" \
-              | jq -r ".choices[0].message.content"'
-    chat_audio:
-      - run: |
-          # Text in, text and speech out: the thinker writes the answer, the
-          # talker and code2wav stages turn it into audio (base64 WAV)
-          kubectl run chat-audio-test --rm -i --restart=Never \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/images/generations" -H "Content-Type: application/json" \
+              -d "{\"model\": \"${MODEL}\", \"prompt\": \"a red apple on a wooden table\", \"size\": \"512x512\", \"n\": 1, \"response_format\": \"b64_json\"}" \
+              | jq -r "if .data[0].b64_json then (.data[0].b64_json | (if startswith(\"iVBORw0KGgo\") then \"PNG\" elif startswith(\"/9j/\") then \"JPEG\" else \"unexpected\" end) + \" image, \(length) base64 characters\") else . end"'
+    image-to-image:
+      - when: {TASK: [image-to-image]}
+        run: |
+          # Image and instruction in (multipart/form-data), edited image out.
+          # The input is a 64x64 red PNG embedded here, so no download is needed
+          kubectl run i2i-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
-              -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"Say hello to llm-d in one short sentence.\"}], \"modalities\": [\"text\", \"audio\"]}" \
-              | jq -r ".choices[] | if .message.audio then \"audio: \(.message.audio.data | length) base64 characters\" else \"text: \(.message.content)\" end"'
-    endpoints:
-      - run: |
-          # One request per OpenAI endpoint path the pool fronts; the status
-          # code comes from whichever component answered
-          kubectl run endpoints-test --rm -i --restart=Never \
+            -- /bin/sh -c 'echo "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAS0lEQVR42u3PQQkAAAgAsetfWiP4FgYrsKZeS0BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDgsqnc8OJg6Ln3AAAAAElFTkSuQmCC" | base64 -d > /tmp/input.png
+              curl -sS -X POST "http://${IP}/v1/images/edits" \
+                -F "image=@/tmp/input.png" -F "prompt=turn the red square into a blue circle" \
+                -F "model=${MODEL}" -F "size=512x512" -F "n=1" \
+              | jq -r "if .data[0].b64_json then (.data[0].b64_json | (if startswith(\"iVBORw0KGgo\") then \"PNG\" elif startswith(\"/9j/\") then \"JPEG\" else \"unexpected\" end) + \" image, \(length) base64 characters\") else . end"'
+    text-to-speech:
+      - when: {TASK: [text-to-speech]}
+        run: |
+          # Text in, speech out: the response body is the WAV file itself;
+          # a valid one starts with "RIFF"
+          kubectl run tts-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -o /dev/null -w "/v1/audio/speech: HTTP %{http_code}\n" -X POST "http://${IP}/v1/audio/speech" -H "Content-Type: application/json" \
-                -d "{\"model\": \"${MODEL}\", \"input\": \"llm-d routes omni requests.\", \"response_format\": \"wav\"}"
-              curl -sS -o /dev/null -w "/v1/images/generations: HTTP %{http_code}\n" -X POST "http://${IP}/v1/images/generations" -H "Content-Type: application/json" \
-                -d "{\"model\": \"${MODEL}\", \"prompt\": \"a red apple on a wooden table\", \"size\": \"512x512\", \"n\": 1}"'
+            -- /bin/sh -c 'curl -sS -o /tmp/speech.wav -w "HTTP %{http_code}, %{size_download} bytes, %{content_type}\n" \
+                -X POST "http://${IP}/v1/audio/speech" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"input\": \"llm-d routes speech requests to the least busy pod.\", \"voice\": \"vivian\", \"response_format\": \"wav\"}"
+              echo "header: $(head -c 4 /tmp/speech.wav)"'
     pod_logs:
       - run: |
-          # The model server's access log: every request above, by endpoint
-          # path and status, on the pods of the Omni pool
+          # The model servers' logs: every request above, by endpoint path,
+          # on the pods of the pool (each line prefixed with its pod name)
           kubectl logs -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -c modelserver --tail=-1 --prefix \
-            | grep -E '"POST /v1/(chat/completions|audio/speech|images/generations) HTTP' || true
+            | grep -E 'POST /v1/(chat/completions|images/generations|images/edits|audio/speech)' || true
 
 cleanup:
   modelserver:
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+    omni:
+      - when: {TASK: [omni]}
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/omni/${INFRA_PROVIDER}
+    text-to-image:
+      - when: {TASK: [text-to-image]}
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-image/${INFRA_PROVIDER}
+    image-to-image:
+      - when: {TASK: [image-to-image]}
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/image-to-image/${INFRA_PROVIDER}
+    text-to-speech:
+      - when: {TASK: [text-to-speech]}
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
