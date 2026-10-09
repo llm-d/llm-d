@@ -5,6 +5,9 @@ name: pd-disaggregation
 # it), or {status: unsupported, issue: <url>} for a tracked gap. `model:`
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllm: vLLM, sglang: SGLang}
   accelerators:
@@ -12,46 +15,77 @@ support:
       label: NVIDIA GPU
       notes: "H200 · 1P (TP=1) + 1D (TP=4), 5 GPUs; SGLang 1P (TP=2) + 1D (TP=2) · NIXL"
       model: openai/gpt-oss-120b
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: gke/a4x, label: "GKE A4X (GB200)", engines: [vllm]}
+        - {name: gke/a4xmax, label: "GKE A4X Max (GB300)", engines: [vllm]}
+        - {name: coreweave, label: "CoreWeave"}
+        - {name: aws, label: "AWS"}
+        - {name: cks-mooncake, label: "CKS + Mooncake", engines: [vllm]}
       engines: {vllm: validated, sglang: validated}
     amd:
       label: AMD GPU
       notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4) · NIXL"
       model: amd/Llama-3.3-70B-Instruct-FP8-KV
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: amd-ci, label: "AMD CI"}
+        - {name: oci, label: "OCI"}
+        - {name: tensorwave, label: "TensorWave"}
+        - {name: moriio/base, label: "MoRI-IO (base)"}
+        - {name: moriio/amd-ci, label: "MoRI-IO (AMD CI)"}
+        - {name: moriio/amd-ci-1p1d-tp8, label: "MoRI-IO (AMD CI, 1P1D TP8)"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
       notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL"
       model: Qwen/Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: rdma, label: "RDMA"}
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
       notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: validated}
     "tpu/v7":
       label: Google TPU v7
       notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA"
       model: Qwen/Qwen3.5-397B-A17B-FP8
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
       notes: "TPU7x sub-slices via dynamic slicing + Kueue · 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA"
       model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
     iluvatar:
       label: Iluvatar GPU
       notes: "BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
     metax:
       label: MetaX GPU
       notes: "C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
     npu:
       label: Rebellions NPU
       notes: "4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector"
       model: MiniMaxAI/MiniMax-M2.7
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
 
 env:
