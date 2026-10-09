@@ -65,6 +65,18 @@ roles:
 
 Then point HPA, KEDA, or any `/scale`-aware autoscaler at the auto-created `DisaggregatedSetRoleScaler` named `<ds>-<role>` (for example `pd-disagg-vllm-prefill`). See the [LWS autoscaling example](https://lws.sigs.k8s.io/docs/examples/disaggregatedset/autoscaling/) and the [KEDA token-aware P/D guide](../../../guides/workload-autoscaling/keda-epp-token-aware/README.md).
 
+## Kueue-Scheduled Sets (TPU7x Dynamic Sub-slices)
+
+The P/D guide's [TPU7x dynamic sub-slice overlay](../../../guides/pd-disaggregation/README.md#2-deploy-the-model-server) runs `pd-disagg-tpu-vllm` under Kueue Topology-Aware Scheduling, with the `kueue.x-k8s.io/queue-name` label on each role's `metadata` and the default `groupIdentity: Ordinal`.
+
+<details>
+<summary><b>Why these two settings differ from the NVIDIA GPU sets</b></summary>
+
+* The controller copies role `metadata.labels` to the LeaderWorkerSets it generates, and Kueue reads the queue name from the LeaderWorkerSet metadata; labels on the set itself never reach it.
+* The Kueue LeaderWorkerSet integration creates one Workload per numeric group index and ungates pods that are not owned by a StatefulSet. `Hash` mode assigns random group keys and runs leaders through a Deployment, so its groups would be released without admission and no `Slice` would be formed.
+
+</details>
+
 ## Known Issue: Rolling Updates Can Stall on Fully Allocated Clusters
 
 The controller creates new pods before draining their old counterparts. On a cluster with no spare accelerators the new pods stay Pending and the rollout never progresses. Keep at least one decode's worth of free accelerators before a template change (for example by scaling `slices` down by one first), or scale the old revision's LeaderWorkerSet down manually.
