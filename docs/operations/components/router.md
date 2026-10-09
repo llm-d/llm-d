@@ -14,11 +14,11 @@ When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`
 
 #### Active-Passive Mode
 
-In Active-Passive mode, traffic routes to a single primary replica set while standby replicas remain available for failover.
+In Active-Passive mode, traffic routes to primary replica(s) while standby replicas remain available for failover.
 
-- **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the active replica handles external processing requests.
-- **Priority Routing (Recommended)**: Routes traffic to primary EPP replicas (Priority 0) and shifts traffic to warm standby EPP replicas (Priority 1) upon primary failure. This reduces failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. Supported in standalone service mode (`router.proxy.priorityRouting.enabled: true`) and GKE Gateway mode (`provider.gke.preferredBackends.enabled: true`).
-- **Leader Election with Fail-Open**: Coordinates a single active leader via a Kubernetes `coordination.k8s.io/Lease` (`router.epp.flags.ha-enable-leader-election: true`) while standby replicas remain idle. With fail-open enabled (`router.proxy.failOpen: true`), client requests are routed directly to backend model servers and are not dropped if the leader fails, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
+- **Sizing & Capacity Impact**: Scaling standby replicas (or total replica count under single-leader election) does not increase total request throughput capacity, as only the active primary replica(s) handle external processing requests.
+- **Priority Routing (Recommended)**: In standalone service mode (`router.proxy.priorityRouting.enabled: true`), Envoy routes traffic to primary EPP replicas (Priority 0) and shifts traffic to warm standby EPP replicas (Priority 1) upon primary failure, reducing failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. (In GKE Gateway mode, `provider.gke.preferredBackends.enabled: true` configures equivalent primary/standby tiering via GKE Preferred Backends.)
+- **Leader Election with Fail-Open**: Coordinates a single active leader via a Kubernetes `coordination.k8s.io/Lease` (`router.epp.flags.ha-enable-leader-election: true`) while standby replicas remain idle. With fail-open enabled (`router.proxy.failOpen: true` in standalone mode or `router.inferencePool.failureMode: FailOpen` in Gateway mode), client requests are routed directly to backend model servers and are not dropped if the leader fails, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
 
 ```yaml
 # Priority Routing (Recommended, standalone service mode)
@@ -39,7 +39,7 @@ router:
     flags:
       ha-enable-leader-election: true
   proxy:
-    failOpen: true
+    failOpen: true # Standalone mode (or router.inferencePool.failureMode: FailOpen in Gateway mode)
 ```
 
 #### Active-Active Mode
