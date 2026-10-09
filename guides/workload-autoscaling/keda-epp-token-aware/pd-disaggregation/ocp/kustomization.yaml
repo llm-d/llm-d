@@ -23,8 +23,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 # Default namespace for the guide; override per deployment. The namespace
-# transformer also rewrites the base ScaledObjects'/TriggerAuthentication namespace
-# and the ServiceAccount subject in the ClusterRoleBinding, keeping them aligned.
+# transformer rewrites namespaced resources, but not the ClusterRoleBinding subject.
+# Keep the binding's name and subject namespace patch below aligned with this value.
 # NOTE: the PromQL label selectors inside the trigger queries are opaque strings
 # the transformer cannot reach — edit them, and the peakPrefillThroughput divisor,
 # to match your EPP pool/namespace and calibrated token rate.
@@ -65,7 +65,7 @@ patches:
         value: "bearer"
     target:
       kind: ScaledObject
-      name: pd-disaggregation-nvidia-gpu-vllm-prefill-token-aware
+      name: pd-disagg-vllm-prefill-token-aware
   # Same for the decode trigger.
   - patch: |-
       - op: replace
@@ -76,7 +76,7 @@ patches:
         value: "bearer"
     target:
       kind: ScaledObject
-      name: pd-disaggregation-nvidia-gpu-vllm-decode-token-aware
+      name: pd-disagg-vllm-decode-token-aware
   # The ClusterRoleBinding from the metrics-reader component is cluster-scoped, so
   # its name must be unique per namespace or two deployments of this guide (or of
   # the keda-epp guide's overlays, which share the recipe) collide on it.
@@ -84,6 +84,9 @@ patches:
       - op: replace
         path: /metadata/name
         value: keda-epp-metrics-reader-monitoring-view-llm-d-pd-disaggregation
+      - op: replace
+        path: /subjects/0/namespace
+        value: llm-d-pd-disaggregation
     target:
       kind: ClusterRoleBinding
       name: keda-epp-metrics-reader-monitoring-view

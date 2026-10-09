@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Graceful shutdown for single-host model server Deployments, so rolling updates,
+# scale-down and node drains do not fail in-flight requests. Uses the same
+# preStop + drain pattern as KServe's vLLM presets. See
+# docs/operations/lifecycle/graceful-shutdown.md.
+#
+# What happens when a pod is deleted:
+#   t=0s    Pod is Terminating and leaves the InferencePool; the preStop sleep starts
+#           so the Router and Service endpoints stop sending it new requests.
+#   t=15s   SIGTERM. vLLM started with --shutdown-timeout=45 rejects new requests
+#           and lets in-flight ones finish.
+#   t=60s   Drain deadline: vLLM aborts anything still running and tears down
+#           the engine.
+#   t=75s   SIGKILL if the process is still alive.
+#
+# This component sets the preStop sleep and terminationGracePeriodSeconds. It
+# does not set --shutdown-timeout: each guide's patch replaces the whole args
+# list, and patches run after components, so the flag lives in each guide's
+# vLLM args instead. Keep:
+#
+#   terminationGracePeriodSeconds >= preStop sleep (15) + --shutdown-timeout (45)
+#                                    + teardown buffer (15)
+#
+# A guide that raises --shutdown-timeout above 45 should also set a larger
+# terminationGracePeriodSeconds in its own patch, which overrides the value here.
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/terminationGracePeriodSeconds
+        value: 75
+      - op: add
+        path: /spec/template/spec/containers/0/lifecycle
+        value:
+          preStop:
+            exec:
+              command: ["/bin/sleep", "15"]

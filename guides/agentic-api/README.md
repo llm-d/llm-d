@@ -64,9 +64,9 @@ second time. The parsers are per-model, and not every overlay sets them:
 
 | Model | Flags | Already set by |
 | --- | --- | --- |
-| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/patch-prefill.yaml) — all GPU overlays (`base`, `aws`, `cks-mooncake`, `gke/a4x`, `gke/a4xmax`) and the [`vllm-ds` `DisaggregatedSet`](../pd-disaggregation/modelserver/gpu/vllm-ds/base/disaggregatedset.yaml). `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
+| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml) — all GPU overlays (`base`, `aws`, `cks-mooncake`, `gke/a4x`, `gke/a4xmax`). `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
 | `Qwen/Qwen3-32B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`optimized-baseline`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) (its default GPU overlay). `pd-disaggregation`'s TPU overlays serve the same model and set **no** parsers |
-| `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra`](../agentic-serving/modelserver/gpu/vllm/nemotron-3-ultra/gke/patch-prefill.yaml) |
+| `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`nemotron-3-ultra/modelserver/gpu/vllm`](../models/nemotron-3-ultra/modelserver/gpu/vllm/gke/patch-prefill.yaml) |
 
 > [!IMPORTANT]
 > Most model manifests in the repo still omit these flags — see
@@ -79,14 +79,14 @@ The two guides this one is most often layered on already ship the flags on their
 `pd-disaggregation` with `gpt-oss-120b`, `optimized-baseline` with `Qwen3-32B`. Deploy either of
 those unchanged and there is nothing to do here. For any other model or overlay — including
 `pd-disaggregation` on TPU, which serves Qwen models with no parsers set (see
-[that guide's note](../pd-disaggregation/README.md#tpu)) — use one of the two workarounds below.
+[that guide's note](../pd-disaggregation/README.md#2-deploy-the-model-server)) — use one of the two workarounds below.
 
 **Workaround A — edit the overlay before deploying the base guide (preferred).** This survives
 re-applying the overlay, which is what the base guide's own instructions tell you to do. Add the
 three flags to the model manifest, next to the other `vllm serve` args:
 
 ```bash
-# e.g. guides/pd-disaggregation/modelserver/tpu/v6/vllm/patch-{prefill,decode}.yaml (Qwen3-32B)
+# e.g. guides/pd-disaggregation/modelserver/tpu/v6/vllm/base/patch-{prefill,decode}.yaml (Qwen3-32B)
 #              - "Qwen/Qwen3-32B"
 #   +          - "--enable-auto-tool-choice"
 #   +          - "--tool-call-parser=hermes"
@@ -98,13 +98,14 @@ has no merge key, so it is replaced wholesale. Check the overlay you actually de
 
 ```bash
 # <overlay> is the path the base guide tells you to apply, e.g.
-# ${REPO_ROOT}/guides/pd-disaggregation/modelserver/tpu/${TPU_VARIANT}/vllm
+# ${REPO_ROOT}/guides/pd-disaggregation/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 kubectl kustomize <overlay> | grep -c -- --enable-auto-tool-choice  # expect one per model-server role
 ```
 
 **Workaround B — patch an already-running deployment.** Faster if the base guide is already up,
 but `kubectl apply -k` of the base overlay reverts it, and it only covers `Deployment`-based
-topologies (not the `vllm-ds` or `wide-ep` `DisaggregatedSet` manifests, which need Workaround A).
+topologies (not the `DisaggregatedSet` manifests of `pd-disaggregation` on NVIDIA GPU or `wide-ep`, which
+need Workaround A).
 Rolls the model servers, so weights reload:
 
 ```bash
@@ -160,7 +161,8 @@ kubectl rollout status -n "${NAMESPACE}" deploy -l llm-d.ai/engine-type=vllm --t
 
 Nothing extra to do: a base guide deployed in Gateway Mode has already created the
 `llm-d-inference-gateway` Gateway, because its own instructions say to (see
-[`pd-disaggregation`](../pd-disaggregation/README.md#gateway-mode), which points at
+Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router),
+which [`pd-disaggregation`](../pd-disaggregation/README.md) links to and which points at
 [the gateway guides](../../docs/infrastructure/gateway) and
 [`guides/recipes/gateway/<provider>`](../recipes/gateway)). The `Gateway` is namespaced, so one
 exists per namespace and every llm-d guide there shares it, each contributing its own `HTTPRoute`.

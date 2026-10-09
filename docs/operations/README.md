@@ -18,25 +18,29 @@ Autoscale the inference pool on proactive, SLO-aware signals that reflect the tr
 
 ## Speed Up Model Startup
 
-### [Model Loading & Startup](startup/model-loading-and-startup.md)
+### [Load and Cache Model Weights](startup/model-loading-and-startup.md)
 
-Model sources, persistent caches, and startup optimization options for llm-d deployments.
+Model sources, node-local and PVC weight caches, self-hosted registries, and compilation-cache reuse for llm-d deployments.
 
-### [Fast Model Actuation](../../guides/fast-model-actuation-base/README.md)
+### [Transfer Weights Peer-to-Peer (ModelExpress)](../../guides/modelexpress-p2p/README.md)
 
-Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
+Load one replica from storage and transfer weights to peer replicas over GPU-to-GPU NIXL/RDMA for faster cold scale-outs.
 
-### [FMA with KEDA](../../guides/fast-model-actuation-keda/README.md)
-
-Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
-
-### [Pod Snapshots](../../guides/pod-snapshot/README.md)
+### [Restore from Pod Snapshots](../../guides/pod-snapshot/README.md)
 
 Checkpoint and restore single-GPU vLLM model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
 
-### [ModelExpress P2P Weight Transfer](../../guides/modelexpress-p2p/README.md)
+### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation-base/README.md)
 
-Load one replica from storage and transfer weights to peer replicas over GPU-to-GPU NIXL/RDMA for faster cold scale-outs.
+Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
+
+### [Scale from Zero with FMA and KEDA](../../guides/fast-model-actuation-keda/README.md)
+
+Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
+
+### [Troubleshoot Model Startup](startup/troubleshooting.md)
+
+Measure cold and warm starts, and fix Hugging Face rate limits and timeouts, startup-probe restarts, and cache storage errors.
 
 ## Manage Inference Pool Lifecycle
 
@@ -56,25 +60,51 @@ Production rollout strategies including [Blue-Green updates](../../guides/rollou
 
 ## Operate Disaggregated Serving
 
-### [Disaggregated Serving Operations](disaggregation/README.md): [vLLM](disaggregation/vllm.md) and [SGLang](disaggregation/sglang.md)
+### [Disaggregated Serving Operations](disaggregation/README.md): [vLLM](disaggregation/vllm.md), [SGLang](disaggregation/sglang.md) and [DisaggregatedSet](disaggregation/disaggregatedset.md)
 
 Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/advanced/disaggregation/README.md).
 
 ## Manage Traffic and Tenants
 
-### [Flow Control & Fairness](../../guides/flow-control/README.md)
+### [Queue and Prioritize Requests (Flow Control)](../../guides/flow-control/README.md)
 
-Intelligent request queuing in the EPP: priority bands, per-tenant fairness, and saturation detection for multi-tenant deployments and traffic spikes. [Production Tuning](../../guides/flow-control/tuning.md) covers sizing `maxConcurrency`.
+Intelligent request queuing in the EPP: priority bands, per-tenant fairness, and saturation detection for multi-tenant deployments and traffic spikes.
 
-### [Multi-Model & LoRA Routing](../../guides/multi-model-routing/README.md)
+### [Tune Flow Control Concurrency](traffic/flow-control-tuning.md)
+
+Derive `maxConcurrency` for the saturation detector from your hardware, model, and workload with the tuning wizard.
+
+### [Deploy Multiple Inference Pools](../../guides/workload-autoscaling/multi-inference-pool/README.md)
+
+Add InferencePools, each with its own EPP and model server Deployment, to an existing deployment so several models or tenants are served side by side.
+
+### [Route to Multiple Models and LoRA Adapters](../../guides/multi-model-routing/README.md)
 
 Serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
 
 ## Process Batch and Async Requests
 
-### [Batch & Async Processing](../../guides/batch-serving/README.md)
+Process offline and latency-insensitive work in front of an existing deployment. [Choosing between the two approaches](../../guides/batch-serving/README.md) compares them.
 
-Process offline and latency-insensitive work in front of an existing deployment: the OpenAI-compatible [Batch Gateway](../../guides/batch-serving/batch-gateway/README.md) (`/v1/batches`, `/v1/files`) and queue-based [Asynchronous Processing](../../guides/batch-serving/asynchronous-processing/README.md) with metric-gated dispatch, including Async Processor sizing and scaling.
+### [Run Batch Jobs (Batch Gateway)](../../guides/batch-serving/batch-gateway/README.md)
+
+Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggable metadata and file storage and a processor that dispatches requests to the llm-d Router.
+
+### [Queue Async Requests (Async Processor)](../../guides/batch-serving/asynchronous-processing/README.md)
+
+Consume requests from a message queue and dispatch them with metric-gated back-off based on live model server saturation, including Async Processor sizing and scaling.
+
+### [Use Redis as the Async Queue](../../guides/batch-serving/asynchronous-processing/redis/README.md)
+
+Configure the Async Processor with a Redis or Valkey sorted set.
+
+### [Use GCP Pub/Sub as the Async Queue](../../guides/batch-serving/asynchronous-processing/gcp-pubsub/README.md)
+
+Configure the Async Processor with Google Cloud Pub/Sub topics and subscriptions.
+
+### [Enforce Tenant Quotas and Priorities](../../guides/batch-serving/asynchronous-processing/multitenant/README.md)
+
+Share async queues across teams with reserved quotas, tier-priority dispatch, and saturation back-off across inference pools.
 
 ## Integrate an AI Gateway
 

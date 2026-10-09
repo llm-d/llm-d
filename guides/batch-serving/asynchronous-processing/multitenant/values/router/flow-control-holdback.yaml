@@ -1,0 +1,120 @@
+# Router values for Multi-Tenant Async Processing using Flow Control with
+# priority holdback (the guide's default).
+#
+# priority-holdback-policy protects realtime traffic that shares the pool with
+# llm-d-async traffic by reserving headroom: as the pool saturates, each lower
+# priority band is admitted only up to a ceiling, falling linearly by rank from
+# maxCeiling for the highest band to minCeiling for the lowest. Nothing
+# already running is cancelled, but the reserved headroom stays idle while
+# realtime traffic is quiet. See the README's "Protecting realtime traffic" for
+# the tradeoff against flow-control-evictable.yaml.
+#
+# priority-holdback-policy is an Alpha plugin, so the EPP runs with
+# --allow-experimental-plugins.
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+  monitoring:
+    prometheus:
+      enabled: true
+      auth:
+        enabled: false
+  epp:
+    flags:
+      allow-experimental-plugins: true   # priority-holdback-policy is Alpha
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        memory: "8Gi"
+    pluginsConfigFile: "flow-control-plugins.yaml"
+    pluginsCustomConfig:
+      flow-control-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: round-robin-fairness-policy
+        - type: fcfs-ordering-policy
+        - type: concurrency-detector
+          parameters:
+            maxConcurrency: 10
+            concurrencyMode: requests
+            headroom: 0.0
+        # Ceilings by rank across the six bands (100, 60, 30, 10, -5, -10):
+        # 1.0, 0.9, 0.8, 0.7, 0.6 and 0.5 of capacity.
+        # minCeiling must leave more headroom than the router's admission
+        # burst under a backlog (https://github.com/llm-d/llm-d-async/issues/468):
+        # 0.5 protected realtime in the measurements, 0.7 and 0.9 did not.
+        - type: priority-holdback-policy
+          name: holdback
+          parameters:
+            shape: linear
+            domain: rank
+            minCeiling: 0.5
+            maxCeiling: 1.0
+
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+
+        flowControl:
+          maxBytes: "10Gi"
+          maxRequests: "1k"
+          defaultRequestTTL: "300s"
+          saturationDetector:
+            pluginRef: concurrency-detector
+          # Admission ceilings per priority band (see the plugin above). No
+          # in-flight eviction: see flow-control-evictable.yaml for that mode.
+          usageLimitPolicyPluginRef: holdback
+          priorityBands:
+          - priority: 100
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 60
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 30
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 10
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: -5
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: -10
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+
+  proxy:
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        memory: "8Gi"
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: async-multitenant   # set on the model server by README step 1's sed

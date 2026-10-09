@@ -1,0 +1,205 @@
+name: multimodal-serving
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# The nightly E2E workflows deploy the aggregation/ and e-disaggregation/
+# scenarios this guide selects with TOPOLOGY (gpu: aggregated and E/PD;
+# tpu/v7: aggregated).
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "H200 reference · aggregated 8 replicas × TP=2 (16 GPUs), E/PD 2 Encode + 8 PD, E/P/D 2 Encode + 4 Prefill + 4 Decode (TP=2) · `INFRA_PROVIDER` `base`, `gke` (+ `coreweave` for E/PD and E/P/D) · E/P/D is not run nightly"
+      model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: coreweave, label: "CoreWeave"}
+      engines: {vllm: validated}
+    xpu:
+      label: Intel XPU
+      notes: "Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base`"
+      model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
+    tpu/v7:
+      label: Google TPU v7
+      notes: "GKE only (`INFRA_PROVIDER=gke`) · aggregated only · 8 replicas × 4 chips (`2x2x1`, TP=4) · needs the `medium` PriorityClass"
+      model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: validated}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: multimodal-serving
+    NAMESPACE: llm-d-multimodal-serving
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+
+    # aggregation: every pod encodes, prefills, and decodes. e-pd / e-p-d:
+    # dedicated Encode pods in front of PD (or separate P and D) pods,
+    # NVIDIA GPU only.
+    TOPOLOGY: {default: aggregation, values: [aggregation, e-pd, e-p-d]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu, tpu/v7]}
+    MODEL_SERVER: {default: vllm, values: [vllm]}
+    # The overlay is <topology dir>/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/[<TOPOLOGY>/]<INFRA_PROVIDER>/
+    # (see the Notes column for the providers each accelerator supports).
+    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave]}
+
+    MODEL: {default: "Qwen/Qwen3-VL-32B-Instruct", comment: "the model the overlays serve (table above)"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  topology:
+    aggregation:
+      - when: {TOPOLOGY: [aggregation]}
+        run: |
+          export TOPOLOGY_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}/aggregation"
+          export ROUTER_VALUES="${TOPOLOGY_DIR}/router/aggregation.values.yaml"
+          export MODEL_SERVER_PATH="${TOPOLOGY_DIR}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
+          export MONITORING_COMPONENT=monitoring
+          # The pods the InferencePool selects (matchLabels in the router values)
+          export POD_SELECTOR=llm-d.ai/guide=aggregation
+    # guide.py only wraps non-default ACCELERATOR_TYPE / MODEL_SERVER variants in
+    # cicd:skip markers. TOPOLOGY is not one of them, so the non-default branch
+    # also carries skip_in: [ci]; otherwise running the README's unskipped bash
+    # blocks in order would overwrite the aggregation variables set above.
+    disaggregation:
+      - when: {TOPOLOGY: [e-pd, e-p-d]}
+        skip_in: [ci]
+        run: |
+          export TOPOLOGY_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}/e-disaggregation"
+          export ROUTER_VALUES="${TOPOLOGY_DIR}/router/${MODEL_SERVER}/${TOPOLOGY}-disaggregation.values.yaml"
+          export MODEL_SERVER_PATH="${TOPOLOGY_DIR}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TOPOLOGY}/${INFRA_PROVIDER}"
+          export MONITORING_COMPONENT=monitoring-pd
+          # The pods the InferencePool selects (matchLabels in the router values)
+          export POD_SELECTOR=llm-d.ai/guide=e-disaggregation
+
+  router_values:
+    - run: |
+        # Paths to values files (ROUTER_VALUES is set by the topology step above)
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+
+  monitoring_values:
+    - when: {MONITORING: ["true"]}
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/${MONITORING_COMPONENT}
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    request:
+      - run: |
+          # An image (a 64x64 PNG embedded in the request, so the pods need no
+          # outbound network access) and a question about it
+          kubectl run mm-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'IMG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAS0lEQVR42u3PQQkAAAgAsetfWiP4FgYrsKZeS0BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDgsqnc8OJg6Ln3AAAAAElFTkSuQmCC"
+              curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"${IMG}\"}}, {\"type\": \"text\", \"text\": \"What color is this image?\"}]}], \"max_tokens\": 64}" \
+                | jq -r ".choices[0].message.content"'
+    mm_requests:
+      - run: |
+          # The same ~700-token prompt and image twice, then a text-only
+          # request: the router hashes text and image together, and the
+          # Encode stage (E/PD, E/P/D) only runs for requests with media
+          kubectl run mm-cache-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 40); do printf "The router hashes the text and the image of a multimodal request to find a warm pod. "; done)
+              IMG="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAS0lEQVR42u3PQQkAAAgAsetfWiP4FgYrsKZeS0BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDgsqnc8OJg6Ln3AAAAAElFTkSuQmCC"
+              for i in 1 2; do
+                curl -sS -o /dev/null -w "image request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/chat/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"${P} What color is this image?\"}, {\"type\": \"image_url\", \"image_url\": {\"url\": \"${IMG}\"}}]}], \"max_tokens\": 16}"
+              done
+              curl -sS -o /dev/null -w "text-only request: HTTP %{http_code}\n" -X POST "http://${IP}/v1/chat/completions" \
+                -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"How are you today?\"}], \"max_tokens\": 16}"'
+    pod_metrics:
+      - run: |
+          # Request, prefix-cache, and multimodal-cache counters of every pod
+          # the router selects, read through the Kubernetes API server proxy
+          # (no port-forward needed). Each pod is read on its vLLM port: 8000,
+          # or 8200 for E/PD and E/P/D decode pods (behind the routing sidecar).
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l ${POD_SELECTOR} -o jsonpath='{.items[*].metadata.name}'); do
+            port=$(kubectl get pod ${pod} -n ${NAMESPACE} -o jsonpath='{.spec.containers[?(@.name=="modelserver")].ports[?(@.name=="modelserver")].containerPort}')
+            echo "== ${pod} ($(kubectl get pod ${pod} -n ${NAMESPACE} -o jsonpath='{.metadata.labels.llm-d\.ai/role}'))"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:${port}/proxy/metrics" \
+              | grep -E '^vllm:(request_success_total|prefix_cache_hits_total|mm_cache_(queries|hits)_total)' || true
+          done
+    router_metrics:
+      - when: {MONITORING: ["true"]}
+        run: |
+          # Prefix-cache matches and disaggregation decisions taken by the
+          # router, read through the API server service proxy
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
+            | grep -E '^llm_d_epp_(prefix_indexer_hit_ratio_(sum|count)|disagg_decision_total)' || true
+
+cleanup:
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/${MONITORING_COMPONENT} --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

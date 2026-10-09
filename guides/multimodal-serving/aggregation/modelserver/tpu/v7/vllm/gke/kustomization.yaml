@@ -1,0 +1,6 @@
+# TPU7x runs on GKE only: INFRA_PROVIDER=gke serves Qwen/Qwen3-VL-32B-Instruct
+# from the qwen3-vl overlay, which the nightly E2E workflow applies directly.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../qwen3-vl

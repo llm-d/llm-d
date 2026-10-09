@@ -7,7 +7,7 @@ time-to-first-token from in-flight load, which drives prefix-cache-aware routing
 The value is **hardware- and model-specific** — the plugin default (`15928`) is
 calibrated for Qwen 32B on H100 80 GB (TP=2). If you deploy a different model or accelerator, measure your
 own with this tool and set it on the `prefix-cache-affinity-filter` plugin in your
-guide's router values file. (The agentic-serving guide ships `16444`, measured for
+guide's router values file. (The Qwen3-Coder-480B guide ships `16444`, measured for
 Qwen3-Coder-480B-FP8 on TPU v7x.)
 
 See the [**configuration matrix**](./configuration-matrix.md) for the reference values by
@@ -33,8 +33,8 @@ It **only measures and prints** the value — it does not modify any config.
 ## Usage
 
 ```bash
-GUIDE_NAME=agentic-serving \
-NAMESPACE=llm-d-agentic-serving \
+GUIDE_NAME=qwen3-coder-480b \
+NAMESPACE=llm-d-qwen3-coder-480b \
 MODEL_NAME=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
 CHUNK_SIZE=8192 \
 ./calibrate.sh

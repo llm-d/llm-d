@@ -294,6 +294,9 @@ The connectors do not evict data from the shared tier. Capacity is managed by th
 
 For `CONNECTOR=mooncake-store`, **deploy the [Mooncake Master](../../helpers/mooncake-master-store/) metadata service**, and for `VARIANT=fs` the Mooncake Client. The Client allocates its CPU DRAM and SSD pool at startup and registers it with the Master, so sizing is set before deployment (this overlay raises the [helper defaults](../../helpers/mooncake-client/) of 40 GB DRAM and 500 GB SSD to 80 GB DRAM and 1 TB SSD per node):
 
+> [!NOTE]
+> Both variants use RDMA. The model server pods (and the Mooncake Client for `fs`) request `rdma/ib: 1`, so nodes must expose that resource or the pods stay `Pending`. See [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md).
+
 <!-- guide:deploy.mooncake start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -341,7 +344,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 3. Observability & Troubleshooting
 
-Once monitoring is enabled, use the signals below to operate tiered prefix caching. Metric definitions are in the [metric reference](../../docs/operations/observability/metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
+Once monitoring is enabled, use the signals below to operate tiered prefix caching. Metric definitions are in the [metric reference](../../docs/operations/observability/model-server-metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
 
 Offloading only pays off when blocks evicted from HBM are loaded back later instead of recomputed. Two views need to agree: the router keeps a separate prefix index per tier (`gpu-prefix-cache-producer` and `cpu-prefix-cache-producer` in this guide's router values), and the model server reports what it actually stored and loaded. Most problems show up as a gap between the two.
 

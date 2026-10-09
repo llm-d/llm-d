@@ -211,6 +211,143 @@ def test_precise_prefix_cache_routing_matrix_matches_repo():
     assert g.check().ok(), _errors(g.check())
 
 
+def test_pd_disaggregation_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation")
+    assert g.check().ok(), _errors(g.check())
+
+
+# --------------------------------------------------------------------------
+# support: providers (INFRA_PROVIDER per accelerator)
+# --------------------------------------------------------------------------
+
+
+def _provider_guide(gpu_providers, tpu_providers=None):
+    g = _guide()
+    g["env"]["static"]["INFRA_PROVIDER"] = {
+        "default": "base", "values": ["base", "gke", "gke/a4x", "cks-mooncake"],
+    }
+    g["support"]["accelerators"]["gpu"]["providers"] = gpu_providers
+    if tpu_providers is not None:
+        g["support"]["accelerators"]["tpu"]["providers"] = tpu_providers
+    return g
+
+
+def test_providers_valid_strings_and_maps():
+    g = _provider_guide(
+        ["base", {"name": "gke/a4x", "label": "GKE A4X (GB200)"},
+         {"name": "cks-mooncake", "label": "CKS + Mooncake", "engines": ["vllm"]}],
+        ["gke"],
+    )
+    assert guide.check_yaml(g).ok(), _errors(guide.check_yaml(g))
+    assert guide.support_providers(g, "gpu") == [
+        {"name": "base", "label": "base", "engines": ["vllm", "sglang"]},
+        {"name": "gke/a4x", "label": "GKE A4X (GB200)", "engines": ["vllm", "sglang"]},
+        {"name": "cks-mooncake", "label": "CKS + Mooncake", "engines": ["vllm"]},
+    ]
+    # engines default to those supported on the accelerator (tpu: vllm only).
+    assert guide.support_providers(g, "tpu")[0]["engines"] == ["vllm"]
+    assert guide.support_providers(g, "hpu") == []
+
+
+def test_providers_engines_must_be_supported_on_accelerator():
+    g = _provider_guide(["base"], [{"name": "gke", "engines": ["sglang"]}])
+    errs = _errors(guide.check_yaml(g))
+    assert any("tpu.providers[0].engines: 'sglang' is not an engine supported on tpu" in e for e in errs)
+    g = _provider_guide([{"name": "base", "engines": ["trtllm"]}])
+    assert any("'trtllm' is not an engine supported on gpu" in e for e in _errors(guide.check_yaml(g)))
+    g = _provider_guide([{"name": "base", "engines": []}])
+    assert any("must be a non-empty list" in e for e in _errors(guide.check_yaml(g)))
+
+
+def test_providers_schema_errors():
+    g = _provider_guide(["base", {"name": "base", "label": "dup"}, "aws", {"label": "x"}, 3,
+                         {"name": "gke", "flavor": "x"}])
+    errs = _errors(guide.check_yaml(g))
+    assert any("providers[1]: duplicate provider 'base'" in e for e in errs)
+    assert any("providers[2]: 'aws' is not in env.static.INFRA_PROVIDER.values" in e for e in errs)
+    assert any("providers[3].name: must be a non-empty string" in e for e in errs)
+    assert any("providers[4]: must be a provider name" in e for e in errs)
+    assert any("providers[5]: unknown key 'flavor'" in e for e in errs)
+    g = _provider_guide([])
+    assert any("gpu.providers: must be a non-empty list" in e for e in _errors(guide.check_yaml(g)))
+    g = _provider_guide(["base"])
+    del g["env"]["static"]["INFRA_PROVIDER"]
+    assert any("requires env.static.INFRA_PROVIDER" in e for e in _errors(guide.check_yaml(g)))
+
+
+def _kustomizations(gdir, paths):
+    for p in paths:
+        d = gdir / p
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "kustomization.yaml").write_text("kind: Kustomization\n")
+
+
+def test_provider_overlays_suffix_match(tmp_path):
+    gdir = _repo(tmp_path, [], [("nightly-e2e-sup-guide-gke-acc-gpu-vllm-x.yaml", "gpu")])
+    _kustomizations(gdir / "modelserver", [
+        "gpu/vllm/base", "gpu/sglang/native/cpu/base",           # nested levels
+        "gpu/vllm/gke/a4x", "gpu/sglang/gke/a4x",                # provider with '/'
+        "gpu/vllm/cks-mooncake",                                 # vllm only
+        "tpu/vllm/gke",
+    ])
+    g = _provider_guide(
+        ["base", "gke/a4x", {"name": "cks-mooncake", "engines": ["vllm"]}], ["gke"]
+    )
+    assert guide.check_support_repo(g, gdir).ok(), _errors(guide.check_support_repo(g, gdir))
+
+
+def test_provider_overlays_missing(tmp_path):
+    gdir = _repo(tmp_path, [], [("nightly-e2e-sup-guide-gke-acc-gpu-vllm-x.yaml", "gpu")])
+    _kustomizations(gdir / "modelserver", [
+        "gpu/vllm/base", "gpu/sglang/base", "gpu/vllm/cks-mooncake",
+        "gpu/vllm/a4x",                       # not a suffix match for gke/a4x
+        "tpu/vllm/base",
+    ])
+    (gdir / "modelserver" / "tpu" / "vllm" / "gke").mkdir()  # no kustomization.yaml
+    g = _provider_guide(["base", "gke/a4x", "cks-mooncake"], ["gke"])
+    errs = _errors(guide.check_support_repo(g, gdir))
+    assert any("gpu.providers: 'gke/a4x' allows vllm but no kustomization" in e for e in errs)
+    assert any("gpu.providers: 'gke/a4x' allows sglang" in e for e in errs)
+    # cks-mooncake defaults to every supported engine, so sglang needs one too.
+    assert any("'cks-mooncake' allows sglang" in e for e in errs)
+    assert any("tpu.providers: 'gke' allows vllm" in e for e in errs)
+    assert len(errs) == 4, errs
+
+
+def test_provider_overlays_under_topology_dirs(tmp_path):
+    # multimodal-serving keeps its overlays in <topology>/modelserver/.
+    gdir = _repo(tmp_path, [], [("nightly-e2e-sup-guide-gke-acc-gpu-vllm-x.yaml", "gpu")])
+    _kustomizations(gdir, [
+        "aggregation/modelserver/gpu/vllm/base", "aggregation/modelserver/gpu/sglang/base",
+        "e-disaggregation/modelserver/gpu/vllm/e-pd/gke",
+    ])
+    g = _provider_guide(["base", {"name": "gke", "engines": ["vllm"]}])
+    assert guide.check_support_repo(g, gdir).ok(), _errors(guide.check_support_repo(g, gdir))
+
+
+@pytest.mark.parametrize("name", [
+    "optimized-baseline", "precise-prefix-cache-routing", "predicted-latency-routing",
+    "tiered-prefix-cache", "p2p-kv-cache-sharing", "multimodal-serving", "omni-serving",
+    "wide-ep", "models/nemotron-3-ultra",
+])
+def test_published_guides_declare_providers(name):
+    """Guides with an INFRA_PROVIDER list it per accelerator, and the env
+    default is offered wherever the accelerator has a matching overlay."""
+    g = guide.Guide.load(REPO_ROOT / "guides" / name)
+    assert g.check().ok(), _errors(g.check())
+    declared = guide._declared_values(g.data, guide.PROVIDER_VAR)
+    listed = {
+        a: [p["name"] for p in guide.support_providers(g.data, a)]
+        for a in g.data["support"]["accelerators"]
+    }
+    assert any(listed.values()), listed
+    for names in listed.values():
+        assert set(names) <= set(declared)
+    default = guide._declared_default(g.data, guide.PROVIDER_VAR)
+    acc_default = guide._declared_default(g.data, guide.ACCEL_VAR)
+    assert default in listed[acc_default], (acc_default, listed[acc_default])
+
+
 # --------------------------------------------------------------------------
 # rendering
 # --------------------------------------------------------------------------
@@ -376,6 +513,45 @@ def test_p2p_kv_cache_sharing_matrix_matches_repo():
 def test_predicted_latency_routing_matrix_matches_repo():
     g = guide.Guide.load(REPO_ROOT / "guides" / "predicted-latency-routing")
     assert g.check().ok(), _errors(g.check())
+
+
+def test_multimodal_serving_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "multimodal-serving")
+    assert g.check().ok(), _errors(g.check())
+    # The guide has no top-level modelserver/, so check() cannot see the
+    # overlays: assert every TOPOLOGY / accelerator / provider the README
+    # documents resolves to an overlay (the paths deploy.topology exports).
+    root = REPO_ROOT / "guides" / "multimodal-serving"
+    agg = root / "aggregation" / "modelserver"
+    edisagg = root / "e-disaggregation" / "modelserver"
+    overlays = [agg / "gpu" / "vllm" / p for p in ("base", "gke")]
+    overlays += [agg / "xpu" / "vllm" / "base", agg / "tpu" / "v7" / "vllm" / "gke"]
+    overlays += [
+        edisagg / "gpu" / "vllm" / t / p
+        for t in ("e-pd", "e-p-d")
+        for p in ("base", "gke", "coreweave")
+    ]
+    missing = [str(o) for o in overlays if not (o / "kustomization.yaml").is_file()]
+    assert not missing, missing
+
+
+def test_omni_serving_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "omni-serving")
+    assert g.check().ok(), _errors(g.check())
+
+
+def test_wide_ep_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "wide-ep")
+    assert g.check().ok(), _errors(g.check())
+    # Every INFRA_PROVIDER the support table documents per accelerator resolves
+    # to an overlay, and every accelerator has the router/<ACCELERATOR>.values.yaml
+    # that deploy.router_values layers on router/wide-ep.values.yaml.
+    root = REPO_ROOT / "guides" / "wide-ep"
+    providers = {"gpu": ("base", "gke", "coreweave"), "amd": ("base", "amd-ci"), "xpu": ("base",)}
+    overlays = [root / "modelserver" / a / "vllm" / p for a, ps in providers.items() for p in ps]
+    missing = [str(o) for o in overlays if not (o / "kustomization.yaml").is_file()]
+    missing += [str(root / "router" / f"{a}.values.yaml") for a in providers if not (root / "router" / f"{a}.values.yaml").is_file()]
+    assert not missing, missing
 
 
 def test_env_comment_renders_inline():

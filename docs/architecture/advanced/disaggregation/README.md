@@ -8,6 +8,8 @@ Disaggregated serving separates the **prefill** and **decode** stages of LLM inf
 * **Avoidance of Request Interference** - For long context requests, prefills can slow down processing of existing requests in the decode phase. Separating the prefill phase of these long requests into dedicated prefill instances allows the ongoing decoding requests to be efficiently processed without being blocked by these long prefills, improving quality-of-service.
 * **Compatibility with DP/EP** - For DP/EP deployments of Mixture of Experts models, disaggregated serving is essential to avoid pipeline bubbles and leveraging the specialized "MaskedGEMM" format for decode.
 
+These benefits are largest for long-context workloads (e.g. 10:1 ISL:OSL) and medium-to-large models; see [When to use P/D and how to tune it](#when-to-use-pd-and-how-to-tune-it).
+
 An implementation of disaggregated serving requires two key components:
 
 * **Request Flow Orchestration** - select and route the requests to the correct prefill and decode pods
@@ -18,7 +20,18 @@ An implementation of disaggregated serving requires two key components:
 
 ## Request Flow Orchestration
 
-llm-d's EPP supports the concept of P/D disaggregation by selecting a prefill and decode worker pair, with the following request flow:
+<p align="center">
+  <picture>
+    <img src="../../../assets/pd-disaggregation.svg" alt="P/D Disaggregation">
+  </picture>
+</p>
+
+Prefill and decode instances run as separate roles that are all part of the same `InferencePool`:
+
+* The **prefill** role runs the prefill instances, labeled with `llm-d.ai/role=prefill`.
+* The **decode** role runs the decode instances, labeled with `llm-d.ai/role=decode`. These pods have a routing proxy sidecar in front of the engine.
+
+llm-d's EPP supports the concept of P/D disaggregation by selecting a prefill and decode worker pair, using these labels to tell the two roles apart, with the following request flow:
 
 ```mermaid
 sequenceDiagram
@@ -176,6 +189,28 @@ vLLM and SGLang both reserve RAM ahead of time for KV cache memory. NIXL directl
 │                             │              │                             │
 └─────────────────────────────┘              └─────────────────────────────┘
 ```
+
+## When to use P/D and how to tune it
+
+P/D disaggregation provides more flexibility in navigating the trade-off between throughput and interactivity ([ref](https://arxiv.org/html/2506.05508v1)).
+In particular, due to the elimination of prefill interference to the decode phase, P/D disaggregation can achieve lower inter token latency (ITL), thus improving interactivity. For a given ITL goal, P/D disaggregation can benefit overall throughput by:
+
+* Specializing P and D workers for compute-bound vs latency-bound workloads
+* Reducing the number of copies of the model (increasing KV cache RAM) with wide parallelism
+
+However, P/D disaggregation is not a target for all workloads. We suggest exploring P/D disaggregation for workloads with:
+
+* Medium-large models (e.g. gpt-oss-120b)
+* Longer input sequence lengths (e.g 10k ISL | 1k OSL, not 200 ISL | 200 OSL)
+* Sparse MoE architectures with opportunities for wide-ep
+
+As you tune your P/D deployments, we suggest focusing on the following parameters:
+
+* **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas, see the TP ratio warning below.
+* **xPyD Ratios**: tune the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio, scaling the two roles independently. For example, 8 TP=1 prefill pods and 2 TP=4 decode pods (16 GPUs) suit a 5k ISL | 250 OSL workload on gpt-oss-120b. In the [P/D Disaggregation guide](../../../../guides/pd-disaggregation/README.md), set the per-role `replicas` in the NVIDIA GPU `disaggregatedset.yaml`, or `replicas` in the other overlays' `patch-prefill.yaml` / `patch-decode.yaml`.
+
+> [!WARNING]
+> The NixlConnector has known issues and limitations around TP ratio direction and stale agent caching after prefill pod restarts. See [Known NIXL Connector Issues and Limitations](../../../operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) for details.
 
 ## Operations
 

@@ -1,0 +1,88 @@
+# Coordinator configuration for this guide's optional HTTP front door
+# (README step 4). The README's render() replaces NAMESPACE; the result is
+# mounted as /etc/coordinator/coordinator.yaml from the
+# llm-d-coordinator-config ConfigMap. Parameters:
+# https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_async_broker.md
+#
+# Tenants are selected with the x-llm-d-tenant header. The coordinator is one
+# more producer of llm-d-async traffic: with x-llm-d-async-mode: enqueue or wait
+# a request is written to its team's queue and treated exactly like a request
+# published there directly (same tier, quota gate and worker pool):
+#   * premium  -> queue team-premium, tier interactive.
+#   * standard -> queue team-standard, tier async.
+#   * batch    -> queue team-batch, tier batch (the default).
+#   * realtime -> no queue: live traffic only. With x-llm-d-async-mode:
+#     passthrough it is stamped reserved-interactive (priority 100; no quota, so
+#     never overflow) and forwarded to the router.
+# The quota limits, prefix and attribute match the team queues' redis-quota
+# gates, so passthrough requests are classified against the same counters.
+log_level: 2
+
+server:
+  listen_addr: ":8080"
+  # The coordinator serves TLS with a self-signed certificate by default. This
+  # topology is plain HTTP end to end (harness pods, the llm-d-async dispatch
+  # loop-back and the router itself), and the deployment's probes are HTTP.
+  secure_serving: false
+  read_timeout: 30s
+  # Wait-mode holds the client connection until the async result lands; this
+  # must exceed the async-broker wait timeout below.
+  write_timeout: 600s
+  shutdown_timeout: 25s
+
+gateway:
+  address: "http://llm-d-router-epp.NAMESPACE.svc.cluster.local:80"
+  max_idle_conns_per_host: 200
+  idle_conn_timeout: 90s
+  timeout: 600s
+
+pipeline:
+  use_openai_format: true
+  steps:
+    - type: async-broker
+      params:
+        redis_url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+        # The request headers this guide documents (the coordinator's defaults
+        # since llm-d/llm-d-router#3200), set explicitly: a request without a
+        # recognized mode header is forwarded untouched, unqueued and without
+        # an objective, so a change of default must not pass silently.
+        mode_header: x-llm-d-async-mode
+        tenant_header: x-llm-d-tenant
+        routes:
+          - tenant: realtime
+            tier: interactive
+          - tenant: premium
+            queue: team-premium
+            tier: interactive
+          - tenant: standard
+            queue: team-standard
+            tier: async
+          - tenant: batch
+            queue: team-batch
+            tier: batch
+        default_queue: team-batch
+        default_tier: batch
+        objectives:
+          interactive:
+            reserved: reserved-interactive
+            overflow: overflow-interactive
+          async:
+            reserved: reserved-async
+            overflow: overflow-async
+          batch:
+            reserved: reserved-batch
+            overflow: overflow-batch
+        quota:
+          prefix: "quota:"
+          attribute: team
+          limits:
+            premium: 2
+            standard: 2
+            batch: 1
+        timeouts:
+          wait:
+            default_seconds: 300
+            max_seconds: 600
+        wait_cap_seconds: 300
+        wakeup_mode: auto
+    - type: decode
