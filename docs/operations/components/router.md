@@ -1,6 +1,6 @@
 # Router Operations Guide
 
-This guide covers operational best practices, high availability deployment architectures, and container sizing recommendations for the llm-d Router components. For deep-dive tuning parameters and component internals, see the [`llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md).
+This guide covers operational best practices, high availability deployment architectures, and container sizing recommendations for the llm-d Router components. For deep-dive architecture and tuning parameters, see the [`llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md).
 
 ---
 
@@ -10,104 +10,36 @@ When deploying the Endpoint Picker (EPP) in either **Standalone** or **Gateway**
 
 ### High Availability & Scaling Modes
 
-When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`), its behavior depends on the configured HA mode:
+When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`), its behavior depends on the configured HA mode.
 
-1. **Active-Passive**: Traffic routes to a single primary replica set while standby replicas remain available for failover.
-   - **Priority Routing (Recommended)**: Routes traffic to primary EPP replicas (Priority 0) and shifts traffic to warm standby EPP replicas (Priority 1) upon primary failure, reducing failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. Supported in standalone service mode (`router.proxy.priorityRouting.enabled: true`) and GKE Gateway mode (`provider.gke.preferredBackends.enabled: true`).
-   - **Leader Election with Fail-Open**: Uses Kubernetes `coordination.k8s.io/Lease` coordination so only the elected leader serves inference extension requests while standby pods remain idle. If the active leader fails, fail-open mode prevents dropped requests by routing traffic directly to backend model servers, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
-2. **Active-Active**: Multiple EPP replicas run concurrently and share load across all instances. Suitable when scheduling algorithms and plugins do not require unified state across pods or a synchronization mechanism is in place.
+#### Active-Passive Mode
 
-#### Active-Passive Mode: Priority Routing (Recommended)
+In Active-Passive mode, traffic routes to a single primary replica set while standby replicas remain available for failover.
 
-Priority Routing keeps standby EPP pods warm with synced model-server state and shifts traffic in **sub-second** time (`< 1s`) upon primary failure, avoiding the 10 to 30 second unoptimized fail-open window of lease-based leader election.
-
-- **Standalone Service Mode (`llm-d-router-standalone`)**:
-
-  ```yaml
-  router:
-    proxy:
-      mode: service
-      priorityRouting:
-        enabled: true
-        primaryReplicas: 1
-        standbyReplicas: 1
-  ```
-
-  ```bash
-  helm install my-standalone-router ./config/charts/llm-d-router-standalone \
-    --set router.modelServers.matchLabels.app=my-vllm-service \
-    --set router.inferencePool.create=false \
-    --set router.proxy.mode=service \
-    --set router.proxy.priorityRouting.enabled=true \
-    --set router.proxy.priorityRouting.primaryReplicas=1 \
-    --set router.proxy.priorityRouting.standbyReplicas=1
-  ```
-
-- **GKE Gateway Mode (`llm-d-router-gateway`)**:
-
-  ```yaml
-  provider:
-    name: gke
-    gke:
-      preferredBackends:
-        enabled: true
-        preferredReplicas: 1
-        defaultReplicas: 1
-  ```
-
-  ```bash
-  helm install my-gateway-router ./config/charts/llm-d-router-gateway \
-    --set router.modelServers.matchLabels.app=my-vllm-service \
-    --set provider.name=gke \
-    --set provider.gke.preferredBackends.enabled=true \
-    --set provider.gke.preferredBackends.preferredReplicas=1 \
-    --set provider.gke.preferredBackends.defaultReplicas=1
-  ```
-
-See [Priority Routing](#priority-routing) for standalone proxy details and the [`llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#priority-routing) for failover mechanics and tuning parameters.
-
-#### Active-Passive Mode: Leader Election and Fail-Open
-
-To enable lease-based leader election (`--ha-enable-leader-election`), set `router.epp.flags.ha-enable-leader-election: true`. One leader replica actively serves routing decisions on Port 9002 and coordinates lease status, while standby replicas answer readiness probes with `NOT_SERVING` so they remain out of Service endpoints.
-
-- **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the single active leader replica handles external processing requests.
-- **Fail-Open Resiliency**: With `router.proxy.failOpen: true` (default in standalone Envoy mode) or `router.inferencePool.failureMode: FailOpen` (default in Gateway mode), client requests are passed directly to backend model servers and are not dropped if the active leader restarts or fails.
-- **Switchover Disadvantage (10-30s Unoptimized Routing Window)**: When the active leader fails, Kubernetes lease expiration (`--ha-lease-duration`, default `15s`), standby readiness transition, and Service endpoint propagation take **10 to 30 seconds** before a standby replica begins serving traffic. Although fail-open prevents dropped requests during this window, EPP is unavailable and **routing is purely unoptimized** (requests bypass KV-cache affinity, prefix-cache scoring, load-aware scheduling, and flow control). Use [Priority Routing](#active-passive-mode-priority-routing-recommended) to reduce switchover time to sub-second (`< 1s`).
+- **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the active replica handles external processing requests.
+- **Priority Routing (Recommended)**: Routes traffic to primary EPP replicas (Priority 0) and shifts traffic to warm standby EPP replicas (Priority 1) upon primary failure. This reduces failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. Supported in standalone service mode (`router.proxy.priorityRouting.enabled: true`) and GKE Gateway mode (`provider.gke.preferredBackends.enabled: true`).
+- **Leader Election with Fail-Open**: Coordinates a single active leader via a Kubernetes `coordination.k8s.io/Lease` (`router.epp.flags.ha-enable-leader-election: true`) while standby replicas remain idle. With fail-open enabled (`router.proxy.failOpen: true`), client requests are routed directly to backend model servers and are not dropped if the leader fails, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
 
 ```yaml
+# Priority Routing (Recommended, standalone service mode)
+router:
+  proxy:
+    mode: service
+    priorityRouting:
+      enabled: true
+      primaryReplicas: 1
+      standbyReplicas: 1
+```
+
+```yaml
+# Leader Election with Fail-Open
 router:
   epp:
     replicas: 2
     flags:
       ha-enable-leader-election: true
   proxy:
-    failOpen: true # Standalone Envoy mode
-  inferencePool:
-    failureMode: FailOpen # Gateway mode
-```
-
-```bash
-helm install my-standalone-router ./config/charts/llm-d-router-standalone \
-  --set router.modelServers.matchLabels.app=my-vllm-service \
-  --set router.inferencePool.create=false \
-  --set router.epp.replicas=2 \
-  --set router.epp.flags.ha-enable-leader-election=true \
-  --set router.proxy.failOpen=true
-```
-
-- **Multi-Replica EPP with `helm --wait`**: Because standby replicas stay `NotReady` under leader election, configure a `RollingUpdate` strategy with `maxUnavailable >= replicas - 1` and `maxSurge: 0` so `helm --wait` and Flux upgrades do not block on standby readiness:
-
-```yaml
-router:
-  epp:
-    replicas: 2
-    flags:
-      ha-enable-leader-election: true
-    deploymentStrategy:
-      type: RollingUpdate
-      rollingUpdate:
-        maxUnavailable: 1 # >= replicas - 1
-        maxSurge: 0
+    failOpen: true
 ```
 
 #### Active-Active Mode
@@ -122,14 +54,6 @@ router:
       ha-enable-leader-election: false
 ```
 
-```bash
-helm install my-standalone-router ./config/charts/llm-d-router-standalone \
-  --set router.modelServers.matchLabels.app=my-vllm-service \
-  --set router.inferencePool.create=false \
-  --set router.epp.replicas=3 \
-  --set router.epp.flags.ha-enable-leader-election=false
-```
-
 - **Near-Linear Throughput Scaling**: Multiple EPP replicas share incoming request load concurrently:
 
   | Replicas | Scaling Factor |
@@ -139,12 +63,12 @@ helm install my-standalone-router ./config/charts/llm-d-router-standalone \
   | 3 | 2.7x |
   | 4 | 3.5x |
 
-- **Flow Control Scope**: Flow control state (queues, fairness accounting, and saturation view) is maintained per replica and is not shared. Priority, fairness, and per-band capacity limits apply within each replica's share of traffic, so fleet-wide queued volume scales with the replica count.
-- **Plugin Compatibility**: EPP replicas do not share local routing state. Active-Active mode works with stateless schedulers (`random-picker`), session affinity (`session-affinity-filter`), or plugins that query real-time metrics from backend model servers (such as queue depth, KV-cache utilization, or precise prefix cache scorers). Avoid approximate prefix routing in Active-Active mode because replicas do not share prefix state (see [Issue #1290](https://github.com/llm-d/llm-d-router/issues/1290)).
+- **Flow Control Scope**: Flow control state (queues, fairness accounting, and saturation view) is per replica and not shared, so priority, fairness, and per-band capacity limits apply within each replica's share of traffic.
+- **Warning (Plugin & Prefix Compatibility)**: In active-active mode, you must only use active-active compatible plugins—specifically stateless schedulers (`random-picker`), session affinity (`session-affinity-filter`), or plugins that query backend model servers dynamically for real-time metrics and state (such as queue depth or KV-cache utilization scorers). Avoid approximate prefix caching plugins in active-active mode; because replicas do not share local memory state, prefix routing partitions across replicas and degrades cache hit rates significantly.
 
-### Horizontal Pod Autoscaling (HPA)
+#### Horizontal Pod Autoscaling (HPA)
 
-EPP supports HorizontalPodAutoscaler (HPA v2) in **Active-Active mode** (`router.epp.autoscaling.enabled: true`). Autoscaling is incompatible with leader election and StatefulSet-based topologies (`router.proxy.priorityRouting.enabled: true` or `provider.gke.preferredBackends.enabled: true`). Set target CPU utilization around **80%** to leave headroom for traffic bursts while new pods initialize:
+EPP supports HorizontalPodAutoscaler (HPA v2) in **Active-Active mode** (`router.epp.autoscaling.enabled: true`). Autoscaling is incompatible with leader election and priority routing. Set target CPU utilization around **80%** to leave headroom for traffic bursts while new pods initialize:
 
 ```yaml
 router:
@@ -156,28 +80,25 @@ router:
       targetCPUUtilizationPercentage: 80
 ```
 
-For full HPA constraints and custom metric options, see [Horizontal Pod Autoscaling (HPA)](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#horizontal-pod-autoscaling-hpa).
-
 ### Container Resource Sizing
 
 #### CPU Allocation
 
 - **Rule of Thumb**: Allocate **0.5 to 1.0 CPU cores per request/second** of expected throughput for large agentic workloads (~100k input / 1k output tokens).
-- **Scaling Behavior**: CPU utilization scales linearly with the request rate, and increases with both the input prompt size and output token length.
-- **Prefix Matching Overhead**: Increasing `maxPrefixTokensToMatch` increases EPP CPU utilization. At lower throughputs, a large prefix limit (such as 400,000 tokens / 6,250 blocks with effective `blockSizeTokens: 64`) can increase EPP CPU utilization by over 100% compared to a small limit (16,384 tokens / 256 blocks) due to block search overhead.
+- **Prefix Matching Overhead**: Increasing `maxPrefixTokensToMatch` increases CPU consumption. At lower throughputs, a large prefix limit (such as 400,000 tokens / 6,250 blocks with effective `blockSizeTokens: 64`) can increase CPU consumption by over 100% compared to a small limit (16,384 tokens / 256 blocks) due to block search overhead.
 - **Idle Scraping Overhead**: Idle CPU consumption scales with total model-serving pods due to background Prometheus scraping. In a cluster with 100 pods, EPP idle consumption reaches approximately **7.5 cores**.
 
 #### Memory Allocation
 
-- **Inflight Concurrency**: Memory footprint is stable with small output token requests, and scales directly with concurrent inflight requests and output decode length.
-- **Flow Control Queues**: When flow control is enabled, saturated requests (including request bodies) are buffered in EPP memory up to per-band limits (`priorityBands[].maxRequests`, default `5000`; `maxBytes`, default `1G`). Because global `flowControl.maxRequests` / `maxBytes` caps default to unlimited, set a global `maxBytes` cap below the container memory limit and budget for the sum of active priority bands on top of inflight-request memory.
+- **Inflight Concurrency**: Memory footprint scales directly with concurrent inflight requests and output decode length.
+- **Flow Control Queues**: When flow control is enabled, saturated requests (including request bodies) are buffered in EPP memory up to per-band limits (`priorityBands[].maxRequests`, default `5000`; `maxBytes`, default `1G`). Set a global `flowControl.maxBytes` cap below the container memory limit and budget for active priority bands on top of inflight-request memory.
 - **Sizing Guidelines**:
   - At 50 to 100 requests/second with 1k output tokens, EPP requires **4 to 6 GiB** of memory.
   - For long-output generation (e.g., 5k+ output tokens), memory footprint can exceed **20 GiB** due to concurrent request state accumulation.
 
 ### Performance Reference Data
 
-Empirical benchmark reference data for `llm-d-simulator` simulating Qwen/Qwen3-8B across 100 model-serving pods:
+Empirical benchmark reference data for Qwen/Qwen3-8B simulation across 100 serving pods:
 
 #### Throughput and Prefix Block Sizing (100k Input / 1k Output Tokens)
 
@@ -207,9 +128,9 @@ The following operational guidelines and proxy scaling architectures apply **exc
 
 ### Horizontally Scalable Proxy Service (Service Mode)
 
-By default, the standalone chart deploys the proxy as a `sidecar` container inside the EPP pod (`router.proxy.mode: sidecar`). To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service`.
+By default, the standalone chart deploys the proxy as a sidecar container inside the EPP pod (`router.proxy.mode: sidecar`). To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service` (with static `replicas` or HPA via `router.proxy.autoscaling.enabled: true`).
 
-In `service` mode, the proxy communicates with EPP over the in-cluster EPP Service. If EPP undergoes active-passive leader failover or momentary pod restarts, the Envoy proxy fails open by default (`router.proxy.failOpen: true`), preserving uninterrupted client request processing. (`router.proxy.failOpen` applies to `proxyType: envoy` only; `agentgateway` fails closed when EPP is unreachable.) To disable fail-open, set `router.proxy.failOpen: false`.
+In this decoupled architecture, the proxy communicates with EPP over the in-cluster EPP Service. If EPP undergoes active-passive leader failover or momentary pod restarts, the proxy fails open by default (`router.proxy.failOpen: true`), preserving uninterrupted client request processing. To disable fail-open, set `router.proxy.failOpen: false`.
 
 ```yaml
 router:
@@ -221,50 +142,9 @@ router:
     failOpen: true
 ```
 
-```bash
-helm install my-standalone-router ./config/charts/llm-d-router-standalone \
-  --set router.modelServers.matchLabels.app=my-vllm-service \
-  --set router.inferencePool.create=false \
-  --set router.proxy.mode=service \
-  --set router.proxy.replicas=3
-```
-
-#### Priority Routing
-
-Priority Routing (`router.proxy.priorityRouting.enabled: true`) is the **recommended Active-Passive setup** in standalone service mode (`router.proxy.mode: service`). It runs EPP as a StatefulSet and uses Envoy Priority Routing with active gRPC health checks and outlier detection (`connectTimeout: 0.250s`) to route traffic to **Priority 0 (Primary)** pods and fail over to warm **Priority 1 (Standby)** pods in **sub-second** time (`< 1s`), avoiding the 10 to 30 second unoptimized fail-open window of lease-based leader election:
-
-```yaml
-router:
-  proxy:
-    mode: service
-    priorityRouting:
-      enabled: true
-      primaryReplicas: 1
-      standbyReplicas: 1
-```
-
-For failover mechanics and health-check tuning parameters, see [Priority Routing in the `llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#priority-routing).
-
-#### Standalone Proxy Autoscaling (Service Mode)
-
-When running in `service` mode (`router.proxy.mode: service`), the standalone proxy Deployment can be autoscaled independently from EPP via HPA v2 (`router.proxy.autoscaling.enabled: true`):
-
-```yaml
-router:
-  proxy:
-    mode: service
-    autoscaling:
-      enabled: true
-      minReplicas: 2
-      maxReplicas: 10
-      targetCPUUtilizationPercentage: 80
-```
-
-For drain windows and custom HPA metric options, see [Standalone Proxy Autoscaling in the `llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#standalone-proxy-autoscaling-service-mode).
-
 ### Proxy Container Resource Sizing
 
-When running Envoy as the standalone proxy (`sidecar` or `service` mode), CPU consumption scales linearly with client request rate, while memory consumption remains stable across workloads.
+When running Envoy as the standalone proxy, CPU consumption scales linearly with client request rate, while memory consumption remains stable across workloads.
 
 #### CPU & Memory Guidelines
 
@@ -300,8 +180,4 @@ router:
         memory: "2Gi"
       limits:
         memory: "4Gi"
-```
-
-```bash
-helm install optimize-baseline ./config/charts/llm-d-router-standalone -f resource_overrides.yaml
 ```
