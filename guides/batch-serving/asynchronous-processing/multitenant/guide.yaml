@@ -1,0 +1,162 @@
+name: async-multitenant
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+    MT: ${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
+
+    NAMESPACE: llm-d-async
+    ASYNC_VERSION: {default: v0.10.0, comment: "llm-d-async release (supports lane_objectives & tier-priority)"}
+    INFRA_PROVIDER: {default: base, values: [base, gke], comment: "model server overlay variant"}
+    GPUS: {default: "2", values: ["2", "1"], comment: "GPUs for the model server; 1 serves Qwen/Qwen3-8B instead"}
+    FLOW_CONTROL: {default: holdback, values: [holdback, evictable], comment: "router values: priority holdback, or experimental in-flight eviction"}
+    QUEUE_BACKEND: {default: redis, values: [redis, pubsub]}
+
+    POOL_NAME: {default: llm-d-router, comment: "constant: the router release and its InferencePool (objectives, PodMonitor, saturation gates)"}
+    MODEL: {default: Qwen/Qwen3-32B, comment: "served model name (goes in payload.model)"}
+
+    PROM_URL: {default: "http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090", comment: "Scenarios C and D only: the Prometheus the saturation gates read"}
+    SAT_CAP: {default: "4", comment: "Scenario C only: concurrent requests at which the pool counts as saturated; keep it below the worker pool's 16 workers"}
+
+    # Sensitive: the README shows the placeholder inside llm-d-cicd:skip
+    # markers, and `guide.py emit` leaves it out unless given --var HF_TOKEN=...
+    # (or HF_TOKEN is already exported), so the placeholder is never deployed.
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
+
+    # Automation hook: the nightly deploy (scripts/nightly-deploy-gke.sh)
+    # passes extra router Helm flags with `guide.py emit --var`. Users leave it
+    # empty.
+    EXTRA_ROUTER_HELM_ARGS: {default: "", comment: "extra router Helm flags (CI only)"}
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+  crds:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+    - run: |
+        # ROUTER_RELEASE_URL is automatically calculated from ROUTER_RELEASE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
+
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  # README step 1. Both overlays build on optimized-baseline's GPU vLLM
+  # overlay. The nightly applies the GPUS=2 overlay itself, with a CI-only
+  # PriorityClass (see scripts/nightly-deploy-gke.sh).
+  modelserver:
+    - when: {GPUS: ["2"]}
+      run: |
+        kubectl apply -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+        # Downloading and loading the model takes several minutes
+        kubectl -n ${NAMESPACE} rollout status deploy/async-multitenant-optimized-baseline-nvidia-gpu-vllm-decode --timeout=30m
+    - when: {GPUS: ["1"]}
+      skip_in: [ci]
+      run: |
+        export MODEL=Qwen/Qwen3-8B
+        kubectl apply -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/single-gpu
+        # Downloading and loading the model takes several minutes
+        kubectl -n ${NAMESPACE} rollout status deploy/async-multitenant-optimized-baseline-nvidia-gpu-vllm-decode --timeout=30m
+
+  # README step 2. FLOW_CONTROL picks how the router protects realtime traffic
+  # (README "Protecting realtime traffic").
+  router:
+    - run: |
+        # 1. Apply InferenceObjectives for the 6 tier-priority lanes
+        kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/objectives
+
+        # 2. Deploy llm-d-router with Flow Control priority bands and priority holdback (or eviction)
+        helm upgrade --install ${POOL_NAME} \
+            ${ROUTER_STANDALONE_CHART} \
+            -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+            -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
+            ${EXTRA_ROUTER_HELM_ARGS} \
+            -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  # README step 3. Redis backs the quota counters on both backends.
+  async:
+    - when: {QUEUE_BACKEND: [redis]}
+      run: |
+        kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/redis
+        kubectl -n ${NAMESPACE} rollout status deploy/redis --timeout=300s
+
+        helm upgrade --install llm-d-async \
+            oci://ghcr.io/llm-d/charts/llm-d-async \
+            -f ${MT}/values/redis/quota-only.yaml \
+            -n ${NAMESPACE} --version ${ASYNC_VERSION}
+    - when: {QUEUE_BACKEND: [pubsub]}
+      skip_in: [ci]
+      run: |
+        export PROJECT_ID=your-project
+        ${MT}/scripts/gcp-setup.sh                         # topics, subscriptions, results topic, SA + IAM
+        kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/redis   # still needed for the quota counters
+        kubectl -n ${NAMESPACE} rollout status deploy/redis --timeout=300s
+
+        sed "s/PROJECT_ID/${PROJECT_ID}/g" ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
+        helm upgrade --install llm-d-async \
+            oci://ghcr.io/llm-d/charts/llm-d-async \
+            -f /tmp/mt-pubsub.yaml \
+            -n ${NAMESPACE} --version ${ASYNC_VERSION}
+
+  # README step 4 (optional for users; the nightly drives its traffic through
+  # it). Ready within seconds: it does not wait for the model server.
+  coordinator:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/coordinator
+        kubectl -n ${NAMESPACE} rollout status deploy/llm-d-coordinator --timeout=300s
+
+verify:
+  tests:
+    transport:
+      - run: |
+          kubectl -n ${NAMESPACE} get deploy llm-d-async -o yaml | grep transport
+          # -> --transport=redis-sortedset
+
+    # Needs the coordinator from deploy.coordinator.
+    coordinator:
+      - run: |
+          kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} svc/llm-d-coordinator 8080:8080 &
+          PF_PID=$!
+          sleep 3
+          kill -0 ${PF_PID}
+
+          # Live, at interactive priority
+          curl -s 127.0.0.1:8080/v1/completions -H 'Content-Type: application/json' \
+            -H 'x-llm-d-async-mode: passthrough' -H 'x-llm-d-tenant: realtime' \
+            -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+
+          # Queued on team-batch; the response arrives once llm-d-async has dispatched it
+          curl -s 127.0.0.1:8080/v1/completions -H 'Content-Type: application/json' \
+            -H 'x-llm-d-async-mode: wait' -H 'x-llm-d-tenant: batch' \
+            -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+
+          kill ${PF_PID:-} 2>/dev/null || true
+
+cleanup:
+  - run: |
+      # --ignore-not-found: the coordinator (step 4) and the PodMonitor (Observability) are optional
+      kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/coordinator --ignore-not-found
+      helm uninstall llm-d-async -n ${NAMESPACE}
+      helm uninstall ${POOL_NAME} -n ${NAMESPACE}
+      kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/objectives
+      # Either model server overlay: the single-GPU one has the same object names
+      kubectl delete -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+      kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/redis
+      kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
+  - when: {QUEUE_BACKEND: [pubsub]}
+    skip_in: [ci]
+    run: |
+      kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml -f ${MT}/manifests/gmp-podmonitoring.yaml
+      gcloud monitoring dashboards list --project ${PROJECT_ID} --filter='displayName:"Async Processor"' \
+        --format='value(name)' | xargs -r -n1 gcloud monitoring dashboards delete --project ${PROJECT_ID} --quiet
+      PROJECT_ID=${PROJECT_ID} DELETE_SA=1 ${MT}/scripts/gcp-teardown.sh
