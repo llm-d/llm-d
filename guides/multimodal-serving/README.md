@@ -98,7 +98,7 @@ The `aggregation/modelserver/tpu/v7/vllm/gemma4/` overlay serves `google/gemma-4
 
 - Ensure your cluster has enough accelerators for your configuration (see the Notes column above; NVIDIA GPUs with 141 GB of HBM, e.g. H200, for the reference sizing).
 
-- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [Cluster Pre-provisioning](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma).
+- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 

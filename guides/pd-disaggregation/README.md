@@ -113,7 +113,7 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | --------- | -------- | --------- | ----- |
 | NixlConnector | default on NVIDIA GPU, AMD GPU, Intel XPU and MetaX | UCX (RDMA / TCP) | Supports heterogeneous TP across P/D. |
 | RblnNixlConnector | `npu/vllm/base` | NIXL over a RoCE VF | Rebellions' NIXL connector with `kv_buffer_device=rbln`. See the [Rebellions NPU tab](#2-deploy-the-model-server). |
-| MooncakeConnector | `gpu/vllm/cks-mooncake` | RDMA via Mooncake Transfer Engine | CKS with InfiniBand. See [CKS with MooncakeConnector](#prerequisites) in Prerequisites. |
+| MooncakeConnector | `gpu/vllm/cks-mooncake` | RDMA via Mooncake Transfer Engine | CKS with InfiniBand. See the platform table in [Prerequisites](#prerequisites). |
 | MoRIIOConnector | `amd/vllm/moriio/*` | RDMA via MoRI-IO | AMD GPU. |
 | TPUConnector / TPUConnectorHMA | `tpu/*` | TPU ICI / DCN | From `tpu_inference`; HMA on TPU7x. |
 | IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
@@ -144,45 +144,18 @@ Both engines run on NVIDIA GPU with the same router configuration and move KV ca
 
 - For NVIDIA GPU, the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it for `ACCELERATOR_TYPE=gpu`; skip that step if your cluster already runs it.
 
-<details>
-<summary><b>CKS with MooncakeConnector (<code>INFRA_PROVIDER=cks-mooncake</code>)</b></summary>
+- Prepare the cluster for your platform (`INFRA_PROVIDER`). `base`, `amd-ci`, `moriio/base`, and the TPU and community accelerators need nothing beyond the accelerator's device plugin (see the [model server tabs](#2-deploy-the-model-server)); the other platforms need:
 
-The `cks-mooncake` overlay uses [Mooncake Transfer Engine](https://github.com/kvcache-ai/Mooncake) as the KV transfer backend. Mooncake provides point-to-point RDMA-based transfer of KV cache blocks between prefill and decode workers. It is used here as a transport layer — llm-d remains responsible for routing, orchestration, and scheduling.
-
-> [!IMPORTANT]
-> This overlay configures `MooncakeConnector` for P/D KV transfer only. It does **not** configure Mooncake Store (`MooncakeStoreConnector`), which provides distributed KV storage for tiered cache offloading and is a separate integration.
-
-**Image requirement:** `mooncake-transfer-engine` must be installed in the vLLM container image. The standard `vllm/vllm-openai` image may not include it — you may need a custom image. See the [Mooncake installation docs](https://kvcache-ai.github.io/Mooncake/).
-
-**CKS / RDMA prerequisites:**
-
-- NVIDIA GPU Operator (or equivalent) with GPUs visible to pods via `nvidia.com/gpu`.
-- InfiniBand / RDMA devices available on worker nodes and exposed **inside pods** (host-level RDMA alone is not sufficient).
-- RDMA device plugin exposing `rdma/ib` resources. Typically provided by the NVIDIA Network Operator, Multus with SR-IOV, or your CKS provider's equivalent.
-
-The Mooncake bootstrap server listens on `VLLM_MOONCAKE_BOOTSTRAP_PORT` (default `8998`), which must be unique per instance if instances are co-located on a node.
-
-Validate RDMA from inside a test pod before deploying:
-
-<!-- llm-d-cicd:skip start -->
-```bash
-kubectl run rdma-test --rm -it \
-    --image=mellanox/rping-test \
-    --overrides='{"spec":{"containers":[{"name":"rdma-test","image":"mellanox/rping-test","command":["ibv_devinfo"],"resources":{"limits":{"rdma/ib":"1"}}}]}}' \
-    -- ibv_devinfo
-```
-<!-- llm-d-cicd:skip end -->
-
-</details>
-
-### GKE: Cluster Pre-provisioning (with DRA & RDMA/RoCE)
-
-The NVIDIA GPU `gke` overlays use Dynamic Resource Allocation (DRA) for GPUs and managed **DRANET** (network DRA) for high-performance RoCE networking. GPU DRA is not yet fully managed by GKE and requires manual node label configuration and driver installation. This section does not apply to the TPU overlays.
-
-> [!IMPORTANT]
-> The current recipe targets the **GKE A3/A4** platform. The **DRANet** (network DRA) setup requires support for both **Hairpin** (direct loopback transfer on the same node) and **Cross-rail** (inter-node multi-rail transfers) routing to ensure proper KV cache exchange between Prefill and Decode nodes.
-
-To create the cluster, node pool, and install the required GPU DRA / network DRA drivers, follow the step-by-step instructions in the [GKE Infrastructure Guide](../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke). For the GKE A4X / A4X Max (GB200 / GB300) platforms, use `INFRA_PROVIDER=gke/a4x` or `gke/a4xmax`.
+  | `INFRA_PROVIDER` | Cluster requirements | Setup |
+  | --- | --- | --- |
+  | `gke`, `gke/a4x`, `gke/a4xmax` (NVIDIA GPU) | GPU DRA (manual node labels and driver install, not yet GKE-managed) and managed DRANET for RoCE; `gke` targets A3/A4, `gke/a4x` / `gke/a4xmax` target A4X / A4X Max (GB200 / GB300); DRANet must support hairpin (same-node) and cross-rail (inter-node multi-rail) routing | [GKE: GPU DRA and DRANET](../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke), [GKE A4X setup](../../docs/infrastructure/providers/gke/README.md#gke-a4x-gb200-setup) |
+  | `coreweave` (NVIDIA GPU) | An RDMA device plugin exposing `rdma/ib` inside pods (one per pod) | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
+  | `cks-mooncake` (NVIDIA GPU, vLLM) | GPUs via `nvidia.com/gpu`; InfiniBand devices exposed inside pods via an `rdma/ib` device plugin (NVIDIA Network Operator, Multus with SR-IOV, or equivalent); a vLLM image with `mooncake-transfer-engine` (the standard image may not include it); `VLLM_MOONCAKE_BOOTSTRAP_PORT` (default `8998`) unique per co-located instance. Configures `MooncakeConnector` transport only, not Mooncake Store | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities), [verify RDMA in a pod](../../docs/infrastructure/rdma/README.md#2-inter-pod-network), [Mooncake installation](https://kvcache-ai.github.io/Mooncake/) |
+  | `aws` (NVIDIA GPU) | `p5en.48xlarge` nodes with the EFA device plugin exposing `vpc.amazonaws.com/efa` | [AWS EFA notes](../../docs/infrastructure/rdma/README.md#aws-efa-deprecated---use-upstream-aws-images) |
+  | `oci` (AMD) | OKE `BM.GPU.MI300X.8` nodes; NVIDIA Network Operator SR-IOV VFs as `nvidia.com/sriov-rdma-vf`, with a `sriov-rdma-vf` SriovNetwork in namespace `default` | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
+  | `tensorwave` (AMD) | An RDMA device plugin exposing `rdma/ib` inside pods | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
+  | `moriio/amd-ci`, `moriio/amd-ci-1p1d-tp8` (AMD) | `amd.com/vnic` resources and an `amd-host-device-nad` NetworkAttachmentDefinition in namespace `default` (the AMD CI cluster) | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
+  | `rdma` (Intel XPU) | A network DRA driver publishing a `dranet-rdma` DeviceClass with RDMA-capable NICs (`dra.net` `rdma` attribute); each claim aligns the NIC with its GPU's PCIe root | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
 
 ### Get the guide
 
@@ -210,9 +183,9 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 | `iluvatar`, `metax`, `npu` | `base` |
 
 - `base`: generic Kubernetes cluster.
-- `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see [GKE: Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
+- `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see the platform table in [Prerequisites](#prerequisites)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
 - `coreweave`: CoreWeave with `rdma/ib`. `aws`: AWS with EFA.
-- `cks-mooncake`: CoreWeave CKS with `MooncakeConnector` over InfiniBand, vLLM only (see [CKS with MooncakeConnector](#prerequisites)).
+- `cks-mooncake`: CoreWeave CKS with `MooncakeConnector` over InfiniBand, vLLM only (see the platform table in [Prerequisites](#prerequisites)).
 - `amd-ci`: the AMD CI cluster. `oci`: OCI OKE `BM.GPU.MI300X.8` with SR-IOV RDMA VFs. `tensorwave`: TensorWave.
 - `moriio/*`: `MoRIIOConnector` instead of NIXL, serving `Qwen/Qwen3-32B` (set `MODEL` accordingly); `moriio/amd-ci-1p1d-tp8` runs TP=8 for both roles.
 - `rdma` (Intel XPU): NIXL over RDMA instead of TCP.
@@ -379,7 +352,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.tpu[0] end -->
 
-The TPU overlays use the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`, and run on GKE only (`INFRA_PROVIDER=gke`). The [GKE cluster pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce) step (GPU DRA / DRANet) does not apply.
+The TPU overlays use the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`, and run on GKE only (`INFRA_PROVIDER=gke`). The NVIDIA GPU `gke` platform requirements in [Prerequisites](#prerequisites) (GPU DRA / DRANet) do not apply.
 
 **Requirements:**
 
