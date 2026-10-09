@@ -1,10 +1,12 @@
 # Disaggregated Serving: Operations (DisaggregatedSet)
 
-The NVIDIA GPU paths of the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) and
-[wide-ep](../../../guides/wide-ep/README.md) guides run prefill and decode as one LWS
+The [P/D disaggregation](../../../guides/pd-disaggregation/README.md)
+and [wide-ep](../../../guides/wide-ep/README.md) guides run prefill and decode as one
 [DisaggregatedSet](../../architecture/model-server-orchestration/disaggregatedset.md) (upstream:
-[LWS DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/)) with `groupIdentity: Hash`
-(`pd-disagg-vllm` and `pd-disagg-sglang` in P/D). The controller runs each role of each slice as a
+[DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/)) with `groupIdentity: Hash`
+(`pd-disagg-vllm`, `pd-disagg-sglang`, or `pd-disagg-<accelerator>` in P/D; the
+[TPU7x dynamic sub-slice set](#kueue-scheduled-sets-tpu7x-dynamic-sub-slices) uses `Ordinal`).
+The controller runs each role of each slice as a
 [LeaderWorkerSet](../../architecture/model-server-orchestration/leaderworkerset.md) named `<ds>-<slice>-<revision>-<role>`.
 The revision changes on every rollout, so query them by label:
 
