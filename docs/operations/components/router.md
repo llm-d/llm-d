@@ -14,7 +14,7 @@ When running multiple replicas of the Endpoint Picker (`router.epp.replicas > 1`
 
 1. **Active-Passive**: Traffic routes to a single primary replica set while standby replicas remain available for failover.
    - **Priority Routing (Recommended)**: Routes traffic to primary EPP replicas (Priority 0) and shifts traffic to warm standby EPP replicas (Priority 1) upon primary failure, reducing failover switchover time to **sub-second** (`< 1s`) while preserving optimized EPP scheduling. Supported in standalone service mode (`router.proxy.priorityRouting.enabled: true`) and GKE Gateway mode (`provider.gke.preferredBackends.enabled: true`).
-   - **Leader Election with Fail-Open (Default)**: Uses Kubernetes `coordination.k8s.io/Lease` coordination so only the elected leader serves inference extension requests while standby pods remain idle. If the active leader fails, fail-open mode prevents dropped requests by routing traffic directly to backend model servers, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
+   - **Leader Election with Fail-Open**: Uses Kubernetes `coordination.k8s.io/Lease` coordination so only the elected leader serves inference extension requests while standby pods remain idle. If the active leader fails, fail-open mode prevents dropped requests by routing traffic directly to backend model servers, but **leader switchover takes 10 to 30 seconds**. During that window while EPP is unavailable, **routing is purely unoptimized**.
 2. **Active-Active**: Multiple EPP replicas run concurrently and share load across all instances. Suitable when scheduling algorithms and plugins do not require unified state across pods or a synchronization mechanism is in place.
 
 #### Active-Passive Mode: Priority Routing (Recommended)
@@ -33,6 +33,16 @@ Priority Routing keeps standby EPP pods warm with synced model-server state and 
         standbyReplicas: 1
   ```
 
+  ```bash
+  helm install my-standalone-router ./config/charts/llm-d-router-standalone \
+    --set router.modelServers.matchLabels.app=my-vllm-service \
+    --set router.inferencePool.create=false \
+    --set router.proxy.mode=service \
+    --set router.proxy.priorityRouting.enabled=true \
+    --set router.proxy.priorityRouting.primaryReplicas=1 \
+    --set router.proxy.priorityRouting.standbyReplicas=1
+  ```
+
 - **GKE Gateway Mode (`llm-d-router-gateway`)**:
 
   ```yaml
@@ -45,11 +55,20 @@ Priority Routing keeps standby EPP pods warm with synced model-server state and 
         defaultReplicas: 1
   ```
 
+  ```bash
+  helm install my-gateway-router ./config/charts/llm-d-router-gateway \
+    --set router.modelServers.matchLabels.app=my-vllm-service \
+    --set provider.name=gke \
+    --set provider.gke.preferredBackends.enabled=true \
+    --set provider.gke.preferredBackends.preferredReplicas=1 \
+    --set provider.gke.preferredBackends.defaultReplicas=1
+  ```
+
 See [Priority Routing](#priority-routing) for standalone proxy details and the [`llm-d-router` Operations Guide](https://github.com/llm-d/llm-d-router/blob/main/docs/operations.md#priority-routing) for failover mechanics and tuning parameters.
 
-#### Active-Passive Mode: Leader Election and Fail-Open (Default)
+#### Active-Passive Mode: Leader Election and Fail-Open
 
-By default, multi-replica EPP deployments without priority routing automatically enable `--ha-enable-leader-election`. One leader replica actively serves routing decisions on Port 9002 and coordinates lease status, while standby replicas answer readiness probes with `NOT_SERVING` so they remain out of Service endpoints.
+To enable lease-based leader election (`--ha-enable-leader-election`), set `router.epp.flags.ha-enable-leader-election: true`. One leader replica actively serves routing decisions on Port 9002 and coordinates lease status, while standby replicas answer readiness probes with `NOT_SERVING` so they remain out of Service endpoints.
 
 - **Sizing & Capacity Impact**: Scaling replica count does not increase total request throughput capacity, as only the single active leader replica handles external processing requests.
 - **Fail-Open Resiliency**: With `router.proxy.failOpen: true` (default in standalone Envoy mode) or `router.inferencePool.failureMode: FailOpen` (default in Gateway mode), client requests are passed directly to backend model servers and are not dropped if the active leader restarts or fails.
@@ -67,12 +86,23 @@ router:
     failureMode: FailOpen # Gateway mode
 ```
 
+```bash
+helm install my-standalone-router ./config/charts/llm-d-router-standalone \
+  --set router.modelServers.matchLabels.app=my-vllm-service \
+  --set router.inferencePool.create=false \
+  --set router.epp.replicas=2 \
+  --set router.epp.flags.ha-enable-leader-election=true \
+  --set router.proxy.failOpen=true
+```
+
 - **Multi-Replica EPP with `helm --wait`**: Because standby replicas stay `NotReady` under leader election, configure a `RollingUpdate` strategy with `maxUnavailable >= replicas - 1` and `maxSurge: 0` so `helm --wait` and Flux upgrades do not block on standby readiness:
 
 ```yaml
 router:
   epp:
     replicas: 2
+    flags:
+      ha-enable-leader-election: true
     deploymentStrategy:
       type: RollingUpdate
       rollingUpdate:
@@ -82,7 +112,7 @@ router:
 
 #### Active-Active Mode
 
-To scale routing throughput concurrently across all EPP replicas, disable leader election by passing `ha-enable-leader-election: false` under `router.epp.flags`:
+To scale routing throughput concurrently across all EPP replicas, set `ha-enable-leader-election: false` under `router.epp.flags`:
 
 ```yaml
 router:
@@ -90,6 +120,14 @@ router:
     replicas: 3
     flags:
       ha-enable-leader-election: false
+```
+
+```bash
+helm install my-standalone-router ./config/charts/llm-d-router-standalone \
+  --set router.modelServers.matchLabels.app=my-vllm-service \
+  --set router.inferencePool.create=false \
+  --set router.epp.replicas=3 \
+  --set router.epp.flags.ha-enable-leader-election=false
 ```
 
 - **Near-Linear Throughput Scaling**: Multiple EPP replicas share incoming request load concurrently:
@@ -171,7 +209,7 @@ The following operational guidelines and proxy scaling architectures apply **exc
 
 By default, the standalone chart deploys the proxy as a `sidecar` container inside the EPP pod (`router.proxy.mode: sidecar`). To scale data plane throughput independently from control plane intelligence, deploy the proxy as a separate horizontally scalable Deployment and Service by setting `router.proxy.mode: service`.
 
-In `service` mode, the proxy communicates with EPP over the in-cluster EPP Service. If EPP undergoes active-passive leader failover or momentary pod restarts, the Envoy proxy fails open by default (`router.proxy.failOpen: true`), preserving uninterrupted client request processing. (`router.proxy.failOpen` applies to `proxyType: envoy` only; `agentgateway` fails closed when EPP is unreachable.)
+In `service` mode, the proxy communicates with EPP over the in-cluster EPP Service. If EPP undergoes active-passive leader failover or momentary pod restarts, the Envoy proxy fails open by default (`router.proxy.failOpen: true`), preserving uninterrupted client request processing. (`router.proxy.failOpen` applies to `proxyType: envoy` only; `agentgateway` fails closed when EPP is unreachable.) To disable fail-open, set `router.proxy.failOpen: false`.
 
 ```yaml
 router:
@@ -190,23 +228,6 @@ helm install my-standalone-router ./config/charts/llm-d-router-standalone \
   --set router.proxy.mode=service \
   --set router.proxy.replicas=3
 ```
-
-#### High Availability with Fail-Open
-
-By default, in service mode, fail open is enabled. To disable it, set `router.proxy.failOpen=false`.
-
-Empirical benchmark reference data for Qwen/Qwen2.5-1.5B-Instruct simulation across 2 model server replicas with forceful and graceful Leader EPP pod termination. Across various Envoy proxy replica counts, `router.proxy.failOpen=true` maintains high request availability during leader pod teardown. Residual errors occur during socket teardown at the exact moment of pod termination. Because lease-based leader switchover takes 10 to 30 seconds, requests served via fail-open during that transition bypass EPP scheduling and receive unoptimized routing until the new leader is ready.
-
-| Scenario | Envoy Replicas | EPP Replicas | Total Requests | Successful Requests (Throughput) | Errors |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Scenario 1**<br>Leader election with standby pod, pod terminates immediately without graceful termination | 1 | 2 | 598 | 598 (100%) | 0 |
-| | 2 | 2 | 591 | 584 (98.8%) | 7 |
-| **Scenario 2**<br>Leader election with no standby pod, pod terminates immediately without graceful termination | 1 | 1 | 598 | 588 (98.3%) | 1 |
-| | 2 | 1 | 592 | 589 (99.3%) | 4 |
-| **Scenario 3**<br>Leader election with standby pod, pod terminates with graceful termination | 1 | 2 | 593 | 591 (99.7%) | 2 |
-| | 2 | 2 | 594 | 583 (98.1%) | 11 |
-| **Scenario 4**<br>Leader election with no standby pod, pod terminates with graceful termination | 1 | 1 | 591 | 591 (100%) | 0 |
-| | 2 | 1 | 593 | 589 (99.3%) | 4 |
 
 #### Priority Routing
 
