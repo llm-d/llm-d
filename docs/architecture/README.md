@@ -1,4 +1,4 @@
-# Architecture
+# Concepts
 
 High-level guide to llm-d architecture. Start here, then dive into specific guides.
 
