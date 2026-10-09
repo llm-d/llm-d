@@ -5,96 +5,107 @@ resources:
   - ../base
   - gke-rdma-nic-template.yaml
 
+components:
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+
 patches:
-  # Configure prefill deployment with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
+  # Configure the prefill role with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
   - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
       metadata:
-        name: prefill
+        name: pd-disagg-vllm
       spec:
-        template:
-          spec:
-            resourceClaims:
-              - name: gke-rdma-claim
-                resourceClaimTemplateName: gke-rdma-nic-template
-            containers:
-              - name: modelserver
-                # A4X requires "kv_buffer_device":"cuda" in kv-transfer-config, gpu-memory-utilization=0.9, and disabling flashinfer autotune
-                args:
-                  - openai/gpt-oss-120b
-                  - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
-                  - --tensor-parallel-size=1
-                  - --block-size=128
-                  - --enable-auto-tool-choice
-                  - --tool-call-parser=openai
-                  - --reasoning-parser=openai_gptoss
-                  - --kv-transfer-config
-                  - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
-                  - --no-disable-hybrid-kv-cache-manager
-                  - --gpu-memory-utilization=0.9
-                  - --no-enable-flashinfer-autotune
-                # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X)
-                resources:
-                  claims:
-                    - name: gke-rdma-claim
-                  limits:
-                    nvidia.com/gpu: "1"
-                  requests:
-                    nvidia.com/gpu: "1"
-                env:
-                  - name: UCX_TLS
-                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
-                securityContext:
-                  capabilities:
-                    add: ["IPC_LOCK", "NET_ADMIN"]
-  # Configure decode deployment with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    resourceClaims:
+                      - name: gke-rdma-claim
+                        resourceClaimTemplateName: gke-rdma-nic-template
+                    containers:
+                      - name: modelserver
+                        # A4X requires "kv_buffer_device":"cuda" in kv-transfer-config, gpu-memory-utilization=0.9, and disabling flashinfer autotune
+                        args:
+                          - openai/gpt-oss-120b
+                          - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                          - --tensor-parallel-size=1
+                          - --block-size=128
+                          - --enable-auto-tool-choice
+                          - --tool-call-parser=openai
+                          - --reasoning-parser=openai_gptoss
+                          - --kv-transfer-config
+                          - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
+                          - --no-disable-hybrid-kv-cache-manager
+                          - --gpu-memory-utilization=0.9
+                          - --no-enable-flashinfer-autotune
+                        # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X)
+                        resources:
+                          claims:
+                            - name: gke-rdma-claim
+                          limits:
+                            nvidia.com/gpu: "1"
+                          requests:
+                            nvidia.com/gpu: "1"
+                        env:
+                          - name: UCX_TLS
+                            value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                        securityContext:
+                          capabilities:
+                            add: ["IPC_LOCK", "NET_ADMIN"]
+  # Configure the decode role with DRANet resourceClaims (gke-rdma-nic-template), A4X GPU resources, env, and capabilities
   - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
       metadata:
-        name: decode
+        name: pd-disagg-vllm
       spec:
-        template:
-          spec:
-            resourceClaims:
-              - name: gke-rdma-claim-0
-                resourceClaimTemplateName: gke-rdma-nic-template
-              - name: gke-rdma-claim-1
-                resourceClaimTemplateName: gke-rdma-nic-template
-              - name: gke-rdma-claim-2
-                resourceClaimTemplateName: gke-rdma-nic-template
-              - name: gke-rdma-claim-3
-                resourceClaimTemplateName: gke-rdma-nic-template
-            containers:
-              - name: modelserver
-                # A4X requires "kv_buffer_device":"cuda" in kv-transfer-config
-                args:
-                  - openai/gpt-oss-120b
-                  - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
-                  - --tensor-parallel-size=4
-                  - --block-size=128
-                  - --enable-auto-tool-choice
-                  - --tool-call-parser=openai
-                  - --reasoning-parser=openai_gptoss
-                  - --kv-transfer-config
-                  - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
-                  - --no-disable-hybrid-kv-cache-manager
-                  - --port=8200
-                # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X)
-                resources:
-                  claims:
-                    - name: gke-rdma-claim-0
-                    - name: gke-rdma-claim-1
-                    - name: gke-rdma-claim-2
-                    - name: gke-rdma-claim-3
-                  limits:
-                    nvidia.com/gpu: "4"
-                  requests:
-                    nvidia.com/gpu: "4"
-                env:
-                  - name: UCX_TLS
-                    value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
-                securityContext:
-                  capabilities:
-                    add: ["IPC_LOCK", "NET_ADMIN"]
+        roles:
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    resourceClaims:
+                      - name: gke-rdma-claim-0
+                        resourceClaimTemplateName: gke-rdma-nic-template
+                      - name: gke-rdma-claim-1
+                        resourceClaimTemplateName: gke-rdma-nic-template
+                      - name: gke-rdma-claim-2
+                        resourceClaimTemplateName: gke-rdma-nic-template
+                      - name: gke-rdma-claim-3
+                        resourceClaimTemplateName: gke-rdma-nic-template
+                    containers:
+                      - name: modelserver
+                        # A4X requires "kv_buffer_device":"cuda" in kv-transfer-config
+                        args:
+                          - openai/gpt-oss-120b
+                          - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                          - --tensor-parallel-size=4
+                          - --block-size=128
+                          - --enable-auto-tool-choice
+                          - --tool-call-parser=openai
+                          - --reasoning-parser=openai_gptoss
+                          - --kv-transfer-config
+                          - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
+                          - --no-disable-hybrid-kv-cache-manager
+                          - --port=8200
+                        # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X)
+                        resources:
+                          claims:
+                            - name: gke-rdma-claim-0
+                            - name: gke-rdma-claim-1
+                            - name: gke-rdma-claim-2
+                            - name: gke-rdma-claim-3
+                          limits:
+                            nvidia.com/gpu: "4"
+                          requests:
+                            nvidia.com/gpu: "4"
+                        env:
+                          - name: UCX_TLS
+                            value: "rc_mlx5,rc,cuda_copy,cuda_ipc,sm,shm,self"
+                        securityContext:
+                          capabilities:
+                            add: ["IPC_LOCK", "NET_ADMIN"]

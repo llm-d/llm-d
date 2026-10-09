@@ -60,7 +60,7 @@ Production rollout strategies including [Blue-Green updates](../../guides/rollou
 
 ## Operate Disaggregated Serving
 
-### [Disaggregated Serving Operations](disaggregation/README.md): [vLLM](disaggregation/vllm.md) and [SGLang](disaggregation/sglang.md)
+### [Disaggregated Serving Operations](disaggregation/README.md): [vLLM](disaggregation/vllm.md), [SGLang](disaggregation/sglang.md) and [DisaggregatedSet](disaggregation/disaggregatedset.md)
 
 Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/advanced/disaggregation/README.md).
 

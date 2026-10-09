@@ -14,9 +14,7 @@ This guide deploys `openai/gpt-oss-120b` with prefill-decode disaggregation, imp
 * 8 TP=1 Prefill Instances
 * 2 TP=4 Decode Instances
 
-This guide also has an alternate variant:
-
-* **[DisaggregatedSet](./README.ds.md)** — the same deployment managed as a single LWS `DisaggregatedSet` resource, with coordinated P/D rollouts, `slices` for replicating the whole topology into independent copies, and per-domain placement policy.
+On NVIDIA GPUs, prefill and decode run as one LWS `DisaggregatedSet` in two slices of 4 prefill and 1 decode each, see [Operating the DisaggregatedSet](#operating-the-disaggregatedset) and [Disaggregated Serving: Operations (DisaggregatedSet)](../../docs/operations/disaggregation/disaggregatedset.md).
 
 The same P/D pattern on GKE TPU (v6e and TPU7x) is covered by the [TPU](#tpu) model server section below.
 
@@ -49,9 +47,8 @@ This guide includes configuration for the following accelerators:
 
 | Backend             | Directory                  | Notes                                                    |
 | ------------------- | -------------------------- | -------------------------------------------------------- |
-| NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/`    | vLLM, tested nightly on GKE (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)) |
-| NVIDIA GPU (vLLM + DisaggregatedSet) | `modelserver/gpu/vllm-ds/` | Manages the whole P/D topology as one LWS `DisaggregatedSet` with `slices`, see [DisaggregatedSet Guide](./README.ds.md) |
-| NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang, validated each release                           |
+| NVIDIA GPU (vLLM)   | `modelserver/gpu/vllm/`    | vLLM as a `DisaggregatedSet`, tested nightly on GKE (see [Cluster Pre-provisioning](#gke-cluster-pre-provisioning-with-dra--rdmaroce)) |
+| NVIDIA GPU (SGLang) | `modelserver/gpu/sglang/`  | SGLang as a `DisaggregatedSet`, validated each release   |
 | Google TPU          | `modelserver/tpu/v6/vllm/` & `modelserver/tpu/v7/vllm/` | GKE TPU (v6e & TPU7x), tested nightly on GKE (v6e), see [TPU](#tpu) |
 | Google TPU (dynamic sub-slices) | `modelserver/tpu/v7/vllm-dynamic-slice/` | TPU7x sub-slices formed on demand via GKE dynamic slicing + Kueue TAS, see [Dynamic sub-slices](#dynamic-sub-slices-tpu7x) |
 | AMD GPU             | `modelserver/amd/vllm/`    | AMD GPU, community contributed                           |
@@ -227,6 +224,7 @@ export MODEL_NAME="openai/gpt-oss-120b"
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 
+* For NVIDIA GPU, you have deployed the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC.
 * Create a target namespace for the installation
 
 ```bash
@@ -302,15 +300,15 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 ```
 
 > [!TIP]
-> The `cks-mooncake` overlay uses MooncakeConnector instead of NixlConnector for KV transfer. It targets CKS clusters with InfiniBand / RDMA and has additional prerequisites — see [KV Transfer Backends](#kv-transfer-backends) above.
+> The `cks-mooncake` overlay uses MooncakeConnector instead of NixlConnector for KV transfer. It targets CKS clusters with InfiniBand / RDMA and has additional prerequisites — see [KV Transfer Backends](#supported-kv-transfer-backends) above.
 
 <details>
 <summary><h4>Deploying with SGLang</h4></summary>
 
-To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `coreweave`, and `gke` infra providers):
+To run the disaggregated deployment with SGLang instead of vLLM, apply the SGLang overlay (available for NVIDIA GPU with `base`, `aws`, `coreweave`, and `gke` infra providers):
 
 ```bash
-export INFRA_PROVIDER=base # base | coreweave | gke | cks-mooncake
+export INFRA_PROVIDER=base # base | aws | coreweave | gke
 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/sglang/${INFRA_PROVIDER}
 ```
@@ -320,6 +318,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/g
 
 SGLang-specific notes:
 
+* **Topology**: two slices of 1 prefill and 1 decode, in the `pd-disagg-sglang` DisaggregatedSet.
 * **Engine flags**: prefill and decode pods launch with `--disaggregation-mode={prefill,decode}` and `--disaggregation-transfer-backend=nixl`. The decode pod's routing-proxy sidecar is configured with `--kv-connector=sglang`.
 * **Bootstrap server**: each prefill instance runs a bootstrap server on port `8998` (the default). To use a different port, set `SGLANG_BOOTSTRAP_PORT` on the sidecar and `--disaggregation-bootstrap-port` on the SGLang engine so the two match. P/D peers discover each other through this server rather than vLLM's peer-to-peer negotiation; the KV transfer itself still runs directly over NIXL/RDMA.
 * **Operations**: scale up/down, request cancellation, fault tolerance, and rollout behavior differ from vLLM. See [Disaggregated Serving: Operations (SGLang)](../../docs/operations/disaggregation/sglang.md).
@@ -448,10 +447,14 @@ In a P/D deployment the prefill and decode pools scale and fail independently, a
 #### Common failure modes
 
 * **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect NIXL transfer (see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
-* **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode `Deployment` needs more replicas or a larger TP degree.
+* **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode role needs more replicas or a larger TP degree.
 * **Both pools underutilized but latency high** — routing problem. Check the P/D decision ratio and EPP scheduler e2e latency before touching the model servers.
 
 For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
+
+## Operating the DisaggregatedSet
+
+The NVIDIA GPU overlays run prefill and decode as one LWS [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm`, or `pd-disagg-sglang` for SGLang) with `groupIdentity: Hash`: `slices` complete copies of the P/D topology, each role of each slice its own LeaderWorkerSet. Scaling, rollouts, placement policy, router slice affinity, and per-role autoscaling are covered in [Disaggregated Serving: Operations (DisaggregatedSet)](../../docs/operations/disaggregation/disaggregatedset.md).
 
 ## Verification
 

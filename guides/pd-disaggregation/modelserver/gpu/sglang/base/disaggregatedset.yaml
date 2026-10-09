@@ -1,0 +1,244 @@
+# Two independent copies of the whole P/D topology. Each slice is 1 prefill and
+# 1 decode that roll out and recover on their own clock, for 2 of each in total.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg-sglang
+  labels:
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+    llm-d.ai/engine-type: sglang
+    llm-d.ai/guide: pd-disaggregation
+    llm-d.ai/model: gpt-oss-120b
+    llm-d.ai/inference-serving: "true"
+spec:
+  slices: 2
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            maxSurge: 0
+            maxUnavailable: 1
+        leaderWorkerTemplate:
+          size: 1
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/accelerator-variant: gpu
+                llm-d.ai/accelerator-vendor: nvidia
+                llm-d.ai/engine-type: sglang
+                llm-d.ai/guide: pd-disaggregation
+                llm-d.ai/model: gpt-oss-120b
+                llm-d.ai/role: prefill
+                llm-d.ai/inference-serving: "true"
+            spec:
+              serviceAccountName: pd-disagg-sglang
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command:
+                    - python3
+                    - -m
+                    - sglang.launch_server
+                  args:
+                    - --model-path=openai/gpt-oss-120b
+                    - --port=8000
+                    - --host=0.0.0.0
+                    - --disaggregation-mode=prefill
+                    - --disaggregation-transfer-backend=nixl
+                    - --tensor-parallel-size=2
+                    # Align KV-block granularity with EPP's approx-prefix-cache-producer (64-token
+                    # blocks) to prevent under-counting prefix hits, and align with other SGLang guides.
+                    - --page-size=64
+                    - --log-level=info
+                    - --enable-metrics
+                    - --uvicorn-access-log-exclude-prefixes=/metrics
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          key: HF_TOKEN
+                          name: llm-d-hf-token
+                    # Staging buffer env variables are required for heterogeneous TP for non-MLA models.
+                    - name: SGLANG_DISAGG_STAGING_BUFFER
+                      value: "1"
+                    - name: SGLANG_DISAGG_STAGING_BUFFER_SIZE_MB
+                      value: "64"
+                    - name: SGLANG_DISAGG_STAGING_POOL_SIZE_MB
+                      value: "4096"
+                  ports:
+                    - containerPort: 8000
+                      name: modelserver
+                      protocol: TCP
+                    - containerPort: 5600
+                      name: nixl
+                      protocol: TCP
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 64Gi
+                      nvidia.com/gpu: "2"
+                    requests:
+                      cpu: "16"
+                      memory: 64Gi
+                      nvidia.com/gpu: "2"
+                  startupProbe:
+                    failureThreshold: 120
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                  livenessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                  readinessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.config
+                      name: metrics-volume
+              volumes:
+                - emptyDir: {}
+                  name: metrics-volume
+                - emptyDir:
+                    medium: Memory
+                    sizeLimit: 16Gi
+                  name: shm
+    - name: decode
+      spec:
+        replicas: 1
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            maxSurge: 1
+            maxUnavailable: 0
+        leaderWorkerTemplate:
+          size: 1
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/accelerator-variant: gpu
+                llm-d.ai/accelerator-vendor: nvidia
+                llm-d.ai/engine-type: sglang
+                llm-d.ai/guide: pd-disaggregation
+                llm-d.ai/model: gpt-oss-120b
+                llm-d.ai/role: decode
+                llm-d.ai/inference-serving: "true"
+            spec:
+              serviceAccountName: pd-disagg-sglang
+              initContainers:
+                - name: routing-proxy
+                  image: REPLACE_ROUTING_SIDECAR_IMAGE
+                  imagePullPolicy: Always
+                  args:
+                    - --port=8000
+                    - --kv-connector=sglang
+                    - --zap-log-level=1
+                    - --secure-serving=false
+                  ports:
+                    - containerPort: 8000
+                      name: sidecar
+                      protocol: TCP
+                  resources: {}
+                  restartPolicy: Always
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command:
+                    - python3
+                    - -m
+                    - sglang.launch_server
+                  args:
+                    - --model-path=openai/gpt-oss-120b
+                    - --port=8200
+                    - --host=0.0.0.0
+                    - --disaggregation-mode=decode
+                    - --disaggregation-transfer-backend=nixl
+                    - --tensor-parallel-size=2
+                    # Align KV-block granularity with EPP's approx-prefix-cache-producer (64-token
+                    # blocks) to prevent under-counting prefix hits, and align with other SGLang guides.
+                    - --page-size=64
+                    - --log-level=info
+                    - --enable-metrics
+                    - --uvicorn-access-log-exclude-prefixes=/metrics
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          key: HF_TOKEN
+                          name: llm-d-hf-token
+                    # Staging buffer env variables are required for heterogeneous TP for non-MLA models.
+                    - name: SGLANG_DISAGG_STAGING_BUFFER
+                      value: "1"
+                    - name: SGLANG_DISAGG_STAGING_BUFFER_SIZE_MB
+                      value: "64"
+                    - name: SGLANG_DISAGG_STAGING_POOL_SIZE_MB
+                      value: "4096"
+                  ports:
+                    - containerPort: 8200
+                      name: modelserver
+                      protocol: TCP
+                    - containerPort: 5600
+                      name: nixl
+                      protocol: TCP
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 64Gi
+                      nvidia.com/gpu: "2"
+                    requests:
+                      cpu: "16"
+                      memory: 64Gi
+                      nvidia.com/gpu: "2"
+                  startupProbe:
+                    failureThreshold: 120
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                  livenessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                  readinessProbe:
+                    failureThreshold: 3
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.config
+                      name: metrics-volume
+              volumes:
+                - emptyDir: {}
+                  name: metrics-volume
+                - emptyDir:
+                    medium: Memory
+                    sizeLimit: 16Gi
+                  name: shm

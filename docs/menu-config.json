@@ -72,6 +72,7 @@
     "operations/lifecycle/readiness-probes": { "position": 2, "label": "Readiness Probes" },
     "operations/disaggregation/vllm": { "position": 1, "label": "vLLM" },
     "operations/disaggregation/sglang": { "position": 2, "label": "SGLang" },
+    "operations/disaggregation/disaggregatedset": { "position": 3, "label": "DisaggregatedSet" },
     "operations/components/router": { "position": 1, "label": "Router Operations" },
     "operations/components/async-processor": { "position": 2, "label": "Async Processor Operations" },
     "operations/observability/setup": { "position": 1, "label": "Set Up the Monitoring Stack" },

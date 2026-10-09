@@ -12,8 +12,8 @@ kind: Kustomization
 # peakPrefillThroughput). The only EPP-side work is setting that parameter to
 # YOUR calibrated value — see Prerequisites in the README.
 #
-# Two ScaledObjects, one per role: prefill and decode are separate Deployments
-# bound by different resources, so they scale independently.
+# Two ScaledObjects, one per role: prefill and decode are separate DisaggregatedSet
+# roles bound by different resources, so they scale independently.
 resources:
   - prefill-scaledobject.yaml
   - decode-scaledobject.yaml

@@ -1,7 +1,7 @@
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
-  name: pd-disagg
+  name: pd-disagg-vllm
   labels:
     llm-d.ai/inference-serving: "true"
     llm-d.ai/guide: pd-disaggregation
@@ -11,10 +11,9 @@ metadata:
     llm-d.ai/model: gpt-oss-120b
 spec:
   # Two independent copies of the whole P/D topology. Each slice is a complete
-  # 4-prefill + 1-decode set that rolls out and recovers on its own clock.
-  # Aggregate capacity matches the Deployment-based variant of this guide:
-  # 8 x TP=1 prefill and 2 x TP=4 decode. Changing slices is a pure scale
-  # operation and never triggers a rollout of existing slices.
+  # 4-prefill + 1-decode set that rolls out and recovers on its own clock, for
+  # 8 x TP=1 prefill and 2 x TP=4 decode in total. Changing slices is a pure
+  # scale operation and never triggers a rollout of existing slices.
   slices: 2
 
   # Optionally confine each slice to a single topology domain (rack, NVLink
@@ -23,8 +22,7 @@ spec:
   # LeaderWorkerSet is created, so enabling this takes effect on the next
   # rollout. ExclusiveTopology additionally guarantees at most one slice per
   # domain across all DisaggregatedSets.
-  # NOTE: placementPolicy requires LWS v0.10.0 or newer. See the "Pinning
-  # Slices to Accelerator Domains" section of README.ds.md for per-platform
+  # See docs/operations/disaggregation/disaggregatedset.md for per-platform
   # topology label keys.
   # placementPolicy:
   #   type: ExclusiveSlice
@@ -33,13 +31,14 @@ spec:
   roles:
     - name: prefill
       spec:
-        replicas: 4 # per slice
+        replicas: 4  # per slice
+        groupIdentity: Hash
         rolloutStrategy:
           rollingUpdateConfiguration:
             maxSurge: 0
             maxUnavailable: 1
         leaderWorkerTemplate:
-          size: 1 # single-host: each group is one pod
+          size: 1  # single-host: each group is one pod
           workerTemplate:
             metadata:
               labels:
@@ -51,7 +50,7 @@ spec:
                 llm-d.ai/model: gpt-oss-120b
                 llm-d.ai/role: prefill
             spec:
-              serviceAccountName: pd-disagg
+              serviceAccountName: pd-disagg-vllm
               containers:
                 - name: modelserver
                   image: REPLACE_MODEL_SERVER_IMAGE
@@ -65,7 +64,7 @@ spec:
                     - "--tool-call-parser=openai"
                     - "--reasoning-parser=openai_gptoss"
                     - "--kv-transfer-config"
-                    - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+                    - '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_buffer_device":"cuda","kv_connector_extra_config":{"backends":["UCX"]}}'
                     - "--no-disable-hybrid-kv-cache-manager"
                   env:
                     - name: HF_TOKEN
@@ -148,7 +147,8 @@ spec:
 
     - name: decode
       spec:
-        replicas: 1 # per slice
+        replicas: 1  # per slice
+        groupIdentity: Hash
         rolloutStrategy:
           rollingUpdateConfiguration:
             # Surge so a slice never loses its only decode during a rollout.
@@ -157,7 +157,7 @@ spec:
             maxSurge: 1
             maxUnavailable: 0
         leaderWorkerTemplate:
-          size: 1 # single-host: each group is one pod
+          size: 1  # single-host: each group is one pod
           workerTemplate:
             metadata:
               labels:
@@ -169,14 +169,13 @@ spec:
                 llm-d.ai/model: gpt-oss-120b
                 llm-d.ai/role: decode
             spec:
-              serviceAccountName: pd-disagg
+              serviceAccountName: pd-disagg-vllm
               initContainers:
                 - name: routing-proxy
                   image: REPLACE_ROUTING_SIDECAR_IMAGE
                   imagePullPolicy: Always
                   args:
                     - --port=8000
-                    - --model-server-port=8200
                     - --kv-connector=nixlv2
                     - --zap-log-level=1
                     - --secure-serving=false
@@ -202,7 +201,7 @@ spec:
                     - "--tool-call-parser=openai"
                     - "--reasoning-parser=openai_gptoss"
                     - "--kv-transfer-config"
-                    - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+                    - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_buffer_device":"cuda","kv_connector_extra_config":{"backends":["UCX"]}}'
                     - "--no-disable-hybrid-kv-cache-manager"
                     - "--port=8200"
                   env:
