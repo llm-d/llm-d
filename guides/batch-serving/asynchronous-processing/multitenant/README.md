@@ -1,5 +1,8 @@
 # Multi-Tenant Async Processing — Quota, Priority & Saturation
 
+[![E2E eviction (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml)
+[![E2E holdback (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml)
+
 An advanced [Async Processor](https://github.com/llm-d/llm-d-async) scenario built on the
 [asynchronous-processing](../README.md) guide, across two dimensions — **team × tier** — for one model served by one llm-d Router
 `InferencePool`. Each **team** gets a per-team quota (reserved vs. overflow) and a priority **tier**; the
@@ -809,11 +812,33 @@ The gate-metric panels need an image newer than v0.7.2. GMP / Monarch lags real 
 is bang-bang on that timescale; the self-hosted Prometheus path reacts within one scrape.
 </details>
 
+## Nightly test
+
+Two GKE nightlies deploy this guide from its [`guide.yaml`](guide.yaml), including the optional coordinator
+from step 4, through [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) (`scripts/guide.py emit`),
+one for each router values file:
+
+- `nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x` (21:00 UTC): the default, in-flight eviction.
+  Its TTFT allowance at 100 % realtime load is wider (`AMT_LEVEL_100_TTFT_ABS=0.6`): with the pool full of
+  realtime work, a realtime request that finds an async request in its slot waits for an eviction, which adds
+  up to about half a second to the slowest requests.
+- `nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (20:00 UTC): priority holdback (`FLOW_CONTROL=holdback`).
+
+Each benchmarks realtime traffic (the coordinator's `passthrough` mode) with and without a queued llm-d-async
+backlog (`wait` mode) at 20/80/90/100 % of the router's configured capacity. What the nightlies measure and how
+their bounds are chosen is documented with the validator in
+[`.github/scripts/e2e/async-multitenant/`](../../../../.github/scripts/e2e/async-multitenant/README.md).
+
+Both lanes rely on the router protecting realtime traffic (see
+[Protecting realtime traffic](#protecting-realtime-traffic)): without holdback or eviction, async work
+admitted up to and past the router's capacity makes realtime requests wait behind it and the isolation
+checks fail (measurements in [llm-d-async#468](https://github.com/llm-d/llm-d-async/issues/468)).
+
 ## Status
 
-**Tier 2 (Deployable)**, per the [guide policy](../../../GUIDES-POLICY.md).
+**Tier 3 (Validated)**, per the [guide policy](../../../GUIDES-POLICY.md).
 Reference environment: GKE, two NVIDIA H100s, vLLM, `Qwen/Qwen3-32B`.
-Gaps to Tier 3: no nightly end-to-end job.
+Gaps to Tier 4: no reviewed benchmark results for the guide yet.
 
 ## Notes & gotchas
 
