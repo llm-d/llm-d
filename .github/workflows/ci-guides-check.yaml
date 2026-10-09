@@ -19,6 +19,8 @@ on:
       - scripts/matrix_common.py
       - scripts/seed-release-badges.py
       - scripts/tests/**
+      - .github/scripts/nightly-e2e-verification/**
+      - helpers/smoke-test/**
   workflow_dispatch:
 
 permissions:
@@ -55,5 +57,5 @@ jobs:
       - name: Check the llm-d.ai guide publish manifest
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
 
-      - name: Run guide.py tests
-        run: python -m pytest scripts/tests/ -v
+      - name: Run Python tests
+        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ helpers/smoke-test/tests/ -v
