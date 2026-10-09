@@ -38,6 +38,10 @@ export ROUTER_GATEWAY_CHART=${ROUTER_GATEWAY_CHART:-oci://ghcr.io/llm-d/charts/l
 export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-main}
 export ROUTER_EPP_IMAGE=${ROUTER_EPP_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker}
 
+### Container Image coordinates and tag for the router coordinator (async-broker front door)
+export ROUTER_COORDINATOR_VERSION=${ROUTER_COORDINATOR_VERSION:-main}
+export ROUTER_COORDINATOR_IMAGE=${ROUTER_COORDINATOR_IMAGE:-ghcr.io/llm-d/llm-d-router-coordinator}
+
 ### Container image used by guide verification steps
 export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
 

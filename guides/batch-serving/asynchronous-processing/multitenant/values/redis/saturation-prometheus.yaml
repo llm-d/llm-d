@@ -1,16 +1,19 @@
-# Redis SortedSet backend + Prometheus — team × tier × MODEL
-# with per-model saturation back-off.
+# Redis SortedSet backend + Prometheus — team × tier with saturation back-off
+# (Scenario C), one model behind one InferencePool.
 #
-#  - MODEL isolation: one worker pool per model (model-a / model-b), each with its
-#    OWN saturation gate scoped to that model's InferencePool (POOL_A / POOL_B).
-#    Saturating one model parks only its pool; the other keeps flowing.
+#  - SATURATION: the worker pool's wait-on-refuse(prometheus-query) gate reads
+#    vLLM running requests for the InferencePool (POOL_NAME) and parks the pool's
+#    workers once SAT_CAP requests are running.
 #  - TEAM quota (redis-quota, classifying): within quota -> reserved, over ->
-#    overflow. Per-model prefix (quota:a: / quota:b:).
-#  - TIER: per-queue label; the tier-priority merge policy orders each pool's
+#    overflow.
+#  - TIER: per-queue label; the tier-priority merge policy orders the
 #    reserved/overflow × tier lanes and stamps x-llm-d-inference-objective.
 #
-# Replace: NAMESPACE, IGW_HOST, POOL_A/POOL_B (InferencePool names), PROM_URL,
-# SAT_CAP (concurrent requests at which a model is considered saturated).
+# Replace: NAMESPACE, IGW_HOST, POOL_NAME (InferencePool name), PROM_URL,
+# SAT_CAP (concurrent requests at which the pool is considered saturated).
+#
+# One llm-d-async can serve several InferencePools independently: give each pool
+# its own worker pool and queues whose igw_base_url points at that pool's router.
 ap:
 
   transport: "redis-sortedset"
@@ -35,17 +38,22 @@ ap:
   transportConfig:
     urlSecret:
       url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
-    result_queue_name: "results-a-list"
+    # Results go to the destination a request carries (the optional coordinator
+    # gives each request its own result key) or, for requests published straight
+    # to Redis, to this list. A per-queue result_queue_name would override both
+    # and break the coordinator's wait and enqueue modes. result_ttl_seconds
+    # expires result keys nobody collects.
+    result_queue_name: "results-list"
     poll_interval_ms: 500
     batch_size: 10
     queues:
-      # ---------- MODEL A ----------
-      - queue_name: "team-premium-a"
-        worker_pool_id: "model-a"
+      # ---------- team queues (pool teams, payload.model = MODEL) ----------
+      - queue_name: "team-premium"
+        worker_pool_id: "teams"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-a-list"
-        labels: { tier: "interactive" }
+        result_ttl_seconds: 3600
+        labels: {tier: "interactive"}
         gate_type: "redis-quota"
         gate_params:
           address: "redis.NAMESPACE.svc.cluster.local:6379"
@@ -53,13 +61,13 @@ ap:
           mode: "concurrency"
           gating_mode: "classifying"
           limit: "2"
-          prefix: "quota:a:"
-      - queue_name: "team-standard-a"
-        worker_pool_id: "model-a"
+          prefix: "quota:"
+      - queue_name: "team-standard"
+        worker_pool_id: "teams"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-a-list"
-        labels: { tier: "async" }
+        result_ttl_seconds: 3600
+        labels: {tier: "async"}
         gate_type: "redis-quota"
         gate_params:
           address: "redis.NAMESPACE.svc.cluster.local:6379"
@@ -67,13 +75,13 @@ ap:
           mode: "concurrency"
           gating_mode: "classifying"
           limit: "2"
-          prefix: "quota:a:"
-      - queue_name: "team-batch-a"
-        worker_pool_id: "model-a"
+          prefix: "quota:"
+      - queue_name: "team-batch"
+        worker_pool_id: "teams"
         request_path_url: "/v1/completions"
         igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-a-list"
-        labels: { tier: "batch" }
+        result_ttl_seconds: 3600
+        labels: {tier: "batch"}
         gate_type: "redis-quota"
         gate_params:
           address: "redis.NAMESPACE.svc.cluster.local:6379"
@@ -81,70 +89,20 @@ ap:
           mode: "concurrency"
           gating_mode: "classifying"
           limit: "1"
-          prefix: "quota:a:"
+          prefix: "quota:"
 
-      # ---------- MODEL B ----------
-      - queue_name: "team-premium-b"
-        worker_pool_id: "model-b"
-        request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-b-list"
-        labels: { tier: "interactive" }
-        gate_type: "redis-quota"
-        gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
-          attribute: "team"
-          mode: "concurrency"
-          gating_mode: "classifying"
-          limit: "2"
-          prefix: "quota:b:"
-      - queue_name: "team-standard-b"
-        worker_pool_id: "model-b"
-        request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-b-list"
-        labels: { tier: "async" }
-        gate_type: "redis-quota"
-        gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
-          attribute: "team"
-          mode: "concurrency"
-          gating_mode: "classifying"
-          limit: "2"
-          prefix: "quota:b:"
-      - queue_name: "team-batch-b"
-        worker_pool_id: "model-b"
-        request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
-        result_queue_name: "results-b-list"
-        labels: { tier: "batch" }
-        gate_type: "redis-quota"
-        gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
-          attribute: "team"
-          mode: "concurrency"
-          gating_mode: "classifying"
-          limit: "1"
-          prefix: "quota:b:"
-
-  # One pool per model, each parking on ITS model's saturation (independent).
+  # The pool parks on its InferencePool's saturation.
   #
-  # SAT_CAP is the divisor: the concurrent-request count at which a model counts as
+  # SAT_CAP is the divisor: the concurrent-request count at which the pool counts as
   # saturated. prometheus-query closes the gate at budget <= 0 and clamp() floors the
   # budget at 0, so the gate closes only once SAT_CAP requests are running.
   workerPools:
-    - id: "model-a"
-      workers: 8
+    - id: "teams"
+      workers: 16
       gate_type: "wait-on-refuse"
       gate_params:
         gate: |
-          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_A\"})/SAT_CAP, 0, 1)","fallback":"1"}}
-    - id: "model-b"
-      workers: 8
-      gate_type: "wait-on-refuse"
-      gate_params:
-        gate: |
-          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_B\"})/SAT_CAP, 0, 1)","fallback":"1"}}
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_NAME\"})/SAT_CAP, 0, 1)","fallback":"1"}}
 
   resources:
     requests:
