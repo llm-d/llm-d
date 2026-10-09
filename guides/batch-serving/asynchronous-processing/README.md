@@ -2,10 +2,13 @@
 
 The [Async Processor](https://github.com/llm-d/llm-d-async) provides a way to process inference requests asynchronously using a queue-based architecture. This is ideal for latency-insensitive workloads or for filling "slack" capacity in your inference pool.
 
-Two guides are available:
+This page deploys the Async Processor for a single model. Three companion guides build on it:
 
-- **This guide** — the standard **single-model** setup (choose a queue backend below and deploy).
-- **[Multi-tenant guide](./multitenant/README.md)** — the **advanced** setup: **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
+- **[GCP Pub/Sub](./gcp-pubsub/README.md)** — set up the default queue backend: cloud-native, scalable messaging on Google Cloud.
+- **[Redis Sorted Set](./redis/README.md)** — set up the alternative queue backend: a persisted queue that orders requests by deadline.
+- **[Multi-tenant](./multitenant/README.md)** — the **advanced** setup: **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
+
+Set up one queue backend before [Installation](#installation).
 
 > [!NOTE]
 > For production sizing, scaling, and container-resource guidance, see [Async Processor Operations](../../../docs/operations/components/async-processor.md).
@@ -23,11 +26,6 @@ For how the processor works — dispatch gates, worker pools, merge policies, re
 - **Batch Inference**: Processing large datasets where completion time is measured in minutes or hours rather than milliseconds.
 - **Slack Capacity Filling**: Using idle GPU cycles between real-time request spikes to perform background tasks like document summarization or embedding generation.
 - **Offline Evaluation**: Running model evaluation pipelines without competing for production resources.
-
-### Supported Queue Implementations
-
-1. **[GCP Pub/Sub](./gcp-pubsub/README.md)**: Cloud-native, scalable messaging service.
-2. **[Redis Sorted Set](./redis/README.md)**: High-performance, persisted, and prioritized queue implementation.
 
 ## Prerequisites
 
