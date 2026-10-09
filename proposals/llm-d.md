@@ -3,7 +3,7 @@
 > **Note.** This is the founding proposal for llm-d. For the current
 > architecture, components, and well-lit-path deployment guides, see the
 > [Architecture overview](../docs/architecture/README.md), the
-> [Getting Started introduction](../docs/getting-started/README.md), and the
+> [Getting Started introduction](../docs/getting-started/README.mdx), and the
 > [Well-Lit Paths](../docs/well-lit-paths/README.md). Some terminology has evolved
 > since this proposal — most notably, the "inference scheduler" component is
 > now referred to as the **llm-d Router**, comprising a Proxy and an Endpoint

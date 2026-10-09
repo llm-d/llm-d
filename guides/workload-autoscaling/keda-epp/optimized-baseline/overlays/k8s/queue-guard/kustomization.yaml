@@ -1,0 +1,8 @@
+# Generic Kubernetes + queue signal + demand-aware overshoot guard. The full
+# ScaledObject is in scaledobject.yaml; this overlay only makes it a kustomize
+# target so the guide's apply command is uniform across platforms. Apply on
+# non-OpenShift clusters; use overlays/ocp/queue-guard on OpenShift.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - scaledobject.yaml

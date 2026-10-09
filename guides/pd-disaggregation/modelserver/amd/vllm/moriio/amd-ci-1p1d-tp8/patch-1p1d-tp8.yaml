@@ -1,5 +1,5 @@
 #
-# 1P/1D, TP=8 variant of the moriio/amd-ci (4P/4D, TP=2) leaf.
+# 1P/1D, TP=8 variant of the moriio/amd-ci (1P/1D, TP=2) leaf.
 #
 # Only the fields that differ are set here; env, cpu/memory, probes, and volumes
 # are inherited from ../amd-ci via strategic-merge. Container/initContainer args
@@ -80,7 +80,7 @@ spec:
         - name: routing-proxy
           args:
             - --port=8000
-            - --vllm-port=8200
+            - --model-server-port=8200
             - --kv-connector=nixlv2
             - --zap-log-level=1
             - --secure-proxy=false

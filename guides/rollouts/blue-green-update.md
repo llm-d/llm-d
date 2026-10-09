@@ -41,6 +41,7 @@ teams can ensure stability and performance, quickly identifying and reverting an
 ## How to do InferencePool rollout
 
 1. **Deploy new infrastructure**: Create a new InferencePool configured with the new node(compute/accelerator) / model server / base model that you chose.
+1. **Optionally mirror traffic**: Copy a share of live requests to the new InferencePool to validate it before it serves clients.
 1. **Configure traffic splitting**: Use an HTTPRoute to split traffic between the existing InferencePool and the new InferencePool. The `backendRefs.weight` field controls the traffic percentage allocated to each pool.
 1. **Preserve rollback capability**: Retain the original nodes and InferencePool during the roll out to facilitate a rollback if necessary.
 
@@ -53,7 +54,7 @@ This is an example of InferencePool rollout with node(compute, accelerator) upda
 To deploy llm-d Router in Gateway Mode follow the below instructions:
 
 1. Deploy a Kubernetes Gateway (see [gateway guides](../../docs/infrastructure/gateway))
-2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../optimized-baseline/README.md#gateway-mode))
+2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../optimized-baseline/README.md#1-deploy-the-llm-d-router))
 
 ### Deploy new infrastructure
 
@@ -62,6 +63,48 @@ To replace the original InferencePool, you create a new InferencePool (the green
 
 Assuming the new model servers already exist, simply:
 **Create a new helm-managed InferencePool of a different name, with a new selector specified**
+
+### Optional: mirror traffic first
+
+Before shifting any weight, you can send a copy of live requests to the new pool with the Gateway API [`RequestMirror`](https://gateway-api.sigs.k8s.io/guides/user-guides/http-request-mirroring/) filter.
+Clients are still served only by the current pool, and the mirrored response is discarded.
+Before applying, confirm your gateway supports the `HTTPRouteRequestPercentageMirror` extended feature, which `percent` requires.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-route
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: inference-gateway
+  rules:
+    - backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: vllm-qwen3-32b
+      filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              group: inference.networking.k8s.io
+              kind: InferencePool
+              name: vllm-qwen3-32b-new
+            percent: 10
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+```
+
+- `percent` limits the share of requests that are copied. Mirrored requests use real accelerator capacity in the new pool.
+- `RequestMirror` is an extended Gateway API feature, and the spec only defines it for Kubernetes Service backends. Support for an InferencePool target is implementation-specific, so check your gateway's documentation.
+- The spec sends each mirrored request to a single endpoint of the backend. Depending on the gateway, the copy may not get the new pool's endpoint picking.
+- Responses are dropped, so confirm the new pool is receiving traffic from its model server logs and metrics.
+
+When you are satisfied, remove the filter and continue with traffic splitting.
 
 ### Direct traffic to the new inference pool
 

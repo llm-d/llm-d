@@ -7,27 +7,23 @@
 ## `../render/standalone/` overlay provides a dedicated render pool when model
 ## server CPU is contended; see the guide's Best Practices.
 ##
-## The deployed EPP config is the affinity + P2P arm (`epp-affinity-p2p.yaml`
-## in ../benchmarking/): placement follows the cache (prefix-affinity
-## scoring), and the p2p-source-producer emits the KV cache source header
-## when a peer out-caches the scheduled pod by at least minCachedTokenDelta
-## tokens. Under precise affinity a peer rarely leads by that margin, so
+## The deployed EPP config is affinity + P2P: placement follows the cache
+## (prefix-affinity scoring), and the p2p-source-producer emits the KV cache
+## source header when a peer out-caches the scheduled pod by at least
+## minCachedTokenDelta tokens. Under precise affinity a peer rarely leads by that margin, so
 ## the pull here is a fallback for displaced requests (its measured
 ## throughput delta over affinity alone sits inside run-to-run spread),
 ## not an established throughput feature, and NOT insurance for a restarted
 ## router (both index modes lose the pre-restart cache map; measured
 ## restart runs produced zero pulls). A cold engine replica behind an
-## intact router is the plausible fallback case and is unmeasured. The
-## arm is the default because affinity is the safer placement in the
+## intact router is the plausible fallback case and is unmeasured. This
+## config is the default because affinity is the safer placement in the
 ## capacity-driven regime, not because the pull improves it.
 ##
-## Reach for `epp-load-p2p.yaml` when your workload looks like many
-## concurrent, multi-turn sessions each pinned to an owner pod: on the
-## document-Q&A headline it avoids the owner-pod queueing this arm pays -
-## see
-## [benchmark-results/gpt-oss-120b-h200.md](../benchmark-results/gpt-oss-120b-h200.md)
-## for both measurements. To reproduce the comparison arms, swap this
-## pluginsCustomConfig for any file under ../benchmarking/.
+## For many concurrent, multi-turn sessions each pinned to an owner pod, a
+## load-aware placement (drop the prefix-cache and no-hit-LRU scorers, use
+## the weighted-random-picker) plus the pull avoids the owner-pod queueing
+## this config pays; see the guide's "When to use this path".
 ##
 ## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
 ## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
@@ -41,11 +37,9 @@ router:
     # with "plugin type 'p2p-source-producer' is not registered". Switch to
     # the next release once it ships the plugin.
     #
-    # REPRODUCIBILITY: `main` floats. The guide's aggregated benchmark tables
-    # were measured against digests of this tag that were not recorded, so
-    # they cannot be reproduced exactly against whatever `main` resolves to
-    # today. To reproduce a run, resolve this tag to a digest, pin it here and
-    # in ../modelserver/gpu/vllm/base/kustomization.yaml, and re-measure.
+    # REPRODUCIBILITY: `main` floats. To reproduce a measurement, resolve
+    # this tag to a digest and pin it here and in
+    # ../modelserver/gpu/vllm/base/kustomization.yaml.
     image:
       tag: main
       pullPolicy: Always
@@ -61,7 +55,7 @@ router:
     pluginsConfigFile: "p2p-kv-cache-sharing-plugins.yaml"
     pluginsCustomConfig:
       p2p-kv-cache-sharing-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
           - type: token-producer
@@ -83,8 +77,8 @@ router:
                     # pods, so real holders are evicted, affinity scores
                     # collapse toward zero, and p2p-source-producer stops
                     # finding a peer to pull from. Size it at
-                    # (discovered endpoints x tiers); 32 covers this guide's
-                    # 16-pod fleet with a GPU and a CPU tier per pod.
+                    # (discovered endpoints x tiers); 32 covers fleets of up
+                    # to 16 pods with a GPU and a CPU tier per pod.
                     podCacheSize: 32
                 kvCacheBackendConfigs:
                 - name: gpu
@@ -98,9 +92,7 @@ router:
               # Seeds predicted cache entries for the selected endpoint right
               # after the routing decision, so the next same-prefix request
               # hits without waiting for engine confirmation. The chart default
-              # is false; every measurement in this guide was taken with it on,
-              # so it is set here to keep the deployed config identical to the
-              # benchmarked arm (../benchmarking/epp-affinity-p2p.yaml).
+              # is false; the guide's measurements were taken with it on.
               speculativeIndexing: true
               kvEventsConfig:
                 topicFilter: "kv@"
@@ -113,7 +105,8 @@ router:
               prefillProfileName: default
               # Minimum extra cached-prefix tokens a peer must hold beyond the
               # scheduled pod before a pull is requested; set from the measured
-              # pull-versus-recompute crossover (see ../benchmarking/README.md).
+              # pull-versus-recompute crossover; calibrate it with
+              # ../../recipes/router/calibration/calibrate-min-cached-token-delta.sh.
               minCachedTokenDelta: 2048
           - type: prefix-cache-scorer
             parameters:
@@ -142,6 +135,12 @@ router:
                 weight: 2
               - pluginRef: no-hit-lru-scorer
                 weight: 2
+
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
 
   modelServers:
     matchLabels:

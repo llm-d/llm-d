@@ -1,0 +1,266 @@
+name: pd-disaggregation
+
+# Accelerator x model server support. A cell is `validated` (a nightly E2E
+# workflow covers it), `community` (the overlay exists but no nightly runs
+# it), or {status: unsupported, issue: <url>} for a tracked gap. `model:`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+support:
+  engines: {vllm: vLLM, sglang: SGLang}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "H200 · 1P (TP=1) + 1D (TP=4), 5 GPUs; SGLang 1P (TP=2) + 1D (TP=2) · NIXL"
+      model: openai/gpt-oss-120b
+      engines: {vllm: validated, sglang: validated}
+    amd:
+      label: AMD GPU
+      notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4) · NIXL"
+      model: amd/Llama-3.3-70B-Instruct-FP8-KV
+      engines: {vllm: validated}
+    xpu:
+      label: Intel XPU
+      notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL"
+      model: Qwen/Qwen3-0.6B
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: validated}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA"
+      model: Qwen/Qwen3.5-397B-A17B-FP8
+      engines: {vllm: community}
+    "tpu/v7-dynamic-slice":
+      label: Google TPU v7 (dynamic slicing)
+      notes: "TPU7x sub-slices via dynamic slicing + Kueue · 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA"
+      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      engines: {vllm: community}
+    iluvatar:
+      label: Iluvatar GPU
+      notes: "BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+    metax:
+      label: MetaX GPU
+      notes: "C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP"
+      model: Qwen/Qwen3-32B
+      engines: {vllm: community}
+    npu:
+      label: Rebellions NPU
+      notes: "4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector"
+      model: MiniMaxAI/MiniMax-M2.7
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: pd-disaggregation
+    NAMESPACE: llm-d-pd-disaggregation
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+    # Extra router values for accelerators that need them (set by deploy.accelerator_values).
+    ACCELERATOR_VALUES: {default: ""}
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, npu]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    # The leaf selects the platform and, where an accelerator offers more than
+    # one, the KV transfer connector (cks-mooncake: MooncakeConnector on GPU;
+    # moriio/*: MoRIIOConnector on AMD; rdma: NIXL over RDMA on Intel XPU).
+    INFRA_PROVIDER:
+      default: base
+      values: [base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma]
+      comment: "valid values per accelerator: table above"
+
+    MODEL: {default: "openai/gpt-oss-120b", comment: "set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  # NVIDIA GPU runs prefill and decode as an LWS DisaggregatedSet. skip_in ci:
+  # the nightly clusters already run LWS, and a second release would collide.
+  lws:
+    - when: {ACCELERATOR_TYPE: [gpu]}
+      skip_in: [ci]
+      run: |
+        helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+          --version=0.11.1 \
+          --namespace lws-system --create-namespace \
+          --set enableDisaggregatedSet=true \
+          --wait --timeout 300s
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  # CoreWeave caches the model weights on an RWX PVC rather than a node-local
+  # hostPath: /var/cache/huggingface there is a 15 GB ramdisk (/dev/ram0), too
+  # small for gpt-oss-120b (60.8 GiB of safetensors).
+  model-cache:
+    - when: {INFRA_PROVIDER: [coreweave]}
+      run: kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
+
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+  # guide.py only treats ACCELERATOR_TYPE / MODEL_SERVER filters as variants,
+  # so this MONITORING step renders as a plain fence; skip_in: [ci] keeps the
+  # README-parsing nightlies from harvesting the export.
+  monitoring_values:
+    - when: {MONITORING: ["true"]}
+      skip_in: [ci]
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  # The Rebellions NPU decode role serves one API server per data-parallel
+  # rank; the router must list every rank port. No nightly covers this
+  # accelerator; skip_in: [ci] keeps the README-parsing nightlies from
+  # harvesting the export.
+  accelerator_values:
+    - when: {ACCELERATOR_TYPE: [npu]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          ${ACCELERATOR_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  # Model server variants, one README tab each (as in the Optimized Baseline).
+  # `standard` is the default tab and the only command the README-parsing
+  # nightlies run; the accelerator variants render with cicd:skip.
+  modelserver:
+    # `standard` lists the remaining accelerators so that `guide.py emit`
+    # runs exactly one apply (and, for dynamic slicing, the LocalQueue first).
+    standard:
+      - when: {ACCELERATOR_TYPE: [gpu, amd, xpu]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    tpu:
+      - when: {ACCELERATOR_TYPE: ["tpu/v6", "tpu/v7"]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    # Dynamic sub-slices are admitted by Kueue: the LocalQueue must exist in
+    # the guide namespace before the overlay is applied. No nightly covers this
+    # accelerator (it needs a full TPU7x 4x4x4 sub-block), hence skip_in: [ci].
+    dynamic_slice:
+      - when: {ACCELERATOR_TYPE: ["tpu/v7-dynamic-slice"]}
+        skip_in: [ci]
+        run: |
+          # Prefill and decode as LeaderWorkerSet groups, one 2x2x1 sub-slice per replica, admitted by Kueue
+          kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    iluvatar:
+      - when: {ACCELERATOR_TYPE: [iluvatar]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    metax:
+      - when: {ACCELERATOR_TYPE: [metax]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    npu:
+      - when: {ACCELERATOR_TYPE: [npu]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    pd_requests:
+      - run: |
+          # 5 requests with a ~1k-token prompt: each is prefilled on a prefill
+          # pod, and its KV cache is transferred to a decode pod
+          kubectl run pd-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 60); do printf "The prefill pod computes the KV cache and the decode pod pulls it to generate tokens. "; done)
+              for i in $(seq 1 5); do
+                curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+              done'
+    pod_metrics:
+      - run: |
+          # Request and KV-transfer counters of the prefill and decode pods, read
+          # through the Kubernetes API server proxy (no port-forward needed).
+          # Prefill engines serve on port 8000; decode engines on 8200, behind
+          # the routing sidecar on 8000.
+          for role in prefill decode; do
+            port=8000; [ "${role}" = decode ] && port=8200
+            for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=${role} -o jsonpath='{.items[*].metadata.name}'); do
+              echo "== ${role}: ${pod}"
+              kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:${port}/proxy/metrics" \
+                | grep -E '^(vllm:(request_success_total|prompt_tokens_total|external_prefix_cache_hits_total)|sglang:(num_requests_total|prompt_tokens_total))' || true
+            done
+          done
+    router_metrics:
+      # The router's /metrics endpoint requires authentication unless the
+      # monitoring values (MONITORING=true) are applied.
+      - when: {MONITORING: ["true"]}
+        run: |
+          # P/D decisions taken by the router, read through the API server service proxy
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
+            | grep -E '^llm_d_epp_disagg_decision_total' || true
+
+cleanup:
+  modelserver:
+    # For TPU dynamic sub-slices, delete the overlay before removing any node
+    # pools so that Kueue releases the Slice resources it created.
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

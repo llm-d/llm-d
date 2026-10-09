@@ -2,14 +2,53 @@
 
 While disaggregated serving can offer superior performance, it introduces additional operational complexity, including:
 
+- [Unconditional Disaggregation](#unconditional-disaggregation) - why an SGLang decode worker cannot serve a request on its own, and which llm-d configurations are therefore unsupported
 - [Dynamic Connections](#dynamic-connections) - how to add or remove P and D instances on the fly when instances require point-to-point RDMA connections
 - [Request Cancellation](#request-cancellation) - how to free KV caches from the instances when requests stop in a distributed setting
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the SGLang image
 
-This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see [vllm.md](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/advanced/disaggregation/README.md) page.
+This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see the [vLLM page](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/advanced/disaggregation/README.md) page.
 
 Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer with no central coordinator and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
+
+## Unconditional Disaggregation
+
+An SGLang server started with `--disaggregation-mode=decode` has no local-prefill path. It expects every request to carry the bootstrap rendezvous fields (`bootstrap_host`, `bootstrap_port`, `bootstrap_room`) that the Routing Proxy Sidecar injects, and it rejects a request that arrives without them with HTTP `400`:
+
+```text
+Invalid request: Disaggregated request received without bootstrap room id.
+```
+
+This is the central behavioral difference from vLLM. A vLLM decode worker prefills the prompt itself when `do_remote_prefill` is absent from the request, which is what allows llm-d to decide *per request* whether disaggregation is worth it and route to the decode worker alone when it is not. SGLang has no such option, and no KV-transfer error policy to fall back on, so with the `sglang` connector every request must be disaggregated.
+
+### Supported configuration
+
+Two rules follow, and llm-d does not currently enforce either of them:
+
+| Path | Use | Do not use |
+| --- | --- | --- |
+| Sidecar (EPP) | `always-disagg-pd-decider`, with `disagg-profile-handler` configured with `deciders.prefill` pointing at it | `prefix-based-pd-decider`, or a `disagg-profile-handler` with no `deciders.prefill`, or an EPP configuration with no `disagg-profile-handler` at all |
+| Coordinator | A pipeline **without** the `conditional-decode` step (the default `coordinator.yaml` leaves it commented out) | `conditional-decode` together with `kv-sglang` |
+
+`prefix-based-pd-decider` is unsupported because its whole purpose is to answer "no" sometimes: it selects the decode-only path when the uncached suffix of the prompt is below `nonCachedTokens` - whose default of `0` selects decode-only for *every* request - and it also falls back to decode-only when it cannot read cache state or prompt length. Each of those requests reaches the decode worker with the client body and no bootstrap fields, and fails with the `400` above.
+
+`conditional-decode` is unsupported for the same reason, one layer up. The step sends the request to the decode profile with the `Prefer: if-available` header; the EPP either declines with `412 Precondition Failed`, in which case the Coordinator runs prefill normally and nothing breaks, or it accepts and forwards the request to the chosen decode pod alone - which is the case SGLang cannot serve.
+
+Only the `disagg-profile-handler` plugin sets the `x-prefiller-host-port` header that the sidecar needs in order to pair a prefill, so an EPP deployment without it sends every request decode-only.
+
+### Performance cost
+
+The restriction is not only a matter of which plugins to list. `prefix-based-pd-decider` and `conditional-decode` exist because disaggregation is not free: a disaggregated request pays prefill scheduling, the bootstrap rendezvous, and a KV cache transfer over NIXL. For a short prompt, or one whose prefix already sits in the decode worker's tree cache, that fixed cost is larger than the prefill compute it replaces, so TTFT comes out worse than it would with local prefill on the decode worker. Skipping disaggregation in exactly those cases is what the `nonCachedTokens` threshold is for.
+
+SGLang P/D therefore disaggregates unconditionally, **including for requests where disaggregation costs more than it saves**. Two practical consequences:
+
+- Size the prefill tier for the full request volume, not for the subset a decider would have forwarded.
+- Expect no TTFT benefit from prefix reuse on the decode worker for the prefill portion of a request; a cached prefix does not shorten the path, because the path always includes a remote prefill.
+
+### Upstream
+
+[sgl-project/sglang#34773](https://github.com/sgl-project/sglang/pull/34773) (draft) adds a `do_local_prefill` request field and a decode-server flag `--disaggregation-decode-enable-conditional-agg`, with which a decode server prefills a request locally. The PR does not add the field to the OpenAI routes that llm-d uses, so llm-d cannot set it on the decode-only path yet. When SGLang accepts the field on those routes, the configurations above become usable and this section can be removed. Tracked in [llm-d-router#3075](https://github.com/llm-d/llm-d-router/issues/3075).
 
 ## Dynamic Connections
 
@@ -53,7 +92,7 @@ sequenceDiagram
 
 #### Discovery
 
-Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances are discovered automatically when their pod status becomes `status: Running`. The same `llm-d.ai/role` label values (`prefill`, `decode`, `prefill-decode`) are used to filter P and D workers. See [vllm.md#discovery](vllm.md#discovery) for details.
+Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances are discovered automatically when their pod status becomes `status: Running`. The same `llm-d.ai/role` label values (`prefill`, `decode`, `prefill-decode`) are used to filter P and D workers. See [vLLM: Discovery](vllm.md#discovery) for details.
 
 As a result, new replicas can be added to a running disaggregated deployment without restarts and without coordinating within any specialized service discovery plane.
 
@@ -151,7 +190,7 @@ SGLang validates layout compatibility at connection time. When a decode instance
 Mismatched tensor-parallel sizes between P and D are supported (the decode resolves a TP/CP/PP rank mapping), but for non-MLA models SGLang warns that performance is not guaranteed.
 
 > [!IMPORTANT]
-> As with vLLM, the llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will schedule requests to any arbitrary pair. Because incompatible `page_size` / `kv_cache_dtype` combinations fail at connection time, it is recommended to roll out model-server upgrades by creating a new `InferencePool` rather than mixing versions in one pool. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`. See [vllm.md#rollouts](vllm.md#rollouts).
+> As with vLLM, the llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will schedule requests to any arbitrary pair. Because incompatible `page_size` / `kv_cache_dtype` combinations fail at connection time, it is recommended to roll out model-server upgrades by creating a new `InferencePool` rather than mixing versions in one pool. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`. See [vLLM: Rollouts](vllm.md#rollouts).
 
 ## Tuning Reference
 

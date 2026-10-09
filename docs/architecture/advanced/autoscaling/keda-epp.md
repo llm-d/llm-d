@@ -75,7 +75,7 @@ paths is which EPP metrics the triggers read and how thresholds are derived.
 | Signal | EPP metrics | Threshold is | Guide |
 |---|---|---|---|
 | **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp (queue signal)](../../../../guides/workload-autoscaling/keda-epp/README.md) |
-| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../../guides/workload-autoscaling/keda-epp/README.md#choosing-a-scaling-signal) |
+| **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../../guides/workload-autoscaling/keda-epp/README.md#choose-your-path) |
 | **Token backlog** | `llm_d_epp_inflight_tokens`, per-pod KV cache occupancy | Seconds of prefill queue wait, derived from a share of the TTFT SLO and a calibrated `peakPrefillThroughput` | [keda-epp-token-aware](../../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
 | **Estimated latency** | EPP predicted/actual TTFT and TPOT histograms | Latency ÷ SLO, with a hysteresis band | [slo-aware](../../../../guides/workload-autoscaling/slo-aware/README.md) |
 
@@ -108,25 +108,162 @@ The SLO-aware path is the exception: it collapses its triggers into a single
 a pass-through target of `1`. Use that shape when the triggers must be combined
 arithmetically rather than raced against each other.
 
-### Pending and Warming Pods
+**Tuning each value.** For an `AverageValue` trigger, the threshold is the
+per-replica load you are willing to carry before adding capacity: lower it to
+react earlier and hold more headroom (more replicas, higher cost), raise it to
+pack each replica harder before scaling (fewer replicas, more queueing risk).
+The replica bounds frame that range: `minReplicaCount` is the warm floor that
+keeps a keep-warm replica up and damps flap, and `maxReplicaCount` is the
+ceiling the HPA silently caps at, so set it high enough to absorb peak demand.
+The stabilization windows and `cooldownPeriod` are covered in
+[Overshoot and Startup-Time Mitigation](#overshoot-and-startup-time-mitigation)
+and [Ownership and Scaling Behavior](#ownership-and-scaling-behavior).
 
-A trigger is a PromQL query, so it is not restricted to EPP series: a
-`ScaledObject` can also read the target's replica counts from kube-state-metrics
-and reason about capacity that is provisioned but not yet serving — pods that are
-pending, scheduling, or still loading the model.
+**Validating the thresholds.** These values are not universal. Validate them
+against representative load for your deployment: drive load up and watch queue
+growth, pool saturation, and running-request concurrency against your latency
+objectives, and find the point where adding a replica stops relieving demand -
+that is where the threshold belongs. Do not assume a value validated for one
+model, accelerator, or tensor-parallel degree transfers to another; a larger
+model or a smaller GPU saturates at lower concurrency.
 
-The SLO-aware path does this. It reads `kube_deployment_status_replicas`
-(provisioned, `n`) alongside `kube_deployment_status_replicas_ready` (ready,
-`r`), and scales its demand by an in-flight credit `r/n` on the scale-up branch.
-Because the latency signal is measured on ready pods only, those pods
-over-report the post-warmup load while a scale-up is in flight; the credit makes
-each ask cover only the deficit beyond the pods already on their way, instead of
-racing to `maxReplicas` while nothing has become Ready. See
-[SLO-Aware Autoscaling with KEDA](./slo-aware-keda.md) for the derivation.
+### Saturation Detector
 
-The simpler per-metric `AverageValue` paths do not carry this term. There, the
-HPA's own stabilization windows and scale-up policies are what keep a
-slow-to-schedule pool from over-asking.
+The saturation detector estimates how loaded the inference pool is. It gates
+dispatch under flow control and feeds the `llm_d_epp_flow_control_pool_saturation`
+gauge, so it shapes both the queue and saturation signals the keda-epp guide can
+scale on. EPP ships two detectors that define "loaded" differently:
+
+- **`utilization-detector` (default, recommended)** - a closed-loop detector that
+  reacts to real-time telemetry (queue depth and KV-cache pressure), so it reflects
+  actual memory pressure rather than request counts. It is the EPP default, so the
+  guide's `router.values.yaml` leaves `flowControl.saturationDetector` unset. It has
+  known limitations under sudden bursts and in heterogeneous pools.
+- **`concurrency-detector`** - an open-loop detector based on in-flight request
+  accounting. It reacts instantly but treats load as a raw request count, so high
+  concurrency need not mean the pool is full (with prefix caching many concurrent
+  requests can be cheap cache hits), and it is blind to KV-cache pressure. Prefer the
+  default unless you have a specific reason to pin it.
+
+See
+[Saturation Detectors](../../core/router/epp/flow-control.md#saturation-detectors)
+for the full comparison and each detector's tuning knobs.
+
+### Flow Control On vs. Off
+
+The keda-epp guide enables EPP flow control, and its default thresholds assume it.
+Flow control changes *where* unmet demand accumulates, which changes what each
+trigger can see:
+
+- **Flow control on (the guide's default).** Flow control is work-conserving: it
+  dispatches whenever the pool has spare capacity and pauses dispatch only once pool
+  saturation reaches the band ceiling (full saturation under the default policy),
+  buffering further requests in its priority queues. Which trigger drives scale-up
+  therefore depends on the load regime. Below the saturation ceiling nothing queues,
+  `llm_d_epp_flow_control_queue_size` stays at zero, and a single replica can run far
+  more concurrent requests than the running-request threshold (`16`), so the
+  running-request trigger is the signal that moves and can drive scale-up on its own.
+  Only once saturation reaches the ceiling does unmet demand surface as queue size,
+  where the queue-size trigger and its low default threshold (`1`) react promptly.
+  The `16` is a scaling threshold, not a per-endpoint admission ceiling; flow control
+  does not cap concurrency per replica. Exercise the path at a concurrency high enough
+  to actually saturate a replica, since moderate load is dispatched with the queue at
+  zero.
+- **Flow control off.** Both flow-control signals
+  (`llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_pool_saturation`)
+  are emitted *only* when the `flowControl` feature gate is on; with it off those
+  series are not produced and the queue and saturation triggers resolve to no data.
+  The running-request trigger (`llm_d_epp_request_running`) is not gated by flow
+  control and keeps working, so scaling degrades to running-requests only. Tune its
+  threshold accordingly, or drive scaling from a vLLM-native signal such as
+  `vllm:num_requests_waiting`.
+
+### Overshoot and Startup-Time Mitigation
+
+Model-server pods take minutes to load a model and become `Ready`, and that startup
+lag distorts autoscaling two ways:
+
+1. **Overshoot.** While a new replica is still coming up it serves nothing, so the
+   demand signal it was meant to relieve stays high and the HPA keeps asking for more
+   replicas. The HPA's external-metric math does not, by itself, credit pods that are
+   provisioned but not yet serving.
+2. **Reaction-interval mismatch.** For scaling between 1 and N replicas the HPA
+   reconciles on the kube-controller-manager's sync period
+   (`--horizontal-pod-autoscaler-sync-period`, about 15s by default) - not KEDA's
+   `pollingInterval` (default 30s), which controls how often KEDA polls the trigger
+   source and drives scale-to-zero activation. A replica can take minutes to become
+   `Ready` - on the order of 240s for Qwen3-8B at TP1 - so a reading taken during that
+   gap reflects a replica that has not yet begun to help.
+
+A trigger is just a PromQL query, so it can also read the target's replica counts from
+kube-state-metrics and credit capacity that is provisioned but not yet serving. The
+[SLO-aware path](./slo-aware-keda.md) does this with an in-flight `r/n` credit on the
+latency signal; the queue path can do the same with a supply-aware formula. Two
+mitigation strategies build on this, trading precision for portability:
+
+- **Stabilization windows (portable).** The `ScaledObject` sets both
+  `scaleUp.stabilizationWindowSeconds` and `scaleDown.stabilizationWindowSeconds` to
+  300s. The scale-up window holds
+  recommendations and acts on the most conservative one, so a replica that is still
+  loading gets time to become `Ready` and relieve demand before another is added; the
+  scale-down window holds capacity across brief dips so the pool does not flap when a
+  slow-starting replica finally absorbs a backlog. Size the scale-up window near the
+  target Deployment's measured cold-start time (the 300s default was validated
+  against a ~240s Qwen3-8B TP1 cold start). It needs no extra dependencies,
+  but it is blunt: it delays all scale-up equally, not just startup-driven overshoot.
+- **Demand-aware overshoot guard (queue signal only).** The precise alternative. It
+  uses KEDA's
+  [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
+  to combine the two demand triggers (queue depth and running requests) with two
+  supply triggers over `kube-state-metrics` - `unavailableReplicas`
+  (`kube_deployment_status_replicas_unavailable`, pods created but not yet `Ready`)
+  and `replicas` (current replica count) - in one formula that reproduces the windows
+  path's demand and then discounts it by the pods already coming up:
+
+  ```
+  let queue_per_replica = 1;
+  let running_per_replica = 16;
+  let queue_replicas = queue / queue_per_replica;
+  let running_replicas = running / running_per_replica;
+  let required_replicas = max(queue_replicas, running_replicas);
+  required_replicas <= replicas
+    ? required_replicas
+    : max(required_replicas - (unavailableReplicas ?? 0), replicas)
+  ```
+
+  `required_replicas` is the same quantity the windows path derives by racing its two
+  `AverageValue` triggers (the HPA takes the larger per-trigger desired count): each
+  signal divided by its per-replica target gives the replicas it implies
+  (`queue_replicas`, `running_replicas`), and `required_replicas` is the larger. The
+  per-replica targets are named constants in the formula, not trigger thresholds,
+  because KEDA passes the formula each trigger's raw metric value and ignores its
+  `threshold` - so the normalization has to live in the formula. Expressing the result
+  in replica units is what makes comparing it to `replicas` meaningful, and it holds
+  only when each signal's per-replica target is a constant the formula divides by; the
+  guard ships for the queue signal, not the pool-wide saturation ratio.
+
+  Because the formula, not a time window, absorbs overshoot, the guard sets
+  `scaleUp.stabilizationWindowSeconds: 0` for immediate scale-up and adds a `fallback`
+  (`behavior: static`, `replicas: 1`) so a formula that cannot evaluate degrades to a
+  single replica instead of failing the `ScaledObject`.
+
+  The guard is more precise but adds cost: it depends on `kube-state-metrics` being
+  scraped into the same Prometheus, and it treats an absent signal differently from a
+  failing one. An absent-but-healthy series - the lazily-created queue gauge at idle,
+  or a supply gauge with no series - reads as zero, because KEDA's `ignoreNullValues`
+  defaults to true, so the formula still evaluates with that term contributing zero
+  (this is why the guard rests at the minimum when idle rather than failing). A
+  trigger whose scaler keeps erroring (Prometheus or `kube-state-metrics` unreachable)
+  for more than `failureThreshold` polls is injected into the formula as nil instead,
+  and the terms are guarded unevenly. Only `unavailableReplicas` is guarded:
+  `unavailableReplicas ?? 0` turns a failing `unavailableReplicas` into zero so the
+  guard keeps scaling on demand, losing only the overshoot discount. The other terms
+  are not, so a nil `queue`, `running`, or
+  `replicas` makes the formula error and that poll's recommendation is skipped; if the
+  failure persists across the `ScaledObject`, KEDA's own `fallback` (`behavior: static`,
+  `replicas: 1`) takes over after `failureThreshold` polls and holds a single replica
+  until the scalers recover, even mid-burst. Prefer the stabilization windows unless you
+  need scale-up faster than a cold-start-sized window allows.
 
 ### Sharing a Contended Accelerator Budget
 
@@ -179,6 +316,8 @@ KEDA owns the generated HPA for the lifetime of the `ScaledObject`:
 EPP Flow Control enables scale-from-zero by buffering requests while no model
 server endpoint is ready. A queued request raises the queue-size metric, KEDA
 activates the target Deployment, and EPP dispatches the request after a model
+server becomes Ready. Those requests buffer in EPP's in-memory queues, so a
+request queued while the pool is at zero is lost if EPP restarts before a model
 server becomes Ready.
 
 Scale-to-zero should be enabled only after one-to-N scaling is validated. Model

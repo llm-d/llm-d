@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Stress test script for Multi-Tenant Async Processing using Redis SortedSet backend.
-Generates multi-tenant traffic (team × tier × model) and drives background
+Generates multi-tenant traffic (team × tier) and drives background
 saturation load on the router to test quota classification, priority lanes,
 and saturation back-off.
 
@@ -21,8 +21,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 DEFAULT_NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
-DEFAULT_MODEL_A = os.environ.get("MODEL_A", "Qwen/Qwen3-8B")
-DEFAULT_MODEL_B = os.environ.get("MODEL_B", "Qwen/Qwen3-8B")
+DEFAULT_MODEL = os.environ.get("MODEL", "Qwen/Qwen3-32B")
 DEFAULT_REDIS = os.environ.get("REDIS_DEPLOY", "deploy/redis")
 
 def check_port_open(host="127.0.0.1", port=8080):
@@ -82,18 +81,18 @@ def send_background_load(igw_url, model_name, duration_sec=60, concurrency=6):
 
     print(f"[*] Background saturation load finished. Completed {req_count} completions.")
 
-def publish_redis_queue(namespace, redis_deploy, queue_name, team, model_code, model_name, count, ttl=300):
+def publish_redis_queue(namespace, redis_deploy, queue_name, team, model_name, count, ttl=300):
     now = int(time.time())
     dl = now + ttl
     run_id = f"{now}-{random.randint(1000, 9999)}"
-    
+
     # Build ZADD args in batches of 50
     batch_size = 50
     for chunk_start in range(1, count + 1, batch_size):
         chunk_end = min(chunk_start + batch_size, count + 1)
         zadd_args = []
         for i in range(chunk_start, chunk_end):
-            msg_id = f"{team}-{model_code}-{run_id}-{i:04d}"
+            msg_id = f"{team}-{run_id}-{i:04d}"
             msg_obj = {
                 "internal": {},
                 "request_kind": "plain",
@@ -121,21 +120,18 @@ def publish_redis_queue(namespace, redis_deploy, queue_name, team, model_code, m
 
     return True
 
-def publish_traffic(namespace, redis_deploy, model_a, model_b):
+def publish_traffic(namespace, redis_deploy, model):
     queues_spec = [
-        ("team-premium-a", "premium", "a", model_a, 40),
-        ("team-standard-a", "standard", "a", model_a, 25),
-        ("team-batch-a", "batch", "a", model_a, 15),
-        ("team-premium-b", "premium", "b", model_b, 40),
-        ("team-standard-b", "standard", "b", model_b, 25),
-        ("team-batch-b", "batch", "b", model_b, 15),
+        ("team-premium", "premium", 80),
+        ("team-standard", "standard", 50),
+        ("team-batch", "batch", 30),
     ]
-    print(f"[*] Publishing multi-tenant requests across 6 Redis SortedSet queues...")
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    print(f"[*] Publishing multi-tenant requests across 3 Redis SortedSet queues...")
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
             executor.submit(
-                publish_redis_queue, namespace, redis_deploy, q_name, team, m_code, m_name, count
-            ): q_name for q_name, team, m_code, m_name, count in queues_spec
+                publish_redis_queue, namespace, redis_deploy, q_name, team, model, count
+            ): q_name for q_name, team, count in queues_spec
         }
         for f in as_completed(futures):
             q_name = futures[f]
@@ -149,10 +145,7 @@ def publish_traffic(namespace, redis_deploy, model_a, model_b):
 def get_redis_stats(namespace, redis_deploy):
     print("\n[*] Checking Redis Quota Counters & Results:")
     try:
-        keys_to_check = [
-            "quota:a:team:premium", "quota:a:team:standard", "quota:a:team:batch",
-            "quota:b:team:premium", "quota:b:team:standard", "quota:b:team:batch"
-        ]
+        keys_to_check = ["quota:team:premium", "quota:team:standard", "quota:team:batch"]
         for k in keys_to_check:
             res = subprocess.run(
                 ["kubectl", "-n", namespace, "exec", redis_deploy, "--", "redis-cli", "GET", k],
@@ -161,7 +154,7 @@ def get_redis_stats(namespace, redis_deploy):
             val = res.stdout.strip() or "(nil)"
             print(f"  - {k}: {val}")
 
-        for res_key in ["results-a-list", "results-b-list"]:
+        for res_key in ["results-list"]:
             res = subprocess.run(
                 ["kubectl", "-n", namespace, "exec", redis_deploy, "--", "redis-cli", "LLEN", res_key],
                 capture_output=True, text=True
@@ -174,8 +167,7 @@ def get_redis_stats(namespace, redis_deploy):
 def main():
     parser = argparse.ArgumentParser(description="Multi-tenant async processor Redis stress test")
     parser.add_argument("--namespace", default=DEFAULT_NAMESPACE, help="Kubernetes namespace")
-    parser.add_argument("--model-a", default=DEFAULT_MODEL_A, help="Model A name")
-    parser.add_argument("--model-b", default=DEFAULT_MODEL_B, help="Model B name")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Served model name")
     parser.add_argument("--redis-deploy", default=DEFAULT_REDIS, help="Redis deployment name (default: deploy/redis)")
     parser.add_argument("--duration", type=int, default=60, help="Saturation duration in seconds")
     parser.add_argument("--igw-port", type=int, default=8080, help="Local port for router gateway")
@@ -185,8 +177,7 @@ def main():
     print("Multi-Tenant Async Processor — Redis SortedSet Stress Test")
     print(f"Namespace:    {args.namespace}")
     print(f"Redis Deploy: {args.redis_deploy}")
-    print(f"Model A:      {args.model_a}")
-    print(f"Model B:      {args.model_b}")
+    print(f"Model:        {args.model}")
     print(f"Duration:     {args.duration}s")
     print("==========================================================")
 
@@ -195,9 +186,9 @@ def main():
 
     try:
         with ThreadPoolExecutor(max_workers=2) as exec_main:
-            bg_future = exec_main.submit(send_background_load, igw_url, args.model_a, args.duration)
+            bg_future = exec_main.submit(send_background_load, igw_url, args.model, args.duration)
             time.sleep(6)  # allow saturation to reach threshold
-            pub_future = exec_main.submit(publish_traffic, args.namespace, args.redis_deploy, args.model_a, args.model_b)
+            pub_future = exec_main.submit(publish_traffic, args.namespace, args.redis_deploy, args.model)
             pub_future.result()
             bg_future.result()
 

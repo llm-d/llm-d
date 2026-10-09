@@ -17,6 +17,6 @@ Each guide deploys a dedicated model serving a single generation endpoint:
 * **[Image-to-Image Guide](./image-to-image/README.md)**: Edit an uploaded image over the OpenAI-compatible `POST /v1/images/edits` endpoint, which carries `multipart/form-data`, serving on vLLM-Omni or SGLang.
 * **[Text-to-Speech Guide](./text-to-speech/README.md)**: Generate speech from text over the OpenAI-compatible `POST /v1/audio/speech` endpoint, which returns binary audio or streamed audio chunks, serving on vLLM-Omni.
 
-### Multi-Endpoint Guide
+### Omni Models
 
-* **[Multi-Endpoint Guide](./multi-endpoint/README.md)**: Deploy a single unified model (e.g. Qwen3-Omni) that serves **multiple modality endpoints** from one checkpoint — text, audio, and images — using exact-path HTTPRoutes to direct each endpoint to the model's InferencePool.
+* **[Omni Model Serving](../omni-serving/README.md)**: Serve a single unified model (e.g. Qwen3-Omni) that answers **several modality endpoints** from one checkpoint behind one `InferencePool`, with exact-path HTTPRoutes to split endpoints across pools behind a Gateway. Published on llm-d.ai as the **Serve Omni Models** well-lit path.

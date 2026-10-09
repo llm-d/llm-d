@@ -1,0 +1,27 @@
+# OpenShift + saturation signal (stabilization-window overshoot solution). See
+# overlays/ocp/queue for the namespace-transformer, TriggerAuthentication,
+# metrics-reader, and ClusterRoleBinding name/subject-patch rationale; this overlay
+# is identical except the ScaledObject scales on the pool-saturation signal.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ${NAMESPACE}
+
+resources:
+  - scaledobject.yaml
+
+components:
+  - ../../../components/ocp-trigger-auth
+  - ../../../../../../recipes/autoscaling/metrics-reader
+
+patches:
+  - target:
+      kind: ClusterRoleBinding
+      name: keda-epp-metrics-reader-monitoring-view
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: keda-epp-metrics-reader-monitoring-view-${NAMESPACE}
+      - op: replace
+        path: /subjects/0/namespace
+        value: ${NAMESPACE}

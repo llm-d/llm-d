@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=2"
+            - "--max-model-len=131072"
+            - "--hf-overrides={\"max_position_embeddings\":131072,\"rope_parameters\":{\"rope_type\":\"yarn\",\"factor\":3.2,\"original_max_position_embeddings\":40960,\"rope_theta\":1000000}}"
+            # Drain in-flight requests on SIGTERM. Sized with the grace period in
+            # recipes/modelserver/components/graceful-shutdown; raise both together.
+            - "--shutdown-timeout=45"

@@ -5,54 +5,51 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  # Model weights on an RWX PVC rather than a node-local hostPath. CoreWeave's
-  # /var/cache/huggingface is a 15 GB ramdisk (/dev/ram0), far too small for
-  # gpt-oss-120b (60.8 GiB of safetensors), so a hostPath there fails with
-  # `OSError: [Errno 28] No space left on device` during the first download.
-  # Requires the `model-pvc` PVC to exist in the namespace and the default
-  # StorageClass to support ReadWriteMany -- see the guide README.
-  - ../../../../../recipes/modelserver/components/model-cache
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 patches:
-  - target:
-      kind: Deployment
-      name: decode
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: HF_HUB_DOWNLOAD_TIMEOUT
-          value: "60"
-      # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: HF_HUB_DISABLE_XET
-          value: "1"
-  - target:
-      kind: Deployment
-      name: prefill
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: HF_HUB_DOWNLOAD_TIMEOUT
-          value: "60"
-      # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: HF_HUB_DISABLE_XET
-          value: "1"
+  # Both roles get the same settings: written once under prefill and aliased into decode.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-vllm
+      spec:
+        roles:
+          - name: prefill
+            spec: &coreweave
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+                        env:
+                          - name: HF_HOME
+                            value: /root/.cache/huggingface
+                          - name: HF_HUB_DOWNLOAD_TIMEOUT
+                            value: "60"
+                          # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+                          - name: HF_HUB_DISABLE_XET
+                            value: "1"
+                        volumeMounts:
+                          # HuggingFace cache shared across pods and restarts
+                          - mountPath: /root/.cache/huggingface
+                            name: huggingface-cache
+                    volumes:
+                      # Model weights on an RWX PVC rather than a node-local hostPath.
+                      # CoreWeave's /var/cache/huggingface is a 15 GB ramdisk (/dev/ram0),
+                      # far too small for gpt-oss-120b (60.8 GiB of safetensors), so a
+                      # hostPath there fails with `OSError: [Errno 28] No space left on
+                      # device` during the first download. Requires the `model-pvc` PVC to
+                      # exist in the namespace and the default StorageClass to support
+                      # ReadWriteMany -- see the guide README.
+                      - name: huggingface-cache
+                        persistentVolumeClaim:
+                          claimName: model-pvc
+          - name: decode
+            spec: *coreweave
