@@ -7,13 +7,10 @@ This module provides GKESnapshotProvider for triggering gVisor sandbox checkpoin
 from __future__ import annotations
 
 import errno
-import logging
 import os
 import pathlib
 import shutil
 from typing import Optional
-
-logger = logging.getLogger("snapshot.providers")
 
 GVISOR_CHECKPOINT_PATH = "/proc/gvisor/checkpoint"
 
@@ -46,24 +43,19 @@ class GKESnapshotProvider:
     def clear_cache(self) -> None:
         """Clear out cached weight files and directories if a cache directory exists."""
         if not self.cache_dir:
-            logger.debug("No cache directory specified to clear.")
             return
 
         target_path = pathlib.Path(os.path.expanduser(self.cache_dir))
         try:
             if target_path.exists():
                 if target_path.is_file() or target_path.is_symlink():
-                    logger.info("Removing cache file/link: %s", target_path)
                     target_path.unlink()
                 else:
                     for child in target_path.iterdir():
-                        logger.info("Clearing cache entry: %s", child)
                         if child.is_file() or child.is_symlink():
                             child.unlink()
                         else:
                             shutil.rmtree(child)
-            else:
-                logger.debug("Cache path does not exist: %s", target_path)
         except OSError as e:
             raise SnapshotError(f"Could not delete locally stored weights at {target_path}: {e}") from e
 
@@ -74,7 +66,6 @@ class GKESnapshotProvider:
     def trigger(self) -> None:
         """Execute weight cache clearing followed by gVisor checkpoint triggering and barrier sync."""
         if not self.is_available():
-            logger.warning("Pod snapshot trigger not available (checkpoint file '%s' is not writable).", self.proc_path)
             return
 
         self.clear_cache()
@@ -106,8 +97,6 @@ class GKESnapshotProvider:
 
             if res and res != b"r":
                 raise SnapshotError(f"gVisor checkpoint returned unexpected status: {res!r}")
-
-            logger.info("gVisor checkpoint completed successfully")
         finally:
             os.close(fd)
 

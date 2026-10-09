@@ -106,16 +106,12 @@ class TestClearCache(unittest.TestCase):
 class TestGKESnapshotProvider(unittest.TestCase):
     @patch("os.access", return_value=False)
     @patch.object(GKESnapshotProvider, "clear_cache")
-    @patch("docker.scripts.snapshot.providers.logger")
-    def test_open_checkpoint_file_not_writable(self, mock_logger, mock_clear, mock_access):
+    def test_open_checkpoint_file_not_writable(self, mock_clear, mock_access):
         provider = GKESnapshotProvider(proc_path=CHECKPOINT_PATH)
         provider.trigger()
 
         mock_access.assert_called_once_with(CHECKPOINT_PATH, os.W_OK)
         mock_clear.assert_not_called()
-        mock_logger.warning.assert_called()
-        warnings = [call[0][0] for call in mock_logger.warning.call_args_list]
-        self.assertTrue(any("Pod snapshot trigger not available" in w for w in warnings))
 
     @patch("os.access")
     def test_is_available(self, mock_access):
