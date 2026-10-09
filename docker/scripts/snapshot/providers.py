@@ -11,15 +11,9 @@ import logging
 import os
 import pathlib
 import shutil
-import sys
 from typing import Optional
 
-try:
-    from vllm.logger import init_logger
-
-    logger = init_logger("vllm.snapshot.providers")
-except ImportError:
-    logger = logging.getLogger("vllm.snapshot.providers")
+logger = logging.getLogger("snapshot.providers")
 
 GVISOR_CHECKPOINT_PATH = "/proc/gvisor/checkpoint"
 
@@ -28,15 +22,6 @@ __all__ = [
     "SnapshotError",
     "get_snapshot_provider",
 ]
-
-
-def _is_eager_loading_configured() -> bool:
-    """Check if '--safetensors-load-strategy eager' is configured via CLI arguments."""
-    return any(
-        (arg == "eager" and i > 0 and sys.argv[i - 1] == "--safetensors-load-strategy")
-        or arg.startswith("--safetensors-load-strategy=eager")
-        for i, arg in enumerate(sys.argv)
-    )
 
 
 class SnapshotError(RuntimeError):
@@ -63,15 +48,6 @@ class GKESnapshotProvider:
         if not self.cache_dir:
             logger.debug("No cache directory specified to clear.")
             return
-
-        # Log a warning instead of raising an error if eager loading is not detected in sys.argv.
-        # Clearing cached weights without eager loading can break memory-mapped file descriptors,
-        # but we do not fail hard to avoid false positives for non-safetensors models.
-        if not _is_eager_loading_configured():
-            logger.warning(
-                "Clearing model cache without '--safetensors-load-strategy eager' detected. "
-                "Ensure eager loading is enabled for safetensors models so model weights are copied to memory rather than memory-mapped from disk."
-            )
 
         target_path = pathlib.Path(os.path.expanduser(self.cache_dir))
         try:
