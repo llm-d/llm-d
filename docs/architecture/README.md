@@ -43,6 +43,12 @@ In disaggregated serving, a single inference request is split into multiple phas
 
 See [Disaggregation](advanced/disaggregation/README.md) for complete details.
 
+### Wide Expert Parallelism
+
+Very large Mixture-of-Experts models are served across many nodes by running attention data-parallel and the experts expert-parallel (DP/EP), combined with P/D disaggregation, multi-node `LeaderWorkerSet` groups and DP-aware routing that lets the llm-d Router pick an individual DP rank.
+
+See [Wide Expert Parallelism](advanced/wide-expert-parallelism.md) for complete details.
+
 ### Predicted Latency-Based Routing
 
 The llm-d Router can be extended with "consultant" sidecars that provide advanced signals for routing decisions. The primary implementation is the **Latency Predictor**, which enables routing based on predicted ITL and TTFT.

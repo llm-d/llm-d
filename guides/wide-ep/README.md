@@ -8,64 +8,13 @@
 
 ## Overview
 
-This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes, with vLLM prefill/decode (P/D) disaggregation and DP-aware routing by the llm-d Router. The NVIDIA GPU and AMD configurations deploy a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit; the Intel XPU configuration uses two plain `LeaderWorkerSet`s.
+This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes, with vLLM prefill/decode (P/D) disaggregation and DP-aware routing by the llm-d Router. The NVIDIA GPU and AMD configurations deploy a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit; the Intel XPU configuration uses two plain `LeaderWorkerSet`s.
+
+The default deployment serves `deepseek-ai/DeepSeek-R1-0528` on 32 NVIDIA H200 GPUs: a prefill and a decode role, each one DP16/EP group across two nodes, with DeepEP for the expert all-to-all and NIXL for the KV transfer over RDMA. Every DP rank runs its own API server port, and the router's `InferencePool` targets all of them, so the router picks a DP rank, not just a pod.
 
 Each accelerator serves one model, chosen to teach the mechanics: multi-node `LeaderWorkerSet`/`DisaggregatedSet` deployment, DP/EP configuration in vLLM, and routing to individual DP ranks. For state-of-the-art, benchmarked MoE recipes, see the Models guides, such as [DeepSeek-V4](../models/deepseek-v4/README.md) and [GLM-5.2](../models/glm-5-2/README.md).
 
-### Why wide expert parallelism
-
-Very large MoE models like DeepSeek-R1 can consume 500 GB+ of memory just to hold the weights of the model, pressuring KV cache space for long context and high throughput serving. This problem is especially magnified for models with MLA attention, which replicates the KV cache when sharded with tensor parallelism.
-
-To address these issues, model servers support DP/EP deployments, which deploy the attention layers with data parallelism and the MLP layers with expert parallelism. This deployment pattern scales the KV cache space, as it:
-
-- **Scales to multiple nodes**: the collective operations (dispatch/combine) are sparse, since tokens are only sent to the expert rank after routing, so they consume much less bandwidth than the all-reduces of TP setups. This makes them suitable to run over slower interconnects (InfiniBand, RoCE rather than NVLink).
-- **Avoids KV replication**: attention is data-parallel (TP=1 in every DP group), so there is only one copy of each token's KV.
-
-The following visualizes the forward pass in a DP/EP deployment in vLLM:
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../docs/assets/dp-ep-deployment.svg" alt="DP/EP deployment">
-  </picture>
-</p>
-
-1. Each rank runs attention independently.
-2. The MoE router selects the `topk` experts for each token. This is sparse: in the case of DeepSeek, 8 out of 256 experts are selected.
-3. Tokens are "dispatched" (using the `topk_id`) to the proper expert rank (e.g. the green token on rank 1 is routed to E1 and E3).
-4. Each expert runs independently.
-5. Tokens are "combined" back to the original attention rank.
-
-### Architecture
-
-Multi-node wide-EP deployments are typically combined with disaggregated serving because:
-
-- Disaggregation avoids "bubbles" where rank N is computing a prefill and rank M is computing a decode.
-- Specialized kernels for prefill and decode can be used (e.g. DeepEP high-throughput vs. DeepEP low-latency).
-
-As a result, this guide uses:
-
-- Disaggregated prefill and decode, scheduled by the llm-d Router.
-- A `DisaggregatedSet` (or `LeaderWorkerSet`s) to manage the multi-node pod groups of vLLM.
-- DP/EP configuration in vLLM, with every DP rank exposed on its own port so the router can pick a rank, not just a pod.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../docs/assets/wide-ep.svg" alt="Multi-Node Wide Expert Parallelism">
-  </picture>
-</p>
-
-The request flow works as follows:
-
-1. A request arrives at the proxy, which forwards it to the router (EPP).
-2. The router schedules the request with P/D disaggregation, using the pod labels to detect the prefill and decode roles, and picks specific DP ranks within the pod groups.
-3. The request is routed to the decode pod's sidecar, which forwards it to the selected prefill rank.
-4. The prefill rank processes the prompt, executing the forward pass with DP/EP; the all-to-all backend (DeepEP, MoRI) executes the cross-node dispatch/combine collectives. vLLM returns metadata about how to retrieve the KV blocks.
-5. The decode rank pulls the KV cache over RDMA (InfiniBand, RoCE, EFA) with the KV connector (NIXL, MoRI-IO).
-6. The decode rank generates the output tokens, executing the forward passes with DP/EP.
-
-For more details, see the [P/D architecture](../../docs/architecture/advanced/disaggregation/README.md) and the vLLM docs on [DP deployment](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/), [EP deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/), and [DeepEP and DeepGEMM](https://docs.vllm.ai/en/latest/design/fused_moe_modular_kernel/).
+For why wide expert parallelism helps, how a DP/EP forward pass works, why it pairs with P/D disaggregation, and how requests flow to individual DP ranks, see [Wide Expert Parallelism](../../docs/architecture/advanced/wide-expert-parallelism.md).
 
 ## Supported Accelerators and Model Servers
 
