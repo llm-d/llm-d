@@ -262,22 +262,24 @@ For how flow-control on/off changes which trigger sees demand, see [Flow Control
 
 New replicas take minutes to load a model, so scale-up can overshoot. The default
 `OVERSHOOT=windows` smooths this with HPA stabilization windows. To opt into the
-demand-aware guard (queue signal only), set `OVERSHOOT=guard`, which credits pending
-pods against demand and lets scale-up act immediately. To learn how each works and
+demand-aware guard (queue signal only), set `OVERSHOOT=guard`, which credits the
+not-yet-Ready replicas against demand and lets scale-up act immediately. To learn how each works and
 when to pick which, see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
 
 ## Apply the KEDA ScaledObject
 
-Review the base
-[`scaledobject.yaml`](optimized-baseline/base/scaledobject.yaml) and your
-chosen trigger component before applying. The namespace, target deployment, and
-the PromQL label selectors are rendered from the environment variables in the
-export block above by `envsubst` at apply time, so the fields to review and
-adjust directly in the YAML are:
+Review the ScaledObject for your platform and signal before applying. Each overlay
+carries a full
+[`scaledobject.yaml`](optimized-baseline/overlays/k8s/queue/scaledobject.yaml) (the
+link points at the generic-Kubernetes queue overlay). The namespace, target
+deployment, and the PromQL label selectors are rendered from the environment
+variables in the export block above by `envsubst` at apply time, so the fields to
+review and adjust directly in the YAML are:
 
 - Prometheus `serverAddress` (the bundled kube-prometheus-stack on generic
-  Kubernetes; the OCP overlay repoints it at Thanos Querier)
-- The trigger thresholds
+  Kubernetes; the OCP overlays point it at Thanos Querier)
+- The trigger thresholds (and, for the guard overlay, the matching per-replica
+  constants in the `scalingModifiers` formula)
 
 This walkthrough intentionally begins with one target replica so that a 1-to-N
 scale-up is observable. Scale the target Deployment down before creating the
@@ -315,7 +317,7 @@ kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MOD
 <!-- guide:deploy.apply_k8s_queue end -->
 
 Queue signal with the overshoot guard (`OVERSHOOT=guard`): same signal, but the
-pending-aware `scalingModifiers` formula replaces the scale-up stabilization
+overshoot-aware `scalingModifiers` formula replaces the scale-up stabilization
 window (see [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation)).
 
 <!-- guide:deploy.apply_k8s_queue_guard start -->
@@ -440,14 +442,16 @@ seq 1 100 | xargs -P 16 -I{} \
 Adjust concurrency only if the reference load does not cross the configured
 threshold. Keep request counts and timeouts bounded while tuning.
 
-With `OVERSHOOT=guard` the reference load above is too light. The guard drops the
-running-requests keep-warm trigger and scales purely on queue depth, and the queue
-only forms once load exceeds a replica's serving capacity, so moderate concurrency
-is absorbed with the queue at zero and a correctly working guard looks like one
-that never scales. Raise `-P` (concurrency) and `max_tokens` until
-`llm_d_epp_flow_control_queue_size` goes non-zero; the level needed depends on the
-model, accelerator, tensor-parallel degree, and `max-model-len`, so climb from a
-few hundred concurrent requests rather than assuming a fixed value. See
+With `OVERSHOOT=guard` the reference load above exercises scale-up the same way it
+does for the windows path: the guard combines queue depth and running requests in its
+formula, so moderate concurrency drives scale-up through the running-request term
+before any queue forms. To exercise the formula's queue-driven branch specifically -
+where demand comes from a backlog rather than from concurrency - raise `-P`
+(concurrency) and `max_tokens` until `llm_d_epp_flow_control_queue_size` goes
+non-zero. The queue only forms once load exceeds a replica's serving capacity, and
+the level needed depends on the model, accelerator, tensor-parallel degree, and
+`max-model-len`, so climb from a few hundred concurrent requests rather than assuming
+a fixed value. See
 [Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
 
 ## Verify Scale-Up

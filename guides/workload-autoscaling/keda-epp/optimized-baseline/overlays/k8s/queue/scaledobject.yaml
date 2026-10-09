@@ -1,0 +1,72 @@
+# KEDA ScaledObject - Generic Kubernetes, queue signal, stabilization-window
+# overshoot solution.
+#
+# Scales ${TARGET_DEPLOYMENT} on two EPP demand signals, raced by the HPA (it
+# uses the larger desired count):
+#   - epp-queue-size       unmet demand (flow-control queue depth), per-replica target 1
+#   - epp-running-requests active concurrency, per-replica target 16
+# Overshoot is handled by the 300s stabilization windows: a still-loading replica
+# is not counted as fresh demand. The demand-aware guard variant
+# (overlays/k8s/queue-guard) is the precise alternative to the windows.
+#
+# Triggers scrape the bundled kube-prometheus-stack over plain in-cluster HTTP
+# (no client auth). Do NOT enable TLS on the bundled Prometheus for this path:
+# KEDA's prometheus scaler ignores a TriggerAuthentication CA unless authModes is
+# also set, so a CA-only trigger silently fails (PR #2571). On OpenShift use
+# overlays/ocp/queue, which points at the Thanos Querier with authModes:bearer.
+#
+# ${...} placeholders are rendered by envsubst at apply time (see the guide).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-keda-epp
+  namespace: ${NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${TARGET_DEPLOYMENT}
+  pollingInterval: 15
+  # Applies to scale-to-zero. The generated HPA behavior below controls ordinary
+  # scale-down while minReplicaCount is 1 or greater.
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: keda-hpa-optimized-baseline
+      # Startup-time mitigation. Model-server pods take minutes to load a model
+      # and become Ready; while a replica starts it serves nothing, so demand
+      # stays elevated (scale-up overshoot) then collapses once Ready (scale-down
+      # flap). Both windows damp that. Size scaleUp near the Deployment's
+      # cold-start time. See "Startup-time mitigation" in the README.
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+  triggers:
+    - type: prometheus
+      name: epp-queue-size
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_flow_control_queue_size{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        threshold: "1"
+    - type: prometheus
+      name: epp-running-requests
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_request_running{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        threshold: "16"

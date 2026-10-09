@@ -1,0 +1,67 @@
+# KEDA ScaledObject - OpenShift, queue signal, stabilization-window overshoot
+# solution.
+#
+# Same as overlays/k8s/queue (two demand signals raced by the HPA: epp-queue-size
+# per-replica target 1, epp-running-requests per-replica target 16; overshoot by
+# the 300s stabilization windows), but the triggers query the OpenShift Thanos
+# Querier over HTTPS with authModes:bearer and authenticationRef:keda-prometheus-auth.
+# The TriggerAuthentication and the metrics-reader RBAC it needs are added by this
+# overlay's kustomization.yaml.
+#
+# ${...} placeholders are rendered by envsubst at apply time (see the guide).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-keda-epp
+  namespace: ${NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${TARGET_DEPLOYMENT}
+  pollingInterval: 15
+  # Applies to scale-to-zero. The generated HPA behavior below controls ordinary
+  # scale-down while minReplicaCount is 1 or greater.
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: keda-hpa-optimized-baseline
+      # Startup-time mitigation; see overlays/k8s/queue for the full rationale.
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+  triggers:
+    - type: prometheus
+      name: epp-queue-size
+      metricType: AverageValue
+      metadata:
+        serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+        query: >-
+          sum(llm_d_epp_flow_control_queue_size{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        threshold: "1"
+        authModes: "bearer"
+      authenticationRef:
+        name: keda-prometheus-auth
+    - type: prometheus
+      name: epp-running-requests
+      metricType: AverageValue
+      metadata:
+        serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+        query: >-
+          sum(llm_d_epp_request_running{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        threshold: "16"
+        authModes: "bearer"
+      authenticationRef:
+        name: keda-prometheus-auth

@@ -1,0 +1,74 @@
+# KEDA ScaledObject - Generic Kubernetes, saturation signal, stabilization-window
+# overshoot solution.
+#
+# Scales ${TARGET_DEPLOYMENT} on two EPP demand signals, raced by the HPA (it
+# uses the larger desired count):
+#   - pool-saturation      EPP pool-saturation ratio (0.0-1.0+), per-replica target 0.7
+#   - epp-running-requests active concurrency, per-replica target 16
+# Saturation is a normalized ratio, more portable across hardware than a raw
+# queue-depth count. Overshoot is handled by the 300s stabilization windows.
+# The demand-aware guard is NOT offered for this signal: it renames the signal to
+# a replica-unit demand, which is only correct when the per-replica target is 1
+# (queue depth), not for a pool-wide ratio.
+#
+# maxReplicaCount is 10 here (vs 8 on the queue overlays), the saturation guide's
+# higher cap.
+#
+# Triggers scrape the bundled kube-prometheus-stack over plain in-cluster HTTP
+# (no client auth); see overlays/k8s/queue for the CA-only caveat (PR #2571). On
+# OpenShift use overlays/ocp/saturation.
+#
+# ${...} placeholders are rendered by envsubst at apply time (see the guide).
+# inference_pool is the InferencePool name (the EPP's --pool-name), which for
+# optimized-baseline is the Helm release name; it is NOT the namespace, so it has
+# its own ${INFERENCE_POOL} var (default optimized-baseline).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-keda-epp
+  namespace: ${NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${TARGET_DEPLOYMENT}
+  pollingInterval: 15
+  # Applies to scale-to-zero. The generated HPA behavior below controls ordinary
+  # scale-down while minReplicaCount is 1 or greater.
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: keda-hpa-optimized-baseline
+      # Startup-time mitigation; see overlays/k8s/queue for the full rationale.
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+  triggers:
+    - type: prometheus
+      name: pool-saturation
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          max(llm_d_epp_flow_control_pool_saturation{inference_pool="${INFERENCE_POOL}",namespace="${NAMESPACE}"})
+        threshold: "0.7"
+    - type: prometheus
+      name: epp-running-requests
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_request_running{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})
+        threshold: "16"
