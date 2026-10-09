@@ -6,6 +6,9 @@ name: wide-ep
 # Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllm: vLLM}
   accelerators:
@@ -13,16 +16,25 @@ support:
       label: NVIDIA GPU
       notes: "Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave`"
       model: deepseek-ai/DeepSeek-R1-0528
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: coreweave, label: "CoreWeave"}
       engines: {vllm: validated}
     amd:
       label: AMD GPU
       notes: "32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci`"
       model: deepseek-ai/DeepSeek-V3
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: amd-ci, label: "AMD CI"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
       notes: "4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base`"
       model: deepseek-ai/DeepSeek-V2-Lite-Chat
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated}
 
 env:

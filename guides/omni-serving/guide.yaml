@@ -7,6 +7,9 @@ name: omni-serving
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
 # No nightly E2E workflow covers this guide yet, so every cell is community.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllmomni: vLLM-Omni}
   accelerators:
@@ -14,6 +17,8 @@ support:
       label: NVIDIA GPU
       notes: "H100 80 GB reference · 1 replica × 2 GPUs (thinker on GPU 0, talker + code2wav on GPU 1) · `INFRA_PROVIDER=base`"
       model: Qwen/Qwen3-Omni-30B-A3B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllmomni: community}
 
 env:

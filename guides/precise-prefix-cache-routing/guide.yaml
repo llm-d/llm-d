@@ -6,6 +6,9 @@ name: precise-prefix-cache-routing
 # Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllm: vLLM, sglang: SGLang}
   accelerators:
@@ -13,31 +16,45 @@ support:
       label: NVIDIA GPU
       notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool)"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
       engines: {vllm: validated, sglang: community}
     amd:
       label: AMD GPU
       notes: "2 replicas × TP=2 (4 GPUs)"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
       notes: "2 replicas × 1 GPU via DRA · fp16"
       model: Qwen/Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
       notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: validated}
     "tpu/v7":
       label: Google TPU v7
       notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29"
       model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
     cpu:
       label: CPU
       notes: "2 replicas"
       model: meta-llama/Llama-3.2-3B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
 
 env:

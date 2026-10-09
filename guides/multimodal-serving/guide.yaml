@@ -9,6 +9,9 @@ name: multimodal-serving
 # The nightly E2E workflows deploy the aggregation/ and e-disaggregation/
 # scenarios this guide selects with TOPOLOGY (gpu: aggregated and E/PD;
 # tpu/v7: aggregated).
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllm: vLLM}
   accelerators:
@@ -16,16 +19,24 @@ support:
       label: NVIDIA GPU
       notes: "H200 reference · aggregated 8 replicas × TP=2 (16 GPUs), E/PD 2 Encode + 8 PD, E/P/D 2 Encode + 4 Prefill + 4 Decode (TP=2) · `INFRA_PROVIDER` `base`, `gke` (+ `coreweave` for E/PD and E/P/D) · E/P/D is not run nightly"
       model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: coreweave, label: "CoreWeave"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
       notes: "Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base`"
       model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
     tpu/v7:
       label: Google TPU v7
       notes: "GKE only (`INFRA_PROVIDER=gke`) · aggregated only · 8 replicas × 4 chips (`2x2x1`, TP=4) · needs the `medium` PriorityClass"
       model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: validated}
 
 env:
