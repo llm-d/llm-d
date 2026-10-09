@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# P/D disaggregation on GKE TPU7x dynamic sub-slices (2x2x1) as one LWS
+# P/D disaggregation on GKE TPU7x dynamic sub-slices (2x2x1) as one
 # DisaggregatedSet, each role's LeaderWorkerSet scheduled via Kueue TAS.
 # Cluster prerequisites (slice controller, Kueue, LocalQueue, LWS v0.11.1+):
 # docs/infrastructure/providers/gke/dynamic-slicing/README.md
