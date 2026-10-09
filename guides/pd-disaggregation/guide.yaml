@@ -58,7 +58,7 @@ support:
       engines: {vllm: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
-      notes: "TPU7x sub-slices via dynamic slicing + Kueue · 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA"
+      notes: "TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA"
       model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
       providers:
         - {name: gke, label: "GKE"}
@@ -125,7 +125,8 @@ prerequisites:
     - run: |
         # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
         kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
-  # NVIDIA GPU runs prefill and decode as an LWS DisaggregatedSet. skip_in ci:
+  # NVIDIA GPU runs prefill and decode as an LWS DisaggregatedSet, as do TPU7x
+  # dynamic sub-slices (their LWS comes from the GKE cluster preparation). skip_in ci:
   # the nightly clusters already run LWS, and a second release would collide.
   lws:
     - when: {ACCELERATOR_TYPE: [gpu]}
@@ -203,7 +204,7 @@ deploy:
       - when: {ACCELERATOR_TYPE: ["tpu/v7-dynamic-slice"]}
         skip_in: [ci]
         run: |
-          # Prefill and decode as LeaderWorkerSet groups, one 2x2x1 sub-slice per replica, admitted by Kueue
+          # One DisaggregatedSet; each role's LeaderWorkerSet group gets a 2x2x1 sub-slice, admitted by Kueue
           kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/

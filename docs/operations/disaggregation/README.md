@@ -10,4 +10,4 @@ Operational behavior differs by model server engine:
 
 * **[vLLM Operations](./vllm.md)** — Dynamic connections via NIXL peer-to-peer handshake, lease-based KV block management, fault tolerance policies (`fail` vs `recompute`), and rollout compatibility.
 * **[SGLang Operations](./sglang.md)** — Lazy connection establishment via prefill bootstrap server, heartbeat-based fault isolation, waiting timeouts, and rollout compatibility.
-* **[DisaggregatedSet Operations](./disaggregatedset.md)** — Slices, rollouts, placement policy, router slice affinity, and per-role autoscaling for the LWS `DisaggregatedSet` that runs the NVIDIA GPU P/D and wide-ep paths.
+* **[DisaggregatedSet Operations](./disaggregatedset.md)** — Slices, rollouts, placement policy, router slice affinity, and per-role autoscaling for the LWS `DisaggregatedSet` that runs the NVIDIA GPU P/D, TPU7x dynamic sub-slice P/D, and wide-ep paths.
