@@ -1,0 +1,16 @@
+# Name references inside a DisaggregatedSet's pod templates, so nameSuffix/namePrefix
+# in an overlay renames the ServiceAccount and ResourceClaimTemplates it points at.
+nameReference:
+  - kind: ServiceAccount
+    fieldSpecs:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/spec/serviceAccountName
+        kind: DisaggregatedSet
+      - path: spec/roles/spec/leaderWorkerTemplate/leaderTemplate/spec/serviceAccountName
+        kind: DisaggregatedSet
+  - kind: ResourceClaimTemplate
+    group: resource.k8s.io
+    fieldSpecs:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims/resourceClaimTemplateName
+        kind: DisaggregatedSet
+      - path: spec/roles/spec/leaderWorkerTemplate/leaderTemplate/spec/resourceClaims/resourceClaimTemplateName
+        kind: DisaggregatedSet

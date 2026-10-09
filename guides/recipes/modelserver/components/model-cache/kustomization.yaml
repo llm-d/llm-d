@@ -30,3 +30,32 @@ patches:
           name: model-cache
           persistentVolumeClaim:
             claimName: model-pvc
+  # The same for a DisaggregatedSet's prefill and decode roles.
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: any
+      spec:
+        roles:
+          - name: prefill
+            spec: &model-cache
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        env:
+                          - name: HF_HOME
+                            value: /model-cache
+                        volumeMounts:
+                          - mountPath: /model-cache
+                            name: model-cache
+                    volumes:
+                      - name: model-cache
+                        persistentVolumeClaim:
+                          claimName: model-pvc
+          - name: decode
+            spec: *model-cache
