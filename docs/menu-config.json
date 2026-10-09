@@ -24,7 +24,7 @@
     "operations/disaggregation": { "label": "Operate Disaggregated Serving", "position": 6, "collapsed": true },
     "operations/components": { "label": "Size and Scale llm-d Components", "position": 10, "collapsed": true },
     "operations/observability": { "label": "Monitor and Troubleshoot", "position": 1, "collapsed": true },
-    "operations/integrations": { "label": "Integrate an AI Gateway", "position": 9, "collapsed": true },
+    "operations/integrations": { "label": "Integrations", "position": 9, "collapsed": true },
 
     "infrastructure": { "label": "Infrastructure & Environments", "position": 6, "collapsed": true },
     "infrastructure/providers": { "label": "Kubernetes Infrastructure Providers", "position": 1, "collapsed": true },

@@ -35,6 +35,10 @@ composes the same stack, one layer per pressure:
 | **[Precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md)** | An exact, global view of cache state for session-centric routing and smarter KV retention. |
 | **[P/D disaggregation](../../../guides/pd-disaggregation/README.md)** | Separate prefill and decode pools so heavy prefill never stalls token generation. |
 
+Agentic clients and coding harnesses that speak the OpenAI Responses API (stateful conversations,
+tool loops) can sit on top of any of these vLLM deployments through
+[Agentic API](../../../guides/agentic-api/README.md) (Experimental).
+
 Nemotron 3 Ultra and Qwen3-Coder-480B are benchmarked with
 [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) through
 [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark); GLM-5.2 replays production agentic
