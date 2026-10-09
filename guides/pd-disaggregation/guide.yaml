@@ -128,10 +128,10 @@ prerequisites:
     - run: |
         # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
         kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
-  # NVIDIA GPU runs prefill and decode as an LWS DisaggregatedSet. skip_in ci:
+  # Every accelerator except TPU runs prefill and decode as an LWS DisaggregatedSet. skip_in ci:
   # the nightly clusters already run LWS, and a second release would collide.
   lws:
-    - when: {ACCELERATOR_TYPE: [gpu]}
+    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, iluvatar, metax, npu]}
       skip_in: [ci]
       run: |
         helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
