@@ -1,4 +1,4 @@
-# [Experimental] Agentic API (`vllm/agentic-api`)
+# Serve the Responses API with Agentic API (Experimental)
 
 Add the OpenAI-compatible **Responses API** — stateful multi-turn conversations, webhook tool
 loops and WebSocket streaming — to a deployment you already have, by putting

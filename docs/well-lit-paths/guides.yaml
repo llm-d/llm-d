@@ -175,4 +175,12 @@ sections:
         position: 4
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
   # operations/disaggregation has only docs pages: vllm, sglang, disaggregatedset.
-  # operations/integrations (Integrate an AI Gateway) has only docs pages: litellm, kong.
+  operations-integrations:
+    target: operations/integrations
+    guides:
+      # position 1: docs/operations/integrations/litellm.md
+      # position 2: docs/operations/integrations/kong.md
+      - dir: guides/agentic-api
+        slug: agentic-api
+        title: Agentic API
+        position: 3
