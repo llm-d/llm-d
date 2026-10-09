@@ -16,72 +16,14 @@ This guide splits inference into separate **prefill** and **decode** pools. Pref
 - **Prefill** — the `prefix-cache-affinity-filter` keeps prefix groups on cache-warm prefill pods (gated by a calibrated `peakPrefillThroughput`), and the `token-load-scorer` picks the prefill pod with the least queued prompt work.
 - **Decode** — the `active-request-scorer` picks the decode pod with the fewest in-flight requests, since pure decode is bound by concurrency rather than prompt throughput.
 
-The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 prefill pod (TP=1) and 1 decode pod (TP=4)**, 5 GPUs in total: the smallest topology that exercises the full P/D path. Production deployments scale the two pools independently (see [P/D Best Practices](#pd-best-practices)).
+The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 prefill pod (TP=1) and 1 decode pod (TP=4)**, 5 GPUs in total: the smallest topology that exercises the full P/D path. Production deployments scale the two pools independently (see [When to use P/D and how to tune it](../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it)).
 
 How the two pools are deployed depends on the accelerator:
 
 - **NVIDIA GPU** (vLLM and SGLang): one LWS [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang`) with a `prefill` and a `decode` role, in a single slice. The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
 - **All other accelerators** (AMD, Intel XPU, Google TPU, Iluvatar, MetaX, Rebellions NPU): a prefill and a decode `Deployment` (`LeaderWorkerSet` groups for TPU7x dynamic sub-slices).
 
-### Why P/D disaggregation
-
-LLM inference has two computationally distinct phases:
-
-- **Prefill** processes the entire input prompt in a single forward pass - it is compute-bound, bottlenecked by the GPU flops available.
-- **Decode** generates output tokens one at a time from the KV-cache - it is memory-bandwidth-bound, bottlenecked by how fast data moves from HBM to on-chip memory.
-
-For long context workloads (10:1 ISL:OSL) and medium-to-large models, separating prefill and decode into separate instances enables:
-
-- Improved throughput via specialization of prefill and decode
-- Improved quality of service, as long context prefills will not block decode work
-
-### Architecture
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)">
-    <img src="../../docs/assets/pd-disaggregation.svg" alt="P/D Disaggregation">
-  </picture>
-</p>
-
-The model server overlay creates a prefill and a decode role (all pods are part of the same `InferencePool`): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU, two `Deployments` on the other accelerators.
-
-- The **prefill** role runs the prefill instances, labeled with `llm-d.ai/role=prefill`.
-- The **decode** role runs the decode instances, labeled with `llm-d.ai/role=decode`. These pods have a routing proxy sidecar in front of the engine.
-
-During the standard request flow:
-
-- Request arrives at the proxy, which forwards the request to the router (EPP)
-- The router schedules the request with P/D disaggregation, using the labels to detect the decode and prefill pods
-- Request is routed to the decode pod's sidecar, which forwards the request to the selected prefill instance
-- Prefill instance processes the prompt, returning metadata about how to retrieve the KV blocks
-- Decode instance pulls the KVs with the KV transfer connector (NIXL by default, over RDMA such as IB, RoCE or EFA where available)
-- Decode instance processes the decodes
-
-See [PD Architecture](../../docs/architecture/advanced/disaggregation/README.md) for more details.
-
-### P/D Best Practices
-
-P/D disaggregation provides more flexibility in navigating the trade-off between throughput and interactivity ([ref](https://arxiv.org/html/2506.05508v1)).
-In particular, due to the elimination of prefill interference to the decode phase, P/D disaggregation can achieve lower inter token latency (ITL), thus
-improving interactivity. For a given ITL goal, P/D disaggregation can benefit overall throughput by:
-
-- Specializing P and D workers for compute-bound vs latency-bound workloads
-- Reducing the number of copies of the model (increasing KV cache RAM) with wide parallelism
-
-However, P/D disaggregation is not a target for all workloads. We suggest exploring P/D disaggregation for workloads with:
-
-- Medium-large models (e.g. gpt-oss-120b)
-- Longer input sequence lengths (e.g 10k ISL | 1k OSL, not 200 ISL | 200 OSL)
-- Sparse MoE architectures with opportunities for wide-ep
-
-As a result, as you tune your P/D deployments, we suggest focusing on the following parameters:
-
-- **Heterogeneous Parallelism**: deploy P workers with less parallelism and more replicas and D workers with more parallelism and fewer replicas, see the TP ratio warning below.
-- **xPyD Ratios**: tuning the ratio of P workers to D workers to ensure balance for your ISL|OSL ratio. Scale the two roles independently (per-role `replicas` in the NVIDIA GPU `disaggregatedset.yaml`, `replicas` in the other overlays' `patch-prefill.yaml` / `patch-decode.yaml`); for example, 8 TP=1 prefill pods and 2 TP=4 decode pods (16 GPUs) suit a 5k ISL | 250 OSL workload on gpt-oss-120b.
-
-> [!WARNING]
-> The NixlConnector has known issues and limitations around TP ratio direction and stale agent caching after prefill pod restarts. See [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) for details.
+For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/advanced/disaggregation/README.md).
 
 ## Supported Accelerators and Model Servers
 

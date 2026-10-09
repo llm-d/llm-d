@@ -54,7 +54,7 @@ The request flows, the EC Connector, and the vLLM version it needs are described
 Choose **aggregated** serving when media inputs are small (low-resolution images), the model is small, you have a good prefix-cache hit rate (which already avoids repeated encoding), or you do not want to run multi-tier networking (NIXL/ZMQ) between pods.
 
 Choose **E/PD** when requests often carry large or many media items (document parsing with dozens of images, high-definition video, long audio), the vision encoder is heavy enough to stall decoding on the pods that run it, or you want to scale encoding separately.
-Choose **E/P/D** when, in addition, prefill and decode need separate scaling or parallelism: see [P/D Best Practices](../pd-disaggregation/README.md#pd-best-practices), and note that [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) apply to its P/D stage.
+Choose **E/P/D** when, in addition, prefill and decode need separate scaling or parallelism: see [When to use P/D and how to tune it](../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it), and note that [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) apply to its P/D stage.
 
 ## Supported Accelerators and Model Servers
 
