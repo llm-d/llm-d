@@ -5,16 +5,21 @@
 #  - TEAM quota (redis-quota, classifying): reserved vs overflow.
 #  - TIER: per-topic label; tier-priority merge policy orders the lanes.
 #
-# Replace: PROJECT_ID, NAMESPACE, IGW_HOST, POOL_NAME, PROM_URL, SAT_CAP
+# Replace: PROJECT_ID, POOL_NAME, PROM_URL, SAT_CAP
 # (concurrent requests at which the pool is considered saturated).
 # PROM_URL is the base URL the gates read PromQL from — the in-cluster
 # kube-prometheus-stack Prometheus if you followed the guide's Observability
 # section. Get it wrong and the gates fall back to a budget of 1 (wide open), so
 # the demo runs clean and proves nothing: verify it after the upgrade.
-# vLLM is scraped by manifests/prometheus-vllm-podmonitor.yaml.
+# vLLM is scraped by manifests/monitoring/prometheus-vllm-podmonitor.yaml.
+#
+# The router (llm-d-router-epp) and Redis are addressed by Service name: llm-d-async
+# runs in their namespace.
 #
 # One llm-d-async can serve several InferencePools independently: give each pool
 # its own worker pool and queues whose igw_base_url points at that pool's router.
+# A router in another namespace takes its full Service DNS name
+# (http://<release>-epp.<namespace>.svc.cluster.local:80).
 ap:
 
   transport: "gcp-pubsub"
@@ -44,11 +49,11 @@ ap:
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-requests-sub"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         labels: {tier: "interactive"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"
@@ -57,11 +62,11 @@ ap:
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-requests-sub"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         labels: {tier: "async"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"
@@ -70,11 +75,11 @@ ap:
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-requests-sub"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         labels: {tier: "batch"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"

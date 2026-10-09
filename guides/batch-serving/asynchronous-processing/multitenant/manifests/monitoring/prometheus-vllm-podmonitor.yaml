@@ -1,14 +1,13 @@
 # Prometheus Operator PodMonitor that scrapes the vLLM model server so the
 # self-hosted Prometheus has vllm:num_requests_running for the saturation gates.
 #
-# The vLLM pod is optimized-baseline's GPU vLLM overlay, relabelled
-# llm-d.ai/guide=async-multitenant (README step 1), with metrics on the
-# `modelserver` port (8000). The saturation overlays' PromQL filters on
-# inference_pool, which the pods do not carry, so this monitor sets it on every
-# series to the pool name the guide's render() writes in (the same value the
-# saturation overlays filter on).
+# The vLLM pod is this guide's model server overlay (modelserver/), labelled
+# llm-d.ai/guide=async-multitenant, with metrics on the `modelserver` port
+# (8000). The saturation overlays' PromQL filters on inference_pool, which the
+# pods do not carry, so this monitor sets it on every series to the guide's
+# InferencePool, llm-d-router (POOL_NAME in the saturation overlays).
 #
-# Render it and apply it into the model server's namespace: with no
+# Apply it into the model server's namespace with -n: with no
 # namespaceSelector it watches only its own namespace. The Prometheus from
 # install-prometheus-grafana.sh picks up PodMonitors in every namespace in its
 # default (central) mode; in its namespace-scoped mode (-i) the PodMonitor and
@@ -30,4 +29,4 @@ spec:
       interval: 15s
       relabelings:
         - targetLabel: inference_pool
-          replacement: POOL_NAME
+          replacement: llm-d-router

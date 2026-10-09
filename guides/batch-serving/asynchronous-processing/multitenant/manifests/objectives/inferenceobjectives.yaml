@@ -7,11 +7,13 @@
 #   overflow-interactive -> priority 10
 #   overflow-async       -> priority -5   (negative: sheddable, evictable)
 #   overflow-batch       -> priority -10  (negative: sheddable, evictable)
+#
+# Each objective binds to the InferencePool the guide's router release creates,
+# llm-d-router. Apply into the router's namespace with -n.
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: reserved-interactive
-  namespace: NAMESPACE
   labels:
     llm-d.ai/guide: "multitenant"
     llm-d.ai/tier: "interactive"
@@ -19,13 +21,12 @@ metadata:
 spec:
   priority: 100
   poolRef:
-    name: POOL_NAME
+    name: llm-d-router
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: reserved-async
-  namespace: NAMESPACE
   labels:
     llm-d.ai/guide: "multitenant"
     llm-d.ai/tier: "async"
@@ -33,13 +34,12 @@ metadata:
 spec:
   priority: 60
   poolRef:
-    name: POOL_NAME
+    name: llm-d-router
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: reserved-batch
-  namespace: NAMESPACE
   labels:
     llm-d.ai/guide: "multitenant"
     llm-d.ai/tier: "batch"
@@ -47,13 +47,12 @@ metadata:
 spec:
   priority: 30
   poolRef:
-    name: POOL_NAME
+    name: llm-d-router
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: overflow-interactive
-  namespace: NAMESPACE
   labels:
     llm-d.ai/guide: "multitenant"
     llm-d.ai/tier: "interactive"
@@ -61,13 +60,12 @@ metadata:
 spec:
   priority: 10
   poolRef:
-    name: POOL_NAME
+    name: llm-d-router
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: overflow-async
-  namespace: NAMESPACE
   labels:
     llm-d.ai/guide: "multitenant"
     llm-d.ai/tier: "async"
@@ -75,13 +73,12 @@ metadata:
 spec:
   priority: -5
   poolRef:
-    name: POOL_NAME
+    name: llm-d-router
 ---
 apiVersion: llm-d.ai/v1alpha2
 kind: InferenceObjective
 metadata:
   name: overflow-batch
-  namespace: NAMESPACE
   labels:
     llm-d.ai/guide: "multitenant"
     llm-d.ai/tier: "batch"
@@ -89,4 +86,4 @@ metadata:
 spec:
   priority: -10
   poolRef:
-    name: POOL_NAME
+    name: llm-d-router

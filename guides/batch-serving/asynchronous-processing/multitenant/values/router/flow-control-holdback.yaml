@@ -117,4 +117,4 @@ router:
 
   modelServers:
     matchLabels:
-      llm-d.ai/guide: async-multitenant   # set on the model server by README step 1's sed
+      llm-d.ai/guide: async-multitenant   # set by the guide's model server overlay (modelserver/)

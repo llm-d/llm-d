@@ -168,11 +168,10 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
   export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 
   export NAMESPACE=llm-d-async
-  export GUIDE_NAME=async-multitenant  # constant: the llm-d.ai/guide label the router values and PodMonitor select on
   export ASYNC_VERSION=v0.10.0         # llm-d-async release (supports lane_objectives & tier-priority)
-  export INFRA_PROVIDER=base           # optimized-baseline model server variant: base, or gke on GKE
+  export INFRA_PROVIDER=base           # model server overlay variant: base, or gke on GKE
 
-  export POOL_NAME=llm-d-router        # InferencePool the router creates (objectives, saturation gates)
+  export POOL_NAME=llm-d-router        # constant: the InferencePool the router release creates (objectives, PodMonitor, saturation gates)
   export MODEL=Qwen/Qwen3-32B          # served model name (goes in payload.model)
 
   # Scenario C only: the base URL the saturation gates read PromQL from. The default
@@ -186,18 +185,20 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
 
 ## Configuration and Deployment
 
-The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, `COORDINATOR_IMAGE` in the optional
-coordinator manifest, `POOL_NAME` in the vLLM PodMonitor, and `PROJECT_ID` on the GCP paths). Render one for your
-environment before installing:
+The guide's Kubernetes manifests are kustomize overlays ([`modelserver/`](modelserver/) and
+[`manifests/`](manifests/)), applied into `${NAMESPACE}` with `kubectl apply -k`. Everything runs in that one
+namespace, so components address each other by Service name (`llm-d-router-epp`, `redis`), and the default
+llm-d-async values ([`values/redis/quota-only.yaml`](values/redis/quota-only.yaml)) install as they are.
+
+The alternative llm-d-async values for Scenarios C and D and the GCP paths carry literal placeholders
+(`POOL_NAME`, `SAT_CAP` and `PROM_URL` in the saturation overlays, `PROJECT_ID` on the GCP paths). Render one
+for your environment before installing it:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
-  sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-      -e "s/POOL_NAME/${POOL_NAME}/g" \
+  sed -e "s/POOL_NAME/${POOL_NAME}/g" \
       -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
       -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
-      -e "s#COORDINATOR_IMAGE#${ROUTER_COORDINATOR_IMAGE}:${ROUTER_COORDINATOR_VERSION}#g" \
       -e "s/PROJECT_ID/${PROJECT_ID}/g" "$1"
 }
 ```
@@ -234,44 +235,33 @@ kubectl create secret generic llm-d-hf-token \
 Deploy the vLLM model server:
 
 ```bash
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
-  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-  | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
-  | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
 
-Instead of maintaining its own model server manifests, this guide renders the
-[optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay
-(`guides/optimized-baseline/modelserver/gpu/vllm/`) as the [flow-control](../../../flow-control/README.md) guide does:
-`sed` swaps in this guide's `llm-d.ai/guide` label, `${GUIDE_NAME}`. It is a constant, `async-multitenant`, because both router values files and the vLLM PodMonitor select on that value. The model (`Qwen/Qwen3-32B`, two GPUs
-per replica), image, probes and volumes follow that guide. The one change is a single replica instead of optimized-baseline's two: the
-router's `maxConcurrency` and the llm-d-async worker pool below are sized so that async work saturates one replica.
+The model server overlay ([`modelserver/gpu/vllm/`](modelserver/gpu/vllm/)) builds on the
+[optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay: the model (`Qwen/Qwen3-32B`,
+two GPUs per replica), image, probes and volumes follow that guide. It labels the pods
+`llm-d.ai/guide: async-multitenant`, which both router values files and the vLLM PodMonitor select on, and runs a
+single replica instead of optimized-baseline's two: the router's `maxConcurrency` and the llm-d-async worker pool
+below are sized so that async work saturates one replica.
 
 <details>
 <summary><b>Single GPU</b></summary>
 
 On one GPU, serve `Qwen/Qwen3-8B` with tensor parallelism 1 instead (the setup the guide's
-[eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used). Set the served model name to
-match before publishing, because requests carry it in `payload.model`:
+[eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used), with the single-GPU overlay.
+Set the served model name to match before publishing, because requests carry it in `payload.model`:
 
 <!-- llm-d-cicd:skip start -->
 ```bash
 export MODEL=Qwen/Qwen3-8B
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
-  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-  | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
-  | yq '(select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "modelserver")) |= (
-      .args[0] = "Qwen/Qwen3-8B"
-      | .args |= map(select(test("^--tensor-parallel-size=") | not)) + ["--tensor-parallel-size=1", "--max-model-len=4000"]
-      | .resources.limits."nvidia.com/gpu" = 1 | .resources.requests."nvidia.com/gpu" = 1
-      | .resources.limits.cpu = "8" | .resources.requests.cpu = "4"
-      | .resources.limits.memory = "40Gi" | .resources.requests.memory = "20Gi")' \
-  | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/single-gpu
 ```
 <!-- llm-d-cicd:skip end -->
 
-`--max-model-len=4000` keeps the KV cache within a 24 GB GPU such as an L4. The pods keep optimized-baseline's
-`llm-d.ai/model: Qwen3-32B` label, which only identifies the overlay they came from.
+`--max-model-len=4000` keeps the KV cache within a 24 GB GPU such as an L4. The overlay's object names match the
+default one, so the cleanup below removes either; delete one before applying the other, because the pod
+selectors differ.
 
 </details>
 
@@ -284,7 +274,7 @@ Deploy llm-d Router configured with Flow Control and priority holdback, and appl
 
 ```bash
 # 1. Apply InferenceObjectives for the 6 tier-priority lanes
-render ${MT}/manifests/inferenceobjectives.yaml | kubectl apply -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/objectives
 
 # 2. Deploy llm-d-router with Flow Control priority bands and priority holdback
 helm upgrade --install llm-d-router \
@@ -292,9 +282,6 @@ helm upgrade --install llm-d-router \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${MT}/values/router/flow-control-holdback.yaml \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-
-# Get router ClusterIP
-export IP=$(kubectl get service llm-d-router-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
 
 <details>
@@ -318,22 +305,22 @@ helm upgrade --install llm-d-router \
 
 > [!NOTE]
 > **One InferencePool per router:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`
-> (`POOL_NAME`), and `render` binds all 6 `InferenceObjective`s to it. An `InferenceObjective` binds to a single
-> `poolRef.name`, and Kubernetes resource names are unique per namespace, so when one `llm-d-async` feeds several
-> `InferencePool`s, put each pool and its router in its own namespace and apply
-> `manifests/inferenceobjectives.yaml` there with `POOL_NAME` set to that pool.
+> (`POOL_NAME`), and the objectives overlay binds all 6 `InferenceObjective`s to it. An `InferenceObjective` binds
+> to a single `poolRef.name`, and Kubernetes resource names are unique per namespace, so when one `llm-d-async`
+> feeds several `InferencePool`s, put each pool and its router in its own namespace and apply
+> `manifests/objectives` there, with `poolRef.name` patched to that pool if its router release has another name.
 
 ### 3. Deploy Redis and llm-d-async
 
 The bundled Redis backs both the per-team request queues and the quota counters.
 
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/redis
+kubectl -n ${NAMESPACE} rollout status deploy/redis
 
-render ${MT}/values/redis/quota-only.yaml > /tmp/mt-redis.yaml
-helm install llm-d-async \
+helm upgrade --install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
-    -f /tmp/mt-redis.yaml \
+    -f ${MT}/values/redis/quota-only.yaml \
     -n ${NAMESPACE} --version ${ASYNC_VERSION}
 
 kubectl -n ${NAMESPACE} get deploy llm-d-async -o yaml | grep transport
@@ -352,14 +339,13 @@ the per-team topics + subscriptions, the results topic, and the service account 
 ```bash
 export PROJECT_ID=your-project
 ${MT}/scripts/gcp-setup.sh                       # topics, subscriptions, results topic, SA + IAM
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml   # still needed for the quota counters
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/redis   # still needed for the quota counters
 
-sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
-    ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
-helm install llm-d-async \
+render ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
+helm upgrade --install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-pubsub.yaml \
-    -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
+    -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
 <!-- llm-d-cicd:skip end -->
 
@@ -402,17 +388,17 @@ counted against a quota. The llm-d-async values from step 3 need no change: the 
 destination to each request, so the coordinator gets its results back while requests published straight to
 Redis still land on `results-list`.
 
-The guide's Redis (`manifests/redis.yaml`) starts with keyspace notifications enabled
+The guide's Redis (`manifests/redis/redis.yaml`) starts with keyspace notifications enabled
 (`--notify-keyspace-events Kl`), so held `wait` requests wake up as soon as their result lands instead of polling.
 
 ```bash
-# The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
-render ${MT}/manifests/coordinator/config.yaml > /tmp/coordinator.yaml
-kubectl -n ${NAMESPACE} create configmap llm-d-coordinator-config \
-    --from-file=coordinator.yaml=/tmp/coordinator.yaml --dry-run=client -o yaml | kubectl apply -f -
-render ${MT}/manifests/coordinator/coordinator.yaml | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/coordinator
 kubectl -n ${NAMESPACE} rollout status deploy/llm-d-coordinator
 ```
+
+The overlay generates the `llm-d-coordinator-config` ConfigMap from `config.yaml` and takes the coordinator image
+from the shared coordinator image component, at llm-d-router `main`: the config uses settings newer than the
+v0.11.0 release.
 
 Try it:
 
@@ -722,7 +708,7 @@ to install the standard Prometheus and Grafana stack:
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
 # 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
-render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/monitoring
 ```
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
@@ -772,6 +758,12 @@ The gate-metric panels need an image newer than v0.7.2. GMP / Monarch lags real 
 is bang-bang on that timescale; the self-hosted Prometheus path reacts within one scrape.
 </details>
 
+## Status
+
+**Tier 2 (Deployable)**, per the [guide policy](../../../GUIDES-POLICY.md).
+Reference environment: GKE, two NVIDIA H100s, vLLM, `Qwen/Qwen3-32B`.
+Gaps to Tier 3: no `guide.yaml`, and no nightly end-to-end job.
+
 ## Notes & gotchas
 
 - **Image / version.** The overlays no longer pin an image tag — the image tracks the chart's
@@ -799,17 +791,14 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 ## Cleanup
 
 ```bash
-# Only if you deployed the optional coordinator (step 4)
-render ${MT}/manifests/coordinator/coordinator.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
-kubectl -n ${NAMESPACE} delete configmap llm-d-coordinator-config --ignore-not-found
-
+# --ignore-not-found: the coordinator (step 4) and the PodMonitor (Observability) are optional
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/coordinator --ignore-not-found
 helm uninstall llm-d-async -n ${NAMESPACE}
 helm uninstall llm-d-router -n ${NAMESPACE}
-render ${MT}/manifests/inferenceobjectives.yaml | kubectl delete -f -
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
-  | sed "s/optimized-baseline/${GUIDE_NAME}/g" | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
-kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
-render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/objectives
+kubectl delete -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/redis
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
 ```
 
 <details>

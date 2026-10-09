@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Ignored: the kustomization's `target` selects the model server Deployment.
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          # optimized-baseline's args, with the model, tensor parallelism and a
+          # context length that keeps the KV cache within a 24 GB GPU such as an L4.
+          args:
+            - "Qwen/Qwen3-8B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=1"
+            - "--max-model-len=4000"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
+            - "--shutdown-timeout=45"
+          resources:
+            limits:
+              cpu: '8'
+              memory: 40Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: '4'
+              memory: 20Gi
+              nvidia.com/gpu: 1

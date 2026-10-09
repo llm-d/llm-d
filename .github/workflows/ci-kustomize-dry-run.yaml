@@ -39,6 +39,13 @@ jobs:
       - name: Install Gateway API and GAIE CRDs
         run: guides/recipes/gateway/install-gateway-crds.sh
 
+      # llm-d.ai InferenceObjective, used by guides/batch-serving/.../multitenant.
+      # Same apply as the guides' CRD prerequisite; URL from guides/env.sh.
+      - name: Install llm-d-router CRDs
+        run: |
+          source guides/env.sh
+          kubectl apply -f "https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml"
+
       - name: Install monitoring CRDs
         run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
 
