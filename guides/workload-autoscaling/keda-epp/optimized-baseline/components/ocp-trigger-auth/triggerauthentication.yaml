@@ -1,9 +1,8 @@
 # KEDA TriggerAuthentication for OpenShift Thanos Querier (bearer + CA).
 #
 # Thanos Querier rejects unauthorized queries (401 when unauthenticated, 403 when
-# the ServiceAccount lacks cluster-monitoring-view). The trigger then errors; on
-# the guard overlay the fallback degrades to a single replica, on the windows
-# overlays the ScaledObject goes Ready=False with KEDAScalerFailed events. This
+# the ServiceAccount lacks cluster-monitoring-view). The trigger then errors and the
+# ScaledObject goes Ready=False with KEDAScalerFailed events. This
 # points KEDA at the metrics-reader ServiceAccount token Secret provisioned by
 # recipes/autoscaling/metrics-reader: `token` is the bearer token, and
 # `service-ca.crt` is the CA that signs the Thanos serving cert (the service-ca

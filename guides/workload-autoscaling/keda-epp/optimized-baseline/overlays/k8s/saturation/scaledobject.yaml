@@ -7,9 +7,6 @@
 #   - epp-running-requests active concurrency, per-replica target 16
 # Saturation is a normalized ratio, more portable across hardware than a raw
 # queue-depth count. Overshoot is handled by the 300s stabilization windows.
-# The demand-aware guard is NOT offered for this signal: it renames the signal to
-# a replica-unit demand, which is only correct when the per-replica target is 1
-# (queue depth), not for a pool-wide ratio.
 #
 # maxReplicaCount is 10 here (vs 8 on the queue overlays), the saturation guide's
 # higher cap.
