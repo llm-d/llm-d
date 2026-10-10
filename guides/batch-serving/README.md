@@ -101,6 +101,62 @@ Both batch solutions dispatch inference requests to an existing llm-d serving st
 
 ---
 
+## Observability & Troubleshooting
+
+Once monitoring is enabled (see [Observability setup](../../docs/operations/observability/setup.md)), use the signals below to operate batch serving. This section covers what is specific to this path. Batch Gateway metric definitions and alerts are in the shared [metric reference](../../docs/operations/observability/batch-gateway-metrics.md) and [alerting rules](../../docs/operations/observability/alerting.md#batch-gateway-batch-gatewayrules). The Async Processor's full metric list is in the [llm-d-async metrics reference](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics).
+
+Both approaches put a queue in front of the inference pool, so most problems show up as a backlog. The operator question is always the same: is the backlog there because the model servers are saturated, or because the batch layer itself is not dispatching?
+
+### Async Processor
+
+Async Processor metrics are registered under the `llm_d_async` subsystem, so the exposed names carry a doubled prefix (`llm_d_async_async_*`). Per-queue series carry `queue_id`, `queue_name` and `pool_name`.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for batch serving | Where to look |
+| ------ | -------------------------------- | ------------- |
+| Broker backlog (`llm_d_async_async_broker_backlog`) | Work waiting in Redis or Pub/Sub that the processor has not pulled yet. A zero is only trustworthy when `llm_d_async_async_broker_backlog_source_available` is `1` | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| In-process queue (`llm_d_async_async_queue_depth`) and queue time (`llm_d_async_async_queue_residence_time_millis`) | Requests already pulled from the broker and waiting for a worker. This is the delay the async layer itself adds | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| Worker utilization (`sum by (pool_name) (llm_d_async_async_inflight_requests) / llm_d_async_async_pool_worker_limit`) | Near 1.0 means the worker limit, not the model servers, caps throughput. Inflight requests are per-queue, so aggregate to pool first; the limit is already per-pool | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| Dispatch budget (`llm_d_async_async_dispatch_budget`) and gate decisions (`llm_d_async_async_gate_decisions_total` by `reason`) | The gate deliberately holds work back when the pool is busy. A budget of 0 with `gate_closed` decisions is the gate doing its job; `error` decisions are not | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| Gate input (`llm_d_async_async_gate_metric_value` vs `llm_d_async_async_gate_metric_threshold`, with `llm_d_async_async_gate_metric_source_available`) | The budget the gate last computed from its source, compared against the threshold; the gate closes at or below it. When the source is unavailable the gate falls back to its configured default | [Asynchronous processing guide](./asynchronous-processing/README.md) |
+| Inference time (`llm_d_async_async_inference_latency_time_millis`) | Time spent in the router and model servers, measured per attempt. Read it against queue time to see which side the delay is on | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+| Outcomes (`llm_d_async_async_successful_requests_total`, `_failed_requests_total`, `_shedded_requests_total`, `_exceeded_deadline_requests_total`, `_request_retries_total`) | Shed requests were refused with HTTP 429; deadline-exceeded requests aged out before finishing. 5xx errors from the router or model servers drive retries and failures instead of shedding | [llm-d-async metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics) |
+
+#### Common failure modes
+
+- **Backlog grows while workers sit idle**: utilization is well below 1.0 and `llm_d_async_async_dispatch_budget` is at or near 0. The gate is closed when `gate_metric_value` ≤ `gate_metric_threshold`. The value is the gate's budget reading (1 − saturation for saturation gates), not the raw pool metric, so a low value means the pool really is saturated and the backlog is expected, since this path fills slack capacity. If `gate_metric_source_available` is 0, the gate cannot read its source (for example Prometheus is unreachable) and is running on its default; fix the source before tuning thresholds.
+- **Backlog grows with utilization pinned at 1.0**: the worker limit is the bottleneck. If the pool still has headroom (low `llm_d_epp_flow_control_pool_saturation` or `vllm:num_requests_running`), raise the pool's worker limit.
+- **High queue time, normal inference time**: requests wait inside the processor, not in the model servers. Check worker utilization and the gate before scaling the pool.
+- **Rising inference time with the gate open**: the model servers are the slow side. Diagnose them with the router and vLLM signals in the [metric reference](../../docs/operations/observability/metrics.md).
+- **Deadline-exceeded requests climbing**: the drain rate cannot meet the requested deadlines. On the `redis-sortedset` broker, `llm_d_async_async_deadline_proximity_millis` shows how close queued items are to their deadlines before they expire. It is a per-poll snapshot, so read it with `histogram_quantile` rather than `rate()`.
+- **Shed requests climbing**: the router or model servers are refusing requests with HTTP 429 (over capacity). 5xx errors instead drive retries and failures: watch `_request_retries_total` and `_failed_requests_total`.
+
+### Batch Gateway
+
+Batch Gateway metric names carry no prefix (`jobs_processed_total`, `active_workers`), so scope every query by `namespace`, as the bundled alert rules do.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for batch serving | Where to look |
+| ------ | -------------------------------- | ------------- |
+| Queue wait (`job_queue_wait_duration_seconds`) | Time a job spends in the priority queue before a worker picks it up. There is no live queue-depth gauge, so this is the leading indicator of backlog | [Metrics → Batch Gateway](../../docs/operations/observability/batch-gateway-metrics.md) |
+| Worker saturation (`active_workers` / `total_workers`) | Sustained near 1.0 means the processor's worker pool is the bottleneck | [Metrics → Batch Gateway](../../docs/operations/observability/batch-gateway-metrics.md) |
+| Job outcomes (`jobs_processed_total` by `result` and `reason`) | `expired` means jobs aged out before running, which is a capacity problem; `re_enqueued` counts jobs sent back to the queue | [Metrics → Batch Gateway](../../docs/operations/observability/batch-gateway-metrics.md) |
+| Backpressure (`batch_processor_aimd_concurrency_limit`, `batch_processor_aimd_decreases_total` by `signal`) | The processor lowers its per-endpoint concurrency when the backend answers with `429`, `5xx` or a capacity retry. A falling limit means the inference pool is pushing back | [llm-d-batch-gateway metrics](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/metrics.md) |
+| Per-model load and errors (`model_inflight_requests`, `request_errors_by_model_total`) | Isolates one misbehaving model in a multi-model deployment | [llm-d-batch-gateway metrics](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/metrics.md) |
+| File storage (`file_storage_operations_total` by `status`) | `status="exhausted"` means retries gave up, so input or output files are unreachable | [Metrics → Batch Gateway](../../docs/operations/observability/batch-gateway-metrics.md) |
+
+#### Common failure modes
+
+- **Queue wait rising with workers saturated**: the worker pool is too small for the submission rate (`BatchGatewayWorkersSaturated`, `BatchGatewayHighQueueWait`). Raise `num_workers` (processor config) / `processor.config.numWorkers` (Helm chart) or add processor replicas, as long as the inference pool has headroom.
+- **Queue wait rising with workers not saturated and the AIMD limit falling**: the backend is pushing back. `batch_processor_aimd_decreases_total` by `signal` shows whether it is 429s (capacity) or 5xx (errors). Adding workers will not help; the fix is on the inference side.
+- **Expired jobs** (`BatchGatewayExpiredJobsDetected`): jobs aged out before execution. Treat it as a capacity or completion-window problem, not a job failure.
+- **Failed jobs** (`BatchGatewayHighJobFailureRate`): check `request_errors_by_model_total` to see whether one model accounts for them, and `file_storage_operations_total{status="exhausted"}` for jobs that failed on input or output storage.
+- **Orphaned jobs**: a non-zero `batch_reconciler_orphans_recovered_total` points at processor crashes, and `BatchReconcilerErrors` means the reconciler itself is failing to recover them.
+
+llm-d's bundled alerting rules cover the Batch Gateway only; the Async Processor's alerts (`AsyncProcessorHighRetryRate`, `AsyncProcessorHighDeadlineExceededRate`, `AsyncProcessorLowSuccessRate`, `AsyncProcessorHighShedRate`) ship in the llm-d-async chart's PrometheusRule.
+
 ## Related Resources
 
 - [Batch Architecture Overview](../../docs/architecture/advanced/batch/README.md)
