@@ -16,10 +16,8 @@ spec:
           args:
             - Qwen/Qwen3-32B
             - --served-model-name=Qwen/Qwen3-32B
-            - --host=0.0.0.0
             - --port=8000
             - --tensor-parallel-size=8
-            - --dtype=bfloat16
             - --enforce-eager
             - --max-model-len=2048
             - --max-num-seqs=16

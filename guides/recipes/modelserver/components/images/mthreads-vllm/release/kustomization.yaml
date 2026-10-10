@@ -5,13 +5,3 @@ images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: registry.mthreads.com/mcconline/inference/vllm
     newTag: v0.28.0-ph1-5.2.0-torch2.11.0.post1-20260915
-
-patches:
-  - target:
-      kind: Deployment
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: USER
-          value: llm-d
