@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          volumeMounts:
+            - mountPath: /var/run/secrets/tokens
+              name: mx-token
+              readOnly: true
+      volumes:
+        - name: mx-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: modelexpress
+                  audience: modelexpress
+                  expirationSeconds: 3600
