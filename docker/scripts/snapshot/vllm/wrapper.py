@@ -32,6 +32,15 @@ except ImportError:
     logger = logging.getLogger("vllm.snapshot.wrapper")
 
 
+def _is_eager_loading_configured() -> bool:
+    """Check if '--safetensors-load-strategy eager' is configured via CLI arguments."""
+    return any(
+        (arg == "eager" and i > 0 and sys.argv[i - 1] == "--safetensors-load-strategy")
+        or arg.startswith("--safetensors-load-strategy=eager")
+        for i, arg in enumerate(sys.argv)
+    )
+
+
 def patch_vllm_lifespan(app, snapshot_provider: Optional[GKESnapshotProvider] = None):
     """
     Patches the FastAPI app lifespan context manager for vLLM snapshotting (single-rank scope).
@@ -72,6 +81,15 @@ def patch_vllm_lifespan(app, snapshot_provider: Optional[GKESnapshotProvider] = 
                 await engine.sleep(level=1)
             else:
                 logger.error("vLLM engine does not support sleep(level=1); physical VRAM maps were not released before snapshot.")
+
+            # Log a warning instead of raising an error if eager loading is not detected in sys.argv.
+            # Clearing cached weights without eager loading can break memory-mapped file descriptors,
+            # but we do not fail hard to avoid false positives for non-safetensors models.
+            if getattr(snapshot_provider, "cache_dir", None) and not _is_eager_loading_configured():
+                logger.warning(
+                    "Clearing model cache without '--safetensors-load-strategy eager' detected. "
+                    "Ensure eager loading is enabled for safetensors models so model weights are copied to memory rather than memory-mapped from disk."
+                )
 
             logger.info("Triggering snapshot checkpoint...")
             try:
