@@ -1,0 +1,59 @@
+## Hub routing policy "load": rank clusters on the pool averages their routers
+## publish (KV-cache utilization and queue depth). The hub scrapes each
+## cluster's EPP /metrics, so every cluster router needs leaf.values.yaml.
+##
+## Layer on top of: recipes/router/base.values.yaml and hub.values.yaml
+
+router:
+  epp:
+    pluginsConfigFile: "multi-cluster-routing-load.yaml"
+    pluginsCustomConfig:
+      multi-cluster-routing-load.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+          # Endpoints are clusters, listed in clusters.yaml.
+          - type: multicluster-file-discovery
+            name: discovery
+            parameters:
+              path: /etc/epp/clusters/clusters.yaml
+              watchFile: true
+          # Scrapes each cluster's EPP /metrics. The plugin defaults to https with
+          # peer-certificate verification, because it crosses a cluster trust
+          # boundary. The cluster routers serve their metrics over plain HTTP, so
+          # this guide sets `scheme: http` and limits who can reach the metrics
+          # port instead (see the guide's Known Constraints).
+          - type: multicluster-metrics-data-source
+            name: metrics-source
+            parameters:
+              scheme: http
+          # Writes each cluster's pool averages (llm_d_epp_average_kv_cache_utilization,
+          # llm_d_epp_average_queue_size) into the attributes the scorers read.
+          # Both scorers declare those attributes Required, so the configuration
+          # fails to load without this extractor.
+          - type: multicluster-metrics-extractor
+            name: metrics-extractor
+          - type: multicluster-kv-cache-utilization-scorer
+            name: kv-cache
+          - type: multicluster-queue-scorer
+            name: queue
+          - type: max-score-picker
+            name: picker
+          - type: single-profile-handler
+            name: profile-handler
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: kv-cache
+                weight: 1
+              - pluginRef: queue
+                weight: 1
+              - pluginRef: picker
+        dataLayer:
+          discovery:
+            endpoints:
+              pluginRef: discovery
+          sources:
+            - pluginRef: metrics-source
+              extractors:
+                - pluginRef: metrics-extractor

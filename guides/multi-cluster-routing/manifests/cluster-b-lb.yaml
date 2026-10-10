@@ -1,0 +1,35 @@
+# Exposes cluster B's router to the hub, which runs in another Kubernetes
+# cluster. Render with envsubst (Step 3 of the guide sets HUB_EGRESS_CIDR and
+# CLUSTER_B_LB_ANNOTATIONS).
+#
+# Port 80 carries requests to the router's Envoy sidecar (8081); port 9090
+# carries the EPP metrics the load scorer reads. Both are plain HTTP and
+# unauthenticated, accepted only from HUB_EGRESS_CIDR.
+#
+# Whether the load balancer is internal or public is up to the provider, usually
+# through an annotation in CLUSTER_B_LB_ANNOTATIONS. Prefer an internal one when
+# the clusters share a private network.
+#
+# The router chart creates only a ClusterIP Service, so this separate Service
+# selects the router's pods directly. The selector depends on the router's
+# release name (`optimized-baseline`, Step 1): `<release>-epp`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-b-lb
+  annotations: ${CLUSTER_B_LB_ANNOTATIONS}
+spec:
+  type: LoadBalancer
+  # Keeps the client's address, so loadBalancerSourceRanges sees the hub
+  # cluster's real source address.
+  externalTrafficPolicy: Local
+  loadBalancerSourceRanges: ["${HUB_EGRESS_CIDR}"]
+  selector:
+    llm-d-router-gateway: optimized-baseline-epp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8081
+    - name: metrics
+      port: 9090
+      targetPort: 9090

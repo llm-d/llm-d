@@ -1,0 +1,10 @@
+# The Optimized Baseline model server with this cluster's replica count. Set the
+# count here, at apply time: scaling down afterwards would first schedule the
+# base's much larger default.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../optimized-baseline/modelserver/gpu/vllm/base
+replicas:
+  - name: optimized-baseline-nvidia-gpu-vllm-decode
+    count: 2

@@ -1,0 +1,21 @@
+## multi-cluster-routing leaf: the one change a cluster's router needs so the
+## hub can read its load.
+##
+## Layer on top of: recipes/router/base.values.yaml and
+##                  optimized-baseline/router/optimized-baseline.values.yaml
+##
+## The hub scores clusters from each cluster's EPP /metrics. The chart protects
+## that endpoint with bearer-token auth by default, and the hub's
+## multicluster-metrics-data-source does not send a token, so every scrape would
+## return 401 and the hub would see no load. This renders
+## --metrics-endpoint-auth=false on the cluster's EPP.
+##
+## It leaves /metrics open to anything that can reach the EPP Service. Restrict
+## who can reach port 9090 with a NetworkPolicy; see the guide's Known
+## Constraints.
+
+router:
+  monitoring:
+    prometheus:
+      auth:
+        enabled: false
