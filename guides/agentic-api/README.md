@@ -1,5 +1,7 @@
 # Serve the Responses API with Agentic API (Experimental)
 
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-agentic-api-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-agentic-api-gke-acc-gpu-vllm-x.yaml)
+
 Add the OpenAI-compatible **Responses API** — stateful multi-turn conversations, webhook tool
 loops and WebSocket streaming — to a deployment you already have, by putting
 [vLLM Agentic API](https://github.com/vllm-project/agentic-api/blob/main/docs/deploying/README.md)
@@ -583,6 +585,13 @@ to your machine.
 4. **WebSocket mode `[4/4]`** — upgrades an RFC 6455 connection to `ws://<endpoint>/v1/responses`,
    sends a `response.create` frame and verifies streaming completion (pass `--skip-websocket` to
    explicitly skip this check when testing through an HTTP-only proxy).
+
+These steps also run nightly on GKE, in Standalone Mode on top of
+[`optimized-baseline`](../optimized-baseline/README.md) (one Qwen3-32B replica on two H100s):
+[`nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml`](../../.github/workflows/nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml)
+deploys both guides from their `guide.yaml` with
+[`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) and then runs this section's
+`verify.py`.
 
 - - -
 
