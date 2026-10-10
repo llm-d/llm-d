@@ -189,6 +189,17 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 ```
 <!-- guide:prerequisites.namespace end -->
 
+**On CoreWeave, create the model cache PVC** before applying the model server overlay. The overlay mounts the HuggingFace cache from an RWX PVC named `model-pvc` instead of a node-local `hostPath`: `/var/cache/huggingface` on CoreWeave nodes is a 15&nbsp;GB ramdisk (`/dev/ram0`), which cannot hold `gpt-oss-120b` (60.8&nbsp;GiB of safetensors) and fails the first download with `OSError: [Errno 28] No space left on device`. The shared PVC also downloads the weights once for all replicas rather than once per node, and the manifest omits `storageClassName` so the PVC binds the cluster's default StorageClass, which must support `ReadWriteMany`.
+
+<!-- guide:prerequisites.model-cache start -->
+```bash
+# only when INFRA_PROVIDER=coreweave:
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
+```
+<!-- guide:prerequisites.model-cache end -->
+
+On a cold cache all replicas pull at once. `huggingface_hub` takes a per-blob lock under `${HF_HOME}/hub/.locks`, which serializes the download where the storage backend honors `flock` — on RWX NFS that is not guaranteed, and a `nolock` mount makes the lock node-local. A lost race is loud rather than silent: all replicas share one blob path, so they append to the same `.incomplete` file and the post-download size check fails (`Consistency check failed: file should be of size ...`), restarting the pod. To avoid depending on lock behaviour, pre-populate the PVC with a one-off download Job before applying the overlay, as in [`fastsafetensors-prewarm/prewarm-job.yaml`](../modelexpress-p2p/modelserver/gpu/vllm/fastsafetensors-prewarm/prewarm-job.yaml).
+
 **Create the `llm-d-hf-token` secret** in your target namespace with the key [`HF_TOKEN`](../../helpers/hf-token.md) matching a valid HuggingFace token to pull models:
 
 <!-- guide:prerequisites.secrets start -->

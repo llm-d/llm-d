@@ -139,6 +139,13 @@ prerequisites:
           --wait --timeout 300s
   namespace:
     - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  # CoreWeave caches the model weights on an RWX PVC rather than a node-local
+  # hostPath: /var/cache/huggingface there is a 15 GB ramdisk (/dev/ram0), too
+  # small for gpt-oss-120b (60.8 GiB of safetensors).
+  model-cache:
+    - when: {INFRA_PROVIDER: [coreweave]}
+      run: kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
+
   secrets:
     - skip_in: [ci]
       run: |
