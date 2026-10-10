@@ -30,3 +30,10 @@ configMapGenerator:
     files:
       - vllm/__init__.py
       - vllm/wrapper.py
+  # Keys become __init__.py, launcher.py, and wrapper.py; mount one level
+  # deeper, at <snapshot-dir>/sglang.
+  - name: snapshot-scripts-sglang
+    files:
+      - sglang/__init__.py
+      - sglang/launcher.py
+      - sglang/wrapper.py
