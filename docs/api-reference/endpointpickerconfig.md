@@ -6,7 +6,7 @@
 **Version:** `v1`
 
 > [!NOTE]
-> `llm-d.ai/v1alpha1` is still accepted but deprecated; the EPP converts it to `v1` at startup and logs a deprecation warning. See [Configuration](../architecture/core/router/epp/configuration.md) for the field migration.
+> `llm-d.ai/v1alpha1` is still accepted but deprecated; the EPP converts it to `v1` at startup and logs a deprecation warning. See [Configuration](../architecture/router/configuration.md) for the field migration.
 
 ---
 

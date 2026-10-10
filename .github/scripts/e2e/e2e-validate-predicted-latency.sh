@@ -9,7 +9,7 @@ set -Eeuo pipefail
 # The default e2e-validate.sh proves the gateway returns 200s, but cannot tell
 # whether the predicted-latency scheduler actually used predictions or silently
 # fell back to the composite KV/queue/prefix heuristic (see
-# docs/wip-docs-new/architecture/advanced/latency-predictor.md — "If the
+# docs/architecture/router/latency-predictor.md — "If the
 # prediction server is unreachable or fails to return a prediction, the latency
 # scorer falls back ...").
 #

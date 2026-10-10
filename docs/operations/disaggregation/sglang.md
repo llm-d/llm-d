@@ -8,7 +8,7 @@ While disaggregated serving can offer superior performance, it introduces additi
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the SGLang image
 
-This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see the [vLLM page](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/advanced/disaggregation/README.md) page.
+This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see the [vLLM page](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/disaggregation/pd-disaggregation.md) page.
 
 Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer with no central coordinator and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
 

@@ -292,4 +292,4 @@ In the future, this diagnostic will be automated as runtime scripts.
 - [UCCL repository](https://github.com/uccl-project/uccl)
 - [P/D Disaggregation Well-Lit Path](../../../guides/pd-disaggregation/README.md) — deployment patterns using NIXL
 - [Wide Expert-Parallelism Well-Lit Path](../../../guides/wide-ep/README.md) — multi-node deployment with DeepEP networking
-- [Model Servers](../../architecture/core/model-servers.md) — vLLM/SGLang configuration including KV transfer flags
+- [Model Servers](../../architecture/model-servers/README.md) — vLLM/SGLang configuration including KV transfer flags

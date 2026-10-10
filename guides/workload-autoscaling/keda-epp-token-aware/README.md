@@ -52,8 +52,8 @@ The token math is identical across both. Only the query *shape* (role selectors)
 
 For details on these metrics, see:
 
-- [EPP Request Handling Metrics](../../../docs/architecture/core/router/epp/request-handling.md)
-- [EPP Scheduling Metrics](../../../docs/architecture/core/router/epp/scheduling.md)
+- [EPP Request Handling Metrics](../../../docs/architecture/router/request-handling.md)
+- [EPP Scheduling Metrics](../../../docs/architecture/router/scheduling.md)
 - [Metric reference](../../../docs/operations/observability/metrics.md#metric-reference) and [PromQL reference](../../../docs/operations/observability/promql.md)
 
 ### Endpoint-removal note for older EPP images

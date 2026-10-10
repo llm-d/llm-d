@@ -88,7 +88,7 @@ When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowCon
 - **Priority Holdback (`priority-holdback-policy`, in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
 - **In-Flight Eviction (`enableEviction: true`, the default in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
   While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation. Evicted requests are retried by `llm-d-async` and redo their generation. See [Protecting realtime traffic](#protecting-realtime-traffic).
-- For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
+- For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/router/epp.md/flow-control).
 
 #### With Flow Control OFF (Baseline Router with Saturation Detection)
 

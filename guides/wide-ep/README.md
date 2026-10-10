@@ -14,7 +14,7 @@ The default deployment serves `deepseek-ai/DeepSeek-R1-0528` on 32 NVIDIA H200 G
 
 Each accelerator serves one model, chosen to teach the mechanics: multi-node `LeaderWorkerSet`/`DisaggregatedSet` deployment, DP/EP configuration in vLLM, and routing to individual DP ranks. For state-of-the-art, benchmarked MoE recipes, see the Models guides, such as [DeepSeek-V4](../models/deepseek-v4/README.md) and [GLM-5.2](../models/glm-5-2/README.md).
 
-For why wide expert parallelism helps, how a DP/EP forward pass works, why it pairs with P/D disaggregation, and how requests flow to individual DP ranks, see [Wide Expert Parallelism](../../docs/architecture/advanced/wide-expert-parallelism.md).
+For why wide expert parallelism helps, how a DP/EP forward pass works, why it pairs with P/D disaggregation, and how requests flow to individual DP ranks, see [Wide Expert Parallelism](../../docs/architecture/disaggregation/wide-expert-parallelism.md).
 
 ## Supported Accelerators and Model Servers
 
@@ -149,7 +149,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash

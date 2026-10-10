@@ -55,7 +55,7 @@ The [KEDA + EPP Metrics](./keda-epp/README.md) path uses KEDA's Prometheus
 scaler with signals emitted directly by the Endpoint Picker (EPP). KEDA creates
 and owns the HPA that scales the model server Deployment. It ships two scaling
 signals as selectable overlays; the guide covers
-[choosing between them](../../docs/architecture/advanced/autoscaling/keda-epp.md#scaling-signals):
+[choosing between them](../../docs/architecture/autoscaling/keda-epp.md#scaling-signals):
 
 - **Queue depth (default)** scales on requests waiting in EPP Flow Control plus
   running-request count. These signals reflect actual inference demand, enabling
@@ -92,7 +92,7 @@ WVA is designed for operators running multiple variants of the same model across
 
 ## Choosing a Scaling Signal
 
-| | [Queue-based Autoscaling](./keda-epp/README.md) | [Saturation-based Autoscaling](../../docs/architecture/advanced/autoscaling/keda-epp.md#scaling-signals) | [Token-Aware Autoscaling](./keda-epp-token-aware/README.md) | [SLO-Aware Autoscaling](./slo-aware/README.md) | [KEDA + WVA Metrics](./wva/README.md) |
+| | [Queue-based Autoscaling](./keda-epp/README.md) | [Saturation-based Autoscaling](../../docs/architecture/autoscaling/keda-epp.md#scaling-signals) | [Token-Aware Autoscaling](./keda-epp-token-aware/README.md) | [SLO-Aware Autoscaling](./slo-aware/README.md) | [KEDA + WVA Metrics](./wva/README.md) |
 | --- | --- | --- | --- | --- | --- |
 | **Best for** | Homogeneous deployments; scale on absolute queue depth / running requests (lagging, per-deployment thresholds, no over-provisioning) | Homogeneous deployments; scale on a normalized saturation ratio (leading, more portable thresholds, can potentially over-provision) | Deployments with heterogeneous prompt sizes; scale on token backlog, with the prefill threshold derived from a TTFT SLO | Single-pool deployments with per-request latency SLOs, scaled on predicted latency | Multi-variant deployments with cost-aware placement across heterogeneous hardware |
 | **Scaling signal** | EPP metrics such as queue depth and running request count | normalized pool saturation level (0.0–1.0+) and running request count | EPP in-flight tokens ÷ calibrated prefill throughput (seconds of backlog), and per-pod KV cache occupancy | EPP estimated TTFT/TPOT (ML-predicted, or measured) vs the SLO | KV cache utilization, queue depth, performance budgets |
@@ -121,7 +121,7 @@ Full definitions for the model-server and EPP signals live in the [metric refere
 
 - **Demand signal saturated but replicas flat** — the autoscaler is not reacting. On the WVA path check `wva_metrics_freshness_status` and `wva_desired_replicas` for the variant; on the KEDA + EPP path check that the `ScaledObject` is Ready and the external metric is resolving. See the metric-plumbing steps in the [KEDA + EPP troubleshooting](./keda-epp/README.md#troubleshooting) section.
 - **Replica target climbs but the pool does not grow** — `wva_desired_replicas` (or the HPA desired count) rises while `wva_current_replicas` / `llm_d_epp_ready_endpoints` lag. New pods are not scheduling or not passing readiness, usually GPU quota or image pull. See [Desired replicas increase but new replicas are not Ready](./keda-epp/README.md#desired-replicas-increase-but-new-replicas-are-not-ready).
-- **Replicas flapping** — the target oscillates and pods churn. Thresholds are too tight for the demand pattern; widen the stabilization window or the scaling band. See [Choosing Scaling Thresholds](../../docs/architecture/advanced/autoscaling/keda-epp.md#dual-metric-strategy).
+- **Replicas flapping** — the target oscillates and pods churn. Thresholds are too tight for the demand pattern; widen the stabilization window or the scaling band. See [Choosing Scaling Thresholds](../../docs/architecture/autoscaling/keda-epp.md#dual-metric-strategy).
 
 For alert rules covering the model-server and EPP signals, see [Alerting](../../docs/operations/observability/alerting.md).
 

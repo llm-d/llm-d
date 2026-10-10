@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide deploys peer-to-peer KV-cache sharing: any vLLM instance pulls cached prefix KV blocks directly from a peer's CPU offload tier, CPU-to-CPU over NIXL, instead of recomputing them. For how the pull works and when it pays, see [P2P KV-Cache Sharing](../../docs/architecture/advanced/kv-management/p2p-kv-cache-sharing.md).
+This guide deploys peer-to-peer KV-cache sharing: any vLLM instance pulls cached prefix KV blocks directly from a peer's CPU offload tier, CPU-to-CPU over NIXL, instead of recomputing them. For how the pull works and when it pays, see [P2P KV-Cache Sharing](../../docs/architecture/kv-management/p2p-kv-cache-sharing.md).
 
 The deployment composes three llm-d capabilities:
 
@@ -147,7 +147,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash

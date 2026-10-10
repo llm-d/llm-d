@@ -9,7 +9,7 @@ or GPU utilization, which an inference accelerator pins high at both low and hig
 concurrency.
 
 For how KEDA+EPP scaling works and why demand signals beat utilization, see
-[KEDA with EPP Metrics](../../../docs/architecture/advanced/autoscaling/keda-epp.md#the-llm-autoscaling-problem).
+[KEDA with EPP Metrics](../../../docs/architecture/autoscaling/keda-epp.md#the-llm-autoscaling-problem).
 
 ## Prerequisites
 
@@ -225,7 +225,7 @@ below. Do not apply two `ScaledObject`s to one Deployment.
 | `queue` (default) | `overlays/{k8s,ocp}/queue` | Mature, nightly-covered path; portable startup smoothing. |
 | `saturation` (experimental) | `overlays/{k8s,ocp}/saturation` | Scale before requests queue; validate thresholds first. |
 
-Signal background and the saturation-detector choice: [Scaling Signals](../../../docs/architecture/advanced/autoscaling/keda-epp.md#scaling-signals) and [Saturation Detector](../../../docs/architecture/advanced/autoscaling/keda-epp.md#saturation-detector). The saturation signal has no nightly end-to-end coverage yet; validate it against your own load before production use.
+Signal background and the saturation-detector choice: [Scaling Signals](../../../docs/architecture/autoscaling/keda-epp.md#scaling-signals) and [Saturation Detector](../../../docs/architecture/autoscaling/keda-epp.md#saturation-detector). The saturation signal has no nightly end-to-end coverage yet; validate it against your own load before production use.
 
 > [!NOTE]
 > This guide is validated with vLLM model servers. The flow-control signals are
@@ -250,18 +250,18 @@ this guide:
 | Scale-up stabilization window | 300s |
 | Scale-down stabilization window | 300s |
 
-For tuning guidance on each value, see [KEDA with EPP Metrics](../../../docs/architecture/advanced/autoscaling/keda-epp.md).
+For tuning guidance on each value, see [KEDA with EPP Metrics](../../../docs/architecture/autoscaling/keda-epp.md).
 
-For how thresholds are interpreted (per-replica `AverageValue` targets) and how to validate them, see [Dual-Metric Strategy](../../../docs/architecture/advanced/autoscaling/keda-epp.md#dual-metric-strategy).
+For how thresholds are interpreted (per-replica `AverageValue` targets) and how to validate them, see [Dual-Metric Strategy](../../../docs/architecture/autoscaling/keda-epp.md#dual-metric-strategy).
 
-For how flow-control on/off changes which trigger sees demand, see [Flow Control On vs. Off](../../../docs/architecture/advanced/autoscaling/keda-epp.md#flow-control-on-vs-off).
+For how flow-control on/off changes which trigger sees demand, see [Flow Control On vs. Off](../../../docs/architecture/autoscaling/keda-epp.md#flow-control-on-vs-off).
 
 ## Overshoot While Pods Start
 
 New replicas take minutes to load a model, so scale-up can overshoot: the HPA keeps
 seeing demand that in-flight capacity will soon absorb. The overlays smooth this with
 HPA stabilization windows (300s scale-up and scale-down). For how this works, see
-[Overshoot and Startup-Time Mitigation](../../../docs/architecture/advanced/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
+[Overshoot and Startup-Time Mitigation](../../../docs/architecture/autoscaling/keda-epp.md#overshoot-and-startup-time-mitigation).
 
 ## Apply the KEDA ScaledObject
 
@@ -543,7 +543,7 @@ When the Deployment is at zero, the Flow Control queue-size metric is the
 activation signal: EPP holds incoming requests until a model server becomes
 Ready.
 
-For how zero-to-one activation, `cooldownPeriod`, and cold-start latency behave, see [Scale to Zero](../../../docs/architecture/advanced/autoscaling/keda-epp.md#scale-to-zero).
+For how zero-to-one activation, `cooldownPeriod`, and cold-start latency behave, see [Scale to Zero](../../../docs/architecture/autoscaling/keda-epp.md#scale-to-zero).
 
 ## Legacy Prometheus Adapter Path
 

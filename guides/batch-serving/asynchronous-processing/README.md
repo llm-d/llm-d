@@ -37,7 +37,7 @@ To prevent background tasks from impacting real-time traffic, the Async Processo
   </picture>
 </p>
 
-Transient failures (like rate limits or network issues) are automatically re-queued with exponential backoff, and configurable worker pools tune the degree of parallelism for background processing (see [Async Processor Operations](../../../docs/operations/components/async-processor.md)). See the [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md) for more details on the internal mechanics.
+Transient failures (like rate limits or network issues) are automatically re-queued with exponential backoff, and configurable worker pools tune the degree of parallelism for background processing (see [Async Processor Operations](../../../docs/operations/components/async-processor.md)). See the [Async Processor Architecture](../../../docs/architecture/batch/async-processor.md) for more details on the internal mechanics.
 
 ### Use Cases
 
@@ -118,4 +118,4 @@ helm uninstall llm-d-async -n ${NAMESPACE}
 ## Related
 
 - [Async Processor Operations](../../../docs/operations/components/async-processor.md) — concurrency, container sizing, and horizontal scaling.
-- [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
+- [Async Processor Architecture](../../../docs/architecture/batch/async-processor.md) — internal mechanics, gates, and queue integrations.

@@ -7,7 +7,7 @@
 > [Well-Lit Paths](../docs/well-lit-paths/README.md). Some terminology has evolved
 > since this proposal — most notably, the "inference scheduler" component is
 > now referred to as the **llm-d Router**, comprising a Proxy and an Endpoint
-> Picker (EPP); see [Router](../docs/architecture/core/router/README.md).
+> Picker (EPP); see [Router](../docs/architecture/router/README.md).
 
 ## Summary
 

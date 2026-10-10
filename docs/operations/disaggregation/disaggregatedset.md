@@ -1,17 +1,23 @@
 # Disaggregated Serving: Operations (DisaggregatedSet)
 
-The NVIDIA GPU paths of the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) and [wide-ep](../../../guides/wide-ep/README.md) guides run prefill and decode as one LWS [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) with `groupIdentity: Hash` (`pd-disagg-vllm` and `pd-disagg-sglang` in P/D). The controller runs each role of each slice as a LeaderWorkerSet named `<ds>-<slice>-<revision>-<role>`. The revision changes on every rollout, so query them by label:
+The NVIDIA GPU paths of the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) and
+[wide-ep](../../../guides/wide-ep/README.md) guides run prefill and decode as one LWS
+[DisaggregatedSet](../../architecture/workload-apis/disaggregatedset.md) (upstream:
+[LWS DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/)) with `groupIdentity: Hash`
+(`pd-disagg-vllm` and `pd-disagg-sglang` in P/D). The controller runs each role of each slice as a
+[LeaderWorkerSet](../../architecture/workload-apis/leaderworkerset.md) named `<ds>-<slice>-<revision>-<role>`.
+The revision changes on every rollout, so query them by label:
 
 ```bash
 kubectl get leaderworkerset -n ${NAMESPACE} -l disaggregatedset.x-k8s.io/name=pd-disagg-vllm
 ```
 
 * Scaling `slices` adds or removes complete P/D copies at the current revision, without touching existing slices.
-* Role `replicas` apply per slice, so the xPyD ratio (see [When to use P/D and how to tune it](../../architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it)) holds in every slice.
+* Role `replicas` apply per slice, so the xPyD ratio (see [When to use P/D and how to tune it](../../architecture/disaggregation/pd-disaggregation.md#when-to-use-pd-and-how-to-tune-it)) holds in every slice.
 * Rolling updates proceed independently per slice.
 * Changing either role's template rolls both roles; one revision covers all roles.
 
-See the [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) for scaling, rollouts, and placement.
+See the [DisaggregatedSet architecture overview](../../architecture/workload-apis/disaggregatedset.md) and upstream [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) for scaling, rollouts, and placement.
 
 ## Pinning Slices to Accelerator Domains (Placement Policy)
 

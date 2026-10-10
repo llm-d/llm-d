@@ -2,7 +2,7 @@
 
 Use this page to control where model servers get their weights and how they reuse downloads and compiled artifacts across restarts and scale-outs. To cut startup further by transferring weights between replicas, restoring snapshots, or keeping warm instances, see [Other ways to speed up startup](#other-ways-to-speed-up-startup).
 
-File caches reduce repeated downloads and JIT caches reuse compiled artifacts; backend-specific settings are noted below. These caches are separate from [KV-cache management](../../architecture/advanced/kv-management/README.md).
+File caches reduce repeated downloads and JIT caches reuse compiled artifacts; backend-specific settings are noted below. These caches are separate from [KV-cache management](../../architecture/kv-management/README.md).
 
 ## Loading from Hugging Face Hub
 

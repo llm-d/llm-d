@@ -644,7 +644,7 @@ llmdbenchmark \
 
 ## Observability
 
-The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/core/router/epp/flow-control.md) for more details.
+The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/router/flow-control.md) for more details.
 
 ## Cleanup
 
@@ -678,4 +678,4 @@ Afterward `kubectl get all,inferenceobjectives,pvc -n ${NAMESPACE}` returns
 
 ## Further Reading
 
-See [Flow Control architecture](../../docs/architecture/core/router/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](../../docs/architecture/router/flow-control.md) for full details of the design.

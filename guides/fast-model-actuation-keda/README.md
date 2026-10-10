@@ -28,7 +28,7 @@ This guide assumes you have a Kubernetes cluster with GPU nodes, the [llm-d rout
 
 - **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../workload-autoscaling/README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes [KEDA installation](../workload-autoscaling/README.md#kubernetes-metrics-adapter).
 
-- **EPP flow control enabled** — The `llm_d_epp_flow_control_queue_size` metric KEDA scales on requires the EPP flow control feature gate; it is also what makes an incoming request enqueue (rather than fail fast) when there is no ready backend yet, which is what lets this guide scale from zero. This guide's router values enable the `flowControl` gate for you (applied in [step 4](#4-deploy-the-llm-d-router-epp-flow-control-enabled)), so no extra action is needed. See [EPP Flow Control](../../docs/architecture/core/router/epp/flow-control.md) for details on flow control behavior.
+- **EPP flow control enabled** — The `llm_d_epp_flow_control_queue_size` metric KEDA scales on requires the EPP flow control feature gate; it is also what makes an incoming request enqueue (rather than fail fast) when there is no ready backend yet, which is what lets this guide scale from zero. This guide's router values enable the `flowControl` gate for you (applied in [step 4](#4-deploy-the-llm-d-router-epp-flow-control-enabled)), so no extra action is needed. See [EPP Flow Control](../../docs/architecture/router/flow-control.md) for details on flow control behavior.
 
 - Checkout llm-d repo:
 

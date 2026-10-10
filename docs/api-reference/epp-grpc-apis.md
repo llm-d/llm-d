@@ -1,6 +1,6 @@
 # EPP gRPC APIs Reference
 
-This document lists the gRPC APIs the [Endpoint Picker (EPP)](../architecture/core/router/epp) supports for inference traffic. gRPC requests flow through the gateway as HTTP/2 (H2C) traffic, and the EPP decodes the gRPC frames and protobuf payloads to do prefix-cache aware routing, plugin decisions, and response usage tracking.
+This document lists the gRPC APIs the [Endpoint Picker (EPP)](../architecture/router/epp.md) supports for inference traffic. gRPC requests flow through the gateway as HTTP/2 (H2C) traffic, and the EPP decodes the gRPC frames and protobuf payloads to do prefix-cache aware routing, plugin decisions, and response usage tracking.
 
 Unlike the HTTP APIs, gRPC parsing is not enabled by default: the matching parser plugin must be configured in the [EndpointPickerConfig](endpointpickerconfig.md).
 

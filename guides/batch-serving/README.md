@@ -13,7 +13,7 @@ Serving batch and offline inference workloads alongside real-time, interactive t
 1. **[Batch Gateway](./batch-gateway/README.md)**: An enterprise-grade, fully managed **OpenAI-compatible Batch API** for formal job submission, file storage, status tracking, and multi-tenant batch management.
 2. **[Asynchronous Processing](./asynchronous-processing/README.md)**: A lightweight, queue-based dispatch mechanism (using Redis Sorted Sets or GCP Pub/Sub) featuring **dynamic dispatch gating** based on live model server saturation metrics (KV cache pressure, queue depth).
 
-For the broader architectural context and design principles, see the [Batch Architecture documentation](../../docs/architecture/advanced/batch/README.md).
+For the broader architectural context and design principles, see the [Batch Architecture documentation](../../docs/architecture/batch/README.md).
 
 ---
 
@@ -159,9 +159,9 @@ llm-d's bundled alerting rules cover the Batch Gateway only; the Async Processor
 
 ## Related Resources
 
-- [Batch Architecture Overview](../../docs/architecture/advanced/batch/README.md)
-- [Async Processor Architecture](../../docs/architecture/advanced/batch/async-processor.md)
-- [Batch Gateway Architecture](../../docs/architecture/advanced/batch/batch-gateway.md)
+- [Batch Architecture Overview](../../docs/architecture/batch/README.md)
+- [Async Processor Architecture](../../docs/architecture/batch/async-processor.md)
+- [Batch Gateway Architecture](../../docs/architecture/batch/batch-gateway.md)
 - [llm-d-async Repository](https://github.com/llm-d/llm-d-async)
 - [llm-d-batch-gateway Repository](https://github.com/llm-d/llm-d-batch-gateway)
 - [SIG Batch Inference](../../SIGS.md#sig-batch-inference)

@@ -22,9 +22,9 @@ The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas 
 | `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
 | `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
 
-Use `native` unless you need a capability it does not provide yet. The vLLM native overlays give each replica a 100 GB CPU tier (`cpu_bytes_to_use`), SGLang uses `--hicache-size=200`, LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE`, and the TPU connector uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`. Keep the CPU tier within the pod's memory limit when you change it. Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/advanced/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
+Use `native` unless you need a capability it does not provide yet. The vLLM native overlays give each replica a 100 GB CPU tier (`cpu_bytes_to_use`), SGLang uses `--hicache-size=200`, LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE`, and the TPU connector uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`. Keep the CPU tier within the pod's memory limit when you change it. Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
 
-For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/advanced/kv-management/kv-offloader.md).
+For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md).
 
 ## Supported Accelerators and Model Servers
 
@@ -148,7 +148,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash

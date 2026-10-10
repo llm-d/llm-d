@@ -174,7 +174,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <details open>
 <summary><b>Standalone Mode</b></summary>
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/router/proxy.md) with an Envoy sidecar (default):
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -326,7 +326,7 @@ SGLang deployments expose the equivalent signals under `sglang_*`; the [PromQL r
 <details>
 <summary><b>TensorRT-LLM</b></summary>
 
-`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/core/model-servers.md) for the flags that enable them.
+`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/model-servers/README.md) for the flags that enable them.
 
 </details>
 <!-- tabs:end -->
