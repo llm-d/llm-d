@@ -1,0 +1,10 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: ack-envoy-proxy-config
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
