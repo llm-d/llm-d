@@ -19,6 +19,7 @@ Examples of unacceptable behavior by participants include:
 * The use of sexualized language or imagery and unwelcome sexual attention or advances
 * Trolling, insulting/derogatory comments, and personal or political attacks
 * Public or private harassment
+* Unsolicited commercial offers or recruitment messages to community members, whether publicly, via Slack DM, or by email, are strictly forbidden.
 * Publishing others' private information, such as a physical or electronic address, without explicit permission
 * Other conduct which could reasonably be considered inappropriate in a professional setting
 
@@ -32,3 +33,7 @@ This Code of Conduct applies both within project spaces and in public spaces whe
 This Code of Conduct is adapted from the Contributor Covenant, version 1.4, available at <https://www.contributor-covenant.org/version/1/4/code-of-conduct.html>
 
 For answers to common questions about this code of conduct, see <https://www.contributor-covenant.org/faq>
+
+## CNCF Compliance
+
+This Code of Conduct fully incorporates all parts of the [CNCF Code of Conduct](https://github.com/cncf/foundation/blob/main/code-of-conduct.md) and it's provisions and reporting methods as well
