@@ -1,0 +1,174 @@
+name: Nightly - Async Multi-Tenant Eviction E2E (GKE GPU)
+
+# Nightly regression test for the multitenant async-processing guide
+# (guides/batch-serving/asynchronous-processing/multitenant) with its default
+# router values, values/router/flow-control-evictable.yaml: llm-d-async
+# dispatching queued work through an llm-d-router with Flow Control and the
+# six lane InferenceObjectives, with the router coordinator's async-broker
+# step in front so that queued traffic can be produced over HTTP. Flow Control
+# protects realtime traffic with in-flight eviction of overflow-async and
+# overflow-batch requests. The alternative priority holdback values have their
+# own lane, nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml, which shares
+# this lane's deploy script and validator.
+#
+# Deploys via the guide's scripts/nightly-deploy-gke.sh, which emits the
+# guide's guide.yaml commands, and hands off (via
+# --extra-validate) to e2e-validate-async-multitenant.sh, which drives an
+# llm-d-benchmark inference-perf experiment: realtime traffic
+# (x-llm-d-async-mode: passthrough) alone and together with an async backlog
+# (x-llm-d-async-mode: wait) at 20/80/90/100 % of the router's configured concurrency
+# capacity, plus an async-only phase. It asserts bounded realtime degradation
+# (TTFT, latency, throughput) and that async alone saturates the pool.
+#
+# Why not the shared benchmark reusable? Two reasons:
+#   1. It cannot stand this guide up. The kustomize standup needs a
+#      guides/<scenario>/modelserver/<accel>/<backend>/<infra>/ overlay; this
+#      guide lives below guides/batch-serving and deploys the router, Redis,
+#      llm-d-async and the coordinator from its guide.yaml as well.
+#   2. The experiment needs a coordinator in front of the router and two
+#      traffic populations in one run, which the harness lanes do not model.
+# This lane therefore runs the bespoke e2e reusable, as flow-control does.
+
+on:
+  schedule:
+    - cron: '0 21 * * *'  # 21:00 UTC daily (after the holdback lane at 20:00)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      # This is a bespoke e2e, not a benchmark run, so the parameters below are
+      # accepted and ignored — except cleanup (mapped to skip_cleanup) and
+      # update_badge/dry_run (consumed by the badge job). They must stay
+      # declared: slash-test-nightly.yaml sends its DEFAULT_PARAMS to every
+      # nightly-e2e-* workflow whether or not the user passes any, and its 422
+      # fallback only retries without pr_number/pr_repo — so an undeclared
+      # parameter makes /test-nightly undispatchable for this lane. Keep this
+      # set in sync with SUPPORTED_PARAMS in slash-test-nightly.yaml.
+      decode_pods:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Ignored (guide is standalone/epponly)'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Affects the badge only; this lane has no dry-run path'
+        required: false
+        default: 'false'
+      verbose:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        default: 'sanity_random.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
+
+permissions:
+  contents: write  # update-badge job commits the badge to the badges branch
+  actions: read
+
+concurrency:
+  group: nightly-e2e-async-multitenant-evictable-gke-gpu
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
+    with:
+      guide_name: async-multitenant-evictable
+      guide_path: guides/batch-serving/asynchronous-processing/multitenant
+      namespace: llm-d-nightly-async-multitenant-evictable-gke-gpu
+      # The smoke loop targets the router directly, as the guide documents;
+      # the validator targets the coordinator service on its own.
+      gateway_host: 'llm-d-router-epp'
+      # At 100 % realtime load the pool is full of realtime work, so a realtime
+      # request that finds an async request in its slot waits for an eviction
+      # round trip (up to ~0.5 s on H100s); the TTFT allowance at that level
+      # leaves room for one, and still fails on a full service time (~2 s).
+      custom_deploy_script: |
+        AMT_FLOW_CONTROL=evictable AMT_LEVEL_100_TTFT_ABS=0.6 bash guides/batch-serving/asynchronous-processing/multitenant/scripts/nightly-deploy-gke.sh
+      e2e_validate_args: '--extra-validate async-multitenant'
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      # One replica of optimized-baseline's Qwen3-32B model server, tensor parallelism 2.
+      required_gpus: 2
+      recommended_gpus: 2
+      accelerator_type: H100
+      pod_wait_timeout: '30m'
+      # Brief grace after pods report Ready so the EPP finishes backend
+      # discovery and the coordinator's Redis probe settles before the smoke
+      # loop fires (reusable default is 180s).
+      pod_readiness_delay: 60
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' || github.event.inputs.cleanup == 'false' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: async-multitenant-evictable-gke
+      badge_label: "VLLM GPU"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      # The e2e reusable declares no outputs, so failure_category resolves empty
+      # and the badge falls back to a plain pass/fail (no category granularity).
+      # Same as the flow-control and workload-autoscaling lanes.
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
