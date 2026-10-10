@@ -35,15 +35,58 @@ case "$command_name:$1" in
       secret|configmap)
         exit 1
         ;;
+      svc)
+        # jaeger-collector lookups. STUB_JAEGER_NAMESPACES lists the namespaces
+        # holding one, space-separated; unset means tracing is not installed.
+        if [[ "${3:-}" == --all-namespaces ]]; then
+          printf '%s' "${STUB_JAEGER_NAMESPACES:-}"
+          exit 0
+        fi
+        for namespace in ${STUB_JAEGER_NAMESPACES:-}; do
+          [[ " $* " == *" -n ${namespace} "* ]] && exit 0
+        done
+        exit 1
+        ;;
     esac
     ;;
-  kubectl:create|kubectl:apply|kubectl:delete|helm:install|helm:uninstall|oc:create)
+  kubectl:create|kubectl:apply|kubectl:delete|helm:install|helm:upgrade|helm:uninstall|oc:create)
     record_mutation
+    # Read a piped manifest like kubectl does. Exiting first breaks the pipe
+    # under the installer's pipefail and randomly aborts the install.
+    if [[ " $* " == *" -f - "* ]]; then
+      cat >/dev/null
+    fi
     ;;
 esac
 
 if [[ "$command_name" == helm && "${1:-}" == repo && "${2:-}" == list ]]; then
   printf '%s\n' 'prometheus-community https://prometheus-community.github.io/helm-charts'
+fi
+
+# The installer deletes its values file once helm returns, so keep a copy of
+# exactly what helm was given.
+if [[ "$command_name" == helm && -n "${STUB_CAPTURE_VALUES:-}" ]]; then
+  previous=""
+  for argument in "$@"; do
+    if [[ "$previous" == -f && -f "$argument" ]]; then
+      cp "$argument" "$STUB_CAPTURE_VALUES"
+    fi
+    previous="$argument"
+  done
+fi
+
+# An existing release: STUB_RELEASE_CHART_VERSION makes helm list report it and
+# STUB_RELEASE_VALUES names a file helm get values prints.
+if [[ "$command_name" == helm && "${1:-}" == list && -n "${STUB_RELEASE_CHART_VERSION:-}" ]]; then
+  if [[ " $* " == *" -o json "* ]]; then
+    printf '[{"name":"llmd","chart":"kube-prometheus-stack-%s"}]\n' "$STUB_RELEASE_CHART_VERSION"
+  else
+    printf 'llmd\tllm-d-monitoring\t1\tdeployed\tkube-prometheus-stack-%s\n' "$STUB_RELEASE_CHART_VERSION"
+  fi
+fi
+
+if [[ "$command_name" == helm && "${1:-}" == get && "${2:-}" == values && -n "${STUB_RELEASE_VALUES:-}" ]]; then
+  cat "$STUB_RELEASE_VALUES"
 fi
 
 if [[ "$command_name" == helm && "${1:-}" == show && "${2:-}" == crds ]]; then
