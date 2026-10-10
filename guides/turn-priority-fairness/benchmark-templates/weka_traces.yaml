@@ -1,0 +1,45 @@
+# Trace replay of multi-turn agentic sessions.
+# Copied from llm-d-benchmark (workload/profiles/inference-perf/).
+load:
+  type: trace_session_replay
+  stages:
+    - concurrent_sessions: 64
+      num_sessions: 64
+      timeout: 9000
+  worker_max_concurrency: 10000
+  base_seed: 42
+  request_timeout: 9000
+api:
+  type: chat
+  streaming: true
+  session_id_header_key: x-llm-d-inference-fairness-id
+  headers:
+    x-llm-d-inference-objective: agentic-sessions
+  request_timeout: 9000
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_TOKENIZER
+data:
+  type: weka_trace_replay
+  weka_trace_replay:
+    hf_dataset_path: "semianalysisai/cc-traces-weka-with-subagents-051926"
+    num_dataset_entries: 200
+    skip_invalid_files: true
+    use_static_model: true
+    static_model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+    default_block_size: 64
+    trace_idle_gap_cap_seconds: 1.0
+    bad_tool_call_handling: use_recorded
+    predecessor_wait_timeout_sec: 0
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
+storage:
+  local_storage:
+    path: /workspace
