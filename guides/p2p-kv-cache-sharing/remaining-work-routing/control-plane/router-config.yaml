@@ -1,0 +1,186 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glm-cache-route-config
+  namespace: nilig-agentx-slo
+data:
+  baseline.yaml: |
+    apiVersion: llm-d.ai/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: disagg-headers-handler
+    - type: always-disagg-pd-decider
+    - type: disagg-profile-handler
+      parameters:
+        deciderPluginName: always-disagg-pd-decider
+    - type: prefill-filter
+    - type: decode-filter
+    - type: session-affinity-filter
+      name: decode-session-affinity
+      parameters:
+        strategy: session_id
+        sessionIdConfig:
+          evictionTtlSeconds: 3600
+          sources:
+          - header: x-session-id
+          - header: x-correlation-id
+    - type: token-producer
+      parameters:
+        modelName: zai-org/GLM-5.2-FP8
+        vllm:
+          url: http://glm-5-2-render:8000
+    - type: endpoint-notification-source
+    - type: precise-prefix-cache-producer
+      name: precise-cache
+      parameters:
+        indexerConfig:
+          kvBlockIndexConfig:
+            inMemoryConfig:
+              podCacheSize: 128
+          kvCacheBackendConfigs:
+          - name: gpu
+            weight: 1.0
+          - name: cpu
+            weight: 0.4
+        tokenProcessorConfig:
+          blockSizeTokens: 64
+        speculativeIndexing: false
+        kvEventsConfig:
+          topicFilter: "kv@"
+          discoverPods: true
+          podDiscoveryConfig:
+            podLabelSelector: llm-d.ai/benchmark=p2p-cache-routing-glm,llm-d.ai/role=prefill
+            podNamespace: nilig-agentx-slo
+            socketPort: 5557
+    - type: inflight-load-producer
+      name: inflight-load
+      parameters:
+        prefixMatchInfoProducerName: precise-cache
+    - type: prefix-cache-affinity-filter
+      name: cache-load-gate
+      parameters:
+        prefixMatchInfoProducerName: precise-cache
+        inFlightLoadProducerName: inflight-load
+        affinityThreshold: 0.35
+        peakPrefillThroughput: 3585
+        maxTTFTPenaltyMs: 3500
+    - type: p2p-source-producer
+      name: p2p-cache-source
+      parameters:
+        prefixMatchInfoProducerName: precise-cache
+        prefillProfileName: prefill
+        minCachedTokenDelta: 1
+    - type: context-length-aware
+      name: prefill-work-router
+      parameters:
+        label: llm-d.ai/prefill-work-range
+        enableFiltering: false
+    - type: max-score-picker
+    dataLayer:
+      sources:
+      - pluginRef: endpoint-notification-source
+        extractors:
+        - pluginRef: precise-cache
+    schedulingProfiles:
+    - name: prefill
+      plugins:
+      - pluginRef: prefill-filter
+      - pluginRef: cache-load-gate
+      - pluginRef: prefill-work-router
+      - pluginRef: max-score-picker
+    - name: decode
+      plugins:
+      - pluginRef: decode-filter
+      - pluginRef: decode-session-affinity
+      - pluginRef: max-score-picker
+
+  candidate.yaml: |
+    apiVersion: llm-d.ai/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+    - type: disagg-headers-handler
+    - type: always-disagg-pd-decider
+    - type: disagg-profile-handler
+      parameters:
+        deciderPluginName: always-disagg-pd-decider
+    - type: prefill-filter
+    - type: decode-filter
+    - type: session-affinity-filter
+      name: decode-session-affinity
+      parameters:
+        strategy: session_id
+        sessionIdConfig:
+          evictionTtlSeconds: 3600
+          sources:
+          - header: x-session-id
+          - header: x-correlation-id
+    - type: token-producer
+      parameters:
+        modelName: zai-org/GLM-5.2-FP8
+        vllm:
+          url: http://glm-5-2-render:8000
+    - type: endpoint-notification-source
+    - type: precise-prefix-cache-producer
+      name: precise-cache
+      parameters:
+        indexerConfig:
+          kvBlockIndexConfig:
+            inMemoryConfig:
+              podCacheSize: 128
+          kvCacheBackendConfigs:
+          - name: gpu
+            weight: 1.0
+          - name: cpu
+            weight: 0.4
+        tokenProcessorConfig:
+          blockSizeTokens: 64
+        speculativeIndexing: false
+        kvEventsConfig:
+          topicFilter: "kv@"
+          discoverPods: true
+          podDiscoveryConfig:
+            podLabelSelector: llm-d.ai/benchmark=p2p-cache-routing-glm,llm-d.ai/role=prefill
+            podNamespace: nilig-agentx-slo
+            socketPort: 5557
+    - type: inflight-load-producer
+      name: inflight-load
+      parameters:
+        prefixMatchInfoProducerName: precise-cache
+    - type: prefix-cache-affinity-filter
+      name: cache-load-gate
+      parameters:
+        prefixMatchInfoProducerName: precise-cache
+        inFlightLoadProducerName: inflight-load
+        affinityThreshold: 0.35
+        peakPrefillThroughput: 3585
+        maxTTFTPenaltyMs: 3500
+    - type: p2p-source-producer
+      name: p2p-cache-source
+      parameters:
+        prefixMatchInfoProducerName: precise-cache
+        prefillProfileName: prefill
+        minCachedTokenDelta: 1
+    - type: context-length-aware
+      name: prefill-work-router
+      parameters:
+        label: llm-d.ai/prefill-work-range
+        enableFiltering: false
+        reusableTokensProducerName: p2p-cache-source
+    - type: max-score-picker
+    dataLayer:
+      sources:
+      - pluginRef: endpoint-notification-source
+        extractors:
+        - pluginRef: precise-cache
+    schedulingProfiles:
+    - name: prefill
+      plugins:
+      - pluginRef: prefill-filter
+      - pluginRef: cache-load-gate
+      - pluginRef: prefill-work-router
+      - pluginRef: max-score-picker
+    - name: decode
+      plugins:
+      - pluginRef: decode-filter
+      - pluginRef: decode-session-affinity
+      - pluginRef: max-score-picker

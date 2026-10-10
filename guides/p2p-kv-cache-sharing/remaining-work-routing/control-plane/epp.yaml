@@ -1,0 +1,307 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glm-cache-route-epp-baseline
+  namespace: nilig-agentx-slo
+  labels:
+    app.kubernetes.io/name: glm-cache-route-epp
+    llm-d.ai/benchmark-arm: baseline
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: glm-cache-route-epp-baseline
+  template:
+    metadata:
+      labels:
+        app: glm-cache-route-epp-baseline
+        app.kubernetes.io/name: glm-cache-route-epp
+        llm-d.ai/benchmark-arm: baseline
+    spec:
+      serviceAccountName: glm-cache-route-epp
+      imagePullSecrets:
+      - name: niliguy-quay-pull
+      containers:
+      - name: envoy-proxy
+        image: docker.io/envoyproxy/envoy:v1.33.2
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c"]
+        args:
+        - set -eu; ulimit -n 65536; exec envoy "$@"
+        - envoy
+        - --service-node
+        - envoy-proxy
+        - --log-level
+        - warn
+        - --cpuset-threads
+        - --drain-strategy
+        - immediate
+        - --drain-time-s
+        - "60"
+        - -c
+        - /etc/envoy/envoy.yaml
+        ports:
+        - name: http
+          containerPort: 8081
+        - name: envoy-ready
+          containerPort: 19001
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 19001
+          periodSeconds: 5
+          failureThreshold: 1
+        resources:
+          requests:
+            cpu: "2"
+            memory: 2Gi
+          limits:
+            memory: 8Gi
+        volumeMounts:
+        - name: envoy-config
+          mountPath: /etc/envoy
+          readOnly: true
+      - name: epp
+        image: quay.io/niliguy/llm-d-router-endpoint-picker:p2p-cache-routing-709e0991@sha256:643d14897eaa908d9db29ab0f30e433abfd2e697e164023da1097a7d288c0202
+        imagePullPolicy: IfNotPresent
+        args:
+        - --pool-name
+        - glm-cache-route-baseline
+        - --pool-namespace
+        - nilig-agentx-slo
+        - --pool-group
+        - inference.networking.k8s.io
+        - --zap-encoder
+        - json
+        - --config-file
+        - /config/baseline.yaml
+        - --grpc-health-port
+        - "9003"
+        - --metrics-endpoint-auth=false
+        - --allow-experimental-plugins
+        - --v=5
+        - --tracing=false
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - name: grpc
+          containerPort: 9002
+        - name: grpc-health
+          containerPort: 9003
+        - name: metrics
+          containerPort: 9090
+        readinessProbe:
+          grpc:
+            port: 9003
+            service: inference-extension
+          periodSeconds: 2
+          failureThreshold: 10
+        livenessProbe:
+          grpc:
+            port: 9003
+            service: inference-extension
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            memory: 16Gi
+        volumeMounts:
+        - name: plugins-config
+          mountPath: /config
+          readOnly: true
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: glm-cache-route-envoy
+          items:
+          - key: envoy.yaml
+            path: envoy.yaml
+      - name: plugins-config
+        configMap:
+          name: glm-cache-route-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glm-cache-route-epp-baseline
+  namespace: nilig-agentx-slo
+spec:
+  selector:
+    app: glm-cache-route-epp-baseline
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8081
+  - name: grpc
+    port: 9002
+    targetPort: 9002
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glm-cache-route-epp-candidate
+  namespace: nilig-agentx-slo
+  labels:
+    app.kubernetes.io/name: glm-cache-route-epp
+    llm-d.ai/benchmark-arm: candidate
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: glm-cache-route-epp-candidate
+  template:
+    metadata:
+      labels:
+        app: glm-cache-route-epp-candidate
+        app.kubernetes.io/name: glm-cache-route-epp
+        llm-d.ai/benchmark-arm: candidate
+    spec:
+      serviceAccountName: glm-cache-route-epp
+      imagePullSecrets:
+      - name: niliguy-quay-pull
+      containers:
+      - name: envoy-proxy
+        image: docker.io/envoyproxy/envoy:v1.33.2
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c"]
+        args:
+        - set -eu; ulimit -n 65536; exec envoy "$@"
+        - envoy
+        - --service-node
+        - envoy-proxy
+        - --log-level
+        - warn
+        - --cpuset-threads
+        - --drain-strategy
+        - immediate
+        - --drain-time-s
+        - "60"
+        - -c
+        - /etc/envoy/envoy.yaml
+        ports:
+        - name: http
+          containerPort: 8081
+        - name: envoy-ready
+          containerPort: 19001
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 19001
+          periodSeconds: 5
+          failureThreshold: 1
+        resources:
+          requests:
+            cpu: "2"
+            memory: 2Gi
+          limits:
+            memory: 8Gi
+        volumeMounts:
+        - name: envoy-config
+          mountPath: /etc/envoy
+          readOnly: true
+      - name: epp
+        image: quay.io/niliguy/llm-d-router-endpoint-picker:p2p-cache-routing-709e0991@sha256:643d14897eaa908d9db29ab0f30e433abfd2e697e164023da1097a7d288c0202
+        imagePullPolicy: IfNotPresent
+        args:
+        - --pool-name
+        - glm-cache-route-candidate
+        - --pool-namespace
+        - nilig-agentx-slo
+        - --pool-group
+        - inference.networking.k8s.io
+        - --zap-encoder
+        - json
+        - --config-file
+        - /config/candidate.yaml
+        - --grpc-health-port
+        - "9003"
+        - --metrics-endpoint-auth=false
+        - --allow-experimental-plugins
+        - --v=5
+        - --tracing=false
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - name: grpc
+          containerPort: 9002
+        - name: grpc-health
+          containerPort: 9003
+        - name: metrics
+          containerPort: 9090
+        readinessProbe:
+          grpc:
+            port: 9003
+            service: inference-extension
+          periodSeconds: 2
+          failureThreshold: 10
+        livenessProbe:
+          grpc:
+            port: 9003
+            service: inference-extension
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "4"
+            memory: 8Gi
+          limits:
+            memory: 16Gi
+        volumeMounts:
+        - name: plugins-config
+          mountPath: /config
+          readOnly: true
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: glm-cache-route-envoy
+          items:
+          - key: envoy.yaml
+            path: envoy.yaml
+      - name: plugins-config
+        configMap:
+          name: glm-cache-route-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glm-cache-route-epp-candidate
+  namespace: nilig-agentx-slo
+spec:
+  selector:
+    app: glm-cache-route-epp-candidate
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8081
+  - name: grpc
+    port: 9002
+    targetPort: 9002
+  - name: metrics
+    port: 9090
+    targetPort: 9090

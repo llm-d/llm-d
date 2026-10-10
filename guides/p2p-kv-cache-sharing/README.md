@@ -345,6 +345,18 @@ Once the direct pull works, router-driven pulls show up as `running P2P source p
   When serving CPU is contended, apply `render/standalone/` instead and scale it (`kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`): one replica saturates near 10 req/s at ~50K-token prompts, and past saturation every request stalls for the `token-producer` `vllm.timeout` (default 5 s), then routes without token IDs, silently disabling prefix scoring while engines sit idle. Alert on flat TTFT plateaus at the timeout value.
   The standalone pool serves `openai/gpt-oss-120b`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) together with the router `token-producer` `modelName`.
 
+## Work-range variant: remaining-work routing [Experimental]
+
+Routes long-context follow-ups by their remaining prefill work instead of
+their total length: a request whose prefix is pullable over the P2P tier
+counts only its fresh tail, so it can run on a short-work prefill class
+and pull the prefix instead of queueing behind cold long prefills. Split
+prefill classes by the `llm-d.ai/prefill-work-range` label, derive the
+boundary with the deployment-measured calibration script, and see
+[remaining-work-routing/](remaining-work-routing/README.md) for the full
+deploy and
+[benchmark results](benchmark-results/remaining-work-routing/RESULTS.md).
+
 ## P/D variant: P2P over NIXL disaggregation
 
 Under P/D disaggregation, the prefill worker is the pull consumer because it computes the prompt KV. A decode worker may be the source for generated session history retained in its CPU tier. After prefill completes, the normal NIXL P/D path transfers the request's KV to the selected decoder.

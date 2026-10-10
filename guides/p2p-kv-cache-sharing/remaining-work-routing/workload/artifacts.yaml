@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workload-pvc
+  namespace: nilig-agentx-slo
+spec:
+  storageClassName: shared-vast
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: workload-access
+  namespace: nilig-agentx-slo
+spec:
+  containers:
+  - name: shell
+    image: python:3.12-slim
+    command: ["sleep", "infinity"]
+    resources:
+      requests: {cpu: "100m", memory: 256Mi}
+      limits: {cpu: "1", memory: 1Gi}
+    volumeMounts:
+    - name: workload
+      mountPath: /workload
+  volumes:
+  - name: workload
+    persistentVolumeClaim:
+      claimName: workload-pvc
