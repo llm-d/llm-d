@@ -869,17 +869,21 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
                         f"there is no overlay at modelserver/{accel}/{eng}/"
                     )
         for eng_dir in sorted(p for p in ms_dir.rglob("*") if p.is_dir() and p.name in engine_values):
-            accel = eng_dir.parent.relative_to(ms_dir).as_posix()
+            overlay = eng_dir.relative_to(ms_dir)
+            accel_parts = overlay.parts[:-1]
+            if accel_parts and accel_parts[0] == "tracing":
+                accel_parts = accel_parts[1:]
+            accel = Path(*accel_parts).as_posix()
             if accel == "." or eng_dir.parent == ms_dir:
                 continue
             if accel not in {str(a) for a in accels}:
                 f.error(
-                    f"overlay modelserver/{accel}/{eng_dir.name}/ exists but {accel!r} is not "
+                    f"overlay modelserver/{overlay.as_posix()}/ exists but {accel!r} is not "
                     f"in support.accelerators (nor in env.static.{ACCEL_VAR}.values)"
                 )
             elif not is_supported(guide, accel, eng_dir.name):
                 f.error(
-                    f"overlay modelserver/{accel}/{eng_dir.name}/ exists but support marks "
+                    f"overlay modelserver/{overlay.as_posix()}/ exists but support marks "
                     f"{accel}/{eng_dir.name} as {support_status(guide, accel, eng_dir.name)}"
                 )
 
