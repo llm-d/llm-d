@@ -162,3 +162,50 @@ There are two main possibilities to trigger a nightly test job.
 * The first is to go `Actions` on **GitHub Actions UI** and select a praticular workflow to be executed (look for the ones prefixed by `Nightly -`). This is useful if the goal is to quickly re-test a guide using nightly built images, or after a cluster-specific issue was fixed.
 
 * The second is to comment directly in an open PR, using **PR Slash Commands**. Here, the author of the PR, **provided he or she has the right permissions**, can simply comment with `/test-nightly <name of the workflow>` and new CI/CD job will be created **using the code from the PR**. For instance, `/test-nightly e2e-pd-disaggregation-gke-acc-gpu-vllm-x` will start a test against the `GKE` cluster available for `llm-d`, with the parameters specified on the name.
+
+## llm-d.ai previews for PRs
+
+Every PR that touches content published on [llm-d.ai](https://llm-d.ai) gets a preview of the site built with that PR's content. That means `docs/**`, `guides/**`, and the community pages mirrored from the repo root (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SIGS.md`). Two workflows split the work:
+
+* [`ci-site-preview.yaml`](ci-site-preview.yaml) ("CI Site Preview") runs on `pull_request`. It checks out the PR (merged into `main`) and [`llm-d/llm-d.github.io`](https://github.com/llm-d/llm-d.github.io)@`main`. It then runs the site's normal build against the PR checkout: `npm ci`, `make llmd-site`, `LLMD_REPO=<pr checkout> ./bin/llmd-site sync main` and `./bin/llmd-site build`. The static site is uploaded as the `site-preview` artifact (kept 7 days), together with a small `site-preview-meta` artifact holding the PR number and head SHA. The run's job summary explains how to view the artifact.
+* [`site-preview-deploy.yaml`](site-preview-deploy.yaml) runs on `workflow_run` after a successful "CI Site Preview" run for a PR. It publishes the artifact to Netlify when configured. It also keeps one sticky comment on the PR, updated on every push, that links to the preview, or to the artifact when Netlify is not configured.
+
+PR content shows up under the **dev** docs version (`/docs/dev/...`), the same place `main` is published. "Edit this page" and source links point at `llm-d/llm-d@main`.
+
+### Security model
+
+The build runs content from the PR, which may come from a fork. It therefore runs with a read-only `GITHUB_TOKEN` and no secrets, like any `pull_request` workflow.
+Anything that needs a secret or write access lives in the `workflow_run` workflow. GitHub always runs that workflow from the default branch, in the base repository's context, so a PR cannot change what it does.
+It never checks out or executes PR code. It downloads the built static files and reads the metadata as data. It deploys only if the metadata matches the PR resolved from the event and the API (number and head SHA).
+Each job asks for the minimum permissions: `actions: read` and `pull-requests: read` to deploy, and `pull-requests: write` to comment. The Netlify secrets are only exposed to the deploy steps.
+
+Two consequences of `workflow_run`:
+
+* It matches the build workflow by display name. Renaming "CI Site Preview" silently stops deploys unless the `workflows:` list in `site-preview-deploy.yaml` is updated too.
+* Changes to `site-preview-deploy.yaml` only take effect once merged to `main`.
+
+### Maintainer setup
+
+Without any setup, previews are available as artifacts and the PR comment links to them. To publish them instead (one-time, needs repo admin):
+
+1. Create a Netlify site for previews, for example from the Netlify UI with *Add new site → Deploy manually*. It does not need a Git connection or build settings; the workflow uploads prebuilt files.
+2. Create a Netlify personal access token (*User settings → Applications*). A dedicated bot account limited to that site is preferable.
+3. Add the repository secrets `NETLIFY_AUTH_TOKEN` (the token) and `NETLIFY_SITE_ID` (*Site configuration → Site ID*) under *Settings → Secrets and variables → Actions*.
+
+Each PR is then deployed to a stable alias, `https://pr-<number>--<site-name>.netlify.app`, which is overwritten on every push.
+
+### Testing locally
+
+The build job is plain shell. To reproduce it, with Go and Node 24:
+
+```bash
+git clone https://github.com/llm-d/llm-d.github.io site
+cd site
+npm ci
+make llmd-site
+LLMD_REPO=/path/to/your/llm-d/checkout ./bin/llmd-site sync main   # reads the checkout as-is, uncommitted edits included
+./bin/llmd-site build
+npx serve build    # then open http://localhost:3000/docs/dev
+```
+
+To view a CI preview, download the `site-preview` artifact from the run, unzip it into `build/`, and serve it the same way. `python3 -m http.server -d build` also works, but only for URLs ending in `.html`.
