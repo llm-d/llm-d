@@ -13,6 +13,8 @@ on:
     paths:
       - .github/workflows/ci-guides-check.yaml
       - guides/**
+      - scripts/assigned-issue-reminder.py
+      - scripts/github_api.py
       - docs/well-lit-paths/guides.yaml
       - .github/workflows/nightly-e2e-*.yaml
       - scripts/guide.py

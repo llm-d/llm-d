@@ -1,0 +1,44 @@
+name: Assigned Issue Reminder
+
+# Reminds assignees of quiet issues, then unassigns them if they stay quiet.
+# See scripts/assigned-issue-reminder.py for the rules.
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only log the actions'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+# Serialize runs; the read-then-comment flow is not atomic.
+concurrency:
+  group: assigned-issue-reminder
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Remind or unassign
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python3 scripts/assigned-issue-reminder.py "${args[@]}"
