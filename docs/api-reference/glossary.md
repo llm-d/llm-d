@@ -36,7 +36,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **Latency Predictor** — A Consultant that uses XGBoost quantile regression models trained on live traffic to predict per-endpoint TTFT and TPOT, enabling SLO-aware routing. See [Latency Predictor](../architecture/advanced/latency-predictor.md).
 
-**llm-d** — A distributed inference serving stack that adds intelligent routing, KV Cache-aware routing, Disaggregated Serving, and autoscaling on top of existing Model Servers. See [Introduction](../getting-started/README.md).
+**llm-d** — A distributed inference serving stack that adds intelligent routing, KV Cache-aware routing, Disaggregated Serving, and autoscaling on top of existing Model Servers. See [Introduction](../getting-started/README.mdx).
 
 **llm-d Async Processor** — A lightweight dispatch agent that pulls individual inference requests from message queues (such as Redis and Google Pub/Sub) and sends them to the llm-d Router. It adjusts the dispatch rate based on system metrics to protect interactive traffic. See [Batch Inference](../architecture/advanced/batch/README.md).
 
@@ -46,7 +46,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **llm-d Router** — The intelligent entry point for inference requests. It provides LLM-aware load balancing (e.g., prefix-cache and load-aware routing) and request queuing, and manages disaggregated serving. It is composed of two functional parts: a data-plane **Proxy** (e.g., Envoy) and the **Endpoint Picker (EPP)**. See [Architecture Overview](../architecture/README.md).
 
-**llm-d Well-Lit Path** — A pre-validated, end-to-end deployment recipe (model + hardware + Helm values + benchmarks) that the llm-d community tests and supports as a first-class configuration. See [Introduction](../getting-started/README.md).
+**llm-d Well-Lit Path** — A pre-validated, end-to-end deployment recipe (model + hardware + Helm values + benchmarks) that the llm-d community tests and supports as a first-class configuration. See [Introduction](../getting-started/README.mdx).
 
 **MoE (Mixture of Experts)** — A model architecture where only a subset of "expert" sub-networks activate per token, enabling very large models (e.g., DeepSeek-R1) to run efficiently. llm-d supports MoE serving via Wide Expert Parallelism.
 
@@ -76,6 +76,6 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **vLLM** — An open-source high-throughput LLM serving engine and the default Model Server in llm-d. Provides PagedAttention, continuous batching, Prefix Caching, and KV-Events for cache-aware routing. See [Model Servers](../architecture/core/model-servers.md).
 
-**Wide Expert Parallelism** — A deployment pattern for large MoE models that combines Data Parallelism and Expert Parallelism across multiple nodes, maximizing KV-cache space for long-context serving. See [Introduction](../getting-started/README.md).
+**Wide Expert Parallelism** — A deployment pattern for large MoE models that combines Data Parallelism and Expert Parallelism across multiple nodes, maximizing KV-cache space for long-context serving. See [Introduction](../getting-started/README.mdx).
 
 **Workload Variant Autoscaler (WVA)** — A multi-model, SLO-aware autoscaler that optimizes cost on heterogeneous hardware by measuring instance capacity, deriving load functions, and calculating the optimal mix of model variants. See [Architecture Overview](../architecture/README.md).

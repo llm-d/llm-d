@@ -27,7 +27,7 @@ Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/
 * **[Advanced KV-Cache Management:](https://llm-d.ai/docs/well-lit-paths/foundations/tiered-prefix-cache)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
 * **[Serving Large Models:](https://llm-d.ai/docs/well-lit-paths/foundations/wide-expert-parallelism)** Optimize massive models (e.g., DeepSeek-R1, GPT-OSS) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
 * **[Operational Excellence:](https://llm-d.ai/docs/operations)** Ensure production stability with intelligent flow control for multi-tenant serving and proactive, SLO-aware autoscaling based on real-time inference signals.
-* **[Batch Processing:](https://llm-d.ai/docs/well-lit-paths/workloads/batch-serving)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
+* **[Batch Processing:](https://llm-d.ai/docs/operations/batch-serving)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
 
 For a complete list of tested recipes and architectural patterns, see our [well-lit path guides](https://llm-d.ai/docs/well-lit-paths). These guides provide benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. Our intent is to eliminate the heavy lifting common in tuning and deploying generative AI inference on modern accelerators.
 

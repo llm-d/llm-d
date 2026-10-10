@@ -1,0 +1,10 @@
+# Generic Kubernetes + queue signal (stabilization-window overshoot solution).
+# The full ScaledObject is in scaledobject.yaml; this overlay only makes it a
+# kustomize target so the guide's
+# `kubectl kustomize ... | envsubst | kubectl apply -f -` command is uniform
+# across platforms. Apply on non-OpenShift clusters; use overlays/ocp/queue on
+# OpenShift.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - scaledobject.yaml

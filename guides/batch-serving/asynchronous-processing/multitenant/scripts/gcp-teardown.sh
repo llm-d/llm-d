@@ -12,31 +12,33 @@ PROJECT_ID="${PROJECT_ID:-${1:-}}"
 SA_NAME="${SA_NAME:-async-processor}"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 TEAMS=(premium standard batch)
-MODELS=(a b)
 
 echo ">> Deleting subscriptions"
 for t in "${TEAMS[@]}"; do
-  for m in "${MODELS[@]}"; do
-    gcloud pubsub subscriptions delete "team-${t}-${m}-requests-sub" --project "$PROJECT_ID" --quiet 2>/dev/null \
-      && echo "  deleted team-${t}-${m}-requests-sub" || true
-  done
+  gcloud pubsub subscriptions delete "team-${t}-requests-sub" --project "$PROJECT_ID" --quiet 2>/dev/null \
+    && echo "  deleted team-${t}-requests-sub" || true
 done
 gcloud pubsub subscriptions delete "results-sub" --project "$PROJECT_ID" --quiet 2>/dev/null || true
 
 echo ">> Deleting topics"
 for t in "${TEAMS[@]}"; do
-  for m in "${MODELS[@]}"; do
-    gcloud pubsub topics delete "team-${t}-${m}-requests" --project "$PROJECT_ID" --quiet 2>/dev/null \
-      && echo "  deleted team-${t}-${m}-requests" || true
-  done
+  gcloud pubsub topics delete "team-${t}-requests" --project "$PROJECT_ID" --quiet 2>/dev/null \
+    && echo "  deleted team-${t}-requests" || true
 done
 gcloud pubsub topics delete "results" --project "$PROJECT_ID" --quiet 2>/dev/null || true
 
 if [ "${DELETE_SA:-0}" = "1" ]; then
+  # Deleting a service account leaves its project-level bindings behind (as
+  # deleted:serviceAccount:... members), so remove the roles gcp-setup.sh granted first.
+  echo ">> Removing project IAM bindings"
+  for role in roles/pubsub.subscriber roles/pubsub.publisher roles/pubsub.viewer roles/monitoring.viewer; do
+    gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
+      --member="serviceAccount:${SA_EMAIL}" --role="$role" --condition=None >/dev/null 2>&1 \
+      && echo "  removed $role" || echo "  $role was not bound"
+  done
   echo ">> Deleting service account"
   gcloud iam service-accounts delete "$SA_EMAIL" --project "$PROJECT_ID" --quiet 2>/dev/null \
     && echo "  deleted $SA_EMAIL" || true
-  echo "  (project-level IAM bindings for the SA are removed with the SA)"
 fi
 
 echo "Done."

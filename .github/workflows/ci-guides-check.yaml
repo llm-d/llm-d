@@ -2,8 +2,10 @@ name: CI Guides Check
 
 # Guides on the guide.yaml method render their README bash fences from the
 # YAML (see guides/templates/README.md). The job fails when a README is stale
-# relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`) and
-# runs the unit tests under scripts/tests/.
+# relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`),
+# when a guide's `support:` matrix disagrees with its overlays or nightly E2E
+# workflows, or when the llm-d.ai publish manifest is invalid, and runs the
+# unit tests under scripts/tests/.
 
 on:
   pull_request:
@@ -11,10 +13,14 @@ on:
     paths:
       - .github/workflows/ci-guides-check.yaml
       - guides/**
+      - docs/well-lit-paths/guides.yaml
+      - .github/workflows/nightly-e2e-*.yaml
       - scripts/guide.py
       - scripts/matrix_common.py
       - scripts/seed-release-badges.py
       - scripts/tests/**
+      - .github/scripts/nightly-e2e-verification/**
+      - helpers/smoke-test/**
   workflow_dispatch:
 
 permissions:
@@ -45,7 +51,11 @@ jobs:
         run: python -m pip install --quiet 'pyyaml==6.*' pytest
 
       - name: Check rendered READMEs are current
-        run: python scripts/guide.py render guides/*/ --check
+        run: python scripts/guide.py render guides/*/ guides/models/*/ --check
 
-      - name: Run guide.py tests
-        run: python -m pytest scripts/tests/ -v
+      # The list of guides llm-d.ai publishes (synced by llm-d/llm-d.github.io).
+      - name: Check the llm-d.ai guide publish manifest
+        run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
+
+      - name: Run Python tests
+        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ helpers/smoke-test/tests/ -v

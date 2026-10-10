@@ -66,8 +66,8 @@ on:
 #    branches:
 #      - main
 
-#  schedule:
-#    - cron: '0 20 * * *'  # 20:00 UTC daily (clear of the other ROCm nightlies)
+  schedule:
+    - cron: '0 14 * * *'  # 14:00 UTC daily
 
 permissions:
   contents: write
@@ -87,10 +87,11 @@ jobs:
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
-      backend_type: ${{ inputs.backend_type || 'vllm-deepseek-v3' }}
+      backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
       connector: ${{ inputs.connector || '' }}
-      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-amd-rocm-moriio' }}
+      # Pre-provisioned with model-pvc and llm-d-hf-token.
+      cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-lws-amd-rocm-moriio' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-wide-ep-amd-moriio' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-wide-ep-amd-moriio' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}

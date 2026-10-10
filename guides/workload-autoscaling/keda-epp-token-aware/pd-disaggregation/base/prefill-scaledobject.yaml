@@ -1,6 +1,6 @@
 # Token-aware KEDA autoscaling for the PREFILL role of a P/D-disaggregated topology.
 #
-# Prefill and decode are separate Deployments bound by different resources —
+# Prefill and decode are separate DisaggregatedSet roles bound by different resources —
 # prefill is compute-bound on the prompt pass, decode is memory-bound for the
 # request's whole lifetime — so each gets its own ScaledObject and scales
 # independently. This is the difference from the ../../optimized-baseline overlay,
@@ -15,7 +15,7 @@
 #     slow KV fabric it can be several times lower than the aggregated-path figure
 #     for the same GPU, and a wrong divisor silently changes when prefill scales.
 #   - namespace in the query, to your deployment's namespace
-#   - the .*prefill.* endpoint selectors if your Deployments are named differently
+#   - the .*prefill.* endpoint selectors if your pods are named differently
 #   - threshold (workload-dependent — see "Choosing the two thresholds" in the README)
 #   - minReplicaCount / maxReplicaCount
 #   - serverAddress if your Prometheus is not the bundled llm-d stack (see ../ocp)
@@ -31,15 +31,15 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: pd-disaggregation-nvidia-gpu-vllm-prefill-token-aware
+  name: pd-disagg-vllm-prefill-token-aware
   labels:
     app.kubernetes.io/part-of: keda-epp-token-aware
     llm-d.ai/role: prefill
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: pd-disaggregation-nvidia-gpu-vllm-prefill
+    apiVersion: disaggregatedset.x-k8s.io/v1
+    kind: DisaggregatedSetRoleScaler
+    name: pd-disagg-vllm-prefill
   minReplicaCount: 1
   maxReplicaCount: 10
   # No pollingInterval here on purpose. KEDA only honours it when it owns

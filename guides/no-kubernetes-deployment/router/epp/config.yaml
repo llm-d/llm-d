@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha1
+apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 
 # Plugin set mirrors the optimized-baseline guide
@@ -37,7 +37,8 @@ schedulingProfiles:
 dataLayer:
   injectDefaults: false
   discovery:
-    pluginRef: file-discovery
+    endpoints:
+      pluginRef: file-discovery
   sources:
     - pluginRef: metrics-source
       extractors:

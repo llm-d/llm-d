@@ -19,7 +19,7 @@ router:
     pluginsConfigFile: "predicted-latency-pd-plugins.yaml"
     pluginsCustomConfig:
       predicted-latency-pd-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: always-disagg-pd-decider
@@ -31,7 +31,7 @@ router:
         - type: decode-filter
         - type: approx-prefix-cache-producer
           parameters:
-            # Sized for the ~5K-token gpt-oss-120b workload benchmarked below — far below
+            # Sized for a ~5K-token-prompt gpt-oss-120b workload — far below
             # the 256K agentic sizing, so a smaller match window keeps EPP prefix-matching
             # cheap. Raise it to match your longest prompts.
             maxPrefixTokensToMatch: 131072
@@ -69,14 +69,12 @@ router:
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: predicted-latency-producer
           - pluginRef: loose-affinity-filter
           - pluginRef: ttft-scorer
           - pluginRef: weighted-random-picker
         - name: decode
           plugins:
           - pluginRef: decode-filter
-          - pluginRef: predicted-latency-producer
           - pluginRef: tpot-scorer
           - pluginRef: weighted-random-picker
 

@@ -138,10 +138,10 @@ fi
 echo "Namespace=$NAMESPACE Gateway=${SVC_HOST} EPP=${EPP_METRICS_URL} Model=${MODEL_ID} Burst/band=${BURST} max_tokens=${MAX_TOKENS}"
 
 # ── Stage the request payload on the curl pod ───────────────────────────────
-# max_tokens is sized to keep each request in flight long enough to hold the
+# max_tokens + ignore_eos keep each request in flight long enough to hold the
 # gate closed while the queue fills. Stage via `tee`: `kubectl exec` + redirect
 # silently writes a 0-byte file, sending empty request bodies.
-PAYLOAD=$(printf '{"model":"%s","prompt":"Write a long detailed story about a robot learning to paint.","max_tokens":%s}' "$MODEL_ID" "$MAX_TOKENS")
+PAYLOAD=$(printf '{"model":"%s","prompt":"Write a long detailed story about a robot learning to paint.","max_tokens":%s,"ignore_eos":true}' "$MODEL_ID" "$MAX_TOKENS")
 printf '%s' "$PAYLOAD" | kubectl exec -i -n "$NAMESPACE" "$CURL_POD_NAME" -- tee /tmp/payload.json >/dev/null
 
 # ── Metric extraction helpers ───────────────────────────────────────────────
@@ -195,29 +195,52 @@ QSIZE=llm_d_epp_flow_control_queue_size
 SAT=llm_d_epp_flow_control_pool_saturation
 QD=llm_d_epp_flow_control_request_queue_duration_seconds
 
-# Run one band's burst; FlowKey = (fairness id, objective-derived priority).
+# Run the primer and all three bands' bursts inside a single `kubectl exec`
+# session so `kubectl exec` connection jitter cannot reorder band arrival.
 # Store per-request headers (.headers), body (.body), stderr (.err), and status
 # code (.status) inside /tmp/burst-${priority}/ on the curl pod so failed
 # requests can be inspected on CI failure.
-fire_band() {
-  local objective="$1" priority="$2" tenant="$3"
-  kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -c "
-    rm -rf '/tmp/burst-${priority}' && mkdir -p '/tmp/burst-${priority}'
-    seq 1 ${BURST} | xargs -I{} -P ${BURST} sh -c '
-      idx=\$1
-      code=\$(curl -sS --max-time 180 \
-        -D \"/tmp/burst-${priority}/\${idx}.headers\" \
-        -o \"/tmp/burst-${priority}/\${idx}.body\" \
-        -w \"%{http_code}\" \
-        -X POST \"http://${SVC_HOST}/v1/completions\" \
-        -H \"content-type: application/json\" \
-        -H \"x-llm-d-inference-fairness-id: ${tenant}\" \
-        -H \"x-llm-d-inference-objective: ${objective}\" \
-        --data-binary @/tmp/payload.json 2>\"/tmp/burst-${priority}/\${idx}.err\") || true
-      echo \"\${code:-000}\" > \"/tmp/burst-${priority}/\${idx}.status\"
-      echo \"\${code:-000}\"
-    ' _ {}
-  " >"/tmp/burst-${priority}.log" 2>&1
+fire_burst() {
+  kubectl exec -i -n "$NAMESPACE" "$CURL_POD_NAME" -- sh -s "$SVC_HOST" "$BURST" <<'EOF'
+    svc_host=$1
+    burst=$2
+
+    fire_band() {
+      objective=$1 priority=$2 tenant=$3
+      rm -rf "/tmp/burst-${priority}" && mkdir -p "/tmp/burst-${priority}"
+      seq 1 "$burst" | xargs -I{} -P "$burst" sh -c '
+        svc_host=$1 objective=$2 priority=$3 tenant=$4 idx=$5
+        code=$(curl -sS --max-time 180 \
+          -D "/tmp/burst-${priority}/${idx}.headers" \
+          -o "/tmp/burst-${priority}/${idx}.body" \
+          -w "%{http_code}" \
+          -X POST "http://${svc_host}/v1/completions" \
+          -H "content-type: application/json" \
+          -H "x-llm-d-inference-fairness-id: ${tenant}" \
+          -H "x-llm-d-inference-objective: ${objective}" \
+          --data-binary @/tmp/payload.json 2>"/tmp/burst-${priority}/${idx}.err") || true
+        echo "${code:-000}" > "/tmp/burst-${priority}/${idx}.status"
+        echo "${code:-000}"
+      ' _ "$svc_host" "$objective" "$priority" "$tenant" {} > "/tmp/burst-${priority}.log" 2>&1
+    }
+
+    # Send 4 primer requests first (matching CI maxConcurrency=4) so the
+    # saturation gate is already closed when the three priority bands arrive.
+    for _ in 1 2 3 4; do
+      curl -sS --max-time 180 \
+        -X POST "http://${svc_host}/v1/completions" \
+        -H "content-type: application/json" \
+        -H "x-llm-d-inference-fairness-id: tenant-b" \
+        -H "x-llm-d-inference-objective: standard-traffic" \
+        --data-binary @/tmp/payload.json </dev/null >/dev/null 2>&1 &
+    done
+    sleep 0.1
+
+    fire_band premium-traffic     100 tenant-a &
+    fire_band standard-traffic    0   tenant-b &
+    fire_band best-effort-traffic -10 tenant-c &
+    wait
+EOF
 }
 
 dump_failed_requests() {
@@ -253,13 +276,8 @@ dump_failed_requests() {
 # Firing every band simultaneously is what surfaces QoS: under a closed gate the
 # hardcoded strict-priority dispatcher must drain premium before best-effort.
 echo "── Firing ${BURST} requests into each band simultaneously (premium=100, standard=0, best-effort=-10) ──"
-# Start each band in this shell so wait can join all three before the final scrape.
-fire_band premium-traffic     100 tenant-a &
-PID_PREMIUM=$!
-fire_band standard-traffic   0   tenant-b &
-PID_STANDARD=$!
-fire_band best-effort-traffic    -10 tenant-c &
-PID_BEST=$!
+fire_burst &
+PID_BURST=$!
 
 peak_total_q=0
 peak_sat=0
@@ -282,31 +300,26 @@ for _ in $(seq 1 "$POLL_ATTEMPTS"); do
     fi
     echo "  poll: queue_size premium=${q100} standard=${q0} best-effort=${qbe} | pool_saturation(max)=${sat}"
   fi
-  if ! kill -0 "$PID_PREMIUM" 2>/dev/null && ! kill -0 "$PID_STANDARD" 2>/dev/null \
-     && ! kill -0 "$PID_BEST" 2>/dev/null; then
+  if ! kill -0 "$PID_BURST" 2>/dev/null; then
     break
   fi
   sleep "$POLL_INTERVAL_SECONDS"
 done
 
-# Join every band even if an earlier one failed, and report request failures
-# before interpreting metrics as a flow-control configuration problem.
+# Report request failures before interpreting metrics as a flow-control
+# configuration problem.
 burst_failed=false
-for band in "100:$PID_PREMIUM" "0:$PID_STANDARD" "-10:$PID_BEST"; do
-  pri=${band%%:*}
-  if wait "${band#*:}"; then
-    if ! awk -v expected="$BURST" '
-      /^[2][0-9][0-9]$/ { successful++ }
-      END { exit !(NR == expected && successful == expected) }
-    ' "/tmp/burst-${pri}.log"; then
-      echo "Error: burst priority=${pri} did not return ${BURST} successful HTTP responses." >&2
-      cat "/tmp/burst-${pri}.log" >&2
-      dump_failed_requests "$pri"
-      burst_failed=true
-    fi
-  else
-    burst_exit=$?
-    echo "Error: burst priority=${pri} failed (exit ${burst_exit}); kubectl/curl output:" >&2
+if ! wait "$PID_BURST"; then
+  echo "Error: burst execution failed." >&2
+  burst_failed=true
+fi
+for pri in 100 0 -10; do
+  kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- cat "/tmp/burst-${pri}.log" >"/tmp/burst-${pri}.log" 2>/dev/null || true
+  if ! awk -v expected="$BURST" '
+    /^[2][0-9][0-9]$/ { successful++ }
+    END { exit !(NR == expected && successful == expected) }
+  ' "/tmp/burst-${pri}.log"; then
+    echo "Error: burst priority=${pri} did not return ${BURST} successful HTTP responses." >&2
     cat "/tmp/burst-${pri}.log" >&2
     dump_failed_requests "$pri"
     burst_failed=true

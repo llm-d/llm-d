@@ -6,9 +6,7 @@ spec:
   # 2 replicas (1 source + 1 receiver) for a CI-sized functional check of
   # the P2P pull path on Intel XPU. Every pod is both a puller and a
   # source: it serves its own requests and answers peer pulls from its CPU
-  # tier, same as the GPU overlay — just fewer replicas and a much smaller
-  # model, since this validates the mechanism rather than reproducing the
-  # GPU benchmark's scale.
+  # tier, same as the GPU overlay — just with a much smaller model.
   replicas: 2
   template:
     spec:
@@ -27,6 +25,9 @@ spec:
           args:
             - Qwen/Qwen3-0.6B
             - --port=8200
+            # vLLM 0.30 gates /v1/*/render behind this flag. The router's
+            # token-producer needs that endpoint on the model servers.
+            - --enable-scale-out
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             # The offloading config below omits `block_size`, so it defaults to
             # this engine block size. Keep it identical across all P2P peers.

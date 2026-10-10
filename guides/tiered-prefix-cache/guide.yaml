@@ -1,0 +1,302 @@
+name: tiered-prefix-cache
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
+support:
+  engines: {vllm: vLLM, sglang: SGLang}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache)"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+      engines: {vllm: validated, sglang: validated}
+    amd:
+      label: AMD GPU
+      notes: "2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: validated}
+    xpu:
+      label: Intel XPU
+      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU)"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: validated}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: tiered-prefix-cache
+    NAMESPACE: llm-d-tiered-prefix-cache
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7"]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
+    # Offloading implementation and tier: the overlay is
+    # modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<CONNECTOR>/<VARIANT>/<INFRA_PROVIDER>/.
+    # CONNECTOR and VARIANT are also the names the nightly E2E workflows override.
+    CONNECTOR: {default: native, values: [native, lmcache-connector, mooncake-store], comment: "offloading implementation (table above)"}
+    VARIANT: {default: cpu, values: [cpu, fs], comment: "offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem"}
+    # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
+    INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
+    HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7 only"}
+    STORAGE_CLASS: {default: "", comment: "VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default"}
+
+    # Two sub-variants serve a different model; set MODEL to match or the test
+    # requests fail with 404: ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector
+    # serves Qwen/Qwen3-8B, and ACCELERATOR_TYPE=tpu/v7 + HOST_TYPE=multi-host
+    # serves Qwen/Qwen3-Coder-480B-A35B-Instruct.
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7 multi-host: Qwen/Qwen3-Coder-480B-A35B-Instruct"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+# Why some `when:` steps also carry `skip_in: [ci]`: guide.py only treats
+# ACCELERATOR_TYPE / MODEL_SERVER filters as variants, and wraps non-default
+# variants in cicd:skip markers in the README automatically. Steps keyed on
+# CONNECTOR, HOST_TYPE or MONITORING render as plain fences with an
+# `# only when ...` comment and no skip marker. The tiered nightlies stand the
+# guide up by parsing the README's bash blocks and don't honor those comments,
+# so `skip_in: [ci]` is what keeps them from running the MooncakeStore,
+# TPU multi-host and router-monitoring steps, which no nightly covers.
+# Drop it only once a nightly targets that configuration.
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GUIDE_NAME}-cpu.values.yaml"
+
+  monitoring_values:
+    # skip_in ci: the README-parsing nightlies harvest every `export`, and they
+    # never enabled router monitoring for this guide.
+    - when: {MONITORING: ["true"]}
+      skip_in: [ci]
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  storage:
+    - when: {VARIANT: [fs], CONNECTOR: [native, lmcache-connector], INFRA_PROVIDER: [base, gke]}
+      run: |
+        # ReadWriteMany PVC for the filesystem tier, mounted at /mnt/files-storage
+        envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+
+  mooncake:
+    # skip_in ci: no nightly covers MooncakeStore (see the note above deploy:).
+    - when: {CONNECTOR: [mooncake-store]}
+      skip_in: [ci]
+      run: |
+        # Mooncake Master metadata service (namespace mooncake); use .../monitoring to also scrape it
+        kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store/base/
+    - when: {CONNECTOR: [mooncake-store], VARIANT: [fs]}
+      skip_in: [ci]
+      run: |
+        # Mooncake Client DaemonSet that owns the CPU DRAM + SSD pool, sized for Qwen3-32B
+        kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/
+
+  modelserver:
+    - when: {HOST_TYPE: [single-host]}
+      run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+    # skip_in ci: no nightly covers TPU multi-host (see the note above deploy:).
+    - when: {HOST_TYPE: [multi-host]}
+      skip_in: [ci]
+      run: |
+        # TPU v7 multi-host (LeaderWorkerSet), serving Qwen/Qwen3-Coder-480B-A35B-Instruct
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/native/cpu/multi-host/
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    pvc:
+      - when: {VARIANT: [fs], CONNECTOR: [native, lmcache-connector]}
+        run: kubectl get pvc llm-d-kv-cache-storage -n ${NAMESPACE}
+    model:
+      - run: |
+          # Fail fast if MODEL does not match the model the servers load (two
+          # sub-variants serve a different model; see the MODEL comment above).
+          # `false` (not `exit 1`) fails the step without closing an interactive shell.
+          POD=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+              -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}' | awk '{print $1}')
+          SERVED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${POD}:8000/proxy/v1/models" \
+            | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+          echo "model servers serve: ${SERVED}"
+          [ "${SERVED}" = "${MODEL}" ] \
+            || { echo "MODEL=${MODEL} does not match the served model: export MODEL=${SERVED}" >&2; false; }
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    shared_prefix:
+      - run: |
+          # 10 requests that share a ~2k-token prefix and differ only in the last sentence
+          kubectl run prefix-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 100); do printf "Evicted KV-cache blocks move to CPU RAM and are loaded back instead of recomputed. "; done)
+              for i in $(seq 1 10); do
+                curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+              done'
+    offload_metrics:
+      - when: {MODEL_SERVER: [vllm]}
+        run: |
+          # Offload counters of every model server pod, read through the
+          # Kubernetes API server proxy (no port-forward needed). On TPU
+          # multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+              -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
+            echo "== ${pod}"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
+          done
+      - when: {MODEL_SERVER: [sglang]}
+        run: |
+          # HiCache counters of every model server pod, read through the
+          # Kubernetes API server proxy (no port-forward needed). On TPU
+          # multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
+              -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
+            echo "== ${pod}"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | grep -E '^sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total)' || true
+          done
+    offload_gate:
+      - when: {MODEL_SERVER: [vllm], CONNECTOR: [native], ACCELERATOR_TYPE: [gpu, amd, xpu]}
+        run: |
+          # Gate: the native OffloadingConnector writes every computed block to
+          # the offload tier, so after the burst above the bytes stored, summed
+          # over all model server pods, must be above zero.
+          STORED=0
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | awk -v s="${STORED}" '/^vllm:kv_offload_store_bytes_total/ {s += $NF} END {print s + 0}')
+          done
+          echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
+          awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
+            || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
+    shared_tier:
+      - when: {MODEL_SERVER: [vllm], VARIANT: [fs], CONNECTOR: [native]}
+        run: |
+          # Prime a new prefix on the first pod, then send it to the second pod,
+          # which has never seen it and must load it from the shared filesystem tier
+          PODS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'))
+          IPS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}'))
+          if [ ${#PODS[@]} -lt 2 ]; then
+            echo "needs at least 2 model server pods, found ${#PODS[@]} (e.g. Intel XPU runs 1): skipping"
+          else
+          kubectl run shared-tier-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="FIRST=${IPS[0]}" \
+            --env="SECOND=${IPS[1]}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 100); do printf "The shared filesystem tier lets every replica reuse KV-cache blocks written by another. "; done)
+              for ip in ${FIRST} ${SECOND}; do
+                curl -sS -o /dev/null -w "${ip}: HTTP %{http_code}\n" -X POST "http://${ip}:8000/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P}\", \"max_tokens\": 1}"
+                sleep 10
+              done'
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${PODS[1]}:8000/proxy/metrics" \
+            | grep -E '^vllm:external_prefix_cache_hits_total' || true
+          fi
+
+# skip_in ci on the multi-host and MooncakeStore steps below: same reason as in
+# deploy (no nightly covers them; see the note above deploy:).
+cleanup:
+  modelserver:
+    - when: {HOST_TYPE: [single-host]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
+    - when: {HOST_TYPE: [multi-host]}
+      skip_in: [ci]
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/native/cpu/multi-host
+  storage:
+    - when: {VARIANT: [fs], CONNECTOR: [native, lmcache-connector], INFRA_PROVIDER: [base, gke]}
+      run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/pvc.yaml --ignore-not-found=true
+  mooncake:
+    - when: {CONNECTOR: [mooncake-store], VARIANT: [fs]}
+      skip_in: [ci]
+      run: kubectl delete -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/mooncake-store/fs/mooncake-client/ --ignore-not-found=true
+    - when: {CONNECTOR: [mooncake-store]}
+      skip_in: [ci]
+      run: kubectl delete -k ${REPO_ROOT}/helpers/mooncake-master-store/base/ --ignore-not-found=true
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

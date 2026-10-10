@@ -22,7 +22,9 @@ spec:
       containers:
         - name: redis
           image: redis:7-alpine
-          args: ["--save", "", "--appendonly", "no"]
+          # Keyspace notifications (Kl) let the optional coordinator wake held
+          # wait-mode requests as soon as their result lands, instead of polling.
+          args: ["--save", "", "--appendonly", "no", "--notify-keyspace-events", "Kl"]
           ports:
             - containerPort: 6379
               name: redis

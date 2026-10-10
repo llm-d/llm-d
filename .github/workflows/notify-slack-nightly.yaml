@@ -41,7 +41,6 @@ on:
       - "Nightly - Optimized Baseline E2E (AMD ROCM)"
       - "Nightly - Optimized Baseline E2E (CKS GPU)"
       - "Nightly - Optimized Baseline E2E (GKE GPU SGLang)"
-      - "Nightly - Optimized Baseline E2E (GKE GPU TensorRT-LLM)"
       - "Nightly - Optimized Baseline E2E (GKE GPU)"
       - "Nightly - Optimized Baseline E2E (GKE TPU)"
       - "Nightly - Optimized Baseline E2E (Intel XPU)"
@@ -81,6 +80,7 @@ on:
       - "Nightly - Wide EP LWS E2E (GKE GPU)"
       - "Nightly - Wide EP LWS E2E (Intel XPU)"
       - "Nightly - Wide EP LWS E2E (OCP GPU)"
+      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)"
       - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
       # SLACK-WORKFLOWS-END
 

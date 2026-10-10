@@ -1,0 +1,88 @@
+# Provider-neutral HTTPRoutes that put agentic-api in front of the base guide's
+# InferencePool. Both work unchanged on Istio, GKE, agentgateway and kgateway.
+#
+# These are ADDITIVE: the base guide is installed exactly as its own README says,
+# with the router chart creating `HTTPRoute/${BASE_GUIDE_NAME}` (a single
+# `PathPrefix: /` rule to `InferencePool/${BASE_GUIDE_NAME}`). That route is left
+# untouched; the two routes below win over it on Gateway API matching precedence,
+# which is specified ACROSS routes, not just within one:
+#
+#   "Across all rules specified on applicable Routes, precedence must be given to
+#    the match having: [...] 'Prefix' path match with largest number of characters.
+#    [...] If ties still exist across multiple Routes, matching precedence MUST be
+#    determined [by] the oldest Route based on creation timestamp."
+#     -- gateway-api/apis/v1/httproute_types.go
+#
+# So `/v1/responses` (13 chars) beats the chart's `/` (1 char) regardless of which
+# route was created first, and a matching `hostnames` entry outranks both. Verified
+# on Istio 1.30.3 + Gateway API v1.6.2 with the chart's route created first.
+#
+# Anything not listed here -- /v1/chat/completions, /v1/completions, /health,
+# /metrics -- keeps falling through to the chart's route, unchanged.
+
+# Internal route for the inference requests agentic-api itself emits.
+# Matched by Host, so it outranks the longer path prefixes below and prevents
+# agentic-api's upstream call from looping back into agentic-api.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agentic-api-internal
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  hostnames:
+    - "epp.gateway.internal"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: ${BASE_GUIDE_NAME}
+      # Matches the router chart's own route; on many providers 0s means
+      # "the provider maximum", which long agentic turns need.
+      timeouts:
+        request: 0s
+---
+# External route for client traffic arriving at the Gateway address.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agentic-api
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/responses
+        - path:
+            type: PathPrefix
+            value: /v1/conversations
+        - path:
+            type: PathPrefix
+            value: /v1/messages
+        # /v1/models is here for the Codex CLI: with `?client_version=<ver>` set,
+        # agentic-api transforms the upstream list into the Codex model catalog.
+        # Without that query param it proxies the upstream response unchanged, so
+        # plain OpenAI clients see no difference -- but note this does put
+        # agentic-api on the /v1/models path for the base deployment too. Drop
+        # this match to leave /v1/models with the InferencePool; Codex then has to
+        # be pointed at Service/agentic-api:9000 directly.
+        - path:
+            type: PathPrefix
+            value: /v1/models
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: agentic-api
+          port: 9000
+      timeouts:
+        request: 0s

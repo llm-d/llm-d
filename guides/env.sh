@@ -37,3 +37,36 @@ export ROUTER_GATEWAY_CHART=${ROUTER_GATEWAY_CHART:-oci://ghcr.io/llm-d/charts/l
 ### Container Image coordinates and tag for router chart
 export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-main}
 export ROUTER_EPP_IMAGE=${ROUTER_EPP_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker}
+
+### Container Image coordinates and tag for the router coordinator (async-broker front door)
+export ROUTER_COORDINATOR_VERSION=${ROUTER_COORDINATOR_VERSION:-main}
+export ROUTER_COORDINATOR_IMAGE=${ROUTER_COORDINATOR_IMAGE:-ghcr.io/llm-d/llm-d-router-coordinator}
+
+### Container image used by guide verification steps
+export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
+
+### Accelerator / model-server guard
+# Guides that declare a `support:` matrix in guide.yaml ship one overlay per
+# supported pairing at guides/<guide>/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/.
+# Fail early, with the available choices, instead of letting a later
+# `kubectl apply -k` fail on a missing directory.
+if [[ -n "${GUIDE_NAME:-}" && -n "${ACCELERATOR_TYPE:-}" && -n "${MODEL_SERVER:-}" && -n "${REPO_ROOT:-}" ]]; then
+  _llmd_guide_dir="${REPO_ROOT}/guides/${GUIDE_NAME}"
+  # Guides that keep their overlays elsewhere (e.g. multimodal-serving's
+  # per-topology sub-directories) have no top-level modelserver/ and are skipped.
+  if [[ -f "${_llmd_guide_dir}/guide.yaml" ]] && grep -q '^support:' "${_llmd_guide_dir}/guide.yaml" \
+      && [[ -d "${_llmd_guide_dir}/modelserver" ]] \
+      && [[ ! -d "${_llmd_guide_dir}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}" ]]; then
+    _llmd_engines=$(cd "${_llmd_guide_dir}/modelserver/${ACCELERATOR_TYPE}" 2>/dev/null \
+      && for d in vllm sglang trtllm vllmomni; do [[ -d "$d" ]] && printf '%s ' "$d"; done)
+    echo "error: ${GUIDE_NAME} does not support MODEL_SERVER=${MODEL_SERVER} on ACCELERATOR_TYPE=${ACCELERATOR_TYPE}." >&2
+    if [[ -n "${_llmd_engines}" ]]; then
+      echo "       supported MODEL_SERVER values on ${ACCELERATOR_TYPE}: ${_llmd_engines}" >&2
+    else
+      echo "       ${ACCELERATOR_TYPE} has no configuration in this guide; see the support table in guides/${GUIDE_NAME}/README.md" >&2
+    fi
+    unset _llmd_guide_dir _llmd_engines
+    return 1 2>/dev/null || exit 1
+  fi
+  unset _llmd_guide_dir
+fi
