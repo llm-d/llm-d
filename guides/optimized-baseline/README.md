@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
-| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci` |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16 |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
@@ -235,6 +235,8 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
+The NVIDIA GPU, AMD, CPU, Intel XPU and TPU v6/v7 vLLM overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). The Iluvatar, MetaX, Rebellions NPU and TPU v7 dynamic-slice overlays do not drain yet. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
+
 **Apply the Kustomize overlays** for your specific backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere):
 
 <!-- tabs:start group=modelserver -->
@@ -285,7 +287,7 @@ kubectl get pods -n ${NAMESPACE}
 Notes:
 
 * Increasing `spec.replicas` on the `LeaderWorkerSet` scales out one sub-slice per replica; replicas are formed from any sub-block with healthy partitions of the requested shape.
-* Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7/vllm-dynamic-slice/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
+* Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/base/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
 
@@ -303,7 +305,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 3. Observability & Troubleshooting
 
-Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
 
 This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
 
@@ -319,7 +321,7 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 | Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
 | Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
 | Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
 
 </details>
 <details>

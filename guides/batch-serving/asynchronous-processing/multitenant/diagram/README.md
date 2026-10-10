@@ -1,11 +1,12 @@
 # Animated architecture diagram
 
-A looping diagram of the **team × tier × model** scenario: **two models**, each
-with its own worker pool and vLLM; within each model, three team/tier lanes flow
-through a per-team **reserved/overflow** quota gate and the **tier-priority** merge
-into that model's pool. The loop tells the **model-isolation + priority** story —
-**model A** saturates, so its pool gate goes to **WAIT** (parks in-memory) while
-**model B keeps flowing**.
+A looping diagram of the **team × tier** scenario: **one model** behind **one llm-d
+Router and InferencePool**, fed by **one llm-d-async worker pool**. Three team/tier
+lanes flow through a per-team **reserved/overflow** quota gate and the
+**tier-priority** merge into the pool. The loop tells the **saturation + priority**
+story: the InferencePool saturates, the worker pool's gate goes to **WAIT** (parks
+in-memory), and the lanes drain by priority as capacity frees. A callout notes that
+one llm-d-async can feed many InferencePools, one worker pool each.
 
 > The queue column is drawn generically (Redis SortedSet queue names shown); the
 > **GCP Pub/Sub** backend is equivalent (topics/subscriptions in place of sorted

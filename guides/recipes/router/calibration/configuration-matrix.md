@@ -65,7 +65,7 @@ rows because the serving engine changes prefill throughput.
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
   `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
-**Related (other guides):** the [agentic-serving](../../../agentic-serving) guide ships
+**Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
 

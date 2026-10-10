@@ -195,50 +195,21 @@ lag distorts autoscaling two ways:
    `Ready` - on the order of 240s for Qwen3-8B at TP1 - so a reading taken during that
    gap reflects a replica that has not yet begun to help.
 
-A trigger is just a PromQL query, so it can also read the target's replica counts from
-kube-state-metrics and credit capacity that is provisioned but not yet serving. The
+A trigger is just a PromQL query, so it could read the target's replica counts from
+kube-state-metrics and credit capacity that is provisioned but not yet serving - the
 [SLO-aware path](./slo-aware-keda.md) does this with an in-flight `r/n` credit on the
-latency signal; the queue path can do the same with a supply-aware formula. Two
-mitigation strategies build on this, trading precision for portability:
+latency signal. The queue path takes the portable route instead: HPA stabilization
+windows.
 
-- **Stabilization windows (portable).** The `ScaledObject` sets both
-  `scaleUp.stabilizationWindowSeconds` and `scaleDown.stabilizationWindowSeconds` to
-  300s. The scale-up window holds
-  recommendations and acts on the most conservative one, so a replica that is still
-  loading gets time to become `Ready` and relieve demand before another is added; the
-  scale-down window holds capacity across brief dips so the pool does not flap when a
-  slow-starting replica finally absorbs a backlog. Size the scale-up window near the
-  target Deployment's measured cold-start time (the 300s default was validated
-  against a ~240s Qwen3-8B TP1 cold start). It needs no extra dependencies,
-  but it is blunt: it delays all scale-up equally, not just startup-driven overshoot.
-- **Demand-aware overshoot guard (queue signal only).** The precise alternative. It
-  uses KEDA's
-  [`advanced.scalingModifiers`](https://keda.sh/docs/2.20/reference/scaledobject-spec/#scalingmodifiers)
-  to replace the running-requests keep-warm trigger with two supply triggers over
-  `kube-state-metrics` - `pending`
-  (`kube_deployment_status_replicas_unavailable`, pods created but not yet `Ready`)
-  and `replicas` (current replica count) - and a formula that discounts demand by the
-  pods already coming up:
-
-  ```
-  demand <= replicas ? demand : max(demand - (pending ?? 0), replicas)
-  ```
-
-  Because the formula, not a time window, absorbs overshoot, the guard sets
-  `scaleUp.stabilizationWindowSeconds: 0` for immediate scale-up and adds a `fallback`
-  (`behavior: static`, `replicas: 1`) so a formula that cannot evaluate degrades to a
-  single replica instead of failing the `ScaledObject`. It ships for the queue signal
-  only: renaming the raw signal to a replica-unit `demand` is correct only when the
-  signal's per-pod target is 1, which holds for queue depth but not for the pool-wide
-  saturation ratio.
-
-  The guard is more precise but adds cost: it depends on `kube-state-metrics` being
-  scraped into the same Prometheus, and the two supply series fail differently. A
-  missing `pending` series is read as zero (`pending ?? 0`), so the guard keeps
-  scaling but loses overshoot protection (demand-only scaling); a missing `demand` or
-  `replicas` series makes the formula unevaluable, so after `failureThreshold` polls
-  the `fallback` holds a single replica, even mid-burst. Prefer the stabilization
-  windows unless you need scale-up faster than a cold-start-sized window allows.
+The `ScaledObject` sets both `scaleUp.stabilizationWindowSeconds` and
+`scaleDown.stabilizationWindowSeconds` to 300s. The scale-up window holds
+recommendations and acts on the most conservative one, so a replica that is still
+loading gets time to become `Ready` and relieve demand before another is added; the
+scale-down window holds capacity across brief dips so the pool does not flap when a
+slow-starting replica finally absorbs a backlog. Size the scale-up window near the
+target Deployment's measured cold-start time (the 300s default was validated against
+a ~240s Qwen3-8B TP1 cold start). Windows need no extra dependencies, but they are
+blunt: they delay all scale-up equally, not just startup-driven overshoot.
 
 ### Sharing a Contended Accelerator Budget
 

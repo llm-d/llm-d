@@ -20,6 +20,59 @@ Transformer inference computes Key and Value tensors during prefill, then reuses
 
 The offloading system generally operates asynchronously. Writes to lower tiers happen in the background without blocking inference. Reads from storage still require waiting, but loading cached blocks is typically faster than recomputing them—up to 16x faster for long prompts.
 
+Offloading grows the **KV working set** each replica can hold, and with it the **receptive field**: how long a KV cache stays reusable after its request completes. Without offloading, a follow-on request that arrives after its prefix was evicted from HBM recomputes the prefill; with offloading, it loads the prefix back from a lower tier:
+
+- Without KV offloading:
+
+```text
+   ┌───────┐           ┌─────────┐            ┌───────────┐
+   │user A │           │ user A  │            │  user A   │
+   │  req  │           │   KV    │            │ follow-on │
+   │       │           │ evicted │            │    req    │
+   └───┬───┘           └────┬────┘            └─────┬─────┘
+       │                    │                       │
+───────●────────────────────●───────────────────────●───────▶ time
+       │                    │                       │
+       t                   t+a                     t+b
+       │                    │                       │
+       │◄───── KV live ────►│ ✗                     │
+                                                    ▼
+                                              ┌────────────┐
+                                              │ RECOMPUTE  │
+                                              │  PREFILL   │
+                                              └────────────┘
+```
+
+- With KV offloading:
+
+```text
+   ┌───────┐           ┌─────────┐            ┌───────────┐
+   │user A │           │ user A  │            │  user A   │
+   │  req  │           │   KV    │            │ follow-on │
+   │       │           │ offload │            │    req    │
+   └───┬───┘           └────┬────┘            └─────┬─────┘
+       │                    │                       │
+───────●────────────────────●───────────────────────●───────▶ time
+       │                    │                       │
+       t                   t+a                     t+b
+       │                    │                       │
+       │◄─────────────── KV live ──────────────────►│ ✓
+                                                    ▼
+                                              ┌────────────┐
+                                              │ PULL FROM  │
+                                              │  CPU RAM   │
+                                              └────────────┘
+```
+
+## Storage Tiers
+
+Offloaded KV caches can live on several tiers, ordered by read/write latency: frequently accessed caches stay closest to the accelerator, while larger or colder caches move to slower, higher-capacity tiers. We recommend always enabling the HBM and CPU RAM tiers, and adding a filesystem tier when the working set grows beyond HBM + CPU RAM.
+
+- **CPU RAM** — Low operational overhead and typically far larger than accelerator HBM, making it the default offload target. Loading from CPU RAM is faster than recomputing prefill in most cases, and asynchronous offload adds little overhead.
+- **Local disk** — Increases capacity further, but is slower than CPU RAM. Suitable when the workload tolerates the added latency and local capacity is sufficient.
+- **Shared (remote) storage** — Provides capacity independent of deployment size, KV-cache sharing across replicas, fast scale-up (new replicas reuse existing cache), and persistence across restarts and failures. Latency and throughput depend on the underlying system, so evaluate that the transfer cost does not outweigh the savings. Mature enterprise systems (for example CephFS, GCP Lustre, IBM Storage Scale, AWS EFS) integrate through standard POSIX file access.
+- **P2P sharing** — Inference replicas can share caches in CPU memory over a peer-to-peer network, extending sharing without additional storage resources. See [P2P KV-Cache Sharing](p2p-kv-cache-sharing.md).
+
 ## Architecture
 
 The two integration patterns map to distinct architectures.
@@ -62,10 +115,27 @@ The native path lives entirely inside the vLLM stack. The `OffloadingConnector` 
 | CPU RAM | Low | ~250GB/GPU | Per-node | High-frequency reuse, preemption recovery |
 | Shared Storage | Higher | TB+ | Cross-cluster | Cross-node sharing, persistence, massive scale |
 
-Today, the two targets operate as independent options — choose one offloading target based on your workload requirements.
+#### CPU Tier
 
-> [!NOTE]
-> **Hierarchical KV-cache offloading** — where blocks flow GPU → CPU → Storage as a unified tiered hierarchy — is under active development in the native path.
+Each model server offloads to host CPU memory through its own native mechanism: vLLM uses the `OffloadingConnector`, and SGLang uses HiCache. Pods are configured with the connector enabled and increased CPU memory requests (e.g., 400 GB). Evicted KV-cache blocks move to host CPU memory instead of being discarded, extending the effective cache size with negligible overhead. The EPP maintains a global index of which blocks exist on which pods and tiers, adding a second `prefix-cache-scorer` plugin for CPU-tier blocks.
+
+<p align="center">
+  <picture>
+    <img src="../../../assets/cpu-offloading.svg" alt="CPU KV Cache Offloading">
+  </picture>
+</p>
+
+#### Tiered Offloading to Filesystem
+
+The `OffloadingConnector` also supports a multi-tier hierarchy: HBM → CPU RAM → filesystem. Configured with `TieringOffloadingSpec` and a `secondary_tiers` entry of `type: fs`, evicted blocks spill from CPU RAM to a ReadWriteMany PVC (backed by Lustre, CephFS, IBM Storage Scale, AWS EFS, or similar). I/O is asynchronous and uses GPU DMA, parallelized across read/write threads.
+
+Because the tier is shared, newly scaled pods read existing cache immediately and the cache persists across pod restarts; capacity is bounded only by the storage system. The connector does not evict data from the shared tier (see [llm-d Filesystem Connector](#llm-d-filesystem-connector)).
+
+<p align="center">
+  <picture>
+    <img src="../../../assets/fs-offloading.svg" alt="Tiered Offloading to Filesystem">
+  </picture>
+</p>
 
 ### Out-of-tree Connectors
 
@@ -116,6 +186,16 @@ CPU offloading requires no external infrastructure. The simplest way to enable i
 ```
 
 Equivalent to passing `--kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both",...}'` directly — the top-level flags are a convenience wrapper around the connector JSON.
+
+> [!IMPORTANT]
+> **Serving models with mismatched attention head dimensions (e.g. Gemma 4) under KV offloading:**
+> enabling the vLLM native `OffloadingConnector` disables vLLM's Hybrid KV Cache Manager (HMA). Most
+> models still run fine because their attention layers share one KV spec and collapse into a single
+> unified group: this includes sliding-window + full-attention models (e.g. `gpt-oss-120b`) and Mamba +
+> attention hybrids (e.g. `Nemotron`, whose attention layers are uniform and whose SSM state uses a separate
+> cache). **Gemma 4 does not:** its sliding-window and full-attention layers use *different* head
+> dimensions, so their KV specs cannot be unified and the server fails to start. To serve
+> such a model, add `--no-disable-hybrid-kv-cache-manager` to the vLLM args to keep HMA enabled.
 
 ### llm-d Filesystem Connector
 
@@ -354,6 +434,8 @@ The FS backend populates vLLM's built-in offloading metrics (`vllm:kv_offload_*`
 
 ## Performance Considerations
 
+**Choosing an implementation:** Prefer each model server's native offloading path: the `OffloadingConnector` on vLLM and HiCache, its equivalent, on SGLang. Native offloading is low-overhead, needs no extra components, and enabling the CPU tier is appropriate in almost all deployments. Reach for an out-of-tree connector only when you need a capability the native path does not provide yet.
+
 **CPU offloading:** Should always be enabled if CPU DRAM is larger than GPU HBM space. It has minimal overhead when the cache fits in HBM, and provides significant benefits when it doesn't—recovering preempted requests without recomputation and extending effective cache capacity with low latency.
 
 **Storage offloading:** Best when cache working set exceeds single-node capacity, when cross-node sharing is valuable (repeated system prompts across replicas, agentic workflows), or when persistence across restarts matters. Storage offloading is most effective when the storage network is fast enough to allow low-latency loads and stores.
@@ -375,5 +457,7 @@ Any POSIX filesystem is a candidate; the best choice for a given deployment depe
 - [llm-d KV-Disaggregation Roadmaps](https://github.com/llm-d/llm-d-kv-cache/issues?q=is%3Aissue%20state%3Aopen%20label%3Aroadmap) — Planned features and improvements across offloading and KV-cache management
 - [llm-d FS Backend](https://github.com/llm-d/llm-d-kv-cache/tree/main/kv_connectors/llmd_fs_backend) — Implementation details, configuration, and metrics
 - [vLLM KV Offloading Connector](https://vllm.ai/blog/kv-offloading-connector) — Deep dive into vLLM's native offloading
+- [Multi-tier KV offloading RFC](https://github.com/vllm-project/vllm/issues/38260) — The upstream tiering design
+- [LMCache](https://lmcache.ai) and [SGLang HiCache](https://github.com/sgl-project/sglang) — Alternative offloading implementations
 - [Mooncake Store](https://github.com/kvcache-ai/Mooncake) — Upstream Mooncake project and documentation
 - [vLLM MooncakeStoreConnector Usage Guide](https://docs.vllm.ai/en/v0.23.0/features/mooncake_store_connector_usage/) — vLLM-side configuration reference

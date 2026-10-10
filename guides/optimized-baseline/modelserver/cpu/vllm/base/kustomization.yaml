@@ -7,6 +7,7 @@ namePrefix: optimized-baseline-cpu-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/cpu-vllm/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

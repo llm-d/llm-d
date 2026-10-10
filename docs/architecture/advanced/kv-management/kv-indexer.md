@@ -18,6 +18,19 @@ The precise view offers improved precision for harder-to-approximate scenarios:
 > [!NOTE]
 > Hybrid-attention-aware scoring is a work in progress.
 
+### Why KV-Cache Events
+
+The model server is the most accurate source of truth for what is cached on its own accelerators and memory tiers. vLLM, SGLang and NVIDIA TensorRT-LLM publish every cache change as an event; llm-d subscribes to that stream, builds a near-real-time view of resident blocks across the fleet, and scores requests against it.
+
+KV-events have become the ecosystem-standard substrate for exposing accurate cache state: where reusable inference state lives and how it changes over time. As KV-cache orchestration grows more sophisticated and agentic workloads stretch prefixes longer, cache state becomes something the control plane needs to observe and act on. Beyond routing, the same view extends to:
+
+- tier-aware cache tracking across GPU HBM, CPU DRAM, local NVMe, and shared storage;
+- policies that account for explicit prompt-cache placement and dynamic KV-offloading;
+- cache movement and prefetching workflows for fleet-wide KV reuse;
+- advanced KV retention and eviction policies for agentic patterns.
+
+The two sides are decoupled: model servers produce events and the EPP consumes them, so model server and EPP replicas scale independently.
+
 ## Architecture
 
 At the top level there are two components: the **Model Servers** and the **EPP**. Model servers publish KV-Events whenever their cache state changes; the EPP watches those events, stores them in an index, and consults the index during scheduling.

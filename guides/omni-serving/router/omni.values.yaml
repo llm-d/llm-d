@@ -1,0 +1,36 @@
+## omni-serving guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  # Expose the standalone proxy on port 80, like the other guides, so
+  # requests go to http://${IP}/v1/...
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "omni-serving.yaml"
+    pluginsCustomConfig:
+      omni-serving.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        # Load-based routing. Omni requests mix text chat with audio or image
+        # generation, whose cost does not follow prompt length, and vLLM-Omni's
+        # Qwen3-Omni deploy config turns prefix caching off on every stage, so
+        # prefix and token-load scorers have no signal: the router picks the
+        # endpoint with the shortest queue. Every pod in the pool serves the
+        # same model and endpoints, so no filter is needed.
+        plugins:
+        - type: queue-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "omni-serving"

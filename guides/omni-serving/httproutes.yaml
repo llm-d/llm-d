@@ -1,0 +1,37 @@
+# Exact-path HTTPRoute for an Omni pool behind a Kubernetes Gateway.
+#
+# Only needed in Gateway Mode, to split endpoints across pools: the rule below
+# sends the modality endpoints to the Omni InferencePool (`omni-serving`, the
+# router's Helm release name), while the router chart's own HTTPRoute (a
+# PathPrefix `/` catch-all) keeps sending everything else, such as
+# /v1/chat/completions, to the pool it was installed for. Exact matches win
+# over the PathPrefix catch-all per the Gateway API specification.
+#
+# The Gateway is the shared `llm-d-inference-gateway` from the Optimized
+# Baseline's Gateway Mode. Remove the path matches your model does not serve.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: omni-serving-endpoints
+spec:
+  parentRefs:
+  - name: llm-d-inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/audio/speech
+    - path:
+        type: Exact
+        value: /v1/audio/transcriptions
+    - path:
+        type: Exact
+        value: /v1/images/generations
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: omni-serving
+      port: 8000
+    timeouts:
+      request: 600s

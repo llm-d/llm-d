@@ -78,7 +78,7 @@ For P/D disaggregation with RDMA-accelerated KV-cache transfer on Intel XPU, the
 - GPU-NIC PCIe alignment for optimal transfer performance.
 - UCX transport configured with `ib,rc,ze_copy`.
 
-The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
+The RDMA overlay (`modelserver/xpu/vllm/rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
 
 ## Iluvatar
 
@@ -109,7 +109,7 @@ paths. The device plugin must expose `mthreads.com/gpu`.
 **vLLM**
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
-- **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
+- **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
 
 **SGLang**
 
