@@ -1,0 +1,36 @@
+image:
+  pullPolicy: IfNotPresent
+webhooks:
+  enabled: false
+resources:
+  operator:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  metricServer:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+certificates:
+  operator:
+    caDirs:
+      - /custom/ca
+volumes:
+  keda:
+    extraVolumes:
+      - name: llmd-prometheus-ca
+        secret:
+          secretName: llmd-prometheus-ca
+          items:
+            - key: ca.crt
+              path: ca.crt
+    extraVolumeMounts:
+      - name: llmd-prometheus-ca
+        mountPath: /custom/ca
+        readOnly: true
