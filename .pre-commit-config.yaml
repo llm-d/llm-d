@@ -76,10 +76,10 @@ repos:
         name: sync slack channel mapping
         language: python
         entry: python scripts/sync-slack-channels.py --check
-        # Also triggers on nightly-* workflows because renaming one changes the
-        # generated workflow_run trigger, and on notify-slack-nightly.yaml itself
-        # to catch hand-edits of that generated list.
-        files: ^(\.github/slack-channels\.yaml|\.github/workflows/(nightly-.*|notify-slack-nightly)\.yaml)$
+        # Also triggers on nightly-* workflows: adding, renaming or deleting one
+        # is what makes the mapping incomplete, and an unrouted nightly is simply
+        # absent from the digest with no error anywhere.
+        files: ^(\.github/slack-channels\.yaml|\.github/workflows/nightly-.*\.yaml)$
         pass_filenames: false
         additional_dependencies: [pyyaml]
 

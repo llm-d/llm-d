@@ -3,33 +3,29 @@
 #
 # This file is the single source of truth. Two consumers read it:
 #
-#   1. scripts/sync-slack-channels.py generates the `workflows:` list in
-#      .github/workflows/notify-slack-nightly.yaml from these entries.
-#      That list is a GENERATED artifact -- never edit it by hand.
-#   2. .github/scripts/notify-slack-nightly.py resolves the destination channel
-#      at runtime from the workflow's FILE NAME. Current routed nightlies all
-#      post to #llm-d-ci-alerts.
+#   1. .github/scripts/slack-nightly-digest.py enumerates the nightlies to
+#      report on and resolves each one's destination channel, keyed by the
+#      workflow's FILE NAME. Current routed nightlies all post to
+#      #llm-d-ci-alerts.
+#   2. scripts/sync-slack-channels.py validates this file against the nightly
+#      workflows on disk.
 #
 # Entries are keyed by file name rather than by the workflow's display `name:`
 # because the file name is the stable identifier -- it is already baked into
 # badge_name, release/README.md, /test-nightly and the consolidate-status-*
-# workflows. A renamed display name can only stop the trigger from firing
-# (which CI catches).
+# workflows. Renaming a workflow's display `name:` therefore cannot misroute it.
 #
-# After editing this file, regenerate the trigger list:
-#
-#     python scripts/sync-slack-channels.py --fix
-#
-# The `sync-slack-channels` pre-commit hook verifies both directions on every
-# PR: that the generated list is in sync, and that every nightly workflow is
-# accounted for below (either routed or explicitly skipped).
+# The `sync-slack-channels` pre-commit hook verifies on every PR that every
+# nightly workflow is accounted for below -- either routed or explicitly
+# skipped -- and that every file named below still exists.
 
-# Runtime safety net only, not a routing decision. Used when a run arrives for a
-# workflow absent from `channels` -- for example mid-rename, or when a workflow
-# is deleted while the generated trigger list still references it. The intended
-# place to catch an unrouted workflow is the pre-commit hook, because an unmapped
-# workflow is also absent from the trigger and therefore never fires at all:
-# the symptom is missing messages, which is invisible by construction.
+# Runtime safety net only, not a routing decision. The digest uses this channel
+# for two things: the notice it posts when the digest job itself fails, and the
+# warning it appends when a nightly workflow on disk is routed nowhere.
+#
+# The intended place to catch an unrouted workflow is still the pre-commit hook.
+# A nightly missing from `channels` is simply absent from the digest, and the
+# symptom is a missing line in a message nobody diffs against a list.
 fallback_channel: "#llm-d-ci-alerts"
 
 channels:

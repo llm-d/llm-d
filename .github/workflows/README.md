@@ -59,48 +59,62 @@ workflow files:
 
 ## Slack notifications
 
-[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
+[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts **one message a day** to `#llm-d-ci-alerts`, at **20:00 UTC**, summarising every **scheduled** nightly that failed, timed out, came back unstable, or did not run at all. The failures are grouped by guide, and each group mentions the owners in that guide's `OWNERS` file when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
 
-This replaces the old `/github subscribe` integration, which also fired on manual `workflow_dispatch` runs.
+This replaces the per-run notifier from #2598, which posted one message per failing nightly. Because the nightlies are staggered across 01:00–18:30 UTC, that produced a dozen-odd separate messages a day, and none of them answered "how was last night?" without scrolling the channel.
+
+### Why 20:00 UTC
+
+The nightly cycle starts at 01:00 and the last lane kicks off at 18:30, with runs taking ~45–60m, so the cycle is done by ~19:30. Firing in that quiet gap means each digest covers exactly one complete night and never splits one across two messages. The window is the preceding 24h.
+
+### Why nothing is accumulated
+
+The digest holds no state between runs: it asks the Actions API what each routed nightly did in the window.
+
+The tempting alternative — having each nightly append to a shared store (an artifact, an orphan branch, issue comments) that the digest then drains — needs locking for the lanes that finish in the same minute, loses an alert outright when a write fails, and has to be pruned. The API already holds every result, so copying it buys nothing. Being stateless is also what makes any past window replayable exactly.
 
 ### How routing works
 
 [`.github/slack-channels.yaml`](../slack-channels.yaml) is the source of truth. It lists notified nightlies under `#llm-d-ci-alerts`, **keyed by workflow file name**, and lists nightlies that are deliberately not notified (each with a reason).
 
-The `workflows:` list in the `workflow_run` trigger is *generated* from that file:
-
 ```bash
-python scripts/sync-slack-channels.py --fix     # regenerate
 python scripts/sync-slack-channels.py --check   # verify (runs in pre-commit)
 python scripts/sync-slack-channels.py --audit   # print the routing table
 ```
 
-Two different identifiers are in play, deliberately:
+File names are used rather than display `name:` values because the file name is the stable identifier — it is already baked into `badge_name`, `release/README.md`, `/test-nightly` and the `consolidate-status-*` workflows. Renaming a workflow's display name cannot misroute or silence it.
 
-* The **trigger** must use display names, because `workflow_run` matches on nothing else. That makes it the part that breaks silently — rename a nightly and the notifications just stop, with no error, which looks exactly like a quiet night. Generating the list means the rename turns CI red in the same PR that does the renaming.
-* **Runtime routing** uses the workflow *file* name (`workflow_run.path`), which is stable — it is already baked into `badge_name`, `release/README.md`, `/test-nightly` and the `consolidate-status-*` workflows. So a renamed display name can only stop notifications; it can never send them to the wrong channel.
+> The per-run notifier also needed a *generated* list of display names, because `workflow_run` matches on nothing else — which made renaming a nightly silently stop its notifications. The digest resolves routing from file names at runtime, so that list and its failure mode are both gone.
 
-A nightly that is in neither `channels` nor `skip` fails the `sync-slack-channels` pre-commit hook. That check is the only place the mistake can be caught: an unrouted nightly is also absent from the generated trigger, so it never fires at all, and the symptom is *missing messages* — invisible by construction.
+A nightly that is in neither `channels` nor `skip` fails the `sync-slack-channels` pre-commit hook. That check is the guardrail: an unrouted nightly is simply absent from the digest, and the symptom is a *missing line* in a message nobody diffs against a list — invisible by construction. As a backstop, the digest appends a warning naming any nightly on disk that is routed nowhere.
 
 ### Deliberate decisions
 
 These are easy to mistake for bugs, so they are recorded here:
 
-* **Only `schedule` runs notify.** Manual dispatches and `/test-nightly` runs are filtered out via `github.event.workflow_run.event`. The replay input checks an existing scheduled run.
-* **Re-runs of a scheduled run DO notify**, marked `(attempt N)`. When a SIG re-runs a nightly that failed on a transient cluster error, the re-run's result is the current truth about that guide — suppressing it would leave the channel showing an already-fixed failure as the last word.
-* **Success, `cancelled`, and `skipped` runs do not notify.** An all-skipped run means nothing exercised the guide. GitHub's `neutral`, `stale`, and `action_required` conclusions are reported as unstable.
-* **The guide's result is computed from the `nightly` jobs, not just the run's conclusion.** A failed `update-badge` job still posts a warning to the alert channel, but it does not mention guide owners when the guide test passed.
+* **Nothing is posted when there is nothing to report.** A daily all-green message was considered and declined — this is an alert channel. So that silence stays trustworthy, a failure of the digest job itself posts a short notice to `fallback_channel`: otherwise a broken digest would look exactly like a quiet night.
+* **Only `schedule` runs count.** Manual dispatches and `/test-nightly` runs are excluded by the `event=schedule` API filter, so a green manual re-run cannot paper over a failed nightly.
+* **The newest run in the window wins**, and a re-run is marked `(attempt N)`. When a SIG re-runs a nightly that failed on a transient cluster error, that re-run is the current truth about the guide — reporting the earlier failure would leave the digest showing an already-fixed problem as the last word.
+* **Success, `cancelled` and `skipped` do not appear** beyond the footer counts. An all-skipped run means nothing exercised the guide. GitHub's `neutral`, `stale` and `action_required` conclusions are reported as unstable.
+* **The guide's result is computed from the `nightly` jobs, not the run's conclusion.** `update-badge` runs with `if: always()`, so a green test whose badge push failed comes out as a failed *run*. Those are listed separately as "guide passed, `update-badge` failed" and do **not** mention guide owners.
+* **"Did not run" only covers nightlies with an active `cron`.** Seven routed lanes (the IBM/OCP ones) have their whole `schedule:` block commented out; listing those every day would train people to ignore the section that exists to catch a genuinely stalled schedule. They appear only in the footer's "not scheduled" count.
+* **Above 25 failures the digest collapses to one line each** and says main is likely broken. At that point the answer is one investigation, not forty.
 
 ### Testing a change
 
-`workflow_run` **and** `workflow_dispatch` only work from the default branch, so the workflow itself cannot be exercised from a feature branch. Test the logic locally against any scheduled run instead:
+The digest script is fully exercisable locally against the real repository — this is the main way to test a change, and it posts nothing:
 
 ```bash
-GH_TOKEN=$(gh auth token) python .github/scripts/notify-slack-nightly.py \
-    --repo llm-d/llm-d --run-id <run-id> --dry-run
+# The last 24h.
+GH_TOKEN=$(gh auth token) python .github/scripts/slack-nightly-digest.py \
+    --repo llm-d/llm-d --dry-run
+
+# Any past window, e.g. to reproduce a specific night.
+GH_TOKEN=$(gh auth token) python .github/scripts/slack-nightly-digest.py \
+    --repo llm-d/llm-d --since 2026-10-04T20:00:00Z --until 2026-10-05T20:00:00Z --dry-run
 ```
 
-Once merged, the workflow's `workflow_dispatch` inputs replay an existing run (`run_id`), optionally to a scratch channel (`channel_override`) and without posting (`dry_run`).
+`schedule` and `workflow_dispatch` only work from the default branch, so the posting path itself can only be exercised once merged. The `workflow_dispatch` inputs cover that: `window_hours` or `since`/`until` to pick the window, `dry_run` (default `true`) to render into the job summary without posting, and `channel_override` to post to a scratch channel such as `#llm-d-ci-test`.
 
 ### Slack app setup
 
@@ -143,7 +157,7 @@ All nightly benchmark workflows rely heavily on these two "reusable" workflows o
 
 Developers aiming to add a new guide or testing an existing guide on a new cluster or with a new set of parameters should open a PR with **two** new workflows: one for the "nightly benchmark", and one for "consolidated status". Again, an illustratibe example using `optimized-baseline`:
 
-The same PR must also assign the new nightly a Slack channel in [`.github/slack-channels.yaml`](../slack-channels.yaml) (or add it to `skip` with a reason) and run `python scripts/sync-slack-channels.py --fix`; see [Slack notifications](#slack-notifications) above. The `sync-slack-channels` pre-commit hook fails until this is done.
+The same PR must also assign the new nightly a Slack channel in [`.github/slack-channels.yaml`](../slack-channels.yaml) (or add it to `skip` with a reason); see [Slack notifications](#slack-notifications) above. The `sync-slack-channels` pre-commit hook fails until this is done.
 
 ```bash
 [llm-d]$ ls .github/workflows/*optimized-baseline*

@@ -1,102 +1,58 @@
 ---
-name: Notify Slack - Nightly Results
+name: Notify Slack - Nightly Digest
 
-# Posts non-success scheduled nightly results to #llm-d-ci-alerts and mentions
-# the owners listed in the guide's OWNERS file when Slack user IDs are mapped.
+# Posts ONE message a day to #llm-d-ci-alerts summarising every nightly that
+# failed, did not run, or passed with a broken badge push. Owners from the
+# guide's OWNERS file are mentioned when their Slack user IDs are mapped.
 #
-# This replaces the `/github subscribe` integration, which notified on manual
-# workflow_dispatch runs and could not filter out successful nightlies.
+# This replaces a per-run notifier (PR #2598) that posted one message per
+# failing nightly. The nightlies are staggered across 01:00-18:30 UTC, so that
+# produced a dozen-odd separate messages a day, none of which answered "how was
+# last night?" without scrolling the channel.
+#
+# Nothing is accumulated between runs: the script asks the Actions API what each
+# routed nightly did in the window. Having each nightly append to a shared store
+# instead would need locking for the lanes that finish in the same minute, would
+# lose an alert outright on a failed write, and would have to be pruned.
 #
 # Channel routing lives in .github/slack-channels.yaml -- that file is the
-# source of truth. The `workflows:` list below is GENERATED from it by
-#
-#     python scripts/sync-slack-channels.py --fix
-#
-# and verified on every PR by the `sync-slack-channels` pre-commit hook.
-# DO NOT edit that list by hand.
-#
-# Why the list is generated: workflow_run can only match on a workflow's display
-# name, and a display name is easy to change. Rename a nightly and the trigger
-# silently stops matching -- no error, just no more messages, which is
-# indistinguishable from a quiet night. Generating the list means the rename
-# turns CI red in the very PR that does the renaming.
-#
-# Note that owner lookup at runtime keys off the workflow's FILE name
-# (workflow_run.path), not its display name.
+# source of truth, and is verified on every PR by the `sync-slack-channels`
+# pre-commit hook. Unlike the per-run notifier this workflow replaces, there is
+# no generated list of workflow display names here: routing is resolved at
+# runtime from workflow FILE names, which are stable.
 
 on:
-  workflow_run:
-    types:
-      - completed
-    # Filters the branch of the *upstream* run. Scheduled runs always use the
-    # default branch, so this is belt-and-braces, but it does keep runs on the
-    # temporary test-nightly/pr-* branches from reaching this workflow.
-    branches:
-      - main
-    workflows:
-      # SLACK-WORKFLOWS-START
-      - "Nightly - Fast Model Actuation + KEDA E2E (OCP GPU)"
-      - "Nightly - Fast Model Actuation E2E (OCP GPU)"
-      - "Nightly - Flow Control E2E (GKE GPU)"
-      - "Nightly - Optimized Baseline E2E (AMD ROCM)"
-      - "Nightly - Optimized Baseline E2E (CKS GPU)"
-      - "Nightly - Optimized Baseline E2E (GKE GPU SGLang)"
-      - "Nightly - Optimized Baseline E2E (GKE GPU)"
-      - "Nightly - Optimized Baseline E2E (GKE TPU)"
-      - "Nightly - Optimized Baseline E2E (Intel XPU)"
-      - "Nightly - Optimized Baseline E2E (OCP GPU)"
-      - "Nightly - PD Disaggregation E2E (AMD ROCM MORI-IO)"
-      - "Nightly - PD Disaggregation E2E (AMD ROCM NIXL)"
-      - "Nightly - PD Disaggregation E2E (CKS GPU)"
-      - "Nightly - PD Disaggregation E2E (GKE GPU SGLang)"
-      - "Nightly - PD Disaggregation E2E (GKE GPU)"
-      - "Nightly - PD Disaggregation E2E (GKE TPU)"
-      - "Nightly - PD Disaggregation E2E (Intel XPU)"
-      - "Nightly - PD Disaggregation E2E (OCP GPU)"
-      - "Nightly - Precise Prefix Cache E2E (GKE TPU)"
-      - "Nightly - Precise Prefix Cache Routing E2E (AMD ROCM)"
-      - "Nightly - Precise Prefix Cache Routing E2E (CKS GPU)"
-      - "Nightly - Precise Prefix Cache Routing E2E (GKE GPU)"
-      - "Nightly - Precise Prefix Cache Routing E2E (Intel XPU)"
-      - "Nightly - Precise Prefix Cache Routing E2E (OCP GPU)"
-      - "Nightly - Predicted Latency Routing E2E (AMD ROCM)"
-      - "Nightly - Predicted Latency Routing E2E (CKS GPU)"
-      - "Nightly - Predicted Latency Routing E2E (GKE GPU)"
-      - "Nightly - Predicted Latency Routing E2E (Intel XPU)"
-      - "Nightly - Predicted Latency Routing E2E (OCP GPU)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (AMD ROCM, Native)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU SGLang)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (GKE GPU)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (Intel XPU)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading E2E (OCP GPU)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (AMD ROCM)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (GKE GPU)"
-      - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (Intel XPU)"
-      - "Nightly - Tiered Prefix Cache E2E (GKE TPU)"
-      - "Nightly - Tiered Prefix Cache FS Offloading E2E (AMD ROCM, Native)"
-      - "Nightly - Tiered Prefix Cache FS Offloading LMCache E2E (AMD ROCM)"
-      - "Nightly - Wide EP LWS E2E (AMD ROCM MORI-IO)"
-      - "Nightly - Wide EP LWS E2E (CKS GPU)"
-      - "Nightly - Wide EP LWS E2E (GKE GPU)"
-      - "Nightly - Wide EP LWS E2E (Intel XPU)"
-      - "Nightly - Wide EP LWS E2E (OCP GPU)"
-      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)"
-      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
-      # SLACK-WORKFLOWS-END
+  schedule:
+    # 20:00 UTC. The nightly cycle starts at 01:00 and the last lane kicks off
+    # at 18:30 with runs taking ~45-60m, so the cycle is done by ~19:30. Firing
+    # in that quiet gap means each digest covers exactly one complete night and
+    # never splits one across two messages.
+    - cron: '0 20 * * *'
 
-  # Replays an existing nightly run through the notifier. Because workflow_run
-  # (and workflow_dispatch itself) only work from the default branch, this is
-  # the only way to exercise the real posting path once merged. Before merging,
-  # run .github/scripts/notify-slack-nightly.py locally instead -- see
+  # Replays the digest for an arbitrary window. Because `schedule` and
+  # `workflow_dispatch` only work from the default branch, this is the only way
+  # to exercise the real posting path once merged. Before merging, run
+  # .github/scripts/slack-nightly-digest.py locally instead -- see
   # .github/workflows/README.md.
   workflow_dispatch:
     inputs:
-      run_id:
-        description: 'ID of an existing nightly run (the trailing number in its Actions URL)'
-        required: true
+      window_hours:
+        description: 'How far back to look, in hours (ignored when `since` is set)'
+        required: false
+        default: '24'
+        type: string
+      since:
+        description: 'Window start, ISO 8601 (e.g. 2026-10-05T20:00:00Z). Overrides window_hours.'
+        required: false
+        default: ''
+        type: string
+      until:
+        description: 'Window end, ISO 8601. Defaults to now.'
+        required: false
+        default: ''
         type: string
       dry_run:
-        description: 'true = render the payload into the job summary without posting to Slack'
+        description: 'true = render the digest into the job summary without posting to Slack'
         required: false
         default: 'true'
         type: string
@@ -106,47 +62,37 @@ on:
         default: ''
         type: string
 
-# Deliberately minimal. A workflow_run-triggered workflow is handed secrets and a
-# privileged token even when the upstream run had neither, so it should ask for
-# no more than it uses: reading routing and owner mappings from the repo, and
-# reading the upstream run and its jobs from the API.
+# Deliberately minimal: reading routing and owner mappings from the repo, and
+# reading runs and their jobs from the API. Nothing here needs write access.
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  # One group per upstream run. A global group would serialise 40 notifications
-  # behind each other; cancel-in-progress would drop a notification outright.
-  group: notify-slack-nightly-${{ github.event.workflow_run.id || inputs.run_id }}
+  # A single group: there is one digest per day and dropping or duplicating it
+  # are both worse than making a manual replay queue behind the scheduled run.
+  group: notify-slack-nightly-digest
   cancel-in-progress: false
 
 jobs:
-  notify:
-    # Three independent guards:
-    #   1. repository -- forks have no SLACK_BOT_TOKEN and must not try to post.
-    #   2. event == 'schedule' -- THE reason this workflow exists. Excludes
-    #      manual dispatches of a nightly and /test-nightly runs. Note this
-    #      cannot move into `on:`: workflow_run offers no filter on the upstream
-    #      run's own event, so we pay a ~2s empty run per manual dispatch.
-    #   3. conclusion -- only failures, timeouts and unstable results are posted.
-    #
-    # 'cancelled' and 'skipped' are excluded. GitHub Actions uses 'neutral' for
-    # an unstable result. 'timed_out' gets its own result label.
-    if: >-
-      github.repository == 'llm-d/llm-d' &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event.workflow_run.event == 'schedule' &&
-        contains(fromJSON('["failure", "timed_out", "neutral", "stale", "action_required", "startup_failure"]'), github.event.workflow_run.conclusion)))
+  render:
+    # Forks have no SLACK_BOT_TOKEN and must not try to post.
+    if: github.repository == 'llm-d/llm-d'
     runs-on: ubuntu-latest
+    outputs:
+      channels: ${{ steps.render.outputs.channels }}
+      payloads: ${{ steps.render.outputs.payloads }}
+      has_digests: ${{ steps.render.outputs.has_digests }}
+      fallback_channel: ${{ steps.render.outputs.fallback_channel }}
     steps:
       - name: Checkout mapping and script
         uses: actions/checkout@v7
         with:
-          # Read the notifier inputs, nightly workflow files and guide owners.
+          # Read the digest inputs, nightly workflow files and guide owners.
           sparse-checkout: |
             .github/slack-channels.yaml
             .github/slack-owner-ids.yaml
-            .github/scripts/notify-slack-nightly.py
+            .github/scripts/slack-nightly-digest.py
             .github/workflows/nightly-*.yaml
             guides/**/OWNERS
           sparse-checkout-cone-mode: false
@@ -160,25 +106,45 @@ jobs:
       - name: Install dependencies
         run: pip install --disable-pip-version-check pyyaml
 
-      - name: Render Slack payload
+      - name: Render Slack digest
         id: render
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          WINDOW_HOURS: ${{ inputs.window_hours || '24' }}
+          SINCE: ${{ inputs.since }}
+          UNTIL: ${{ inputs.until }}
           CHANNEL_OVERRIDE: ${{ inputs.channel_override }}
         run: |
-          python .github/scripts/notify-slack-nightly.py \
+          python .github/scripts/slack-nightly-digest.py \
             --repo "${GITHUB_REPOSITORY}" \
-            --run-id "${RUN_ID}" \
+            --window-hours "${WINDOW_HOURS}" \
+            ${SINCE:+--since "${SINCE}"} \
+            ${UNTIL:+--until "${UNTIL}"} \
             ${CHANNEL_OVERRIDE:+--channel "${CHANNEL_OVERRIDE}"} \
             --github-output
 
-      - name: Post to Slack
-        # An empty channel means the render step decided there is nothing to
-        # send. dry_run only applies to manual replays.
-        if: >-
-          steps.render.outputs.channel != '' &&
-          !(github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true')
+  post:
+    needs: render
+    # `has_digests` is what keeps this job from expanding an empty matrix, which
+    # is a hard error rather than a no-op. Comparing to 'true' means an unset or
+    # unexpected value skips the job instead. A quiet night emits no digest at
+    # all: posting a daily all-green message to an alert channel was considered
+    # and declined, so silence here means there was nothing to report.
+    if: >-
+      needs.render.outputs.has_digests == 'true' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true')
+    runs-on: ubuntu-latest
+    strategy:
+      # One entry per channel that has something to report. Only
+      # #llm-d-ci-alerts is routed today, but slack-channels.yaml is structured
+      # for more and this should not be what has to change when a SIG wants its
+      # own channel. Keyed on channel names, not payloads, so the job shows up
+      # as `post (#llm-d-ci-alerts)` rather than with the digest in its name.
+      matrix:
+        channel: ${{ fromJSON(needs.render.outputs.channels) }}
+      fail-fast: false
+    steps:
+      - name: Post digest to Slack
         # Pinned by SHA: this is a third-party action in a job that holds
         # SLACK_BOT_TOKEN. Dependabot already tracks github-actions and will
         # propose bumps.
@@ -190,4 +156,30 @@ jobs:
           # not being a member of the target channel ('not_in_channel'), which is
           # broken configuration rather than operational noise.
           errors: true
-          payload: ${{ steps.render.outputs.payload }}
+          payload: ${{ toJSON(fromJSON(needs.render.outputs.payloads)[matrix.channel]) }}
+
+  report-failure:
+    needs: [render, post]
+    # Without an all-green message, silence means "nothing to report" -- so a
+    # broken digest must not also be silent, or a genuinely red night looks
+    # exactly like a quiet one. Skipped jobs are not failures: always() is
+    # required for this to run at all when an upstream job failed.
+    if: >-
+      always() && github.repository == 'llm-d/llm-d' &&
+      (needs.render.result == 'failure' || needs.post.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the broken digest to Slack
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d  # v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            {
+              "channel": "${{ needs.render.outputs.fallback_channel || '#llm-d-ci-alerts' }}",
+              "text": ":bangbang:  *The nightly CI digest failed to run.* Last night's results were not reported — check <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|run #${{ github.run_number }}>.",
+              "mrkdwn": true,
+              "unfurl_links": false,
+              "unfurl_media": false
+            }

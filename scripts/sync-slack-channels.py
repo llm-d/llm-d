@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
-"""Validate the Slack channel mapping and regenerate the notify workflow trigger.
+"""Validate the Slack channel mapping against the nightly workflows on disk.
 
 Usage:
-  python scripts/sync-slack-channels.py --check   # exit 1 if out of sync (default)
-  python scripts/sync-slack-channels.py --fix     # regenerate the trigger in-place
+  python scripts/sync-slack-channels.py --check   # exit 1 if invalid (default)
   python scripts/sync-slack-channels.py --audit   # print the routing table
 
 .github/slack-channels.yaml is the source of truth: it routes each nightly
-workflow to a Slack channel, keyed by file name. The `workflows:` list in
-.github/workflows/notify-slack-nightly.yaml is derived from it.
+workflow to a Slack channel, keyed by file name, or records why a nightly is
+deliberately not notified.
 
-That list has to hold display names because `workflow_run` matches on them and
-offers nothing else, which makes it the one part that breaks silently: rename a
-workflow and the notifications simply stop, with no error anywhere. Generating
-the list -- and checking it here -- turns that silent break into a failure in
-the same PR that does the renaming.
+The guardrail this enforces is coverage. A nightly that is in neither `channels`
+nor `skip` is simply absent from the daily digest, and the symptom is a *missing*
+line in a message nobody is comparing against a list -- invisible by
+construction. Requiring every nightly on disk to be routed or explicitly skipped
+turns that into a failure in the PR that adds the workflow.
+
+This used to also generate a list of workflow display names into
+notify-slack-nightly.yaml, because the old per-run notifier triggered on
+`workflow_run`, which matches on display names and nothing else. The digest
+resolves routing from file names at runtime, so that generated list -- and the
+silent breakage it guarded against -- is gone.
 
 The workflow discovery helpers are shared with the testing matrices; see
 scripts/matrix_common.py.
 """
 
 import argparse
-import difflib
 import re
 import sys
 from pathlib import Path
@@ -30,17 +34,10 @@ import matrix_common as mc
 import yaml
 
 # ---------------------------------------------------------------------------
-# Paths and sentinels
+# Paths
 # ---------------------------------------------------------------------------
 
 MAPPING_PATH = mc.REPO_ROOT / ".github" / "slack-channels.yaml"
-NOTIFY_WORKFLOW_PATH = mc.REPO_ROOT / ".github" / "workflows" / "notify-slack-nightly.yaml"
-
-TRIGGER_START = "      # SLACK-WORKFLOWS-START"
-TRIGGER_END = "      # SLACK-WORKFLOWS-END"
-
-# Indentation of the generated list items inside `on.workflow_run.workflows`.
-ITEM_INDENT = "      "
 
 # Every nightly workflow must be routed or explicitly skipped. Globbing
 # `nightly-*` rather than matrix_common's `nightly-e2e-*` deliberately widens
@@ -119,7 +116,8 @@ def validate(mapping: dict, on_disk: dict[str, str]) -> list[str]:
     for file_name in sorted(set(routed) & set(skip)):
         errors.append(f"{file_name} appears in both 'channels' and 'skip'. Pick one.")
 
-    # Existence: catches renamed and deleted workflow files.
+    # Existence: catches renamed and deleted workflow files. A routed file that
+    # no longer exists is silently dropped from the digest.
     for file_name in sorted(set(routed) | set(skip)):
         if file_name not in on_disk:
             errors.append(
@@ -127,8 +125,7 @@ def validate(mapping: dict, on_disk: dict[str, str]) -> list[str]:
                 f"in {mc.WORKFLOWS_DIR.relative_to(mc.REPO_ROOT)}/."
             )
 
-    # Coverage: the guardrail. A nightly missing from this file is also missing
-    # from the generated trigger, so it never fires and nobody notices.
+    # Coverage: the guardrail. See the module docstring.
     for file_name in sorted(set(on_disk) - set(routed) - set(skip)):
         errors.append(
             f"{file_name} has no Slack channel assigned. Add it to 'channels' in "
@@ -140,8 +137,8 @@ def validate(mapping: dict, on_disk: dict[str, str]) -> list[str]:
         if not (reason or "").strip():
             errors.append(f"{file_name} is skipped without a reason. Say why it is not notified.")
 
-    # workflow_run matches on display names, so duplicates among routed
-    # workflows would fire this notifier twice for one upstream run.
+    # Two nightlies sharing a display name render as two indistinguishable lines
+    # in the digest, which is worse than useless when one is red and one is not.
     seen: dict[str, str] = {}
     for file_name in sorted(routed):
         display = on_disk.get(file_name)
@@ -150,40 +147,11 @@ def validate(mapping: dict, on_disk: dict[str, str]) -> list[str]:
         if display in seen:
             errors.append(
                 f"{file_name} and {seen[display]} share the display name '{display}'. "
-                "workflow_run cannot tell them apart; rename one."
+                "The digest could not tell them apart; rename one."
             )
         seen[display] = file_name
 
     return errors
-
-
-# ---------------------------------------------------------------------------
-# Trigger generation
-# ---------------------------------------------------------------------------
-
-
-def generate_trigger_list(mapping: dict, on_disk: dict[str, str]) -> str:
-    """Render the `workflows:` list items for the notify workflow's trigger.
-
-    Skipped workflows are omitted: keeping them would spend trigger entries on
-    runs the notifier then discards.
-
-    Names are quoted so a future workflow name containing ':' or '#' cannot
-    silently change the meaning of the generated YAML.
-    """
-    names = sorted(
-        on_disk[file_name]
-        for files in (mapping["channels"] or {}).values()
-        for file_name in (files or [])
-        if file_name in on_disk
-    )
-    return "\n".join(f'{ITEM_INDENT}- "{name}"' for name in names)
-
-
-def read_notify_workflow() -> str:
-    if not NOTIFY_WORKFLOW_PATH.exists():
-        raise SystemExit(f"ERROR: {NOTIFY_WORKFLOW_PATH} does not exist.")
-    return NOTIFY_WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +183,7 @@ def run_audit(mapping: dict, on_disk: dict[str, str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--check", action="store_true", default=True, help="fail if out of sync (default)")
-    group.add_argument("--fix", action="store_true", help="regenerate the trigger list in the notify workflow")
+    group.add_argument("--check", action="store_true", default=True, help="fail if the mapping is invalid (default)")
     group.add_argument("--audit", action="store_true", help="print the routing table for human review")
     args = parser.parse_args()
 
@@ -233,40 +200,8 @@ def main() -> int:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    content = read_notify_workflow()
-    current = mc.extract_matrix(content, TRIGGER_START, TRIGGER_END)
-    if current is None:
-        print(
-            f"ERROR: sentinel comments not found in {NOTIFY_WORKFLOW_PATH}.\n"
-            f"Add '{TRIGGER_START.strip()}' and '{TRIGGER_END.strip()}' around the workflows list.",
-            file=sys.stderr,
-        )
-        return 1
-
-    expected = generate_trigger_list(mapping, on_disk)
-
-    if current.strip("\n") == expected.strip("\n"):
-        print("Slack channel mapping is up to date.")
-        return 0
-
-    if args.fix:
-        updated = mc.replace_matrix(content, expected, TRIGGER_START, TRIGGER_END)
-        NOTIFY_WORKFLOW_PATH.write_text(updated, encoding="utf-8")
-        print(f"Updated the workflow_run trigger in {NOTIFY_WORKFLOW_PATH.relative_to(mc.REPO_ROOT)}")
-        return 0
-
-    diff = difflib.unified_diff(
-        current.strip("\n").splitlines(keepends=True),
-        expected.strip("\n").splitlines(keepends=True),
-        fromfile="notify-slack-nightly.yaml (current)",
-        tofile="notify-slack-nightly.yaml (expected)",
-        lineterm="",
-    )
-    print("ERROR: the workflow_run trigger in notify-slack-nightly.yaml is out of sync.", file=sys.stderr)
-    print("Run: python scripts/sync-slack-channels.py --fix", file=sys.stderr)
-    for line in diff:
-        print(line.rstrip("\n"), file=sys.stderr)
-    return 1
+    print(f"Slack channel mapping is valid ({len(on_disk)} nightly workflows accounted for).")
+    return 0
 
 
 if __name__ == "__main__":
