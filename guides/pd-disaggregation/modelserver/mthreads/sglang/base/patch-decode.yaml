@@ -24,14 +24,12 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
         - name: modelserver
-          # IB HCA list and dist-init IP are node-local; GPU/IB come from
+          # IB HCA list is node-local; GPU/IB come from
           # device plugins (mthreads.com/gpu + rdma/ib), not privileged.
           command: ["bash", "-lc"]
           args:
             - |
               set -euo pipefail
-              HOST_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')
-              HOST_IP=${HOST_IP:-$(hostname -I | awk '{print $1}')}
               IB_DEVS=()
               for dev in /sys/class/infiniband/*; do
                 [[ -e "$dev" ]] || continue
@@ -59,7 +57,7 @@ spec:
                 --disaggregation-transfer-backend mooncake \
                 --disaggregation-bootstrap-port 8998 \
                 --disaggregation-ib-device "${MCCL_IB_HCA}" \
-                --dist-init-addr "${HOST_IP}:29500" \
+                --dist-init-addr "${POD_IP}:29500" \
                 --mem-fraction-static 0.9 \
                 --swa-full-tokens-ratio 0.35 \
                 --host 0.0.0.0 \
@@ -81,6 +79,10 @@ spec:
                 --log-requests \
                 --log-requests-level 2
           env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: MTHREADS_VISIBLE_DEVICES
               value: all
             - name: MTHREADS_DRIVER_CAPABILITIES
@@ -182,12 +184,12 @@ spec:
               cpu: "32"
               memory: 128Gi
               mthreads.com/gpu: "8"
-              rdma/ib: "8"
+              rdma/ib: "1"
             limits:
               cpu: "64"
               memory: 256Gi
               mthreads.com/gpu: "8"
-              rdma/ib: "8"
+              rdma/ib: "1"
           volumeMounts:
             - name: shm
               mountPath: /dev/shm

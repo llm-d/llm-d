@@ -14,14 +14,12 @@ spec:
       terminationGracePeriodSeconds: 120
       containers:
         - name: modelserver
-          # IB HCA list and dist-init IP are node-local; everything else is static
+          # IB HCA list is node-local; everything else is static
           # like the other optimized-baseline overlays.
           command: ["bash", "-lc"]
           args:
             - |
               set -euo pipefail
-              HOST_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')
-              HOST_IP=${HOST_IP:-$(hostname -I | awk '{print $1}')}
               IB_DEVS=()
               for dev in /sys/class/infiniband/*; do
                 [[ -e "$dev" ]] || continue
@@ -55,11 +53,15 @@ spec:
                 --reasoning-parser deepseek-v4 \
                 --tool-call-parser deepseekv4 \
                 --enable-metrics \
-                --dist-init-addr "${HOST_IP}:29500" \
+                --dist-init-addr "${POD_IP}:29500" \
                 --log-level info \
                 --log-requests \
                 --log-requests-level 2
           env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: MTHREADS_VISIBLE_DEVICES
               value: all
             - name: MTHREADS_DRIVER_CAPABILITIES
