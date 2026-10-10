@@ -53,7 +53,7 @@ docker/scripts/snapshot/
 ### Component Details
 
 - **[`launcher.py`](launcher.py)**:
-  CLI entrypoint intended to replace `vllm serve` or `python3 -m vllm.entrypoints.openai.api_server`. It dynamically intercepts `vllm.entrypoints.openai.api_server.build_app` to apply `patch_vllm_lifespan()` to the FastAPI application before passing control to `vllm.entrypoints.cli.main()`.
+  CLI entrypoint intended to replace `vllm serve` or `python3 -m vllm.entrypoints.openai.api_server`. It dynamically intercepts `vllm.entrypoints.launchers.app.build_app` (falling back to `vllm.entrypoints.openai.api_server.build_app` on vLLM `< v0.29.0`) to apply `patch_vllm_lifespan()` to the FastAPI application before passing control to `vllm.entrypoints.cli.main()`.
 
 - **[`vllm/wrapper.py`](vllm/wrapper.py) (`patch_vllm_lifespan`)**:
   Wraps the FastAPI application's `router.lifespan_context`. During startup, after the original lifespan context initializes the vLLM engine:

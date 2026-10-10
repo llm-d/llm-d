@@ -432,21 +432,6 @@ class TestGetSnapshotProvider(unittest.TestCase):
 
 
 class TestLauncher(unittest.TestCase):
-    @patch("docker.scripts.snapshot.launcher.patch_vllm_lifespan")
-    def test_build_app_hooks_and_patches_lifespan(self, mock_patch_lifespan):
-        from docker.scripts.snapshot import launcher
-
-        mock_app = MagicMock()
-        mock_orig_build_app = MagicMock(return_value=mock_app)
-        mock_patch_lifespan.return_value = "patched_app"
-
-        wrapped_build_app = lambda *args, **kwargs: launcher.patch_vllm_lifespan(mock_orig_build_app(*args, **kwargs))
-        result = wrapped_build_app("arg1", key="val")
-
-        mock_orig_build_app.assert_called_once_with("arg1", key="val")
-        mock_patch_lifespan.assert_called_once_with(mock_app)
-        self.assertEqual(result, "patched_app")
-
     @patch("sys.argv", ["launcher.py", "--model", "meta-llama/Llama-2-7b"])
     def test_launcher_main(self):
         import sys
@@ -469,18 +454,67 @@ class TestLauncher(unittest.TestCase):
     def test_launcher_api_server_not_importable_warning(self):
         from docker.scripts.snapshot import launcher
 
-        with patch.dict("sys.modules", {"vllm.entrypoints.openai.api_server": None}), \
-             patch("docker.scripts.snapshot.launcher.logger") as mock_logger:
+        with patch.dict(
+            "sys.modules",
+            {
+                "vllm.entrypoints.launchers.app": None,
+                "vllm.entrypoints.openai.api_server": None,
+            },
+        ), patch("docker.scripts.snapshot.launcher.logger") as mock_logger:
             result = launcher._hook_api_server()
             self.assertFalse(result)
             mock_logger.warning.assert_called_once()
             self.assertIn("vLLM API server is not importable", mock_logger.warning.call_args[0][0])
 
+    @patch("docker.scripts.snapshot.launcher.patch_vllm_lifespan", return_value="patched_app")
+    def test_launcher_hook_launchers_app_and_entry(self, mock_patch_lifespan):
+        from docker.scripts.snapshot import launcher
+
+        orig_build_app = MagicMock(return_value="raw_app")
+        mock_launchers_app = MagicMock(build_app=orig_build_app)
+        mock_api_server_entry = MagicMock(build_app=orig_build_app)
+        mock_render_entry = MagicMock(build_app=orig_build_app)
+        modules = {
+            "vllm": MagicMock(),
+            "vllm.entrypoints": MagicMock(),
+            "vllm.entrypoints.launchers": MagicMock(app=mock_launchers_app),
+            "vllm.entrypoints.launchers.app": mock_launchers_app,
+            "vllm.entrypoints.launchers.api_server": MagicMock(entry=mock_api_server_entry),
+            "vllm.entrypoints.launchers.api_server.entry": mock_api_server_entry,
+            "vllm.entrypoints.launchers.render.entry": mock_render_entry,
+        }
+        with patch.dict("sys.modules", modules):
+            result = launcher._hook_api_server()
+            self.assertTrue(result)
+            self.assertIs(mock_launchers_app.build_app, mock_api_server_entry.build_app)
+            self.assertIs(mock_launchers_app.build_app, mock_render_entry.build_app)
+            self.assertEqual(mock_api_server_entry.build_app("args"), "patched_app")
+            orig_build_app.assert_called_once_with("args")
+            mock_patch_lifespan.assert_called_once_with("raw_app")
+
+    def test_launcher_hook_launchers_app_without_build_app_falls_back(self):
+        from docker.scripts.snapshot import launcher
+
+        mock_launchers_app = MagicMock(spec=[])
+        mock_api_server = MagicMock()
+        orig = mock_api_server.build_app = MagicMock(return_value="app")
+        modules = {
+            "vllm": MagicMock(),
+            "vllm.entrypoints": MagicMock(),
+            "vllm.entrypoints.launchers": MagicMock(app=mock_launchers_app),
+            "vllm.entrypoints.launchers.app": mock_launchers_app,
+            "vllm.entrypoints.openai": MagicMock(api_server=mock_api_server),
+            "vllm.entrypoints.openai.api_server": mock_api_server,
+        }
+        with patch.dict("sys.modules", modules):
+            self.assertTrue(launcher._hook_api_server())
+            self.assertIsNot(mock_api_server.build_app, orig)
+
     def test_launcher_hook_api_server_success(self):
         from docker.scripts.snapshot import launcher
 
         mock_api_server = MagicMock()
-        mock_api_server.build_app = MagicMock(return_value="app")
+        orig = mock_api_server.build_app = MagicMock(return_value="app")
         modules = {
             "vllm": MagicMock(),
             "vllm.entrypoints": MagicMock(),
@@ -488,9 +522,8 @@ class TestLauncher(unittest.TestCase):
             "vllm.entrypoints.openai.api_server": mock_api_server,
         }
         with patch.dict("sys.modules", modules):
-            result = launcher._hook_api_server()
-            self.assertTrue(result)
-            self.assertIsNotNone(mock_api_server.build_app)
+            self.assertTrue(launcher._hook_api_server())
+            self.assertIsNot(mock_api_server.build_app, orig)
 
 
 if __name__ == "__main__":
