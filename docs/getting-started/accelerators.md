@@ -103,7 +103,7 @@ MetaX C500X GPUs are supported for community-contributed well-lit paths. The dev
 
 ## Biren 166M
 
-Biren 166M GPUs have community overlays with `hostNetwork` and hostPath device mounts (no in-tree device plugin yet):
+Biren 166M GPUs are supported for community-contributed well-lit paths. The device plugin must expose `birentech.com/gpu`; the P/D overlay also requests InfiniBand through an RDMA device plugin (`rdma/ib`):
 
 - [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, two `TP=8` replicas of Qwen3-32B.
 - [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).

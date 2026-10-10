@@ -40,7 +40,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
 | Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
-| Biren GPU | `biren` | `Qwen72B_INT8` | 🟡 community | — | 166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v) |
+| Biren GPU | `biren` | `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8` | 🟡 community | — | 166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v) |
 | Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -421,19 +421,18 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.biren[0] end -->
 
-The `biren` overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving local `/share/models/Qwen2.5-72B-Quant` as `Qwen72B_INT8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). Set `ACCELERATOR_TYPE=biren`, `MODEL_SERVER=vllm`, `INFRA_PROVIDER=base`, and `MODEL=Qwen72B_INT8`.
+The `biren` overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). Set `ACCELERATOR_TYPE=biren`, `MODEL_SERVER=vllm`, `INFRA_PROVIDER=base`, and `MODEL=Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8`.
 
 **Requirements:**
 
-- Kubernetes nodes with `/dev/biren`.
-- InfiniBand enabled.
-- Containerd `RuntimeClass` `biren` (`handler: biren`).
+- The Biren device plugin exposing `birentech.com/gpu`. Each role requests four GPUs.
+- An RDMA device plugin exposing `rdma/ib` inside pods (edit the resource name in the patches if yours differs, e.g. `rdma/hca` or `rdma/roce_gdr`). Each role requests one.
 - An image with vLLM and NIXL, compatible with BR166M.
 
 **Configuration notes:**
 
 - KV transfer uses `NixlConnector` over RDMA with `UCX_TLS=rc_v`.
-- Verify with Router `/v1/completions` or `/v1/chat/completions` against `Qwen72B_INT8`. Confirm decode logs show an external KV transfer rather than decode-only recompute.
+- Verify with Router `/v1/completions` or `/v1/chat/completions` against `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8`. Confirm decode logs show an external KV transfer rather than decode-only recompute.
 
 </details>
 <details data-when="ACCELERATOR_TYPE=npu">

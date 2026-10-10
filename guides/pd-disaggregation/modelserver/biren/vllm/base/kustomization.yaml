@@ -11,7 +11,7 @@ components:
 
 labels:
   - pairs:
-      llm-d.ai/model: Qwen72B_INT8
+      llm-d.ai/model: Qwen2.5-72B-Instruct-GPTQ-Int8
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: biren

@@ -80,7 +80,7 @@ support:
     biren:
       label: Biren GPU
       notes: "166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v)"
-      model: Qwen72B_INT8
+      model: Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}

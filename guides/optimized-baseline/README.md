@@ -46,6 +46,7 @@ This guide includes configurations for the following accelerator and model serve
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
 | Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
 | MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | 2 replicas × TP=8 (16 GPUs) |
+| Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -84,7 +85,7 @@ export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, biren
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2
@@ -221,7 +222,7 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
-The NVIDIA GPU, AMD, CPU, Intel XPU and TPU v6/v7 vLLM overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). The Iluvatar, MetaX, Rebellions NPU and TPU v7 dynamic-slice overlays do not drain yet. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
+The NVIDIA GPU, AMD, CPU, Intel XPU and TPU v6/v7 vLLM overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). The Iluvatar, MetaX, Biren, Rebellions NPU and TPU v7 dynamic-slice overlays do not drain yet. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
 
 **Apply the Kustomize overlays** for your specific backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere):
 

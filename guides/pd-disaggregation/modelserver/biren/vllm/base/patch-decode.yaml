@@ -10,8 +10,6 @@ spec:
     spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      runtimeClassName: biren
-      nodeName: wz-server005
       terminationGracePeriodSeconds: 30
       containers:
         - name: modelserver
@@ -21,15 +19,12 @@ spec:
             - vllm
             - serve
           args:
-            - /share/models/Qwen2.5-72B-Quant
-            - --host=0.0.0.0
+            - Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8
             - --port=8200
-            - --served-model-name=Qwen72B_INT8
             - --distributed-executor-backend=mp
             - --block-size=128
             - --seed=1024
             - --tensor-parallel-size=4
-            - --dtype=bfloat16
             - --max-model-len=3072
             - --max-num-seqs=64
             - --max-num-batched-tokens=4096
@@ -39,26 +34,23 @@ spec:
             - --kv-transfer-config
             - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_buffer_device":"cpu"}'
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
             - name: VLLM_NIXL_SIDE_CHANNEL_HOST
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
             - name: VLLM_NIXL_SIDE_CHANNEL_PORT
               value: "5600"
-            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
-              value: "120"
-            - name: SUPA_VISIBLE_DEVICES
-              value: "0,1,2,3"
             - name: UCX_TLS
               value: rc_v
             - name: UCX_NET_DEVICES
               value: all
-            - name: VLLM_USE_V1
-              value: "1"
             - name: VLLM_ENABLE_V1_MULTIPROCESSING
               value: "1"
-            - name: VLLM_WORKER_MULTIPROC_METHOD
-              value: spawn
             - name: VLLM_BR_WEIGHT_TYPE
               value: NUMA
             - name: VLLM_USE_TRITON_FLASH_ATTN
@@ -73,8 +65,6 @@ spec:
               value: "1"
             - name: BRTB_ENABLE_NUMA_ALIGN_4K
               value: "1"
-            - name: PYTHONHASHSEED
-              value: "0"
             - name: RAY_DEDUP_LOGS
               value: "0"
             - name: LD_PRELOAD
@@ -87,7 +77,6 @@ spec:
               containerPort: 5600
               protocol: TCP
           securityContext:
-            privileged: true
             capabilities:
               add:
                 - IPC_LOCK
@@ -96,16 +85,14 @@ spec:
             limits:
               cpu: "32"
               memory: 256Gi
+              birentech.com/gpu: "4"
+              rdma/ib: "1"
             requests:
               cpu: "16"
               memory: 128Gi
+              birentech.com/gpu: "4"
+              rdma/ib: "1"
           volumeMounts:
-            - mountPath: /share
-              name: share
-            - mountPath: /dev/biren
-              name: biren
-            - mountPath: /dev/infiniband
-              name: infiniband
             - mountPath: /dev/shm
               name: shm
             - mountPath: /.cache
@@ -117,7 +104,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 180
+            failureThreshold: 360
           livenessProbe:
             httpGet:
               path: /health
@@ -133,21 +120,9 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 6
       volumes:
-        - name: share
-          hostPath:
-            path: /share
-            type: Directory
-        - name: biren
-          hostPath:
-            path: /dev/biren
-            type: Directory
-        - name: infiniband
-          hostPath:
-            path: /dev/infiniband
-            type: Directory
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 128Gi
+            sizeLimit: 32Gi
         - name: torch-compile-cache
           emptyDir: {}
