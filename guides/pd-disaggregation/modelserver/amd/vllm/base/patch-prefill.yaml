@@ -1,68 +1,72 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
 metadata:
-  name: prefill
+  name: pd-disagg
 spec:
-  replicas: 1
-  template:
-    spec:
-      containers:
-        - name: modelserver
-          command: ["vllm", "serve"]
-          args:
-            - "amd/Llama-3.3-70B-Instruct-FP8-KV"
-            - "--disable-uvicorn-access-log"
-            - "--tensor-parallel-size=1"
-            - "--block-size=128"
-            - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer"}'
-            - "--max-model-len=32000"
-          env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            # Default vLLM keep-alive (5s) is shorter than llm-d-routing-sidecar's default idle
-            # conn timeout (90s, from Go http.Transport), causing TCP RSTs on reuse.
-            # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
-            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
-              value: "120"
-          resources:
-            limits:
-              cpu: "8"
-              memory: 256Gi
-              amd.com/gpu: "1"
-            requests:
-              cpu: "8"
-              memory: 256Gi
-              amd.com/gpu: "1"
-          volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
-            - mountPath: /.cache
-              name: torch-compile-cache
-          startupProbe:
-            initialDelaySeconds: 15
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 60
-          livenessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
-      volumes:
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 16Gi
-        - name: torch-compile-cache
-          emptyDir: {}
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              containers:
+                - name: modelserver
+                  command: ["vllm", "serve"]
+                  args:
+                    - "amd/Llama-3.3-70B-Instruct-FP8-KV"
+                    - "--disable-uvicorn-access-log"
+                    - "--tensor-parallel-size=1"
+                    - "--block-size=128"
+                    - "--kv-transfer-config"
+                    - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer"}'
+                    - "--max-model-len=32000"
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    # Default vLLM keep-alive (5s) is shorter than llm-d-routing-sidecar's default idle
+                    # conn timeout (90s, from Go http.Transport), causing TCP RSTs on reuse.
+                    # Server keep-alive must be >= sidecar idle timeout; configured to 120s.
+                    - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                      value: "120"
+                  resources:
+                    limits:
+                      cpu: "8"
+                      memory: 256Gi
+                      amd.com/gpu: "1"
+                    requests:
+                      cpu: "8"
+                      memory: 256Gi
+                      amd.com/gpu: "1"
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                  startupProbe:
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 60
+                  livenessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                    failureThreshold: 3
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 16Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
