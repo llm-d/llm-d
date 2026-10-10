@@ -1,0 +1,173 @@
+name: hyperconverged-cephfs
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: hyperconverged-cephfs
+    NAMESPACE: llm-d-hyperconverged-cephfs
+
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
+
+    MONITORING_VALUES: {default: ""}
+    PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
+
+    MODEL: {default: "Qwen/Qwen3.6-35B-A3B"}
+
+    # STORAGE
+    ROOK_NAMESPACE: {default: rook-ceph}
+    ROOK_CHART_REPO: {default: "https://charts.rook.io/release"}
+    ROOK_CHART_VERSION: {default: v1.20.2}
+    ROOK_CLUSTER_EXTRA_VALUES: {default: ""}
+    STORAGE_NODE_LABEL: {default: "llm-d.ai/ceph-storage=true"}
+    STORAGE_CLASS: {default: rook-cephfs-fast}
+    KV_CACHE_PVC_SIZE: {default: 3Ti}
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+  storage_nodes:
+    - skip_in: [ci]
+      run: |
+        # Replace with the GPU nodes that will also host the Ceph daemons and OSDs
+        export STORAGE_NODES="dgx-01 dgx-02 dgx-03"
+        kubectl label node ${STORAGE_NODES} ${STORAGE_NODE_LABEL} --overwrite
+
+deploy:
+
+  storage:
+    - run: |
+        # Reads the ROOK_* and STORAGE_NODE_LABEL variables set above
+        ${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh
+
+  pvc:
+    - run: |
+        envsubst '${STORAGE_CLASS} ${KV_CACHE_PVC_SIZE}' \
+          < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
+        kubectl wait pvc/llm-d-kv-cache-storage -n ${NAMESPACE} \
+          --for=jsonpath='{.status.phase}'=Bound --timeout=5m
+
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+  monitoring_values:
+    - run: |
+        #
+        # Uncomment the below to enable Prometheus monitoring on the llm-d router
+        #
+        # Unlike the ROUTER_*_VALUES paths above, this variable carries its own
+        # -f flag: it is empty by default, so the helm commands expand it as-is.
+        #
+        # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  gateway:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_GATEWAY_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          --set provider.name=${PROVIDER_NAME} \
+          --set httpRoute.create=true \
+          --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/
+
+  monitoring:
+    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+    gateway:
+      - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+  tests:
+    storage:
+      - run: |
+          kubectl exec -n ${ROOK_NAMESPACE} deploy/rook-ceph-tools -- ceph status
+          kubectl exec -n ${ROOK_NAMESPACE} deploy/rook-ceph-tools -- ceph fs status kvcache-fs
+          kubectl exec -n ${ROOK_NAMESPACE} deploy/rook-ceph-tools -- ceph osd pool get kvcache-fs-data0 all
+          # OSD addresses should be on the high-speed subnets, not the management one
+          kubectl exec -n ${ROOK_NAMESPACE} deploy/rook-ceph-tools -- ceph osd dump | grep '^osd\.'
+          kubectl get pvc llm-d-kv-cache-storage -n ${NAMESPACE}
+    completion:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    offload:
+      - run: |
+          # Long prompt (~6K tokens) so KV blocks are offloaded
+          kubectl run curl-offload --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/bash -c '
+              PROMPT=$(printf "Story: "; for i in $(seq 1 800); do printf "alice met bob and they walked together. "; done)
+              jq -n --arg model "${MODEL}" --arg prompt "${PROMPT}" "{model:\$model, prompt:\$prompt, max_tokens:3, temperature:0}" \
+                | curl -sS "http://${IP}/v1/completions" -H "Content-Type: application/json" -d @- | jq .usage'
+      - run: |
+          # Every replica mounts the same CephFS volume, so each one reports the same usage
+          for POD in $(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            echo "${POD}: $(kubectl exec -n ${NAMESPACE} ${POD} -c modelserver -- du -sh /mnt/files-storage | cut -f1)"
+          done
+          # The effective mount options are authoritative: check that noatime and nodiratime are listed
+          kubectl exec -n ${NAMESPACE} ${POD} -c modelserver -- grep ' /mnt/files-storage ' /proc/mounts
+
+cleanup:
+  stack:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/ --ignore-not-found=true
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - run: kubectl delete pvc llm-d-kv-cache-storage -n ${NAMESPACE} --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}
+  storage:
+    - skip_in: [ci]
+      run: |
+        # DESTRUCTIVE: destroys the Ceph cluster and everything stored in it (asks for confirmation)
+        ${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh --uninstall

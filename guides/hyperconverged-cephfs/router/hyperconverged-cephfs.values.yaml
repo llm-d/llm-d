@@ -1,0 +1,40 @@
+## hyperconverged-cephfs guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "hyperconverged-cephfs-plugins.yaml"
+    pluginsCustomConfig:
+      hyperconverged-cephfs-plugins.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        # Same prefix- and load-aware routing as the optimized baseline. The
+        # CephFS tier is shared, so any replica can restore a prefix that
+        # another replica computed: the router still prefers the replica that
+        # holds it in GPU or CPU memory, and a request that the saturation
+        # override sends elsewhere reads the prefix back from CephFS instead of
+        # recomputing it.
+        #
+        # peakPrefillThroughput defaults to the value measured for Qwen3-32B on
+        # H100 (TP=2). Measure your own with guides/recipes/router/calibration
+        # and set it on the filter.
+        plugins:
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "hyperconverged-cephfs"
