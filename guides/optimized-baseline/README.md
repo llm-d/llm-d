@@ -46,9 +46,23 @@ This guide includes configurations for the following accelerator and model serve
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
 | Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
 | MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | 2 replicas × TP=8 (16 GPUs) |
+| Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
+
+The MThreads **vLLM** overlay is a single-replica TP validation profile: one
+`Qwen/Qwen3-32B` vLLM server, tensor parallelism 8, and eight
+`mthreads.com/gpu` resources in the pod. It uses the standalone Router/EPP
+path and the `llm-d-hf-token` Secret for model download. Set `ACCELERATOR_TYPE=mthreads`,
+`MODEL_SERVER=vllm`, and keep `MODEL=Qwen/Qwen3-32B` when following the
+deployment commands. The MThreads profile is not covered by the default H100 calibration
+value; measure `peakPrefillThroughput` on the target model and hardware before
+performance tuning.
+
+The MThreads **SGLang** overlay colocates prefill and decode for
+`DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
+[Deploying on Moore Threads S5000 (SGLang, colocated, no PD)](#deploying-on-moore-threads-s5000-sglang-colocated-no-pd).
 
 ## Prerequisites
 
@@ -84,7 +98,7 @@ export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, mthreads
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2

@@ -21,7 +21,7 @@ The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 pref
 How the two pools are deployed depends on the accelerator:
 
 - **NVIDIA GPU** (vLLM and SGLang) **and Google TPU7x dynamic sub-slices**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices) with a `prefill` and a `decode` role, in a single slice. The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
-- **All other accelerators** (AMD, Intel XPU, Google TPU v6e and TPU7x on static node pools, Iluvatar, MetaX, Rebellions NPU): a prefill and a decode `Deployment`.
+- **All other accelerators** (AMD, Intel XPU, Google TPU v6e and TPU7x on static node pools, Iluvatar, MetaX, Moore Threads, Rebellions NPU): a prefill and a decode `Deployment`.
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/advanced/disaggregation/README.md).
 
@@ -40,6 +40,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
 | Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
+| Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | MTT S5000 · vLLM 1P TP=4 + 1D TP=4, Mooncake TCP; SGLang 1P+1D TP=8, Mooncake RDMA |
 | Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -59,6 +60,8 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | MoRIIOConnector | `amd/vllm/moriio/*` | RDMA via MoRI-IO | AMD GPU. |
 | TPUConnector / TPUConnectorHMA | `tpu/*` | TPU ICI / DCN | From `tpu_inference`; HMA on TPU7x. |
 | IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
+| MooncakeConnector | `mthreads/vllm/base` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires the same TP on prefill and decode. See the [Moore Threads tab](#2-deploy-the-model-server). |
+| SGLang mooncake | `mthreads/sglang/base` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
 
 NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production.
 
@@ -143,7 +146,7 @@ export NAMESPACE=llm-d-pd-disaggregation
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, npu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, mthreads, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma; valid values per accelerator: table above
 export MODEL=openai/gpt-oss-120b # set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B
@@ -449,6 +452,54 @@ The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMa
 - Neither the DRA allocation nor the NIXL transfer can be checked by a server dry-run against a cluster without these DeviceClasses. Both need a run on the real hardware.
 
 </details>
+<details data-when="ACCELERATOR_TYPE=mthreads">
+<summary><b>Moore Threads</b></summary>
+
+<!-- guide:deploy.modelserver.mthreads[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.mthreads[0] end -->
+
+Both overlays request `mthreads.com/gpu` and deploy a prefill `Deployment` and a decode `Deployment`. Set `ACCELERATOR_TYPE=mthreads` and `INFRA_PROVIDER=base`, then choose `MODEL_SERVER`.
+
+**SGLang** (`MODEL_SERVER=sglang`): **1 Prefill + 1 Decode**, each `TP=8` (prefill also `EP=8`), serving `DeepSeek-V4-Flash-0731-FP8-mt` with `--disaggregation-transfer-backend mooncake`. It needs **two** 8-GPU nodes. For a single 8-GPU node, use the [optimized-baseline colocated overlay](../optimized-baseline/README.md). Set `MODEL=/data/models/DeepSeek-V4-Flash-0731-FP8-mt/`.
+
+**Requirements:**
+
+- Moore Threads GPU Operator / device plugin exposing `mthreads.com/gpu`, plus RuntimeClass `mthreads`.
+- InfiniBand device plugin exposing `rdma/ib` (edit the resource name in the patches if yours differs, e.g. `rdma/hca` or `rdma/roce_gdr`). `mt_peermem` is a **node** module for GPUDirect RDMA; load it on the node, do not request it as a Pod resource.
+- Image `registry.mthreads.com/devtech/sglang-dsv4:1.0` (air-gapped sites can retag).
+- Pods get `IPC_LOCK` and Unconfined seccomp so Mooncake can pin memory. They are not privileged.
+- Prefill↔Decode reachability on HTTP 8000/8200 and Mooncake bootstrap TCP **8998**, plus RDMA between the injected IB devices.
+
+The routing sidecar sets `bootstrap_host` to the InferencePool **Pod IP**. Mooncake then uses that address to pick the RDMA path (QP RTR). Requesting `rdma/ib`, or bind-mounting `/dev/infiniband`, is not enough if the RoCE GID is not on that IP — the transfer fails with `Failed to modify QP to RTR` / `No such device`. Give the Pod an IP on the RoCE NIC (Multus / SR-IOV). `hostNetwork` is a cluster-level fallback so `podIP` equals the node IP; do not bake it into this overlay.
+
+**vLLM** (`MODEL_SERVER=vllm`): single-node compatibility topology for **Qwen3-32B**, one Prefill Deployment with `TP=4` and one Decode Deployment with `TP=4`. Each Deployment requests four `mthreads.com/gpu` devices, so the topology consumes all eight GPUs on an MTT S5000 node. Keep `MODEL=Qwen/Qwen3-32B`.
+
+**Requirements:**
+
+- MThreads Device Controller exposing `mthreads.com/gpu`.
+- The `llm-d-hf-token` Secret with a valid `HF_TOKEN`.
+- The MThreads vLLM image configured in `guides/recipes/modelserver/components/images/mthreads-vllm/release/`.
+- A vLLM image that includes the built-in `MooncakeConnector` and the `mooncake-transfer-engine-musa` package. The validated MThreads image uses Mooncake's TCP protocol with its MUSA transport; NIXL is not required.
+- Pod-to-pod TCP connectivity for the Mooncake bootstrap endpoint on port `8998`, in addition to the Prefill and Decode HTTP ports (`8000` and `8200`). The transfer-engine data-plane RPC ports are allocated dynamically by Mooncake.
+
+**Configuration notes:**
+
+- Prefill: `MooncakeConnector`, `kv_role=kv_producer`, `mooncake_protocol=tcp`.
+- Decode: `MooncakeConnector`, `kv_role=kv_consumer`, `mooncake_protocol=tcp`.
+- Decode sidecar: `--kv-connector=mooncake`, `--mooncake-bootstrap-port=8998`.
+- Prefill and Decode use `kv_load_failure_policy=fail` so a failed KV pull is visible as an inference error instead of silently recomputing the prompt.
+- The standalone-store settings are a separate RDMA-backed Mooncake Store setup. They are not required for this single-node P2P validation. A successful HTTP response alone is not sufficient: inspect the vLLM logs for `Using MUSA transport`, Mooncake bootstrap startup, and successful KV-transfer metrics.
+- `guides/pd-disaggregation/router/pd-disaggregation.values.yaml` is enough for a functional smoke test, but its `peakPrefillThroughput: 33821` is an NVIDIA H200 reference value. Do not use it for MTT S5000 performance claims; measure the MThreads Qwen3-32B TP=4 prefill path with the calibration recipe and override the value.
+
+Treat the vLLM path as a compatibility smoke test until a clean multi-hour soak and hardware-specific calibration have been completed.
+
+</details>
 <!-- tabs:end -->
 
 ### 3. Enable Monitoring (optional)
@@ -482,7 +533,7 @@ In a P/D deployment the prefill and decode pools scale and fail independently, a
 
 #### Common failure modes
 
-- **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect NIXL transfer (see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
+- **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect the configured KV-transfer backend (NIXL, Mooncake, or another backend; see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
 - **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode role needs more replicas or a larger TP degree.
 - **Both pools underutilized but latency high** — routing problem. Check the P/D decision ratio and EPP scheduler e2e latency before touching the model servers.
 - **`cks-mooncake`: no RDMA in pod** — check that `rdma/ib` appears in the node's allocatable resources (`kubectl describe node`) and that the RDMA device plugin is running.
