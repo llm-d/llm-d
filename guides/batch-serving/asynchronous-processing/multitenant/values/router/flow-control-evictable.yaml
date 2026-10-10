@@ -1,0 +1,107 @@
+# Router values for Multi-Tenant Async Processing using Flow Control with
+# in-flight eviction. EXPERIMENTAL: eviction cancels requests that are
+# already running on the model server, and its behavior may change.
+#
+# Eviction protects realtime traffic that shares the pool with llm-d-async
+# traffic: when a higher-priority request is blocked by saturation, the router
+# cancels in-flight sheddable (negative-priority) requests, here overflow-async
+# (-5) and overflow-batch (-10), lowest priority first. llm-d-async retries
+# them, so their partial work is lost. See the README's "Protecting realtime
+# traffic" for the tradeoff against flow-control-holdback.yaml.
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+  monitoring:
+    prometheus:
+      enabled: true
+      auth:
+        enabled: false
+  epp:
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        memory: "8Gi"
+    pluginsConfigFile: "flow-control-plugins.yaml"
+    pluginsCustomConfig:
+      flow-control-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: round-robin-fairness-policy
+        - type: fcfs-ordering-policy
+        - type: concurrency-detector
+          parameters:
+            maxConcurrency: 10
+            concurrencyMode: requests
+            headroom: 0.0
+
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+
+        flowControl:
+          maxBytes: "10Gi"
+          maxRequests: "1k"
+          defaultRequestTTL: "300s"
+          saturationDetector:
+            pluginRef: concurrency-detector
+          # Reclaim capacity from sheddable (negative-priority) in-flight
+          # requests when a higher-priority request is blocked by pool
+          # saturation. Without it (or priority holdback), async work admitted
+          # up to and past maxConcurrency holds the pool and realtime requests
+          # wait a full service time in flow control; see
+          # https://github.com/llm-d/llm-d-async/issues/468.
+          enableEviction: true
+          priorityBands:
+          - priority: 100
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 60
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 30
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 10
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: -5
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: -10
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+
+  proxy:
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        memory: "8Gi"
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: async-multitenant   # set on the model server by README step 1's sed

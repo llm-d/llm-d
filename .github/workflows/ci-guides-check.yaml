@@ -5,7 +5,8 @@ name: CI Guides Check
 # relative to its guide.yaml (fix: `scripts/guide.py render <guide-dir>`),
 # when a guide's `support:` matrix disagrees with its overlays or nightly E2E
 # workflows, or when the llm-d.ai publish manifest is invalid, and runs the
-# unit tests under scripts/tests/ and docker/scripts/cpu/.
+# Python tests under scripts/tests/, docker/scripts/cpu/,
+# .github/scripts/nightly-e2e-verification/, and helpers/smoke-test/tests/.
 
 on:
   pull_request:
@@ -20,6 +21,8 @@ on:
       - scripts/seed-release-badges.py
       - scripts/tests/**
       - docker/scripts/cpu/**
+      - .github/scripts/nightly-e2e-verification/**
+      - helpers/smoke-test/**
   workflow_dispatch:
 
 permissions:
@@ -50,11 +53,11 @@ jobs:
         run: python -m pip install --quiet 'pyyaml==6.*' 'packaging>=24.2' pytest
 
       - name: Check rendered READMEs are current
-        run: python scripts/guide.py render guides/*/ --check
+        run: python scripts/guide.py render guides/*/ guides/models/*/ --check
 
       # The list of guides llm-d.ai publishes (synced by llm-d/llm-d.github.io).
       - name: Check the llm-d.ai guide publish manifest
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
 
-      - name: Run Python unit tests
-        run: python -m pytest scripts/tests/ docker/scripts/cpu/ -v
+      - name: Run Python tests
+        run: python -m pytest scripts/tests/ docker/scripts/cpu/ .github/scripts/nightly-e2e-verification/ helpers/smoke-test/tests/ -v

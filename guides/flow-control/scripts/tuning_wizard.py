@@ -298,7 +298,7 @@ def main():
 
     print_header("CONFIGURATION SNIPPETS")
     print("1. Gateway Configuration (EndpointPickerConfig YAML):")
-    print(f"""apiVersion: llm-d.ai/v1alpha1
+    print(f"""apiVersion: llm-d.ai/v1
 kind: EndpointPickerConfig
 featureGates:
 - flowControl
@@ -308,9 +308,9 @@ plugins:
   parameters:
     maxConcurrency: {gateway_concurrency}
     headroom: {recommended_headroom} # Adjust 10-20% only if compute-bound & cache enabled
-saturationDetector:
-  pluginRef: my-concurrency-detector
 flowControl:
+  saturationDetector:
+    pluginRef: my-concurrency-detector
   maxRequests: 200 # Recommended minimum burst queue capacity
   maxBytes: "10Gi"
 """)

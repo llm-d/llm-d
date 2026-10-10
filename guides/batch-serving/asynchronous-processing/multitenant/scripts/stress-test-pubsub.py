@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Stress test script for Multi-Tenant Async Processing using GCP Pub/Sub backend.
-Generates multi-tenant traffic (team × tier × model) and drives background
+Generates multi-tenant traffic (team × tier) and drives background
 saturation load on the router to populate Prometheus, Grafana, and Cloud Monitoring metrics.
 
 Usage:
@@ -31,8 +31,7 @@ if not DEFAULT_PROJECT:
         DEFAULT_PROJECT = None
 
 DEFAULT_NAMESPACE = os.environ.get("NAMESPACE", "llm-d-async")
-DEFAULT_MODEL_A = os.environ.get("MODEL_A", "Qwen/Qwen3-8B")
-DEFAULT_MODEL_B = os.environ.get("MODEL_B", "Qwen/Qwen3-8B")
+DEFAULT_MODEL = os.environ.get("MODEL", "Qwen/Qwen3-32B")
 
 def check_port_open(host="127.0.0.1", port=8080):
     import socket
@@ -91,10 +90,10 @@ def send_background_load(igw_url, model_name, duration_sec=60, concurrency=6):
 
     print(f"[*] Background saturation load finished. Completed {req_count} completions.")
 
-def publish_message(project_id, topic, team, model_code, model_name, seq_id, ttl=600):
+def publish_message(project_id, topic, team, model_name, seq_id, ttl=600):
     now = int(time.time())
     dl = now + ttl
-    msg_id = f"stress-{team}-{model_code}-{now}-{seq_id:04d}"
+    msg_id = f"stress-{team}-{now}-{seq_id:04d}"
     payload = {
         "id": msg_id,
         "created": now,
@@ -117,22 +116,19 @@ def publish_message(project_id, topic, team, model_code, model_name, seq_id, ttl
     res = subprocess.run(cmd, capture_output=True, text=True)
     return res.returncode == 0, msg_id
 
-def publish_traffic(project_id, model_a, model_b):
+def publish_traffic(project_id, model):
     topics_spec = [
-        ("team-premium-a-requests", "premium", "a", model_a, 15),
-        ("team-standard-a-requests", "standard", "a", model_a, 10),
-        ("team-batch-a-requests", "batch", "a", model_a, 5),
-        ("team-premium-b-requests", "premium", "b", model_b, 15),
-        ("team-standard-b-requests", "standard", "b", model_b, 10),
-        ("team-batch-b-requests", "batch", "b", model_b, 5),
+        ("team-premium-requests", "premium", 30),
+        ("team-standard-requests", "standard", 20),
+        ("team-batch-requests", "batch", 10),
     ]
-    print(f"[*] Publishing multi-tenant requests across 6 Pub/Sub topics...")
+    print(f"[*] Publishing multi-tenant requests across 3 Pub/Sub topics...")
     tasks = []
     with ThreadPoolExecutor(max_workers=12) as executor:
-        for topic, team, m_code, m_name, count in topics_spec:
+        for topic, team, count in topics_spec:
             for i in range(count):
                 tasks.append(executor.submit(
-                    publish_message, project_id, topic, team, m_code, m_name, i + 1
+                    publish_message, project_id, topic, team, model, i + 1
                 ))
         success = 0
         failed = 0
@@ -148,8 +144,7 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-tenant async processor Pub/Sub stress test")
     parser.add_argument("--project", default=DEFAULT_PROJECT, help="GCP Project ID")
     parser.add_argument("--namespace", default=DEFAULT_NAMESPACE, help="Kubernetes namespace")
-    parser.add_argument("--model-a", default=DEFAULT_MODEL_A, help="Model A name")
-    parser.add_argument("--model-b", default=DEFAULT_MODEL_B, help="Model B name")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Served model name")
     parser.add_argument("--duration", type=int, default=60, help="Saturation duration in seconds")
     parser.add_argument("--igw-port", type=int, default=8080, help="Local port for router gateway")
     args = parser.parse_args()
@@ -163,8 +158,7 @@ def main():
     print("Multi-Tenant Async Processor — GCP Pub/Sub Stress Test")
     print(f"Project:    {args.project}")
     print(f"Namespace:  {args.namespace}")
-    print(f"Model A:    {args.model_a}")
-    print(f"Model B:    {args.model_b}")
+    print(f"Model:      {args.model}")
     print(f"Duration:   {args.duration}s")
     print("==========================================================")
 
@@ -173,9 +167,9 @@ def main():
 
     try:
         with ThreadPoolExecutor(max_workers=2) as exec_main:
-            bg_future = exec_main.submit(send_background_load, igw_url, args.model_a, args.duration)
+            bg_future = exec_main.submit(send_background_load, igw_url, args.model, args.duration)
             time.sleep(6)  # allow saturation to reach threshold
-            pub_future = exec_main.submit(publish_traffic, args.project, args.model_a, args.model_b)
+            pub_future = exec_main.submit(publish_traffic, args.project, args.model)
             pub_future.result()
             bg_future.result()
 

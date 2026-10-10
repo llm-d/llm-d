@@ -1,0 +1,210 @@
+name: predicted-latency-routing
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
+support:
+  engines: {vllm: vLLM, sglang: SGLang}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · vLLM runs a RoPE-scaled 131,072-token context · `INFRA_PROVIDER`: `base`, `gke`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+      engines: {vllm: validated, sglang: community}
+    amd:
+      label: AMD GPU
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · RoPE-scaled 131,072-token context"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: validated}
+    xpu:
+      label: Intel XPU
+      notes: "2 replicas × 1 GPU via DRA · single-GPU pods have no room for the long-context `Qwen3-32B` config"
+      model: Qwen/Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · `INFRA_PROVIDER`: `base`, `gke`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
+    "tpu/v7":
+      label: Google TPU v7
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · `INFRA_PROVIDER`: `base`, `gke`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: predicted-latency-routing
+    NAMESPACE: llm-d-predicted-latency
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* and
+    # verify.tests.router_metrics steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+
+    # SLO-aware scheduling is opt-in: set SLO_AWARE=true to deploy
+    # router/predicted-latency-slo.values.yaml instead of the routing-only
+    # router/predicted-latency.values.yaml.
+    SLO_AWARE: {default: "false", values: ["false", "true"]}
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7"]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*); base everywhere else.
+    INFRA_PROVIDER: {default: base, values: [base, gke]}
+
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the model your accelerator serves (table above); Intel XPU serves Qwen/Qwen3-0.6B"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml"
+    # skip_in ci: SLO_AWARE is not a variant variable, so guide.py renders this
+    # step as a plain fence; the README-parsing nightlies would harvest the
+    # export and deploy the SLO-aware values, which no nightly covers.
+    - when: {SLO_AWARE: ["true"]}
+      skip_in: [ci]
+      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency-slo.values.yaml"
+
+  monitoring_values:
+    # skip_in ci: the README-parsing nightlies harvest every `export`, and they
+    # never enabled router monitoring for this guide.
+    - when: {MONITORING: ["true"]}
+      skip_in: [ci]
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    traffic:
+      - run: |
+          # 200 requests, 10 at a time, with output lengths from 16 to 128 tokens:
+          # every completed request becomes a training sample for the predictor
+          kubectl run traffic-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'for i in $(seq 1 200); do
+                curl -sS -o /dev/null -w "%{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"Request ${i}: explain how an LLM router picks a model server.\", \"max_tokens\": $((16 * (i % 8 + 1)))}" &
+                [ $((i % 10)) -eq 0 ] && wait
+              done | sort | uniq -c'
+    predictor:
+      - run: |
+          # The latency predictor sidecars run in the router (EPP) pod: the training
+          # server on port 8000 and the prediction server on port 8001. Read them
+          # through the Kubernetes API server pod proxy (no port-forward needed)
+          EPP_POD=$(kubectl get pods -n ${NAMESPACE} -o name | grep "^pod/${GUIDE_NAME}-epp-" | head -1 | cut -d/ -f2)
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8000/proxy/metrics" \
+            | awk '/^training_samples_count\{model="ttft"/ {ttft += $NF} /^training_samples_count\{model="tpot"/ {tpot += $NF} END {printf "training samples: ttft=%d tpot=%d\n", ttft, tpot}'
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8001/proxy/status"; echo
+    router_metrics:
+      # The router's /metrics endpoint requires authentication unless the
+      # monitoring values (MONITORING=true) are applied.
+      - when: {MONITORING: ["true"]}
+        run: |
+          # Actual vs. predicted TTFT histograms of the router, read through the
+          # API server service proxy
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
+            | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
+    slo_request:
+      # skip_in ci: SLO_AWARE is not a variant variable (see deploy.router_values).
+      - when: {SLO_AWARE: ["true"]}
+        skip_in: [ci]
+        run: |
+          # A streamed request with TTFT and TPOT SLOs: the SLO-aware values set
+          # streamingMode: true, so requests must be sent with "stream": true
+          kubectl run slo-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -N -o /dev/null -w "HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+              -H "Content-Type: application/json" \
+              -H "x-llm-d-slo-ttft-ms: 2000" \
+              -H "x-llm-d-slo-tpot-ms: 100" \
+              -d "{\"model\": \"${MODEL}\", \"prompt\": \"Explain the difference between prefill and decode.\", \"max_tokens\": 128, \"stream\": true}"'
+
+cleanup:
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

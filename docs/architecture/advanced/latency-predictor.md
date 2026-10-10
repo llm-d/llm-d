@@ -2,7 +2,7 @@
 
 The Latency Predictor is the llm-d component behind predicted latency-based scheduling. Instead of scoring pods by coarse utilization signals alone, the EPP asks an online-trained ML model to predict **Time To First Token (TTFT)** and **Time Per Output Token (TPOT)** for each candidate pod, then routes on those predictions — optionally gated by per-request Service Level Objectives (SLOs).
 
-This page is a reference for the component: its design, EPP plugins, ML model, failure modes, and scaling characteristics. For step-by-step adoption — Helm enablement, SLO header usage, verification, troubleshooting — see the [Predicted Latency well-lit path](../../well-lit-paths/foundations/predicted-latency.md). Design rationale and benchmarks are in the blog [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms).
+This page is a reference for the component: its design, EPP plugins, ML model, failure modes, and scaling characteristics. For step-by-step adoption — Helm enablement, SLO header usage, verification, troubleshooting — see the [Predicted Latency well-lit path](../../../guides/predicted-latency-routing/README.md). Design rationale and benchmarks are in the blog [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms).
 
 ## Why Predicted Latency?
 
@@ -50,6 +50,20 @@ The predictor ships as a set of sidecars colocated with the EPP in the same pod.
 In the EPP, latency-based scheduling is implemented as a series of composable EPP plugins (more on this later). The `predicted-latency-producer` plugin drives interactions with the predictor. For each request, it calls the predictor to obtain TTFT and TPOT predictions for every candidate endpoint, conditioned on the endpoint's state (KV cache utilization, queue depth, prefix cache match score). After the request is served, the producer sends the observed TTFT and ITL latencies back to the predictor as training samples, so the model is continuously retrained on live traffic.
 
 If the prediction server is unreachable or fails to return a prediction, the latency scorer falls back to a composite score built from KV cache utilization, queue depth, and prefix cache match — so a predictor outage degrades to baseline heuristic routing rather than dropping traffic.
+
+### Request Flow
+
+<p align="center">
+  <picture>
+    <img src="../../assets/latency-predictor.svg" alt="Latency Predictor request flow">
+  </picture>
+</p>
+
+1. A request arrives at the proxy, which forwards it to the EPP.
+2. The EPP queries the prediction server for the request's TTFT and TPOT on every candidate endpoint.
+3. The filters and the `latency-scorer` pick an endpoint from the predictions (see [Scheduling Strategy](#scheduling-strategy)).
+4. The proxy forwards the request to that model server, which processes it and returns the response.
+5. The EPP sends the observed latencies to the training server, which adds them to its training set for the next model update.
 
 ### ML Model
 
@@ -128,6 +142,13 @@ Three plugins handle scoring and final selection.
 
 - **[`weighted-random-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/weightedrandom/README.md)** selects an endpoint via weighted random selection over the scores. This spreads load while still favoring better-scoring endpoints, and avoids the "everyone piles onto the current best pod" failure mode of pure arg-max selection.
 
+## Composing with Other Topologies
+
+Because the predictor and its plugins run entirely in the EPP pod, predicted latency-based scheduling layers onto other model server topologies without changing them; only the EPP configuration differs. The [Predicted Latency well-lit path](../../../guides/predicted-latency-routing/README.md#composing-with-other-paths) ships values files for two of them:
+
+- **P/D disaggregation.** The prefill scheduling profile is scored purely on predicted TTFT and the decode profile purely on predicted TPOT; prefix-cache affinity runs on prefill only. Scoring decode on TPOT requires `streamingMode: true`.
+- **Multimodal (aggregated).** The multimodal `token-producer` stays in the pipeline to estimate the token count of image inputs, the affinity threshold is lowered to fit the smaller cacheable fraction of multimodal prompts, and the predictor trains on end-to-end latency (`streamingMode: false`).
+
 ## Observability
 
 When the latency predictor is enabled, the EPP exposes Prometheus metrics for actual vs. predicted latency, prediction duration, and SLO violation tracking. The primary series are:
@@ -152,6 +173,6 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 ## Further Reading
 
-- [Predicted Latency Well-Lit Path](../../well-lit-paths/foundations/predicted-latency.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
+- [Predicted Latency Well-Lit Path](../../../guides/predicted-latency-routing/README.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.
 - [EPP Scheduling](../core/router/epp/scheduling.md) — how the plugins fits into EPP request handling.

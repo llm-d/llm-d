@@ -1,9 +1,9 @@
-# Distributed Tracing
+# Trace Requests
 
 This guide shows how to enable [OpenTelemetry](https://opentelemetry.io/) distributed tracing across llm-d components.
 
 > [!NOTE]
-> This guide assumes a running llm-d deployment with an InferencePool and model servers. For metrics and dashboards, see [Metrics](metrics.md).
+> This guide assumes a running llm-d deployment with an InferencePool and model servers. For metrics and dashboards, see [Collect Metrics](./metrics.md) and [Use Grafana Dashboards](./dashboards.md).
 
 Commands in this guide use `${NAMESPACE}` for the namespace where your llm-d workload runs:
 

@@ -1,0 +1,80 @@
+# llm-d-router coordinator with the async-broker step: an optional HTTP front
+# door for this guide (README step 4). Based on llm-d-router's
+# deploy/coordinator manifests. The image placeholder is replaced by the
+# README's render() with the coordinator image and tag that guides/env.sh
+# exports (ROUTER_COORDINATOR_*). terminationGracePeriodSeconds is above the config's
+# shutdown_timeout so held wait-mode connections drain instead of being cut.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: llm-d-coordinator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  template:
+    metadata:
+      labels:
+        app: llm-d-coordinator
+    spec:
+      serviceAccountName: llm-d-coordinator
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: coordinator
+          image: COORDINATOR_IMAGE
+          imagePullPolicy: Always
+          args:
+            - --config
+            - /etc/coordinator/coordinator.yaml
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+            limits:
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coordinator
+      volumes:
+        - name: config
+          configMap:
+            name: llm-d-coordinator-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    app: llm-d-coordinator
+  type: ClusterIP
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080

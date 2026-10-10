@@ -8,7 +8,7 @@ Two guides are available:
 - **[Multi-tenant guide](./multitenant/README.md)** — the **advanced** setup: **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. Runs on either queue backend.
 
 > [!NOTE]
-> For production sizing, scaling, and container-resource guidance, see the [Async Processor Operations Guide](../../../docs/operations/async-processor.md).
+> For production sizing, scaling, and container-resource guidance, see [Async Processor Operations](../../../docs/operations/components/async-processor.md).
 
 ## Overview
 
@@ -17,6 +17,33 @@ Async Processor integrates with llm-d to:
 - **Decouple submission from execution**: Clients submit requests to a queue and retrieve results later.
 - **Optimize resource utilization**: Fill idle accelerator time with background tasks.
 - **Provide Resilience**: Automatic retries for failed requests without impacting real-time traffic.
+
+It decouples request submission from execution, allowing clients to submit large volumes of work without maintaining a long-lived HTTP connection.
+
+### Architecture
+
+The **Async Processor** is a lightweight dispatch agent that pulls requests from a message queue and forwards them to the llm-d Router.
+
+To prevent background tasks from impacting real-time traffic, the Async Processor uses **Dispatch Gates**. These gates regulate the flow of requests based on system metrics:
+
+- **Prometheus Gating**: Queries model server saturation (e.g., KV cache pressure, queue depth) and only dispatches when the system has available "slack" capacity.
+- **Budget Gating**: Uses a pre-calculated budget to control throughput.
+- **Priority & Deadlines**: Requests can be prioritized, and the processor enforces deadlines to ensure stale work is abandoned.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../../docs/assets/async-processor.svg" alt="Async Processor Architecture">
+  </picture>
+</p>
+
+Transient failures (like rate limits or network issues) are automatically re-queued with exponential backoff, and configurable worker pools tune the degree of parallelism for background processing (see [Async Processor Operations](../../../docs/operations/components/async-processor.md)). See the [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md) for more details on the internal mechanics.
+
+### Use Cases
+
+- **Batch Inference**: Processing large datasets where completion time is measured in minutes or hours rather than milliseconds.
+- **Slack Capacity Filling**: Using idle GPU cycles between real-time request spikes to perform background tasks like document summarization or embedding generation.
+- **Offline Evaluation**: Running model evaluation pipelines without competing for production resources.
 
 ### Supported Queue Implementations
 
@@ -30,7 +57,7 @@ Before installing Async Processor, ensure you have:
 1. **Kubernetes cluster**: A running Kubernetes cluster (v1.31+).
    - For local development, you can use **Kind** or **Minikube**.
    - For production, GKE, AKS, or OpenShift are supported.
-2. **Gateway control plane**: Configure and deploy your [Gateway control plane](../../../docs/infrastructure/gateway/README.md) (e.g., Istio) before installation.
+2. **Gateway control plane** (Gateway mode only): if you run the optimized baseline behind a Gateway, configure and deploy your [Gateway control plane](../../../docs/infrastructure/gateway/README.md) (e.g., Istio) before installation. In Standalone mode the Async Processor dispatches to the llm-d Router directly and no Gateway is needed.
 3. **llm-d Inference Stack**: Async Processor requires an existing [optimized baseline](../../optimized-baseline/README.md) stack to dispatch requests to.
 
 ## Installation
@@ -87,3 +114,8 @@ Testing instructions vary depending on the chosen queue implementation. Please r
 ```bash
 helm uninstall llm-d-async -n ${NAMESPACE}
 ```
+
+## Related
+
+- [Async Processor Operations](../../../docs/operations/components/async-processor.md) — concurrency, container sizing, and horizontal scaling.
+- [Async Processor Architecture](../../../docs/architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.

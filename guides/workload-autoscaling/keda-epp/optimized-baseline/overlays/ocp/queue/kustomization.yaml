@@ -1,21 +1,22 @@
-# OpenShift + queue signal (windows overshoot solution). The namespace
-# transformer rewrites the base ScaledObject, the TriggerAuthentication, and the
-# metrics-reader ServiceAccount to the deployment namespace; it is rendered from
-# ${NAMESPACE} by envsubst at apply time (see the guide).
+# OpenShift + queue signal (stabilization-window overshoot solution).
 #
-# Component order matters: trigger-queue inserts the signal trigger BEFORE
-# ocp-auth patches both triggers.
+# The ScaledObject (scaledobject.yaml) carries the Thanos Querier serverAddress
+# and authModes:bearer + authenticationRef inline, so there is no trigger
+# patching here. This overlay adds the pieces the ScaledObject depends on:
+#   - the namespace transformer (rendered from ${NAMESPACE} by envsubst), which
+#     also moves the TriggerAuthentication and the metrics-reader ServiceAccount
+#     into the deployment namespace,
+#   - components/ocp-trigger-auth: the keda-prometheus-auth TriggerAuthentication,
+#   - recipes/autoscaling/metrics-reader: the SA, token Secret, and CRB that grant
+#     cluster-monitoring-view so Thanos accepts the queries.
 #
-# The namespace transformer does NOT rewrite the metrics-reader
-# ClusterRoleBinding subject namespace (kustomize leaves an explicit subject
-# namespace as-is), so the patch below sets it to ${NAMESPACE} too. Without it the
-# binding points at the wrong namespace on any non-default deployment, the SA is
-# not granted cluster-monitoring-view, and Thanos rejects the query (401 when
-# unauthenticated, 403 when the SA lacks the role). The trigger then errors and the
-# ScaledObject goes Ready=False with KEDAScalerFailed events; no `fallback` is
-# configured, so autoscaling fails visibly rather than silently. The shared recipe
-# stays untouched so the other guides that apply it with plain `kubectl apply -k`
-# keep working.
+# The namespace transformer does NOT rewrite the metrics-reader ClusterRoleBinding
+# subject namespace (kustomize leaves an explicit subject namespace as-is), so the
+# patch below sets it to ${NAMESPACE} too. Without it the binding points at the
+# wrong namespace on any non-default deployment, the SA is not granted
+# cluster-monitoring-view, and Thanos rejects the query (401 unauthenticated, 403
+# when the SA lacks the role). The shared recipe stays untouched so the other
+# guides that apply it with plain `kubectl apply -k` keep working.
 #
 # The ClusterRoleBinding is cluster-scoped, so the patch also makes its name
 # namespace-unique (...-${NAMESPACE}); otherwise a second deployment on the same
@@ -27,11 +28,10 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 
 resources:
-  - ../../../base
+  - scaledobject.yaml
 
 components:
-  - ../../../components/trigger-queue
-  - ../../../components/ocp-auth
+  - ../../../components/ocp-trigger-auth
   - ../../../../../../recipes/autoscaling/metrics-reader
 
 patches:

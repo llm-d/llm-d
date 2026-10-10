@@ -13,7 +13,7 @@ Serving batch and offline inference workloads alongside real-time, interactive t
 1. **[Batch Gateway](./batch-gateway/README.md)**: An enterprise-grade, fully managed **OpenAI-compatible Batch API** for formal job submission, file storage, status tracking, and multi-tenant batch management.
 2. **[Asynchronous Processing](./asynchronous-processing/README.md)**: A lightweight, queue-based dispatch mechanism (using Redis Sorted Sets or GCP Pub/Sub) featuring **dynamic dispatch gating** based on live model server saturation metrics (KV cache pressure, queue depth).
 
-For the broader architectural context and design principles, see the [Batch Serving workload overview](../../docs/well-lit-paths/workloads/batch-serving/README.md) and [Batch Architecture documentation](../../docs/architecture/advanced/batch/README.md).
+For the broader architectural context and design principles, see the [Batch Architecture documentation](../../docs/architecture/advanced/batch/README.md).
 
 ---
 
@@ -50,7 +50,7 @@ The **Async Processor** is a lightweight, high-throughput agent designed to deco
 - **Key Capabilities**:
   - **Dynamic Dispatch Gating**: Evaluates downstream engine telemetry (such as KV cache utilization and request queue depth via Prometheus) to dispatch background requests only when slack capacity is available, protecting interactive traffic from latency spikes.
   - **Quota & Priority Management**: Enforces concurrency limits, budget gates, and tier-based scheduling across multiple tenants and worker pools.
-  - **Resilience**: Automatically retries transient failures with exponential backoff and dead-letter handling.
+  - **Resilience**: Automatically retries transient failures with exponential backoff until the request's deadline; dead-lettering, where available, is the broker's (GCP Pub/Sub subscriptions).
 
 ### 3. Unified Hybrid Deployment
 
@@ -97,13 +97,12 @@ Both batch solutions dispatch inference requests to an existing llm-d serving st
 
 1. **Deploy the Inference Stack**: Ensure you have a running model server and llm-d Router deployed via the [Optimized Baseline](../optimized-baseline/README.md) or related workload guides.
 2. **Configure Environment Variables**: Source [`guides/env.sh`](../env.sh) for shared environment variables and Helm repository configurations.
-3. **Review Operations Guidance**: For sizing, scaling, and production deployment patterns of the Async Processor, see the [Async Processor Operations Guide](../../docs/operations/async-processor.md).
+3. **Review Operations Guidance**: For sizing, scaling, and production deployment patterns of the Async Processor, see [Async Processor Operations](../../docs/operations/components/async-processor.md).
 
 ---
 
 ## Related Resources
 
-- [Batch Serving Workload Narrative](../../docs/well-lit-paths/workloads/batch-serving/README.md)
 - [Batch Architecture Overview](../../docs/architecture/advanced/batch/README.md)
 - [Async Processor Architecture](../../docs/architecture/advanced/batch/async-processor.md)
 - [Batch Gateway Architecture](../../docs/architecture/advanced/batch/batch-gateway.md)

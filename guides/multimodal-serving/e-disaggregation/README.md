@@ -1,5 +1,8 @@
 # E-Disaggregation (Encode Disaggregation)
 
+> [!NOTE]
+> This page is the Encode-disaggregated scenario that the multimodal nightly E2E workflow deploys. The published well-lit path, which covers aggregated serving and Encode disaggregation (E/PD, E/P/D) with mechanism verification, is [Multimodal Model Serving](../README.md).
+
 ## Overview
 
 This experimental guide deploys encode-disaggregated multimodal inference workloads. Encode disaggregation offloads the multimodal encoding stage (converting raw images, video, or audio into embeddings) to dedicated workers. The resulting embeddings are consumed by prefill/decode workers alongside text tokens. When a request contains multiple multimodal entries, different Encode workers can process them concurrently.
@@ -48,7 +51,8 @@ Encode disaggregation is most beneficial for workloads with:
 Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
-* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in the [P/D Best Practices](../../pd-disaggregation/README.md#pd-best-practices) section. That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
+* **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in
+  [When to use P/D and how to tune it](../../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it). That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/operations/disaggregation/vllm.md#prefill-tp--decode-tp-is-not-supported)
   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/operations/disaggregation/vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
 
@@ -87,7 +91,7 @@ export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-pd"
 export NAMESPACE="llm-d-e-pd-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export INFRA_PROVIDER="gke" # base | gke
+export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
@@ -101,7 +105,7 @@ export RELEASE_NAME="e-disaggregation"
 export TOPOLOGY="e-p-d"
 export NAMESPACE="llm-d-e-p-d-disaggregation"
 export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
-export INFRA_PROVIDER="gke" # base | gke
+export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
 export MONITORING_COMPONENT="monitoring-pd"
@@ -179,6 +183,10 @@ helm install ${RELEASE_NAME} \
 ### 2. Deploy the Model Server
 
 Apply the Kustomize overlays for your chosen topology:
+
+Choose the overlay matching your infrastructure provider:
+- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma).
+- **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
@@ -274,6 +282,28 @@ curl -sS -f -X POST http://${IP}/v1/chat/completions \
     }' | jq .
 ```
 
+### 3. Confirm the EC Transfer (vLLM profiles)
+
+A successful multimodal response does not show that the encoder output came from the Encode Worker, because a consumer that receives no encoder output encodes the media locally. The ECCPU Connector logs the transfer at `DEBUG` level only, so set the log level on the consumer (the decode pods in E/PD, the prefill pods in E/P/D):
+
+```bash
+export EC_CONSUMER_ROLE=decode # use "prefill" for the E/P/D profile
+kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL=DEBUG -n ${NAMESPACE}
+kubectl rollout status deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -n ${NAMESPACE}
+```
+
+Send the multimodal request from step 2 again, then search the consumer logs:
+
+```bash
+kubectl logs -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver -n ${NAMESPACE} --tail=-1 | grep "EC consumer: NIXL xfer complete"
+```
+
+One line for each transferred multimodal item shows that the transfer works. If there is no such line, make sure that the image contains the P2P NIXL mode (see [EC Connector](#ec-connector)). Remove the variable when you are done:
+
+```bash
+kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL- -n ${NAMESPACE}
+```
+
 ## Cleanup
 
 To remove the deployed components:
@@ -298,6 +328,11 @@ Once the Encode Worker processes a multimodal item, the EC Connector handles the
 
 This guide uses ECCPU connector. The ECCPU Connector is a distributed transfer mechanism that allows a consumer vLLM instance to efficiently fetch pre-computed encoder outputs from a remote producer instance
 using a high-performance NIXL data plane and ZMQ control plane. By sharing these cached outputs across CPU memory-mapped regions, it enables consumer instances to bypass redundant encoding tasks and speed up inference.
+
+The vLLM E/PD and E/P/D profiles use the upstream vLLM `v0.30.0` image (`docker.io/vllm/vllm-openai:v0.30.0`), set `VLLM_USE_V2_MODEL_RUNNER=1` on each vLLM instance that uses the ECCPU Connector (all instances in E/PD, encode and prefill in E/P/D) because the [ECCPU Connector](https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/) requires the V2 model runner, and configure it in P2P NIXL mode (`"ec_enable_nixl": true` and `ec_cpu_bytes`, the size of the shared CPU region).
+
+> [!IMPORTANT]
+> The P2P NIXL mode requires vLLM `v0.30.0` or later ([vllm-project/vllm#47941](https://github.com/vllm-project/vllm/pull/47941)). Earlier releases silently ignore `"ec_enable_nixl": true`: requests succeed, but the consumer encodes the media again. See [Confirm the EC Transfer](#3-confirm-the-ec-transfer-vllm-profiles).
 
 ### E/PD Request Flow
 

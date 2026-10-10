@@ -5,7 +5,7 @@ router:
     # scope differs, pointing at the AMD DisaggregatedSet instead of the NVIDIA one.
     pluginsCustomConfig:
       wide-ep-config.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         # Pin each request to a single DisaggregatedSet revision during

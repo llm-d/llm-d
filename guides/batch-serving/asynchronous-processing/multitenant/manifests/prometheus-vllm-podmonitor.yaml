@@ -1,12 +1,19 @@
 # Prometheus Operator PodMonitor that scrapes the vLLM model server so the
 # self-hosted Prometheus has vllm:num_requests_running for the saturation gates.
 #
-# The vLLM pod is deployed via manifests/vllm.yaml and is labelled
-# app=vllm-1, exposing metrics on the `modelserver` port (8000).
-# (The async-processor chart's modelServerMonitor selects llm-d.ai/role=decode,
-# which this stack's vLLM pod doesn't carry — hence this dedicated monitor.)
+# The vLLM pod is optimized-baseline's GPU vLLM overlay, relabelled
+# llm-d.ai/guide=async-multitenant (README step 1), with metrics on the
+# `modelserver` port (8000). The saturation overlays' PromQL filters on
+# inference_pool, which the pods do not carry, so this monitor sets it on every
+# series to the pool name the guide's render() writes in (the same value the
+# saturation overlays filter on).
 #
-# Adjust namespaceSelector / selector / port for your own model server.
+# Render it and apply it into the model server's namespace: with no
+# namespaceSelector it watches only its own namespace. The Prometheus from
+# install-prometheus-grafana.sh picks up PodMonitors in every namespace in its
+# default (central) mode; in its namespace-scoped mode (-i) the PodMonitor and
+# its namespace also need the monitoring-ns=<monitoring namespace> label.
+# Adjust selector / port for your own model server.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -14,17 +21,13 @@ metadata:
   labels:
     app: vllm-model-server
 spec:
-  podTargetLabels:
-    - inference_pool
-    - model
-  namespaceSelector:
-    matchNames:
-      - llm-d-async
-      - default
   selector:
     matchLabels:
-      app: vllm-1
+      llm-d.ai/guide: async-multitenant
   podMetricsEndpoints:
     - port: modelserver
       path: /metrics
       interval: 15s
+      relabelings:
+        - targetLabel: inference_pool
+          replacement: POOL_NAME

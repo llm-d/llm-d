@@ -3,7 +3,7 @@
 This document covers the llm-d-specific configuration for serving model servers on GKE TPU7x dynamic sub-slices. Cluster preparation is documented by Google Cloud and linked below rather than repeated here. It is the infrastructure prerequisite for the dynamic-slice recipes in the well-lit path guides:
 
 * [Optimized Baseline on TPU sub-slices](../../../../../guides/optimized-baseline/README.md#2-deploy-the-model-server)
-* [P/D Disaggregation on TPU sub-slices](../../../../../guides/pd-disaggregation/README.md#dynamic-sub-slices-tpu7x)
+* [P/D Disaggregation on TPU sub-slices](../../../../../guides/pd-disaggregation/README.md#2-deploy-the-model-server)
 
 ## Overview
 
@@ -15,7 +15,7 @@ GKE supports two consumption models: a custom scheduler that manages `Slice` res
 
 Prepare the cluster by following [Use dynamic slicing in GKE with Kueue](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing):
 
-1. [Requirements](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#requirements): GKE Standard on the Rapid channel, TPU7x, an All Capacity mode reservation, and the minimum Kueue, JobSet, and LeaderWorkerSet (LWS) versions for sub-slicing. LWS is required: the llm-d recipes deploy every model server replica as a `LeaderWorkerSet` group.
+1. [Requirements](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#requirements): GKE Standard on the Rapid channel, TPU7x, an All Capacity mode reservation, and the minimum Kueue, JobSet, and LeaderWorkerSet (LWS) versions for sub-slicing. LWS is required: the llm-d recipes deploy every model server replica as a `LeaderWorkerSet` group, and the P/D recipe generates its LeaderWorkerSets from a `DisaggregatedSet`, which needs LWS `v0.11.1` or newer (above the minimum on the GKE page).
 2. [Enable the slice controller](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#enable_the_slice_controller)
 3. [Install Kueue, JobSet, and LWS](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#install-components)
 4. [Create node pools with incremental provisioning](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#create-tpu-node-pools): a `provision_only` workload policy, then one 16-node pool per reservation sub-block.
@@ -42,7 +42,8 @@ The llm-d dynamic-slice recipes set the following on every model server pod; the
 
 | Field | Value |
 | --- | --- |
-| Workload label | `kueue.x-k8s.io/queue-name: <LocalQueue name>` |
+| Workload label | `kueue.x-k8s.io/queue-name: <LocalQueue name>` on the `LeaderWorkerSet` metadata; for a `DisaggregatedSet`, in each role's `metadata.labels`, which the controller copies to the LeaderWorkerSets it generates |
+| LWS `groupIdentity` | `Ordinal` (the default). The Kueue LeaderWorkerSet integration creates one Workload per numeric `group-index` label and ungates pods not owned by a StatefulSet; `Hash` mode satisfies neither, so its groups are never admitted |
 | Pod annotation | `cloud.google.com/gke-tpu-slice-topology: "<shape>"` (e.g. `2x2x2`) |
 | Pod nodeSelector | `cloud.google.com/gke-tpu-accelerator: tpu7x` |
 | Pod nodeSelector (health) | `cloud.google.com/gke-tpu-partition-<shape>-state: "HEALTHY"` (see [partition health selection](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#define_the_partition_health_selection)) |
@@ -60,8 +61,8 @@ Each `tpu7x-standard-4t` node has 4 chips and each TPU7x chip has 2 cores, so a 
 | `2x2x4` | 16 | 4 | 32 |
 | `2x4x4` | 32 | 8 | 64 |
 
-Slice names are limited to 49 characters and Kueue derives them from the namespace, workload name, and replica index, so keep namespace plus `LeaderWorkerSet` names short.
+Slice names are limited to 49 characters and Kueue derives them from the namespace, workload name, and replica index, so keep namespace plus `LeaderWorkerSet` names short. A `DisaggregatedSet` names each generated LeaderWorkerSet `<set>-<slice>-<revision>-<role>` with an 8-character revision, and the Kueue LeaderWorkerSet integration bounds that name to 39 characters, so a set with a `prefill` role needs a name of at most 21 characters (the P/D recipe uses `pd-disagg-tpu-vllm`).
 
 ## Operations
 
-Slice status (`ACTIVATING`, `ACTIVE`, `FAILED`, `INCOMPLETE`) is visible with `kubectl get slices -A`; see [Monitor the slice](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#monitor-dynamic-slicing) for status details and Cloud Monitoring metrics. When tearing down, delete the `LeaderWorkerSet` resources first so Kueue removes the `Slice` resources it created; active slices block node pool deletion. See [Clean up](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#clean-up).
+Slice status (`ACTIVATING`, `ACTIVE`, `FAILED`, `INCOMPLETE`) is visible with `kubectl get slices -A`; see [Monitor the slice](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#monitor-dynamic-slicing) for status details and Cloud Monitoring metrics. When tearing down, delete the `LeaderWorkerSet` resources (or the `DisaggregatedSet` that owns them) first so Kueue removes the `Slice` resources it created; active slices block node pool deletion. See [Clean up](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing#clean-up).

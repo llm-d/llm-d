@@ -7,6 +7,7 @@ namePrefix: optimized-baseline-tpu-v7-vllm-
 
 components:
   - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

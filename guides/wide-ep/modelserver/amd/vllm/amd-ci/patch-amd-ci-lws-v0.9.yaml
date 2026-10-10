@@ -1,0 +1,24 @@
+# The CI cluster runs LWS v0.9, which names each role's LWS <metadata.name>-<revision>-<role>, without
+# the slice segment v0.10+ adds. Drop this patch once the cluster is on the v0.11.1+ the guide requires.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: wide-ep-amd-vllm-dsv3
+spec:
+  roles:
+    # Listed so the merge keeps prefill ahead of decode.
+    - name: prefill
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              initContainers:
+                - name: wait-peer-dns
+                  env:
+                    - name: LWS_PREFIX
+                      value: wide-ep-amd-vllm-dsv3
+                - name: routing-proxy
+                  env:
+                    - name: LWS_PREFIX
+                      value: wide-ep-amd-vllm-dsv3

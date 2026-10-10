@@ -6,6 +6,9 @@ name: optimized-baseline
 # Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
   engines: {vllm: vLLM, sglang: SGLang, trtllm: TensorRT-LLM}
   accelerators:
@@ -13,26 +16,37 @@ support:
       label: NVIDIA GPU
       notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke`"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
       engines: {vllm: validated, sglang: validated, trtllm: community}
     amd:
       label: AMD GPU
-      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci`"
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs)"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated, sglang: community}
     xpu:
       label: Intel XPU
       notes: "Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16"
       model: Qwen/Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
       notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8)"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: validated}
     "tpu/v7":
       label: Google TPU v7
       notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8)"
       model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
@@ -43,21 +57,30 @@ support:
       label: Rebellions NPU
       notes: "RBLN-CR series · 2 replicas × 1 NPU via DRA"
       model: openai/gpt-oss-120b
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
     cpu:
       label: CPU
       notes: "x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model)"
       model: meta-llama/Llama-3.2-3B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
       engines: {vllm: community}
     iluvatar:
       label: Iluvatar GPU
       notes: "BI-V150 (dual-die) · 1 replica × 4 GPUs"
       model: deepseek-ai/DeepSeek-V4-Flash
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
     metax:
       label: MetaX GPU
       notes: "2 replicas × TP=8 (16 GPUs)"
       model: deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
 
 env:

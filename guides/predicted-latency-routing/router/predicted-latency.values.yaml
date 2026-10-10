@@ -2,10 +2,11 @@
 ##
 ## Overrides the chart's default plugin pipeline to raise the
 ## approx-prefix-cache-producer maxPrefixTokensToMatch (the chart default leaves it
-## unset) and to train the predictor on streaming TTFT/TPOT samples. Every request
-## must therefore be sent with "stream": true. No SLO headers are required — for
-## SLO-aware scheduling (x-llm-d-slo-ttft-ms / x-llm-d-slo-tpot-ms), use
-## predicted-latency-slo.values.yaml.
+## unset) and to score endpoints on predicted latency. The predicted-latency-producer
+## keeps its default streamingMode: false, so the predictor trains on end-to-end
+## request latency and works for streaming and non-streaming clients alike. No SLO
+## headers are required — for SLO-aware scheduling (x-llm-d-slo-ttft-ms /
+## x-llm-d-slo-tpot-ms), use predicted-latency-slo.values.yaml.
 
 router:
   latencyPredictor:
@@ -19,7 +20,7 @@ router:
     pluginsConfigFile: "predicted-latency-plugins.yaml"
     pluginsCustomConfig:
       predicted-latency-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: approx-prefix-cache-producer

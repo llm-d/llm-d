@@ -9,38 +9,15 @@
 
 ## Overview
 
-This guide routes requests on precise per-pod KV-cache state rather than request-traffic heuristics. Each model server pod (vLLM or SGLang) publishes [KV-cache events](https://github.com/vllm-project/vllm/issues/16669) over ZMQ; the router subscribes, builds an index keyed by block hash, filters candidates to the pods where an incoming request's prefix is already resident, and picks the least token-loaded pod within that set.
+This guide routes requests on precise per-pod KV-cache state rather than request-traffic heuristics. It builds on the [Optimized Baseline](../optimized-baseline/README.md) with the same `prefix-cache-affinity-filter` and `token-load-scorer`, but replaces the approximate prefix-cache estimate with the model servers' own record of what they cache:
 
-It builds on the [Optimized Baseline](../optimized-baseline/README.md): the same filter and scorer, with the approximate prefix-cache estimate replaced by the model servers' own record of what they cache. The routing decision combines precise cache knowledge with token-based load balancing:
+- Each model server pod (vLLM or SGLang) publishes KV-cache events over ZMQ, and every router replica subscribes to every pod (pod discovery) to build an index of resident KV blocks.
+- The [`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) looks each request's prefix up in that index; the `prefix-cache-affinity-filter` keeps each prefix group on its cache-warm endpoints (gated by a calibrated `peakPrefillThroughput`), and the `token-load-scorer` picks the least token-loaded endpoint among them.
+- The router needs exact token IDs to look a prompt up, so this guide also deploys a **render (tokenizer) Service** that the router calls before every routing decision.
 
-- **Precise prefix-cache aware** — the [precise-prefix-cache-producer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) indexes real KV-block events from the model servers and publishes the exact resident-block fraction. The `prefix-cache-affinity-filter` reads it via `prefixMatchInfoProducerName` to keep each prefix group on its cache-warm endpoints,
-  gated by a calibrated `peakPrefillThroughput` so saturated endpoints are bypassed. Indexer internals (event ingestion, block hashing, dual-key design) are documented in [llm-d-kv-cache architecture](https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md).
-- **Token-load aware** — the `token-load-scorer` (fed by the `inflight-load-producer`) picks the least token-loaded endpoint within the filtered set, balancing by queued prefill work rather than request counts.
+The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas at tensor parallelism 2. [How It Works](#how-it-works) shows how this guide wires the events, the render Service and the router together.
 
-The router needs exact token IDs to look a prompt up in the index, so this guide also deploys a **render (tokenizer) Service** that the router calls before every routing decision.
-
-### Why KV-cache events
-
-The model server is the most accurate source of truth for what's cached on its own accelerators and memory tiers. vLLM, SGLang and NVIDIA TensorRT-LLM publish every cache change as an event; llm-d subscribes to that stream, builds a near-real-time view of resident blocks across the fleet, and scores requests against it.
-
-KV-events have become the ecosystem-standard substrate for exposing accurate cache state: where reusable inference state lives and how it changes over time. As KV-cache orchestration grows more sophisticated and agentic workloads stretch prefixes longer, cache state becomes something the control plane needs to observe and act on. The same view scales naturally to:
-
-- tier-aware cache tracking across GPU HBM, CPU DRAM, local NVMe, and shared storage;
-- policies that account for explicit prompt-cache placement and dynamic KV-offloading;
-- cache movement and prefetching workflows for fleet-wide KV reuse;
-- advanced KV retention and eviction policies for agentic patterns;
-- hybrid-attention models where layer groups (full, sliding-window, linear) evict independently.
-
-### Architecture
-
-The split is straightforward: **model servers** produce KV-events on every cache change; the **llm-d Router** consumes them to score pods for better routing decisions. The two sides are decoupled: model server and router replicas scale independently.
-
-Inside the llm-d Router:
-
-- An **indexer** consumes the event stream and maintains a `block key → pods` mapping for every block resident across the fleet.
-- A **scorer** derives block keys deterministically from the input and queries the index. It returns the longest consecutive prefix each candidate pod has cached, weighted by tier.
-
-Events flow from model server pods to the router over ZMQ via **pod discovery**: each model server pod binds its own ZMQ socket and every router replica subscribes to every pod independently, so all replicas converge to the same index. See [KV-Cache Indexer](../../docs/architecture/advanced/kv-management/kv-indexer.md) for the full architecture, and [How It Works](#how-it-works) below for how this guide wires it up.
+For why KV-cache events make a better source of truth than heuristics, and how the indexer ingests them and scores requests, see [Prefix-Cache Aware Routing](../../docs/architecture/advanced/kv-management/prefix-cache-aware-routing.md#2-precise-implementation) and the [KV-Cache Indexer](../../docs/architecture/advanced/kv-management/kv-indexer.md).
 
 ## Supported Accelerators and Model Servers
 
@@ -65,7 +42,7 @@ This guide includes configurations for the following accelerator and model serve
 > - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together.
 > - **Model.** The `token-producer` `modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) is `Qwen/Qwen3-32B`. On an accelerator that serves another model, set it to `MODEL` before deploying the router: with the default render Service the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 
-For wide-EP LWS deployments (multi-port DP model servers), use the [`wide-ep` precise routing variant](../wide-ep/README.precise-prefix-cache-routing.md) instead of the manifests here.
+For wide-EP LWS deployments (multi-port DP model servers), use the precise prefix-cache routing mode in the [GLM-5.2 guide](../models/glm-5-2/README.md#installation-instructions) instead of the manifests here.
 
 > [!NOTE]
 > The router runs as a **single replica**: the `token-load-scorer`'s in-flight token accounting is local to each router process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index itself is HA-safe (each replica converges independently via pod discovery), so active-active HA (`--set router.epp.replicas=2`) can return once in-flight state is shared.
@@ -185,7 +162,7 @@ Tokenization is served by a separate render Service (step 3), not by a router si
 
 ### 2. Deploy the Model Server
 
-For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
+For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
 **Apply the Kustomize overlay** for your backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere). Every overlay starts the model server with KV-cache events enabled (`--kv-events-config`) and exposes the per-pod ZMQ socket (port `5556`) the router subscribes to:
 
@@ -195,6 +172,8 @@ kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- guide:deploy.modelserver end -->
+
+The vLLM model server overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
 
 ### 3. Deploy the Render (Tokenizer) Service
 

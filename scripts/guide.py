@@ -325,8 +325,14 @@ STEP_SECTIONS = ("prerequisites", "deploy", "verify", "benchmark", "cleanup")
 ACCEL_VAR = "ACCELERATOR_TYPE"
 ENGINE_VAR = "MODEL_SERVER"
 VARIANT_VARS = (ACCEL_VAR, ENGINE_VAR)
+# INFRA_PROVIDER is not a variant dimension of the README (the nightlies parse
+# the README to pick a provider); each accelerator instead lists the values it
+# takes in `support.accelerators.<acc>.providers`, which the llm-d.ai site
+# turns into a third page-level selector next to accelerator and engine.
+PROVIDER_VAR = "INFRA_PROVIDER"
 SUPPORT_KEYS = {"engines", "accelerators"}
-SUPPORT_ACCEL_KEYS = {"label", "model", "notes", "engines"}
+SUPPORT_ACCEL_KEYS = {"label", "model", "notes", "engines", "providers"}
+SUPPORT_PROVIDER_KEYS = {"name", "label", "engines"}
 SUPPORT_CELL_KEYS = {"status", "issue"}
 SUPPORT_STATUSES = ("validated", "community", "unsupported")
 SUPPORTED_STATUSES = {"validated", "community"}
@@ -577,6 +583,86 @@ def is_supported(guide: Any, accel: str, engine: str) -> bool:
     return support_status(guide, accel, engine) in SUPPORTED_STATUSES
 
 
+def _supported_engines(guide: Any, accel: str) -> list[str]:
+    """Engines with a supported cell for ``accel``, in MODEL_SERVER order."""
+    return [e for e in _declared_values(guide, ENGINE_VAR) if is_supported(guide, accel, e)]
+
+
+def support_providers(guide: Any, accel: str) -> list[dict]:
+    """The ``providers:`` of one accelerator, normalized to
+    ``{"name", "label", "engines"}`` (label defaults to the name; engines to
+    every engine supported on the accelerator). Malformed entries are skipped —
+    :func:`_check_providers` reports them."""
+    sup = guide.get("support") if isinstance(guide, dict) else None
+    accels = sup.get("accelerators") if isinstance(sup, dict) else None
+    spec = accels.get(accel) if isinstance(accels, dict) else None
+    entries = spec.get("providers") if isinstance(spec, dict) else None
+    out: list[dict] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, str):
+            entry = {"name": entry}
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            continue
+        engines = entry.get("engines")
+        out.append({
+            "name": entry["name"],
+            "label": str(entry.get("label") or entry["name"]),
+            "engines": (
+                [str(e) for e in engines] if isinstance(engines, list)
+                else _supported_engines(guide, accel)
+            ),
+        })
+    return out
+
+
+def _check_providers(guide: dict, accel: str, providers: Any, p: str, f: Findings) -> None:
+    """Schema of ``support.accelerators.<acc>.providers``: a list of names or
+    ``{name, label, engines}`` maps; names unique and declared in
+    env.static.INFRA_PROVIDER.values; engines a subset of those supported on
+    the accelerator."""
+    if not isinstance(providers, list) or not providers:
+        f.error(f"{p}: must be a non-empty list of {PROVIDER_VAR} values (strings or `name:` maps)")
+        return
+    declared = _declared_values(guide, PROVIDER_VAR)
+    if not declared:
+        f.error(f"{p}: requires env.static.{PROVIDER_VAR} to declare `values:`")
+    supported = _supported_engines(guide, accel)
+    seen: set[str] = set()
+    for i, entry in enumerate(providers):
+        ep = f"{p}[{i}]"
+        if isinstance(entry, dict):
+            for k in entry:
+                if k not in SUPPORT_PROVIDER_KEYS:
+                    f.error(f"{ep}: unknown key {k!r} (allowed: {sorted(SUPPORT_PROVIDER_KEYS)})")
+            name = entry.get("name")
+            if "label" in entry and not isinstance(entry["label"], str):
+                f.error(f"{ep}.label: must be a string")
+            if "engines" in entry:
+                engs = entry["engines"]
+                if not isinstance(engs, list) or not engs:
+                    f.error(f"{ep}.engines: must be a non-empty list of {ENGINE_VAR} values")
+                else:
+                    for e in engs:
+                        if str(e) not in supported:
+                            f.error(
+                                f"{ep}.engines: {e!r} is not an engine supported on {accel} "
+                                f"(supported: {supported})"
+                            )
+        elif isinstance(entry, str):
+            name = entry
+        else:
+            f.error(f"{ep}: must be a provider name or a map with `name:`")
+            continue
+        if not isinstance(name, str) or not name:
+            f.error(f"{ep}.name: must be a non-empty string")
+            continue
+        if name in seen:
+            f.error(f"{ep}: duplicate provider {name!r}")
+        seen.add(name)
+        if declared and name not in declared:
+            f.error(f"{ep}: {name!r} is not in env.static.{PROVIDER_VAR}.values {declared}")
+
+
 def _iter_steps(node: Any, path: str) -> Iterator[tuple[str, dict]]:
     """Every step under a section, whatever its nesting (lists, named
     sub-groups, mode maps). Tolerant of malformed input — schema errors are
@@ -650,6 +736,8 @@ def _check_support(guide: dict, f: Findings) -> None:
             f.error(f"{p}.notes: must be a string")
         elif "|" in str(spec.get("notes", "")) or "\n" in str(spec.get("notes", "")).strip():
             f.error(f"{p}.notes: must be a single line without '|' (it is a table cell)")
+        if "providers" in spec:
+            _check_providers(guide, str(accel), spec["providers"], f"{p}.providers", f)
         cells = spec.get("engines")
         if not isinstance(cells, dict):
             f.error(f"{p}.engines: must map MODEL_SERVER values to a status")
@@ -700,6 +788,9 @@ def _check_support(guide: dict, f: Findings) -> None:
 _WORKFLOW_ACCEL = re.compile(
     r"accelerator_type:\s*\$\{\{\s*inputs\.accelerator_type\s*\|\|\s*'([^']+)'\s*\}\}"
 )
+_WORKFLOW_BACKEND = re.compile(
+    r"backend_type:\s*\$\{\{\s*inputs\.backend_type\s*\|\|\s*'([^']+)'\s*\}\}"
+)
 
 
 def _find_repo_root(start: Path) -> Path | None:
@@ -709,11 +800,50 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 
+def _check_provider_overlays(guide: dict, guide_dir: Path) -> Findings:
+    """Every provider the site can select — each (accelerator, engine
+    supported on it, provider allowing that engine) — must have at least one
+    kustomization under ``modelserver/<acc>/<engine>/`` whose path ends in
+    ``/<provider>``. Suffix match, because some guides nest extra levels
+    (``<connector>/<tier>/<provider>``) and providers may contain ``/``
+    (``gke/a4x``). Every ``modelserver/`` directory in the guide counts, so
+    guides split by topology (``<topology>/modelserver/...``) are covered."""
+    f = Findings()
+    accels = guide["support"].get("accelerators")
+    ms_dirs = sorted(p for p in guide_dir.rglob("modelserver") if p.is_dir())
+    for accel in accels if isinstance(accels, dict) else {}:
+        for prov in support_providers(guide, str(accel)):
+            name = prov["name"].strip("/")
+            for eng in prov["engines"]:
+                if not is_supported(guide, str(accel), eng):
+                    continue  # reported by the schema check
+                found = False
+                for ms in ms_dirs:
+                    base = ms / str(accel) / eng
+                    if not base.is_dir():
+                        continue
+                    for k in base.rglob("kustomization.yaml"):
+                        rel = k.parent.relative_to(base).as_posix()
+                        if rel == name or rel.endswith(f"/{name}"):
+                            found = True
+                            break
+                    if found:
+                        break
+                if not found:
+                    f.error(
+                        f"support.accelerators.{accel}.providers: {name!r} allows {eng} but no "
+                        f"kustomization under modelserver/{accel}/{eng}/ ends in /{name}"
+                    )
+    return f
+
+
 def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = None) -> Findings:
     """Cross-check the support matrix against the repository:
 
     * every supported cell has a ``modelserver/<accel>/<engine>/`` overlay, and
       every engine overlay on disk is a supported cell;
+    * every ``providers:`` entry has an overlay for each engine it allows
+      (see :func:`_check_provider_overlays`);
     * every ``validated`` cell has a nightly E2E workflow, and every nightly
       workflow for this guide runs a ``validated`` cell.
 
@@ -753,6 +883,8 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
                     f"{accel}/{eng_dir.name} as {support_status(guide, accel, eng_dir.name)}"
                 )
 
+    f.extend(_check_provider_overlays(guide, guide_dir))
+
     root = repo_root or _find_repo_root(guide_dir.resolve())
     # nightly-e2e-<guide>-<provider>-acc-<acc>-<engine>-x.yaml; the provider
     # may itself contain hyphens (e.g. amd-ci).
@@ -765,9 +897,19 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
         nightly: set[tuple[str, str]] = set()
         for wf in sorted(wf_dir.iterdir()):
             m = pat.match(wf.name)
-            if not m:
-                continue
-            eng = m.group("engine")
+            if m:
+                eng, acc = m.group("engine"), m.group("acc")
+            else:
+                # Workflows named another way (e.g. nightly-e2e-<guide>-<prov>-
+                # <tier>-<acc>-<engine>-<connector>.yaml) count when they declare
+                # both accelerator_type and backend_type input defaults.
+                if not re.match(rf"^nightly-e2e-{re.escape(name)}-.+\.ya?ml$", wf.name):
+                    continue
+                text = wf.read_text(errors="replace")
+                bm = _WORKFLOW_BACKEND.search(text)
+                if not bm or not _WORKFLOW_ACCEL.search(text):
+                    continue
+                eng, acc = bm.group(1), ""
             if eng not in engine_values:
                 f.error(
                     f"workflow {wf.name} targets engine {eng!r} which is not in "
@@ -775,8 +917,8 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
                 )
                 continue
             am = _WORKFLOW_ACCEL.search(wf.read_text(errors="replace"))
-            accel = am.group(1) if am else m.group("acc")
-            pair = (accel, m.group("engine"))
+            accel = am.group(1) if am else acc
+            pair = (accel, eng)
             nightly.add(pair)
             status = support_status(guide, *pair)
             if status != "validated":
@@ -1923,12 +2065,26 @@ def _cmd_set_branch(args: argparse.Namespace) -> int:
 
 DEFAULT_MANIFEST = "docs/well-lit-paths/guides.yaml"
 MANIFEST_SECTIONS = ("foundations", "models", "operations")
+# Sections whose guides may be published from a README alone (no guide.yaml):
+# Operations guides are not held to the Foundations/Models guide.yaml rules.
+README_ONLY_SECTIONS = ("operations",)
+
+
+def _manifest_pillar(name: str) -> str | None:
+    """The pillar a section belongs to: ``<pillar>`` itself, or
+    ``<pillar>-<sub-category>`` (e.g. ``operations-scaling``, published under
+    a nested target such as ``operations/scaling``)."""
+    for pillar in MANIFEST_SECTIONS:
+        if name == pillar or re.fullmatch(rf"{pillar}-[a-z0-9][a-z0-9-]*", name):
+            return pillar
+    return None
 
 
 def check_manifest(data: Any, repo_root: Path) -> Findings:
     """Validate the llm-d.ai publish manifest: every guide directory exists
-    with a ``guide.yaml`` and ``README.md``, slugs are unique per target, child
-    pages exist, and titles are present."""
+    with a ``README.md`` (and a ``guide.yaml``, except in Operations
+    sections), slugs are unique across sections, child pages exist, and
+    titles are present."""
     f = Findings()
     if not isinstance(data, dict) or not isinstance(data.get("sections"), dict):
         f.error("manifest: must be a map with `sections:`")
@@ -1936,10 +2092,15 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
     if data.get("version") != 1:
         f.error("manifest: `version: 1` is required")
     seen_dirs: dict[str, str] = {}
+    seen_slugs: dict[str, str] = {}
     for name, section in data["sections"].items():
         p = f"sections.{name}"
-        if name not in MANIFEST_SECTIONS:
-            f.error(f"{p}: unknown section (allowed: {list(MANIFEST_SECTIONS)})")
+        pillar = _manifest_pillar(name)
+        if pillar is None:
+            f.error(
+                f"{p}: unknown section (allowed: {list(MANIFEST_SECTIONS)}, "
+                "or <section>-<sub-category>)"
+            )
         if not isinstance(section, dict):
             f.error(f"{p}: must be a map with `target:` and `guides:`")
             continue
@@ -1950,6 +2111,7 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
         if not isinstance(guides, list):
             f.error(f"{p}.guides: must be a list")
             continue
+        required = (GUIDE_MD,) if pillar in README_ONLY_SECTIONS else (GUIDE_YAML, GUIDE_MD)
         slugs: set[str] = set()
         for i, entry in enumerate(guides):
             gp = f"{p}.guides[{i}]"
@@ -1963,8 +2125,14 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
                 f.error(f"{gp}.slug: required, lowercase letters, digits and dashes")
             elif slug in slugs:
                 f.error(f"{gp}.slug: duplicate slug {slug!r} in {name}")
+            elif slug in seen_slugs:
+                f.error(
+                    f"{gp}.slug: {slug!r} is already used by {seen_slugs[slug]} "
+                    "(slugs must be unique across sections)"
+                )
             else:
                 slugs.add(slug)
+                seen_slugs[slug] = gp
             if not isinstance(d, str) or not d.startswith("guides/"):
                 f.error(f"{gp}.dir: required, a repo-relative path under guides/")
                 continue
@@ -1972,7 +2140,7 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
                 f.error(f"{gp}.dir: {d} is already published by {seen_dirs[d]}")
             seen_dirs[d] = gp
             gdir = repo_root / d
-            for req in (GUIDE_YAML, GUIDE_MD):
+            for req in required:
                 if not (gdir / req).is_file():
                     f.error(f"{gp}.dir: {d}/{req} does not exist")
             if "position" in entry and not isinstance(entry["position"], int):

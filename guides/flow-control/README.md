@@ -6,16 +6,28 @@
 
 Flow Control enables intelligent request queuing at the llm-d Router level. Traditional load balancing falls short for LLMs because resource consumption varies wildly per request. Shifting queuing to the Router enables:
 
-* **Multi-Tenancy**: Prevent noisy neighbors from starving others and enforce fairness between tenants.
-* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck.
+* **Multi-Tenancy**: Prevent noisy neighbors from starving others and enforce fairness between tenants. Compared to a single-workload deployment, operators of multi-tenant workloads have additional considerations:
+  * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid).
+  * Certain requests have **different SLOs** than others (e.g. batch vs online).
+  * Certain tenants are more active than others, so **fairness** between them matters.
+* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource.
 
 ### How it Works
 
-Incoming requests are classified by a `FlowKey` (Fairness ID + Priority). EPP maintains separate in-memory queues for each flow and dispatches them based on:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/flow-control.svg" alt="Flow Control">
+  </picture>
+</p>
+
+Requests arrive at the proxy with headers expressing their tenant ID and traffic priority. The EPP classifies each request by a `FlowKey` (Fairness ID + Priority), maintains separate in-memory queues for each flow, and assigns each flow to a `PriorityBand` (several tenants can share the same priority). In each scheduling cycle it dispatches based on:
 
 1. **Priority**: Servicing highest priority bands first.
-2. **Fairness**: Cycling through tenants within a band.
-3. **Ordering**: Ordering requests within a flow.
+2. **Fairness**: Cycling through tenants within a band, as decided by the **Fairness Policy**.
+3. **Ordering**: Ordering requests within a flow, as decided by the **Ordering Policy** (e.g. FCFS or SLO-aware).
+
+In the background, the EPP monitors the model servers for saturation; while it detects saturation, requests stay queued until it subsides.
 
 *While Backpressure protects the physical hardware from overload, the Multi-Tenancy policies dictate exactly how that delayed traffic is ordered and distributed among your users.*
 
@@ -57,7 +69,7 @@ When the `flowControl` feature gate is enabled, the EPP uses the following polic
 > [!NOTE]
 >
 > * Beneath the flow control layer, this guide uses the exact same `prefix-cache-scorer` and `load-aware` routing policies established in the [Optimized Baseline](../optimized-baseline/README.md). Flow control acts as an intelligent ingress layer that holds saturated traffic *before* it passes to the scheduler.
-> * While `utilization-detector` is the out-of-the-box system default listed here, production deployments should switch to `concurrency-detector` to avoid telemetry lag risks, as detailed in the [Tuning Guide](tuning.md).
+> * While `utilization-detector` is the out-of-the-box system default listed here, production deployments should switch to `concurrency-detector` to avoid telemetry lag risks, as detailed in the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 
 By default, the EPP uses a `global-strict` policy. Because the system is **work-conserving**, it will never artificially throttle traffic if GPUs have spare capacity. However, enforcing strict fairness (like Round-Robin) during periods of saturation constrains the scheduler's ability to pick the globally optimal request for batching or cache reuse, thereby bounding the maximum explorable latency-throughput frontier. The default prioritizes absolute global throughput, while this guide overrides it to prioritize tenant equity.
 
@@ -532,7 +544,7 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 > [!IMPORTANT]
 > The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) is empirically tuned **only** for the default reference workload (Qwen3-32B on 16 H100s). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
 
-For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tuning Guide](tuning.md).
+For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 
 ## Benchmarking
 
