@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          imagePullPolicy: Always
+          command: ["python", "-m", "atom.entrypoints.openai_server"]
+          args:
+            - "--model=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--server-port=8000"
+            - "--tensor-parallel-size=8"
+            - "--gpu-memory-utilization=0.50"
+            - "--kv_cache_dtype=fp8"
+            - "--enable_prefix_caching"
+            - "--disable-uvicorn-access-log"
+            - "--kv-transfer-config"
+            # PRODUCER (prefill) role: sends KV cache blocks via RDMA to decode.
+            # proxy_ip intentionally omitted; peer discovery is via the routing sidecar.
+            - '{"kv_connector":"moriio","kv_role":"kv_producer","http_port":8000,"handshake_port":6301}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          ports:
+            - containerPort: 6301
+              name: mori-handshake
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "64"
+              memory: 160Gi
+              amd.com/gpu: "8"
+            requests:
+              cpu: "32"
+              memory: 128Gi
+              amd.com/gpu: "8"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+          startupProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
