@@ -21,7 +21,7 @@ The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 pref
 How the two pools are deployed depends on the accelerator:
 
 - **NVIDIA GPU** (vLLM and SGLang) **and Google TPU7x dynamic sub-slices**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices) with a `prefill` and a `decode` role, in a single slice. The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
-- **All other accelerators** (AMD, Intel XPU, Google TPU v6e and TPU7x on static node pools, Iluvatar, MetaX, Rebellions NPU): a prefill and a decode `Deployment`.
+- **All other accelerators** (AMD, Intel XPU, Google TPU v6e and TPU7x on static node pools, Iluvatar, MetaX, Biren, Rebellions NPU): a prefill and a decode `Deployment`.
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/advanced/disaggregation/README.md).
 
@@ -40,6 +40,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
 | Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
+| Biren GPU | `biren` | `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8` | 🟡 community | — | 166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v) |
 | Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -59,6 +60,7 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | MoRIIOConnector | `amd/vllm/moriio/*` | RDMA via MoRI-IO | AMD GPU. |
 | TPUConnector / TPUConnectorHMA | `tpu/*` | TPU ICI / DCN | From `tpu_inference`; HMA on TPU7x. |
 | IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
+| NixlConnector | `biren/vllm/base` | RDMA (`UCX_TLS=rc_v`) | Biren 166M, `kv_buffer_device=cpu`. See the [Biren tab](#2-deploy-the-model-server). |
 
 NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production.
 
@@ -143,7 +145,7 @@ export NAMESPACE=llm-d-pd-disaggregation
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, npu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, biren, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma; valid values per accelerator: table above
 export MODEL=openai/gpt-oss-120b # set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B
@@ -405,6 +407,32 @@ The `metax` overlay runs vLLM on MetaX C500X over `NixlConnector` and the llm-d 
 **Known issues:**
 
 - Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=biren">
+<summary><b>Biren</b></summary>
+
+<!-- guide:deploy.modelserver.biren[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.biren[0] end -->
+
+The `biren` overlay is a **1 Prefill + 1 Decode** compatibility configuration: each replica is `TP=4` on four Biren 166M GPUs, serving `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8` over `NixlConnector` (`kv_buffer_device=cpu`) and the llm-d routing sidecar (`nixlv2`). Set `ACCELERATOR_TYPE=biren`, `MODEL_SERVER=vllm`, `INFRA_PROVIDER=base`, and `MODEL=Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8`.
+
+**Requirements:**
+
+- The Biren device plugin exposing `birentech.com/gpu`. Each role requests four GPUs.
+- An RDMA device plugin exposing `rdma/ib` inside pods (edit the resource name in the patches if yours differs, e.g. `rdma/hca` or `rdma/roce_gdr`). Each role requests one.
+- An image with vLLM and NIXL, compatible with BR166M.
+
+**Configuration notes:**
+
+- KV transfer uses `NixlConnector` over RDMA with `UCX_TLS=rc_v`.
+- Verify with Router `/v1/completions` or `/v1/chat/completions` against `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8`. Confirm decode logs show an external KV transfer rather than decode-only recompute.
 
 </details>
 <details data-when="ACCELERATOR_TYPE=npu">

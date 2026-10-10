@@ -82,6 +82,13 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
+    biren:
+      label: Biren GPU
+      notes: "BR166M · 2 replicas × TP=8 (16 GPUs)"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
 
 env:
   static:
@@ -95,7 +102,7 @@ env:
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", npu, cpu, iluvatar, metax]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", npu, cpu, iluvatar, metax, biren]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
     # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*, cpu); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}

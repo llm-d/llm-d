@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/library/birensupa-smartinfer-vllm
+    newTag: 26.08.25831-pd-ready

@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: modelserver
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/birensupa/br_container_tools/biren_entrypoint.sh
+            - vllm
+            - serve
+          args:
+            - Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8
+            - --port=8000
+            - --distributed-executor-backend=mp
+            - --block-size=128
+            - --seed=1024
+            - --tensor-parallel-size=4
+            - --max-model-len=3072
+            - --max-num-seqs=64
+            - --max-num-batched-tokens=16384
+            - --trust-remote-code
+            - --gpu-memory-utilization=0.7
+            - --no-enable-prefix-caching
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_buffer_device":"cpu"}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+              value: "5600"
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+            - name: UCX_TLS
+              value: rc_v
+            - name: UCX_NET_DEVICES
+              value: all
+            - name: VLLM_ENABLE_V1_MULTIPROCESSING
+              value: "1"
+            - name: VLLM_BR_WEIGHT_TYPE
+              value: NUMA
+            - name: VLLM_USE_TRITON_FLASH_ATTN
+              value: "0"
+            - name: VLLM_ENGINE_ITERATION_TIMEOUT_S
+              value: "300"
+            - name: VLLM_PD_PROFILE
+              value: "1"
+            - name: PYTORCH_SUPA_ALLOC_CONF
+              value: "max_split_size_mb:32,pool_type_boundary_mb:10"
+            - name: BRTB_ENABLE_NUMA_SPLIT
+              value: "1"
+            - name: BRTB_ENABLE_NUMA_ALIGN_4K
+              value: "1"
+            - name: RAY_DEDUP_LOGS
+              value: "0"
+            - name: LD_PRELOAD
+              value: /lib/x86_64-linux-gnu/libibverbs.so.1
+          ports:
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+                - SYSLOG
+          resources:
+            limits:
+              cpu: "32"
+              memory: 256Gi
+              birentech.com/gpu: "4"
+              rdma/ib: "1"
+            requests:
+              cpu: "16"
+              memory: 128Gi
+              birentech.com/gpu: "4"
+              rdma/ib: "1"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 360
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
+        - name: torch-compile-cache
+          emptyDir: {}
