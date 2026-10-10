@@ -114,12 +114,6 @@ sections:
           - from: asynchronous-processing/README.md
             to: asynchronous-processing
             title: Queue Async Requests (Async Processor)
-          - from: asynchronous-processing/redis/README.md
-            to: async-redis
-            title: Use Redis as the Async Queue
-          - from: asynchronous-processing/gcp-pubsub/README.md
-            to: async-gcp-pubsub
-            title: Use GCP Pub/Sub as the Async Queue
           - from: asynchronous-processing/multitenant/README.md
             to: async-multitenant
             title: Enforce Tenant Quotas and Priorities

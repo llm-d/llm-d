@@ -2,6 +2,8 @@
 
 The Async Processor is a lightweight dispatch agent that pulls inference requests from message queues and forwards them to the llm-d Router. It uses dispatch gates, isolated worker pools, request body transforms, and merge policies to regulate dispatch rates and process background workloads efficiently without overflowing inference servers.
 
+Queue-based dispatch decouples submission from execution: clients submit large volumes of work to a queue and collect results later instead of holding long-lived HTTP connections, transient failures are retried from the queue without impacting real-time traffic, and gated dispatch fills idle accelerator capacity between real-time spikes.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)">
