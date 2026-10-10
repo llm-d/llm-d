@@ -357,6 +357,45 @@ That distinction is the one worth internalising. `0` means the query ran and the
 
 Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscaler-sync-period`, 15 s by default), not by a `pollingInterval` on the ScaledObject: KEDA honours that field only when it owns activation or caching — `minReplicaCount: 0`, `idleReplicaCount: 0`, or a trigger with `useCachedMetrics`. Setting it otherwise is inert and makes KEDA 2.20 warn on every apply, so these overlays omit it. Use the `behavior` block to change how fast replicas are added or removed; if you set `minReplicaCount: 0` to scale to zero, `pollingInterval` starts mattering and should be set deliberately.
 
+## Benchmarking
+
+Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) at `9415d5e1`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
+cd llm-d-benchmark && git checkout 9415d5e1 && source .venv/bin/activate
+
+SPEC=guides/keda-epp-token-aware                     # P+D
+# SPEC=guides/keda-epp-token-aware-pd-disaggregation # P/D
+
+for SHAPE in prefill_heavy symmetrical decode_heavy; do
+  llmdbenchmark --spec ${SPEC} standup -p ${NAMESPACE}
+  make calibrate-peak-prefill NAMESPACE=${NAMESPACE} APPLY=1
+  llmdbenchmark --spec ${SPEC} --workspace results/${SHAPE} run -p ${NAMESPACE} \
+    --harness inference-perf --workload random_${SHAPE}.yaml --monitoring --analyze
+  llmdbenchmark --spec ${SPEC} teardown -p ${NAMESPACE}
+done
+```
+
+To run a static baseline without autoscaling, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`; the stack stays at 1 replica per role. To fix it at 4 replicas per role instead, also add `--set=decode.replicas=4`, plus `--set=prefill.replicas=4` for P/D, and pass `--modelservice-deploy-timeout 3600` to `standup`: 4 replicas loading the model at once can exceed the default readiness wait. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
+
+### Sizing
+
+Decode runs at TP=2: Qwen3-32B weights (~64 GB) on TP=1 leave ~12 GB of KV cache (~48k tokens), while TP=2 leaves ~88 GB (~350k tokens). Prefill runs at TP=1, so each extra prefill replica costs one GPU.
+
+To change TP, add these overrides to the loop's `standup`. GPU requests follow `tensor`. `prefill.*` applies to P/D only.
+
+```bash
+llmdbenchmark --spec ${SPEC} standup -p ${NAMESPACE} \
+  --set prefill.parallelism.tensor=2 \
+  --set decode.parallelism.tensor=4 \
+  --set eppKedaSaturation.scaledObject.maxReplicas=2
+```
+
+- `peakPrefillThroughput` depends on prefill TP. The loop's `calibrate-peak-prefill` step re-measures it.
+- Peak GPUs = `maxReplicas` × TP (P+D), or `maxReplicas` × (prefill TP + decode TP) (P/D). Lower `maxReplicas` to fit your GPU budget.
+- The thresholds (`1.5` s, `0.8`) are per replica and don't change with TP.
+
 ## Cleanup
 
 <!-- guide:cleanup start -->
