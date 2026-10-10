@@ -1,0 +1,22 @@
+# Single-GPU variant of ../base: Qwen/Qwen3-8B with tensor parallelism 1, the
+# setup the guide's eviction measurements used (one L4,
+# https://github.com/llm-d/llm-d-async/issues/468). Object names match ../base,
+# so the guide's cleanup removes either variant. It builds on ../base on GKE too:
+# with tensor parallelism 1 there is no NCCL traffic, so it needs no
+# disable-gke-nccl-tuner-patch.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-8B
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-vllm.yaml
+    target:
+      kind: Deployment

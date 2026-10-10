@@ -1,0 +1,26 @@
+# This guide's model server: the optimized-baseline guide's GPU vLLM overlay
+# (Qwen/Qwen3-32B, tensor parallelism 2, two GPUs per replica), relabelled for
+# this guide and cut to one replica. Model, image, probes and volumes follow
+# optimized-baseline.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../../../../optimized-baseline/modelserver/gpu/vllm/base
+
+namePrefix: async-multitenant-
+
+# Both router values files (values/router/) and the vLLM PodMonitor select the
+# model server on this label.
+labels:
+  - pairs:
+      llm-d.ai/guide: async-multitenant
+    includeSelectors: true
+    includeTemplates: true
+
+# One replica instead of optimized-baseline's two: the router's maxConcurrency
+# and the llm-d-async worker pool are sized so that async work saturates one
+# replica.
+replicas:
+  - name: optimized-baseline-nvidia-gpu-vllm-decode
+    count: 1

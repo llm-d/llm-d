@@ -85,8 +85,8 @@ When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowCon
 - **Retries with Backoff in `llm-d-async`:** Requests dropped or rejected by router flow control (e.g., when a priority band is full or during in-flight eviction, returning HTTP 429) are caught by `llm-d-async` and **retried with exponential backoff and jitter** provided the request's deadline has not expired.
 - **Multi-Tenant Fairness:** Within any single priority band, the router enforces tenant fairness (`round-robin-fairness-policy` over `x-llm-d-inference-fairness-id`, which is stamped from `metadata.team`). No single tenant can monopolize a priority tier.
 - **Order Preservation:** Within each tenant's individual flow, requests dispatch in arrival order (`fcfs-ordering-policy`).
-- **Priority Holdback (`priority-holdback-policy`, the default in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
-- **In-Flight Eviction (`enableEviction: true`, experimental, in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
+- **Priority Holdback (`priority-holdback-policy`, in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
+- **In-Flight Eviction (`enableEviction: true`, the default in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
   While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation. Evicted requests are retried by `llm-d-async` and redo their generation. See [Protecting realtime traffic](#protecting-realtime-traffic).
 - For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/core/router/epp/flow-control).
 
@@ -117,12 +117,11 @@ finishes: a full request duration
 eviction is required to protect realtime traffic mixed with `llm-d-async` traffic.** The guide provides one
 router values file for each:
 
-| | Priority holdback ([`flow-control-holdback.yaml`](values/router/flow-control-holdback.yaml), default) | In-flight eviction ([`flow-control-evictable.yaml`](values/router/flow-control-evictable.yaml), experimental) |
+| | In-flight eviction ([`flow-control-evictable.yaml`](values/router/flow-control-evictable.yaml), default, recommended) | Priority holdback ([`flow-control-holdback.yaml`](values/router/flow-control-holdback.yaml)) |
 | :-- | :-- | :-- |
-| **How** | Admits each lower band only up to a ceiling (here falling from 100 % of capacity for priority 100 to 50 % for `overflow-batch`), keeping headroom free for higher bands | Lets async work fill the pool, then cancels in-flight `overflow-async` / `overflow-batch` requests when a higher-priority request is blocked |
-| **Realtime latency** | Protected, as long as the reserved headroom is larger than the router's admission burst (`minCeiling: 0.5`; 0.7 and 0.9 were not enough) | Protected |
-| **Async efficiency** | The headroom stays idle while realtime traffic is quiet: async throughput was 26 % lower (48 % with shared prompt prefixes) | Full async throughput while realtime is quiet; evicted requests are retried and their partial work is lost (6 to 9 % of the tokens processed) |
-| **Maturity** | `priority-holdback-policy` is an Alpha plugin (the values file sets `--allow-experimental-plugins`) | Experimental |
+| **How** | Lets async work fill the pool, then cancels in-flight `overflow-async` / `overflow-batch` requests when a higher-priority request is blocked | Admits each lower band only up to a ceiling (here falling from 100 % of capacity for priority 100 to 50 % for `overflow-batch`), keeping headroom free for higher bands |
+| **Realtime latency** | Protected | Protected, as long as the reserved headroom is larger than the router's admission burst (`minCeiling: 0.5`; 0.7 and 0.9 were not enough) |
+| **Async efficiency** | Full async throughput while realtime is quiet; evicted requests are retried and their partial work is lost (6 to 9 % of the tokens processed) | The headroom stays idle while realtime traffic is quiet: async throughput was 26 % lower (48 % with shared prompt prefixes) |
 
 The tradeoff with holdback is between protecting realtime traffic and async efficiency: a lower `minCeiling`
 reserves more headroom, which protects realtime traffic against larger admission bursts but leaves more
@@ -160,44 +159,51 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
   the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
   parallelism 2).
 
-- **Environment.** In addition to the base guide's variables:
+Then set this guide's environment (on top of the base guide's variables). `GPUS`, `FLOW_CONTROL` and
+`QUEUE_BACKEND` select the alternatives described in the steps below:
 
-  ```bash
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-  source ${REPO_ROOT}/guides/env.sh
-  export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
-
-  export NAMESPACE=llm-d-async
-  export GUIDE_NAME=async-multitenant  # constant: the llm-d.ai/guide label the router values and PodMonitor select on
-  export ASYNC_VERSION=v0.10.0         # llm-d-async release (supports lane_objectives & tier-priority)
-  export INFRA_PROVIDER=base           # optimized-baseline model server variant: base, or gke on GKE
-
-  export POOL_NAME=llm-d-router        # InferencePool the router creates (objectives, saturation gates)
-  export MODEL=Qwen/Qwen3-32B          # served model name (goes in payload.model)
-
-  # Scenario C only: the base URL the saturation gates read PromQL from. The default
-  # matches the monitoring setup; override it if your Prometheus lives somewhere else:
-  export PROM_URL=http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
-
-  # Scenario C only: concurrent requests at which the pool counts as saturated.
-  # Must be BELOW the worker pool's worker count (16 in the overlays) — see Scenario C:
-  export SAT_CAP=4
-  ```
+<!-- guide:env.static start -->
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
+export NAMESPACE=llm-d-async
+export ASYNC_VERSION=v0.10.0 # llm-d-async release (supports lane_objectives & tier-priority)
+export INFRA_PROVIDER=base # options: base, gke; model server overlay variant
+export GPUS=2 # options: 2, 1; GPUs for the model server; 1 serves Qwen/Qwen3-8B instead
+export FLOW_CONTROL=evictable # options: evictable, holdback; router values: in-flight eviction (recommended), or priority holdback
+export QUEUE_BACKEND=redis # options: redis, pubsub
+export POOL_NAME=llm-d-router # constant: the router release and its InferencePool (objectives, PodMonitor, saturation gates)
+export MODEL=Qwen/Qwen3-32B # served model name (goes in payload.model)
+export PROM_URL=http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090 # Scenarios C and D only: the Prometheus the saturation gates read
+export SAT_CAP=4 # Scenario C only: concurrent requests at which the pool counts as saturated; keep it below the worker pool's 16 workers
+```
+<!-- llm-d-cicd:skip start -->
+```bash
+export HF_TOKEN=HF_TOKEN_PLACEHOLDER
+```
+<!-- llm-d-cicd:skip end -->
+```bash
+export EXTRA_ROUTER_HELM_ARGS= # extra router Helm flags (CI only)
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.static end -->
 
 ## Configuration and Deployment
 
-The value overlays live in [`values/`](values/) with literal placeholders (`NAMESPACE`, `IGW_HOST`,
-`POOL_NAME`, `SAT_CAP` in the saturation overlays, `PROM_URL`, `COORDINATOR_IMAGE` in the optional
-coordinator manifest, `POOL_NAME` in the vLLM PodMonitor, and `PROJECT_ID` on the GCP paths). Render one for your
-environment before installing:
+The guide's Kubernetes manifests are kustomize overlays ([`modelserver/`](modelserver/) and
+[`manifests/`](manifests/)), applied into `${NAMESPACE}` with `kubectl apply -k`. Everything runs in that one
+namespace, so components address each other by Service name (`llm-d-router-epp`, `redis`), and the default
+llm-d-async values ([`values/redis/quota-only.yaml`](values/redis/quota-only.yaml)) install as they are.
+
+The alternative llm-d-async values for Scenarios C and D and the GCP paths carry literal placeholders
+(`POOL_NAME`, `SAT_CAP` and `PROM_URL` in the saturation overlays, `PROJECT_ID` on the GCP paths). Render one
+for your environment before installing it:
 
 ```bash
 render() {   # render <overlay-path> -> stdout
-  sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" \
-      -e "s/POOL_NAME/${POOL_NAME}/g" \
+  sed -e "s/POOL_NAME/${POOL_NAME}/g" \
       -e "s/SAT_CAP/${SAT_CAP:-4}/g" \
       -e "s#PROM_URL#${PROM_URL:-http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090}#g" \
-      -e "s#COORDINATOR_IMAGE#${ROUTER_COORDINATOR_IMAGE}:${ROUTER_COORDINATOR_VERSION}#g" \
       -e "s/PROJECT_ID/${PROJECT_ID}/g" "$1"
 }
 ```
@@ -208,70 +214,83 @@ model name reaches the system through `payload.model`, which the `publish()` hel
 
 ### 1. Install CRDs and Deploy the Backend Model Server
 
-Create the namespace and install the `InferenceObjective` CRD:
+Create the namespace:
 
+<!-- guide:prerequisites.namespace start -->
 ```bash
 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
 
-# ROUTER_RELEASE_URL exported from guides/env.sh
+Install the GAIE `InferencePool` and llm-d `InferenceObjective` CRDs (the base guide's prerequisites may already
+have installed them; applying them again is harmless):
+
+<!-- guide:prerequisites.crds start -->
+```bash
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+
+# ROUTER_RELEASE_URL is automatically calculated from ROUTER_RELEASE_VERSION at ${REPO_ROOT}/guides/env.sh
 kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
 ```
+<!-- guide:prerequisites.crds end -->
 
 Create the `llm-d-hf-token` secret the model server reads its [Hugging Face token](../../../../helpers/hf-token.md)
-from. The model server runs in this guide's namespace, so it needs its own copy even if optimized-baseline's
+from (`HF_TOKEN`, set with the environment above). The model server runs in this guide's namespace, so it needs its own copy even if optimized-baseline's
 namespace already has one:
 
+<!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export HF_TOKEN=<your Hugging Face token>
 kubectl create secret generic llm-d-hf-token \
   --from-literal="HF_TOKEN=${HF_TOKEN}" \
   --namespace "${NAMESPACE}" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 Deploy the vLLM model server:
 
+<!-- guide:deploy.modelserver[0] start -->
 ```bash
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
-  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-  | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
-  | kubectl apply -n ${NAMESPACE} -f -
+# only when GPUS=2:
+kubectl apply -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+# Downloading and loading the model takes several minutes
+kubectl -n ${NAMESPACE} rollout status deploy/async-multitenant-optimized-baseline-nvidia-gpu-vllm-decode --timeout=30m
 ```
+<!-- guide:deploy.modelserver[0] end -->
 
-Instead of maintaining its own model server manifests, this guide renders the
-[optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay
-(`guides/optimized-baseline/modelserver/gpu/vllm/`) as the [flow-control](../../../flow-control/README.md) guide does:
-`sed` swaps in this guide's `llm-d.ai/guide` label, `${GUIDE_NAME}`. It is a constant, `async-multitenant`, because both router values files and the vLLM PodMonitor select on that value. The model (`Qwen/Qwen3-32B`, two GPUs
-per replica), image, probes and volumes follow that guide. The one change is a single replica instead of optimized-baseline's two: the
-router's `maxConcurrency` and the llm-d-async worker pool below are sized so that async work saturates one replica.
+The model server overlay ([`modelserver/gpu/vllm/`](modelserver/gpu/vllm/)) builds on the
+[optimized-baseline](../../../optimized-baseline/README.md) guide's GPU vLLM overlay: the model (`Qwen/Qwen3-32B`,
+two GPUs per replica), image, probes and volumes follow that guide. It labels the pods
+`llm-d.ai/guide: async-multitenant`, which both router values files and the vLLM PodMonitor select on, and runs a
+single replica instead of optimized-baseline's two: the router's `maxConcurrency` and the llm-d-async worker pool
+below are sized so that async work saturates one replica.
 
 <details>
 <summary><b>Single GPU</b></summary>
 
 On one GPU, serve `Qwen/Qwen3-8B` with tensor parallelism 1 instead (the setup the guide's
-[eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used). Set the served model name to
-match before publishing, because requests carry it in `payload.model`:
+[eviction measurements](https://github.com/llm-d/llm-d-async/issues/468) used): set `GPUS=1` and apply the
+single-GPU overlay. The step also sets the served model name to match, because requests carry it in
+`payload.model`:
 
+<!-- guide:deploy.modelserver[1] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+# only when GPUS=1:
 export MODEL=Qwen/Qwen3-8B
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
-  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-  | yq '(select(.kind == "Deployment") | .spec.replicas) = 1' \
-  | yq '(select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "modelserver")) |= (
-      .args[0] = "Qwen/Qwen3-8B"
-      | .args |= map(select(test("^--tensor-parallel-size=") | not)) + ["--tensor-parallel-size=1", "--max-model-len=4000"]
-      | .resources.limits."nvidia.com/gpu" = 1 | .resources.requests."nvidia.com/gpu" = 1
-      | .resources.limits.cpu = "8" | .resources.requests.cpu = "4"
-      | .resources.limits.memory = "40Gi" | .resources.requests.memory = "20Gi")' \
-  | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/single-gpu
+# Downloading and loading the model takes several minutes
+kubectl -n ${NAMESPACE} rollout status deploy/async-multitenant-optimized-baseline-nvidia-gpu-vllm-decode --timeout=30m
 ```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver[1] end -->
 
-`--max-model-len=4000` keeps the KV cache within a 24 GB GPU such as an L4. The pods keep optimized-baseline's
-`llm-d.ai/model: Qwen3-32B` label, which only identifies the overlay they came from.
+`--max-model-len=4000` keeps the KV cache within a 24 GB GPU such as an L4. The overlay's object names match the
+default one, so the cleanup below removes either; delete one before applying the other, because the pod
+selectors differ.
 
 </details>
 
@@ -280,37 +299,33 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 
 ### 2. Configure llm-d-router and Apply InferenceObjectives
 
-Deploy llm-d Router configured with Flow Control and priority holdback, and apply the 6 lane `InferenceObjective`s:
+Deploy llm-d Router configured with Flow Control and in-flight eviction, and apply the 6 lane `InferenceObjective`s:
 
+<!-- guide:deploy.router start -->
 ```bash
 # 1. Apply InferenceObjectives for the 6 tier-priority lanes
-render ${MT}/manifests/inferenceobjectives.yaml | kubectl apply -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/objectives
 
-# 2. Deploy llm-d-router with Flow Control priority bands and priority holdback
-helm upgrade --install llm-d-router \
+# 2. Deploy llm-d-router with Flow Control priority bands and in-flight eviction (or priority holdback)
+helm upgrade --install ${POOL_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${MT}/values/router/flow-control-holdback.yaml \
+    -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
+    ${EXTRA_ROUTER_HELM_ARGS} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-
-# Get router ClusterIP
-export IP=$(kubectl get service llm-d-router-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:deploy.router end -->
 
 <details>
-<summary><b>Experimental: in-flight eviction instead of priority holdback</b></summary>
+<summary><b>Priority holdback instead of in-flight eviction</b></summary>
 
-To keep full async throughput while realtime traffic is quiet, at the cost of cancelled and retried async
-work (see [Protecting realtime traffic](#protecting-realtime-traffic)), install the router with the evictable
-values instead:
+To protect realtime traffic without cancelling async work that is already running, at the cost of idle
+headroom while realtime traffic is quiet (see [Protecting realtime traffic](#protecting-realtime-traffic)),
+install the router with the holdback values instead: set `FLOW_CONTROL` and run the step above again.
 
 <!-- llm-d-cicd:skip start -->
 ```bash
-helm upgrade --install llm-d-router \
-    ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${MT}/values/router/flow-control-evictable.yaml \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+export FLOW_CONTROL=holdback   # router values: values/router/flow-control-holdback.yaml
 ```
 <!-- llm-d-cicd:skip end -->
 
@@ -318,27 +333,36 @@ helm upgrade --install llm-d-router \
 
 > [!NOTE]
 > **One InferencePool per router:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`
-> (`POOL_NAME`), and `render` binds all 6 `InferenceObjective`s to it. An `InferenceObjective` binds to a single
-> `poolRef.name`, and Kubernetes resource names are unique per namespace, so when one `llm-d-async` feeds several
-> `InferencePool`s, put each pool and its router in its own namespace and apply
-> `manifests/inferenceobjectives.yaml` there with `POOL_NAME` set to that pool.
+> (`POOL_NAME`), and the objectives overlay binds all 6 `InferenceObjective`s to it. An `InferenceObjective` binds
+> to a single `poolRef.name`, and Kubernetes resource names are unique per namespace, so when one `llm-d-async`
+> feeds several `InferencePool`s, put each pool and its router in its own namespace and apply
+> `manifests/objectives` there, with `poolRef.name` patched to that pool if its router release has another name.
 
 ### 3. Deploy Redis and llm-d-async
 
 The bundled Redis backs both the per-team request queues and the quota counters.
 
+<!-- guide:deploy.async[0] start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
+# only when QUEUE_BACKEND=redis:
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/redis
+kubectl -n ${NAMESPACE} rollout status deploy/redis --timeout=300s
 
-render ${MT}/values/redis/quota-only.yaml > /tmp/mt-redis.yaml
-helm install llm-d-async \
+helm upgrade --install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
-    -f /tmp/mt-redis.yaml \
+    -f ${MT}/values/redis/quota-only.yaml \
     -n ${NAMESPACE} --version ${ASYNC_VERSION}
+```
+<!-- guide:deploy.async[0] end -->
 
+Check the transport:
+
+<!-- guide:verify.tests.transport start -->
+```bash
 kubectl -n ${NAMESPACE} get deploy llm-d-async -o yaml | grep transport
 # -> --transport=redis-sortedset
 ```
+<!-- guide:verify.tests.transport end -->
 
 Queues are just sorted-set keys — no per-team resource creation needed; they appear on first publish.
 
@@ -346,22 +370,26 @@ Queues are just sorted-set keys — no per-team resource creation needed; they a
 <summary><b>GCP Pub/Sub backend</b></summary>
 
 Requires a GCP project with the Pub/Sub API enabled and `gcloud` authenticated. `gcp-setup.sh` creates
-the per-team topics + subscriptions, the results topic, and the service account + IAM.
+the per-team topics + subscriptions, the results topic, and the service account + IAM. Set `QUEUE_BACKEND=pubsub`
+and your project in place of the Redis step:
 
+<!-- guide:deploy.async[1] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+# only when QUEUE_BACKEND=pubsub:
 export PROJECT_ID=your-project
-${MT}/scripts/gcp-setup.sh                       # topics, subscriptions, results topic, SA + IAM
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml   # still needed for the quota counters
+${MT}/scripts/gcp-setup.sh                         # topics, subscriptions, results topic, SA + IAM
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/redis   # still needed for the quota counters
+kubectl -n ${NAMESPACE} rollout status deploy/redis --timeout=300s
 
-sed -e "s/NAMESPACE/${NAMESPACE}/g" -e "s#IGW_HOST#${IP}#g" -e "s/PROJECT_ID/${PROJECT_ID}/g" \
-    ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
-helm install llm-d-async \
+sed "s/PROJECT_ID/${PROJECT_ID}/g" ${MT}/values/pubsub/quota-only.yaml > /tmp/mt-pubsub.yaml
+helm upgrade --install llm-d-async \
     oci://ghcr.io/llm-d/charts/llm-d-async \
     -f /tmp/mt-pubsub.yaml \
-    -n ${NAMESPACE} --create-namespace --version ${ASYNC_VERSION}
+    -n ${NAMESPACE} --version ${ASYNC_VERSION}
 ```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.async[1] end -->
 
 `gcp-setup.sh` binds the `async-processor` service account to `pubsub.subscriber`, `pubsub.publisher`,
 `pubsub.viewer` (the readiness probe's `GetSubscription`) and `monitoring.viewer` (broker backlog). With
@@ -402,33 +430,42 @@ counted against a quota. The llm-d-async values from step 3 need no change: the 
 destination to each request, so the coordinator gets its results back while requests published straight to
 Redis still land on `results-list`.
 
-The guide's Redis (`manifests/redis.yaml`) starts with keyspace notifications enabled
+The guide's Redis (`manifests/redis/redis.yaml`) starts with keyspace notifications enabled
 (`--notify-keyspace-events Kl`), so held `wait` requests wake up as soon as their result lands instead of polling.
 
+<!-- guide:deploy.coordinator start -->
 ```bash
-# The coordinator (image and tag from guides/env.sh: ROUTER_COORDINATOR_IMAGE / _VERSION)
-render ${MT}/manifests/coordinator/config.yaml > /tmp/coordinator.yaml
-kubectl -n ${NAMESPACE} create configmap llm-d-coordinator-config \
-    --from-file=coordinator.yaml=/tmp/coordinator.yaml --dry-run=client -o yaml | kubectl apply -f -
-render ${MT}/manifests/coordinator/coordinator.yaml | kubectl apply -n ${NAMESPACE} -f -
-kubectl -n ${NAMESPACE} rollout status deploy/llm-d-coordinator
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/coordinator
+kubectl -n ${NAMESPACE} rollout status deploy/llm-d-coordinator --timeout=300s
 ```
+<!-- guide:deploy.coordinator end -->
+
+The overlay generates the `llm-d-coordinator-config` ConfigMap from `config.yaml` and takes the coordinator image
+from the shared coordinator image component, at llm-d-router `main`: the config uses settings newer than the
+v0.11.0 release.
 
 Try it:
 
+<!-- guide:verify.tests.coordinator start -->
 ```bash
-kubectl -n ${NAMESPACE} port-forward svc/llm-d-coordinator 8080:8080 &
+kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} svc/llm-d-coordinator 8080:8080 &
+PF_PID=$!
+sleep 3
+kill -0 ${PF_PID}
 
 # Live, at interactive priority
-curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
+curl -s 127.0.0.1:8080/v1/completions -H 'Content-Type: application/json' \
   -H 'x-llm-d-async-mode: passthrough' -H 'x-llm-d-tenant: realtime' \
   -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
 
 # Queued on team-batch; the response arrives once llm-d-async has dispatched it
-curl -s localhost:8080/v1/completions -H 'Content-Type: application/json' \
+curl -s 127.0.0.1:8080/v1/completions -H 'Content-Type: application/json' \
   -H 'x-llm-d-async-mode: wait' -H 'x-llm-d-tenant: batch' \
   -d "{\"model\":\"${MODEL}\",\"prompt\":\"hello\",\"max_tokens\":32}"
+
+kill ${PF_PID:-} 2>/dev/null || true
 ```
+<!-- guide:verify.tests.coordinator end -->
 
 A client that disconnects while its `wait` request is still queued cancels it before dispatch. The coordinator
 trusts `x-llm-d-tenant` as sent, like the rest of the llm-d serving path, so put it behind your own authentication when
@@ -722,7 +759,7 @@ to install the standard Prometheus and Grafana stack:
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
 # 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
-render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/monitoring
 ```
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
@@ -772,6 +809,12 @@ The gate-metric panels need an image newer than v0.7.2. GMP / Monarch lags real 
 is bang-bang on that timescale; the self-hosted Prometheus path reacts within one scrape.
 </details>
 
+## Status
+
+**Tier 2 (Deployable)**, per the [guide policy](../../../GUIDES-POLICY.md).
+Reference environment: GKE, two NVIDIA H100s, vLLM, `Qwen/Qwen3-32B`.
+Gaps to Tier 3: no nightly end-to-end job.
+
 ## Notes & gotchas
 
 - **Image / version.** The overlays no longer pin an image tag — the image tracks the chart's
@@ -798,29 +841,32 @@ is bang-bang on that timescale; the self-hosted Prometheus path reacts within on
 
 ## Cleanup
 
+<!-- guide:cleanup[0] start -->
 ```bash
-# Only if you deployed the optional coordinator (step 4)
-render ${MT}/manifests/coordinator/coordinator.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
-kubectl -n ${NAMESPACE} delete configmap llm-d-coordinator-config --ignore-not-found
-
+# --ignore-not-found: the coordinator (step 4) and the PodMonitor (Observability) are optional
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/coordinator --ignore-not-found
 helm uninstall llm-d-async -n ${NAMESPACE}
-helm uninstall llm-d-router -n ${NAMESPACE}
-render ${MT}/manifests/inferenceobjectives.yaml | kubectl delete -f -
-kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
-  | sed "s/optimized-baseline/${GUIDE_NAME}/g" | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
-kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/redis.yaml
-render ${MT}/manifests/prometheus-vllm-podmonitor.yaml | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+helm uninstall ${POOL_NAME} -n ${NAMESPACE}
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/objectives
+# Either model server overlay: the single-GPU one has the same object names
+kubectl delete -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/redis
+kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
 ```
+<!-- guide:cleanup[0] end -->
 
 <details>
 <summary><b>GCP Pub/Sub cleanup</b></summary>
 
+<!-- guide:cleanup[1] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+# only when QUEUE_BACKEND=pubsub:
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml -f ${MT}/manifests/gmp-podmonitoring.yaml
 gcloud monitoring dashboards list --project ${PROJECT_ID} --filter='displayName:"Async Processor"' \
   --format='value(name)' | xargs -r -n1 gcloud monitoring dashboards delete --project ${PROJECT_ID} --quiet
 PROJECT_ID=${PROJECT_ID} DELETE_SA=1 ${MT}/scripts/gcp-teardown.sh
 ```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:cleanup[1] end -->
 </details>

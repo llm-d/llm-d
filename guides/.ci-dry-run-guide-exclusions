@@ -20,9 +20,6 @@ recipes/observability
 # Reinforcement learning guide — markdown documentation only, no kustomize overlays
 rl
 
-# Batch serving guide — markdown documentation only, no kustomize overlays
-batch-serving
-
 # Runtime AI inventory guide — markdown documentation only, no kustomize overlays
 runtime-inventory
 

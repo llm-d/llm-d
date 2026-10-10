@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - coordinator.yaml
+
+configMapGenerator:
+  - name: llm-d-coordinator-config
+    files:
+      - coordinator.yaml=config.yaml
+
+# nightly (llm-d-router main): config.yaml uses key names newer than the
+# release component's llm-d-router v0.11.0 (server.secure_serving, see
+# llm-d-router#2908).
+components:
+  - ../../../../../recipes/modelserver/components/images/coordinator/nightly
