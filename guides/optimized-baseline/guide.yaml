@@ -10,7 +10,7 @@ name: optimized-baseline
 # needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
 # narrows one to a subset); llm-d.ai turns it into the provider selector.
 support:
-  engines: {vllm: vLLM, sglang: SGLang, trtllm: TensorRT-LLM}
+  engines: {vllm: vLLM, sglang: SGLang, trtllm: TensorRT-LLM, atom: Atom}
   accelerators:
     gpu:
       label: NVIDIA GPU
@@ -26,7 +26,7 @@ support:
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated, sglang: community}
+      engines: {vllm: validated, sglang: community, atom: validated}
     xpu:
       label: Intel XPU
       notes: "Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16"
@@ -96,7 +96,7 @@ env:
     MONITORING_VALUES: {default: ""}
 
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", npu, cpu, iluvatar, metax]}
-    MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm, atom]}
     # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*, cpu); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
     TPU_SLICE_TOPOLOGY: {default: 2x2x1, values: [2x2x1, 2x2x2]} # only for ACCELERATOR_TYPE=tpu/v7-dynamic-slice
@@ -132,7 +132,7 @@ deploy:
         # Paths to values files
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 
-    - when: {MODEL_SERVER: [vllm, sglang]}
+    - when: {MODEL_SERVER: [vllm, sglang, atom]}
       run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
     # trtllm-serve needs its own values: modelServers.type and the /prometheus/metrics path.

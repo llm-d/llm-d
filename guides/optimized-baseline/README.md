@@ -34,18 +34,18 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves exactly one model:
 
 <!-- guide:support start -->
-| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
-| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16 |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
-| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
-| Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
-| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
-| Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
-| MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | 2 replicas × TP=8 (16 GPUs) |
+| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Atom | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | — | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | ✅ validated | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | — | Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16 |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
+| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
+| Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
+| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
+| Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
+| MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | — | 2 replicas × TP=8 (16 GPUs) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -85,7 +85,7 @@ export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax
-export MODEL_SERVER=vllm # options: vllm, sglang, trtllm
+export MODEL_SERVER=vllm # options: vllm, sglang, trtllm, atom
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2
 export MODEL=Qwen/Qwen3-32B # set to the Served model for your accelerator (table above)
@@ -135,8 +135,8 @@ kubectl create secret generic llm-d-hf-token \
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 ```
 <!-- variants:start -->
-<details open data-when="MODEL_SERVER=vllm,sglang">
-<summary><b>vLLM / SGLang</b></summary>
+<details open data-when="MODEL_SERVER=vllm,sglang,atom">
+<summary><b>vLLM / SGLang / Atom</b></summary>
 
 ```bash
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
