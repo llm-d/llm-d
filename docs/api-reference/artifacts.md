@@ -109,8 +109,8 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 | Image | Tag | Accelerator | Base OS | Architectures |
 |-------|-----|-------------|---------|---------------|
 | `ghcr.io/llm-d/llm-d-cuda` (deprecated) | - | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-aws` (deprecated)  | - | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
-| `ghcr.io/llm-d/llm-d-rocm`              | `v0.10.0` | AMD ROCm | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-aws`  (deprecated) | - | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
+| `ghcr.io/llm-d/llm-d-rocm` (deprecated) | `v0.10.0` | AMD ROCm | RHEL UBI9 | amd64 |
 | `ghcr.io/llm-d/llm-d-xpu`               | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
 | `ghcr.io/llm-d/llm-d-xpu-sglang`        | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
 | `ghcr.io/llm-d/llm-d-cpu`               | `v0.10.0` | CPU | RHEL UBI9 | amd64 |
