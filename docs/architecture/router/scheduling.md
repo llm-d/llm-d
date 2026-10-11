@@ -199,8 +199,7 @@ The following metrics provide visibility into the InferencePool health and sched
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `llm_d_epp_disagg_decision_total` | Counter | `plugin_name`, `plugin_type`, `model_name`, `decision_type` | Disaggregation routing decisions (`decode-only`, `prefill-decode`, `encode-decode`, `encode-prefill-decode`) |
-| `llm_d_epp_pd_decision_total` | Counter | `plugin_name`, `plugin_type`, `model_name`, `decision_type` | Prefill/Decode decisions (deprecated handler) |
-| `llm_d_epp_disaggregatedset_strict_header_no_match_total` | Counter | `plugin_type`, `plugin_name`, `selector` | Strict header selections that matched no endpoint |
+| `llm_d_epp_disaggregatedset_strict_revision_no_match_total` | Counter | `plugin_type`, `plugin_name` | Strict revision selections that matched no endpoint and failed closed |
 | `llm_d_epp_disaggregatedset_revision_gating_share` | Gauge | `plugin_type`, `plugin_name`, `mode`, `revision` | Current weighted revision gating share |
 
 #### Prefix Cache Metrics (Approximate)
