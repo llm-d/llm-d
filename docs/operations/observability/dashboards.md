@@ -35,12 +35,14 @@ llm-d-vllm-overview                               1      30s
 llm-d-sglang-overview                             1      30s
 llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
+llm-d-inference-gateway                           1      30s
 llm-d-performance-kv-cache                        1      30s
 llm-d-pd-coordinator-metrics                      1      30s
 llm-d-batch-gateway-apiserver                     1      30s
 llm-d-batch-gateway-processor                     1      30s
 llm-d-batch-gateway-gc                            1      30s
 llm-d-inference-cost                              1      30s
+llm-d-tpu-overview                                1      30s
 ```
 
 Or import individual dashboard JSON files manually from `guides/recipes/observability/grafana/dashboards/`:

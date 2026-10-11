@@ -73,7 +73,7 @@ Different pod roles use different ports:
 | Pod Role | Port | Description |
 | ---------- | ------ | ------------- |
 | Prefill | 8000 | Direct vLLM API access |
-| Decode | 8200 | Proxied through sidecar (8200 → 8000) |
+| Decode | 8200 | vLLM behind the routing sidecar, which listens on 8000 and proxies to vLLM on 8200; probe vLLM on 8200 |
 | Standalone | 8000 | Single-node deployments |
 
 Always configure probes to match the pod's serving port.
@@ -169,47 +169,43 @@ Container Start
 
 ## Examples
 
-### Wide Endpoint Deployment
+### Disaggregated Decode Pod
 
-Example from `guides/wide-ep/manifests/modelserver/base/decode.yaml`:
+Condensed from the decode role in `guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml`. The probes target the vLLM container port (8200, named `modelserver`), not the routing sidecar on 8000:
 
 ```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: vllm-decode
-spec:
-  containers:
-  - name: vllm
-    image: ghcr.io/llm-d/llm-d:latest
-    ports:
-    - containerPort: 8200
-      protocol: TCP
+containers:
+- name: modelserver
+  image: docker.io/vllm/vllm-openai:v0.30.0
+  ports:
+  - containerPort: 8200
+    name: modelserver
+    protocol: TCP
 
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: 8200
-      initialDelaySeconds: 30
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 60
+  startupProbe:
+    httpGet:
+      path: /v1/models
+      port: modelserver
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 120
 
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: 8200
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 3
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: modelserver
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: 8200
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /v1/models
+      port: modelserver
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
 ```
 
 ## Testing Probes
