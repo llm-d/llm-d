@@ -1,6 +1,6 @@
 # InferencePool
 
-The `InferencePool` is the central resource that bridges the gap between the Gateway, the Endpoint Policy Provider (EPP), and the collection of model server instances. It serves as the source of truth for both endpoint discovery and service mesh/gateway integration.
+The `InferencePool` is the central resource that bridges the gap between the Gateway, the Endpoint Picker (EPP), and the collection of model server instances. It serves as the source of truth for both endpoint discovery and service mesh/gateway integration.
 
 ## Functional Overview
 

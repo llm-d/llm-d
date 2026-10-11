@@ -381,10 +381,11 @@ The `Drop Reason` column lists the value emitted in the `x-llm-d-request-dropped
 |---|---|---|---|---|
 | `QueueOutcomeRejectedCapacity` | `ResourceExhausted` | 429 (Too Many Requests) | `rejected-saturated` | Rejection because queue capacity limits were met (Global or Per-Band). |
 | In-flight eviction (`enableEviction: true`) | *(ImmediateResponse, no internal code)* | 429 (Too Many Requests) | `evicted` | Post-dispatch reclamation, not a `QueueOutcome`: an already-dispatched, negative-priority request is ended to reclaim capacity for blocked higher-priority demand. Returned as an Envoy `ImmediateResponse`, so it carries no internal error code. The evicted caller owns retry. See [In-Flight Eviction](#in-flight-eviction). |
-| `QueueOutcomeEvictedTTL` | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-ttl-expired` | Eviction from queue because the request's TTL expired. |
+| `QueueOutcomeEvictedTTL` | `ResourceExhausted` | 429 (Too Many Requests) | `rejected-ttl-expired` | Eviction from queue because the request's TTL expired while the pool still had endpoints. |
+| `QueueOutcomeEvictedTTL` (empty pool) / no endpoints | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-no-endpoints` | The pool has no serving endpoints (for example, scaled to zero), or a queued request's TTL expired while the pool was empty. |
 | `QueueOutcomeEvictedContextCancelled` | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-context-cancelled` | Eviction from queue because the client disconnected. |
 | `QueueOutcomeRejectedOther` / `EvictedOther` (graceful drain) | `ServiceUnavailable` | 503 (Service Unavailable) | `rejected-shutting-down` | The flow controller is draining queued requests during a graceful shutdown (e.g., rolling update), while the EPP is still alive and its ext_proc stream is open. Transient and retryable, **not** an internal fault. |
-| `QueueOutcomeRejectedOther` / `EvictedOther` (other) | `Internal` | 500 (Internal Server Error) | *(none)* | Genuine internal flow control error. No drop-reason header is set, since this is an unexpected failure rather than a specific removal policy. |
+| `QueueOutcomeRejectedOther` / `EvictedOther` (other) | `Internal` | 500 (Internal Server Error) | `rejected-internal` | Genuine internal flow control error, an unexpected failure rather than a specific removal policy. |
 
 > [!IMPORTANT]
 > **These mappings only apply while the EPP is reachable.** The table above describes outcomes the EPP returns over a live ext_proc stream — including the 503 graceful-drain case, where the EPP is still running long enough to finalize its queued requests. Once the EPP process is actually gone (abrupt crash, or the tail of a shutdown after the ext_proc connection closes), none of these codes apply, because Envoy never receives a response from the extension. What happens then is governed by the `InferencePool`'s [`failureMode`](inferencepool.md):
@@ -461,8 +462,8 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `llm_d_epp_flow_control_queue_bytes` | Gauge | Current total size in bytes of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
 | `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Histogram | Time taken for each internal dispatch cycle. | None |
 | `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Histogram | Time taken to enqueue requests into the Flow Control layer. | `fairness_id`, `priority`, `outcome` |
-| `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool` |
-| `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector` |
+| `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool`, `stage` |
+| `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector`, `stage` |
 | `llm_d_epp_flow_control_requests_total` | Counter | Total requests processed by the Flow Control layer by outcome. | `outcome`, `priority`, `inference_pool` |
 | `llm_d_epp_flow_control_revocations_issued_total` | Counter | Total in-flight eviction revocations issued, labeled by the demand band's priority. Emitted when `enableEviction` is set. | `priority`, `inference_pool` |
 | `llm_d_epp_flow_control_revocations_total` | Counter | Total in-flight eviction revocations by terminal outcome (`confirmed`, `timed_out`). Every issued revocation eventually increments exactly one outcome. | `outcome`, `inference_pool` |

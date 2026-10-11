@@ -19,7 +19,7 @@ The approximate implementation is designed to be lightweight and requires no ext
 ### How it Works
 
 1. **Approximation**: Since the EPP does not natively contain a tokenizer, it approximates tokens using character-to-token ratios.
-2. **Hashing**: The `approx-prefix-cache-producer` splits the incoming prompt into fixed-size blocks (e.g., 16 tokens approximated as characters) and builds a rolling hash chain.
+2. **Hashing**: The `approx-prefix-cache-producer` splits the incoming prompt into fixed-size blocks (64 tokens by default, approximated as characters) and builds a rolling hash chain.
 3. **Local Index**: The EPP maintains an in-memory LRU index of which prefix hashes were recently sent to which Pods.
 4. **Scoring**: The `prefix-cache-scorer` reads the match information and assigns a score based on the ratio of matched blocks to total prompt blocks.
 5. **Learning**: After a routing decision is made, the EPP updates its local index, assuming the selected Pod will now host that prefix.

@@ -127,7 +127,7 @@ When a request arrives, the sidecar inspects a routing header set by the proxy:
 
 | Header | Purpose |
 |---|---|
-| `x-prefiller-host-port` | One or more prefill pod addresses (comma-separated or multi-value) |
+| `x-llm-d-prefiller-host-port` | One or more prefill pod addresses (comma-separated or multi-value) |
 
 Based on which headers are present, the sidecar selects one of two execution paths:
 

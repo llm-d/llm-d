@@ -123,7 +123,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 | `llm_d_epp_request_output_tokens` | Histogram | Output token count per request | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 | `llm_d_epp_request_cached_tokens` | Histogram | Distribution of prompt tokens read from cache | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 
-> **Note:** Response-level metrics (response sizes, output tokens, NTPOT) require Envoy body mode to be set to `Buffered` or `Streamed`. For vLLM streaming responses with usage data, include `stream_options: {"include_usage": true}` in the request.
+> **Note:** Response-level metrics (response sizes, output tokens, NTPOT) require the response body to reach the EPP, which the `FULL_DUPLEX_STREAMED` body mode provides (see [Endpoint Picker](epp.md)). For vLLM streaming responses with usage data, include `stream_options: {"include_usage": true}` in the request.
 
 ### Processing Overhead, Model Rewrite & Request Gauges
 

@@ -35,7 +35,7 @@ Two rules follow, and llm-d does not currently enforce either of them:
 
 `conditional-decode` is unsupported for the same reason, one layer up. The step sends the request to the decode profile with the `Prefer: if-available` header; the EPP either declines with `412 Precondition Failed`, in which case the Coordinator runs prefill normally and nothing breaks, or it accepts and forwards the request to the chosen decode pod alone - which is the case SGLang cannot serve.
 
-Only the `disagg-profile-handler` plugin sets the `x-prefiller-host-port` header that the sidecar needs in order to pair a prefill, so an EPP deployment without it sends every request decode-only.
+Only the `disagg-profile-handler` plugin sets the `x-llm-d-prefiller-host-port` header that the sidecar needs in order to pair a prefill, so an EPP deployment without it sends every request decode-only.
 
 ### Performance cost
 

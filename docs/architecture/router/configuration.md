@@ -109,7 +109,7 @@ spec:
           - type: prefix-cache-scorer
           - type: approx-prefix-cache-producer
             parameters:
-              blockSizeTokens: 5
+              blockSizeTokens: 64
               maxPrefixTokensToMatch: 1280
               lruCapacityPerServer: 31250
           schedulingProfiles:
@@ -220,7 +220,7 @@ See [Flow Control](flow-control.md) for more architectural details on how the EP
 
 The `flowControl` section configures the EPP's Flow Control layer, which acts as a pool defense mechanism by buffering requests before they reach backend model servers. Flow Control implements a 3-tier dispatch hierarchy: **Priority → Fairness → Ordering**. For a visual breakdown of how this looks in practice, see the [Queuing Topology diagram in the Flow Control reference](flow-control.md#queuing-topology--the-3-tier-dispatch).
 
-When flow control is enabled (via the `FlowControl` feature gate), incoming requests are queued in memory and dispatched according to configured priority bands, fairness policies, and ordering policies. When the pool is saturated (as determined by the [saturation detector](#saturation-detector)), requests are held in the queue until capacity frees up.
+When flow control is enabled (via the `flowControl` feature gate), incoming requests are queued in memory and dispatched according to configured priority bands, fairness policies, and ordering policies. When the pool is saturated (as determined by the [saturation detector](#saturation-detector)), requests are held in the queue until capacity frees up.
 
 The following example demonstrates a complete `EndpointPickerConfig` with flow control enabled, showing how to configure the `featureGates`, `plugins`, and `flowControl` sections (including the nested `saturationDetector`) to work together.
 
@@ -248,8 +248,8 @@ flowControl:
     pluginRef: utilization-detector # Default
 
   defaultPriorityBand:
-    maxBytes: "1Gi" # Default
-    maxRequests: 0 # Default: unlimited
+    maxBytes: "1G" # Default
+    maxRequests: 5000 # Default
     orderingPolicyRef: fcfs-ordering-policy # Default
     fairnessPolicyRef: global-strict-fairness-policy # Default
 
@@ -280,8 +280,8 @@ flowControl:
 These fields apply to both `defaultPriorityBand` and entries in `priorityBands`:
 
 - `priority`: (Required for `priorityBands` entries) Integer priority level; higher values mean higher priority.
-- `maxBytes`: Aggregate byte limit for the band. Default: `1Gi`.
-- `maxRequests`: Concurrent request limit for the band. Default: no per-band limit.
+- `maxBytes`: Aggregate byte limit for the band. Default: `1G` (1,000,000,000 bytes). A value of `0` is treated as unset and receives the default.
+- `maxRequests`: Queued request limit for the band. Default: `5000`. A value of `0` is treated as unset and receives the default.
 - `orderingPolicyRef`: References a plugin name for request ordering within the band. Default: `fcfs-ordering-policy`.
 - `fairnessPolicyRef`: References a plugin name for fairness policy within the band. Default: `global-strict-fairness-policy`.
 
@@ -427,7 +427,7 @@ schedulingProfiles:
 
 The `dataLayer` section configures the backend sources and metrics collection used for smart scheduling decisions and observability. It defines a list of data sources and the extractors that pull data from them.
 
-> For full details and a list of available data sources and extractors, see the Data Layer reference (TODO: add link to datalayer.md once written).
+> For full details and a list of available data sources and extractors, see the [Data Layer](datalayer.md) reference.
 
 ```yaml
 dataLayer:
