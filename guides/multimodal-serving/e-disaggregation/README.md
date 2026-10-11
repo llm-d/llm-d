@@ -317,7 +317,7 @@ Two deployments of the same model, under the same workload, differing only in wh
 
 In the E/PD arm the encode pod runs the vision encoder and sends the embeddings to the prefill+decode pod over NIXL through the [EC Connector](#ec-connector), so image encoding no longer competes with prefill and decode for the same GPUs.
 
-We deliberately chose the **E/PD disaggregation and not E/P/D**. E/P/D would additionally split prefill from decode, and that split has its own substantial effect on TTFT and TPOT (see [P/D Disaggregation](../../pd-disaggregation/README.md)). Comparing EPD against E/PD keeps the prefill+decode stage identical on both sides, so the only architectural difference left is where encoding runs, and the measured delta isolates the encode-disaggregation effect instead of mixing it with a P/D effect.
+We deliberately chose the **E/PD disaggregation and not E/P/D**. E/P/D would additionally split prefill from decode, and that split has its own substantial effect on TTFT and TPOT (see [P/D Disaggregation](../../pd-disaggregation/README.md)). Comparing EPD against E/PD keeps the prefill+decode stage identical on both sides, so the measured delta isolates encode disaggregation from P/D disaggregation. It does not isolate it from resource cost: E/PD spends an extra pod, and therefore extra accelerators, on the encoder, so these numbers are the latency of each architecture at its own resource budget rather than an equal-cost comparison.
 
 ### Test Environment
 
@@ -363,9 +363,9 @@ Mean values per request rate. Lower is better; a negative delta means E/PD is fa
 | Delta | -21.2% | -32.4% | -22.4% | -15.5% | -20.3% |
 
 <p float="left">
-  <img src="benchmark-results/e2e_comparison.png" width="32%" />
-  <img src="benchmark-results/ttft_comparison.png" width="32%" />
-  <img src="benchmark-results/tpot_comparison.png" width="32%" />
+  <img src="benchmark-results/e2e_comparison.png" width="32%" alt="Mean end-to-end request latency against request rate, EPD versus E/PD" />
+  <img src="benchmark-results/ttft_comparison.png" width="32%" alt="Mean time to first token against request rate, EPD versus E/PD" />
+  <img src="benchmark-results/tpot_comparison.png" width="32%" alt="Mean time per output token against request rate, EPD versus E/PD" />
 </p>
 
 
