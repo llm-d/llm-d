@@ -181,7 +181,7 @@ The filesystem tier works with any storage system that exposes a ReadWriteMany P
 
 | Backend | `STORAGE_CLASS` | Setup |
 | ------- | --------------- | ----- |
-| GCP Lustre (GKE) | `lustre` | [GCP Lustre guide](./manifests/backends/lustre/README.md) |
+| GCP Lustre (GKE) | `lustre-class` | [GCP Lustre guide](./manifests/backends/lustre/README.md) |
 | AWS EFS | `efs-sc` | [EFS guide](./manifests/backends/aws/README.md) |
 
 The connectors do not evict data from the shared tier. Capacity is managed by the storage system or by an external controller; a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache).

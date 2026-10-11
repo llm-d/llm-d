@@ -140,7 +140,7 @@ kubectl create secret generic llm-d-hf-token \
 **Prepare the paths to the `helm` values files** for the `llm-d` router. The router values
 ([`deepseek-v4.values.yaml`](router/deepseek-v4.values.yaml)) run separate `prefill` and
 `decode` scheduling profiles (prefix-cache, queue and active-request scoring for prefill;
-active-request scoring for decode) over all 8 DP rank ports, and pin each request to one
+active-request scoring for decode) and pin each request to one
 `DisaggregatedSet` revision during rollouts:
 
 <!-- guide:deploy.router_values start -->
@@ -207,7 +207,7 @@ Wait for the pods to become ready (the ~850 GB model takes a while to download a
 kubectl get pods -n ${NAMESPACE} -l llm-d.ai/model=DeepSeek-V4-Pro -w
 ```
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)). With DP-aware scheduling, each DP rank is available at `podip:port`, where each port is `rank0`-`rank7`; this overlay scrapes each rank's port:
+**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
 <!-- guide:deploy.monitoring start -->
 ```bash

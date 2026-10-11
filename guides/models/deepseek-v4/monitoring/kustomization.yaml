@@ -1,17 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-# Wide-EP / DP-aware monitoring overlay.
+# DeepSeek-V4 monitoring overlay.
 #
 # This is an overlay of the generic recipes/modelserver/components/monitoring-pd
-# component, which defines the decode and prefill PodMonitors. That component
-# scrapes a single "modelserver" port, but wide expert parallelism runs
-# data-parallel ranks behind a routing sidecar, exposing one metrics port per
-# rank (rank0-rank7).
-#
-# The patch below replaces the metrics endpoints on both PodMonitors so they
-# scrape all 8 ranks (at a tighter 5s interval), and the labels transformer
-# scopes the PodMonitors to this guide's pods.
+# component, which defines the decode and prefill PodMonitors on the
+# "modelserver" port. Each DeepSeek-V4 pod exposes one API port per role (the
+# prefill API servers share 8000 behind --data-parallel-hybrid-lb, decode serves
+# vLLM on 8200), so the component's port is the right one. The patch below only
+# tightens the scrape interval to 5s, and the labels transformer scopes the
+# PodMonitors to this guide's pods.
 components:
   - ../../../recipes/modelserver/components/monitoring-pd
 
@@ -42,27 +40,6 @@ patches:
       - op: replace
         path: /spec/podMetricsEndpoints
         value:
-          - port: rank0
-            path: /metrics
-            interval: 5s
-          - port: rank1
-            path: /metrics
-            interval: 5s
-          - port: rank2
-            path: /metrics
-            interval: 5s
-          - port: rank3
-            path: /metrics
-            interval: 5s
-          - port: rank4
-            path: /metrics
-            interval: 5s
-          - port: rank5
-            path: /metrics
-            interval: 5s
-          - port: rank6
-            path: /metrics
-            interval: 5s
-          - port: rank7
+          - port: modelserver
             path: /metrics
             interval: 5s

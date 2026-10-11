@@ -270,7 +270,7 @@ kubectl get pods -n ${NAMESPACE} -l llm-d.ai/model=GLM-5.2-FP8 -w
 
 **(Optional) Deploy the monitoring resources for model servers** (requires the Prometheus
 Operator from the monitoring stack mentioned in [Prerequisites](#prerequisites)): PodMonitors
-that scrape each DP rank's port (`rank0`-`rank7`). See [Monitoring](#monitoring-optional) for
+that scrape each DP rank's port (`dp0`-`dp7` on prefill, `rank0`-`rank7` on decode). See [Monitoring](#monitoring-optional) for
 node-exporter sidecars and the plain-Prometheus alternative.
 
 <!-- guide:deploy.monitoring start -->
