@@ -66,8 +66,13 @@ second time. The parsers are per-model, and not every overlay sets them:
 
 | Model | Flags | Already set by |
 | --- | --- | --- |
-| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml) — every `gpu/vllm` overlay. `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
-| `Qwen/Qwen3-32B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`optimized-baseline`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) (its default GPU overlay). `pd-disaggregation`'s `tpu/v6` overlay serves the same model and sets **no** parsers; its `tpu/v7` and `tpu/v7-dynamic-slice` overlays serve different models (`Qwen/Qwen3.5-397B-A17B-FP8` and `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`), which need their own parsers rather than this row's |
+| `openai/gpt-oss-120b` | `--enable-auto-tool-choice`<br>`--tool-call-parser=openai`<br>`--reasoning-parser=openai_gptoss` | [`pd-disaggregation`](../pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml) — every `gpu/vllm` overlay, and [`p2p-kv-cache-sharing`](../p2p-kv-cache-sharing/modelserver/gpu/vllm/base/patch-vllm.yaml) on GPU. `optimized-baseline` serves this model only on its NPU overlay, which sets no parsers |
+| `Qwen/Qwen3-32B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`optimized-baseline`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) (its default GPU overlay) and [`pd-disaggregation`](../pd-disaggregation/modelserver/tpu/v6/vllm/base/patch-prefill.yaml)'s `tpu/v6` overlay, which serves the same model. Still missing on `precise-prefix-cache-routing` and `tiered-prefix-cache`, which also serve it |
+| `Qwen/Qwen3-0.6B` | `--enable-auto-tool-choice`<br>`--tool-call-parser=hermes`<br>`--reasoning-parser=qwen3` | [`p2p-kv-cache-sharing`](../p2p-kv-cache-sharing/modelserver/xpu/vllm/base/patch-vllm.yaml) on XPU |
+| `Qwen/Qwen3.5-397B-A17B-FP8` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_xml`<br>`--reasoning-parser=qwen3` | [`pd-disaggregation`](../pd-disaggregation/modelserver/tpu/v7/vllm/base/patch-prefill.yaml) `tpu/v7`. Its chat template emits XML-style tool calls, so `hermes` does not apply |
+| `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_xml` | [`pd-disaggregation`](../pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/base/disaggregatedset.yaml) `tpu/v7-dynamic-slice`. No reasoning parser: the model emits no reasoning blocks |
+| `deepseek-ai/DeepSeek-R1-0528` | `--enable-auto-tool-choice`<br>`--tool-call-parser=deepseek_v3`<br>`--chat-template /vllm-workspace/examples/tool_chat_template_deepseekr1.jinja` | [`wide-ep`](../wide-ep/modelserver/gpu/vllm/base/disaggregatedset.yaml). The model's bundled chat template never renders the `tools` list, so vLLM's replacement is required; no reasoning parser, since vLLM lists `deepseek_r1` reasoning as [not supporting tool calling](https://github.com/vllm-project/vllm/blob/main/docs/features/reasoning_outputs.md) |
+| `deepseek-ai/DeepSeek-V4-Pro` | `--enable-auto-tool-choice`<br>`--tool-call-parser=deepseek_v4`<br>`--reasoning-parser=deepseek_v4` | [`models/deepseek-v4`](../models/deepseek-v4/modelserver/gpu/vllm/base/disaggregatedset.yaml), both the `base` and `base-low-latency` overlays |
 | `nvidia/Nemotron-3-Ultra` | `--enable-auto-tool-choice`<br>`--tool-call-parser=qwen3_coder`<br>`--reasoning-parser=nemotron_v3` | [`nemotron-3-ultra/modelserver/gpu/vllm`](../models/nemotron-3-ultra/modelserver/gpu/vllm/gke/patch-prefill.yaml) |
 
 > [!IMPORTANT]
@@ -79,16 +84,17 @@ second time. The parsers are per-model, and not every overlay sets them:
 
 The two guides this one is most often layered on already ship the flags on their GPU overlays:
 `pd-disaggregation` with `gpt-oss-120b`, `optimized-baseline` with `Qwen3-32B`. Deploy either of
-those unchanged and there is nothing to do here. For any other model or overlay — including
-`pd-disaggregation` on TPU, which serves Qwen models with no parsers set (see
-[that guide's note](../pd-disaggregation/README.md#2-deploy-the-model-server)) — use one of the two workarounds below.
+those unchanged and there is nothing to do here, and the same now holds for `pd-disaggregation`
+on TPU, `wide-ep` and `p2p-kv-cache-sharing`. For any other model or overlay — the vendor overlays
+(`amd`, `cpu`, `iluvatar`, `metax`, `npu`, `xpu`) and guides such as `precise-prefix-cache-routing`,
+`tiered-prefix-cache` and `multimodal-serving` — use one of the two workarounds below.
 
 **Workaround A — edit the overlay before deploying the base guide (preferred).** This survives
 re-applying the overlay, which is what the base guide's own instructions tell you to do. Add the
 three flags to the model manifest, next to the other `vllm serve` args:
 
 ```bash
-# e.g. guides/pd-disaggregation/modelserver/tpu/v6/vllm/base/patch-{prefill,decode}.yaml (Qwen3-32B)
+# e.g. guides/precise-prefix-cache-routing/modelserver/gpu/vllm/base/patch-vllm.yaml (Qwen3-32B)
 #              - "Qwen/Qwen3-32B"
 #   +          - "--enable-auto-tool-choice"
 #   +          - "--tool-call-parser=hermes"
@@ -112,8 +118,9 @@ these, the flags go inside the script, on the `vllm serve` line, because the scr
 positional parameters:
 
 ```bash
-# e.g. guides/pd-disaggregation/modelserver/tpu/v7/vllm/base/patch-{prefill,decode}.yaml
-#              exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+# e.g. guides/tiered-prefix-cache/modelserver/gpu/vllm/native/fs/base/patch-vllm.yaml
+#              exec vllm serve \
+#                Qwen/Qwen3-32B \
 #   +            --enable-auto-tool-choice \
 #   +            --tool-call-parser=<parser for this model> \
 #   +            --reasoning-parser=<parser for this model> \

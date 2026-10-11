@@ -85,6 +85,9 @@ spec:
 
                     exec vllm serve \
                       deepseek-ai/DeepSeek-V4-Pro \
+                      --enable-auto-tool-choice \
+                      --tool-call-parser deepseek_v4 \
+                      --reasoning-parser deepseek_v4 \
                       --port 8000 \
                       --tokenizer-mode deepseek_v4 \
                       --gpu-memory-utilization 0.95 \
@@ -332,6 +335,9 @@ spec:
 
                     exec vllm serve \
                       deepseek-ai/DeepSeek-V4-Pro \
+                      --enable-auto-tool-choice \
+                      --tool-call-parser deepseek_v4 \
+                      --reasoning-parser deepseek_v4 \
                       --port 8200 \
                       --tokenizer-mode deepseek_v4 \
                       --gpu-memory-utilization 0.9 \

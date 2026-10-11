@@ -297,6 +297,8 @@ kubectl apply -n ${NAMESPACE} \
 
 The TPU overlays use the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`, and run on GKE only (`INFRA_PROVIDER=gke`). The NVIDIA GPU `gke` platform requirements in [Prerequisites](#prerequisites) (GPU DRA / DRANet) do not apply.
 
+Tool calling and reasoning parsing are enabled with the parsers for the model each overlay serves, not the GPU overlays' gpt-oss pair: `--tool-call-parser=hermes` with `--reasoning-parser=qwen3` for `Qwen/Qwen3-32B` on v6e (the parser [Qwen documents for vLLM](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm)), and `--tool-call-parser=qwen3_xml` with `--reasoning-parser=qwen3` for `Qwen/Qwen3.5-397B-A17B-FP8` on TPU7x, whose chat template emits [XML-style](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md) rather than Hermes-style tool calls.
+
 **Requirements:**
 
 - **TPU v6e**: nodes with `2x4` topology (`tpu-v6e-slice`, 8 chips per node, 1 core per chip). Each prefill and decode pod requests all 8 chips (`google.com/tpu: 8`).
@@ -311,10 +313,6 @@ The TPU overlays use the `TPUConnector` (v6e) or `TPUConnectorHMA` (TPU7x) KV co
 
 > [!NOTE]
 > The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
-
-- Tool calling is unavailable: the GPU overlays' `--tool-call-parser=openai` and `--reasoning-parser=openai_gptoss` are properties of `gpt-oss-120b`, not of the deployment, so the TPU overlays do not set them.
-  To enable it for the Qwen models these overlays serve, add `--enable-auto-tool-choice` together with the tool parser for your variant from vLLM's [tool-calling docs](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md#automatic-function-calling) (`hermes` per [Qwen's own guidance](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm), `qwen3_xml` for Qwen3-Coder)
-  and `--reasoning-parser=qwen3` for the Qwen3 series ([reasoning outputs](https://github.com/vllm-project/vllm/blob/main/docs/features/reasoning_outputs.md)). Tracked in #2640.
 
 </details>
 <details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
@@ -332,6 +330,8 @@ kubectl apply -n ${NAMESPACE} \
 <!-- guide:deploy.modelserver.dynamic_slice[0] end -->
 
 `ACCELERATOR_TYPE=tpu/v7-dynamic-slice` deploys `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` (`TP=8` per `2x2x1` sub-slice) as one `DisaggregatedSet` (`pd-disagg-tpu-vllm`) with a `prefill` and a `decode` role of one replica each. The controller generates one `LeaderWorkerSet` per role, and Kueue Topology-Aware Scheduling places each LeaderWorkerSet group on a sub-slice that [GKE dynamic slicing](../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke) forms on demand from pre-provisioned `4x4x4` sub-blocks, instead of a statically provisioned `2x2x1` node pool.
+
+This overlay sets `--enable-auto-tool-choice --tool-call-parser=qwen3_xml`, the parser vLLM [documents for Qwen3-Coder](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md). It sets no reasoning parser: `Qwen3-Coder-480B-A35B-Instruct` does not emit reasoning blocks.
 
 **Requirements:**
 
