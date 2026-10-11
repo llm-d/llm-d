@@ -304,6 +304,78 @@ One line for each transferred multimodal item shows that the transfer works. If 
 kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL- -n ${NAMESPACE}
 ```
 
+## Benchmark
+
+### What Was Compared
+
+Two deployments of the same model, under the same workload, differing only in where the multimodal encode stage runs:
+
+| Arm | llm-d guide | Pods | Router EPP |
+| --- | ----------- | ---- | ---------- |
+| **EPD Aggregated** | [Multimodal Model Serving](../README.md) | 1 pod runs **E**ncode + **P**refill + **D**ecode | `aggregation-epp` |
+| **E/PD** | this guide, [vLLM E/PD profile](#vllm-epd-reference-configuration) | 2 pods: an encode-only pod (vision encoder) plus a prefill+decode pod | `e-disaggregation-epp` |
+
+In the E/PD arm the encode pod runs the vision encoder and sends the embeddings to the prefill+decode pod over NIXL through the [EC Connector](#ec-connector), so image encoding no longer competes with prefill and decode for the same GPUs.
+
+We deliberately chose the **E/PD disaggregation and not E/P/D**. E/P/D would additionally split prefill from decode, and that split has its own substantial effect on TTFT and TPOT (see [P/D Disaggregation](../../pd-disaggregation/README.md)). Comparing EPD against E/PD keeps the prefill+decode stage identical on both sides, so the only architectural difference left is where encoding runs, and the measured delta isolates the encode-disaggregation effect instead of mixing it with a P/D effect.
+
+### Test Environment
+
+| Parameter | Value |
+| --------- | ----- |
+| Model | `Qwen/Qwen3-VL-32B-Instruct` |
+| Benchmark tool | `sglang.bench_serving` (`lmsysorg/sglang:v0.5.14`), backend `sglang-oai-chat`, dataset `image` |
+| Images per request | 4 random 1080p (1920x1080) JPEGs, about 8.2k vision tokens per request |
+| Input text length | 128 random tokens (`--random-input-len`) |
+| Output length | 128 tokens requested (`--random-output-len`); runs generated about 65 tokens per request on average |
+| Requests per run | 128 |
+| Max concurrency | 8 |
+| Request rates | 0.2, 0.5, 0.8, 1.0, 2.0 req/s |
+| Seed | 0 |
+
+
+### Results
+
+Mean values per request rate. Lower is better; a negative delta means E/PD is faster.
+
+**End-to-end request latency (ms):**
+
+| Arm | 0.2 req/s | 0.5 req/s | 0.8 req/s | 1.0 req/s | 2.0 req/s |
+| --- | --------: | --------: | --------: | --------: | --------: |
+| EPD | 3,553 | 5,587 | 9,477 | 9,770 | 9,900 |
+| E/PD | 3,636 | 4,913 | 8,124 | 9,009 | 8,949 |
+| Delta | +2.3% | -12.1% | -14.3% | -7.8% | -9.6% |
+
+**TTFT, time to first token (ms):**
+
+| Arm | 0.2 req/s | 0.5 req/s | 0.8 req/s | 1.0 req/s | 2.0 req/s |
+| --- | --------: | --------: | --------: | --------: | --------: |
+| EPD | 1,802 | 2,324 | 3,282 | 3,725 | 3,491 |
+| E/PD | 1,986 | 2,228 | 3,203 | 3,715 | 3,655 |
+| Delta | +10.2% | -4.2% | -2.4% | -0.2% | +4.7% |
+
+**TPOT, time per output token (ms):**
+
+| Arm | 0.2 req/s | 0.5 req/s | 0.8 req/s | 1.0 req/s | 2.0 req/s |
+| --- | --------: | --------: | --------: | --------: | --------: |
+| EPD | 38.1 | 73.6 | 118.0 | 115.0 | 121.2 |
+| E/PD | 30.0 | 49.8 | 91.5 | 97.2 | 96.5 |
+| Delta | -21.2% | -32.4% | -22.4% | -15.5% | -20.3% |
+
+<p float="left">
+  <img src="benchmark-results/e2e_comparison.png" width="32%" />
+  <img src="benchmark-results/ttft_comparison.png" width="32%" />
+  <img src="benchmark-results/tpot_comparison.png" width="32%" />
+</p>
+
+
+### What the Numbers Show
+
+* **Decode is where encode disaggregation pays.** TPOT is 15-32% lower with E/PD at every request rate: once the vision encoder runs on its own pod, decode steps no longer queue behind image encoding on the same GPUs. End-to-end latency follows TPOT, 8-14% lower from 0.5 req/s upwards.
+* **TTFT is roughly a wash** (-4% to +5%). Prefill still cannot start before the embeddings exist and have been transferred, so the first token does not arrive sooner; the extra hop and the NIXL transfer cost about as much as the freed GPU time buys back.
+* **Contention is a precondition.** At 0.2 req/s, with a single request in flight and largely idle GPUs, aggregation is slightly ahead (+2.3% E2E, +10.2% TTFT for E/PD): there is no encode/decode contention to remove, so the transfer is pure overhead. This is the quantitative form of the [Best Practices](#best-practices) guidance that encode disaggregation suits workloads with a high multimodal share and expensive encoders.
+* **Above about 0.8 req/s both arms saturate** the max concurrency of 8 and their latency curves flatten; the gap that remains is the steady-state difference under load, not a transient.
+
 ## Cleanup
 
 To remove the deployed components:
