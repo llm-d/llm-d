@@ -6,6 +6,7 @@ Run from anywhere:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -347,12 +348,13 @@ class SampleTests(unittest.TestCase):
         s = a.parse_sample(1000.0, VLLM_TEXT + VLLM_TEXT, EPP_TEXT)   # two model pods -> sums
         self.assertEqual((s.running, s.waiting), (14.0, 4.0))
         self.assertEqual(s.saturation, 0.7)                             # effective stage preferred
-        self.assertEqual(s.band_requests, {-10: 107.0, 100: 23.0})
+        # Only outcome="Dispatched": the 2 Rejected at -10 never reached the model server.
+        self.assertEqual(s.band_requests, {-10: 105.0, 100: 23.0})
         empty = a.parse_sample(1.0, "", "")
         self.assertIsNone(empty.running)
         self.assertIsNone(empty.saturation)
         self.assertEqual(empty.band_requests, {})
-        self.assertEqual(s.as_dict()["band_requests"], {"-10": 107.0, "100": 23.0})
+        self.assertEqual(s.as_dict()["band_requests"], {"-10": 105.0, "100": 23.0})
 
     def test_saturation_summary_window(self):
         samples = [a.Sample(t=float(t), running=float(r), saturation=r / 10) for t, r in
@@ -400,7 +402,9 @@ class ExpositionTests(unittest.TestCase):
 
     def test_band_counts_and_checks(self):
         self.assertEqual(a.band_counts(EXPOSITION, a.QUEUE_DURATION_COUNT), {100: 40.0, -10: 12.0, 30: 3.0})
-        self.assertEqual(a.band_counts(EPP_TEXT), {-10: 107.0, 100: 23.0})   # default: requests_total
+        self.assertEqual(a.band_counts(EPP_TEXT), {-10: 105.0, 100: 23.0})   # default: dispatched requests_total
+        # A counter without an outcome label is summed whole (older routers).
+        self.assertEqual(a.band_counts('llm_d_epp_flow_control_requests_total{priority="30"} 4\n'), {30: 4.0})
         checks = a.band_checks({100: 40.0, -10: 12.0, 30: 3.0})
         self.assertTrue(all(c.passed for c in checks))
         checks = {c.name: c for c in a.band_checks({100: 40.0})}
@@ -669,3 +673,59 @@ class ExperimentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ResultsSelectionTests(unittest.TestCase):
+    @staticmethod
+    def _run_dir(ws: Path, run: str, treatment: str, mtime: float) -> Path:
+        d = ws / run / "results" / treatment
+        d.mkdir(parents=True)
+        meta = d / "run_metadata.yaml"
+        meta.write_text(f'namespace: "ns"\nexperiment_id: "inference-perf-{treatment}-1790370232-09ucm1"\n')
+        os.utime(meta, (mtime, mtime))
+        return d
+
+    def _cfg(self, tmp: str):
+        return type("Cfg", (), {"namespace": "ns", "workspace": Path(tmp) / "ws", "results_dir": Path(tmp) / "out"})()
+
+    def test_rerun_that_wrote_nothing_returns_no_treatments(self):
+        import run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._cfg(tmp)
+            first = self._run_dir(cfg.workspace, "u-1", "baseline_20", 1000)
+            self.assertEqual(run.collect_results(cfg), {"baseline_20": first})
+            before = run.results_roots(cfg)
+            # The re-run failed before writing results: the first run is still newest.
+            self.assertEqual(run.collect_results(cfg, exclude=before), {})
+            # A re-run that did write results is picked up.
+            second = self._run_dir(cfg.workspace, "u-2", "baseline_20", 2000)
+            self.assertEqual(run.collect_results(cfg, exclude=before), {"baseline_20": second})
+
+    def test_analyze_only_prefers_the_saved_merged_results(self):
+        import run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._cfg(tmp)
+            self.assertEqual(run.saved_results(cfg), {})
+            for name in ("baseline_20", "mixed_20_rt"):
+                (cfg.results_dir / "results" / name).mkdir(parents=True)
+            self.assertEqual(sorted(run.saved_results(cfg)), ["baseline_20", "mixed_20_rt"])
+
+    def test_write_outputs_keeps_results_already_in_place(self):
+        import run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._cfg(tmp)
+            cfg.workdir = Path(tmp) / "work"
+            cfg.workdir.mkdir()
+            saved = cfg.results_dir / "results" / "baseline_20"
+            saved.mkdir(parents=True)
+            (saved / "data.json").write_text("{}")
+            orig = run.coordinator_logs
+            run.coordinator_logs = lambda c: ""
+            try:
+                run.write_outputs(cfg, {"checks": [], "levels": []}, {"baseline_20": saved}, "", None)
+            finally:
+                run.coordinator_logs = orig
+            self.assertTrue((saved / "data.json").is_file())   # not deleted by its own copy

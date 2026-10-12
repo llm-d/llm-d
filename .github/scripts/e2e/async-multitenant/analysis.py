@@ -539,6 +539,11 @@ VLLM_RUNNING = "vllm:num_requests_running"
 VLLM_WAITING = "vllm:num_requests_waiting"
 EPP_SATURATION = "llm_d_epp_flow_control_pool_saturation"
 EPP_BAND_REQUESTS = "llm_d_epp_flow_control_requests_total"
+# requests_total counts every terminal flow-control outcome per band; only
+# Dispatched requests reached the model server. Rejected, TTL-evicted and
+# context-cancelled ones never did. A series without the label counts as
+# dispatched (older routers).
+DISPATCHED = "Dispatched"
 
 
 @dataclass
@@ -547,7 +552,7 @@ class Sample:
     running: float | None = None      # sum of vllm:num_requests_running over model pods
     waiting: float | None = None      # sum of vllm:num_requests_waiting
     saturation: float | None = None   # EPP pool saturation (stage="effective" when labelled)
-    band_requests: dict[int, float] = field(default_factory=dict)  # requests_total by priority
+    band_requests: dict[int, float] = field(default_factory=dict)  # dispatched requests_total by priority
 
     def as_dict(self) -> dict:
         d = asdict(self)
@@ -569,7 +574,8 @@ def parse_sample(t: float, vllm_text: str, epp_text: str) -> Sample:
     for name, labels, value in parse_exposition(epp_text):
         if name == EPP_SATURATION:
             sat_by_stage[labels.get("stage", "")] = value
-        elif name == EPP_BAND_REQUESTS and "priority" in labels:
+        elif name == EPP_BAND_REQUESTS and "priority" in labels \
+                and labels.get("outcome", DISPATCHED) == DISPATCHED:
             try:
                 prio = int(labels["priority"])
             except ValueError:
@@ -749,10 +755,14 @@ def parse_exposition(text: str) -> list[tuple[str, dict[str, str], float]]:
 
 
 def band_counts(text: str, metric: str = EPP_BAND_REQUESTS) -> dict[int, float]:
-    """Sum a per-priority counter across label sets; keys are band priorities."""
+    """Sum a per-priority counter across label sets; keys are band priorities.
+
+    Series with an ``outcome`` label count only when it is Dispatched (see
+    DISPATCHED); counters without one are summed whole.
+    """
     counts: dict[int, float] = {}
     for name, labels, value in parse_exposition(text):
-        if name != metric or "priority" not in labels:
+        if name != metric or "priority" not in labels or labels.get("outcome", DISPATCHED) != DISPATCHED:
             continue
         try:
             prio = int(labels["priority"])

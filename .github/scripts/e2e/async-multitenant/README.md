@@ -88,7 +88,7 @@ window where both members were active (minus a 15 s warm-up):
 Async-only: `vllm:num_requests_running` max >= 0.9 C x ceiling and p50 >=
 0.8 C x ceiling during the async-only treatment, some client completions, an
 EPP-side dispatch rate for the async bands (from the cumulative
-`flow_control_requests_total` counters) >= 0.7 x baseline(100) req/s x
+`flow_control_requests_total` counters, `outcome="Dispatched"` only) >= 0.7 x baseline(100) req/s x
 ceiling, and every completion has the
 configured 128 tokens (server-reported usage). The EPP counter is the
 throughput figure because the open-loop async client abandons queued requests

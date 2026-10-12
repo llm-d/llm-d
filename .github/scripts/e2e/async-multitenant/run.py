@@ -421,8 +421,23 @@ def run_experiment(cfg: Config, clone: Path, cli: list[str], exp_path: Path,
     return stream(cmd, clone, cfg.workdir / log_name, extra_env)
 
 
-def collect_results(cfg: Config) -> dict[str, Path]:
+def results_roots(cfg: Config) -> set[Path]:
+    """Every <user>-<ts>/results/ directory llmdbenchmark has written in the workspace so far."""
+    return {m.parent.parent for m in cfg.workspace.rglob("run_metadata.yaml") if m.parent.parent.name == "results"}
+
+
+def collect_results(cfg: Config, exclude: set[Path] = frozenset()) -> dict[str, Path]:
+    """The treatments of the newest llmdbenchmark run in the workspace.
+
+    find_results_dirs returns only the newest results/ directory. ``exclude``
+    holds the directories that existed before a re-run: if the newest is one of
+    them, the re-run wrote nothing and no treatments are returned, rather than
+    an earlier run's.
+    """
     dirs = v.find_results_dirs(str(cfg.workspace), cfg.namespace) or []
+    if dirs and dirs[0].parent in exclude:
+        log(f"no new results directory since the earlier run ({dirs[0].parent} is not new)")
+        return {}
     found: dict[str, Path] = {}
     stems = [p[:-len(".yaml")] for p in (experiment.REALTIME_PROFILE, experiment.ASYNC_PROFILE)]
     for d in dirs:
@@ -614,6 +629,16 @@ def analyze(cfg: Config, capacity: int, results: dict[str, Path], samples: list,
     return report, checks
 
 
+def saved_results(cfg: Config) -> dict[str, Path]:
+    """The merged treatment set an earlier run copied to RESULTS_DIR/results (empty if none).
+
+    After a level re-run the workspace's newest results/ directory holds only the
+    re-run levels, so --analyze-only prefers this consolidated copy.
+    """
+    root = cfg.results_dir / "results"
+    return {d.name: d for d in sorted(root.iterdir()) if d.is_dir()} if root.is_dir() else {}
+
+
 def write_outputs(cfg: Config, report: dict, results: dict[str, Path], epp_text: str, exp_path: Path | None,
                   samples: list | None = None) -> None:
     out = cfg.results_dir
@@ -628,6 +653,8 @@ def write_outputs(cfg: Config, report: dict, results: dict[str, Path], epp_text:
         shutil.copyfile(exp_path, out / "experiment.yaml")
     for name, d in results.items():
         dest = out / "results" / name
+        if dest.resolve() == Path(d).resolve():
+            continue  # --analyze-only reading the saved copy: already in place
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(d, dest, ignore=shutil.ignore_patterns("*.pvc", "*.bin"))
@@ -660,9 +687,10 @@ def retry_invalid_levels(cfg: Config, capacity: int, clone: Path, cli: list[str]
         log(f"retry {attempt}/{cfg.retries}: re-running levels {levels}" + (" and async-only" if async_only else ""))
         exp = render_experiment(cfg, capacity, tuple(levels), include_async_only=async_only,
                                 name=f"experiment-retry{attempt}.yaml")
+        before = results_roots(cfg)
         rc = run_experiment(cfg, clone, cli, exp, log_name=f"llmdbenchmark-retry{attempt}.log")
         log(f"llmdbenchmark (retry {attempt}) exited {rc}")
-        results, notes = analysis.merge_rerun(results, collect_results(cfg), levels, async_only)
+        results, notes = analysis.merge_rerun(results, collect_results(cfg, exclude=before), levels, async_only)
         for note in notes:
             log(f"retry {attempt}: {note}")
     return results
@@ -675,7 +703,8 @@ def main() -> int:
     ap.add_argument("-v", "--verbose", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="one short baseline group; report only")
     ap.add_argument("--analyze-only", action="store_true",
-                    help="skip the benchmark run; analyze the newest results already in the workspace")
+                    help="skip the benchmark run; analyze the results an earlier run saved under "
+                         "RESULTS_DIR/results, or else the newest in the workspace")
     ap.add_argument("--set", dest="settings", action="append", default=[], metavar="KEY=VALUE",
                     help="validator setting, e.g. AMT_SERVICE_S=10 (repeatable; overrides the environment)")
     args = ap.parse_args()
@@ -708,7 +737,9 @@ def main() -> int:
                                            saturation=s.get("saturation"),
                                            band_requests={int(k): v for k, v in (s.get("band_requests") or {}).items()})
                            for s in json.loads(samples_path.read_text())]
-            log(f"analyze-only: reusing the newest results in the workspace ({len(samples)} saved samples)")
+            results = saved_results(cfg)
+            log(f"analyze-only: reusing {'the results saved in ' + str(cfg.results_dir / 'results') if results else 'the newest results in the workspace'} "
+                f"({len(samples)} saved samples)")
         else:
             clone, cli = install_cli(cfg)
             check_profiles(clone)
