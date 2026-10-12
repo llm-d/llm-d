@@ -1,0 +1,72 @@
+# OCI OKE on BM.GPU.MI300X.8: one SR-IOV VF per GPU/rank over RoCE.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg-vllm
+spec:
+  roles:
+    - name: prefill
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            metadata:
+              annotations:
+                k8s.v1.cni.cncf.io/networks: |
+                  [
+                    {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"}
+                  ]
+            spec:
+              volumes:
+                - name: dev-infiniband
+                  hostPath:
+                    path: /dev/infiniband
+                    type: Directory
+              containers:
+                - name: modelserver
+                  resources:
+                    limits:
+                      nvidia.com/sriov-rdma-vf: "1"
+                    requests:
+                      nvidia.com/sriov-rdma-vf: "1"
+                  env:
+                    - name: UCX_TLS
+                      value: "rc,ud,sm,self,rocm"
+                    - name: UCX_IB_GID_INDEX
+                      value: "3"
+                  volumeMounts:
+                    - name: dev-infiniband
+                      mountPath: /dev/infiniband
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            metadata:
+              annotations:
+                k8s.v1.cni.cncf.io/networks: |
+                  [
+                    {"name":"sriov-rdma-vf","namespace":"default","interface":"net1"},
+                    {"name":"sriov-rdma-vf","namespace":"default","interface":"net2"},
+                    {"name":"sriov-rdma-vf","namespace":"default","interface":"net3"},
+                    {"name":"sriov-rdma-vf","namespace":"default","interface":"net4"}
+                  ]
+            spec:
+              volumes:
+                - name: dev-infiniband
+                  hostPath:
+                    path: /dev/infiniband
+                    type: Directory
+              containers:
+                - name: modelserver
+                  resources:
+                    limits:
+                      nvidia.com/sriov-rdma-vf: "4"
+                    requests:
+                      nvidia.com/sriov-rdma-vf: "4"
+                  env:
+                    - name: UCX_TLS
+                      value: "rc,ud,sm,self,rocm"
+                    - name: UCX_IB_GID_INDEX
+                      value: "3"
+                  volumeMounts:
+                    - name: dev-infiniband
+                      mountPath: /dev/infiniband

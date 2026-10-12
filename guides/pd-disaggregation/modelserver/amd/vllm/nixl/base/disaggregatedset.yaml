@@ -1,0 +1,281 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg-vllm
+  labels:
+    llm-d.ai/inference-serving: "true"
+    llm-d.ai/guide: pd-disaggregation
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: amd
+    llm-d.ai/engine-type: vllm
+    llm-d.ai/model: gpt-oss-120b
+spec:
+  # Match the NVIDIA NIXL topology: one independently managed copy containing
+  # one TP=1 prefill and one TP=4 decode. Increase slices to scale both roles.
+  slices: 1
+
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1  # per slice
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            maxSurge: 0
+            maxUnavailable: 1
+        leaderWorkerTemplate:
+          size: 1
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/guide: pd-disaggregation
+                llm-d.ai/accelerator-variant: gpu
+                llm-d.ai/accelerator-vendor: amd
+                llm-d.ai/engine-type: vllm
+                llm-d.ai/model: gpt-oss-120b
+                llm-d.ai/role: prefill
+            spec:
+              serviceAccountName: pd-disagg-vllm
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command: ["vllm", "serve"]
+                  args:
+                    - "openai/gpt-oss-120b"
+                    - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+                    - "--tensor-parallel-size=1"
+                    - "--kv-cache-memory-bytes=100000000000"
+                    - "--block-size=128"
+                    - "--enable-auto-tool-choice"
+                    - "--tool-call-parser=openai"
+                    - "--reasoning-parser=openai_gptoss"
+                    - "--kv-transfer-config"
+                    - '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_buffer_device":"cuda","kv_connector_extra_config":{"backends":["UCX"]}}'
+                    - "--no-disable-hybrid-kv-cache-manager"
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                      value: "120"
+                    - name: VLLM_ROCM_USE_AITER
+                      value: "1"
+                    - name: AITER_JIT_DIR
+                      value: /.aiter
+                    - name: VLLM_CACHE_ROOT
+                      value: /.cache
+                    - name: MAX_JOBS
+                      value: "16"
+                  ports:
+                    - name: modelserver
+                      containerPort: 8000
+                      protocol: TCP
+                    - name: nixl
+                      containerPort: 5600
+                      protocol: TCP
+                  securityContext:
+                    capabilities:
+                      add: ["IPC_LOCK"]
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "1"
+                    requests:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "1"
+                  startupProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 120
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                    failureThreshold: 3
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                    - mountPath: /.config
+                      name: vllm-config
+                    - mountPath: /.triton
+                      name: triton-cache
+                    - mountPath: /.aiter
+                      name: aiter-cache
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 20Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
+                - name: vllm-config
+                  emptyDir: {}
+                - name: triton-cache
+                  emptyDir: {}
+                - name: aiter-cache
+                  emptyDir: {}
+
+    - name: decode
+      spec:
+        replicas: 1  # per slice
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            maxSurge: 1
+            maxUnavailable: 0
+        leaderWorkerTemplate:
+          size: 1
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/guide: pd-disaggregation
+                llm-d.ai/accelerator-variant: gpu
+                llm-d.ai/accelerator-vendor: amd
+                llm-d.ai/engine-type: vllm
+                llm-d.ai/model: gpt-oss-120b
+                llm-d.ai/role: decode
+            spec:
+              serviceAccountName: pd-disagg-vllm
+              initContainers:
+                - name: routing-proxy
+                  image: REPLACE_ROUTING_SIDECAR_IMAGE
+                  imagePullPolicy: Always
+                  args:
+                    - --port=8000
+                    - --kv-connector=nixlv2
+                    - --zap-log-level=1
+                    - --secure-serving=false
+                  ports:
+                    - name: sidecar
+                      containerPort: 8000
+                      protocol: TCP
+                  resources: {}
+                  restartPolicy: Always
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command: ["vllm", "serve"]
+                  args:
+                    - "openai/gpt-oss-120b"
+                    - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+                    - "--tensor-parallel-size=4"
+                    - "--kv-cache-memory-bytes=100000000000"
+                    - "--block-size=128"
+                    - "--enable-auto-tool-choice"
+                    - "--tool-call-parser=openai"
+                    - "--reasoning-parser=openai_gptoss"
+                    - "--kv-transfer-config"
+                    - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_buffer_device":"cuda","kv_connector_extra_config":{"backends":["UCX"]}}'
+                    - "--no-disable-hybrid-kv-cache-manager"
+                    - "--port=8200"
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: VLLM_ROCM_USE_AITER
+                      value: "1"
+                    - name: AITER_JIT_DIR
+                      value: /.aiter
+                    - name: VLLM_CACHE_ROOT
+                      value: /.cache
+                    - name: MAX_JOBS
+                      value: "16"
+                  ports:
+                    - name: modelserver
+                      containerPort: 8200
+                      protocol: TCP
+                    - name: nixl
+                      containerPort: 5600
+                      protocol: TCP
+                  securityContext:
+                    capabilities:
+                      add: ["IPC_LOCK"]
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "4"
+                    requests:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "4"
+                  startupProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 120
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                    failureThreshold: 3
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                    - mountPath: /.config
+                      name: vllm-config
+                    - mountPath: /.triton
+                      name: triton-cache
+                    - mountPath: /.aiter
+                      name: aiter-cache
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 20Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
+                - name: vllm-config
+                  emptyDir: {}
+                - name: triton-cache
+                  emptyDir: {}
+                - name: aiter-cache
+                  emptyDir: {}

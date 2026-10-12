@@ -1,0 +1,30 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg-vllm
+spec:
+  roles:
+    - name: prefill
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              containers:
+                - name: modelserver
+                  resources:
+                    limits:
+                      rdma/ib: "1"
+                    requests:
+                      rdma/ib: "1"
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              containers:
+                - name: modelserver
+                  resources:
+                    limits:
+                      rdma/ib: "1"
+                    requests:
+                      rdma/ib: "1"

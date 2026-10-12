@@ -154,8 +154,8 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 
 <!-- guide:prerequisites.lws start -->
 <!-- variants:start -->
-<details open data-when="ACCELERATOR_TYPE=gpu">
-<summary><b>NVIDIA GPU</b></summary>
+<details open data-when="ACCELERATOR_TYPE=gpu,amd">
+<summary><b>NVIDIA GPU / AMD GPU</b></summary>
 
 <!-- llm-d-cicd:skip start -->
 ```bash
