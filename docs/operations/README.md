@@ -28,7 +28,7 @@ Load one replica from storage and transfer weights to peer replicas over GPU-to-
 
 ### [Restore from Pod Snapshots](../../guides/pod-snapshot/README.md)
 
-Checkpoint and restore single-GPU vLLM model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
+Checkpoint and restore single-GPU vLLM and SGLang model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
 
 ### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation/README.md)
 
