@@ -23,6 +23,9 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "openai/gpt-oss-120b"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=openai"
+            - "--reasoning-parser=openai_gptoss"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--block-size=4096"
             - "--max-num-batched-tokens=512"
