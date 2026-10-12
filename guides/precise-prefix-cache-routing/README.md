@@ -225,6 +225,35 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
+### 4. Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate precise prefix cache routing. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [Router (EPP)](../../docs/operations/observability/router-metrics.md) and [model server](../../docs/operations/observability/model-server-metrics.md) metric references, and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md#precise-prefix-cache-routing).
+
+This path has a pipeline of its own: every model server pod must stream KV-cache events to the router, the router must fold them into its KV-block index, every prompt must be tokenized by the render Service, and the affinity filter must land shared prefixes on cache-warm pods. A problem at any stage degrades silently — requests still serve, just without cache locality — so watch the pipeline end to end rather than the hit rate alone.
+
+#### Key metrics for this path
+
+| Signal | Why it matters for this path | Where to look |
+|--------|------------------------------|---------------|
+| KV-event flow (`llm_d_epp_kv_cache_events_active_subscribers`, `llm_d_epp_kv_cache_events_messages_received_total`) | The router runs one ZMQ subscriber per model server pod. Fewer subscribers than pods, or a pod with zero message rate, means that pod's cache state is invisible to routing | [PromQL → Precise Prefix Cache Routing](../../docs/operations/observability/promql.md#precise-prefix-cache-routing) |
+| Index population (`llm_d_epp_kv_cache_index_admissions_total`, `llm_d_epp_kv_cache_index_evictions_total`) | Admissions must rise with traffic. A flat counter means the index is empty and the `prefix-cache-affinity-filter` has nothing to filter on | [Router metrics → Precise KV-Cache Index](../../docs/operations/observability/router-metrics.md#precise-kv-cache-index--events) |
+| Predicted vs. delivered hit rate (`llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens` vs. `llm_d_epp_request_cached_tokens` / `llm_d_epp_request_input_tokens`) | The predicted rate is what the router expected when it routed; the delivered rate is what model servers reported. Predicted high but delivered low points at a stale or mis-keyed index | [PromQL → Precise Prefix Cache Routing](../../docs/operations/observability/promql.md#precise-prefix-cache-routing) |
+| Per-pod model server hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`, or `sglang:cache_hit_rate`) | Ground truth for cache reuse. Working precise routing shows high hit rates concentrated on the pods serving each prefix group | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Render latency and failures (`llm_d_epp_token_producer_render_duration_seconds`, `llm_d_epp_token_producer_render_failures_total`) | Render sits on the request path before routing, so its latency feeds TTFT directly — and a failed render skips prefix-cache scoring for that request entirely | [Router metrics → Prefix & Multimodal Cache](../../docs/operations/observability/router-metrics.md#prefix--multimodal-cache) |
+| TTFT (`vllm:time_to_first_token_seconds`) | The end-user payoff of this path. Compare TTFT for prefix-heavy traffic against the delivered hit rate to confirm cache hits translate into latency wins | [Model server metrics](../../docs/operations/observability/model-server-metrics.md) |
+
+> The `llm_d_epp_kv_cache_*` series require `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on the `precise-prefix-cache-producer`. This guide's [values file](router/precise-prefix-cache-routing.values.yaml) sets it; if you based a custom configuration on other samples, those series are absent until you opt in.
+
+#### Common failure modes
+
+- **Requests spread evenly, hit rates near zero** — KV events are not reaching the router or prompts are not being tokenized. Check `llm_d_epp_kv_cache_events_active_subscribers` against the pod count and the per-pod message rate; non-zero `llm_d_epp_kv_cache_events_zmq_errors_total` or climbing `subscriber_reconnections_total` point at the ZMQ transport (model server `--kv-events-config`, port 5556 reachability, network policy). If events flow but routing still sprays, re-run the [render check](#2-check-the-render-service) and look for `token_producer_render_failures_total` — a request without token IDs is never prefix-scored.
+- **Events arrive but the index stays empty** — messages received yet `llm_d_epp_kv_cache_index_admissions_total` is flat. Check `llm_d_epp_kv_cache_events_stores_skipped_total` by `reason`, and event-pool saturation (`pool_queue_depth` near `pool_capacity` means the workers can't keep up and the index lags live cache state).
+- **Lookups miss although the index is populated** — `lookup_requests_total` rises but `lookup_hits_total` stays near zero. The usual cause is a block-size mismatch: vLLM `--block-size` (or SGLang `--page-size`) must match the producer's `tokenProcessorConfig.blockSizeTokens`.
+- **High hit rate but TTFT barely improves** — the cache-warm pods may be saturated: the affinity filter falls back to least-loaded pods past `peakPrefillThroughput`, so a miscalibrated value either sheds traffic off warm pods too early or pins them past saturation ([calibration guide](../recipes/router/calibration/README.md)). Also check render latency — on shared render deployments tokenization CPU competes with serving, and render time is part of every request's TTFT.
+- **Hit rate degrades after a router restart** — the index rebuilds from the replay buffer where available (vLLM v0.26.0+); on backends without replay it only re-learns from live events, so a warm-up dip is expected. A dip that doesn't recover indicates subscribers failed to reconnect.
+
+For alert rules on the shared signals, see [Alerting](../../docs/operations/observability/alerting.md).
+
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -320,7 +349,7 @@ One pod reports most of the requests in `sglang:num_requests_total`, and its `sg
 </details>
 <!-- tabs:end -->
 
-If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render check above, confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render check above, confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. With monitoring enabled, [Observability & Troubleshooting](#4-observability--troubleshooting) walks the same pipeline through metrics. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
 ## How It Works
 

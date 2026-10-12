@@ -97,6 +97,30 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 | `llm_d_epp_encoder_cache_queries_total` | Total multimodal encoder-cache lookups | Volume of multimodal items queried against cache |
 | `llm_d_epp_encoder_cache_hits_total` | Encoder-cache hits per pod | Tracks multimodal embedding cache reuse |
 | `llm_d_epp_encoder_cache_hit_ratio` | Hit ratio distribution for encoder-cache lookups | Surfaces uneven multimodal cache locality across pods |
+| `llm_d_epp_prefix_predicted_cached_tokens` | Prompt tokens predicted to hit the chosen endpoint's prefix cache | Divide its `_sum` by `llm_d_epp_prefix_prompt_tokens_sum` for the hit rate the router predicted when routing |
+| `llm_d_epp_prefix_prompt_tokens` | Prompt tokens the prefix predictions were measured against | Denominator for the predicted hit rate; compare against the delivered rate from `llm_d_epp_request_cached_tokens` / `llm_d_epp_request_input_tokens` |
+| `llm_d_epp_token_producer_render_duration_seconds` | Duration of one render (tokenization) call by `result` | Render sits on the request path before routing, so its latency feeds TTFT directly |
+| `llm_d_epp_token_producer_render_failures_total` | Failed render calls by `reason` (`timeout`, `status`, `connection`, ...) | A request whose render fails is routed without a tokenized prompt, so prefix-cache scoring is skipped for it |
+
+## Precise KV-Cache Index & Events
+
+These series belong to the precise-prefix-cache pipeline used by [precise prefix cache routing](../../../guides/precise-prefix-cache-routing/README.md). They are emitted only when `indexerConfig.kvBlockIndexConfig.enableMetrics: true` is set on the `precise-prefix-cache-producer` (the guide's values file sets it); they are absent otherwise.
+
+| Metric | What it measures | Why it matters |
+| -------- | ----------------- | ---------------- |
+| `llm_d_epp_kv_cache_index_admissions_total` | KV blocks admitted to the precise index | A flat counter under traffic means KV events are not populating the index, so the affinity filter routes blind |
+| `llm_d_epp_kv_cache_index_evictions_total` | KV blocks evicted from the precise index | Compare with admissions; heavy eviction churn shrinks the reusable prefix window |
+| `llm_d_epp_kv_cache_index_lookup_requests_total` | Index lookups performed | Volume of prefix lookups the router makes |
+| `llm_d_epp_kv_cache_index_lookup_hits_total` | Contiguous prefix blocks matched by the best pod per lookup | Lookups without hits while events flow usually mean a block-size mismatch |
+| `llm_d_epp_kv_cache_index_lookup_latency_seconds` | Index lookup latency | Lookup time is routing-decision overhead on every request |
+| `llm_d_epp_kv_cache_events_active_subscribers` | ZMQ subscribers currently managed | Should equal the model server pod count; a lower value means some pods publish events nobody consumes |
+| `llm_d_epp_kv_cache_events_messages_received_total` | Messages received per `pod_identifier` | A pod with zero rate is not delivering KV events to the router |
+| `llm_d_epp_kv_cache_events_subscriber_reconnections_total` | ZMQ subscriber reconnection attempts per pod | Persistent reconnects point at network policy or endpoint configuration problems |
+| `llm_d_epp_kv_cache_events_zmq_errors_total` | ZMQ subscriber errors by `pod_identifier` and `operation` | Direct error signal for the event transport |
+| `llm_d_epp_kv_cache_events_pool_queue_depth` | Messages queued across event-pool workers | Approaching `pool_capacity` means event processing can't keep up and the index lags live cache state |
+| `llm_d_epp_kv_cache_events_pool_capacity` | Event-pool worker capacity | Denominator for event-pool saturation |
+| `llm_d_epp_kv_cache_events_stores_skipped_total` | KV store events skipped before indexing by `reason` | Events arriving but skipped never reach the index |
+| `llm_d_epp_kv_cache_events_removals_skipped_total` | KV removal events skipped before indexing by `reason` | Skipped removals leave stale blocks in the index |
 
 ## Predicted Latency & SLO
 
