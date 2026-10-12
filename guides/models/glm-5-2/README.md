@@ -655,6 +655,13 @@ server capacity (warmup failures) and are excluded from the reported results.
 
 ## Benchmark Results
 
+> [!NOTE]
+> **TODO: re-run with the current router config.** The results below were measured with the
+> previous router (weighted GPU + CPU prefix-cache scorers plus queue and active-request
+> scorers). The guide now routes prefill through the prefix-cache affinity filter and
+> token-load scorer (`peakPrefillThroughput: 3585`) with a CPU prefix-cache score, and the
+> tables have not yet been re-measured with that config.
+
 ### Recommended 64-GPU Deployment
 
 The full-input-length reference uses `p3w2d1w2`, native MTP, CPU KV offloading, and dual

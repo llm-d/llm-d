@@ -68,6 +68,11 @@ rows because the serving engine changes prefill throughput.
 **Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
+The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` for
+GLM-5.2-FP8 on an H200 DP8 wide-EP prefill cell (per-rank endpoints). The
+[DeepSeek-V4](../../../models/deepseek-v4/README.md) guide (DeepSeek-V4-Pro on GB200) is
+**not yet calibrated** and runs the plugin default (15928) until a `calibrate.sh` run on
+that hardware fills it in.
 
 ## Filling a cell
 

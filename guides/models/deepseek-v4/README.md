@@ -268,7 +268,12 @@ kubectl run serve-check --rm -i --restart=Never \
 
 ## Benchmarking
 
-Benchmark profiles and results for this guide are not yet published.
+> [!NOTE]
+> **TODO:** benchmark profiles and results for this guide are not yet published. The first
+> published results should be measured with the current router config (prefix-cache affinity
+> filter + token-load scorer on prefill, active-request scorer on decode), after
+> `peakPrefillThroughput` has been calibrated for DeepSeek-V4-Pro on GB200 (see the
+> warning in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)).
 
 ## Cleanup
 
