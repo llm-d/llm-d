@@ -254,7 +254,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 > **👥 Leadership:** [Shimi Bandiel](https://github.com/shimib), [Jacob Murry](https://github.com/jtechapps), [Lior Aronovich](https://github.com/lioraron)
 
-> North Star Design Document TODO
+> [**⭐️ North Star Design Document** ↗️](https://docs.google.com/document/d/1UmtxdwUR_fDJlbk2Q8vUeNSWdPQjsJKw3s302pY5qlg) *(Google Docs)*
 
 **Charter**: Develop solutions for efficient batch inference in Kubernetes environments.
 
