@@ -7,12 +7,17 @@ from __future__ import annotations
 import asyncio
 import errno
 import os
+import sys
 import tempfile
 import unittest
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import requests
+try:
+    import requests
+except ModuleNotFoundError:
+    requests = MagicMock(HTTPError=Exception)
+    sys.modules["requests"] = requests
 
 from docker.scripts.snapshot import (
     GKESnapshotProvider,
