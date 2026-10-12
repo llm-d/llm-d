@@ -138,7 +138,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NA
 ```
 <!-- guide:deploy.router_values end -->
 
-**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -167,7 +167,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- guide:deploy.modelserver end -->
 
 This deploys the 6 prefill and 2 decode replicas. Wait for them to become ready (model load is
-large; the startup probe allows up to an hour):
+large; the startup probe allows about two hours):
 
 ```bash
 kubectl rollout status deployment/agentic-serving-gpu-vllm-prefill -n ${NAMESPACE}

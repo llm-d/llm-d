@@ -43,12 +43,12 @@ with MTP and tiered KV offloading enabled.
 | Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
 | Serving topology         | P/D disaggregated — 3 prefill replicas + 1 decode replica, each TP=1, DP=16, EP=16 (DEP16, 2 nodes) |
 | DP model                 | Supervisor (`--data-parallel-multi-port-external-lb`)                        |
-| All-to-all               | `deepep_v2` (prefill), `deepep_low_latency` with IBGDA + NVSHMEM (decode)    |
+| All-to-all               | `deepep_high_throughput` (prefill), `deepep_low_latency` with IBGDA + NVSHMEM (decode) |
 | MoE backend              | DeepGemm                                                                     |
 | KV transfer              | NixlConnector                                                                |
 | KV cache offloading      | CPU + NVMe tiered on prefill (`offloading-tiered` component)                 |
 | MTP speculative decoding | On (3 draft tokens)                                                          |
-| `gpu-memory-utilization` | 0.935 (prefill), 0.95 (decode); 0.80 on multi-node replicas                  |
+| `gpu-memory-utilization` | 0.935 (prefill), 0.95 (decode)                                               |
 | Routing                  | Dual GPU+CPU prefix-cache scoring ([`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml)) |
 | Reasoning / tool-call    | glm45 / glm47                                                                |
 
@@ -228,7 +228,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -426,9 +426,6 @@ Both prefill and decode configure IB for multi-node communication:
 | `NVSHMEM_HCA_PREFIX`      | `ibp`  | Filter IB HCAs for NVSHMEM (decode low-latency)  |
 | `NVSHMEM_REMOTE_TRANSPORT` | `ibgda` | GPUDirect Async for NVSHMEM                     |
 | `rdma/ib`                 | `8`    | Request 8 RDMA/IB devices per pod                |
-
-Multi-node deployments (`LWS_GROUP_SIZE > 1`) automatically set `NVSHMEM_SYMMETRIC_SIZE=16G`
-and reduce `gpu-memory-utilization` to 0.80 to reserve VRAM for the NVSHMEM heap.
 
 ### KV Cache Evictor
 

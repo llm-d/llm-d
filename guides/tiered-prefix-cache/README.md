@@ -46,7 +46,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total) and enough host memory for the CPU tier. If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total) and enough host memory for the CPU tier. If your cluster has fewer resources, adjust `replicas` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) and `--tensor-parallel-size` in the connector overlay you deploy (for example [native/cpu](./modelserver/gpu/vllm/native/cpu/base/patch-vllm.yaml)) for your environment.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -227,7 +227,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver end -->
 
-The ROCm native overlays raise vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path; see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
+The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path (the filesystem overlay leaves it unchanged); see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
 
 **(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
