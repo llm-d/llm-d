@@ -169,6 +169,24 @@ verify:
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
             -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    messages:
+      - run: |
+          # Anthropic Messages API: the router tokenizes it through /v1/messages/render
+          kubectl run curl-messages --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/messages" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"max_tokens\": 16, \"messages\": [{\"role\": \"user\", \"content\": \"How are you today?\"}]}"'
+    responses:
+      - run: |
+          # OpenAI Responses API: the router tokenizes it through /v1/responses/render
+          kubectl run curl-responses --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/responses" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"max_output_tokens\": 16, \"input\": \"How are you today?\"}"'
     shared_prefix:
       - run: |
           # 10 requests that share a ~2k-token prefix and differ only in the last sentence

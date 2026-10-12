@@ -55,6 +55,16 @@ router:
                 # Guide render Service (../render/), not a loopback sidecar.
                 # `precise-prefix-cache-routing-` namePrefix + Service name `render`.
                 url: "http://precise-prefix-cache-routing-render:8000"
+                # How /v1/messages (Anthropic) and /v1/responses requests are
+                # tokenized. `auto` (default) probes the render endpoint once and
+                # uses vLLM's native /v1/messages/render or /v1/responses/render
+                # when it exists, else falls back to `legacy`: a translation to
+                # chat-completions rendering that is deprecated and does not
+                # guarantee token parity with the model server. `native` fails
+                # instead of falling back. vLLM 0.30 serves both endpoints;
+                # vLLM 0.29 (TPU overlays) serves Messages only.
+                messagesRenderMode: auto
+                responsesRenderMode: auto
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer
             parameters:
@@ -69,9 +79,25 @@ router:
                 topicFilter: "kv@"
                 concurrency: 8
                 discoverPods: true
+                # OpenTelemetry spans for KV-event receive/process/decode. Off by
+                # default: events arrive at many times the request rate and would
+                # crowd request traces out of a shared sampler. Needs router
+                # tracing enabled (recipes/router/features/tracing.values.yaml).
+                # tracing: true
                 podDiscoveryConfig:
                   socketPort: 5556
+                  # Replay buffered events on connect and after a sequence gap
+                  # (vLLM GPU backend binds this ZMQ ROUTER socket).
                   replaySocketPort: 5559
+                  # Subscribe only to pool members that publish KV events, e.g.
+                  # prefill pods in a P/D pool. Empty (default) matches every pod.
+                  # podLabelSelector: "llm-d.ai/role=prefill"
+                  # EXPERIMENTAL: warm the index from a vLLM KV-event snapshot
+                  # instead of a full replay. Requires vllm-project/vllm#57789
+                  # (unreleased); upgrade the router before setting
+                  # `snapshot_endpoint` on vLLM, or the router cannot decode
+                  # the engine's event batches.
+                  # snapshotSocketPort: <port>
           - type: inflight-load-producer
             parameters:
               prefixMatchInfoProducerName: precise-prefix-cache-producer
