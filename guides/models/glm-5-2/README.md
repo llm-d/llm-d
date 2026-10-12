@@ -65,7 +65,7 @@ This guide supports two prefix-cache routing modes (`ROUTING`), selected with ta
 - **Approximate prefix routing (`ROUTING=approximate`, default)** — scores GPU- and CPU-resident
   prefix caches heuristically (`glm-5.2-overrides.values.yaml`), paired with the `default`
   (`p3w2d1w2` + tiered offloading) or any raw topology overlay.
-- **Precise prefix-cache routing (`ROUTING=precise`, experimental)** — replaces the approximate
+- **Precise prefix-cache routing (`ROUTING=precise`)** — replaces the approximate
   prefix index with exact KV-event-backed routing (`precise-routing.values.yaml`) on the 3-node
   `p2w1d1w1-precise` deployment (24 GPUs, 64-token KV blocks, `wide-ep-render` tokenizer Service,
   and per-rank ZMQ KV-event subscriptions), validated on three 8-GPU H200 nodes with InfiniBand
@@ -197,7 +197,7 @@ export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/
 
 </details>
 <details>
-<summary><b>Precise Prefix-Cache Routing (Experimental)</b></summary>
+<summary><b>Precise Prefix-Cache Routing</b></summary>
 
 Layers [`precise-routing.values.yaml`](router/precise-routing.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), replacing the approximate prefix index with exact KV-event-backed routing (`precise-prefix-cache-producer` + `prefix-cache-affinity-filter` + `token-load-scorer`). It also sets `DEPLOYMENT=p2w1d1w1-precise`, the only overlay that publishes per-rank KV events and deploys the `wide-ep-render` Service.
 
