@@ -29,7 +29,7 @@ support:
       engines: {vllm: validated, sglang: community}
     xpu:
       label: Intel XPU
-      notes: "vLLM: Data Center GPU Max 1550+ · 2 replicas × 1 XPU via DRA · fp16"
+      notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
