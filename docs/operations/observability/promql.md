@@ -71,6 +71,27 @@ adds instance, model, and topology filters.
 | **EPP prefix indexer size** | `llm_d_epp_prefix_indexer_size` |
 | **EPP prefix hit ratio P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
 
+### Precise Prefix Cache Routing
+
+Queries for the [precise prefix cache routing guide](../../../guides/precise-prefix-cache-routing/README.md). The `llm_d_epp_kv_cache_*` series require `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on the `precise-prefix-cache-producer` (the guide's values file sets it); see the [Router (EPP) metric reference](./router-metrics.md#precise-kv-cache-index--events).
+
+| Metric Need | PromQL Query |
+| ----------- | ------------ |
+| **Active KV-event subscribers** (should equal the model server pod count) | `llm_d_epp_kv_cache_events_active_subscribers` |
+| **KV-event message rate per model server pod** | `sum by(pod_identifier) (rate(llm_d_epp_kv_cache_events_messages_received_total[5m]))` |
+| **KV-event transport error rate** | `sum by(pod_identifier, operation) (rate(llm_d_epp_kv_cache_events_zmq_errors_total[5m]))` |
+| **Index admission rate** (flat under traffic = index not being populated) | `sum(rate(llm_d_epp_kv_cache_index_admissions_total[5m]))` |
+| **Index eviction rate** | `sum(rate(llm_d_epp_kv_cache_index_evictions_total[5m]))` |
+| **Matched prefix blocks per lookup** | `sum(rate(llm_d_epp_kv_cache_index_lookup_hits_total[5m])) / sum(rate(llm_d_epp_kv_cache_index_lookup_requests_total[5m]))` |
+| **Index lookup latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket[5m])))` |
+| **Event-pool saturation** (near 1.0 = index lags live cache state) | `llm_d_epp_kv_cache_events_pool_queue_depth / llm_d_epp_kv_cache_events_pool_capacity` |
+| **Predicted prefix hit rate** (what the router expected when routing) | `sum(rate(llm_d_epp_prefix_predicted_cached_tokens_sum[5m])) / sum(rate(llm_d_epp_prefix_prompt_tokens_sum[5m]))` |
+| **Delivered prefix hit rate** (what the model servers reported) | `sum(rate(llm_d_epp_request_cached_tokens_sum[5m])) / sum(rate(llm_d_epp_request_input_tokens_sum[5m]))` |
+| **Render call latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_token_producer_render_duration_seconds_bucket[5m])))` |
+| **Render failure rate by reason** | `sum by(reason) (rate(llm_d_epp_token_producer_render_failures_total[5m]))` |
+
+The predicted and delivered hit rates are each internally consistent, but their request cohorts differ (predictions are recorded before forwarding; delivered counts come from model server responses), so compare their trends rather than dividing one by the other.
+
 ### Tiered Prefix Cache
 
 Queries for the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md). The `vllm:kv_offload_*` series come from vLLM's native `OffloadingConnector`.
