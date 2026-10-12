@@ -19,6 +19,11 @@ router:
       targetPort: 8081
 
   epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which the token-load-scorer and affinity filter consume) is local to each
+    # EPP process, so multiple replicas would each see only a fraction of the
+    # per-endpoint load and incorrectly gate the affinity filter.
+    replicas: 1
     pluginsConfigFile: "agentic-serving-gpu-plugins.yaml"
     pluginsCustomConfig:
       agentic-serving-gpu-plugins.yaml: |
@@ -36,22 +41,32 @@ router:
           parameters:
             autoTune: false
             lruCapacityPerServer: 4000000
-        - type: active-request-scorer
-        - type: token-load-scorer
+        - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
+            # Set for this guide's reference setup (Nemotron-3-Ultra FP8,
+            # H200 TP=8). Re-measure for other hardware or models
+            # (guides/recipes/router/calibration).
             peakPrefillThroughput: 9866
-        - type: inflight-load-producer
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
         schedulingProfiles:
+        # Prefill does the prompt pass: keep prefix groups on cache-warm pods
+        # (affinity filter) and pick by queued prefill token load.
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: token-load-scorer
           - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
 
   modelServers:
     matchLabels:

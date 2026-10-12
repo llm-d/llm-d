@@ -14,8 +14,9 @@ the large ISL:OSL ratio of multi-turn agentic sessions (heavy prefill, lighter d
 configuration layers the agentic optimizations onto disaggregated serving:
 
 - **P/D disaggregation** so heavy prefill never stalls decode, stabilizing ITL.
-- **Disagg-aware, prefix-cache routing** that scores both the on-device (GPU) and CPU-offload
-  prefix caches when picking a prefill/decode endpoint.
+- **Disagg-aware, token-aware prefix-cache routing**: the prefill profile keeps prefix groups on
+  cache-warm endpoints with the prefix-cache affinity filter and picks by queued prefill token
+  load; the decode profile picks the endpoint with the fewest active requests.
 - **KV cache offloading** to CPU DRAM — `200 GiB` per model server (`~1.6 TB` across the 8
   replicas) — to extend the cacheable working set far beyond HBM for long, resumable sessions.
 - **FP8 block weights + FP8 KV cache** to fit the `~563 GB` of weights at `TP=8` and leave KV

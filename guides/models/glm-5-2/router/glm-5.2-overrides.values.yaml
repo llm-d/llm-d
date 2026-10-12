@@ -1,7 +1,8 @@
-# GLM-5.2 overrides for glm-5-2.values.yaml: replaces the single prefix-cache
-# scorer with dual GPU+CPU prefix-cache scoring, so P/D routing accounts for
-# CPU-offloaded KV when picking an endpoint. Apply after glm-5-2.values.yaml;
-# targetPorts and matchLabels are inherited from it.
+# GLM-5.2 overrides for glm-5-2.values.yaml: gates prefill on GPU prefix-cache
+# affinity and token load, and adds a CPU prefix-cache scorer so P/D routing
+# also accounts for CPU-offloaded KV when picking an endpoint. Apply after
+# glm-5-2.values.yaml; replicas, targetPorts and matchLabels are inherited
+# from it.
 router:
   epp:
     pluginsCustomConfig:
@@ -30,28 +31,41 @@ router:
           parameters:
             autoTune: false
             lruCapacityPerServer: 200000
-        - type: prefix-cache-scorer
-          name: gpu-prefix-cache-scorer
+        - type: inflight-load-producer
           parameters:
             prefixMatchInfoProducerName: gpu-prefix-cache-producer
+        # The affinity filter takes a single prefix producer, so it gates on the
+        # GPU-resident index; CPU-offloaded hits are scored separately below.
+        - type: prefix-cache-affinity-filter
+          parameters:
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
+            # Measured on an H200 GLM-5.2-FP8 DP8 cell. Re-measure for other
+            # hardware or models (guides/recipes/router/calibration).
+            peakPrefillThroughput: 3585
+        - type: token-load-scorer
         - type: prefix-cache-scorer
           name: cpu-prefix-cache-scorer
           parameters:
             prefixMatchInfoProducerName: cpu-prefix-cache-producer
-        - type: queue-scorer
         - type: active-request-scorer
+        - type: max-score-picker
         schedulingProfiles:
+        # Prefill: keep prefix groups on GPU-cache-warm ranks (affinity filter),
+        # then pick by queued prefill token load, with a CPU-tier prefix bonus
+        # so resumed sessions favor ranks that can restore offloaded context.
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: gpu-prefix-cache-scorer
-            weight: 5
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+            weight: 3
           - pluginRef: cpu-prefix-cache-scorer
-            weight: 2
-          - pluginRef: active-request-scorer
             weight: 1
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 3
+          - pluginRef: max-score-picker

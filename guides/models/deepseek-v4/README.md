@@ -139,9 +139,16 @@ kubectl create secret generic llm-d-hf-token \
 
 **Prepare the paths to the `helm` values files** for the `llm-d` router. The router values
 ([`deepseek-v4.values.yaml`](router/deepseek-v4.values.yaml)) run separate `prefill` and
-`decode` scheduling profiles (prefix-cache, queue and active-request scoring for prefill;
-active-request scoring for decode) and pin each request to one
+`decode` scheduling profiles (prefix-cache affinity filtering and token-load scoring for
+prefill; active-request scoring for decode) and pin each request to one
 `DisaggregatedSet` revision during rollouts:
+
+> [!WARNING]
+> **`peakPrefillThroughput` is not yet calibrated for DeepSeek-V4-Pro on GB200.** The
+> `prefix-cache-affinity-filter` runs with its built-in default (15928, measured for Qwen3-32B
+> on H100), which will gate affinity incorrectly on this hardware. Measure your own value with
+> the [router calibration tool](../../recipes/router/calibration/README.md) and set it in
+> `router/deepseek-v4.values.yaml`.
 
 <!-- guide:deploy.router_values start -->
 ```bash
