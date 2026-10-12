@@ -65,6 +65,7 @@ def sglang_snapshot_callback(
     sglang_warmup_and_hold; without one, the current status is saved and restored instead.
     """
     from sglang.srt.entrypoints import http_server  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+    from sglang.srt.utils import kill_process_tree  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
 
     tokenizer_manager: Any = http_server._global_state.tokenizer_manager  # pyright: ignore[reportOptionalMemberAccess]
 
@@ -126,7 +127,7 @@ def sglang_snapshot_callback(
         logger.info("Restored server_status to %s.", prev_status)
     except Exception as e:
         logger.error("Sleep/wake cycle failed: %s. Terminating SGLang server.", e, exc_info=True)
-        http_server.kill_process_tree(os.getpid())
+        kill_process_tree(os.getpid())
 
 
 def sglang_warmup_and_hold(

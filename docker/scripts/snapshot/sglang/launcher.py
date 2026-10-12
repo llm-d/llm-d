@@ -44,6 +44,23 @@ def _get_snapshot_provider_for_launch(server_args) -> Optional[GKESnapshotProvid
         )
         return None
 
+    from sglang.srt.arg_groups.overrides import resolving_view  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+    from sglang.srt.environ import envs  # pyright: ignore[reportMissingImports,reportUnknownVariableType]
+
+    server_args.resolve_once()
+    cfg = resolving_view(server_args)
+    if (
+        cfg.encoder_only
+        or cfg.smg_grpc_mode
+        or cfg.use_ray
+        or envs.SGLANG_RUST_SERVER.get()
+        or server_args.tokenizer_worker_num > 1
+    ):
+        logger.warning(
+            "SGLang pod snapshotting supports only the single-tokenizer Python HTTP server; no snapshot will be taken."
+        )
+        return None
+
     # Without --enable-memory-saver, SGLang frees no GPU memory on release; without
     # --enable-weights-cpu-backup, SGLang throws the weights away instead of copying them to CPU memory.
     if not (server_args.enable_memory_saver and server_args.enable_weights_cpu_backup):

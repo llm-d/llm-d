@@ -500,7 +500,12 @@ class TestLauncher(unittest.TestCase):
             self.assertIsNotNone(mock_api_server.build_app)
 
 
-def _sglang_modules(tokenizer_manager=None, server_args=None, **http_server_attrs):
+def _sglang_modules(
+    tokenizer_manager=None,
+    server_args=None,
+    rust_server: bool = False,
+    **http_server_attrs,
+):
     """sys.modules entries for fake SGLang modules."""
     mock_http_server = MagicMock(
         _global_state=MagicMock(tokenizer_manager=tokenizer_manager or MagicMock(server_status="Up")),
@@ -508,15 +513,23 @@ def _sglang_modules(tokenizer_manager=None, server_args=None, **http_server_attr
         _execute_server_warmup=MagicMock(return_value=True),
         **http_server_attrs,
     )
+    mock_overrides = MagicMock(resolving_view=MagicMock(side_effect=lambda sa: sa))
     mock_serving_hook = MagicMock(ssl_verify_of=MagicMock(return_value=True))
+    mock_envs = MagicMock()
+    mock_envs.SGLANG_RUST_SERVER.get.return_value = rust_server
     return {
         "sglang": MagicMock(),
         "sglang.launch_server": MagicMock(),
         "sglang.srt": MagicMock(),
-        "sglang.srt.arg_groups": MagicMock(serving_hook=mock_serving_hook),
+        "sglang.srt.arg_groups": MagicMock(
+            overrides=mock_overrides,
+            serving_hook=mock_serving_hook,
+        ),
+        "sglang.srt.arg_groups.overrides": mock_overrides,
         "sglang.srt.arg_groups.serving_hook": mock_serving_hook,
         "sglang.srt.entrypoints": MagicMock(http_server=mock_http_server),
         "sglang.srt.entrypoints.http_server": mock_http_server,
+        "sglang.srt.environ": MagicMock(envs=mock_envs),
         "sglang.srt.plugins": MagicMock(),
         "sglang.srt.server_args": MagicMock(prepare_server_args=MagicMock(return_value=server_args)),
         "sglang.srt.utils": MagicMock(),
@@ -529,6 +542,10 @@ def _sglang_server_args(url: str = "http://127.0.0.1:30000", **overrides):
         "api_key": None,
         "enable_memory_saver": True,
         "enable_weights_cpu_backup": True,
+        "encoder_only": False,
+        "smg_grpc_mode": False,
+        "tokenizer_worker_num": 1,
+        "use_ray": False,
         **overrides,
     }
     server_args = MagicMock(**defaults)
@@ -655,9 +672,8 @@ class TestSGLangWrapper(unittest.TestCase):
         for fail_on in ("release_memory_occupation", "resume_memory_occupation"):
             with self.subTest(fail_on=fail_on):
                 mock_provider = MagicMock(spec=GKESnapshotProvider)
-                mock_kill = MagicMock()
                 mock_tokenizer_manager = MagicMock(server_status="Up")
-                modules = _sglang_modules(mock_tokenizer_manager, kill_process_tree=mock_kill)
+                modules = _sglang_modules(mock_tokenizer_manager)
 
                 def _post(url, **kwargs):
                     resp = MagicMock()
@@ -677,7 +693,7 @@ class TestSGLangWrapper(unittest.TestCase):
                     )
 
                 self.assertEqual(mock_tokenizer_manager.server_status, "Starting")
-                mock_kill.assert_called_once_with(9999)
+                modules["sglang.srt.utils"].kill_process_tree.assert_called_once_with(9999)
 
     def test_sglang_snapshot_callback_forwards_auth_headers_and_ssl_verify(self):
         from docker.scripts.snapshot.sglang.wrapper import (
@@ -780,15 +796,20 @@ class TestSGLangLauncher(unittest.TestCase):
         )
 
         cases = [
-            (None, _sglang_server_args()),
-            (unavail_provider, _sglang_server_args()),
-            (avail_provider, _sglang_server_args(enable_memory_saver=False, enable_weights_cpu_backup=True)),
-            (avail_provider, _sglang_server_args(enable_memory_saver=True, enable_weights_cpu_backup=False)),
+            (None, _sglang_server_args(), False),
+            (unavail_provider, _sglang_server_args(), False),
+            (avail_provider, _sglang_server_args(enable_memory_saver=False, enable_weights_cpu_backup=True), False),
+            (avail_provider, _sglang_server_args(enable_memory_saver=True, enable_weights_cpu_backup=False), False),
+            (avail_provider, _sglang_server_args(encoder_only=True), False),
+            (avail_provider, _sglang_server_args(smg_grpc_mode=True), False),
+            (avail_provider, _sglang_server_args(use_ray=True), False),
+            (avail_provider, _sglang_server_args(), True),
+            (avail_provider, _sglang_server_args(tokenizer_worker_num=2), False),
         ]
-        for provider, mock_server_args in cases:
-            with self.subTest(provider=provider, server_args=mock_server_args):
+        for provider, mock_server_args, rust_server in cases:
+            with self.subTest(provider=provider, server_args=mock_server_args, rust_server=rust_server):
                 mock_get_provider.return_value = provider
-                modules = _sglang_modules(server_args=mock_server_args)
+                modules = _sglang_modules(server_args=mock_server_args, rust_server=rust_server)
                 with patch.dict("sys.modules", modules), patch(
                     "os.getpid", return_value=9999
                 ), patch("docker.scripts.snapshot.sglang.launcher.logger"):
