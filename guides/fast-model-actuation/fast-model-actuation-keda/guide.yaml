@@ -58,13 +58,13 @@ deploy:
     - run: |
         # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator.
         # Reused verbatim from the base guide (identical RBAC).
-        kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml
+        kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml
 
         # ServiceAccount + Role (namespaced): the launcher pods run as the
         # fma-launcher ServiceAccount so the state-change-reflector sidecar can
         # patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
         # annotation). Reused verbatim from the base guide.
-        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml
 
         # RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
         # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
@@ -101,7 +101,7 @@ deploy:
         helm install ${GUIDE_NAME} \
           ${ROUTER_STANDALONE_CHART} \
           -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          -f ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
           -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
@@ -111,7 +111,7 @@ deploy:
   # leaves KEDA nothing to read. Step 6 scales this to 0 instead.
   modelserver:
     - run: |
-        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
@@ -120,7 +120,7 @@ deploy:
   # ServiceAccount + token. Once Ready, KEDA owns the replica count.
   keda:
     - run: |
-        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp
 
         kubectl wait --for=condition=Ready --timeout=120s \
           scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
@@ -177,7 +177,7 @@ benchmark:
   execute:
     - run: |
         llmdbenchmark \
-          --spec           guides/${GUIDE_NAME} \
+          --spec           guides/fast-model-actuation-${GUIDE_NAME} \
           run \
           --endpoint-url   "${ENDPOINT_URL}" \
           --gateway-class  "${GATEWAY_CLASS}" \
@@ -190,11 +190,11 @@ benchmark:
 cleanup:
   # Order matters. Delete the KEDA ScaledObject/TriggerAuth FIRST so the HPA stops
   # scaling the requester while we tear it down.
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
   # Then the model-server CRs and the requester Deployment (both in modelserver/):
   # this unbinds the requester/provider pairs and tells the controller to tear
   # down the launcher pods.
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
   # Wait for pods to drain while the controller is still running to strip their
   # finalizers. If the controller is removed first, finalizer-bound pods get stuck
   # in Terminating forever.
@@ -206,14 +206,14 @@ cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
   # Namespaced RBAC for this guide (Role + ServiceAccount from rbac/role.yaml,
   # plus the imperatively-created RoleBinding).
-  - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
   - run: kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
   # The per-deployment ClusterRoleBinding is namespace-suffixed, so it is unique
   # to this deployment and safe to delete on a shared cluster.
   - run: kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAMESPACE}" --ignore-not-found=true
   # Skipped in CI, where the cluster is shared; run only on a cluster you own.
   - skip_in: [ci]
-    run: kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml --ignore-not-found=true
+    run: kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml --ignore-not-found=true
   # Destructive / cluster-wide -- skipped in CI, where the namespace is reused
   # and the FMA CRDs are shared across deployments. Run only on a cluster you own.
   - skip_in: [ci]

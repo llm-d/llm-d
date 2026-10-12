@@ -104,8 +104,8 @@ For [vLLM](https://docs.vllm.ai/en/latest/models/supported_models/#modelscope), 
 | -------- | -------------- | ----- |
 | Peer-to-peer weight transfer | Loading weights from storage on every replica: one seed replica loads them, peers receive them over GPU-to-GPU NIXL/RDMA (`--load-format=mx`) | [Transfer Weights Peer-to-Peer (ModelExpress)](../../../guides/modelexpress-p2p/README.md) |
 | Pod snapshots | Model download and engine initialization: new Pods restore a checkpointed, initialized model server (single-GPU vLLM on GKE) | [Restore from Pod Snapshots](../../../guides/pod-snapshot/README.md) |
-| Warm instances (sleep/wake) | Process start and module import: resident instances sleep and wake, and a pre-warmed launcher spawns new ones | [Reuse Warm Model Servers (FMA)](../../../guides/fast-model-actuation-base/README.md) |
-| Warm instances with scale from zero | Idle GPU cost while keeping fast actuation: KEDA scales FMA on EPP flow-control metrics | [Scale from Zero with FMA and KEDA](../../../guides/fast-model-actuation-keda/README.md) |
+| Warm instances (sleep/wake) | Process start and module import: resident instances sleep and wake, and a pre-warmed launcher spawns new ones | [Reuse Warm Model Servers (FMA)](../../../guides/fast-model-actuation/README.md) |
+| Warm instances with scale from zero | Idle GPU cost while keeping fast actuation: KEDA scales FMA on EPP flow-control metrics | [Scale from Zero with FMA and KEDA](../../../guides/fast-model-actuation/fast-model-actuation-keda/README.md) |
 
 The ModelExpress guide also covers [checkpoint pre-staging](../../../guides/modelexpress-p2p/measuring-storage-paths.md#1-prewarm-the-checkpoint-onto-nfs-once) (ordinary files, not an `HF_HOME` cache), [compilation-cache distribution via P2P transfer or a shared RWX PVC](../../../guides/modelexpress-p2p/compile-cache.md), and storage-backed alternatives to P2P using [fastsafetensors on NFS or local NVMe](../../../guides/modelexpress-p2p/measuring-storage-paths.md); follow each path's prerequisites.
 

@@ -1,6 +1,6 @@
 # Fast Model Actuation
 
-[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-base-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-base-ibm-acc-gpu-vllm-x.yaml)
+[![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -10,7 +10,7 @@ Fast Model Actuation (FMA) addresses vLLM startup time using two technologies. O
 Together they turn model swap-in and replica scale-up from a minutes-scale cold start into a near-instant operation — without changing steady-state serving performance.
 
 > [!NOTE]
-> FMA's value is *actuation speed*, not inference throughput. Resident servers add only a small (~2.5%) CPU-memory overhead, and served performance matches a standard deployment. [Workload Autoscaling](../workload-autoscaling/README.md) decides *when* to scale; FMA addresses *how fast* the new capacity becomes ready. For **autoscaled** FMA, see the [Fast Model Actuation + KEDA guide](../fast-model-actuation-keda/README.md), where KEDA scales the requester pool on EPP flow-control metrics and each scale-up drives an FMA hot or warm start.
+> FMA's value is *actuation speed*, not inference throughput. Resident servers add only a small (~2.5%) CPU-memory overhead, and served performance matches a standard deployment. [Workload Autoscaling](../workload-autoscaling/README.md) decides *when* to scale; FMA addresses *how fast* the new capacity becomes ready. For **autoscaled** FMA, see the [Fast Model Actuation + KEDA guide](./fast-model-actuation-keda/README.md), where KEDA scales the requester pool on EPP flow-control metrics and each scale-up drives an FMA hot or warm start.
 
 FMA uses the following **dual pod** technique to circumvent the exclusive, lifetime-long GPU allocation.
 
@@ -67,8 +67,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 ```bash
 export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export GUIDE_NAME=fast-model-actuation-base
-export NAMESPACE=llm-d-fast-model-actuation-base
+export GUIDE_NAME=fast-model-actuation
+export NAMESPACE=llm-d-fast-model-actuation
 export FMA_VERSION=0.6.5
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B

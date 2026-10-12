@@ -30,11 +30,11 @@ Load one replica from storage and transfer weights to peer replicas over GPU-to-
 
 Checkpoint and restore single-GPU vLLM model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
 
-### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation-base/README.md)
+### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation/README.md)
 
 Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
 
-### [Scale from Zero with FMA and KEDA](../../guides/fast-model-actuation-keda/README.md)
+### [Scale from Zero with FMA and KEDA](../../guides/fast-model-actuation/fast-model-actuation-keda/README.md)
 
 Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
 

@@ -109,10 +109,10 @@ GUIDES = [
     ("Predicted Latency-Based Routing", "../guides/predicted-latency-routing/README.md", "predicted-latency-routing", None),
     ("Flow Control", "../guides/flow-control/README.md", "flow-control", None),
     ("Workload Autoscaling (KEDA + EPP Queue)", "../guides/workload-autoscaling/keda-epp-queue/README.md", "workload-autoscaling-keda-epp", None),
-    ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation-base/README.md", "fast-model-actuation-base", None),
+    ("Fast Model Actuation (FMA)", "../guides/fast-model-actuation/README.md", "fast-model-actuation", None),
     ("Multimodal Serving (Aggregation)", "../guides/multimodal-serving/aggregation/README.md", "multimodal-serving-aggregation", None),
     ("Multimodal Serving (E-Disaggregation)", "../guides/multimodal-serving/e-disaggregation/README.md", "multimodal-serving-e-disaggregation", None),
-    ("Fast Model Actuation + KEDA Autoscaling", "../guides/fast-model-actuation-keda/README.md", "fast-model-actuation-keda", None),
+    ("Fast Model Actuation + KEDA Autoscaling", "../guides/fast-model-actuation/fast-model-actuation-keda/README.md", "fast-model-actuation-keda", None),
     ("Agentic API", "../guides/agentic-api/README.md", "agentic-api", None),
 ]
 

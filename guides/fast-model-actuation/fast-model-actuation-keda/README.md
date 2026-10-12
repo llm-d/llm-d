@@ -4,8 +4,8 @@
 
 ## Overview
 
-This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation-base/README.md) with **scale-from-zero autoscaling via KEDA**. A KEDA `ScaledObject` scales the FMA `server-requesting` Deployment on Endpoint Picker (EPP) flow-control metrics — all the way down to **zero** when the pool is idle, and back up on the first queued request. Each requesting pod reserves a GPU and drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**; scaling to zero releases the GPU and puts the vLLM to sleep.
-(See the [FMA guide](../fast-model-actuation-base/README.md#actuation-paths) for what hot and warm start mean.)
+This guide combines [Fast Model Actuation (FMA)](../README.md) with **scale-from-zero autoscaling via KEDA**. A KEDA `ScaledObject` scales the FMA `server-requesting` Deployment on Endpoint Picker (EPP) flow-control metrics — all the way down to **zero** when the pool is idle, and back up on the first queued request. Each requesting pod reserves a GPU and drives the FMA controllers to bring a vLLM instance online via a **hot or warm start**; scaling to zero releases the GPU and puts the vLLM to sleep.
+(See the [FMA guide](../README.md#actuation-paths) for what hot and warm start mean.)
 
 ## Configuration
 
@@ -22,13 +22,13 @@ This guide combines [Fast Model Actuation (FMA)](../fast-model-actuation-base/RE
 
 ## Prerequisites
 
-This guide assumes you have a Kubernetes cluster with GPU nodes, the [llm-d router](../../guides/recipes/router/README.md) infrastructure, and a **Prometheus/monitoring stack that scrapes the EPP**. If you are starting from an existing llm-d deployment, the Gateway API Inference Extension CRDs may already be installed and you can skip that step.
+This guide assumes you have a Kubernetes cluster with GPU nodes, the [llm-d router](../../../guides/recipes/router/README.md) infrastructure, and a **Prometheus/monitoring stack that scrapes the EPP**. If you are starting from an existing llm-d deployment, the Gateway API Inference Extension CRDs may already be installed and you can skip that step.
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+- Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 
-- **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../workload-autoscaling/README.md#prerequisites) and [Prometheus Setup Guide](../../docs/operations/observability/setup.md). This includes [KEDA installation](../workload-autoscaling/README.md#kubernetes-metrics-adapter).
+- **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../../workload-autoscaling/README.md#prerequisites) and [Prometheus Setup Guide](../../../docs/operations/observability/setup.md). This includes [KEDA installation](../../workload-autoscaling/README.md#kubernetes-metrics-adapter).
 
-- **EPP flow control enabled** — The `llm_d_epp_flow_control_queue_size` metric KEDA scales on requires the EPP flow control feature gate; it is also what makes an incoming request enqueue (rather than fail fast) when there is no ready backend yet, which is what lets this guide scale from zero. This guide's router values enable the `flowControl` gate for you (applied in [step 4](#4-deploy-the-llm-d-router-epp-flow-control-enabled)), so no extra action is needed. See [EPP Flow Control](../../docs/architecture/router/flow-control.md) for details on flow control behavior.
+- **EPP flow control enabled** — The `llm_d_epp_flow_control_queue_size` metric KEDA scales on requires the EPP flow control feature gate; it is also what makes an incoming request enqueue (rather than fail fast) when there is no ready backend yet, which is what lets this guide scale from zero. This guide's router values enable the `flowControl` gate for you (applied in [step 4](#4-deploy-the-llm-d-router-epp-flow-control-enabled)), so no extra action is needed. See [EPP Flow Control](../../../docs/architecture/router/flow-control.md) for details on flow control behavior.
 
 - Checkout llm-d repo:
 
@@ -99,7 +99,7 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 <!-- guide:prerequisites.namespace end -->
 
 > [!NOTE]
-> **Fast Model Actuation** — This guide reuses the base [Fast Model Actuation guide](../fast-model-actuation-base/README.md)'s manifests (`LauncherConfig`, `LauncherPopulationPolicy`, `InferenceServerConfig` and server-requesting `Deployment`) as a kustomize base and stands up its own FMA controllers. You do not need to deploy it separately.
+> **Fast Model Actuation** — This guide reuses the base [Fast Model Actuation guide](../README.md)'s manifests (`LauncherConfig`, `LauncherPopulationPolicy`, `InferenceServerConfig` and server-requesting `Deployment`) as a kustomize base and stands up its own FMA controllers. You do not need to deploy it separately.
 
 ## Installation Instructions
 
@@ -125,13 +125,13 @@ The FMA controllers need cluster-level access to list nodes (for the launcher-po
 ```bash
 # ClusterRole (cluster-scoped): the FMA controllers list nodes for the launcher-populator.
 # Reused verbatim from the base guide (identical RBAC).
-kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml
+kubectl apply -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml
 
 # ServiceAccount + Role (namespaced): the launcher pods run as the
 # fma-launcher ServiceAccount so the state-change-reflector sidecar can
 # patch its own pod (the dual-pods.llm-d.ai/vllm-instance-signature
 # annotation). Reused verbatim from the base guide.
-kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml
 
 # RoleBinding (namespaced): bind the Role to the fma-launcher ServiceAccount.
 # Created imperatively (not from a static manifest) so ${NAMESPACE} drives both the
@@ -181,7 +181,7 @@ The router values for this guide enable the EPP `flowControl` feature gate so th
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  -f ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
@@ -191,11 +191,11 @@ helm install ${GUIDE_NAME} \
 
 Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` — **together with** the server-requesting `fma-requester` Deployment in a single `kubectl apply -k modelserver/`.
 
-This creates 1 [server-requesting pod](../fast-model-actuation-base/README.md#overview), which reserves a GPU, and the FMA controllers bind it to a [launcher pod](../fast-model-actuation-base/README.md#overview) — the launcher is what actually runs the vLLM instance. KEDA takes over the replica count in [step 6](#6-enable-scale-from-zero-autoscaling-keda).
+This creates 1 [server-requesting pod](../README.md#overview), which reserves a GPU, and the FMA controllers bind it to a [launcher pod](../README.md#overview) — the launcher is what actually runs the vLLM instance. KEDA takes over the replica count in [step 6](#6-enable-scale-from-zero-autoscaling-keda).
 
 <!-- guide:deploy.modelserver start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/
 
 kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 ```
@@ -207,7 +207,7 @@ Apply the KEDA layer — the `ScaledObject`, its `TriggerAuthentication`, and th
 metrics-reader ServiceAccount + token — from the `ocp` overlay, then wait for the
 `ScaledObject` to reconcile `Ready`. KEDA then creates the HPA and owns the
 requester's replica count from here on. The overlay follows the
-[`keda-epp`](../workload-autoscaling/keda-epp) guide, pointing the
+[`keda-epp`](../../workload-autoscaling/keda-epp) guide, pointing the
 queue-depth trigger at Thanos Querier; on OpenShift the service-ca operator
 injects the Thanos CA into the token Secret, so **no `prometheus-token` copy is
 required**.
@@ -220,7 +220,7 @@ shortened delays (`cooldownPeriod` 30s, then the HPA's 30s stabilization window)
 
 <!-- guide:deploy.keda start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp
 
 kubectl wait --for=condition=Ready --timeout=120s \
   scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
@@ -245,7 +245,7 @@ kubectl create secret generic keda-prometheus-auth \
   --from-literal=ca.crt="$(kubectl get configmap prometheus-web-tls-ca \
     -n ${MONITORING_NAMESPACE} -o jsonpath='{.data.ca\.crt}')" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/k8s
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/k8s
 ```
 <!-- llm-d-cicd:skip end -->
 
@@ -296,14 +296,14 @@ kubectl get deployment/fma-requester -n ${NAMESPACE} -w
 <!-- llm-d-cicd:skip end -->
 
 > [!NOTE]
-> This scale-up should trigger a [hot start](../fast-model-actuation-base/README.md#actuation-paths) — the fast path, waking the vLLM instance that step 6 put to sleep. For a `Qwen/Qwen3-32B` it takes 4.0 s mean pod startup against 85.3 s for a warm start ([benchmark results](./benchmark-results/qwen3-32b-h100/README.md#queue-based-autoscaling)). Which path you get depends on GPU assignment; see [wake latency](../fast-model-actuation-base/README.md#3-demonstrate-sleepwake) in the FMA guide.
+> This scale-up should trigger a [hot start](../README.md#actuation-paths) — the fast path, waking the vLLM instance that step 6 put to sleep. For a `Qwen/Qwen3-32B` it takes 4.0 s mean pod startup against 85.3 s for a warm start ([benchmark results](./benchmark-results/qwen3-32b-h100/README.md#queue-based-autoscaling)). Which path you get depends on GPU assignment; see [wake latency](../README.md#3-demonstrate-sleepwake) in the FMA guide.
 
 ## Benchmarking
 
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking. The commands below run the `inference-perf` harness with the `shared_prefix_synthetic_heavy.yaml` workload. On this small model (Qwen3-0.6B) each request drains in tens of milliseconds, so the flow-control queue does not stay backed up — the value you are exercising is the **scale-from-zero transition**: when the requester has scaled to 0, the benchmark's first arrivals enqueue, KEDA's activation trip on that cold-start queue transient scales the requester up (0→1), and the continuing arrivals keep it above zero for the rest of the run.
 
 > [!IMPORTANT]
-> The Benchmarking section below contains only the **guide-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **guide-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../../helpers/benchmark.md).
 
 ### 1. Install the CLI
 
@@ -332,7 +332,7 @@ export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPA
 <!-- guide:benchmark.execute start -->
 ```bash
 llmdbenchmark \
-  --spec           guides/${GUIDE_NAME} \
+  --spec           guides/fast-model-actuation-${GUIDE_NAME} \
   run \
   --endpoint-url   "${ENDPOINT_URL}" \
   --gateway-class  "${GATEWAY_CLASS}" \
@@ -353,9 +353,9 @@ To remove all deployed components:
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
 
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
 
 kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
 
@@ -365,7 +365,7 @@ helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/role.yaml --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/role.yaml --ignore-not-found=true
 
 kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
 
@@ -373,7 +373,7 @@ kubectl delete clusterrolebinding "keda-epp-metrics-reader-monitoring-view-${NAM
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
-kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation-base/rbac/clusterrole.yaml --ignore-not-found=true
+kubectl delete -f ${REPO_ROOT}/guides/fast-model-actuation/rbac/clusterrole.yaml --ignore-not-found=true
 
 kubectl delete namespace ${NAMESPACE}
 

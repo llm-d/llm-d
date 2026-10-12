@@ -82,7 +82,7 @@ jobs:
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
-      standup_scenario: ${{ inputs.standup_scenario || 'fast-model-actuation-keda' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'fast-model-actuation/fast-model-actuation-keda' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}

@@ -8,7 +8,7 @@ resources:
 # Shared OCP metrics-reader auth (SA + token Secret; its ClusterRoleBinding is
 # removed below and created imperatively in the guide's RBAC step).
 components:
-  - ../../../recipes/autoscaling/metrics-reader
+  - ../../../../recipes/autoscaling/metrics-reader
 
 patches:
   # Drop the Component's ClusterRoleBinding: it pins a subject namespace and
