@@ -18,8 +18,21 @@ The default deployment is two aggregated `openai/gpt-oss-120b` replicas, one GPU
 ### When to use this path
 
 - **Long shared prefixes.** The router requests a pull only when the source holds at least `minCachedTokenDelta` more prefix tokens than the scheduled pod; the crossover is model-, hardware-, and transport-specific (see [Calibrate `minCachedTokenDelta`](#4-optional-calibrate-mincachedtokendelta)).
-- **Placement.** The shipped router values use affinity placement, so pulls are a fallback for requests placement displaces and fire rarely. To trade locality for load spreading, drop the `prefix-cache-scorer` and `no-hit-lru-scorer` from the scheduling profile in the [router values](router/p2p-kv-cache-sharing.values.yaml) and replace the `max-score-picker` with the `weighted-random-picker`. Re-measure both placements on your own workload; performance benchmarks are not part of this guide.
+- **Placement.** The shipped router values use token-aware placement: an `inflight-load-producer` discounts each pod's in-flight prompt tokens by what the precise index says it already caches, and the `token-load-scorer` with the `max-score-picker` sends each request to the pod with the fewest tokens still to prefill. A prefix owner is preferred until it is loaded; a request placed elsewhere pulls the prefix instead of recomputing it. It is the placement for many concurrent sessions pinned to owner pods, such as document Q&A (measured below).
+  - **Affinity:** when nothing contends on an owner pod, or GPU KV capacity is the bottleneck, replace the `inflight-load-producer` and `token-load-scorer` in the [router values](router/p2p-kv-cache-sharing.values.yaml) with the `prefix-cache-scorer` (weight 3), `queue-scorer`, `kv-cache-utilization-scorer` and `no-hit-lru-scorer` (weight 2 each) ahead of the `max-score-picker`. Under affinity the pull rarely fires and is a fallback for displaced requests, not a throughput feature.
+    On a uniform shared-prefix pool affinity measured ahead of load-aware placement (TTFT p50 0.48 s against 0.73 s at 30 req/s); token-aware placement has not been measured there.
+  - **Load spreading:** the affinity profile without the `prefix-cache-scorer` and `no-hit-lru-scorer`, with the `weighted-random-picker` in place of the `max-score-picker`. Simpler than token-aware placement, and behind it on document Q&A.
 - **Multi-turn sessions on P/D disaggregation.** Use the [P/D variant](#pd-variant-p2p-over-nixl-disaggregation) so the prefill worker pulls the session history decode generated.
+
+Measured on the guide's document Q&A profile ([llm-d-benchmark#1656](https://github.com/llm-d/llm-d-benchmark/pull/1656): 96 conversations, each over a private 48K-token document, 64 in flight), 8 x `openai/gpt-oss-120b` TP=1 on H200 with the pull over TCP, empty caches before every run, four runs per arm (affinity: one run):
+
+| Placement + P2P | Served req/s | TTFT p50 / p90 | TPOT p90 | Pulls per run |
+| --- | --- | --- | --- | --- |
+| token-aware (shipped) | **6.3** | 0.67 s / **7.1 s** | **34 ms** | 89 |
+| load-aware | 4.4 | 3.0 s / 9.2 s | 49 ms | 344 |
+| affinity | 2.75 | 0.53 s / 14.1 s | 139 ms | 36 |
+
+Token-aware placement pulls a quarter as often as load spreading because it spills only once the owner is loaded, so the pull's queueing stays out of the TTFT tail. Re-measure the placements on your own workload before assuming any of them generalizes.
 
 ## Supported Accelerators and Model Servers
 
@@ -42,6 +55,7 @@ SGLang has no equivalent of the `OffloadingConnector` P2P secondary tier, so thi
 **Transport (`INFRA_PROVIDER`).** NIXL/UCX moves the KV blocks over RDMA when the model server can reach an InfiniBand device, and falls back to TCP otherwise; the pull works either way. The transport sets the pull-versus-recompute crossover, and therefore `minCachedTokenDelta`:
 
 - **`base`** (default) requests no RDMA device, so the pull runs over TCP. Calibrate `minCachedTokenDelta` for it rather than reusing the shipped value. This is the only overlay for Intel XPU: the P2P tier stages every transfer through its CPU-mmap-backed offload tier and registers only that host memory with NIXL/UCX, never XPU device memory, so the XPU overlay pins UCX to TCP. For transports that register XPU device memory with NIXL directly, see the open UCX `ze_copy` DMA-BUF-export issue ([openucx/ucx#11902](https://github.com/openucx/ucx/pull/11902), [#11903](https://github.com/openucx/ucx/pull/11903)).
+  - On the reference setup (gpt-oss-120b on H200) the recipe returned the same 2,048 over TCP: the pull was ahead of recompute at every tested length, 52 ms against 85 ms at 2,048 tokens and 533 ms against 1,102 ms at 32,768. A slower network or a larger model shifts the crossover, so measure rather than assume.
 - **`rdma`** (NVIDIA GPU) adds an `rdma/ib` device and `IPC_LOCK` to every model server. It is the recommended configuration for production GPU clusters that expose RDMA, and the one the shipped `minCachedTokenDelta: 2048` was measured on (gpt-oss-120b on H200, where the pull beat recompute at every measured prefix length from 2K to 48K tokens).
 
 ## Prerequisites
@@ -136,7 +150,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 ```
 <!-- guide:deploy.router_values end -->
 
-The [router values](router/p2p-kv-cache-sharing.values.yaml) deploy the affinity + P2P scheduling configuration: the precise prefix index, prefix-cache, queue, KV-utilization and no-hit-LRU scorers, and the `p2p-source-producer` with `minCachedTokenDelta: 2048`. On Intel XPU, set the `token-producer` `modelName` to `MODEL` first (see the note in [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)).
+The [router values](router/p2p-kv-cache-sharing.values.yaml) deploy the token-aware + P2P scheduling configuration: the precise prefix index, the `inflight-load-producer` and `token-load-scorer`, and the `p2p-source-producer` with `minCachedTokenDelta: 2048`. [When to use this path](#when-to-use-this-path) gives the affinity alternative. On Intel XPU, set the `token-producer` `modelName` to `MODEL` first (see the note in [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)).
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
@@ -325,6 +339,7 @@ Once the direct pull works, router-driven pulls show up as `running P2P source p
 - **Keep the offloading block size identical across all P2P peers.** This guide omits `kv_connector_extra_config.block_size`, so it defaults to the engine's `--block-size`; therefore `--block-size` must be identical across all model server pods. If an explicit offloading `block_size` is configured instead, use the same value on every peer and make it a multiple of each peer's engine block size. The router's `tokenProcessorConfig.blockSizeTokens` is an independent indexing granularity and may differ.
 - **Pin `PYTHONHASHSEED` to the same value fleet-wide.** vLLM seeds block hashes per process; unpinned seeds mean no block hash ever matches across pods and every lookup misses.
 - **Set `--kv-events-config` on every serving pod**, topic `kv@<POD_IP>:<PORT>@<model>`. No events, no precise index, no source selection. `<PORT>` must be the port the router identifies the endpoint by: the routing sidecar's port (`8000` in this guide), not the engine port (`8200`). A mismatched port leaves the index empty, so no pull ever fires.
+- **Set `self_describing_kv_events: true` in the offloading connector's `kv_connector_extra_config`** (the shipped GPU manifest sets it). Without it, CPU-tier store events carry no tokens or parent hash, and the router can attribute a CPU-tier block only through the mapping it learned from that block's GPU-tier store. Under churn the GPU-tier removal can arrive first, and the CPU copy, which is the block a peer would pull, never enters the index, so the pull finds no source.
 - **Match TP between peers that serve each other.** The peer session fingerprint embeds the parallel layout, so a TP-mismatched pair rejects the session and requests silently recompute. Hetero-TP works only for non-hybrid-attention models on the V1 model runner (`VLLM_USE_V2_MODEL_RUNNER=0` where V2 is the default); in-review upstream work stores offloaded KV in a parallelism-free layout ([vllm#48414](https://github.com/vllm-project/vllm/pull/48414)), removing the coupling.
 - **Size `podCacheSize` for the fleet.** The router's per-block LRU of `(endpoint, tier)` holders must hold every legitimate holder of a hot block: size it at discovered endpoints × tiers. The shipped `32` covers up to 16 pods with a GPU and a CPU tier each; below that, real holders are evicted, affinity scores collapse, and the `p2p-source-producer` stops finding a peer to pull from.
 - **Multi-pod data-parallel groups (LWS wide-EP) must compensate the socket base ports per pod.** vLLM binds the P2P and KV-events listeners at `configured base + global data_parallel_index`; the router addresses `pod IP + pod-local rank`. Those agree when each pod is its own DP group (every topology in this guide), but not for worker pods of a multi-pod group, and a mis-addressed pull does not fall back to recompute: it stalls the request until the client times out. Each pod subtracts its global start rank from both bases:
