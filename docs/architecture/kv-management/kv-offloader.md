@@ -82,7 +82,7 @@ The two integration patterns map to distinct architectures.
 The native path lives entirely inside the vLLM stack. The `OffloadingConnector` supports two offloading specs:
 
 - **`CPUOffloadingSpec`** (default) — a single CPU RAM tier.
-- **`TieringOffloadingSpec`** — multi-tier offloading: a CPU RAM primary tier plus an ordered list of secondary tiers.
+- **`TieringOffloadingSpec`** — multi-tier offloading: a CPU RAM primary tier plus one or more secondary tiers.
 
 Only the CPU primary tier has direct GPU access. All transfers between GPU and a secondary tier are staged through the CPU tier:
 
@@ -106,7 +106,7 @@ Only the CPU primary tier has direct GPU access. All transfers between GPU and a
    │  Filesystem  │       │ Object Store │       │     P2P      │  ...
    │     (fs)     │       │    (obj)     │       │    (p2p)     │
    └──────────────┘       └──────────────┘       └──────────────┘
-                     secondary tiers (ordered)
+                         secondary tiers
 ```
 
 | Tier | Latency | Capacity | Scope | Best For |
@@ -129,7 +129,7 @@ Each model server offloads to host CPU memory through its own native mechanism: 
 
 #### Tiered Offloading to Filesystem
 
-The `OffloadingConnector` also supports a multi-tier hierarchy: HBM → CPU RAM → filesystem. Configured with `TieringOffloadingSpec` and a `secondary_tiers` entry of `type: fs`, evicted blocks spill from CPU RAM to a ReadWriteMany PVC (backed by Lustre, CephFS, IBM Storage Scale, AWS EFS, or similar). I/O is asynchronous and uses GPU DMA, parallelized across read/write threads.
+The `OffloadingConnector` also supports a multi-tier hierarchy: HBM → CPU RAM → filesystem. Configured with `TieringOffloadingSpec` and a `secondary_tiers` entry of `type: fs`, evicted blocks spill from CPU RAM to a ReadWriteMany PVC (backed by Lustre, CephFS, IBM Storage Scale, AWS EFS, or similar). Transfers between GPU and the filesystem are staged through CPU RAM; file I/O is asynchronous and parallelized across read/write threads.
 
 Because the tier is shared, newly scaled pods read existing cache immediately and the cache persists across pod restarts; capacity is bounded only by the storage system. The connector does not evict data from the shared tier (see [vLLM Multi-Tier Offloading](#vllm-multi-tier-offloading)).
 
@@ -201,13 +201,13 @@ Equivalent to passing `--kv-transfer-config '{"kv_connector":"OffloadingConnecto
 
 ### vLLM Multi-Tier Offloading
 
-`TieringOffloadingSpec` extends native offloading beyond CPU RAM. The CPU tier stays the primary tier, and blocks flow from it to one or more secondary tiers, listed in the `secondary_tiers` config in lookup order. On a hit in a secondary tier, the block is promoted back through CPU RAM to the GPU.
+`TieringOffloadingSpec` extends native offloading beyond CPU RAM. The CPU tier stays the primary tier, and blocks flow from it to one or more secondary tiers. Secondary tiers are looked up in the order they appear in `secondary_tiers`. On a hit in a secondary tier, the block is promoted back through CPU RAM to the GPU.
 
 Built-in secondary tiers:
 
 - **Filesystem (`fs`)** — Stores KV blocks as files under a directory, typically a shared ReadWriteMany PVC. It works with any POSIX filesystem (CephFS, Lustre, IBM Storage Scale, AWS EFS, local NVMe). Multiple vLLM instances that share the directory reuse each other's cached prefixes, and the cache persists across pod restarts. I/O is asynchronous, with separate read and write thread pools.
 - **Object store (`obj`)** — Stores KV blocks in an S3-compatible bucket through the NIXL OBJ backend.
-- **P2P (`p2p`)** — Pulls KV blocks directly from other vLLM instances' CPU tiers over RDMA via NIXL. The router decides which peer to pull from; the same tier also implements prefill/decode (P/D) disaggregation. See the [P2P KV-Cache Sharing guide](../../../guides/p2p-kv-cache-sharing).
+- **P2P (`p2p`)** — Pulls KV blocks directly from other vLLM instances' CPU tiers over RDMA via NIXL. The router decides which peer to pull from; the same tier also implements prefill/decode (P/D) disaggregation. See [P2P KV-Cache Sharing](p2p-kv-cache-sharing.md).
 
 Custom tiers can be plugged in out-of-tree, with no vLLM changes, by implementing vLLM's `SecondaryTierManager` interface and setting `module_path` in the tier config.
 
