@@ -146,6 +146,21 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 ```
 <!-- guide:prerequisites.gaie end -->
 
+**(`TOPOLOGY=e-pd` and `e-p-d` only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
+
+<!-- guide:prerequisites.lws[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when TOPOLOGY=e-pd or e-p-d:
+helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+  --version=0.11.1 \
+  --namespace lws-system --create-namespace \
+  --set enableDisaggregatedSet=true \
+  --wait --timeout 300s
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.lws[0] end -->
+
 **Create a target namespace for the installation:**
 
 <!-- guide:prerequisites.namespace start -->
