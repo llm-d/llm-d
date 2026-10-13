@@ -68,5 +68,5 @@ llm-d-kv-cache-storage   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX         
 ## Cleanup
 
 ```bash
-kubectl delete -f ./storage_class.yaml
+kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/lustre/storage_class.yaml
 ```

@@ -64,7 +64,7 @@ if [[ -n "${GUIDE_NAME:-}" && -n "${ACCELERATOR_TYPE:-}" && -n "${MODEL_SERVER:-
     if [[ -n "${_llmd_engines}" ]]; then
       echo "       supported MODEL_SERVER values on ${ACCELERATOR_TYPE}: ${_llmd_engines}" >&2
     else
-      echo "       ${ACCELERATOR_TYPE} has no configuration in this guide; see the support table in guides/${GUIDE_NAME}/README.md" >&2
+      echo "       ${ACCELERATOR_TYPE} has no configuration in this guide; see the support table in ${_llmd_guide_dir#"${REPO_ROOT}/"}/README.md" >&2
     fi
     unset _llmd_guide_dir _llmd_engines
     return 1 2>/dev/null || exit 1

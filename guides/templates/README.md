@@ -483,7 +483,7 @@ exiting, so one run surfaces every problem in the repo.
 One command covers both files across every guide:
 
 ```bash
-scripts/guide.py render guides/*/ guides/models/*/ guides/batch-serving/asynchronous-processing/multitenant/ --check
+scripts/guide.py render guides --recursive --check
 ```
 
 `--check` catches out-of-date READMEs — someone edited `guide.yaml` without
