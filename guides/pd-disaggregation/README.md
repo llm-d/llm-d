@@ -20,9 +20,9 @@ The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 pref
 
 How the two pools are deployed depends on the accelerator:
 
-- **All accelerators except Google TPU v6e, TPU7x on static node pools, Biren and Moore Threads**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
+- **All accelerators except Moore Threads SGLang**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
   The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
-- **Google TPU v6e, TPU7x on static node pools, Biren and Moore Threads**: a prefill and a decode `Deployment`.
+- **Moore Threads SGLang**: a prefill and a decode `Deployment`.
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/disaggregation/pd-disaggregation.md).
 
@@ -507,7 +507,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.mthreads[0] end -->
 
-Both overlays request `mthreads.com/gpu` and deploy a prefill `Deployment` and a decode `Deployment`. Set `ACCELERATOR_TYPE=mthreads` and `INFRA_PROVIDER=base`, then choose `MODEL_SERVER`.
+Both overlays request `mthreads.com/gpu`; vLLM runs prefill and decode as one `DisaggregatedSet` (`pd-disagg-mthreads`), SGLang as a prefill and a decode `Deployment`. Set `ACCELERATOR_TYPE=mthreads` and `INFRA_PROVIDER=base`, then choose `MODEL_SERVER`.
 
 **SGLang** (`MODEL_SERVER=sglang`): **1 Prefill + 1 Decode**, each `TP=8` (prefill also `EP=8`), serving `DeepSeek-V4-Flash-0731-FP8-mt` with `--disaggregation-transfer-backend mooncake`. It needs **two** 8-GPU nodes. For a single 8-GPU node, use the [optimized-baseline colocated overlay](../optimized-baseline/README.md). Set `MODEL=/data/models/DeepSeek-V4-Flash-0731-FP8-mt/`.
 
@@ -521,7 +521,7 @@ Both overlays request `mthreads.com/gpu` and deploy a prefill `Deployment` and a
 
 The routing sidecar sets `bootstrap_host` to the InferencePool **Pod IP**. Mooncake then uses that address to pick the RDMA path (QP RTR). Requesting `rdma/ib`, or bind-mounting `/dev/infiniband`, is not enough if the RoCE GID is not on that IP — the transfer fails with `Failed to modify QP to RTR` / `No such device`. Give the Pod an IP on the RoCE NIC (Multus / SR-IOV). `hostNetwork` is a cluster-level fallback so `podIP` equals the node IP; do not bake it into this overlay.
 
-**vLLM** (`MODEL_SERVER=vllm`): single-node compatibility topology for **Qwen3-32B**, one Prefill Deployment with `TP=4` and one Decode Deployment with `TP=4`. Each Deployment requests four `mthreads.com/gpu` devices, so the topology consumes all eight GPUs on an MTT S5000 node. Keep `MODEL=Qwen/Qwen3-32B`.
+**vLLM** (`MODEL_SERVER=vllm`): single-node compatibility topology for **Qwen3-32B**, a prefill role with `TP=4` and a decode role with `TP=4`. Each role requests four `mthreads.com/gpu` devices, so the topology consumes all eight GPUs on an MTT S5000 node. Keep `MODEL=Qwen/Qwen3-32B`.
 
 **Requirements:**
 

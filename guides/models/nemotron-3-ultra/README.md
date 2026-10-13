@@ -100,6 +100,20 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 ```
 <!-- guide:prerequisites.gaie end -->
 
+**Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
+
+<!-- guide:prerequisites.lws start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+  --version=0.11.1 \
+  --namespace lws-system --create-namespace \
+  --set enableDisaggregatedSet=true \
+  --wait --timeout 300s
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.lws end -->
+
 **Create a target namespace for the installation:**
 
 <!-- guide:prerequisites.namespace start -->
@@ -166,12 +180,11 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
-This deploys the 6 prefill and 2 decode replicas. Wait for them to become ready (model load is
-large; the startup probe allows about two hours):
+This deploys one `DisaggregatedSet` (`pd-disagg-vllm`) with 6 prefill and 2 decode replicas. Wait for it to become
+available (model load is large; the startup probe allows about two hours):
 
 ```bash
-kubectl rollout status deployment/agentic-serving-gpu-vllm-prefill -n ${NAMESPACE}
-kubectl rollout status deployment/agentic-serving-gpu-vllm-decode -n ${NAMESPACE}
+kubectl wait --for=condition=Available disaggregatedset/pd-disagg-vllm -n ${NAMESPACE} --timeout=7200s
 ```
 
 ## Verification

@@ -143,7 +143,7 @@ prerequisites:
   # controller from the GKE cluster preparation). skip_in ci:
   # the nightly clusters already run LWS, and a second release would collide.
   lws:
-    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, iluvatar, metax, npu]}
+    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, "tpu/v6", "tpu/v7", iluvatar, metax, biren, mthreads, npu]}
       skip_in: [ci]
       run: |
         helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \

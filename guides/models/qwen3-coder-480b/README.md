@@ -88,6 +88,21 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 ```
 <!-- guide:prerequisites.gaie end -->
 
+**(`TOPOLOGY=disaggregated` only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
+
+<!-- guide:prerequisites.lws[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when TOPOLOGY=disaggregated:
+helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+  --version=0.11.1 \
+  --namespace lws-system --create-namespace \
+  --set enableDisaggregatedSet=true \
+  --wait --timeout 300s
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.lws[0] end -->
+
 **Create a target namespace for the installation:**
 
 <!-- guide:prerequisites.namespace start -->
@@ -198,11 +213,13 @@ kubectl apply -n ${NAMESPACE} \
 </details>
 <!-- tabs:end -->
 
-Wait for the deployment to become ready (with `TOPOLOGY=disaggregated`, also wait for
-`deployment/agentic-serving-tpu-vllm-prefill`):
+Wait for the model server to become ready:
 
 ```bash
+# TOPOLOGY=unified
 kubectl rollout status deployment/agentic-serving-tpu-vllm-decode -n ${NAMESPACE}
+# TOPOLOGY=disaggregated
+kubectl wait --for=condition=Available disaggregatedset/pd-disagg-tpu -n ${NAMESPACE} --timeout=1800s
 ```
 
 ## Verification
@@ -291,11 +308,12 @@ envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark-templates/guide.ya
 
 > [!TIP]
 > **Tuning Prefill-to-Decode Ratios:**
-> The `vllm-disaggregated` overlay (`TOPOLOGY=disaggregated`) deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the active deployments directly:
+> The `vllm-disaggregated` overlay (`TOPOLOGY=disaggregated`) deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the set's roles directly (role 0 is prefill, role 1 is decode):
 >
 > ```bash
-> kubectl scale deployment/agentic-serving-tpu-vllm-prefill --replicas=5 -n ${NAMESPACE}
-> kubectl scale deployment/agentic-serving-tpu-vllm-decode --replicas=3 -n ${NAMESPACE}
+> kubectl patch disaggregatedset/pd-disagg-tpu -n ${NAMESPACE} --type=json \
+>   -p '[{"op": "replace", "path": "/spec/roles/0/spec/replicas", "value": 5},
+>        {"op": "replace", "path": "/spec/roles/1/spec/replicas", "value": 3}]'
 > ```
 
 ## Benchmark Results
