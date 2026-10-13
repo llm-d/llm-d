@@ -7,12 +7,17 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 
 ## Documentation
 
-* [Setup](./setup.md) — Install Prometheus and Grafana, load dashboards, and deploy tracing backends
-* [Metrics](./metrics.md) — Enable and interpret model server and EPP metrics
-* [Distributed Tracing](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
-* [PromQL Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
-* [Alerting](./alerting.md) — Apply the default EPP Prometheus alerting rules
-* [GKE TPU Observability](./tpu.md) — Interpret TPU hardware metrics and troubleshoot missing data
+* [Set Up the Monitoring Stack](./setup.md) — Install Prometheus and Grafana, load dashboards, and deploy tracing backends
+* [Collect Metrics](./metrics.md) — Scrape model server and EPP metrics into Prometheus and query them
+* [Use Grafana Dashboards](./dashboards.md) — Access Grafana and import the llm-d dashboards
+* [Model Server Metrics](./model-server-metrics.md) — vLLM and SGLang metric reference
+* [Router (EPP) Metrics](./router-metrics.md) — llm-d Router Endpoint Picker metric reference
+* [Batch Gateway Metrics](./batch-gateway-metrics.md) — Batch Gateway metric reference
+* [Track Inference Cost](./inference-cost.md) — Per-model cost attribution with OpenCost
+* [PromQL Query Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
+* [Configure Alerts](./alerting.md) — Apply the default EPP and Batch Gateway Prometheus alerting rules
+* [Trace Requests](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
+* [Monitor GKE TPUs](./tpu.md) — Interpret TPU hardware metrics and troubleshoot missing data
 
 ## Runnable assets
 

@@ -59,7 +59,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 ## Prerequisites
 
 * Install the [required client tools on your local system](../../helpers/client-setup/README.md) to use this guide.
-* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200). Fabric access comes either from a device plugin that exposes `rdma/ib` (the `coreweave` overlay; adjust the resource name for your fabric's equivalent, see Step 3), or on GKE from GPU DRA + DRANet (the `gke` overlay) — to pre-provision a GKE cluster with DRA & RDMA/RoCE, follow the [same setup as the P/D guide](../pd-disaggregation/README.md#gke-cluster-pre-provisioning-with-dra--rdmaroce).
+* Use a Kubernetes cluster with RDMA-capable GPU nodes (H100/H200). Fabric access comes either from a device plugin that exposes `rdma/ib` (the `coreweave` overlay; adjust the resource name for your fabric's equivalent, see Step 3), or on GKE from GPU DRA + DRANet (the `gke` overlay) — to pre-provision a GKE cluster with DRA & RDMA/RoCE, follow the [same setup as the P/D guide](../pd-disaggregation/README.md#prerequisites).
 
 * Checkout llm-d repo:
 
@@ -88,7 +88,7 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 <!-- llm-d-cicd:skip end -->
 ```bash
 export MODEL=openai/gpt-oss-120b
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
+export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export INFRA_PROVIDER=coreweave # options: base, coreweave, gke
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 ```
@@ -230,6 +230,9 @@ To use a Kubernetes Gateway managed proxy instead of the standalone version, fol
 
 1. _Deploy a Kubernetes Gateway_ by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. _Deploy the llm-d router and an HTTPRoute_ that connects it to the Gateway as follows:
+
+> [!IMPORTANT]
+> Set `PROVIDER_NAME` to the gateway provider you deployed in step 1 (e.g. `gke`, `istio`). The default, `none`, renders no provider-specific resources — on GKE that means no `HealthCheckPolicy`, so the Gateway marks the backends unhealthy and requests fail with 503s.
 
 <!-- guide:deploy.gateway start -->
 ```bash

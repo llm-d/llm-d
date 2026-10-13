@@ -8,6 +8,7 @@ namePrefix: precise-prefix-cache-routing-gpu-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

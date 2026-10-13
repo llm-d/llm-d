@@ -85,12 +85,12 @@ upstream gateways **retry** rather than treating the drain as a hard fault.
 These retryable semantics only apply while the EPP is still reachable over its
 `ext_proc` stream. Once the EPP process is actually gone, the outcome is governed
 by the `InferencePool`'s
-[`failureMode`](../../architecture/core/inferencepool.md). For high-availability
+[`failureMode`](../../architecture/router/inferencepool.md). For high-availability
 Router configurations and `failOpen` behavior during leader teardown, see
 [Router Operations](../components/router.md).
 
 For the full set of flow-control outcome codes, see
-[Flow Control](../../architecture/core/router/epp/flow-control.md).
+[Flow Control](../../architecture/router/flow-control.md).
 
 ## Recommended Configuration
 
@@ -113,6 +113,11 @@ spec:
     ports:
     - containerPort: 8000
       protocol: TCP
+    lifecycle:
+      preStop:
+        exec:
+          # Delay SIGTERM so the Router stops picking this pod first.
+          command: ["/bin/sleep", "15"]
     # Readiness gates traffic; see readiness-probes.md.
     readinessProbe:
       httpGet:
@@ -127,10 +132,42 @@ Guidance:
 
 - Set `--shutdown-timeout` to roughly the p99 request duration you want to allow
   to complete on drain.
-- Set `terminationGracePeriodSeconds` above that with headroom (here 120s vs
-  90s).
+- Set `terminationGracePeriodSeconds` above that with headroom. The grace period
+  starts when the `preStop` hook starts, so budget for the hook, the drain, and
+  engine teardown (here 120s = 15s `preStop` + 90s drain + 15s teardown).
 - Pair with model-aware readiness probes so pods are only marked `Ready` once the
   model is loaded — see [Readiness Probes](readiness-probes.md).
+
+### Defaults in the guides
+
+These vLLM model server overlays ship with this pattern, using a shorter drain
+window than the example above:
+
+- [Optimized Baseline](../../../guides/optimized-baseline/README.md): NVIDIA GPU,
+  AMD, CPU, Intel XPU, TPU v6 and TPU v7.
+- [Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md):
+  NVIDIA GPU, AMD, CPU, Intel XPU, TPU v6 and TPU v7.
+- [Predicted Latency Routing](../../../guides/predicted-latency-routing/README.md):
+  the aggregated NVIDIA GPU, AMD, Intel XPU, TPU v6 and TPU v7 model servers.
+
+This includes their `gke` and `amd-ci` `INFRA_PROVIDER` variants, which build
+on the `base` overlays.
+
+Other overlays do not drain yet (tracked in
+[llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)), including the
+Optimized Baseline Iluvatar, MetaX, Rebellions NPU and TPU v7 dynamic-slice
+overlays, and the model servers Predicted Latency Routing reuses from other
+guides for its P/D and multimodal paths.
+
+| Setting | Value | Where it is set |
+| --- | --- | --- |
+| `--shutdown-timeout` | 45s | The vLLM `args` in each guide's model server patch |
+| `preStop` sleep | 15s | [`graceful-shutdown` component](../../../guides/recipes/modelserver/components/graceful-shutdown/kustomization.yaml) |
+| `terminationGracePeriodSeconds` | 75s (15s + 45s + 15s) | [`graceful-shutdown` component](../../../guides/recipes/modelserver/components/graceful-shutdown/kustomization.yaml) |
+
+If your requests run longer, raise `--shutdown-timeout` and set a matching
+`terminationGracePeriodSeconds` in the same patch. A value in the guide's patch
+overrides the component.
 
 ## Verification
 
@@ -176,5 +213,5 @@ Expected behavior with `--shutdown-timeout` set:
 - [Disaggregated Serving Operations (vLLM)](../disaggregation/vllm.md)
 - [Readiness Probes](readiness-probes.md)
 - [Router Operations](../components/router.md)
-- [Flow Control](../../architecture/core/router/epp/flow-control.md)
+- [Flow Control](../../architecture/router/flow-control.md)
 - [Kubernetes Pod Termination](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination)

@@ -28,7 +28,7 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 > [!NOTE]
 > We aim to increase our requirements to have active CI coverage for all hardware guide variants in a future release.
->
+
 > [!NOTE]
 > The community can assist but is not responsible for keeping hardware guide variants updated. We reserve the right to remove stale examples and documentation with regard to hardware support.
 
@@ -57,7 +57,7 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
 
-On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/dynamic-slicing/README.md).
+On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke).
 
 ## AMD ROCm
 
@@ -77,7 +77,7 @@ For P/D disaggregation with RDMA-accelerated KV-cache transfer on Intel XPU, the
 - GPU-NIC PCIe alignment for optimal transfer performance.
 - UCX transport configured with `ib,rc,ze_copy`.
 
-The RDMA overlay (`modelserver/xpu/vllm-rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
+The RDMA overlay (`modelserver/xpu/vllm/rdma/`) reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) for deployment instructions.
 
 ## Iluvatar
 
@@ -135,7 +135,7 @@ file go away once the runtime supports prefix caching here.
 `openai/gpt-oss-120b`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
 `MODEL=openai/gpt-oss-120b` so the validation and benchmark steps address the served model.
 
-**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation-base/README.md),
+**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation/README.md),
 because the runtime does not support sleep and wake; LoRA adapters; and multimodal models,
 which on this runtime need a code path that cannot run alongside a KV connector.
 

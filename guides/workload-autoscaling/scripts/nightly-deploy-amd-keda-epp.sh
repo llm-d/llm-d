@@ -10,7 +10,6 @@
 #   PROMETHEUS_ADDRESS    Prometheus endpoint KEDA queries (default: prometheus-operated)
 #   EPP_SERVICE           EPP service name (default: discovered after the router install)
 #   MODEL_NAME            model_name label in the trigger queries (default: Qwen/Qwen3-32B)
-#   ROUTER_CHART_VERSION_OVERRIDE  EPP router chart version (default: v0.9.0)
 
 set -euo pipefail
 
@@ -35,9 +34,6 @@ MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-32B}"
 # collides with the other nightlies. The workflow's gateway_host is derived from it.
 ROUTER_RELEASE=keda-epp-rocm
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t nightly-deploy-amd-keda-epp.XXXXXX)}"
-# env.sh's rolling `v0` tag carries llm-d-router#1681, which drops the EPP Service when
-# flowControl or monitoring is enabled. Pinned as in the OCP sibling.
-ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION_OVERRIDE:-v0.9.0}"
 
 MONITORING_NAMESPACE="${MONITORING_NAMESPACE:-$(kubectl get prometheus -A \
   -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || true)}"
@@ -163,7 +159,7 @@ echo "==> Waiting for the decode modelserver to become ready"
 kubectl rollout status deployment/"${DECODE_DEPLOYMENT}" \
   -n "${NAMESPACE}" --timeout=40m
 
-# The v0.9.0 EPP creates the per-model series on the first request, not at idle.
+# EPP creates the per-model series on the first request, not at idle.
 echo "==> Warming up the EPP to register the queue metrics"
 kubectl run keda-epp-warmup -n "${NAMESPACE}" --image=curlimages/curl:8.10.1 \
   --restart=Never --rm -i --quiet --command -- sh -c '

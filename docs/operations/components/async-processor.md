@@ -14,7 +14,7 @@ The Async Processor is a **lightweight dispatch agent**, not an inference engine
 Understanding how the processor scales is a prerequisite to sizing it.
 
 - **Workers are the unit of in-flight concurrency.** Each worker pulls one request, dispatches it, and blocks until the Router returns a result (or the deadline expires). The total number of requests the processor can have in flight at once is the sum of its worker counts.
-- **The bottleneck is downstream, not the processor.** Dispatch rate is ultimately limited by inference-server capacity and the [dispatch gates](../../architecture/advanced/batch/async-processor.md#dispatch-gates), not by the processor's CPU. Adding workers beyond what the inference pool can absorb only grows queue backlog and memory, not throughput.
+- **The bottleneck is downstream, not the processor.** Dispatch rate is ultimately limited by inference-server capacity and the [dispatch gates](../../architecture/batch/async-processor.md#dispatch-gates), not by the processor's CPU. Adding workers beyond what the inference pool can absorb only grows queue backlog and memory, not throughput.
 - **Scaling is horizontal and stateless.** The processor is a pull-based consumer. Running N replicas against the same queue multiplies effective concurrency: `total in-flight = replicas × workers-per-replica`. Queue backends distribute messages across all consumers, so no leader election or coordination is required.
 
 ### Concurrency Configuration
@@ -183,5 +183,5 @@ helm install llm-d-async \
 ## Related
 
 - [Asynchronous Processing guide](../../../guides/batch-serving/asynchronous-processing/README.md) — deploy the Async Processor with Redis or GCP Pub/Sub.
-- [Async Processor Architecture](../../architecture/advanced/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
+- [Async Processor Architecture](../../architecture/batch/async-processor.md) — internal mechanics, gates, and queue integrations.
 - [llm-d Router Operations Guide](router.md) — sizing for the Router/EPP and standalone proxy.

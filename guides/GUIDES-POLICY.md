@@ -8,7 +8,7 @@
 - [4. Baseline requirements for every guide](#4-baseline-requirements-for-every-guide)
 - [5. Production-readiness tiers](#5-production-readiness-tiers)
 - [6. Placing and promoting a guide](#6-placing-and-promoting-a-guide)
-- [7. Foundation guides vs workload guides](#7-foundation-guides-vs-workload-guides)
+- [7. Foundation guides vs model guides](#7-foundation-guides-vs-model-guides)
 - [8. Contribution standards](#8-contribution-standards)
 - [9. Lifecycle: demotion, archival, graduation](#9-lifecycle-demotion-archival-graduation)
 
@@ -20,9 +20,9 @@
 | ---- | ------- |
 | **Well-lit path** | The *concept*: an opinionated, curated way to run a given inference pattern/pipeline on llm-d, chosen by the project as working examples with specific infrastructure. |
 | **Guide** | The *artifact* that makes a well-lit path executable: a directory under `guides/` containing documentation and, at higher tiers, deployable manifests and machine-readable steps. |
-| **Foundation guide** | A guide covering one capability or one physical execution path (routing algorithm, KV-cache tier, disaggregation topology, queuing engine). |
-| **Workload guide** | A guide that composes foundation guides into one cohesive stack for a use case (agentic, multimodal, RL, batch). |
-| **Supporting guide** | Operational tooling documentation that is not a deployment path in itself (e.g. benchmarking automation, weight-transfer helpers). |
+| **Foundation guide** | A guide covering one capability or one physical execution path (routing algorithm, KV-cache tier, disaggregation topology, queuing engine). Targets Tiers 1–3 with machine-readable `guide.yaml` and nightly automated verification. |
+| **Model guide** | A benchmarked, fully tuned recipe for serving a specific state-of-the-art model on a specific accelerator, composing several foundation capabilities (e.g. DeepSeek-V4 on GB200, GLM-5.2 on H200). Targets Tiers 4–5. |
+| **Operations guide** | Operational documentation and fleet recipes (autoscaling, startup acceleration, rollouts, traffic management, batch & async processing, AI gateway integrations) that layer onto any deployment. Published directly to `docs/operations/`; may be README-only without requiring `guide.yaml`. |
 | **Recipe** | Reusable, non-standalone kustomize building blocks under `guides/recipes/`. Recipes are *ingredients*, not guides. |
 | **Reference environment** | The single platform / accelerator / model-server / model combination against which a guide's tier claim is evidenced. See [§5.2](#52-tiers-are-claimed-against-a-reference-environment). |
 
@@ -143,6 +143,12 @@ see [§5.3](#53-declared-gaps).
 | **4** | Benchmarked | "It has been run under load and the numbers are sane." | A benchmark workload runs against the guide, and the results are **validated** — coherent, explainable, and free of visible bugs or pathologies. Any harness qualifies (`inference-perf`, `nop`, …); the requirement is a real run with reviewed results, not a specific tool. Baseline-only numbers are sufficient for this tier. |
 | **5** | Proven | "This delivers a measurable benefit, and we have published why." | A blog post (or equivalent published narrative) that explains the benefits, presents results that are coherent and consistent, **and shows an improvement** over the relevant baseline. A post that only presents a baseline stays at Tier 4. |
 
+#### Pillar alignment across tiers
+
+- **Foundation guides** target **Tiers 1–3**: the focus is proving deployability (Tier 2) and automated end-to-end nightly verification (Tier 3) of an architectural mechanism (routing, KV-cache management, disaggregation). Foundation guides do not require load benchmarks.
+- **Model guides** target **Tiers 4–5**: they compose foundation capabilities to achieve peak performance for a specific model on specific hardware, requiring real benchmark load runs with sane, validated results (Tier 4) and a published narrative demonstrating a measured win over baseline (Tier 5).
+- **Operations guides** focus on fleet management and day-2 operations across clusters, published directly into the Operations section of the documentation.
+
 ### 5.2 Tiers are claimed against a reference environment
 
 A tier claim is scoped to the guide's declared reference
@@ -220,28 +226,37 @@ release, since they commit shared nightly capacity.
 
 - - -
 
-## 7. Foundation guides vs workload guides
+## 7. Foundation guides vs model guides
 
-Guides come in two shapes. This is a distinction of *role*, not of version — one
-does not supersede the other, and both are first-class.
+Guides in llm-d follow a three-pillar architecture:
 
-| | **Foundation guides** | **Workload guides** |
+1. **Foundation guides** — one capability or execution topology (intelligent routing, KV-cache tiering, P/D disaggregation, wide expert-parallelism, multimodal/omni serving), targeting Tiers 1–3 with machine-readable `guide.yaml` and nightly automated verification.
+2. **Model guides** — benchmarked, fully-tuned end-to-end recipes for serving a specific state-of-the-art model on a specific accelerator, composing several foundations, targeting Tiers 4–5.
+3. **Operations guides** — fleet operations that layer onto any deployment (autoscaling, startup acceleration, rollouts, traffic management, batch & async processing, AI gateway integrations), published directly to the Operations docs on llm-d.ai (and permitted to be README-only).
+
+Here is how Foundation guides and Model guides compare:
+
+| | **Foundation guides** | **Model guides** |
 | --- | --- | --- |
-| Answers | "How does capability X work and how do I turn it on?" | "How do I serve workload Y well?" |
-| Content | One capability, routing algorithm, or execution topology | A cohesive composition of several foundations |
-| Examples | intelligent routing, KV-cache tiering, P/D disaggregation, wide expert-parallelism, flow control | agentic serving, multimodal serving, RL rollout, batch serving |
-| New machinery | May introduce it | **Must not** introduce it — it composes what exists |
-| Reader | An operator evaluating a capability | An operator with a use case, who wants one recommended stack |
+| Answers | "How does capability X work and how do I turn it on?" | "How do I serve model M on accelerator A with peak performance?" |
+| Content | One capability, routing algorithm, or execution topology | A benchmarked, fully tuned recipe for a specific model on a specific accelerator, composing several foundation capabilities |
+| Target tier | **Tiers 1–3** (deployable manifests, `guide.yaml`, nightly E2E validation) | **Tiers 4–5** (benchmarked under load with sane results, proven narrative with measured win over baseline) |
+| Examples | Intelligent routing, tiered prefix cache, P/D disaggregation, wide expert parallelism, multimodal serving | DeepSeek-V4 on GB200, GLM-5.2 on H200, Nemotron 3 Ultra on H200, Qwen3-Coder-480B on TPU v7 |
+| New machinery | May introduce it (new router/EPP plugins, cache backends, topologies) | **Must not** introduce it — it composes what exists in foundation guides and shared recipes |
+| Reader | An operator evaluating or adopting an architectural capability | An engineer deploying a specific model who needs a proven, optimal stack |
 
-Rules for workload guides:
+Rules for model guides:
 
-1. **Compose, do not invent.** A workload guide must state which foundation
+1. **Compose, do not invent.** A model guide must state which foundation
    guides it composes and link to them. If it needs machinery that no foundation
    guide covers, that machinery must first become (or extend) a foundation guide.
-2. **No duplicated instructions.** Deployment steps live in the foundation guide
-   or the shared recipes; the workload guide references them and adds only the
-   composition, the tuning choices for the workload, and the workload-specific
-   verification.
+2. **Target Tiers 4–5 with real benchmark evidence.** A model guide must be
+   benchmarked under load with reviewed, reproducible results showing sane behavior
+   (Tier 4), and provide a published narrative demonstrating a measured benefit
+   over baseline (Tier 5).
+3. **No duplicated instructions.** Deployment steps and manifests live in shared
+   recipes and foundation components; the model guide focuses on the composition,
+   hardware-specific tuning choices, and workload benchmark verification.
 
 - - -
 
@@ -249,7 +264,7 @@ Rules for workload guides:
 
 ### 8.1 Entry path for a new guide
 
-```
+```text
 proposal / accepted goals        →  Tier 0
         ↓
 documentation PR                 →  Tier 1
@@ -307,7 +322,6 @@ For Tier 3+: after **N consecutive nightly failures** on the
 reference environment, an issue is filed against the guide's owners; if the guide
 is still failing after **a further grace period**, it is demoted to Tier 2 and
 the failing nightly job is muted or removed.
-
 
 Demotion is a mechanical health signal, not a punishment, and re-promotion uses
 the ordinary path.

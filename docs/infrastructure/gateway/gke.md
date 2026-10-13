@@ -1,4 +1,4 @@
-# GKE
+# GKE Gateway
 
 This guide shows how to deploy llm-d with
 [GKE Gateway](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/about-gke-inference-gateway) as your inference gateway. By the end, inference requests will be forwarded by a GKE-managed `Gateway` to your model servers via the llm-d EPP.

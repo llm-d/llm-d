@@ -38,6 +38,10 @@ export ROUTER_GATEWAY_CHART=${ROUTER_GATEWAY_CHART:-oci://ghcr.io/llm-d/charts/l
 export ROUTER_EPP_VERSION=${ROUTER_EPP_VERSION:-main}
 export ROUTER_EPP_IMAGE=${ROUTER_EPP_IMAGE:-ghcr.io/llm-d/llm-d-router-endpoint-picker}
 
+### Container Image coordinates and tag for the router coordinator (async-broker front door)
+export ROUTER_COORDINATOR_VERSION=${ROUTER_COORDINATOR_VERSION:-main}
+export ROUTER_COORDINATOR_IMAGE=${ROUTER_COORDINATOR_IMAGE:-ghcr.io/llm-d/llm-d-router-coordinator}
+
 ### Container image used by guide verification steps
 export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
 
@@ -48,10 +52,13 @@ export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
 # `kubectl apply -k` fail on a missing directory.
 if [[ -n "${GUIDE_NAME:-}" && -n "${ACCELERATOR_TYPE:-}" && -n "${MODEL_SERVER:-}" && -n "${REPO_ROOT:-}" ]]; then
   _llmd_guide_dir="${REPO_ROOT}/guides/${GUIDE_NAME}"
+  # Guides that keep their overlays elsewhere (e.g. multimodal-serving's
+  # per-topology sub-directories) have no top-level modelserver/ and are skipped.
   if [[ -f "${_llmd_guide_dir}/guide.yaml" ]] && grep -q '^support:' "${_llmd_guide_dir}/guide.yaml" \
+      && [[ -d "${_llmd_guide_dir}/modelserver" ]] \
       && [[ ! -d "${_llmd_guide_dir}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}" ]]; then
     _llmd_engines=$(cd "${_llmd_guide_dir}/modelserver/${ACCELERATOR_TYPE}" 2>/dev/null \
-      && for d in vllm sglang trtllm; do [[ -d "$d" ]] && printf '%s ' "$d"; done)
+      && for d in vllm sglang trtllm vllmomni; do [[ -d "$d" ]] && printf '%s ' "$d"; done)
     echo "error: ${GUIDE_NAME} does not support MODEL_SERVER=${MODEL_SERVER} on ACCELERATOR_TYPE=${ACCELERATOR_TYPE}." >&2
     if [[ -n "${_llmd_engines}" ]]; then
       echo "       supported MODEL_SERVER values on ${ACCELERATOR_TYPE}: ${_llmd_engines}" >&2

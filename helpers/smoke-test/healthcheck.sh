@@ -182,7 +182,11 @@ check_models() {
 
   if [[ "$http_code" != "200" ]]; then
     fail "/v1/models returned HTTP ${http_code}"
-    MODELS_RESULT="000|"
+    # Keep the real status. curl already reports 000 when nothing answered, so
+    # hardcoding it here made a reachable-but-erroring endpoint read as
+    # unreachable in the summary table, while the failure list below it showed
+    # the true code.
+    MODELS_RESULT="${http_code}|"
     return
   fi
 

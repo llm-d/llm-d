@@ -314,6 +314,10 @@ support:
       label: NVIDIA GPU
       model: Qwen/Qwen3-32B          # optional: model this overlay serves (llm-d.ai sets MODEL from it)
       notes: "Default configuration" # optional, one line: Notes column of the support table
+      providers:                     # optional: INFRA_PROVIDER values on this accelerator (llm-d.ai provider selector)
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: cks-mooncake, label: "CKS + Mooncake", engines: [vllm]}  # engines: subset; default = all supported here
       engines: {vllm: validated, sglang: validated, trtllm: validated}
     tpu/v7:
       label: Google TPU v7
@@ -329,7 +333,10 @@ Statuses: `validated` (a nightly E2E workflow runs it), `community` (an overlay 
 - the keys match the `ACCELERATOR_TYPE` / `MODEL_SERVER` `values:`, and the default pair is supported;
 - no `when:` filter targets an unsupported pairing;
 - every supported cell has an overlay at `modelserver/<accelerator>/<engine>/`, and every engine overlay on disk is a supported cell;
-- every `validated` cell has a `nightly-e2e-<guide>-*-acc-*-<engine>-x.yaml` workflow, and every such workflow runs a `validated` cell.
+- every `validated` cell has a `nightly-e2e-<guide>-*-acc-*-<engine>-x.yaml` workflow, and every such workflow runs a `validated` cell;
+- `providers:` names are unique and in the `INFRA_PROVIDER` `values:`, any `engines:` are supported on that accelerator, and every (accelerator, engine, provider) the site can select has a kustomization under `modelserver/<accelerator>/<engine>/` whose path ends in `/<provider>` (extra levels such as `<connector>/<tier>/` are fine).
+
+`providers:` drives the llm-d.ai provider selector (next to accelerator and engine); its default is the `INFRA_PROVIDER` default when the accelerator lists it, else the first entry. A string entry is a name whose label is the name itself. Keep labels identical across guides (`Kubernetes (base)`, `GKE`, `CoreWeave`, `AMD CI`, ...). `INFRA_PROVIDER` is not a variant dimension of the README — keep its steps as plain `when:` filters (`# only when` comments).
 
 `<!-- guide:support start -->` / `<!-- guide:support end -->` renders the matrix as a table. [`guides/env.sh`](../env.sh) refuses an unsupported pair at `source` time.
 
@@ -389,7 +396,7 @@ The same markup with `group=mode` and summaries `Standalone Mode` / `Gateway Mod
 
 ### Publishing
 
-Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/guides.yaml) (section, slug, title, sidebar position, optional child pages) and run `scripts/guide.py check-manifest`. Link to a published guide from `docs/` with its repo-relative README path (`../../../guides/<guide>/README.md`); the website rewrites it to the guide's page. At a release cut, `scripts/guide.py set-branch <release-branch> guides/*/` pins every guide's clone step to the release.
+Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/guides.yaml) (section, slug, title, sidebar position, optional child pages) and run `scripts/guide.py check-manifest`. Link to a published guide from `docs/` with its repo-relative README path (`../../../guides/<guide>/README.md`); the website rewrites it to the guide's page. At a release cut, `scripts/guide.py set-branch <release-branch> guides --recursive` (or `guides/*/`) pins every guide's clone step to the release.
 
 - - -
 
@@ -398,6 +405,14 @@ Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/g
 [`scripts/guide.py`](../../scripts/guide.py) validates and renders. Targets are guide
 directories or `guide.yaml` paths, absolute or relative — the companion file is
 discovered alongside.
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `render` | Validate and fill the README from the YAML | `scripts/guide.py render guides/optimized-baseline` |
+| `check` | Validate YAML schema and README marker structure | `scripts/guide.py check guides/*/` |
+| `emit` | Assemble executable bash from YAML sections | `scripts/guide.py emit guides/my-guide env deploy.standalone` |
+| `check-manifest` | Validate `docs/well-lit-paths/guides.yaml` | `scripts/guide.py check-manifest` |
+| `set-branch` | Pin `BRANCH` in `guide.yaml` and re-render | `scripts/guide.py set-branch release-0.8 guides --recursive` |
 
 ### `guide.py render` — fill the README from the YAML
 
@@ -440,7 +455,7 @@ Marker-path resolution is the only check that spans both files. With `--md`
 alone it cannot run, so the tool reports what it actually covered rather than a
 bare "OK":
 
-```
+```text
 README.md: OK  (structure only — pass --yaml to resolve marker paths)
 ```
 
@@ -514,6 +529,42 @@ sub-path for any section whose children are mutually exclusive.
 `guides/flow-control/scripts/nightly-deploy-gke.sh` is the reference
 consumer: it emits the flow-control guide's CRD and deploy steps and layers
 its CI-only overrides on top via `--var`.
+
+### `guide.py check-manifest` — validate publish manifest
+
+Validate `docs/well-lit-paths/guides.yaml`, the manifest listing which guides llm-d.ai publishes and where:
+
+```bash
+# default manifest: docs/well-lit-paths/guides.yaml
+scripts/guide.py check-manifest
+
+# explicit manifest path
+scripts/guide.py check-manifest path/to/guides.yaml
+```
+
+The check verifies that:
+
+- Every listed guide directory exists and has both a `guide.yaml` and a `README.md` (or README alone for sections like Operations).
+- Slugs are unique across sections.
+- Declared child pages exist within each guide's directory.
+- Required titles and sidebar positions are present.
+
+### `guide.py set-branch` — pin `BRANCH` on release cuts
+
+Rewrite `env.static.BRANCH` and every `export BRANCH=` across guides to a release tag or branch name, validate each guide, and re-render its README:
+
+```bash
+# pin a specific guide
+scripts/guide.py set-branch release-0.8 guides/optimized-baseline
+
+# pin every guide via glob
+scripts/guide.py set-branch release-0.8 guides/*/
+
+# recursively discover and pin all guides in the repository
+scripts/guide.py set-branch release-0.8 guides --recursive
+```
+
+`set-branch` preserves comments and formatting on `BRANCH:` lines (e.g. `BRANCH: main # pinned on release cut`).
 
 ### Using it as a library
 
@@ -602,7 +653,7 @@ cleanup:                        # optional — flat list or map of named sub-gro
 support:                        # optional — accelerator x model-server matrix
   engines: {<engine>: <label>}
   accelerators:
-    <accelerator>: {label: <label>, model: <model>, notes: <one line>, engines: {<engine>: validated|community|{status: unsupported, issue: <url>}}}
+    <accelerator>: {label: <label>, model: <model>, notes: <one line>, providers: [<name> | {name, label, engines}], engines: {<engine>: validated|community|{status: unsupported, issue: <url>}}}
 ```
 
 **Step shape**, valid in any step list:

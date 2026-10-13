@@ -148,17 +148,18 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/ocp-queue/
+  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/overlays/ocp/queue/
 patches:
-  # The namespace/service/model_name live inside opaque PromQL strings that the
-  # kustomize namespace transformer cannot reach — rewrite both trigger queries
-  # explicitly to match the deployed EPP. maxReplicaCount is capped at the GPU
-  # budget the nightly reserves (2), rather than the guide's default of 8.
-  # scaleDown.stabilizationWindowSeconds is lowered 300 -> 60 so the scale-event
-  # validator can observe scale-DOWN within the run instead of waiting out the
-  # production 5-min debounce. Nightly-overlay-only — the guide default stays 300
-  # (the long window guards the vLLM-startup scale-down race in production).
+  # The leaf carries \${...} placeholders that apply -k cannot resolve, so pin
+  # the target Deployment and both trigger queries here. maxReplicaCount is
+  # capped at the GPU budget the nightly reserves (2), rather than the guide's
+  # default of 8. scaleDown.stabilizationWindowSeconds is lowered 300 -> 60 so
+  # the scale-event validator can observe scale-DOWN within the run. Nightly
+  # only; the guide default stays 300.
   - patch: |-
+      - op: replace
+        path: /spec/scaleTargetRef/name
+        value: ${DECODE_DEPLOYMENT}
       - op: replace
         path: /spec/triggers/0/metadata/query
         value: >-
@@ -177,12 +178,9 @@ patches:
       kind: ScaledObject
       name: ${SCALEDOBJECT}
   # ClusterRoleBindings are cluster-scoped; suffix a namespace hash so concurrent
-  # deployments to different namespaces do not collide on the same CRB name.
-  # Also rewrite the subject namespace explicitly: kustomize's `namespace`
-  # transformer does NOT rewrite a ClusterRoleBinding subject's namespace when an
-  # inner overlay (ocp/, namespace llm-d-optimized-baseline) already set it, so the
-  # binding would grant the SA in the WRONG namespace → KEDA's Thanos queries 401/403
-  # → TriggerError (ScaledObject never Ready). Pin the subject to this deployment's ns.
+  # deployments do not collide. The subject namespace is pinned too, or the
+  # binding grants the wrong namespace and KEDA's Thanos queries get 401/403.
+  # Match the leaf's already renamed binding by name prefix.
   - patch: |-
       - op: replace
         path: /metadata/name
@@ -192,7 +190,7 @@ patches:
         value: ${NAMESPACE}
     target:
       kind: ClusterRoleBinding
-      name: keda-epp-metrics-reader-monitoring-view
+      name: keda-epp-metrics-reader-monitoring-view.*
   - path: patch-vllm.yaml
     target:
       kind: Deployment
@@ -200,7 +198,11 @@ patches:
 EOF
 
 echo "==> Validating kustomization"
-kubectl kustomize "${OUTPUT_DIR}" >/dev/null
+RENDERED="$(kubectl kustomize "${OUTPUT_DIR}")"
+if grep -nE '\$\{[A-Z_][A-Z0-9_]*\}' <<<"${RENDERED}" >&2; then
+  echo "ERROR: unresolved \${...} placeholders in the rendered manifests." >&2
+  exit 1
+fi
 
 echo "==> Applying kustomize overlay"
 kubectl apply -k "${OUTPUT_DIR}"

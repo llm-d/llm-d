@@ -92,7 +92,7 @@ load, `s` falls back into the band, and the loop settles.
 
 The full control law — the signal chain, the piecewise formula, and why each
 asymmetry exists — is derived in
-[SLO-Aware Autoscaling with KEDA — the control law](../../../docs/architecture/advanced/autoscaling/slo-aware-keda.md).
+[SLO-Aware Autoscaling with KEDA — the control law](../../../docs/architecture/autoscaling/slo-aware-keda.md).
 
 ## Deploy
 

@@ -84,7 +84,7 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'xpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || '' }}
+      infra_provider: ${{ inputs.infra_provider || 'base' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-intel-xpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-wide-ep-xpu' }}

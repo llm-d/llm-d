@@ -11,7 +11,7 @@
 - Your clients expect an **OpenAI-compatible Batch API** (`/v1/batches`, `/v1/files`) for job submission, tracking and management.
 - You need **multi-tenant isolation** — each tenant's jobs, files, and results are separated.
 
-For queue-based asynchronous inference of individual requests, see the complementary [Asynchronous Processing](../asynchronous-processing/README.md) path. For components, data flow, and the processing pipeline, see the [Batch Gateway Architecture](../../../docs/architecture/advanced/batch/batch-gateway.md).
+For queue-based asynchronous inference of individual requests, see the complementary [Asynchronous Processing](../asynchronous-processing/README.md) path. For components, data flow, and the processing pipeline, see the [Batch Gateway Architecture](../../../docs/architecture/batch/batch-gateway.md).
 
 ### Key Features
 
@@ -243,7 +243,7 @@ Optional. Requires Prometheus and Grafana — see [Observability Setup](../../..
    kubectl get podmonitors,servicemonitors,prometheusrules -n ${NAMESPACE}
    ```
 
-For what the metrics mean and how to query them, see the [Batch Gateway metric reference](../../../docs/operations/observability/metrics.md#key-batch-gateway-metrics).
+For what the metrics mean and how to query them, see the [Batch Gateway metric reference](../../../docs/operations/observability/batch-gateway-metrics.md).
 
 ## Cleanup
 

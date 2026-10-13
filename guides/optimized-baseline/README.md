@@ -37,8 +37,8 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
-| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `amd-ci` |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | — | Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA · fp16 |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
@@ -55,6 +55,8 @@ This guide includes configurations for the following accelerator and model serve
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
 - Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+
+- For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -174,7 +176,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <details open>
 <summary><b>Standalone Mode</b></summary>
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/router/proxy.md) with an Envoy sidecar (default):
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -221,6 +223,8 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
+The NVIDIA GPU, AMD, CPU, Intel XPU and TPU v6/v7 vLLM overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). The Iluvatar, MetaX, Rebellions NPU and TPU v7 dynamic-slice overlays do not drain yet. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
+
 **Apply the Kustomize overlays** for your specific backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere):
 
 <!-- tabs:start group=modelserver -->
@@ -249,7 +253,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.dynamic_slice end -->
 
-With `ACCELERATOR_TYPE=tpu/v7-dynamic-slice`, the model servers run on dynamically formed TPU7x sub-slices instead of a static node pool per TPU topology. Capacity is pre-provisioned as `4x4x4` sub-blocks, and [GKE dynamic slicing](../../docs/infrastructure/providers/gke/dynamic-slicing/README.md) forms one sub-slice per model server replica at scheduling time, via Kueue Topology-Aware Scheduling. Each replica is a `LeaderWorkerSet` group; the GKE slice controller activates the requested sub-slice shape for the group and re-forms it on healthy partitions after a hardware failure.
+With `ACCELERATOR_TYPE=tpu/v7-dynamic-slice`, the model servers run on dynamically formed TPU7x sub-slices instead of a static node pool per TPU topology. Capacity is pre-provisioned as `4x4x4` sub-blocks, and [GKE dynamic slicing](../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke) forms one sub-slice per model server replica at scheduling time, via Kueue Topology-Aware Scheduling. Each replica is a `LeaderWorkerSet` group; the GKE slice controller activates the requested sub-slice shape for the group and re-forms it on healthy partitions after a hardware failure.
 
 Pick the sub-slice shape with `TPU_SLICE_TOPOLOGY`:
 
@@ -260,7 +264,7 @@ Pick the sub-slice shape with `TPU_SLICE_TOPOLOGY`:
 
 Both shapes serve `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`, the model these recipes were load-tested with; set `MODEL` to it. To target `2x2x4` (4 hosts, TP up to 32) or `2x4x4` (8 hosts, TP up to 64), copy the `2x2x2` overlay and change the `cloud.google.com/gke-tpu-slice-topology` annotation, the `cloud.google.com/gke-tpu-partition-<shape>-state` node selector, the LWS `size`, and `--tensor-parallel-size` (2 cores per chip).
 
-Before deploying the model servers, complete the cluster and Kueue TAS setup in [TPU Dynamic Slicing on GKE](../../docs/infrastructure/providers/gke/dynamic-slicing/README.md). The deploy step above also creates the Kueue `LocalQueue` in the guide namespace. Workloads are admitted once their `Slice` resources are `ACTIVE`:
+Before deploying the model servers, complete the cluster and Kueue TAS setup in [TPU Dynamic Slicing on GKE](../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke). The deploy step above also creates the Kueue `LocalQueue` in the guide namespace. Workloads are admitted once their `Slice` resources are `ACTIVE`:
 
 ```bash
 kubectl get workloads -n ${NAMESPACE}
@@ -271,7 +275,7 @@ kubectl get pods -n ${NAMESPACE}
 Notes:
 
 * Increasing `spec.replicas` on the `LeaderWorkerSet` scales out one sub-slice per replica; replicas are formed from any sub-block with healthy partitions of the requested shape.
-* Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7/vllm-dynamic-slice/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
+* Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/base/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
 
@@ -289,7 +293,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 3. Observability & Troubleshooting
 
-Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
 
 This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
 
@@ -305,7 +309,7 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 | Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
 | Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
 | Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/metrics.md#key-vllm-metrics) |
+| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
 
 </details>
 <details>
@@ -324,7 +328,7 @@ SGLang deployments expose the equivalent signals under `sglang_*`; the [PromQL r
 <details>
 <summary><b>TensorRT-LLM</b></summary>
 
-`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/core/model-servers.md) for the flags that enable them.
+`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/model-servers/README.md) for the flags that enable them.
 
 </details>
 <!-- tabs:end -->
@@ -411,7 +415,7 @@ kubectl run prefix-test --rm -i --restart=Never \
 for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
 done
 ```
 <!-- guide:verify.tests.pod_metrics end -->
@@ -428,7 +432,10 @@ One pod reports most of the 10 requests in `vllm:request_success_total`, and its
 <details>
 <summary><b>SGLang</b></summary>
 
-One pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+One pod reports most of the requests in `sglang:num_requests_total`. Check
+that `sglang:cached_tokens_total{cache_source="device"}` increases after
+requests with a shared prefix (or check `sglang:cache_hit_rate` on images
+that expose a reliable nonzero ratio).
 
 </details>
 <details>

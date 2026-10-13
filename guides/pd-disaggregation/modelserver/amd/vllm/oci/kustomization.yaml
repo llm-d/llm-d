@@ -3,7 +3,8 @@ kind: Kustomization
 # OCI OKE deployment of Llama-3.3-70B-Instruct-FP8-KV on BM.GPU.MI300X.8 nodes.
 # Network: NVIDIA Network Operator SR-IOV VFs (nvidia.com/sriov-rdma-vf) over RoCE.
 # Resource layout per BM.GPU.MI300X.8 node: 8x amd.com/gpu, 8x nvidia.com/sriov-rdma-vf.
-# This config fills one node: 1 decode (TP=4, 4 GPU + 4 VF) + 4 prefill (TP=1, 1 GPU + 1 VF each).
+# 1 decode (TP=4, 4 GPU + 4 VF) + 1 prefill (TP=1, 1 GPU + 1 VF); scale prefill to 4
+# replicas to fill one node.
 resources:
   - ../base
 patches:

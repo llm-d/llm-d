@@ -7,6 +7,7 @@ namePrefix: precise-prefix-cache-routing-cpu-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/cpu-vllm/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

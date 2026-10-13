@@ -8,7 +8,7 @@ While disaggregated serving can offer superior performance, it introduces additi
 - [Fault Tolerance](#fault-tolerance) - how to ensure crashes do not create cascading failures and that resources are cleaned up
 - [Rollouts](#rollouts) - how to roll out changes to the service, such as the version of the SGLang image
 
-This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see the [vLLM page](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/advanced/disaggregation/README.md) page.
+This page documents architectural considerations that impact these common operations flows for SGLang model servers. For the vLLM counterpart see the [vLLM page](vllm.md), and for an overview of how the EPP and Routing Proxy Sidecar coordinate P/D requests see the [Disaggregated Serving](../../architecture/disaggregation/pd-disaggregation.md) page.
 
 Both engines establish a NIXL (RDMA) connection for each P/D pair and differ mainly in how a pair finds each other and which side moves the data: vLLM negotiates the connection peer-to-peer with no central coordinator and has the decode pull the KVs, while SGLang routes peer discovery through a bootstrap server that runs alongside each prefill instance and has the prefill push the KVs to the decode.
 
@@ -35,7 +35,7 @@ Two rules follow, and llm-d does not currently enforce either of them:
 
 `conditional-decode` is unsupported for the same reason, one layer up. The step sends the request to the decode profile with the `Prefer: if-available` header; the EPP either declines with `412 Precondition Failed`, in which case the Coordinator runs prefill normally and nothing breaks, or it accepts and forwards the request to the chosen decode pod alone - which is the case SGLang cannot serve.
 
-Only the `disagg-profile-handler` plugin sets the `x-prefiller-host-port` header that the sidecar needs in order to pair a prefill, so an EPP deployment without it sends every request decode-only.
+Only the `disagg-profile-handler` plugin sets the `x-llm-d-prefiller-host-port` header that the sidecar needs in order to pair a prefill, so an EPP deployment without it sends every request decode-only.
 
 ### Performance cost
 

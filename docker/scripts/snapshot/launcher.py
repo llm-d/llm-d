@@ -1,14 +1,18 @@
 """
 Launcher for vLLM with GKE Fast Pod Snapshotting support.
 
-Hooks vllm.entrypoints.openai.api_server.build_app to wrap the FastAPI application
-with patch_vllm_lifespan, then delegates CLI invocation to vllm.entrypoints.cli.main.
+Hooks vLLM's build_app (in vllm.entrypoints.launchers on v0.29.0+ or
+vllm.entrypoints.openai.api_server on older releases) to wrap the FastAPI
+application with patch_vllm_lifespan, then delegates CLI invocation to
+vllm.entrypoints.cli.main.
 """
 
 from __future__ import annotations
 
+import importlib
 import logging
 import sys
+from typing import Optional
 
 from .vllm.wrapper import patch_vllm_lifespan
 
@@ -19,24 +23,42 @@ try:
 except ImportError:
     logger = logging.getLogger("vllm.snapshot.launcher")
 
+
 def _hook_api_server() -> bool:
-    """Hooks vllm.entrypoints.openai.api_server.build_app to patch lifespan context."""
-    try:
-        from vllm.entrypoints.openai import api_server
-
-        _orig_build_app = api_server.build_app
-
-        def _build_app(*args, **kwargs):
-            return patch_vllm_lifespan(_orig_build_app(*args, **kwargs))
-
-        api_server.build_app = _build_app
-        return True
-    except (ImportError, AttributeError) as err:
+    """Hooks vLLM's build_app to patch the FastAPI lifespan context."""
+    last_err: Optional[Exception] = None
+    for mod_name in (
+        "vllm.entrypoints.launchers.app",
+        "vllm.entrypoints.openai.api_server",
+    ):
+        try:
+            target = importlib.import_module(mod_name)
+        except Exception as err:
+            last_err = err
+            continue
+        if callable(getattr(target, "build_app", None)):
+            break
+        last_err = AttributeError(f"module '{mod_name}' has no callable 'build_app'")
+    else:
         logger.warning(
             "vLLM API server is not importable (%s); no snapshot will be taken.",
-            err,
+            last_err,
         )
         return False
+
+    _orig_build_app = target.build_app
+
+    def _build_app(*args, **kwargs):
+        return patch_vllm_lifespan(_orig_build_app(*args, **kwargs))
+
+    setattr(target, "build_app", _build_app)
+    for name, mod in list(sys.modules.items()):
+        if (
+            name.startswith("vllm.entrypoints")
+            and getattr(mod, "build_app", None) is _orig_build_app
+        ):
+            setattr(mod, "build_app", _build_app)
+    return True
 
 
 # Module level execution so child processes also inherit the patched build_app

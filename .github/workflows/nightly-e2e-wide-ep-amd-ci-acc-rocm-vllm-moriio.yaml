@@ -87,7 +87,7 @@ jobs:
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
-      backend_type: ${{ inputs.backend_type || 'vllm-deepseek-v3' }}
+      backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
       connector: ${{ inputs.connector || '' }}
       # Pre-provisioned with model-pvc and llm-d-hf-token.

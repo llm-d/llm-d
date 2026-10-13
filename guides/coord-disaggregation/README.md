@@ -9,7 +9,7 @@
 
 This guide deploys a standalone **Coordinator** service in front of an Encode /
 Prefill / Decode (EPD) topology. Instead of the per decode pod [Routing
-Sidecar](../../docs/architecture/advanced/disaggregation/README.md) that today's
+Sidecar](../../docs/architecture/disaggregation/pd-disaggregation.md) that today's
 [P/D Disaggregation](../pd-disaggregation/README.md) guide uses to dispatch a fixed
 prefill→decode sequence, the Coordinator is a single service that drives a
 **configurable pipeline** over each request:

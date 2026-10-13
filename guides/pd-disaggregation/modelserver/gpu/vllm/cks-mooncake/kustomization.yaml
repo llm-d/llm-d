@@ -1,54 +1,102 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../../recipes/modelserver/base/single-host/pd/vllm
-
-namePrefix: pd-disaggregation-nvidia-gpu-vllm-mooncake-
+  - ../base
 
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
 
-labels:
-  - pairs:
-      llm-d.ai/model: gpt-oss-120b
-      llm-d.ai/guide: pd-disaggregation
-      llm-d.ai/accelerator-variant: gpu
-      llm-d.ai/accelerator-vendor: nvidia
-      inference.networking.k8s.io/engine-type: vllm
-    includeSelectors: true
-    includeTemplates: true
-    fields:
-      - version: v1
-        kind: ServiceAccount
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: metadata/labels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/selector/matchLabels
-        create: true
-      - group: apps
-        version: v1
-        kind: Deployment
-        path: spec/template/metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: spec/selector/matchLabels
-        create: true
+# P/D on CoreWeave with the Mooncake connector over RDMA instead of NIXL. Same topology as base;
+# the roles differ only in how vLLM is launched and in the RDMA device request.
 patches:
-  - path: patch-decode.yaml
-  - path: patch-prefill.yaml
-  - path: patch-sidecar.yaml
+  # Settings shared by both roles, written once under prefill and aliased into decode.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-vllm
+        labels:
+          inference.networking.k8s.io/engine-type: vllm
+      spec:
+        roles:
+          - name: prefill
+            spec: &mooncake
+              leaderWorkerTemplate:
+                workerTemplate:
+                  metadata:
+                    labels:
+                      inference.networking.k8s.io/engine-type: vllm
+                  spec:
+                    containers:
+                      - name: modelserver
+                        # The image does not ship the Mooncake transfer engine.
+                        command:
+                          - /bin/bash
+                          - -c
+                        env:
+                          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                            $patch: delete
+                          - name: VLLM_MOONCAKE_BOOTSTRAP_PORT
+                            value: "8998"
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+          - name: decode
+            spec: *mooncake
+  # Per-role launch commands and the decode sidecar's connector.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-vllm
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        args:
+                          - |
+                            pip install mooncake-transfer-engine-cuda13 && \
+                            vllm serve openai/gpt-oss-120b \
+                              --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                              --tensor-parallel-size=1 \
+                              --block-size=128 \
+                              --enable-auto-tool-choice \
+                              --tool-call-parser=openai \
+                              --reasoning-parser=openai_gptoss \
+                              --kv-transfer-config '{"kv_connector":"MooncakeConnector", "kv_role":"kv_producer", "kv_connector_extra_config":{"mooncake_protocol":"rdma"}}' \
+                              --gpu-memory-utilization=0.9 \
+                              --port 8000
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    initContainers:
+                      - name: routing-proxy
+                        args:
+                          - --port=8000
+                          - --kv-connector=mooncake
+                          - --zap-log-level=1
+                          - --secure-serving=false
+                    containers:
+                      - name: modelserver
+                        args:
+                          - |
+                            pip install mooncake-transfer-engine-cuda13 && \
+                            vllm serve openai/gpt-oss-120b \
+                              --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                              --tensor-parallel-size=4 \
+                              --block-size=128 \
+                              --enable-auto-tool-choice \
+                              --tool-call-parser=openai \
+                              --reasoning-parser=openai_gptoss \
+                              --kv-transfer-config '{"kv_connector":"MooncakeConnector", "kv_role":"kv_consumer", "kv_connector_extra_config":{"mooncake_protocol":"rdma"}}' \
+                              --port=8200

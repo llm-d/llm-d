@@ -1,5 +1,5 @@
 #
-# 1P/1D, TP=8 variant of the moriio/amd-ci (4P/4D, TP=2) leaf.
+# 1P/1D, TP=8 variant of the moriio/amd-ci (1P/1D, TP=2) leaf.
 #
 # Only the fields that differ are set here; env, cpu/memory, probes, and volumes
 # are inherited from ../amd-ci via strategic-merge. Container/initContainer args

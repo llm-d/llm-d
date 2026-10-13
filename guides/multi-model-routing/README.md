@@ -232,5 +232,5 @@ curl -X POST "http://${GATEWAY_IP}/v1/chat/completions" \
 
 ## Further Reading
 
-* [IPP Architecture](../../docs/architecture/advanced/inference-payload-processing/README.md) — Technical details of the Inference Payload Processor
+* [IPP Architecture](../../docs/architecture/router/ipp.md) — Technical details of the Inference Payload Processor
 * [IPP Repository](https://github.com/llm-d/llm-d-inference-payload-processor) — Source code, configuration reference, and plugin documentation
