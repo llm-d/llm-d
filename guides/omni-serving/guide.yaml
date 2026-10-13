@@ -23,6 +23,13 @@ support:
         - {name: base, label: "Kubernetes (base)"}
         - {name: gke, label: "GKE"}
       engines: {vllmomni: community, sglang: community}
+    xpu:
+      label: Intel XPU
+      notes: "`text-to-image` only · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`)"
+      model: black-forest-labs/FLUX.2-klein-4B
+      providers:
+        - {name: base, label: "Kubernetes (base)", engines: [sglang]}
+      engines: {sglang: community}
 
 env:
   static:
@@ -39,12 +46,12 @@ env:
     # What the pool serves: `omni` = one omni checkpoint answering several
     # endpoints; the others = one single-endpoint generator per pool.
     TASK: {default: omni, values: [omni, text-to-image, image-to-image, text-to-speech]}
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu]}
     MODEL_SERVER: {default: vllmomni, values: [vllmomni, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<TASK>/<INFRA_PROVIDER>/.
     INFRA_PROVIDER: {default: base, values: [base, gke]}
 
-    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image, image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"}
+    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
