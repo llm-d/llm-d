@@ -623,7 +623,7 @@ Performance benchmarks for this configuration are not part of this guide: they l
 
 Once monitoring is enabled, use the signals below to operate P/D disaggregation under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state pool utilization or saturation signals). This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
 
-In a P/D deployment the prefill and decode pools scale and fail independently, and every decode step depends on a KV transfer from a prefill worker over NIXL. Most problems show up as an **imbalance between the two pools** or as **KV-transfer stalls**, so watch them as a pair rather than as a single aggregate.
+In a P/D deployment the prefill and decode pools scale and fail independently, and every decode step depends on a KV transfer from a prefill worker over the configured KV-transfer backend (NIXL, Mooncake, or MoRIIO). Most problems show up as an **imbalance between the two pools** or as **KV-transfer stalls**, so watch them as a pair rather than as a single aggregate.
 
 ### Key metrics for this path
 

@@ -313,7 +313,7 @@ With monitoring enabled, three router metrics tell you whether predicted-latency
 | --- | --- |
 | `llm_d_epp_request_predicted_ttft_seconds` and `llm_d_epp_request_ttft_prediction_duration_seconds` | Non-zero samples: the router is calling the prediction server. If they stay empty, the predictor is not being called; check the router logs for `predicted-latency-producer` errors. |
 | `llm_d_epp_request_predicted_ttft_seconds` vs. `llm_d_epp_request_ttft_seconds` | Predictions track reality: over a rolling window, the two converge after warm-up. |
-| `llm_d_epp_request_slo_violation_total` | With SLO-annotated traffic, increments only under genuine saturation. |
+| `llm_d_epp_request_slo_violation_total` | With achievable SLOs and a matching `streamingMode`, stays near zero under normal load and increments only under genuine saturation (if it climbs at low QPS, see the symptom table below). |
 
 | Symptom | Likely cause |
 | --- | --- |
