@@ -263,13 +263,7 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 
 - Prepare HuggingFace token secret `llm-d-hf-token` in the namespace.
 
-### 2. Download the Workload Template
-
-```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml"
-```
-
-### 3. Execute Benchmark
+### 2. Execute Benchmark
 
 The request rate and workload shape are fixed in the template, so only the endpoint needs to be
 resolved before rendering:
@@ -283,7 +277,7 @@ export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
 export SEED=$((7 + CONCURRENCY_LEVEL))
 
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-envsubst < guide.yaml > config.yaml
+envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 

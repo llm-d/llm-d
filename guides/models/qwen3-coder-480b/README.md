@@ -237,13 +237,7 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 
 - Prepare HuggingFace token secret `llm-d-hf-token` in the namespace.
 
-### 2. Download the Workload Template
-
-```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml"
-```
-
-### 3. Execute Benchmark
+### 2. Execute Benchmark
 
 ```bash
 # Benchmark parameters. CONCURRENCY_LEVEL is the number of concurrent coding sessions
@@ -256,7 +250,7 @@ export SEED=$((7 + CONCURRENCY_LEVEL))
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 
 # Render the configuration using the appropriate template:
-envsubst < guide.yaml > config.yaml
+envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml > config.yaml
 
 ./run_only.sh -c config.yaml -o ./results
 ```
