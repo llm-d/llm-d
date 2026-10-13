@@ -28,7 +28,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | 2 replicas × 1 GPU via DRA · fp16 |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool) |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29 |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
@@ -40,7 +40,7 @@ This guide includes configurations for the following accelerator and model serve
 > The router and the model servers must agree on two things:
 >
 > - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together.
-> - **Model.** The `token-producer` `modelName` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) is `Qwen/Qwen3-32B`. On an accelerator that serves another model, set it to `MODEL` before deploying the router: with the default render Service the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
+> - **Model.** The `token-producer` `modelName` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values is `Qwen/Qwen3-32B`. On an accelerator that serves another model (e.g. Intel XPU's `Qwen/Qwen3-0.6B`), set it to `MODEL` in the values file you're deploying before installing the router: with the default render Service the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 
 For wide-EP LWS deployments (multi-port DP model servers), use the precise prefix-cache routing mode in the [GLM-5.2 guide](../models/glm-5-2/README.md#installation-instructions) instead of the manifests here.
 
@@ -52,6 +52,8 @@ For wide-EP LWS deployments (multi-port DP model servers), use the precise prefi
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
 - Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
+
+- For the Intel XPU overlay, install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but the overlay will still fail to apply.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell. The router also reads it to reach gated tokenizers.
 
@@ -155,7 +157,7 @@ export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> The `prefix-cache-affinity-filter` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) uses a `peakPrefillThroughput` measured on the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2; SGLang measures the same value as vLLM). On a different model or accelerator, measure and set your value with the [calibration guide](../recipes/router/calibration/README.md).
+> The `prefix-cache-affinity-filter` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values uses a `peakPrefillThroughput` measured on the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2). On a different model or accelerator, measure and set your value with the [calibration guide](../recipes/router/calibration/README.md).
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
@@ -201,10 +203,10 @@ The vLLM model server overlays drain in-flight requests during rollouts and scal
 
 The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v1/*/render` endpoints, so it can look up the exact KV blocks the prompt maps to. This guide serves that endpoint from a Service rather than a per-router sidecar, so render capacity is decoupled from the router.
 
-**Apply the render overlay for your model server.** Both overlays publish the same Service name, so the router configuration is the same either way:
+**Apply the render overlay for your model server and accelerator.** All overlays publish the same Service name, so the router configuration is the same either way:
 
 <!-- tabs:start group=engine -->
-<details open>
+<details open data-when="MODEL_SERVER=vllm">
 <summary><b>vLLM</b></summary>
 
 <!-- guide:deploy.render[0] start -->
@@ -219,8 +221,8 @@ The trade-off: tokenization CPU competes with serving on the same pods (the GPU 
 Only `Ready` endpoints receive render calls, so apply this after the model servers, as ordered here.
 
 </details>
-<details>
-<summary><b>SGLang</b></summary>
+<details data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=sglang">
+<summary><b>NVIDIA GPU · SGLang</b></summary>
 
 <!-- guide:deploy.render[1] start -->
 <!-- llm-d-cicd:skip start -->
@@ -234,6 +236,20 @@ SGLang does not implement vLLM's render endpoints, so the `render/standalone/` o
 It tokenizes with vLLM's tokenizer whichever engine serves inference, and also suits vLLM deployments that should not spend model server CPU on tokenization.
 It is configured for `Qwen/Qwen3-32B`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) together with the router `token-producer` `modelName`. Scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
 These render pods deliberately do **not** carry the `llm-d.ai/guide` label: the router would otherwise treat them as routable model servers.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=xpu;MODEL_SERVER=sglang">
+<summary><b>Intel XPU · SGLang</b></summary>
+
+<!-- guide:deploy.render[2] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.render[2] end -->
+
+Same standalone render pool as `render/standalone/`, but patched to tokenize `Qwen/Qwen3-0.6B` (the model served by the XPU overlay) instead of `Qwen/Qwen3-32B`.
 
 </details>
 <!-- tabs:end -->
@@ -376,12 +392,22 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 ```
 
 </details>
-<details data-when="MODEL_SERVER=sglang">
-<summary><b>SGLang</b></summary>
+<details data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=sglang">
+<summary><b>NVIDIA GPU · SGLang</b></summary>
 
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<details data-when="ACCELERATOR_TYPE=xpu;MODEL_SERVER=sglang">
+<summary><b>Intel XPU · SGLang</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
 ```
 <!-- llm-d-cicd:skip end -->
 

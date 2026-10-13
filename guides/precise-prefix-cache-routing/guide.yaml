@@ -29,11 +29,11 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "2 replicas × 1 GPU via DRA · fp16"
+      notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool)"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: community}
     "tpu/v6":
       label: Google TPU v6e
       notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29"
@@ -138,8 +138,10 @@ deploy:
     - when: {MODEL_SERVER: [vllm]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
     # SGLang has no render endpoints: a dedicated, GPU-less vLLM render pool.
-    - when: {MODEL_SERVER: [sglang]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -197,8 +199,10 @@ cleanup:
   render:
     - when: {MODEL_SERVER: [vllm]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
-    - when: {MODEL_SERVER: [sglang]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true

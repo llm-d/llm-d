@@ -82,8 +82,9 @@ router:
               prefixMatchInfoProducerName: precise-prefix-cache-producer
               # Measured with guides/recipes/router/calibration/calibrate.sh on
               # this guide's reference setup (Qwen3-32B, H100 80 GB, TP=2,
-              # chunk 8192) — SGLang measures the same value as vLLM. Re-measure
-              # for other hardware/models.
+              # chunk 8192). Re-measure for other hardware/models — including
+              # SGLang, which has its own copy of this value in
+              # precise-prefix-cache-routing.sglang.values.yaml.
               peakPrefillThroughput: 15926
           - type: token-load-scorer
         dataLayer: # metrics-data-source + core-metrics-extractor injected by default
