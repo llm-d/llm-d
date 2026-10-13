@@ -8,7 +8,7 @@
 
 ## Overview
 
-This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes with DP-aware routing by the llm-d Router. The NVIDIA GPU and AMD configurations use prefill/decode (P/D) disaggregation and deploy a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit. The Intel XPU configuration uses one aggregated `LeaderWorkerSet` whose expert-parallel group spans two pods.
+This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes, with vLLM prefill/decode (P/D) disaggregation and DP-aware routing by the llm-d Router. The NVIDIA GPU and AMD configurations deploy a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit; the Intel XPU configuration uses two plain `LeaderWorkerSet`s.
 
 The default deployment serves `deepseek-ai/DeepSeek-R1-0528` on 32 NVIDIA H200 GPUs: a prefill and a decode role, each one DP16/EP group across two nodes, with DeepEP for the expert all-to-all and NIXL for the KV transfer over RDMA. Every DP rank runs its own API server port, and the router's `InferencePool` targets all of them, so the router picks a DP rank, not just a pod.
 
@@ -39,7 +39,7 @@ This guide includes configurations for the following accelerator and model serve
 
 The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerSet` pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
-**Intel XPU** (Qwen3-235B-A22B): one aggregated `LeaderWorkerSet` runs two TP8 pods with DP2 and expert parallelism across the pods, using 16 XPUs in total. It uses the `allgather_reducescatter` all-to-all backend and XCCL over the RDMA fabric.
+**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill and decode each run TP2 with expert parallelism on 4 XPUs in total, with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerS
 - Have a cluster with RDMA-capable accelerator nodes. For the networking stack and how to verify it, see [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md) and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md). For GKE, see the [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the [GKE overlay cluster prerequisites](modelserver/gpu/vllm/gke/README.md#cluster-prerequisites).
 
 > [!IMPORTANT]
-> The NVIDIA GPU and AMD configurations use an RDMA all-to-all backend (DeepEP, MoRI) for inter-node EP and require all-to-all RDMA connectivity: every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail. The Intel XPU configuration uses XCCL and `allgather_reducescatter`; it does not use DeepEP, but its two aggregated workers still require full-mesh RDMA connectivity.
+> The NVIDIA GPU and AMD configurations use an RDMA all-to-all backend (DeepEP, MoRI) for inter-node EP and require all-to-all RDMA connectivity: every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail. The Intel XPU configuration uses XCCL and `allgather_reducescatter`; it does not use DeepEP, but still requires full-mesh pod network connectivity between decode and prefill workers.
 
 - Deploy the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC used by the NVIDIA GPU and AMD configurations.
 
@@ -269,8 +269,8 @@ done
 
 The script prints one line per role: the number of DP ranks that served requests, the requests they served, and the connector prefix-cache hits.
 
-- **DP/EP**: on NVIDIA GPU and AMD, where each role spans 16 DP ranks, both roles report more than one DP rank. The router picks a rank per request, so the exact counts vary from run to run. On Intel XPU, the aggregated LWS exposes two DP ranks under the decode role, with experts distributed across both TP8 pods.
-- **P/D**: on NVIDIA GPU and AMD, the prefill pods served every request, and the decode pods report connector prefix-cache hits: tokens whose KV cache was transferred from a prefill rank instead of being recomputed. The aggregated Intel XPU deployment has no prefill-role pod or KV-transfer counter.
+- **DP/EP**: on NVIDIA GPU and AMD, where each role spans 16 DP ranks, both roles report more than one DP rank. The router picks a rank per request, so the exact counts vary from run to run. On Intel XPU, each role is one TP2 engine with expert parallelism, so each reports one rank.
+- **P/D**: the prefill pods served every request, and the decode pods report connector prefix-cache hits: tokens whose KV cache was transferred from a prefill rank instead of being recomputed. Without disaggregation, the prefill counters stay at zero.
 
 If you enabled monitoring (`MONITORING=true`), the router also counts its P/D decisions:
 
