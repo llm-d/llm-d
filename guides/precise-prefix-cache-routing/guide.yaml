@@ -102,12 +102,17 @@ prerequisites:
 
 deploy:
   router_values:
-    - run: |
+    - when: {MODEL_SERVER: [vllm]}
+      run: |
         # Paths to values files
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
         export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
     - when: {MODEL_SERVER: [sglang]}
-      run: export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.sglang.values.yaml"
+      run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+        export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.sglang.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}
@@ -183,7 +188,7 @@ verify:
           for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
             echo "== ${pod}"
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
           done
 
 cleanup:

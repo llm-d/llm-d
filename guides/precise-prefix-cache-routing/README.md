@@ -51,7 +51,7 @@ For wide-EP LWS deployments (multi-port DP model servers), use the precise prefi
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell. The router also reads it to reach gated tokenizers.
 
@@ -127,17 +127,25 @@ kubectl create secret generic llm-d-hf-token \
 **Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below):
 
 <!-- guide:deploy.router_values start -->
+<!-- variants:start -->
+<details open data-when="MODEL_SERVER=vllm">
+<summary><b>vLLM</b></summary>
+
 ```bash
 # Paths to values files
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 ```
-<!-- variants:start -->
+
+</details>
 <details data-when="MODEL_SERVER=sglang">
 <summary><b>SGLang</b></summary>
 
 <!-- llm-d-cicd:skip start -->
 ```bash
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.sglang.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
@@ -251,7 +259,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 
 ### 2. Check the Render Service
 
-**Check that the render Service returns token IDs for your model** (`MODEL` must be the model your accelerator serves, see [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)). The response is a JSON list whose first entry carries `token_ids`:
+**Check that the render Service returns token IDs for your model.** The response is a JSON list whose first entry carries `token_ids`:
 
 <!-- guide:verify.tests.render start -->
 ```bash
@@ -312,7 +320,7 @@ kubectl run prefix-test --rm -i --restart=Never \
 for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
 done
 ```
 <!-- guide:verify.tests.pod_metrics end -->
@@ -329,7 +337,12 @@ One pod reports most of the 10 requests in `vllm:request_success_total`, and its
 <details>
 <summary><b>SGLang</b></summary>
 
-One pod reports most of the requests in `sglang:num_requests_total`, and its `sglang:cache_hit_rate` is well above zero.
+One pod reports most of the requests in `sglang:num_requests_total`. Check
+that `sglang:cached_tokens_total{cache_source="device"}` increases after
+requests with a shared prefix (you can also check `sglang:cache_hit_rate`,
+though some SGLang images—such as the Intel XPU image
+`ghcr.io/llm-d/llm-d-xpu-sglang:v0.10.0`—may incorrectly report `0` for
+`sglang:cache_hit_rate` even when prefix cache hits occur).
 
 </details>
 <!-- tabs:end -->
