@@ -17,7 +17,7 @@ The Latency Predictor closes those gaps by learning the mapping from `(pod state
 
 ## Architecture
 
-The predictor ships as a set of sidecars colocated with the EPP in the same pod. A **training server** continuously retrains on completed requests, and one or more **prediction servers** that read the latest model from a shared volume and answer predictions from the EPP on the hot path.
+The predictor ships as a set of sidecars colocated with the EPP in the same pod. A **training server** continuously retrains on completed requests, and one or more **prediction servers** read the latest model from a shared volume and answer predictions from the EPP on the hot path.
 
 ```text
                 ┌──────────────────────────────────────────────────────┐
@@ -175,4 +175,4 @@ All latency and prediction-duration series are Prometheus **histograms**, so das
 
 - [Predicted Latency Well-Lit Path](../../../guides/predicted-latency-routing/README.md) — how to adopt this path: Helm enablement, request headers, verification, troubleshooting.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms) — design rationale and benchmark results.
-- [EPP Scheduling](scheduling.md) — how the plugins fits into EPP request handling.
+- [EPP Scheduling](scheduling.md) — how the plugins fit into EPP request handling.

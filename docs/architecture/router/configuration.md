@@ -445,7 +445,7 @@ dataLayer:
     - `pluginRef`: References a plugin instance defined in the global `plugins` section that implements the `Extractor` interface.
 
 > [!NOTE]
-> The `metrics-data-source` and `core-metrics-extractor` are injected **by default**, so standard metrics collection works without configuring `dataLayer` at all. Injection is additive — even when you supply your own `dataLayer`, the default metrics source is appended with your sources. Unless you set `injectDefaults: false` or  `dataLayer.sources` already contains a `metrics-data-source` source
+> The `metrics-data-source` and `core-metrics-extractor` are injected **by default**, so standard metrics collection works without configuring `dataLayer` at all. Injection is additive: even when you supply your own `dataLayer`, the default metrics source is appended unless you set `injectDefaults: false` or `dataLayer.sources` already contains a `metrics-data-source` source.
 
 ## High Availability
 

@@ -61,7 +61,7 @@ On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x
 
 ## AMD ROCm
 
-AMD GPUs are supported via ROCm. The specific GPU models supported are determined by the inference container image. See the AMD device plugin or DRA driver below for cluster setup.
+AMD GPUs are supported via ROCm. The specific GPU models supported are determined by the inference container image. Depending on your cluster, the GPU resource is exposed as `amd.com/gpu` (AMD GPU device plugin — the default in the guides) or through a Dynamic Resource Allocation `ResourceClaimTemplate` (AMD GPU DRA driver, used by the `tiered-prefix-cache` AMD overlays). See the [AMD Instinct K8s Device Plugin](https://instinct.docs.amd.com/projects/k8s-device-plugin/en/latest/) or [AMD GPU Operator](https://instinct.docs.amd.com/projects/gpu-operator/en/latest/) documentation for cluster setup.
 
 ## Intel XPU
 

@@ -44,12 +44,12 @@ sequenceDiagram
     D->>R: Response
 ```
 
-- Prefill instances run a background server thread to handle requests for `NIXLMetadata`. When the P instances finishes processing, it constructs the `KVTransferParams`, which includes (among other things) `remote_host=VLLM_SIDE_CHANNEL_HOST` (the pod IP) and `remote_port=VLLM_SIDE_CHANNEL_PORT` in the response body.
-- Decode instances receive the request with the `KVTransferParams`; if there is not yet a connection to the remote P worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usually.
+- Prefill instances run a background server thread to handle requests for `NIXLMetadata`. When the P instance finishes processing, it constructs the `KVTransferParams`, which includes (among other things) `remote_host=VLLM_NIXL_SIDE_CHANNEL_HOST` (the pod IP) and `remote_port=VLLM_NIXL_SIDE_CHANNEL_PORT` in the response body.
+- Decode instances receive the request with the `KVTransferParams`; if there is not yet a connection to the remote P worker, it runs a background thread to fetch the `NIXLMetadata` and create the RDMA connection. This action does not block core engine execution, enabling other requests to proceed as usual.
 
 #### Discovery
 
-Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances discovered automatically when their pods status becomes `status: Running`.
+Since model server instances are added to an `InferencePool` via standard Kubernetes selectors and labels, new prefill and decode instances are discovered automatically when their pod status becomes `status: Running`.
 
 As a result, new replicas can be added to a running disaggregated deployment without restarts and without need to coordinate within any specialized service discovery plane.
 
@@ -58,7 +58,7 @@ As a result, new replicas can be added to a running disaggregated deployment wit
 In Kubernetes, there is a well-defined [pod termination process](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination):
 
 - **Termination Triggered**: The pod's state is changed to **Terminating**.
-- **`InferencePool` Update**: The pod is removed from the list of endpoints for associated the `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kubernetes objects, this is equivalent to removal from a Service)
+- **`InferencePool` Update**: The pod is removed from the list of endpoints for the associated `InferencePool`, preventing new traffic from being routed to it. (note: for standard Kubernetes objects, this is equivalent to removal from a Service)
 - **PreStop Hook**: If defined, the preStop hook executes.
 - **SIGTERM Signal**: Kubernetes sends a SIGTERM signal to the main process in each container.
 - **Termination Grace Period**: The pod is given a set amount of time (default is 30 seconds) to shut down gracefully. If it does not terminate by the end of this period, a SIGKILL is sent to force termination.
@@ -74,7 +74,7 @@ For **running requests**, we can configure how vLLM handles the `SIGTERM`:
 
 Since prefill instances hold the KVs until the decode instances pull them, it is important to ensure that KVs are released on the prefill instance when decode instances are scaled down.
 
-In vLLM, regardless of whether `--shutdown-timeout` is set, requests are `aborted` during the shutdown process. As part of the `abort` process, decode instances with not-yet-started KV transfers send a NIXL notification to the remote prefill instances to free the blocks. Thus, scaling down decode replicas always free requests on the P instance.
+In vLLM, regardless of whether `--shutdown-timeout` is set, requests are `aborted` during the shutdown process. As part of the `abort` process, decode instances with not-yet-started KV transfers send a NIXL notification to the remote prefill instances to free the blocks. Thus, scaling down decode replicas always frees requests on the P instance.
 
 #### Scaling Down Prefill Replicas
 
@@ -89,9 +89,9 @@ As a result, prefill scale down will cause KV load failure for in-progress reque
 
 Given the compute intensity and duration of inference requests, model servers like vLLM support "Request Cancellation", where currently in-progress requests are freed when the client disconnects.
 
-In a disaggregation setup, this feature is more complicated, because the resources associated with an inference request are spread across multiple servers (as the P instances holds onto the KV caches until they have been retrieved by the D instance). As a result, if the request is canceled while it is still "in-flight" on the D instance but before the KV transfer occurs, we need to ensure that the resources on the P instance are properly cleaned up.
+In a disaggregation setup, this feature is more complicated, because the resources associated with an inference request are spread across multiple servers (as the P instance holds onto the KV caches until they have been retrieved by the D instance). As a result, if the request is canceled while it is still "in-flight" on the D instance but before the KV transfer occurs, we need to ensure that the resources on the P instance are properly cleaned up.
 
-llm-d accomplishes this functionality by building on top of vLLM's existing request cancellation infrastructure. When requests are disconnected in vLLM, it triggers the `abort` codepath, which cleans up running resources. When request with `do_remote_prefill=True` are aborted, vLLM sends a NIXL notify message, instructing the remote prefill instance to free the KV cache for the cancelled request.
+llm-d accomplishes this functionality by building on top of vLLM's existing request cancellation infrastructure. When requests are disconnected in vLLM, it triggers the `abort` codepath, which cleans up running resources. When requests with `do_remote_prefill=True` are aborted, vLLM sends a NIXL notify message, instructing the remote prefill instance to free the KV cache for the cancelled request.
 
 ```mermaid
 sequenceDiagram

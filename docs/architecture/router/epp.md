@@ -13,7 +13,7 @@ The EPP is an extensible component that integrates with the proxy layer via Envo
 > [!NOTE]
 > The project provides tools for automatic Envoy installation. However, if you install or
 > configure it yourself, please note that the only supported [request_body_mode and response_body_mode](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto)
-> is `FULL_DUPLEX_STREAMED`
+> is `FULL_DUPLEX_STREAMED`.
 
 When a request arrives at the proxy, the proxy calls the EPP to select a backend endpoint, and the EPP returns the optimal pod address according to the [Endpoint Picking Protocol](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/004-endpoint-picker-protocol).
 
@@ -35,7 +35,7 @@ The steps are:
 1. **Request arrival** -- An inference request arrives at the proxy (Gateway).
 2. **External processing** -- The proxy invokes the EPP via the ext-proc protocol, passing the request headers and body to the EPP.
 3. **Request handling** -- Parses the request (from e.g. OpenAI format, vllm gRPC) into the internal request data structure.
-4. **Flow control** -- If enabled, queues requests and prioritizes and ensures fairness across different tenants within a priority, and holding requests when the pool is "saturated".
+4. **Flow control** -- If enabled, queues requests, prioritizes and ensures fairness across different tenants within a priority, and holds requests when the pool is "saturated".
 5. **Request Scheduling** -- Selecting the optimal endpoint from the available InferencePool, which involves evaluating each request against a configured set of scheduling plugins, such as filters and scorers.
 6. **Request Proxying** -- The EPP returns the address of the selected endpoint to the proxy, which then forwards the request to the corresponding model server endpoint.
 
