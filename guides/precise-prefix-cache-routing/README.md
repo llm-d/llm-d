@@ -81,6 +81,7 @@ export GUIDE_NAME=precise-prefix-cache-routing
 export NAMESPACE=llm-d-precise-prefix-cache-routing
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
+export ENGINE_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke
@@ -131,6 +132,18 @@ kubectl create secret generic llm-d-hf-token \
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 ```
+<!-- variants:start -->
+<details data-when="MODEL_SERVER=sglang">
+<summary><b>SGLang</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.sglang.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
@@ -154,6 +167,7 @@ helm install ${GUIDE_NAME} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
+  ${ENGINE_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
