@@ -54,7 +54,11 @@ This is an example of InferencePool rollout with node (compute, accelerator) upd
 To deploy llm-d Router in Gateway Mode follow the below instructions:
 
 1. Deploy a Kubernetes Gateway (see [gateway guides](../../docs/infrastructure/gateway))
-2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../optimized-baseline/README.md#1-deploy-the-llm-d-router))
+2. Install llm-d router with HTTPRoute enabled (see [optimized-baseline guide](../optimized-baseline/README.md#1-deploy-the-llm-d-router)) and set the deployment namespace:
+
+```bash
+export NAMESPACE=${NAMESPACE:-llm-d-optimized-baseline}
+```
 
 ### Deploy new infrastructure
 
@@ -111,7 +115,7 @@ When you are satisfied, remove the filter and continue with traffic splitting.
 By configuring an **HTTPRoute**, as shown below, you can incrementally split traffic between the original `vllm-qwen3-32b` and new `vllm-qwen3-32b-new`.
 
 ```bash
-kubectl edit httproute llm-route
+kubectl edit httproute llm-route -n ${NAMESPACE}
 ```
 
 Change the backendRefs list in HTTPRoute to match the following:
@@ -147,7 +151,7 @@ The above configuration means one in every ten requests should be sent to the ne
 1. Get the gateway IP:
 
 ```bash
-IP=$(kubectl get gateway/llm-d-inference-gateway -o jsonpath='{.status.addresses[0].value}'); PORT=80
+IP=$(kubectl get gateway/llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}'); PORT=80
 ```
 
 1. Send a few requests as follows:
@@ -190,7 +194,7 @@ spec:
 ### Delete old version of InferencePool and Endpoint Picker Extension
 
 ```shell
-helm uninstall <old-inference-pool-name>
+helm uninstall <old-inference-pool-name> -n ${NAMESPACE}
 ```
 
 With this, all requests should be served by the new Inference Pool.
