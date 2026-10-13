@@ -3,16 +3,14 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/common
   - decode.yaml
-  - prefill.yaml
-  - resource-claim-templates.yaml
+  - resource-claim-template.yaml
 
 components:
   - ../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
-  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
   - pairs:
-      llm-d.ai/model: DeepSeek-V2-Lite-Chat
+      llm-d.ai/model: Qwen3-235B-A22B
       llm-d.ai/guide: wide-ep
       llm-d.ai/accelerator-variant: xpu
       llm-d.ai/accelerator-vendor: intel

@@ -1,14 +1,14 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: wide-ep-xpu-vllm-decode
+  name: wide-ep-xpu-qwen3-235b
   labels:
-    llm-d.ai/model: DeepSeek-V2-Lite-Chat
+    llm-d.ai/model: Qwen3-235B-A22B
     llm-d.ai/role: decode
 spec:
   replicas: 1
   leaderWorkerTemplate:
-    size: 1
+    size: 2
     workerTemplate:
       metadata:
         labels:
@@ -16,7 +16,7 @@ spec:
           llm-d.ai/guide: wide-ep
           llm-d.ai/accelerator-variant: xpu
           llm-d.ai/accelerator-vendor: intel
-          llm-d.ai/model: DeepSeek-V2-Lite-Chat
+          llm-d.ai/model: Qwen3-235B-A22B
           llm-d.ai/role: decode
       spec:
         serviceAccountName: sa
@@ -25,32 +25,13 @@ spec:
           supplementalGroups:
             - 107
         resourceClaims:
-          - name: xpu-decode-claim
-            resourceClaimTemplateName: xpu-decode-claim
-        initContainers:
-          - name: routing-proxy
-            args:
-              - --port=8000
-              - --kv-connector=nixlv2
-              - --zap-log-level=1
-              - --secure-serving=false
-              - --enable-prefiller-sampling
-            image: REPLACE_ROUTING_SIDECAR_IMAGE
-            imagePullPolicy: Always
-            ports:
-              - containerPort: 8000
-                name: sidecar
-                protocol: TCP
-            resources: {}
-            restartPolicy: Always
-            securityContext:
-              allowPrivilegeEscalation: false
-              runAsNonRoot: true
+          - name: xpu-qwen3-235b-claim
+            resourceClaimTemplateName: xpu-qwen3-235b-claim
         volumes:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 16Gi
+              sizeLimit: 64Gi
           - name: hf-cache
             emptyDir: {}
           - name: vllm-cache
@@ -63,6 +44,9 @@ spec:
               capabilities:
                 add:
                   - IPC_LOCK
+                  # Required by the hostname workaround for oneCCL PR #221:
+                  # https://github.com/uxlfoundation/oneCCL/pull/221
+                  - SYS_ADMIN
               runAsGroup: 0
               runAsUser: 0
             command:
@@ -70,37 +54,34 @@ spec:
               - -c
             args:
               - |-
+                set -euo pipefail
+                hostname "qwen-${LWS_WORKER_INDEX:-0}"
                 find /dev/shm -type f -delete
 
+                START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+
                 exec vllm serve \
-                  deepseek-ai/DeepSeek-V2-Lite-Chat \
+                  Qwen/Qwen3-235B-A22B \
                   --host 0.0.0.0 \
                   --port 8200 \
                   --trust-remote-code \
-                  --dtype float16 \
+                  --dtype bfloat16 \
+                  --quantization fp8 \
                   --block-size 64 \
                   --enforce-eager \
                   --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} \
                   --max-model-len ${MAX_MODEL_LEN} \
                   --tensor-parallel-size ${TP_SIZE} \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-size-local ${DP_SIZE_LOCAL} \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --data-parallel-start-rank ${START_RANK} \
+                  --data-parallel-hybrid-lb \
                   --enable-expert-parallel \
                   --all2all-backend allgather_reducescatter \
-                  --kv-transfer-config '{"kv_connector":"NixlConnector",
-                                          "kv_role":"kv_both",
-                                          "kv_buffer_device":"xpu"}' \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             env:
-              - name: HF_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: llm-d-hf-token
-                    key: HF_TOKEN
-              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-                valueFrom:
-                  fieldRef:
-                    fieldPath: status.podIP
-              - name: VLLM_NIXL_SIDE_CHANNEL_PORT
-                value: "5600"
               - name: VLLM_USE_V1
                 value: "1"
               - name: VLLM_WORKER_MULTIPROC_METHOD
@@ -111,14 +92,38 @@ spec:
                 value: "1200"
               - name: TORCH_LLM_ALLREDUCE
                 value: "1"
+              - name: CCL_ATL_TRANSPORT
+                value: ofi
+              - name: CCL_PROCESS_LAUNCHER
+                value: none
+              - name: CCL_LOCAL_SIZE
+                value: "8"
+              - name: CCL_OFI_ENABLE_HOSTNAME_SHARING
+                value: "1"
+              - name: CCL_OFI_INIT_ENABLE_HOSTNAME_SHARING
+                value: "1"
+              - name: CCL_TOPO_FABRIC_VERTEX_CONNECTION_CHECK
+                value: "0"
+              - name: CCL_SYCL_ALLREDUCE_TMP_BUF
+                value: "1"
+              - name: CCL_LOG_LEVEL
+                value: info
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: FI_PROVIDER
+                value: verbs
+              - name: I_MPI_OFI_PROVIDER
+                value: verbs
               - name: UCX_TLS
                 value: tcp,ze_copy
               - name: UCX_MEMTYPE_CACHE
                 value: "0"
               - name: USER
                 value: llm-d
+              - name: DP_SIZE_LOCAL
+                value: "1"
               - name: TP_SIZE
-                value: "2"
+                value: "8"
               - name: MAX_MODEL_LEN
                 value: "512"
               - name: GPU_MEMORY_UTILIZATION
@@ -126,15 +131,12 @@ spec:
               - name: VLLM_LOGGING_LEVEL
                 value: INFO
               - name: HF_HUB_CACHE
-                value: /var/cache/huggingface
+                value: /var/cache/huggingface/hub
               - name: VLLM_CACHE_ROOT
                 value: /var/cache/vllm
             ports:
               - containerPort: 8200
                 name: modelserver
-                protocol: TCP
-              - containerPort: 5600
-                name: nixl
                 protocol: TCP
             startupProbe:
               httpGet:
@@ -160,13 +162,13 @@ spec:
               failureThreshold: 6
             resources:
               limits:
-                cpu: "16"
-                memory: 128Gi
+                cpu: "64"
+                memory: 512Gi
               requests:
-                cpu: "16"
-                memory: 128Gi
+                cpu: "64"
+                memory: 512Gi
               claims:
-                - name: xpu-decode-claim
+                - name: xpu-qwen3-235b-claim
             volumeMounts:
               - name: dshm
                 mountPath: /dev/shm
