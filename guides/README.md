@@ -30,7 +30,7 @@ We currently offer the following:
 
 ## Stateful APIs
 
-* [Serve the Stateful OpenAI Responses API](./agentic-api/README.md) (Experimental) - Serve `/v1/responses` with stateful multi-turn conversations, webhook tool loops and WebSocket streaming via `vllm/agentic-api` and a PostgreSQL state store in front of the llm-d Router, standalone or on top of another guide's vLLM deployment.
+* [Serve the Stateful OpenAI Responses API](./responses-api/README.md) (Experimental) - Serve `/v1/responses` with stateful multi-turn conversations, webhook tool loops and WebSocket streaming via `vllm/agentic-api` and a PostgreSQL state store in front of the llm-d Router, standalone or on top of another guide's vLLM deployment.
 
 ## Models
 

@@ -3,7 +3,7 @@
 Layer additional APIs and gateways on top of a running **llm-d** deployment:
 
 - **AI gateways** ([LiteLLM](./litellm.md), [Kong AI Gateway](./kong.md)), described below.
-- **The stateful OpenAI Responses API** for agentic clients and coding harnesses is a well-lit path of its own: [Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md).
+- **The stateful OpenAI Responses API** for agentic clients and coding harnesses is a well-lit path of its own: [Serve the Stateful OpenAI Responses API](../../../guides/responses-api/README.md).
 
 ## AI Gateways
 

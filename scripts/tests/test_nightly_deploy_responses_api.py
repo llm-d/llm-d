@@ -1,4 +1,4 @@
-"""Contract tests for the agentic-api GKE nightly deploy helper.
+"""Contract tests for the responses-api GKE nightly deploy helper.
 
 The script is run against fake kubectl/helm binaries that only log their argv
 (``kubectl kustomize`` is passed to the real kubectl, and manifests piped to
@@ -20,7 +20,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDE = ROOT / "guides/agentic-api"
+GUIDE = ROOT / "guides/responses-api"
 SCRIPT = GUIDE / "scripts/nightly-deploy-gke.sh"
 NS = "nightly-test"
 
@@ -110,8 +110,8 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path) -> None:
     assert "gateway-api-inference-extension" in calls[crd]
 
     # The router: deploy.standalone with the Optimized Baseline values, release
-    # name agentic-api, which is what LLM_API_BASE resolves the EPP from.
-    router = _index(calls, "helm install agentic-api ")
+    # name responses-api, which is what LLM_API_BASE resolves the EPP from.
+    router = _index(calls, "helm install responses-api ")
     assert f"-n {NS}" in calls[router]
     assert "guides/optimized-baseline/router/optimized-baseline.values.yaml" in calls[router]
 
@@ -142,7 +142,7 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path) -> None:
     applied = [d for d in yaml.safe_load_all((tmp_path / "stdin-applied.yaml").read_text()) if d]
     api = next(d for d in applied if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentic-api")
     assert api["spec"]["template"]["spec"]["containers"][0]["args"] == [
-        "--llm-api-base", f"http://agentic-api-epp.{NS}.svc.cluster.local:80",
+        "--llm-api-base", f"http://responses-api-epp.{NS}.svc.cluster.local:80",
     ]
 
 

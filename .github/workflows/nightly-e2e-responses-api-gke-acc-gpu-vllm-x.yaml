@@ -1,13 +1,13 @@
-name: Nightly - Agentic API E2E (GKE GPU)
+name: Nightly - Responses API E2E (GKE GPU)
 
-# Nightly regression test for the agentic-api guide (guides/agentic-api):
+# Nightly regression test for the responses-api guide (guides/responses-api):
 # vllm/agentic-api and its PostgreSQL state store in front of the guide's
 # Standalone Mode router and Qwen3-32B model server.
 #
-# Deploys via guides/agentic-api/scripts/nightly-deploy-gke.sh, which emits the
+# Deploys via guides/responses-api/scripts/nightly-deploy-gke.sh, which emits the
 # guide.yaml commands, and hands off (via --extra-validate) to
-# e2e-validate-agentic-api.sh, which runs the guide's own verify section:
-# guides/agentic-api/verify.py over a port-forward (health and model discovery,
+# e2e-validate-responses-api.sh, which runs the guide's own verify section:
+# guides/responses-api/verify.py over a port-forward (health and model discovery,
 # stateful /v1/responses continuation, the webhook tool loop, WebSocket).
 #
 # Why not the shared benchmark reusable? Two reasons:
@@ -108,7 +108,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: nightly-e2e-agentic-api-gke-gpu
+  group: nightly-e2e-responses-api-gke-gpu
   cancel-in-progress: true
 
 jobs:
@@ -116,14 +116,14 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
     with:
-      guide_name: agentic-api
-      namespace: llm-d-nightly-agentic-api-gke-gpu
-      # The smoke loop targets the guide's router (helm release agentic-api);
+      guide_name: responses-api
+      namespace: llm-d-nightly-responses-api-gke-gpu
+      # The smoke loop targets the guide's router (helm release responses-api);
       # the validator targets agentic-api on its own.
-      gateway_host: 'agentic-api-epp'
+      gateway_host: 'responses-api-epp'
       custom_deploy_script: |
-        bash guides/agentic-api/scripts/nightly-deploy-gke.sh
-      e2e_validate_args: '--extra-validate agentic-api'
+        bash guides/responses-api/scripts/nightly-deploy-gke.sh
+      e2e_validate_args: '--extra-validate responses-api'
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
       # One replica of the guide's Qwen3-32B model server, tensor parallelism 2.
@@ -148,7 +148,7 @@ jobs:
     if: always() && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: agentic-api-gke
+      badge_name: responses-api-gke
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}

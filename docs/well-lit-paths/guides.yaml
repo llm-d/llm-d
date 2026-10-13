@@ -50,7 +50,7 @@ sections:
         slug: serve-omni-models
         title: Serve Omni Models
         position: 9
-      - dir: guides/agentic-api
+      - dir: guides/responses-api
         slug: serve-responses-api
         title: Serve the Stateful OpenAI Responses API
         position: 10
