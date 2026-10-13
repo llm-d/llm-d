@@ -136,7 +136,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NA
 > `router/qwen3-coder-480b.values.yaml`. See the shared
 > [router calibration tool](../../recipes/router/calibration/README.md).
 
-**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -237,13 +237,7 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 
 - Prepare HuggingFace token secret `llm-d-hf-token` in the namespace.
 
-### 2. Download the Workload Template
-
-```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml"
-```
-
-### 3. Execute Benchmark
+### 2. Execute Benchmark
 
 ```bash
 # Benchmark parameters. CONCURRENCY_LEVEL is the number of concurrent coding sessions
@@ -256,7 +250,7 @@ export SEED=$((7 + CONCURRENCY_LEVEL))
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 
 # Render the configuration using the appropriate template:
-envsubst < guide.yaml > config.yaml
+envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml > config.yaml
 
 ./run_only.sh -c config.yaml -o ./results
 ```

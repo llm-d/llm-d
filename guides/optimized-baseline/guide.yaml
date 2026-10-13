@@ -143,6 +143,15 @@ deploy:
     - when: {MONITORING: ["true"]}
       run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 
+  # The Rebellions NPU overlay serves gpt-oss-120b with prefix caching off, so the
+  # router drops the prefix-cache-affinity-filter (router/npu.rbln.values.yaml).
+  # No nightly covers this accelerator; skip_in: [ci] keeps the README-parsing
+  # nightlies from harvesting the export.
+  accelerator_values:
+    - when: {ACCELERATOR_TYPE: [npu]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+
   standalone:
     - run: |
         # Assuming base-directory is the root of the llm-d repo
@@ -151,6 +160,7 @@ deploy:
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
           -f ${ROUTER_VALUES} \
+          ${ACCELERATOR_VALUES:-} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   gateway:
@@ -161,6 +171,7 @@ deploy:
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
           -f ${ROUTER_VALUES} \
+          ${ACCELERATOR_VALUES:-} \
           --set provider.name=${GW_PROVIDER_NAME} \
           --set httpRoute.create=true \
           --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \

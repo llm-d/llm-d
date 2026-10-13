@@ -140,7 +140,7 @@ kubectl create secret generic llm-d-hf-token \
 **Prepare the paths to the `helm` values files** for the `llm-d` router. The router values
 ([`deepseek-v4.values.yaml`](router/deepseek-v4.values.yaml)) run separate `prefill` and
 `decode` scheduling profiles (prefix-cache, queue and active-request scoring for prefill;
-active-request scoring for decode) over all 8 DP rank ports, and pin each request to one
+active-request scoring for decode) and pin each request to one
 `DisaggregatedSet` revision during rollouts:
 
 <!-- guide:deploy.router_values start -->
@@ -160,7 +160,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -191,8 +191,9 @@ Each deployment is a different prefill : decode operating point. Set `DEPLOYMENT
 | `oci-3p2d-dep8-dep16-flashinfer` | 3 prefill (DEP8) : 2 decode (DEP16), flashinfer | 14 / 56 |
 
 **Apply the Kustomize overlay** for your deployment. The deployments compose the `providers/oci`
-overlay (node-local NVMe model cache and the `ComputeDomain` claim) with a topology component
-from `modelserver/gpu/vllm/components/`:
+overlay (node-local NVMe model cache and the `ComputeDomain` claim), or `base-low-latency` with the
+same OCI settings inlined for the two low-latency variants, with a topology component from
+`modelserver/gpu/vllm/components/`:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -207,7 +208,7 @@ Wait for the pods to become ready (the ~850 GB model takes a while to download a
 kubectl get pods -n ${NAMESPACE} -l llm-d.ai/model=DeepSeek-V4-Pro -w
 ```
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)). With DP-aware scheduling, each DP rank is available at `podip:port`, where each port is `rank0`-`rank7`; this overlay scrapes each rank's port:
+**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
 <!-- guide:deploy.monitoring start -->
 ```bash

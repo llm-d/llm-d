@@ -10,4 +10,3 @@ resources:
 patches:
   - path: patch-amd-ci.yaml
   - path: patch-amd-ci-fabric.yaml
-  - path: patch-amd-ci-lws-v0.9.yaml

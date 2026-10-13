@@ -36,7 +36,8 @@ This guide includes configurations for the following accelerator and model serve
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU) |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` |
+| Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=4) · `CONNECTOR=native`, `VARIANT=cpu` · nightly runs on Spot capacity |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -46,7 +47,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total) and enough host memory for the CPU tier. If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total) and enough host memory for the CPU tier. If your cluster has fewer resources, adjust `replicas` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) and `--tensor-parallel-size` in the connector overlay you deploy (for example [native/cpu](./modelserver/gpu/vllm/native/cpu/base/patch-vllm.yaml)) for your environment.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -78,7 +79,7 @@ export GUIDE_NAME=tiered-prefix-cache
 export NAMESPACE=llm-d-tiered-prefix-cache
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7
 export MODEL_SERVER=vllm # options: vllm, sglang
 export CONNECTOR=native # options: native, lmcache-connector, mooncake-store; offloading implementation (table above)
 export VARIANT=cpu # options: cpu, fs; offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem
@@ -181,7 +182,7 @@ The filesystem tier works with any storage system that exposes a ReadWriteMany P
 
 | Backend | `STORAGE_CLASS` | Setup |
 | ------- | --------------- | ----- |
-| GCP Lustre (GKE) | `lustre` | [GCP Lustre guide](./manifests/backends/lustre/README.md) |
+| GCP Lustre (GKE) | `lustre-class` | [GCP Lustre guide](./manifests/backends/lustre/README.md) |
 | AWS EFS | `efs-sc` | [EFS guide](./manifests/backends/aws/README.md) |
 
 The connectors do not evict data from the shared tier. Capacity is managed by the storage system or by an external controller; a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache).
@@ -227,7 +228,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver end -->
 
-The ROCm native overlays raise vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path; see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
+The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path (the filesystem overlay leaves it unchanged); see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
 
 **(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 

@@ -170,6 +170,23 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
+**(Rebellions NPU only) Layer the NPU router values**, which drop the prefix-cache affinity filter because the NPU overlay serves with prefix caching off:
+
+<!-- guide:deploy.accelerator_values start -->
+<!-- variants:start -->
+<details data-when="ACCELERATOR_TYPE=npu">
+<summary><b>Rebellions NPU</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
+<!-- guide:deploy.accelerator_values end -->
+
 **Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
 
 <!-- tabs:start group=mode -->
@@ -186,6 +203,7 @@ helm install ${GUIDE_NAME} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
+  ${ACCELERATOR_VALUES:-} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
@@ -209,6 +227,7 @@ helm install ${GUIDE_NAME} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
+  ${ACCELERATOR_VALUES:-} \
   --set provider.name=${GW_PROVIDER_NAME} \
   --set httpRoute.create=true \
   --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \

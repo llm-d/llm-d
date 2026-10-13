@@ -168,7 +168,7 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 2. *Deploy the llm-d Router and an HTTPRoute*. The following deploys the llm-d Router with an HTTPRoute that connects it to the Gateway created in the previous step (set `provider.name` to the gateway provider you deployed):
 
 ```bash
-export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+export PROVIDER_NAME=gke # other: none, agentgateway, or istio
 helm install ${RELEASE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \

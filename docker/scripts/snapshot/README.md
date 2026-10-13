@@ -40,11 +40,15 @@ flowchart TD
 
 ```text
 docker/scripts/snapshot/
-├── __init__.py           # Package exports (GKESnapshotProvider, patch_vllm_lifespan, get_snapshot_provider)
+├── __init__.py           # Package exports (GKESnapshotProvider, SnapshotError, get_snapshot_provider)
 ├── launcher.py           # CLI entrypoint wrapping vllm serve
 ├── providers.py          # GKESnapshotProvider and provider factory
 ├── test_providers.py     # Unit test suite
 ├── README.md             # Developer documentation
+├── sglang/
+│   ├── __init__.py       # SGLang integration exports
+│   ├── launcher.py       # CLI entrypoint wrapping SGLang's launch_server
+│   └── wrapper.py        # Warmup hook and snapshot callback
 └── vllm/
     ├── __init__.py       # vLLM integration exports
     └── wrapper.py        # FastAPI lifespan context manager patch
@@ -70,6 +74,22 @@ docker/scripts/snapshot/
 
 - **[`providers.py`](providers.py) (`get_snapshot_provider`)**:
   Factory function that returns a `GKESnapshotProvider` if `SNAPSHOT_PROVIDER=gke_gvisor`, or `None` if unset/disabled.
+
+---
+
+## SGLang
+
+[`sglang/launcher.py`](sglang/launcher.py) starts SGLang's HTTP server with two hooks from [`sglang/wrapper.py`](sglang/wrapper.py), so the sleep/snapshot/wake cycle finishes before the server reports ready:
+
+- `execute_warmup_func` (`sglang_warmup_and_hold`): runs SGLang's server warmup, then holds the server status at `Starting` so readiness probes keep failing.
+- `launch_callback` (`sglang_snapshot_callback`): releases GPU memory with `POST /release_memory_occupation`, triggers the snapshot, resumes GPU memory with `POST /resume_memory_occupation`, then restores the server status. SGLang calls `launch_callback` with or without `--skip-server-warmup`.
+
+> [!IMPORTANT]
+> Start SGLang with `--enable-memory-saver` and `--enable-weights-cpu-backup`, which together are SGLang's counterpart to vLLM's `--enable-sleep-mode`. Without `--enable-memory-saver`, `POST /release_memory_occupation` succeeds but frees no GPU memory, so the snapshot is taken with that memory still allocated. Without `--enable-weights-cpu-backup`, releasing GPU memory would throw the model weights away instead of copying them to CPU memory.
+
+If the snapshot trigger fails, the server resumes and starts without a snapshot. If releasing or resuming GPU memory fails, the server process is terminated. If either `--enable-memory-saver` or `--enable-weights-cpu-backup` is omitted, no snapshot is taken and a warning is logged.
+
+Scope is single-rank Python HTTP server deployments (`--tokenizer-worker-num 1`, without `SGLANG_RUST_SERVER`).
 
 ---
 
