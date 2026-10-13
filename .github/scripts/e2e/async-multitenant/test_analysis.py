@@ -756,3 +756,255 @@ class WrapperTests(unittest.TestCase):
         ok = subprocess.run(["bash", str(self.SCRIPT), "--help"], capture_output=True, text=True)
         self.assertEqual(ok.returncode, 0)
         self.assertIn("Usage:", ok.stdout)
+
+
+def _iso(t: float) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+
+def _treatment(root: Path, name: str, t0: float, duration: float = 120.0, step: float = 1.0,
+               service: float = 2.0) -> Path:
+    """A treatment's results dir: one request per `step` seconds, epoch-stamped."""
+    d = root / name
+    d.mkdir(parents=True)
+    items, s = [], 0.0
+    while s + service <= duration:
+        items.append(lifecycle(t0 + s, t0 + s + service, token_times=[t0 + s + 0.1]))
+        s += step
+    (d / a.PER_REQUEST_FILENAME).write_text(json.dumps(items))
+    (d / "run_metadata.yaml").write_text(
+        f'harness_start: "{_iso(t0)}"\nharness_stop: "{_iso(t0 + duration)}"\nnamespace: "ns"\n')
+    return d
+
+
+class AnalyzeTests(unittest.TestCase):
+    """run.analyze(): which window feeds which check, and where capacity results go."""
+
+    LEVELS = (20, 100)
+    T0 = 1.8e9
+
+    def setUp(self):
+        import run
+
+        self.run = run
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        # Treatments run one after another, 200 s apart; a level's mixed members overlap.
+        t = self.T0
+        self.results = {}
+        for level in self.LEVELS:
+            self.results[f"baseline_{level}"] = _treatment(root, f"baseline_{level}", t)
+            self.results[f"mixed_{level}_rt"] = _treatment(root, f"mixed_{level}_rt", t + 200)
+            self.results[f"mixed_{level}_async"] = _treatment(root, f"mixed_{level}_async", t + 205, step=0.5)
+            t += 400
+        self.results["async_only"] = _treatment(root, "async_only", t, step=0.5)
+        # One sample every 5 s from before the run to after it; cumulative counters
+        # start at the pre-run values (realtime 7, batch 3) and grow.
+        self.samples = [
+            a.Sample(t=ts, running=8.0, saturation=0.8,
+                     band_requests={100: 7 + 2 * i, 30: 3 + i, -10: 3 * i})
+            for i, ts in enumerate(range(int(self.T0) - 10, int(t) + 130, 5))]
+        self.cfg = type("Cfg", (), {
+            "namespace": "ns", "model": "m", "flow_control": "evictable", "dry_run": False,
+            "levels": self.LEVELS,
+            "router_values": run.GUIDE_DIR / "values" / "router" / "flow-control-evictable.yaml"})()
+        self.env = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith(a.ENV_PREFIX)}
+
+    def tearDown(self):
+        os.environ.pop(f"{a.ENV_PREFIX}ENFORCE_CAPACITY", None)
+        os.environ.update(self.env)
+        self.tmp.cleanup()
+
+    def _analyze(self, results=None):
+        calls = []
+        real = self.run.analysis.dispatch_rate
+
+        def spy(samples, window, priorities):
+            calls.append((window, tuple(priorities)))
+            return real(samples, window, priorities)
+
+        self.run.analysis.dispatch_rate = spy
+        try:
+            report, checks = self.run.analyze(self.cfg, 10, self.results if results is None else results,
+                                              self.samples, "")
+        finally:
+            self.run.analysis.dispatch_rate = real
+        return report, {c.name: c for c in checks}, calls
+
+    def test_windows_feeding_the_dispatch_rate(self):
+        _, _, calls = self._analyze()
+        warm = a.tolerance("WARMUP_S", {})
+        expected = []
+        for level in self.LEVELS:   # each level: the overlap of its two mixed members
+            rt = a.load_treatment(self.results[f"mixed_{level}_rt"])
+            asy = a.load_treatment(self.results[f"mixed_{level}_async"])
+            expected.append((a.overlap_window(rt, asy, warm), a.ASYNC_PRIORITIES))
+        # async-only: its own harness window, not a mixed one
+        meta = a.read_flat_yaml(self.results["async_only"] / "run_metadata.yaml")
+        expected.append((a.epoch_window_from_metadata(meta, warm), a.ASYNC_PRIORITIES))
+        self.assertEqual(calls, expected)
+        self.assertTrue(all(w is not None for w, _ in calls))
+
+    def test_checks_per_level_and_band_counts(self):
+        report, checks, _ = self._analyze()
+        for level in self.LEVELS:
+            for suffix in ("ttft p90", "e2e p90", "req/s", "realtime errors", "streaming sanity"):
+                self.assertIn(f"L{level} {suffix}", checks)
+        self.assertIn("L20 async uses slack", checks)        # only at the slack level
+        self.assertNotIn("L100 async uses slack", checks)
+        self.assertIn("async-only dispatch rate", checks)
+        self.assertEqual([row["level"] for row in report["levels"]], list(self.LEVELS))
+        # Band counts are this run's increase, not the cumulative value.
+        last, first = self.samples[-1].band_requests, self.samples[0].band_requests
+        self.assertEqual(report["band_requests"], {str(p): last[p] - first[p] for p in last})
+        self.assertTrue(checks["realtime classified into band 100"].passed)
+        self.assertTrue(checks["async classified into async bands"].passed)
+
+    def test_capacity_results_are_observations_unless_enforced(self):
+        report, checks, _ = self._analyze()
+        observed = {o["name"] for o in report["observations"]}
+        self.assertEqual(observed, {"L20 pool held at capacity", "L100 pool held at capacity",
+                                    "async-only pool held at capacity"})
+        self.assertFalse(any("pool held at capacity" in name for name in checks))
+        os.environ[f"{a.ENV_PREFIX}ENFORCE_CAPACITY"] = "1"
+        report, checks, _ = self._analyze()
+        self.assertEqual(report["observations"], [])
+        self.assertTrue(observed <= set(checks))
+
+    def test_missing_treatment_fails_and_skips_its_level(self):
+        results = {k: v for k, v in self.results.items() if k != "mixed_100_async"}
+        report, checks, _ = self._analyze(results)
+        self.assertFalse(checks["results for mixed_100_async"].passed)
+        self.assertNotIn("L100 ttft p90", checks)
+        self.assertEqual([row["level"] for row in report["levels"]], [20])
+
+
+class RetryTests(unittest.TestCase):
+    """run.retry_invalid_levels(): the re-run and merge loop."""
+
+    OLD = {"baseline_20": "b1", "mixed_20_rt": "r1", "mixed_20_async": "a1", "async_only": "o1"}
+    NEW = {"baseline_20": "b2", "mixed_20_rt": "r2", "mixed_20_async": "a2"}
+
+    def _retry(self, plans, collected, retries=2, dry_run=False):
+        import run
+
+        cfg = type("Cfg", (), {"dry_run": dry_run, "retries": retries, "levels": (20,),
+                               "workdir": Path(tempfile.gettempdir())})()
+        runs, excludes = [], []
+        plans, collected = list(plans), list(collected)
+        patches = {
+            "render_experiment": lambda c, cap, levels, include_async_only, name: Path(name),
+            "run_experiment": lambda c, clone, cli, exp, log_name: runs.append((str(exp), log_name)) or 0,
+            "results_roots": lambda c: {Path("before")},
+            "collect_results": lambda c, exclude=frozenset(): excludes.append(exclude) or collected.pop(0),
+        }
+        saved = {k: getattr(run, k) for k in patches}
+        saved_plan, saved_load = run.analysis.rerun_plan, run.analysis.load_treatment
+        try:
+            for k, v in patches.items():
+                setattr(run, k, v)
+            run.analysis.rerun_plan = lambda levels, records, env: plans.pop(0)
+            run.analysis.load_treatment = lambda d: []
+            merged = run.retry_invalid_levels(cfg, 10, Path("clone"), ["cli"], dict(self.OLD))
+        finally:
+            for k, v in saved.items():
+                setattr(run, k, v)
+            run.analysis.rerun_plan, run.analysis.load_treatment = saved_plan, saved_load
+        return merged, runs, excludes
+
+    def test_nothing_to_rerun(self):
+        merged, runs, _ = self._retry([([], False)], [])
+        self.assertEqual((merged, runs), (self.OLD, []))
+
+    def test_rerun_replaces_a_level_and_stops_when_valid(self):
+        merged, runs, excludes = self._retry([([20], False), ([], False)], [dict(self.NEW)])
+        self.assertEqual(merged, {**self.OLD, **self.NEW})
+        self.assertEqual(runs, [("experiment-retry1.yaml", "llmdbenchmark-retry1.log")])
+        self.assertEqual(excludes, [{Path("before")}])   # results that predate the re-run are ignored
+
+    def test_incomplete_reruns_keep_the_first_run_until_retries_run_out(self):
+        merged, runs, _ = self._retry([([20], False), ([20], False)], [{}, {"baseline_20": "b3"}], retries=2)
+        self.assertEqual(merged, self.OLD)
+        self.assertEqual(len(runs), 2)
+
+    def test_dry_run_never_reruns(self):
+        merged, runs, _ = self._retry([], [], dry_run=True)
+        self.assertEqual((merged, runs), (self.OLD, []))
+
+
+class MainExitCodeTests(unittest.TestCase):
+    """run.main(): exit codes for missing results, failed checks, dry runs and errors."""
+
+    def _main(self, *, checks=(), results=None, dry_run=False, raise_in_preflight=False):
+        import run
+        import experiment
+
+        levels = (20,) if dry_run else (20, 80, 90, 100)
+        if results is None:
+            results = {name: Path(name) for name in experiment.treatment_names(levels)}
+        written = []
+
+        class FakeSampler:
+            samples: list = []
+
+            def __init__(self, cfg): pass
+            def start_pod(self): pass
+            def start(self): pass
+            def stop(self): pass
+            def is_alive(self): return False
+            def cleanup(self): pass
+            def scrape_epp_full(self): return ""
+
+        def preflight(cfg):
+            if raise_in_preflight:
+                raise RuntimeError("no coordinator")
+
+        patches = {
+            "preflight": preflight, "discover_model": lambda cfg: "m", "detect_capacity": lambda cfg: 10,
+            "Sampler": FakeSampler, "install_cli": lambda cfg: (Path("clone"), ["cli"]),
+            "check_profiles": lambda clone: None, "render_experiment": lambda cfg, cap: Path("exp.yaml"),
+            "run_experiment": lambda cfg, clone, cli, exp: 0, "collect_results": lambda cfg: dict(results),
+            "retry_invalid_levels": lambda cfg, cap, clone, cli, res: res,
+            "analyze": lambda cfg, cap, res, samples, epp: ({"checks": [], "observations": []}, list(checks)),
+            "write_outputs": lambda cfg, report, *rest, **kw: written.append(report),
+        }
+        saved = {k: getattr(run, k) for k in patches}
+        saved_argv = sys.argv
+        env_saved = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith(a.ENV_PREFIX)}
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ[f"{a.ENV_PREFIX}SETTINGS_FILE"] = str(Path(tmp) / "none.env")
+            os.environ[f"{a.ENV_PREFIX}WORKDIR"] = tmp
+            try:
+                for k, v in patches.items():
+                    setattr(run, k, v)
+                sys.argv = ["run.py", "-n", "ns", "-m", "m"] + (["--dry-run"] if dry_run else [])
+                rc = run.main()
+            finally:
+                for k, v in saved.items():
+                    setattr(run, k, v)
+                sys.argv = saved_argv
+                for k in [k for k in os.environ if k.startswith(a.ENV_PREFIX)]:
+                    del os.environ[k]
+                os.environ.update(env_saved)
+        return rc, written
+
+    PASS = a.Check("ok", True, "")
+    FAIL = a.Check("bad", False, "")
+
+    def test_all_checks_pass(self):
+        self.assertEqual(self._main(checks=[self.PASS])[0], 0)
+
+    def test_missing_results_fail_even_when_checks_pass(self):
+        self.assertEqual(self._main(checks=[self.PASS], results={"baseline_20": Path("b")})[0], 1)
+
+    def test_failed_check_fails_an_enforced_run(self):
+        self.assertEqual(self._main(checks=[self.PASS, self.FAIL])[0], 1)
+
+    def test_dry_run_only_reports_failed_checks(self):
+        self.assertEqual(self._main(checks=[self.FAIL], dry_run=True)[0], 0)
+
+    def test_an_error_fails_the_run_and_still_writes_artifacts(self):
+        rc, written = self._main(raise_in_preflight=True)
+        self.assertEqual(rc, 1)
+        self.assertEqual(written[0]["error"], "no coordinator")
