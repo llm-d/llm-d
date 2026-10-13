@@ -132,7 +132,7 @@ deploy:
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}/
 
   monitoring:
-    - when: {MONITORING: ["true"]}
+    - when: {MONITORING: ["true"], MODEL_SERVER: [vllmomni]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
@@ -165,7 +165,7 @@ verify:
               --env="MODEL=${MODEL}" \
               -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
                 -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"Say hello to llm-d in one short sentence.\"}], \"modalities\": [\"text\", \"audio\"]}" \
-                | jq -r ".choices[] | if .message.audio then \"audio: \(.message.audio.data | length) base64 characters\" else \"text: \(.message.content)\" end"'
+                | jq -r ".choices[].message | (if .content then \"text: \(.content)\" else empty end), (if .audio then \"audio: \(.audio.data | length) base64 characters\" else empty end)"'
     text-to-image:
       - when: {TASK: [text-to-image]}
         run: |
