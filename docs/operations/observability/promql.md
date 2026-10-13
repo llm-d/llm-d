@@ -16,9 +16,9 @@ Start here when something looks wrong.
 | **Overall Latency P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket[5m])))` |
 | **Overall Latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_request_duration_seconds_bucket[5m])))` |
 | **TTFT P99 per model** | `histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:time_to_first_token_seconds_bucket[5m])))` |
-| **TTFT P99 per model (SGLang)** | `histogram_quantile(0.99, sum by(le, model_name) (rate(sglang_time_to_first_token_seconds_bucket[5m])))` |
+| **TTFT P99 per model (SGLang)** | `histogram_quantile(0.99, sum by(le, model_name) (rate(sglang:time_to_first_token_seconds_bucket[5m])))` |
 | **Inter-Token Latency P99** | `histogram_quantile(0.99, sum by(le, model_name) (rate(vllm:inter_token_latency_seconds_bucket[5m])))` |
-| **Inter-Token Latency P99 (SGLang)** | `histogram_quantile(0.99, sum by(le, model_name) (rate(sglang_inter_token_latency_seconds_bucket[5m])))` |
+| **Inter-Token Latency P99 (SGLang)** | `histogram_quantile(0.99, sum by(le, model_name) (rate(sglang:inter_token_latency_seconds_bucket[5m])))` |
 | **Request Rate** | `sum by(model_name) (rate(llm_d_epp_request_total[5m]))` |
 | **GPU Utilization** | `avg by(gpu, node) (DCGM_FI_DEV_GPU_UTIL or nvidia_gpu_duty_cycle)` |
 | **EPP E2E Latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_scheduler_e2e_duration_seconds_bucket[5m])))` |
@@ -41,15 +41,15 @@ adds instance, model, and topology filters.
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
 | **KV Cache Utilization** | `avg by(pod, model_name) (vllm:kv_cache_usage_perc)` |
-| **KV Cache Utilization (SGLang)** | `avg by(pod, model_name) (sglang_token_usage)` |
+| **KV Cache Utilization (SGLang)** | `avg by(pod, model_name) (sglang:token_usage)` |
 | **Request Queue Depth** | `sum by(pod, model_name) (vllm:num_requests_waiting)` |
-| **Request Queue Depth (SGLang)** | `sum by(pod, model_name) (sglang_num_queue_reqs)` |
+| **Request Queue Depth (SGLang)** | `sum by(pod, model_name) (sglang:num_queue_reqs)` |
 | **Active Requests** | `avg by(pod) (vllm:num_requests_running)` |
-| **Active Requests (SGLang)** | `avg by(pod) (sglang_num_running_reqs)` |
+| **Active Requests (SGLang)** | `avg by(pod) (sglang:num_running_reqs)` |
 | **Total Throughput** (tokens/sec) | `sum by(model_name, pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
-| **Total Throughput (SGLang)** (tokens/sec) | `sum by(model_name, pod) (rate(sglang_prompt_tokens_total[5m]) + rate(sglang_generation_tokens_total[5m]))` |
+| **Total Throughput (SGLang)** (tokens/sec) | `sum by(model_name, pod) (rate(sglang:prompt_tokens_total[5m]) + rate(sglang:generation_tokens_total[5m]))` |
 | **Generation Token Rate** | `sum by(model_name, pod) (rate(vllm:generation_tokens_total[5m]))` |
-| **Generation Token Rate (SGLang)** | `sum by(model_name, pod) (rate(sglang_generation_tokens_total[5m]))` |
+| **Generation Token Rate (SGLang)** | `sum by(model_name, pod) (rate(sglang:generation_tokens_total[5m]))` |
 
 ### Routing & Load Balancing
 
@@ -57,7 +57,7 @@ adds instance, model, and topology filters.
 | ----------- | ------------ |
 | **QPS per endpoint** | `sum by(endpoint_name) (rate(llm_d_epp_scheduler_attempts_total{status="success"}[5m]))` |
 | **Token distribution per pod** | `sum by(pod) (rate(vllm:prompt_tokens_total[5m]) + rate(vllm:generation_tokens_total[5m]))` |
-| **Token distribution per pod (SGLang)** | `sum by(pod) (rate(sglang_prompt_tokens_total[5m]) + rate(sglang_generation_tokens_total[5m]))` |
+| **Token distribution per pod (SGLang)** | `sum by(pod) (rate(sglang:prompt_tokens_total[5m]) + rate(sglang:generation_tokens_total[5m]))` |
 | **Routing decision latency P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_plugin_duration_seconds_bucket[5m])))` |
 
 ### Prefix Caching
@@ -65,9 +65,9 @@ adds instance, model, and topology filters.
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
 | **Cache hit rate** | `sum(rate(vllm:prefix_cache_hits_total[5m])) / sum(rate(vllm:prefix_cache_queries_total[5m]))` |
-| **Cache hit rate (SGLang)** | `avg(sglang_cache_hit_rate)` |
+| **Cache hit rate (SGLang)** | `avg(sglang:cache_hit_rate)` |
 | **Per-pod hit rate** | `sum by(pod) (rate(vllm:prefix_cache_hits_total[5m])) / sum by(pod) (rate(vllm:prefix_cache_queries_total[5m]))` |
-| **Per-pod hit rate (SGLang)** | `sglang_cache_hit_rate` |
+| **Per-pod hit rate (SGLang)** | `sglang:cache_hit_rate` |
 | **EPP prefix indexer size** | `llm_d_epp_prefix_indexer_size` |
 | **EPP prefix hit ratio P90** | `histogram_quantile(0.90, sum by(le) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
 
@@ -84,8 +84,8 @@ Queries for the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/
 | **Offload store allocation failures in 5m** | `sum by(pod) (increase(vllm:kv_offload_allocation_failure_total[5m]))` |
 | **EPP prefix index size by tier** | `sum by(plugin_name) (llm_d_epp_prefix_indexer_size)` |
 | **EPP prefix hit ratio P90 by tier** | `histogram_quantile(0.90, sum by(le, plugin_name) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
-| **Host tier usage (SGLang HiCache)** | `sum by(pod) (sglang_hicache_host_used_tokens) / sum by(pod) (sglang_hicache_host_total_tokens)` |
-| **Share of prompt tokens served from host tier (SGLang HiCache)** | `sum(rate(sglang_cached_tokens_total{cache_source="host"}[5m])) / sum(rate(sglang_prompt_tokens_total[5m]))` |
+| **Host tier usage (SGLang HiCache)** | `sum by(pod) (sglang:hicache_host_used_tokens) / sum by(pod) (sglang:hicache_host_total_tokens)` |
+| **Share of prompt tokens served from host tier (SGLang HiCache)** | `sum(rate(sglang:cached_tokens_total{cache_source="host"}[5m])) / sum(rate(sglang:prompt_tokens_total[5m]))` |
 | **Retrieve hit rate (LMCache)** | `avg by(pod) (lmcache:retrieve_hit_rate)` |
 
 `vllm:external_prefix_cache_hits_total` counts tokens the connector reports as available at scheduling time, before the load completes. `vllm:kv_offload_load_bytes_total` counts bytes actually loaded back to the GPU.
@@ -95,7 +95,7 @@ Queries for the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/
 | Metric Need | PromQL Query |
 | ----------- | ------------ |
 | **Prefill worker utilization** | `avg by(pod) (vllm:num_requests_running{pod=~".*prefill.*"})` |
-| **Prefill worker utilization (SGLang)** | `avg by(pod) (sglang_num_running_reqs{pod=~".*prefill.*"})` |
+| **Prefill worker utilization (SGLang)** | `avg by(pod) (sglang:num_running_reqs{pod=~".*prefill.*"})` |
 | **Decode KV cache utilization** | `avg by(pod) (vllm:kv_cache_usage_perc{pod=~".*decode.*"})` |
 | **Disaggregation decision ratio** | `sum(rate(llm_d_epp_disagg_decision_total{decision_type="prefill-decode"}[5m])) / sum(rate(llm_d_epp_disagg_decision_total[5m]))` |
 | **Average NIXL transfer time (ms)** | `sum(rate(vllm:nixl_xfer_time_seconds_sum[5m])) / sum(rate(vllm:nixl_xfer_time_seconds_count[5m])) * 1000` |

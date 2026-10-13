@@ -136,8 +136,8 @@ kubectl apply -f servicemonitor-vllm.yaml
 ### Verify
 
 ```bash
-kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090
-curl -sk 'https://localhost:9090/api/v1/targets' | jq '.data.activeTargets[] | select(.labels.namespace=="'${NAMESPACE}'") | {job: .labels.job, health: .health}'
+kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &
+curl -sk 'http://localhost:9090/api/v1/targets' | jq '.data.activeTargets[] | select(.labels.namespace=="'${NAMESPACE}'") | {job: .labels.job, health: .health}'
 ```
 
 Targets should show `"health": "up"`. Then proceed to Step 2 for dashboards.

@@ -54,14 +54,14 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 
 | Metric | What it measures | Why it matters |
 | -------- | ----------------- | ---------------- |
-| `sglang_num_running_reqs` | Active requests being processed | High values indicate GPU saturation; new requests will queue |
-| `sglang_num_queue_reqs` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
-| `sglang_token_usage` | KV cache token utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full |
-| `sglang_cache_hit_rate` | Prefix cache hit rate (0.0 to 1.0) | High hit rate indicates efficient KV cache reuse |
-| `sglang_time_to_first_token_seconds` (histogram) | Time from request arrival to first generated token (TTFT) | Directly impacts user experience. Use `histogram_quantile()` to query percentiles |
-| `sglang_inter_token_latency_seconds` (histogram) | Time between consecutive generated tokens (ITL) | Affects streaming response speed. Use `histogram_quantile()` to query percentiles |
-| `sglang_prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod |
-| `sglang_generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput |
+| `sglang:num_running_reqs` | Active requests being processed | High values indicate GPU saturation; new requests will queue |
+| `sglang:num_queue_reqs` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
+| `sglang:token_usage` | KV cache token utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full |
+| `sglang:cache_hit_rate` | Prefix cache hit rate (0.0 to 1.0) | High hit rate indicates efficient KV cache reuse |
+| `sglang:time_to_first_token_seconds` (histogram) | Time from request arrival to first generated token (TTFT) | Directly impacts user experience. Use `histogram_quantile()` to query percentiles |
+| `sglang:inter_token_latency_seconds` (histogram) | Time between consecutive generated tokens (ITL) | Affects streaming response speed. Use `histogram_quantile()` to query percentiles |
+| `sglang:prompt_tokens_total` | Total input tokens processed | Use `rate()` to get tokens/sec per pod |
+| `sglang:generation_tokens_total` | Total output tokens generated | Use `rate()` alongside prompt tokens to get total throughput |
 
 ### SGLang HiCache Metrics
 
@@ -69,9 +69,9 @@ When HiCache is enabled (the SGLang path in the [tiered prefix cache guide](../.
 
 | Metric | What it measures | Why it matters |
 |--------|------------------|----------------|
-| `sglang_hicache_host_used_tokens` | Tokens currently held in the host KV cache | Divide by `sglang_hicache_host_total_tokens` for host tier occupancy |
-| `sglang_hicache_host_total_tokens` | Host KV cache capacity in tokens | Denominator for host tier occupancy |
-| `sglang_evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
-| `sglang_load_back_tokens_total` | Tokens loaded from host back to GPU | Confirms host tier blocks are being reused |
-| `sglang_load_back_duration_seconds` (histogram) | Time to load KV cache from host back to GPU | Slow load-back cuts into the TTFT gain from offloading |
-| `sglang_cached_tokens_total` | Cached prompt tokens by `cache_source` (`device`, `host`, `storage_<backend>`, or `total` when unsplit) | Attributes prefix cache hits to each tier |
+| `sglang:hicache_host_used_tokens` | Tokens currently held in the host KV cache | Divide by `sglang:hicache_host_total_tokens` for host tier occupancy |
+| `sglang:hicache_host_total_tokens` | Host KV cache capacity in tokens | Denominator for host tier occupancy |
+| `sglang:evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
+| `sglang:load_back_tokens_total` | Tokens loaded from host back to GPU | Confirms host tier blocks are being reused |
+| `sglang:load_back_duration_seconds` (histogram) | Time to load KV cache from host back to GPU | Slow load-back cuts into the TTFT gain from offloading |
+| `sglang:cached_tokens_total` | Cached prompt tokens by `cache_source` (`device`, `host`, `storage_<backend>`, or `total` when unsplit) | Attributes prefix cache hits to each tier |
