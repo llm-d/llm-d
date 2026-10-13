@@ -506,8 +506,6 @@ def compare_level(level: int, baseline: Summary, mixed: Summary, env: Mapping[st
     checks.append(_upper_bound_check(f"{p} e2e p90", mixed.e2e_p90, baseline.e2e_p90, t("E2E_FACTOR"), t("E2E_ABS")))
     checks.append(_lower_bound_check(f"{p} req/s", mixed.rps, baseline.rps, t("RPS_FACTOR"), " req/s"))
     checks.append(_lower_bound_check(f"{p} output tok/s", mixed.output_tps, baseline.output_tps, t("TPS_FACTOR"), " tok/s"))
-    if level == min(LEVEL_DEFAULTS) if LEVEL_DEFAULTS else False:
-        pass
     # At 20 % the pool has spare capacity that queued async work should use. The
     # router's dispatch counter is the measure: with a deep backlog most async
     # clients time out before their turn, so client completions read near zero.

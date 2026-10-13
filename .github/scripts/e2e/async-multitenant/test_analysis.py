@@ -741,3 +741,18 @@ class ResultsSelectionTests(unittest.TestCase):
             finally:
                 run.coordinator_logs = orig
             self.assertTrue((saved / "data.json").is_file())   # not deleted by its own copy
+
+
+class WrapperTests(unittest.TestCase):
+    SCRIPT = Path(__file__).resolve().parent.parent / "e2e-validate-async-multitenant.sh"
+
+    def test_unknown_option_fails(self):
+        import subprocess
+
+        bad = subprocess.run(["bash", str(self.SCRIPT), "--bogus"], capture_output=True, text=True)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("Unknown option: --bogus", bad.stderr)
+        self.assertIn("Usage:", bad.stderr)
+        ok = subprocess.run(["bash", str(self.SCRIPT), "--help"], capture_output=True, text=True)
+        self.assertEqual(ok.returncode, 0)
+        self.assertIn("Usage:", ok.stdout)

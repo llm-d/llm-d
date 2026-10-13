@@ -28,7 +28,6 @@ Options:
   --set KEY=VALUE             Validator setting (AMT_* or LLMDBENCH_*), repeatable
   -h, --help                  Show help
 EOF
-  exit 0
 }
 
 NAMESPACE="llm-d"
@@ -44,8 +43,10 @@ while [[ $# -gt 0 ]]; do
     -v|--verbose)   VERBOSE=true; shift ;;
     --dry-run)      DRY_RUN=true; shift ;;
     --set)          SETTINGS+=(--set "$2"); shift 2 ;;
-    -h|--help)      show_help ;;
-    *) echo "Unknown option: $1"; show_help ;;
+    -h|--help)      show_help; exit 0 ;;
+    # Fail, not exit 0 like --help: a mistyped flag in a workflow's
+    # e2e_validate_args must not pass the validation step without running it.
+    *) echo "Unknown option: $1" >&2; show_help >&2; exit 1 ;;
   esac
 done
 
