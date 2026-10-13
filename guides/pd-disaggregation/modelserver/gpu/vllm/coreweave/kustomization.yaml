@@ -41,13 +41,11 @@ patches:
                           - mountPath: /root/.cache/huggingface
                             name: huggingface-cache
                     volumes:
-                      # Model weights on an RWX PVC rather than a node-local hostPath.
-                      # CoreWeave's /var/cache/huggingface is a 15 GB ramdisk (/dev/ram0),
-                      # far too small for gpt-oss-120b (60.8 GiB of safetensors), so a
-                      # hostPath there fails with `OSError: [Errno 28] No space left on
-                      # device` during the first download. Requires the `model-pvc` PVC to
-                      # exist in the namespace and the default StorageClass to support
-                      # ReadWriteMany -- see the guide README.
+                      # Model weights on an RWX PVC rather than a node-local hostPath:
+                      # CoreWeave's /var/cache/huggingface is a 15 GB ramdisk, far too
+                      # small for the model weights. Requires the `model-pvc` PVC in the
+                      # namespace and an RWX default StorageClass -- see
+                      # docs/infrastructure/providers/coreweave/README.md.
                       - name: huggingface-cache
                         persistentVolumeClaim:
                           claimName: model-pvc
