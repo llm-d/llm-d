@@ -162,6 +162,19 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
   the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
   parallelism 2).
 
+### Get the guide
+
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the manifests, Helm values, and Kustomize overlays it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
+
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
+
 Then set this guide's environment (on top of the base guide's variables). `GPUS`, `FLOW_CONTROL` and
 `QUEUE_BACKEND` select the alternatives described in the steps below:
 
