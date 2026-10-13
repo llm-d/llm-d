@@ -136,6 +136,8 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path) -> None:
     assert f"-f {ROOT}/guides/recipes/router/base.values.yaml" in router
     assert f"-f {GUIDE}/values/router/flow-control-evictable.yaml" in router  # the guide's default
     assert "--set router.epp.flags.v=4" in router
+    # CI-only: the validator scrapes the EPP metrics without a token.
+    assert "--set router.monitoring.prometheus.auth.enabled=false" in router
     assert router.endswith(f"-n {NS} --version v0")
     async_ = _helm(tmp_path, "llm-d-async")
     async_version = yaml.safe_load((GUIDE / "guide.yaml").read_text())["env"]["static"]["ASYNC_VERSION"]["default"]

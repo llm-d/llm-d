@@ -64,7 +64,11 @@ python3 -c 'import yaml' 2>/dev/null \
 # NAMESPACE, REPO_ROOT and INFRA_PROVIDER are plumbing, and FLOW_CONTROL picks
 # the router values under test (guide.py rejects anything but evictable or
 # holdback). CI-only (1 of 2): EXTRA_ROUTER_HELM_ARGS raises the EPP log
-# verbosity to 4 for debuggable CI failures.
+# verbosity to 4 for debuggable CI failures, and turns off the EPP's metrics
+# token auth so the validator's sampler can scrape llm-d-router-epp:9090/metrics
+# without a bearer token. The guide keeps auth on (its Prometheus scrape is
+# opt-in, with MONITORING=true), so without this the validator reads only
+# "Unauthorized" and every flow-control counter check fails.
 emit() {
   python3 "${REPO_ROOT}/scripts/guide.py" emit "${GUIDE_DIR}" \
     --context ci \
@@ -72,7 +76,7 @@ emit() {
     --var NAMESPACE="${NAMESPACE}" \
     --var INFRA_PROVIDER="${INFRA_PROVIDER}" \
     --var FLOW_CONTROL="${FLOW_CONTROL}" \
-    --var EXTRA_ROUTER_HELM_ARGS="--set router.epp.flags.v=4" \
+    --var EXTRA_ROUTER_HELM_ARGS="--set router.epp.flags.v=4 --set router.monitoring.prometheus.auth.enabled=false" \
     "$@"
 }
 
