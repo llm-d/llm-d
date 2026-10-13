@@ -13,7 +13,7 @@ A GitHub job summary is written at the end showing a pass/fail tree of every ove
 
 ## Excluding a guide
 
-Exclusions are controlled by `guides/.ci-dry-run-exclusions`. Each non-blank, non-comment line is a path relative to `guides/` that will be skipped. Both top-level directories and subpaths are supported:
+Exclusions are controlled by `guides/.ci-dry-run-guide-exclusions`. Each non-blank, non-comment line is a path relative to `guides/` that will be skipped. Both top-level directories and subpaths are supported:
 
 ```
 # Skip an entire guide

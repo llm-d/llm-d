@@ -5,7 +5,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: "tiered-prefix-cache"
   endpoints:
   - port: 8000
     interval: 15s

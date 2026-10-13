@@ -52,6 +52,7 @@ export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
 # `kubectl apply -k` fail on a missing directory.
 if [[ -n "${GUIDE_NAME:-}" && -n "${ACCELERATOR_TYPE:-}" && -n "${MODEL_SERVER:-}" && -n "${REPO_ROOT:-}" ]]; then
   _llmd_guide_dir="${REPO_ROOT}/guides/${GUIDE_NAME}"
+  [[ ! -d "${_llmd_guide_dir}" && -d "${REPO_ROOT}/guides/models/${GUIDE_NAME}" ]] && _llmd_guide_dir="${REPO_ROOT}/guides/models/${GUIDE_NAME}"
   # Guides that keep their overlays elsewhere (e.g. multimodal-serving's
   # per-topology sub-directories) have no top-level modelserver/ and are skipped.
   if [[ -f "${_llmd_guide_dir}/guide.yaml" ]] && grep -q '^support:' "${_llmd_guide_dir}/guide.yaml" \

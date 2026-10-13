@@ -384,8 +384,8 @@ kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ |
 ### 2. Deploy the Model Servers
 
 Apply the Kustomize overlay for your infrastructure provider. One overlay deploys all
-three role-specific model servers (encode, prefill, decode), each as a single
-replica:
+three role-specific model servers (encode: 2 replicas, prefill: 4 replicas, decode: 4
+replicas):
 
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke
@@ -680,7 +680,7 @@ Coordinator picks decode only after prefill has finished, when the pool's state 
 have changed. It was run under a workload chosen to make that difference matter —
 long multimodal prefills, long outputs, and decode pushed to its KV-cache limit.
 
-This benchmark runs with 4 × `a3-ultragpu-8g` (8 × H200 141GB each),`Qwen/Qwen3-VL-235B-A22B-Instruct` on vLLM v0.26.0, TP=8 (one pod per node),
+This benchmark runs with 4 × `a3-ultragpu-8g` (8 × H200 141GB each), `Qwen/Qwen3-VL-235B-A22B-Instruct` on vLLM v0.26.0, TP=8 (one pod per node),
 NixlConnector over GKE multi-network RDMA, 2 prefill + 2 decode pods. Both arms run in
 Gateway mode behind the same GKE Gateway, with the same EPP image and this guide's
 scheduling profiles on both sides: prefill = `prefix-cache-affinity-filter` +
@@ -753,7 +753,7 @@ all three of the following hold:
 Deployments that pick decode from scraped vLLM metrics (`queue-scorer`,
 `kv-cache-utilization-scorer`) will see a larger gap than measured here, because those
 signals lag and do not include requests still in prefill; the in-process `token-load-scorer`
-`active-request-scorer` used by both guides removes most of that staleness.
+and `active-request-scorer` used by both guides remove most of that staleness.
 
 ## Cleanup
 

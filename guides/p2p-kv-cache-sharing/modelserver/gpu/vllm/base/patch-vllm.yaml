@@ -27,7 +27,7 @@ spec:
             # The offloading config below omits `block_size`, so it defaults to
             # this engine block size. Keep it identical across all P2P peers.
             # It does not need to match the router's
-            # tokenProcessorConfig.blockSize.
+            # tokenProcessorConfig.blockSizeTokens.
             - --block-size=64
             - --max-model-len=65536
             # Tuning knob: raise for more GPU cache, lower to leave headroom.

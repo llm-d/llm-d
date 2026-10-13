@@ -677,7 +677,7 @@ EOF
   local prom_svc_name
   prom_svc_name=$(echo "$PROMETHEUS_ENDPOINT" | sed 's|http[s]*://||' | cut -d. -f1)
   log_info "Access the Prometheus UI:"
-  log_info "  kubectl port-forward -n ${OPENCOST_NAMESPACE} svc/${prom_svc_name} 9092:80"
+  log_info "  kubectl port-forward -n ${prom_ns} svc/${prom_svc_name} 9092:${prom_port}"
   log_info "  Open: http://localhost:9092"
   echo ""
   log_info "Query inference cost metrics (start a port-forward first):"

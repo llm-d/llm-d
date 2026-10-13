@@ -6,10 +6,10 @@ This directory contains Kustomize Components that define the **default container
 
 ```console
 ├── amd-sglang
-│   ├── rocm700-mi30x
-│   ├── rocm700-mi35x
-│   ├── rocm720-mi30x
-│   └── rocm720-mi35x
+│   ├── rocm720-mi30x
+│   ├── rocm720-mi35x
+│   ├── rocm724-mi30x
+│   └── rocm724-mi35x
 ├── amd-vllm
 │   ├── llm-d
 │   ├── nightly
@@ -59,7 +59,7 @@ This directory contains Kustomize Components that define the **default container
 
 ### Why are there both `llm-d` and `vllm` images?
 
-llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d originally supported only vLLM, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today, see the known gaps documented below. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
+llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d originally supported only vLLM, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
 
 ## Usage
 

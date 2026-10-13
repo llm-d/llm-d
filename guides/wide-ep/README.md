@@ -24,16 +24,13 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
-| AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO |
+| AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci` |
 | Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-**NVIDIA GPU** (DeepSeek-R1-0528): prefill DP16 and decode DP16 on 32 H200, with DeepEP (high-throughput prefill, low-latency decode) and NIXL KV transfer. Validated on a 32×H200 cluster with InfiniBand networking (`coreweave`) and a 32×H200 cluster on GKE with RoCE networking (`gke`); `base` is the provider-neutral overlay the others patch.
-
-> [!NOTE]
-> The NVIDIA GPU configuration uses a custom vLLM image built by llm-d to solve two issues: an NVSHMEM bug on RoCE impacting DeepEP high-throughput mode (llm-d vendors a custom patch), and a vLLM v0.23.0-v0.24.0 bug with the DP supervisor. We plan to migrate to the upstream vLLM images in an upcoming release.
+**NVIDIA GPU** (DeepSeek-R1-0528): prefill DP16 and decode DP16 on 32 H200, with DeepEP (`--all2all-backend deepep_v2`) and NIXL KV transfer on upstream vLLM (`docker.io/vllm/vllm-openai:v0.30.0`). Validated on a 32×H200 cluster with InfiniBand networking (`coreweave`) and a 32×H200 cluster on GKE with RoCE networking (`gke`); `base` is the provider-neutral overlay the others patch.
 
 **AMD GPU** (DeepSeek-V3): prefill and decode each run 1 replica of 2 nodes, DP16 (TP=1), on 32 MI355X, with the `mori_high_throughput` all-to-all backend and MoRI-IO KV transfer. `amd-ci` adapts `base` to the AMD CI cluster (MI355X, Pensando AINIC, rail-isolated RoCE fabric).
 

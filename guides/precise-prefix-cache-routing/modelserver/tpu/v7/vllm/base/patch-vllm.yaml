@@ -31,8 +31,8 @@ spec:
             limits:
               memory: 64Gi
               cpu: "16"
-              google.com/tpu: 8
+              google.com/tpu: 4
             requests:
               memory: 64Gi
               cpu: "16"
-              google.com/tpu: 8
+              google.com/tpu: 4

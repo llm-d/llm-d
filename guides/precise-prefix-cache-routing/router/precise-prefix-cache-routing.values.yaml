@@ -65,6 +65,8 @@ router:
                 kvBlockIndexConfig:
                   enableMetrics: true
               kvEventsConfig:
+                # Set engineType: "sglang" when deploying with MODEL_SERVER=sglang (defaults to "vllm").
+                engineType: "vllm"
                 topicFilter: "kv@"
                 concurrency: 8
                 discoverPods: true
