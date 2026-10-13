@@ -355,6 +355,9 @@ class SampleTests(unittest.TestCase):
         self.assertIsNone(empty.saturation)
         self.assertEqual(empty.band_requests, {})
         self.assertEqual(s.as_dict()["band_requests"], {"-10": 105.0, "100": 23.0})
+        # A requests_total series without an outcome label counts whole (older routers).
+        old = a.parse_sample(1.0, "", 'llm_d_epp_flow_control_requests_total{priority="30"} 4\n')
+        self.assertEqual(old.band_requests, {30: 4.0})
 
     def test_saturation_summary_window(self):
         samples = [a.Sample(t=float(t), running=float(r), saturation=r / 10) for t, r in
@@ -365,11 +368,19 @@ class SampleTests(unittest.TestCase):
         self.assertEqual(a.saturation_summary(samples, None).count, 0)
         self.assertEqual(a.saturation_summary(samples, (100, 200)).count, 0)
 
-    def test_band_counts_from_samples_and_merge(self):
-        samples = [a.Sample(t=1, band_requests={100: 5, -10: 1}), a.Sample(t=2, band_requests={100: 9, 30: 2})]
-        self.assertEqual(a.band_counts_from_samples(samples), {100: 9, -10: 1, 30: 2})
-        merged = a.merge_band_counts({100: 9, 30: 2}, {100: 23, -10: 105})
-        self.assertEqual(merged, {100: 23, 30: 2, -10: 105})
+    def test_band_counts_are_this_runs_increase(self):
+        # Cumulative counters: 5 band-100 and 1 band -10 requests predate the run
+        # (first sample), so only the increase counts. Order is by time, samples
+        # without band counters are ignored, and a band absent from the first
+        # sample started at zero.
+        samples = [a.Sample(t=3, band_requests={100: 9, -10: 1, 30: 2}), a.Sample(t=2),
+                   a.Sample(t=1, band_requests={100: 5, -10: 1})]
+        self.assertEqual(a.band_counts_from_samples(samples), {100: 4, -10: 0, 30: 2})
+        self.assertEqual(a.band_counts_from_samples([]), {})
+        self.assertEqual(a.band_counts_from_samples([a.Sample(t=1, band_requests={100: 7})]), {100: 0})
+        # Traffic from before the run alone fails the band checks.
+        stale = [a.Sample(t=1, band_requests={100: 40, -10: 12}), a.Sample(t=2, band_requests={100: 40, -10: 12})]
+        self.assertFalse(any(c.passed for c in a.band_checks(a.band_counts_from_samples(stale))))
 
     def test_epoch_window_from_metadata(self):
         meta = {"harness_start": "2026-09-25T10:00:00+00:00", "harness_stop": "2026-09-25T10:02:00+00:00"}
@@ -400,17 +411,18 @@ class ExpositionTests(unittest.TestCase):
         self.assertEqual(sat[1], {"inference_pool": "llm-d-router"})
         self.assertEqual(sat[2], 1.0)
 
-    def test_band_counts_and_checks(self):
-        self.assertEqual(a.band_counts(EXPOSITION, a.QUEUE_DURATION_COUNT), {100: 40.0, -10: 12.0, 30: 3.0})
-        self.assertEqual(a.band_counts(EPP_TEXT), {-10: 105.0, 100: 23.0})   # default: dispatched requests_total
-        # A counter without an outcome label is summed whole (older routers).
-        self.assertEqual(a.band_counts('llm_d_epp_flow_control_requests_total{priority="30"} 4\n'), {30: 4.0})
+    def test_band_checks(self):
         checks = a.band_checks({100: 40.0, -10: 12.0, 30: 3.0})
         self.assertTrue(all(c.passed for c in checks))
         checks = {c.name: c for c in a.band_checks({100: 40.0})}
         self.assertTrue(checks["realtime classified into band 100"].passed)
-        self.assertFalse(checks["async classified into batch bands"].passed)
+        self.assertFalse(checks["async classified into async bands"].passed)
         self.assertFalse(any(c.passed for c in a.band_checks({})))
+        # The async bands are the ones dispatch_rate counts, reserved-async (60)
+        # and overflow-async (-5) included.
+        for prio in a.ASYNC_PRIORITIES:
+            checks = {c.name: c for c in a.band_checks({100: 1.0, prio: 1.0})}
+            self.assertTrue(checks["async classified into async bands"].passed, prio)
 
 
 class MarkdownTests(unittest.TestCase):

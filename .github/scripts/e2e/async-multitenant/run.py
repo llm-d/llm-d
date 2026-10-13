@@ -621,7 +621,9 @@ def analyze(cfg: Config, capacity: int, results: dict[str, Path], samples: list,
             "samples": sat.count,
         }
 
-    counts = analysis.merge_band_counts(analysis.band_counts_from_samples(samples), analysis.band_counts(epp_text))
+    # Only this run's samples: the final EPP scrape (epp_text) is cumulative since the
+    # EPP started and is kept for the artifacts, not for the checks.
+    counts = analysis.band_counts_from_samples(samples)
     checks += analysis.band_checks(counts)
     report["band_requests"] = {str(k): v for k, v in counts.items()}
     report["checks"] = analysis.checks_to_dicts(checks)

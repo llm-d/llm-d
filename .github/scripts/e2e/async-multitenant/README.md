@@ -96,7 +96,8 @@ by design and its own completion count understates what the pool processed.
 `ceiling` is priority holdback's `minCeiling` from the router values (0.5 in
 `flow-control-holdback.yaml`), the share of capacity the router admits
 `overflow-batch` to, or 1 without holdback. Finally the same counters must show
-traffic in band 100 and in the batch bands (30 / -10).
+traffic in band 100 and in the async bands (60, 30, -5, -10), counted as the
+increase across this run's samples, so traffic from before the run cannot satisfy them.
 
 Cluster metrics come from run.py's own sampler: a curl pod it polls every
 `SAMPLE_INTERVAL_S` seconds for the whole run (vLLM running/waiting requests,
