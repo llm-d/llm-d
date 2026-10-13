@@ -1,4 +1,4 @@
-name: Past Status - Async Multi-Tenant Holdback E2E (GKE GPU)
+name: Past Status - Async Multi-Tenant Eviction E2E (GKE GPU)
 
 on:
   workflow_dispatch:

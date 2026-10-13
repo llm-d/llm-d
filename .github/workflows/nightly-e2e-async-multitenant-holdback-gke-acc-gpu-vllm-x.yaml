@@ -1,15 +1,14 @@
-name: Nightly - Async Multi-Tenant Eviction E2E (GKE GPU)
+name: Nightly - Async Multi-Tenant Holdback E2E (GKE GPU)
 
 # Nightly regression test for the multitenant async-processing guide
-# (guides/batch-serving/asynchronous-processing/multitenant) with its default
-# router values, values/router/flow-control-evictable.yaml: llm-d-async
+# (guides/batch-serving/asynchronous-processing/multitenant): llm-d-async
 # dispatching queued work through an llm-d-router with Flow Control and the
 # six lane InferenceObjectives, with the router coordinator's async-broker
-# step in front so that queued traffic can be produced over HTTP. Flow Control
-# protects realtime traffic with in-flight eviction of overflow-async and
-# overflow-batch requests. The alternative priority holdback values have their
-# own lane, nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml, which shares
-# this lane's deploy script and validator.
+# step in front so that queued traffic can be produced over HTTP. The router
+# protects realtime traffic with priority holdback, the alternative to the
+# guide's default eviction values (values/router/flow-control-holdback.yaml).
+# The default in-flight eviction values have their own lane,
+# nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml.
 #
 # Deploys via the guide's scripts/nightly-deploy-gke.sh, which emits the
 # guide's guide.yaml commands, and hands off (via
@@ -31,7 +30,7 @@ name: Nightly - Async Multi-Tenant Eviction E2E (GKE GPU)
 
 on:
   schedule:
-    - cron: '0 21 * * *'  # 21:00 UTC daily (after the holdback lane at 20:00)
+    - cron: '0 20 * * *'  # 20:00 UTC daily (staggered from sibling GKE nightlies)
   workflow_dispatch:
     inputs:
       skip_cleanup:
@@ -118,7 +117,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: nightly-e2e-async-multitenant-evictable-gke-gpu
+  group: nightly-e2e-async-multitenant-holdback-gke-gpu
   cancel-in-progress: true
 
 jobs:
@@ -126,18 +125,14 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
     with:
-      guide_name: async-multitenant-evictable
+      guide_name: async-multitenant-holdback
       guide_path: guides/batch-serving/asynchronous-processing/multitenant
-      namespace: llm-d-nightly-async-multitenant-evictable-gke-gpu
+      namespace: llm-d-nightly-async-multitenant-holdback-gke-gpu
       # The smoke loop targets the router directly, as the guide documents;
       # the validator targets the coordinator service on its own.
       gateway_host: 'llm-d-router-epp'
-      # At 100 % realtime load the pool is full of realtime work, so a realtime
-      # request that finds an async request in its slot waits for an eviction
-      # round trip (up to ~0.5 s on H100s); the TTFT allowance at that level
-      # leaves room for one, and still fails on a full service time (~2 s).
       custom_deploy_script: |
-        AMT_FLOW_CONTROL=evictable AMT_LEVEL_100_TTFT_ABS=0.6 bash guides/batch-serving/asynchronous-processing/multitenant/scripts/nightly-deploy-gke.sh
+        AMT_FLOW_CONTROL=holdback bash guides/batch-serving/asynchronous-processing/multitenant/scripts/nightly-deploy-gke.sh
       e2e_validate_args: '--extra-validate async-multitenant'
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
@@ -163,7 +158,7 @@ jobs:
     if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
-      badge_name: async-multitenant-evictable-gke
+      badge_name: async-multitenant-holdback-gke
       badge_label: "VLLM GPU"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}

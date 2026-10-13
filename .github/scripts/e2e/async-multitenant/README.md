@@ -1,9 +1,9 @@
 # Async multi-tenant nightly validator
 
 Validator for the two scheduled async multi-tenant lanes:
-`nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x` (in-flight
+`nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (in-flight
 eviction, the guide's default router values) and
-`nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (priority holdback, the
+`nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x` (priority holdback, the
 alternative). It proves that realtime traffic through llm-d-router keeps its TTFT, latency and
 throughput while llm-d-async holds a backlog against the same pool, and that
 llm-d-async alone drives the pool to saturation.

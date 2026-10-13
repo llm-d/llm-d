@@ -8,8 +8,8 @@ name: CI Async Processing E2E (kind)
 # This is a GPU-free, single-runner check intended to gate the guide on PRs. The
 # GPU nightlies for the multitenant scenario (flow control + coordinator
 # async-broker, realtime isolation benchmark) are
-# nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml (eviction,
-# the guide's default) and nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml
+# nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml (eviction, the
+# guide's default) and nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml
 # (holdback).
 
 on:

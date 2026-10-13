@@ -1,4 +1,4 @@
-name: Past Status - Async Multi-Tenant Eviction E2E (GKE GPU)
+name: Past Status - Async Multi-Tenant Holdback E2E (GKE GPU)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
         description: 'Name of the workflow to be queried'
         required: false
         type: 'string'
-        default: 'nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml'
+        default: 'nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml'
       time_window_query:
         description: 'How many days in the past to query'
         required: true
@@ -31,7 +31,7 @@ jobs:
     if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-query-success-past-runs.yaml@main
     with:
-      workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml' }}
+      workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml' }}
       time_window_query: ${{ inputs.time_window_query || '5' }}
       branch_query: ${{ inputs.branch_query || 'main' }}
     secrets: inherit
