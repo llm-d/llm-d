@@ -252,6 +252,7 @@ curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/models/${GU
 export CONCURRENCY_LEVEL=40
 export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
 export SEED=$((7 + CONCURRENCY_LEVEL))
+export BENCHMARK_PVC=benchmark-results
 
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 

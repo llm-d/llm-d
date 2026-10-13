@@ -183,7 +183,10 @@ spec:
                       --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                       $KV_EVENTS_ARGS $BLOCK_SIZE_ARGS \
                       --moe-backend deep_gemm \
-                      --all2all-backend deepep_high_throughput
+                      --all2all-backend deepep_high_throughput \
+                      --reasoning-parser glm45 \
+                      --tool-call-parser glm47 \
+                      --enable-auto-tool-choice
                 env:
                   - name: POD_IP
                     valueFrom:
@@ -254,28 +257,28 @@ spec:
 
                 ports:
                   - containerPort: 8000
-                    name: dp0
+                    name: rank0
                     protocol: TCP
                   - containerPort: 8001
-                    name: dp1
+                    name: rank1
                     protocol: TCP
                   - containerPort: 8002
-                    name: dp2
+                    name: rank2
                     protocol: TCP
                   - containerPort: 8003
-                    name: dp3
+                    name: rank3
                     protocol: TCP
                   - containerPort: 8004
-                    name: dp4
+                    name: rank4
                     protocol: TCP
                   - containerPort: 8005
-                    name: dp5
+                    name: rank5
                     protocol: TCP
                   - containerPort: 8006
-                    name: dp6
+                    name: rank6
                     protocol: TCP
                   - containerPort: 8007
-                    name: dp7
+                    name: rank7
                     protocol: TCP
                   - containerPort: 8208
                     name: supervisor

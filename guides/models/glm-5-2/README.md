@@ -43,7 +43,7 @@ with MTP and tiered KV offloading enabled.
 | Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
 | Serving topology         | P/D disaggregated — 3 prefill replicas + 1 decode replica, each TP=1, DP=16, EP=16 (DEP16, 2 nodes) |
 | DP model                 | Supervisor (`--data-parallel-multi-port-external-lb`)                        |
-| All-to-all               | `deepep_v2` (prefill), `deepep_low_latency` with IBGDA + NVSHMEM (decode)    |
+| All-to-all               | `deepep_high_throughput` (prefill), `deepep_low_latency` with IBGDA + NVSHMEM (decode) |
 | MoE backend              | DeepGemm                                                                     |
 | KV transfer              | NixlConnector                                                                |
 | KV cache offloading      | CPU + NVMe tiered on prefill (`offloading-tiered` component)                 |
