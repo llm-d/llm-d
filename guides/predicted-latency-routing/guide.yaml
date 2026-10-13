@@ -36,14 +36,14 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · `INFRA_PROVIDER`: `base`, `gke`"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · `INFRA_PROVIDER`: `base`, `gke`"
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
@@ -93,6 +93,7 @@ prerequisites:
   secrets:
     - skip_in: [ci]
       run: |
+        export HF_TOKEN=<your HuggingFace token>
         kubectl create secret generic llm-d-hf-token \
           --from-literal="HF_TOKEN=${HF_TOKEN}" \
           --namespace "${NAMESPACE}" \
@@ -153,20 +154,24 @@ verify:
             --namespace="${NAMESPACE}" \
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+            --env="SLO_AWARE=${SLO_AWARE}" \
+            -- /bin/sh -c 'curl -sS -N -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"stream\": ${SLO_AWARE}}"'
     traffic:
       - run: |
           # 200 requests, 10 at a time, with output lengths from 16 to 128 tokens:
-          # every completed request becomes a training sample for the predictor
+          # every completed request becomes a training sample for the predictor.
+          # Passing "stream": ${SLO_AWARE} streams tokens when SLO_AWARE=true so
+          # both TTFT and TPOT models train.
           kubectl run traffic-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
+            --env="SLO_AWARE=${SLO_AWARE}" \
             -- /bin/sh -c 'for i in $(seq 1 200); do
-                curl -sS -o /dev/null -w "%{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                curl -sS -N -o /dev/null -w "%{http_code}\n" -X POST "http://${IP}/v1/completions" \
                   -H "Content-Type: application/json" \
-                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"Request ${i}: explain how an LLM router picks a model server.\", \"max_tokens\": $((16 * (i % 8 + 1)))}" &
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"Request ${i}: explain how an LLM router picks a model server.\", \"max_tokens\": $((16 * (i % 8 + 1))), \"stream\": ${SLO_AWARE}}" &
                 [ $((i % 10)) -eq 0 ] && wait
               done | sort | uniq -c'
     predictor:
@@ -185,15 +190,15 @@ verify:
       standard:
         - when: {MONITORING: ["true"]}
           run: |
-            # Actual vs. predicted TTFT histograms of the router, read through the
+            # Actual vs. predicted TTFT/TPOT histograms of the router, read through the
             # API server service proxy
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
-              | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
+              | grep -E '^llm_d_epp_request_(predicted_|streaming_)?(ttft|tpot)_seconds_count' || true
       gke:
         - when: {MONITORING: ["true"], INFRA_PROVIDER: [gke]}
           skip_in: [ci]
           run: |
-            # Actual vs. predicted TTFT histograms of the router, authenticated
+            # Actual vs. predicted TTFT/TPOT histograms of the router, authenticated
             # with the GMP metrics-reader secret
             TOKEN=$(kubectl get secret ${GUIDE_NAME}-metrics-reader-secret -n ${NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
             kubectl run metrics-test --rm -i --restart=Never \
@@ -202,7 +207,7 @@ verify:
               --env="GUIDE_NAME=${GUIDE_NAME}" \
               --env="TOKEN=${TOKEN}" \
               -- /bin/sh -c 'curl -sS -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics"' \
-              | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
+              | grep -E '^llm_d_epp_request_(predicted_|streaming_)?(ttft|tpot)_seconds_count' || true
     slo_request:
       # skip_in ci: SLO_AWARE is not a variant variable (see deploy.router_values).
       - when: {SLO_AWARE: ["true"]}
