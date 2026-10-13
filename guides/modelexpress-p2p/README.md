@@ -66,7 +66,8 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH:-main}
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.clone end -->
@@ -75,7 +76,6 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=modelexpress-p2p
 export NAMESPACE=llm-d-modelexpress-p2p

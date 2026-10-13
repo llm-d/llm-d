@@ -56,7 +56,8 @@ This guide assumes you have a Kubernetes cluster with GPU nodes and the [llm-d r
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH:-main}
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.clone end -->
@@ -65,7 +66,6 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
