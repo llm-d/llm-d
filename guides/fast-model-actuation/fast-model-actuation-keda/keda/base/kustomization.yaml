@@ -45,11 +45,3 @@ patches:
           sum(llm_d_epp_flow_control_queue_size{inference_pool="fast-model-actuation-keda"})
       - op: remove
         path: /spec/triggers/1
-  - target:
-      group: keda.sh
-      version: v1alpha1
-      kind: TriggerAuthentication
-      name: keda-prometheus-auth
-    patch: |-
-      - op: remove
-        path: /metadata/namespace
