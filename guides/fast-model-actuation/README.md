@@ -283,7 +283,7 @@ Re-run the inference request from step 2 to confirm the model is serving again.
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking. It defaults to the `nop` harness (which stands the stack up and validates it end-to-end without driving a synthetic load); the richer, FMA-specific experimentation workflow lives in [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) itself.
 
 > [!IMPORTANT]
-> The Benchmarking section below contains only the **fast-model-actuation-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **fast-model-actuation-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).
 
 ### 1. Install the CLI
 

@@ -2,7 +2,7 @@
 
 Operational Excellence guidelines focus on overarching Day-2 site reliability engineering, cluster-wide telemetry frameworks, and safe lifecycle rollout strategies for generative AI inference deployments.
 
-While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, and integrations such as AI gateways and the Responses API. These capabilities are model-agnostic and layer onto any deployment.
+While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, integrations such as AI gateways and the Responses API, and post-deployment validation. These capabilities are model-agnostic and layer onto any deployment.
 
 ## Monitor and Troubleshoot
 
@@ -119,3 +119,15 @@ Operational best practices, high availability scaling modes, standalone proxy ar
 ### [Async Processor Operations](components/async-processor.md)
 
 Concurrency selection, container resource sizing, and horizontal scaling for the Async Processor dispatch agent.
+
+## Validate
+
+Functional and performance validation of a deployed llm-d stack.
+
+### [Run a Smoke Test](validation/smoke-test/README.md)
+
+Verify a freshly deployed stack end to end: API readiness, model discovery, and completion and chat-completion inference with latency measurements.
+
+### [Benchmark Performance](validation/benchmark.md)
+
+Run performance benchmarks against a deployed stack with the `llmdbenchmark` CLI: workload profiles, harnesses, results layout, and analysis.

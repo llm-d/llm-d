@@ -22,7 +22,7 @@ on:
       - scripts/seed-release-badges.py
       - scripts/tests/**
       - .github/scripts/nightly-e2e-verification/**
-      - helpers/smoke-test/**
+      - docs/operations/validation/smoke-test/**
   workflow_dispatch:
 
 permissions:
@@ -60,4 +60,4 @@ jobs:
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
 
       - name: Run Python tests
-        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ helpers/smoke-test/tests/ -v
+        run: python -m pytest scripts/tests/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ -v

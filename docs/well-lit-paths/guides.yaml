@@ -81,7 +81,7 @@ sections:
   # Operations guides may be README-only (no guide.yaml).
   # Category order (positions): 1 observability, 2 autoscaling, 3 startup,
   # 4 lifecycle, 5 rollouts, 6 disaggregation, 7 traffic, 8 batch-serving,
-  # 9 integrations, 10 components. Guide categories take their position here;
+  # 9 integrations, 10 components, 11 validation. Guide categories take their position here;
   # docs/operations/<sub>/ categories take theirs from docs/menu-config.json.
   operations:
     target: operations

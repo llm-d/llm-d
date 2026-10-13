@@ -154,4 +154,4 @@ CI dry-runs every deployable overlay in this directory. See
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
+* [Benchmark](../docs/operations/validation/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.

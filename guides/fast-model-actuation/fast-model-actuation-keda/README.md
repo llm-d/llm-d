@@ -303,7 +303,7 @@ kubectl get deployment/fma-requester -n ${NAMESPACE} -w
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking. The commands below run the `inference-perf` harness with the `shared_prefix_synthetic_heavy.yaml` workload. On this small model (Qwen3-0.6B) each request drains in tens of milliseconds, so the flow-control queue does not stay backed up — the value you are exercising is the **scale-from-zero transition**: when the requester has scaled to 0, the benchmark's first arrivals enqueue, KEDA's activation trip on that cold-start queue transient scales the requester up (0→1), and the continuing arrivals keep it above zero for the rest of the run.
 
 > [!IMPORTANT]
-> The Benchmarking section below contains only the **guide-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **guide-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../../docs/operations/validation/benchmark.md).
 
 ### 1. Install the CLI
 

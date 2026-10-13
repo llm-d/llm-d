@@ -4,7 +4,7 @@ A lightweight smoke-test script that verifies an llm-d cluster is healthy after 
 
 Location:
 
-- `guides/operations/healthcheck/healthcheck.sh`
+- `docs/operations/validation/smoke-test/healthcheck.sh`
 
 ## What It Checks
 
@@ -64,7 +64,7 @@ kubectl run llm-d-healthcheck --rm -i --restart=Never \
   --image=alpine:3.20 \
   -- sh -lc '
     apk add --no-cache bash curl jq >/dev/null &&
-    bash -lc "$(cat guides/operations/healthcheck/healthcheck.sh)" -- -e http://llm-d-gateway:80 -o json
+    bash -lc "$(cat docs/operations/validation/smoke-test/healthcheck.sh)" -- -e http://llm-d-gateway:80 -o json
   '
 ```
 
@@ -76,7 +76,7 @@ kubectl run llm-d-healthcheck --rm -i --restart=Never \
   --image=alpine:3.20 \
   -- sh -lc '
     apk add --no-cache bash curl >/dev/null &&
-    bash -lc "$(cat guides/operations/healthcheck/healthcheck.sh)" -- -e http://llm-d-gateway:80 -m meta-llama/Llama-3-8B
+    bash -lc "$(cat docs/operations/validation/smoke-test/healthcheck.sh)" -- -e http://llm-d-gateway:80 -m meta-llama/Llama-3-8B
   '
 ```
 
@@ -84,7 +84,7 @@ kubectl run llm-d-healthcheck --rm -i --restart=Never \
 
 ```bash
 kubectl create configmap llm-d-healthcheck-script \
-  --from-file=healthcheck.sh=guides/operations/healthcheck/healthcheck.sh \
+  --from-file=healthcheck.sh=docs/operations/validation/smoke-test/healthcheck.sh \
   --namespace llm-d
 ```
 
