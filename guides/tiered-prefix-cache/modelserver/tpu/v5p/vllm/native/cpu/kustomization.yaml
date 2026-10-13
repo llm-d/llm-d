@@ -1,0 +1,6 @@
+# Applied by the nightly E2E workflow when accelerator_type=tpu/v5p and
+# INFRA_PROVIDER is empty. Same as ./base (and ./gke).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./base

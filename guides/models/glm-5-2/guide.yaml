@@ -118,7 +118,7 @@ deploy:
           -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
 
   monitoring:
-    # PodMonitors that scrape every DP rank port (rank0-rank7)
+    # PodMonitors that scrape every DP rank port (dp0-dp7 on prefill, rank0-rank7 on decode)
     - when: {MONITORING: ["true"]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
 

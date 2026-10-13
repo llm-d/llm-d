@@ -23,6 +23,8 @@
     "operations/components": { "label": "Size and Scale llm-d Components", "position": 10, "collapsed": true },
     "operations/observability": { "label": "Monitor and Troubleshoot", "position": 1, "collapsed": true },
     "operations/integrations": { "label": "Integrations", "position": 9, "collapsed": true },
+    "operations/validation": { "label": "Validate Deployments", "position": 11, "collapsed": true },
+    "operations/validation/smoke-test": { "label": "Run a Smoke Test", "position": 1, "collapsed": true },
 
     "infrastructure": { "label": "Infrastructure & Environments", "position": 6, "collapsed": true },
     "infrastructure/providers": { "label": "Kubernetes Infrastructure Providers", "position": 1, "collapsed": true },
@@ -96,6 +98,8 @@
     "operations/observability/tpu": { "position": 11, "label": "Monitor GKE TPUs" },
     "operations/integrations/litellm": { "position": 1, "label": "LiteLLM" },
     "operations/integrations/kong": { "position": 2, "label": "Kong AI Gateway" },
+    "operations/validation/smoke-test/README": { "position": 1, "label": "Run a Smoke Test" },
+    "operations/validation/benchmark": { "position": 2, "label": "Benchmark Performance" },
 
     "infrastructure/multi-node": { "position": 3, "label": "Model Server Orchestration (LWS & Kueue)" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },

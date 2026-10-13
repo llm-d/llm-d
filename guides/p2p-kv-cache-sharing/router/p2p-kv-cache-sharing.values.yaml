@@ -88,7 +88,7 @@ router:
               tokenProcessorConfig:
                 # Router indexing granularity. This is independent of the model
                 # server and offloading block sizes; see Best Practices.
-                blockSize: 64
+                blockSizeTokens: 64
               # Seeds predicted cache entries for the selected endpoint right
               # after the routing decision, so the next same-prefix request
               # hits without waiting for engine confirmation. The chart default

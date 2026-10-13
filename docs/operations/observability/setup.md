@@ -172,6 +172,14 @@ kubectl port-forward -n ${NAMESPACE} svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
 
+To link the exemplar dots on the latency panel to their traces, re-run the Step 1 installer the same way you ran it before. It finds Jaeger and adds the Jaeger datasource and the exemplar link to the existing install:
+
+```bash
+./guides/recipes/observability/install-prometheus-grafana.sh
+```
+
+If Jaeger runs in more than one namespace, set `TRACING_NAMESPACE` to the one to link. If you open the Jaeger UI somewhere other than `http://localhost:16686`, set `JAEGER_UI_URL`.
+
 For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 
 ## Cleanup

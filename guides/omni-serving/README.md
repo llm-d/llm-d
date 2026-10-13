@@ -460,7 +460,7 @@ kubectl run tts-test --rm -i --restart=Never \
 Expect `HTTP 200` with a non-zero size and an audio content type, and `header: RIFF`, the start of a valid WAV file.
 
 The endpoint also streams through the router: `"stream_format": "sse"` returns `speech.audio.delta` events with base64 audio chunks and a final `speech.audio.done` event carrying token usage, and `"stream_format": "audio"` returns raw PCM chunks as they are generated, with time-to-first-byte in the tens of milliseconds.
-vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the default image (v0.26.0) omits them.
+vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.29.0, which reports them.
 
 </details>
 <!-- tabs:end -->

@@ -47,8 +47,8 @@ During the standard request flow:
 * Checkout llm-d repo:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  export BRANCH="main" # branch, tag, or commit hash
+  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   ```
 
 * Set the following environment variables:
