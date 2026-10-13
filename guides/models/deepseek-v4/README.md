@@ -144,11 +144,11 @@ prefill; active-request scoring for decode) and pin each request to one
 `DisaggregatedSet` revision during rollouts:
 
 > [!WARNING]
-> **`peakPrefillThroughput` is not yet calibrated for DeepSeek-V4-Pro on GB200.** The
-> `prefix-cache-affinity-filter` runs with its built-in default (15928, measured for Qwen3-32B
-> on H100), which will gate affinity incorrectly on this hardware. Measure your own value with
-> the [router calibration tool](../../recipes/router/calibration/README.md) and set it in
-> `router/deepseek-v4.values.yaml`.
+> **`peakPrefillThroughput` is an estimate for DeepSeek-V4-Pro on GB200, not a measurement.**
+> The `prefix-cache-affinity-filter` ships with `5000` tokens/s per rank, estimated by scaling
+> measured MoE prefill rates to this model (plausible range 3000 to 6300). Measure your own
+> value with the [router calibration tool](../../recipes/router/calibration/README.md)
+> (`CHUNK_SIZE=32768`) and set it in `router/deepseek-v4.values.yaml`.
 
 <!-- guide:deploy.router_values start -->
 ```bash
@@ -272,7 +272,7 @@ kubectl run serve-check --rm -i --restart=Never \
 > **TODO:** benchmark profiles and results for this guide are not yet published. The first
 > published results should be measured with the current router config (prefix-cache affinity
 > filter + token-load scorer on prefill, active-request scorer on decode), after
-> `peakPrefillThroughput` has been calibrated for DeepSeek-V4-Pro on GB200 (see the
+> `peakPrefillThroughput` has been measured for DeepSeek-V4-Pro on GB200 (see the
 > warning in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)).
 
 ## Cleanup

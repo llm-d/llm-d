@@ -24,7 +24,7 @@ best earlier main-agent turn). Each layer addresses a specific pressure of that 
 - **CPU+NVMe tiered KV offloading** — CPU memory keeps evicted prefixes reusable after HBM
   fills. Local NVMe supplies a lower tier when needed.
 - **MTP speculative decoding** (3 draft tokens) — cuts median time between output tokens by
-  about half on this workload (see [Benchmark Results](#benchmark-results)).
+  about half on this workload (see the [blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d)).
 
 The guide composes the [wide expert parallelism](../../wide-ep/README.md),
 [P/D disaggregation](../../pd-disaggregation/README.md) and
@@ -220,7 +220,7 @@ All 8 DP rank ports (8000-8007) are exposed as `targetPorts` on the `InferencePo
 
 Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), adding a CPU-tier prefix index to the prefill profile for P/D routing:
 
-- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks warm in the auto-tuned GPU-resident prefix index, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585`, measured on an H200 DP8 cell).
+- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks warm in the auto-tuned GPU-resident prefix index, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585` per rank, taken from the precise-routing config and not yet re-measured for this routing).
 - **Token-load scorer** (prefill, weight 3) — picks by queued prefill tokens.
 - **CPU prefix-cache scorer** (prefill, weight 1) — fixed LRU capacity (200k entries per server), favors ranks holding CPU-offloaded prefix blocks.
 - **Active-request scorer** (decode) — load balancing.
@@ -541,7 +541,7 @@ DCGM custom metrics: `modelserver/gpu/vllm/base/dcgm-custom-metrics.yaml`.
 
 ## Benchmarking
 
-The results below use requests derived from production agentic traces and replayed with
+The benchmark configuration below uses requests derived from production agentic traces and replayed with
 [aiperf](https://github.com/ai-dynamo/aiperf) on CoreWeave H200 nodes with InfiniBand between
 nodes and NVLink within a node. Limited-input-length runs filter aiperf to only use shorter
 requests for apples-to-apples comparisons with EP8 deployments that cannot handle the entire
@@ -651,40 +651,15 @@ configurations:
 `142000` truncates the trace dataset to requests that fit an EP8 (1-node) prefill deployment.
 `10000000` is effectively unbounded and replays full traces (up to ~1M input tokens) — this is
 the "Full ISL" config. At concurrency 256/512, some Full ISL runs on smaller topologies exceeded
-server capacity (warmup failures) and are excluded from the reported results.
+server capacity (warmup failures) and were excluded from the blog post results.
 
 ## Benchmark Results
 
 > [!NOTE]
-> **TODO: re-run with the current router config.** The results below were measured with the
-> previous router (weighted GPU + CPU prefix-cache scorers plus queue and active-request
-> scorers). The guide now routes prefill through the prefix-cache affinity filter and
-> token-load scorer (`peakPrefillThroughput: 3585`) with a CPU prefix-cache score, and the
-> tables have not yet been re-measured with that config.
-
-### Recommended 64-GPU Deployment
-
-The full-input-length reference uses `p3w2d1w2`, native MTP, CPU KV offloading, and dual
-GPU+CPU prefix-cache routing:
-
-| Concurrency | Requests | TTFT p50 / p90 | ITL p50 / p90 | Turn completion p50 | Output throughput |
-| ----------- | -------- | --------------- | --------------- | ------------------- | ----------------- |
-| 64 | 3,543 | 1.71 s / 6.36 s | 15.5 ms / 18.9 ms | 9.6 s | 3,679 tok/s |
-| 128 | 6,242 | 2.18 s / 15.82 s | 19.1 ms / 23.1 ms | 14.0 s | 6,281 tok/s |
-
-### What Each Optimization Changes
-
-- **CPU offloading keeps evicted prefixes reusable.** In matched 24-GPU runs at concurrency
-  32, offloading raises output 13%, cuts median TTFT 32%, and cuts median turn completion 27%,
-  while median ITL is unchanged. At concurrency 128, baseline output remains near 951 tok/s
-  while offloading reaches 2,776 tok/s.
-- **MTP reduces decode work.** On matched 32-GPU `p1w2d1w2` deployments with CPU offloading
-  enabled in both runs, MTP raises aggregate output 1.6-2.0x and average output per user
-  1.6-1.8x through concurrency 128.
-- **Prefill and decode replicas change different parts of the turn.** At concurrency 128,
-  `p2w2d2w2` produces 8% more output and completes the median turn 10% sooner than
-  `p3w2d1w2` at the same 64-GPU budget. `p3w2d1w2` reaches the first token 19% sooner and
-  restores 63% less KV from CPU memory.
+> **TODO:** results for the current router config (prefix-cache affinity filter and token-load
+> scorer on prefill, active-request scorer on decode) are not yet published. Earlier results,
+> measured with the previous weighted prefix-cache, queue and active-request scorers, are in
+> the [blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d).
 
 ## Cleanup
 

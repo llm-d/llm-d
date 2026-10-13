@@ -39,8 +39,11 @@ router:
         - type: prefix-cache-affinity-filter
           parameters:
             prefixMatchInfoProducerName: gpu-prefix-cache-producer
-            # Measured on an H200 GLM-5.2-FP8 DP8 cell. Re-measure for other
-            # hardware or models (guides/recipes/router/calibration).
+            # Per DP rank, H200, 2048-token prefill chunk. Taken from
+            # precise-routing.values.yaml (#2203) and not re-measured here; it
+            # agrees within ~20% with measured MoE prefill rates scaled to
+            # GLM-5.2's ~40B active parameters. Re-measure for other hardware
+            # or models (guides/recipes/router/calibration).
             peakPrefillThroughput: 3585
         - type: token-load-scorer
         - type: prefix-cache-scorer
