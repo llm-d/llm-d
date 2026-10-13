@@ -1873,7 +1873,9 @@
   ],
   "refresh": false,
   "schemaVersion": 39,
-  "tags": [],
+  "tags": [
+    "llm-d"
+  ],
   "templating": {
     "list": [
       {
@@ -1902,7 +1904,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Inference Gateway",
+  "title": "llm-d Inference Gateway",
   "uid": "aeap3g4ujefb4b",
   "version": 1,
   "weekStart": ""

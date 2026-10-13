@@ -1529,7 +1529,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "P/D Coordinator Metrics",
+  "title": "llm-d P/D Coordinator Metrics",
   "uid": "pd-coordinator-metrics",
   "version": 0,
   "weekStart": ""
