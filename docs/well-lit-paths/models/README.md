@@ -36,8 +36,8 @@ composes the same stack, one layer per pressure:
 | **[P/D disaggregation](../../../guides/pd-disaggregation/README.md)** | Separate prefill and decode pools so heavy prefill never stalls token generation. |
 
 Agentic clients and coding harnesses that speak the OpenAI Responses API (stateful conversations,
-tool loops) can sit on top of any of these vLLM deployments through
-[Agentic API](../../../guides/agentic-api/README.md) (Experimental).
+tool loops) can sit on top of any of these vLLM deployments, as
+[Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md) (Experimental) describes.
 
 Nemotron 3 Ultra and Qwen3-Coder-480B are benchmarked with
 [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) through

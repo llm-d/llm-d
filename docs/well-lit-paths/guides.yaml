@@ -50,6 +50,10 @@ sections:
         slug: serve-omni-models
         title: Serve Omni Models
         position: 9
+      - dir: guides/agentic-api
+        slug: serve-responses-api
+        title: Serve the Stateful OpenAI Responses API
+        position: 10
   # Models: benchmarked recipes for one model on one accelerator, each with a
   # guide.yaml support matrix like the Foundations guides.
   models:
@@ -169,12 +173,4 @@ sections:
         position: 4
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
   # operations/disaggregation has only docs pages: vllm, sglang, disaggregatedset.
-  operations-integrations:
-    target: operations/integrations
-    guides:
-      # position 1: docs/operations/integrations/litellm.md
-      # position 2: docs/operations/integrations/kong.md
-      - dir: guides/agentic-api
-        slug: agentic-api
-        title: Agentic API
-        position: 3
+  # operations/integrations has only docs pages: litellm, kong.

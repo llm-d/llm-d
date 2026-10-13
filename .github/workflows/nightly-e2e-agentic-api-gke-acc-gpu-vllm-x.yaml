@@ -1,20 +1,19 @@
 name: Nightly - Agentic API E2E (GKE GPU)
 
 # Nightly regression test for the agentic-api guide (guides/agentic-api):
-# vllm/agentic-api and its PostgreSQL state store in Standalone Mode, in front
-# of an optimized-baseline router and Qwen3-32B model server.
+# vllm/agentic-api and its PostgreSQL state store in front of the guide's
+# Standalone Mode router and Qwen3-32B model server.
 #
 # Deploys via guides/agentic-api/scripts/nightly-deploy-gke.sh, which emits the
-# guide.yaml commands of both guides, and hands off (via --extra-validate) to
+# guide.yaml commands, and hands off (via --extra-validate) to
 # e2e-validate-agentic-api.sh, which runs the guide's own verify section:
 # guides/agentic-api/verify.py over a port-forward (health and model discovery,
 # stateful /v1/responses continuation, the webhook tool loop, WebSocket).
 #
 # Why not the shared benchmark reusable? Two reasons:
-#   1. It cannot stand this guide up. The kustomize standup needs a
-#      guides/<scenario>/modelserver/<accel>/<backend>/<infra>/ overlay; this
-#      guide is an extension with no model server of its own, and it deploys
-#      PostgreSQL and agentic-api on top of a base guide.
+#   1. It cannot stand this guide up. The kustomize standup deploys only the
+#      router and the guides/<scenario>/modelserver/<accel>/<backend>/<infra>/
+#      overlay; this guide also deploys PostgreSQL and agentic-api.
 #   2. It would not test the feature. A completions benchmark goes straight to
 #      the router; the Responses API, its state store and the tool loop are only
 #      exercised through agentic-api.
@@ -119,15 +118,15 @@ jobs:
     with:
       guide_name: agentic-api
       namespace: llm-d-nightly-agentic-api-gke-gpu
-      # The smoke loop targets the base guide's router, as its README does;
+      # The smoke loop targets the guide's router (helm release agentic-api);
       # the validator targets agentic-api on its own.
-      gateway_host: 'optimized-baseline-epp'
+      gateway_host: 'agentic-api-epp'
       custom_deploy_script: |
         bash guides/agentic-api/scripts/nightly-deploy-gke.sh
       e2e_validate_args: '--extra-validate agentic-api'
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5
-      # One replica of optimized-baseline's Qwen3-32B model server, tensor parallelism 2.
+      # One replica of the guide's Qwen3-32B model server, tensor parallelism 2.
       required_gpus: 2
       recommended_gpus: 2
       accelerator_type: H100

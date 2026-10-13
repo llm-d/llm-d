@@ -6,7 +6,7 @@ set -Eeuo pipefail
 # -----------------------------------------------------------------------------
 # Validates the agentic-api guide beyond the default smoke test.
 #
-# The smoke loop only proves the base guide's router serves chat and text
+# The smoke loop only proves the guide's router serves chat and text
 # completions. This script runs the guide's own verification, the verify
 # section of guides/agentic-api/guide.yaml emitted by scripts/guide.py: a
 # port-forward to Service/agentic-api and guides/agentic-api/verify.py, which
@@ -14,8 +14,7 @@ set -Eeuo pipefail
 # PostgreSQL, the webhook tool loop (function_call -> function_call_output) and
 # WebSocket /v1/responses.
 #
-# Expects the deploy from guides/agentic-api/scripts/nightly-deploy-gke.sh:
-# Standalone Mode on top of optimized-baseline.
+# Expects the deploy from guides/agentic-api/scripts/nightly-deploy-gke.sh.
 # -----------------------------------------------------------------------------
 
 show_help() {
@@ -33,8 +32,6 @@ EOF
 
 NAMESPACE="llm-d"
 MODEL_ID=""
-# Must match BASE_GUIDE_NAME in guides/agentic-api/scripts/nightly-deploy-gke.sh.
-BASE_GUIDE_NAME="optimized-baseline"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -50,13 +47,12 @@ VERIFY_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/agentic-api-verify.XXXXXX")"
 trap 'rm -f "${VERIFY_SCRIPT}"' EXIT
 
 echo "Namespace:  ${NAMESPACE}"
-echo "Base guide: ${BASE_GUIDE_NAME} (router model: ${MODEL_ID:-not given})"
+echo "Router model: ${MODEL_ID:-not given}"
 
 python3 "${REPO_ROOT}/scripts/guide.py" emit "${REPO_ROOT}/guides/agentic-api" \
   --context ci \
   --var REPO_ROOT="${REPO_ROOT}" \
   --var NAMESPACE="${NAMESPACE}" \
-  --var BASE_GUIDE_NAME="${BASE_GUIDE_NAME}" \
   env verify > "${VERIFY_SCRIPT}"
 
 echo "=== Running the agentic-api guide verification ==="
