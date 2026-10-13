@@ -133,16 +133,18 @@ prerequisites:
 deploy:
 
   router_values:
-    - run: |
+    - when: {MODEL_SERVER: [vllm, sglang]}
+      run: |
         # Paths to values files
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-
-    - when: {MODEL_SERVER: [vllm, sglang]}
-      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
     # trtllm-serve needs its own values: modelServers.type and the /prometheus/metrics path.
     - when: {MODEL_SERVER: [trtllm]}
-      run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
+      run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}

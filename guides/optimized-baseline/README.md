@@ -68,7 +68,7 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for your environment.
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
 
 - For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
 
@@ -146,15 +146,13 @@ kubectl create secret generic llm-d-hf-token \
 **Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment commands below):
 
 <!-- guide:deploy.router_values start -->
-```bash
-# Paths to values files
-export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-```
 <!-- variants:start -->
 <details open data-when="MODEL_SERVER=vllm,sglang">
 <summary><b>vLLM / SGLang</b></summary>
 
 ```bash
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 ```
 
@@ -164,6 +162,8 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 <!-- llm-d-cicd:skip start -->
 ```bash
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
@@ -186,20 +186,13 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 
 **(Rebellions NPU only) Layer the NPU router values**, which drop the prefix-cache affinity filter because the NPU overlay serves with prefix caching off:
 
-<!-- guide:deploy.accelerator_values start -->
-<!-- variants:start -->
-<details data-when="ACCELERATOR_TYPE=npu">
-<summary><b>Rebellions NPU</b></summary>
-
+<!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:deploy.accelerator_values end -->
+<!-- guide:deploy.accelerator_values[0] end -->
 
 **Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
 
@@ -327,61 +320,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
-### 3. Observability & Troubleshooting
-
-Once monitoring is enabled, use the signals below to operate the optimized baseline:
-
-- **GKE Managed Monitoring:** With [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) enabled, model server metrics (`vllm:*`, `sglang:*`) are scraped automatically into Google Cloud Managed Service for Prometheus (GMP) via auto-generated `PodMonitoring` resources (`kubectl get podmonitoring -n ${NAMESPACE} -l source=gke-auto-monitoring`). When deployed in Gateway Mode with [GKE Gateway](../../docs/infrastructure/gateway/gke.md) (`GW_PROVIDER_NAME=gke`), use the out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) alongside the model server dashboards.
-- **OSS Prometheus & Grafana:** View the imported [Grafana dashboards](../../docs/operations/observability/dashboards.md) or query Prometheus directly.
-
-This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
-
-This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
-
-#### Key metrics for this path
-
-<!-- tabs:start group=engine -->
-<details open>
-<summary><b>vLLM</b></summary>
-
-| Signal | Why it matters for the optimized baseline | Where to look |
-|--------|-------------------------------------------|---------------|
-| Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-| Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
-| Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
-| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
-
-</details>
-<details>
-<summary><b>SGLang</b></summary>
-
-SGLang deployments expose the equivalent signals under `sglang_*`; the [PromQL reference](../../docs/operations/observability/promql.md) lists both engines.
-
-| Signal | Why it matters for the optimized baseline | Where to look |
-|--------|-------------------------------------------|---------------|
-| Per-pod load (`llm_d_epp_request_total`, `sglang_num_running_reqs`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-| Prefix cache hit rate (`sglang_cache_hit_rate`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
-| Per-pod KV cache utilization (`sglang_token_usage`) | Drives the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
-| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-
-</details>
-<details>
-<summary><b>TensorRT-LLM</b></summary>
-
-`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/model-servers/README.md) for the flags that enable them.
-
-</details>
-<!-- tabs:end -->
-
-#### Common failure modes
-
-- **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
-- **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
-- **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
-
-For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
-
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -411,7 +349,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 ### 2. Send Test Requests
 
-**Send a completion request from a temporary pod inside the cluster (model-aware; `MODEL` must be the model your accelerator serves, see the **Served model** column in [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)):**
+**Send a completion request from a temporary pod inside the cluster:**
 
 <!-- guide:verify.tests.request start -->
 ```bash
@@ -475,8 +413,10 @@ One pod reports most of the 10 requests in `vllm:request_success_total`, and its
 
 One pod reports most of the requests in `sglang:num_requests_total`. Check
 that `sglang:cached_tokens_total{cache_source="device"}` increases after
-requests with a shared prefix (or check `sglang:cache_hit_rate` on images
-that expose a reliable nonzero ratio).
+requests with a shared prefix (you can also check `sglang:cache_hit_rate`,
+though some SGLang images—such as the Intel XPU image
+`ghcr.io/llm-d/llm-d-xpu-sglang:v0.10.0`—may incorrectly report `0` for
+`sglang:cache_hit_rate` even when prefix cache hits occur).
 
 </details>
 <details>
@@ -488,6 +428,61 @@ The command above reads vLLM and SGLang counters only. For `trtllm-serve`, query
 <!-- tabs:end -->
 
 If the requests are spread evenly and hit rates stay near zero, prefix-cache affinity is not taking effect; see [Common failure modes](#common-failure-modes). Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+
+## Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate the optimized baseline under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state load or saturation signals):
+
+- **GKE Managed Monitoring:** With [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) enabled, model server metrics (`vllm:*`, `sglang:*`) are scraped automatically into Google Cloud Managed Service for Prometheus (GMP) via auto-generated `PodMonitoring` resources (`kubectl get podmonitoring -n ${NAMESPACE} -l source=gke-auto-monitoring`). When deployed in Gateway Mode with [GKE Gateway](../../docs/infrastructure/gateway/gke.md) (`GW_PROVIDER_NAME=gke`), use the out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) alongside the model server dashboards.
+- **OSS Prometheus & Grafana:** View the imported [Grafana dashboards](../../docs/operations/observability/dashboards.md) or query Prometheus directly.
+
+This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+
+This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
+
+### Key metrics for this path
+
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
+| Signal | Why it matters for the optimized baseline | Where to look |
+|--------|-------------------------------------------|---------------|
+| Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| TTFT and ITL (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | The user-facing SLO signals this path is tuned to protect. Regressions here are the trigger to inspect the balance/cache split above | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+SGLang deployments expose the equivalent signals under `sglang_*`; the [PromQL reference](../../docs/operations/observability/promql.md) lists both engines.
+
+| Signal | Why it matters for the optimized baseline | Where to look |
+|--------|-------------------------------------------|---------------|
+| Per-pod load (`llm_d_epp_request_total`, `sglang_num_running_reqs`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`sglang_cache_hit_rate`, or `sglang_cached_tokens_total{cache_source="device"}` / `sglang_prompt_tokens_total` on images where `sglang_cache_hit_rate` reports `0`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization (`sglang_token_usage`) | Drives the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+
+</details>
+<details>
+<summary><b>TensorRT-LLM</b></summary>
+
+`trtllm-serve` exposes the equivalent load and KV-cache gauges (`trtllm_num_requests_running`, `trtllm_num_requests_waiting`, `trtllm_kv_cache_utilization`) at `/prometheus/metrics`; see the [model server requirements](../../docs/architecture/model-servers/README.md) for the flags that enable them.
+
+</details>
+<!-- tabs:end -->
+
+### Common failure modes
+
+- **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
+- **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
+- **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency (`llm_d_epp_plugin_duration_seconds`) and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
+
+For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
 
 ## Cleanup
 

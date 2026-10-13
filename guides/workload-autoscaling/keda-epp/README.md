@@ -15,7 +15,7 @@ For how KEDA+EPP scaling works and why demand signals beat utilization, see
 
 1. Complete the [optimized-baseline guide](../../optimized-baseline/README.md),
    including
-   [enabling monitoring](../../optimized-baseline/README.md#3-observability--troubleshooting).
+   [enabling monitoring](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
    Confirm that Prometheus is scraping the EPP metrics endpoint before
    configuring autoscaling.
 

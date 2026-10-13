@@ -156,11 +156,7 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 
 **(NVIDIA GPU only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
 
-<!-- guide:prerequisites.lws start -->
-<!-- variants:start -->
-<details open data-when="ACCELERATOR_TYPE=gpu">
-<summary><b>NVIDIA GPU</b></summary>
-
+<!-- guide:prerequisites.lws[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
@@ -170,10 +166,7 @@ helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
   --wait --timeout 300s
 ```
 <!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:prerequisites.lws end -->
+<!-- guide:prerequisites.lws[0] end -->
 
 **Install the Gateway API Inference Extension CRDs:**
 
@@ -246,20 +239,13 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 
 **(Rebellions NPU only) Layer the NPU router values**, which list every decode rank port:
 
-<!-- guide:deploy.accelerator_values start -->
-<!-- variants:start -->
-<details data-when="ACCELERATOR_TYPE=npu">
-<summary><b>Rebellions NPU</b></summary>
-
+<!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:deploy.accelerator_values end -->
+<!-- guide:deploy.accelerator_values[0] end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -522,35 +508,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
-### 4. Observability & Troubleshooting
-
-Once monitoring is enabled, use the signals below to operate P/D disaggregation. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
-
-In a P/D deployment the prefill and decode pools scale and fail independently, and every decode step depends on a KV transfer from a prefill worker over NIXL. Most problems show up as an **imbalance between the two pools** or as **KV-transfer stalls**, so watch them as a pair rather than as a single aggregate.
-
-#### Key metrics for this path
-
-| Signal | Why it matters for P/D | Where to look |
-|--------|------------------------|---------------|
-| Prefill worker utilization (`vllm:num_requests_running{pod=~".*prefill.*"}`) | Prefill is short and bursty. Sustained saturation here means prompts queue before decode can even start, inflating TTFT | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
-| Decode KV cache utilization (`vllm:kv_cache_usage_perc{pod=~".*decode.*"}`) | Decode holds KV for the full generation. Above ~0.9 the decode pool preempts or rejects, so decode — not prefill — is usually the scaling bottleneck | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
-| P/D decision ratio (`llm_d_epp_disagg_decision_total`) | Confirms the router is actually splitting prefill and decode (`decision_type="prefill-decode"`). A ratio drifting toward `decode-only` means requests are falling back to aggregated serving | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
-| EPP scheduler e2e latency (`llm_d_epp_scheduler_e2e_duration_seconds`) | Rising scheduler latency with healthy pools points at the routing layer, not the model servers | [PromQL → Tier 1](../../docs/operations/observability/promql.md) |
-| TTFT vs. ITL split (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | TTFT regressions localize to prefill or KV transfer; ITL regressions localize to decode. Splitting them tells you which pool to investigate | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
-
-> SGLang deployments expose the equivalent signals under `sglang_*` (`sglang_num_running_reqs`, `sglang_token_usage`); the PromQL reference lists both.
-
-#### Common failure modes
-
-- **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect the configured KV-transfer backend (NIXL, Mooncake, or another backend; see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
-- **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode role needs more replicas or a larger TP degree.
-- **Both pools underutilized but latency high** — routing problem. Check the P/D decision ratio and EPP scheduler e2e latency before touching the model servers.
-- **`cks-mooncake`: no RDMA in pod** — check that `rdma/ib` appears in the node's allocatable resources (`kubectl describe node`) and that the RDMA device plugin is running.
-- **`cks-mooncake`: MooncakeConnector fails to initialize** — verify that `mooncake-transfer-engine` is installed in the image (`pip show mooncake-transfer-engine` inside the pod) and that the bootstrap port is free.
-- **`cks-mooncake`: KV transfer failures** — confirm that the prefill and decode pods can reach each other over the RDMA network.
-
-For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
-
 ## Operating the DisaggregatedSet
 
 The NVIDIA GPU overlays run prefill and decode as one [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm`, or `pd-disagg-sglang` for SGLang) with `groupIdentity: Hash`.
@@ -572,7 +529,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 
 ### 2. Send Test Requests
 
-**Send a completion request from a temporary pod inside the cluster** (`MODEL` must be the model your accelerator serves, see [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)):
+**Send a completion request from a temporary pod inside the cluster:**
 
 <!-- guide:verify.tests.request start -->
 ```bash
@@ -661,6 +618,35 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 <!-- guide:verify.tests.router_metrics end -->
 
 Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+
+## Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate P/D disaggregation under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state pool utilization or saturation signals). This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+
+In a P/D deployment the prefill and decode pools scale and fail independently, and every decode step depends on a KV transfer from a prefill worker over the configured KV-transfer backend (NIXL, Mooncake, or MoRIIO). Most problems show up as an **imbalance between the two pools** or as **KV-transfer stalls**, so watch them as a pair rather than as a single aggregate.
+
+### Key metrics for this path
+
+| Signal | Why it matters for P/D | Where to look |
+|--------|------------------------|---------------|
+| Prefill worker utilization (`vllm:num_requests_running{pod=~".*prefill.*"}`) | Prefill is short and bursty. Sustained saturation here means prompts queue before decode can even start, inflating TTFT | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
+| Decode KV cache utilization (`vllm:kv_cache_usage_perc{pod=~".*decode.*"}`) | Decode holds KV for the full generation. Above ~0.9 the decode pool preempts or rejects, so decode — not prefill — is usually the scaling bottleneck | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
+| P/D decision ratio (`llm_d_epp_disagg_decision_total`) | Confirms the router is actually splitting prefill and decode (`decision_type="prefill-decode"`). A ratio drifting toward `decode-only` means requests are falling back to aggregated serving | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
+| EPP scheduler e2e latency (`llm_d_epp_scheduler_e2e_duration_seconds`) | Rising scheduler latency with healthy pools points at the routing layer, not the model servers | [PromQL → Tier 1](../../docs/operations/observability/promql.md) |
+| TTFT vs. ITL split (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | TTFT regressions localize to prefill or KV transfer; ITL regressions localize to decode. Splitting them tells you which pool to investigate | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
+
+> SGLang deployments expose the equivalent signals under `sglang_*` (`sglang_num_running_reqs`, `sglang_token_usage`); the PromQL reference lists both.
+
+### Common failure modes
+
+- **TTFT regression, decode healthy** — prefill pool is saturated or KV transfer is stalling. Check prefill utilization and TTFT together; if prefill is idle but TTFT is high, suspect the configured KV-transfer backend (NIXL, Mooncake, or another backend; see the [SGLang operations doc](../../docs/operations/disaggregation/sglang.md) for the prefill-side KV-strand caveat).
+- **ITL regression, prefill healthy** — decode pool is the bottleneck. Check decode KV cache utilization; sustained values near 1.0 mean the decode role needs more replicas or a larger TP degree.
+- **Both pools underutilized but latency high** — routing problem. Check the P/D decision ratio (`llm_d_epp_disagg_decision_total`) and EPP scheduler e2e latency (`llm_d_epp_scheduler_e2e_duration_seconds`) before touching the model servers.
+- **`cks-mooncake`: no RDMA in pod** — check that `rdma/ib` appears in the node's allocatable resources (`kubectl describe node`) and that the RDMA device plugin is running.
+- **`cks-mooncake`: MooncakeConnector fails to initialize** — verify that `mooncake-transfer-engine` is installed in the image (`pip show mooncake-transfer-engine` inside the pod) and that the bootstrap port is free.
+- **`cks-mooncake`: KV transfer failures** — confirm that the prefill and decode pods can reach each other over the RDMA network.
+
+For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
 
 ## Cleanup
 

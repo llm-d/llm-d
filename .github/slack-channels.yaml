@@ -39,6 +39,7 @@ channels:
     - nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-flow-control-amd-ci-acc-rocm-vllm-x.yaml
     - nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml
     - nightly-e2e-optimized-baseline-amd-acc-rocm-sglang-x.yaml

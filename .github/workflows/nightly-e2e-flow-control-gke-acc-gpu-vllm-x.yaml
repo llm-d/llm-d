@@ -123,7 +123,8 @@ jobs:
       namespace: llm-d-nightly-flow-control-gke-gpu
       gateway_host: 'flow-control-epp'
       custom_deploy_script: |
-        bash guides/flow-control/scripts/nightly-deploy-gke.sh
+        ACCELERATOR_TYPE=gpu INFRA_PROVIDER=gke \
+          bash guides/flow-control/scripts/nightly-deploy-gke.sh
       e2e_validate_args: '--extra-validate flow-control'
       gke_cluster_name: llm-d-e2e-us-east5
       gke_cluster_zone: us-east5

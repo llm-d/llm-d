@@ -62,7 +62,7 @@ SGLang has no equivalent of the `OffloadingConnector` P2P secondary tier, so thi
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 1, 2 GPUs in total, each with enough HBM for `openai/gpt-oss-120b`, e.g. H100 or H200). Each pod also requests 160 GiB of memory for its 88 GiB CPU tier; to change the replica count or the tier size, edit the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml).
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 1, 2 GPUs in total, each with enough HBM for `openai/gpt-oss-120b`, e.g. H100 or H200). Each pod also requests 160 GiB of memory for its 88 GiB CPU tier; to change the replica count or the tier size, edit the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell. The router also reads it to reach gated tokenizers.
 
