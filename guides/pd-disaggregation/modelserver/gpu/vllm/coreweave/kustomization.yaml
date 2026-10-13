@@ -37,13 +37,19 @@ patches:
                           - name: HF_HUB_DISABLE_XET
                             value: "1"
                         volumeMounts:
-                          # Node-local HuggingFace cache shared across pods and restarts
+                          # HuggingFace cache shared across pods and restarts
                           - mountPath: /root/.cache/huggingface
                             name: huggingface-cache
                     volumes:
+                      # Model weights on an RWX PVC rather than a node-local hostPath.
+                      # CoreWeave's /var/cache/huggingface is a 15 GB ramdisk (/dev/ram0),
+                      # far too small for gpt-oss-120b (60.8 GiB of safetensors), so a
+                      # hostPath there fails with `OSError: [Errno 28] No space left on
+                      # device` during the first download. Requires the `model-pvc` PVC to
+                      # exist in the namespace and the default StorageClass to support
+                      # ReadWriteMany -- see the guide README.
                       - name: huggingface-cache
-                        hostPath:
-                          path: /var/cache/huggingface
-                          type: DirectoryOrCreate
+                        persistentVolumeClaim:
+                          claimName: model-pvc
           - name: decode
             spec: *coreweave
