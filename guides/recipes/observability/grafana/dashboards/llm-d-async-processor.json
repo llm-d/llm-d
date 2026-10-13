@@ -235,7 +235,7 @@
       }
     },
     {
-      "title": "Message Latency (p50 / p95 / p99)",
+      "title": "Inference latency (p50 / p95 / p99)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -245,7 +245,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(llm_d_async_async_message_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(llm_d_async_async_inference_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p50",
           "datasource": {
             "type": "prometheus",
@@ -253,7 +253,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(llm_d_async_async_message_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(llm_d_async_async_inference_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p95",
           "datasource": {
             "type": "prometheus",
@@ -261,7 +261,7 @@
           }
         },
         {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(llm_d_async_async_message_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(llm_d_async_async_inference_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p99",
           "datasource": {
             "type": "prometheus",
@@ -281,10 +281,11 @@
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
-      }
+      },
+      "description": "Time spent in the llm-d Router and model servers per dispatch attempt (llm_d_async_async_inference_latency_time_millis). Compare with queue residence time to see which side a delay is on."
     },
     {
-      "title": "Message Latency by Queue (p95)",
+      "title": "Queue residence time by queue (p95)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -294,7 +295,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le, queue_name) (rate(llm_d_async_async_message_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, queue_name) (rate(llm_d_async_async_queue_residence_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "{{ queue_name }}",
           "datasource": {
             "type": "prometheus",
@@ -314,7 +315,8 @@
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
-      }
+      },
+      "description": "Time a request waits inside the processor between being pulled from the broker and dispatch (llm_d_async_async_queue_residence_time_millis): the delay the async layer itself adds."
     },
     {
       "title": "Exceeded Deadline Rate by Queue",
@@ -670,6 +672,40 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        }
+      }
+    },
+    {
+      "title": "End-to-end message latency by queue (p95, GCP Pub/Sub only)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Publish-to-result time (llm_d_async_async_message_latency_time_millis). Recorded only on GCP Pub/Sub, where the broker stamps a publish time; empty on the Redis transports.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, queue_name) (rate(llm_d_async_async_message_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
+          "legendFormat": "{{ queue_name }} p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 10
