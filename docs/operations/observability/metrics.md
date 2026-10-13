@@ -73,22 +73,19 @@ prefill                 5m
 
 ## Step 2: Scrape EPP and Gateway Metrics
 
-- **GKE Gateway:** When deploying the llm-d Router in Gateway Mode with [GKE Gateway](../../infrastructure/gateway/gke.md) (`GW_PROVIDER_NAME=gke`), GKE provides an out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**). To also scrape the EPP's `/metrics` endpoint (port `9090`) directly into Google Cloud Managed Service for Prometheus, apply a `PodMonitoring` resource matching the EPP pod's label:
+- **GKE Managed Prometheus / GKE Gateway:** GKE automatic application monitoring creates `PodMonitoring` resources for model servers (`vLLM` and `SGLang`), not for the EPP deployment (`*-epp`). To scrape the EPP's authenticated `/metrics` endpoint (port `9090`) into Google Cloud Managed Service for Prometheus, pass `--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true` when installing or upgrading the router Helm chart (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot). In Gateway Mode (`GW_PROVIDER_NAME=gke`) or Standalone Mode, the chart automatically creates the `PodMonitoring` (`monitoring.googleapis.com/v1`) resource, a metrics-reader `ServiceAccount` and token `Secret`, and the RBAC bindings allowing the `gmp-system` collector to read the token. When using [GKE Gateway](../../infrastructure/gateway/gke.md), GKE also provides an out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**).
 
-  ```yaml
-  apiVersion: monitoring.googleapis.com/v1
-  kind: PodMonitoring
-  metadata:
-    name: epp-podmonitoring
-    namespace: ${NAMESPACE}
-  spec:
-    selector:
-      matchLabels:
-        llm-d.ai/igw-mode: llm-d-router-gateway # or llm-d-router-standalone in Standalone Mode
-    endpoints:
-      - port: metrics
-        path: /metrics
-        interval: 15s
+  Verify the EPP `PodMonitoring` resource exists:
+
+  ```bash
+  kubectl get podmonitoring -n ${NAMESPACE}
+  ```
+
+  Expected output:
+
+  ```text
+  NAME                 AGE
+  optimized-baseline   1m
   ```
 
 - **OSS Prometheus Stack:** Pass `-f guides/recipes/router/features/monitoring.values.yaml` when installing the router Helm chart (or see the [Monitoring & Tracing Configuration](https://github.com/llm-d/llm-d-router/tree/main/config/charts#4-monitoring--tracing-configuration) section in the llm-d-router Helm chart docs) to create a `ServiceMonitor` (`monitoring.coreos.com/v1`) for the EPP.

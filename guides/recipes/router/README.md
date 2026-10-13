@@ -111,6 +111,8 @@ If your cluster already has the Prometheus Operator CRDs installed, you can also
 `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the initial
 `helm install` command above instead.
 
+On **GKE Managed Prometheus**, pass `--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true` (instead of `features/monitoring.values.yaml`, and add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot) so the chart creates a GMP `PodMonitoring` (`monitoring.googleapis.com/v1`), a metrics-reader `ServiceAccount` and token `Secret`, and the RBAC bindings required for the GMP collector to scrape the EPP.
+
 ## Calibration
 
 [`calibration/`](calibration/) provides a reusable tool to measure

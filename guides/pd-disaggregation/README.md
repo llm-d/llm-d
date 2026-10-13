@@ -233,7 +233,7 @@ The router configuration in [`router/pd-disaggregation.values.yaml`](router/pd-d
 > [!NOTE]
 > The `prefix-cache-affinity-filter` uses a `peakPrefillThroughput` of `33821`, calibrated for gpt-oss-120b on TP=1 H200 prefill workers through the full P/D path (including the NIXL KV transfer). On a different model or accelerator, measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) before performance work.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
 
 <!-- guide:deploy.monitoring_values start -->
 <!-- llm-d-cicd:skip start -->

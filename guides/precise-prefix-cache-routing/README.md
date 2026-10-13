@@ -149,7 +149,7 @@ export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 > [!NOTE]
 > The `prefix-cache-affinity-filter` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) uses a `peakPrefillThroughput` measured on the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2; SGLang measures the same value as vLLM). On a different model or accelerator, measure and set your value with the [calibration guide](../recipes/router/calibration/README.md).
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
 
 <!-- guide:deploy.monitoring_values start -->
 ```bash

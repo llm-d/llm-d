@@ -138,7 +138,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 > [!NOTE]
 > The router values configure two prefix-cache scorers: one for the accelerator (HBM) cache and one for the CPU tier. vLLM does not report how full its CPU tier is, so the CPU producer's capacity is set by hand (`lruCapacityPerServer`): the `single-host` values are sized for Qwen3-32B and the `multi-host` values for Qwen3-Coder-480B. Recompute it for other models.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
 
 <!-- guide:deploy.monitoring_values start -->
 <!-- llm-d-cicd:skip start -->

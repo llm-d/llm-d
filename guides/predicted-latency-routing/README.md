@@ -154,7 +154,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency
 
 Both values files enable the latency predictor sidecars (`router.latencyPredictor.enabled: true`) and select model server pods labeled `llm-d.ai/guide=optimized-baseline`, the label of the Optimized Baseline model servers this guide reuses.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)). It also disables authentication on the router's `/metrics` endpoint, which the [router metrics check](#3-verify-predicted-latency-routing) relies on:
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor` and disable `/metrics` authentication for the [router metrics check](#3-verify-predicted-latency-routing); for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
 
 <!-- guide:deploy.monitoring_values start -->
 <!-- llm-d-cicd:skip start -->

@@ -138,7 +138,7 @@ export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${ACC
 ```
 <!-- guide:deploy.router_values end -->
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
 
 <!-- guide:deploy.monitoring_values start -->
 <!-- llm-d-cicd:skip start -->

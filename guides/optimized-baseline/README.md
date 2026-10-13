@@ -175,7 +175,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trt
 > [!NOTE]
 > The `prefix-cache-affinity-filter` in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml) defaults to `peakPrefillThroughput` tuned for the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2). On a different model or accelerator, miscalibrated `peakPrefillThroughput` can prevent the saturation override from spreading load across pods — measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) (or check the [configuration matrix](../recipes/router/calibration/configuration-matrix.md) for pre-measured values).
 
-**(Optional) Enable OSS Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (creates a `ServiceMonitor` for the OSS Prometheus Operator; skip if using GKE automatic application monitoring):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
 
 <!-- guide:deploy.monitoring_values start -->
 ```bash
