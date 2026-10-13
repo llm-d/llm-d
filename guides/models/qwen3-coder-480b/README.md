@@ -117,17 +117,34 @@ kubectl create secret generic llm-d-hf-token \
 topology uses its own router values
 ([`router/qwen3-coder-480b-disagg.values.yaml`](router/qwen3-coder-480b-disagg.values.yaml)):
 
-<!-- guide:deploy.router_values start -->
+<!-- tabs:start group=topology -->
+<details open>
+<summary><b>Unified (Default)</b></summary>
+
+<!-- guide:deploy.router_values.unified start -->
 ```bash
-export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-
 # only when TOPOLOGY=unified:
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+```
+<!-- guide:deploy.router_values.unified end -->
 
+</details>
+<details>
+<summary><b>Disaggregated (Experimental)</b></summary>
+
+<!-- guide:deploy.router_values.disaggregated start -->
+<!-- llm-d-cicd:skip start -->
+```bash
 # only when TOPOLOGY=disaggregated:
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-disagg.values.yaml"
 ```
-<!-- guide:deploy.router_values end -->
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.router_values.disaggregated end -->
+
+</details>
+<!-- tabs:end -->
 
 > [!NOTE]
 > **`peakPrefillThroughput` is hardware/model-specific.** The router values set
@@ -152,17 +169,34 @@ helm install ${GUIDE_NAME} \
 
 **Apply the Kustomize overlay** for your topology (the unified overlay enables CPU KV offloading):
 
-<!-- guide:deploy.modelserver start -->
+<!-- tabs:start group=topology -->
+<details open>
+<summary><b>Unified (Default)</b></summary>
+
+<!-- guide:deploy.modelserver.unified start -->
 ```bash
 # only when TOPOLOGY=unified:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+```
+<!-- guide:deploy.modelserver.unified end -->
 
+</details>
+<details>
+<summary><b>Disaggregated (Experimental)</b></summary>
+
+<!-- guide:deploy.modelserver.disaggregated start -->
+<!-- llm-d-cicd:skip start -->
+```bash
 # only when TOPOLOGY=disaggregated:
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
 ```
-<!-- guide:deploy.modelserver end -->
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.disaggregated end -->
+
+</details>
+<!-- tabs:end -->
 
 Wait for the deployment to become ready (with `TOPOLOGY=disaggregated`, also wait for
 `deployment/agentic-serving-tpu-vllm-prefill`):
@@ -322,15 +356,32 @@ This guide and performance numbers will be updated as further optimizations beco
 
 To remove the deployed components:
 
-<!-- guide:cleanup.modelserver start -->
+<!-- tabs:start group=topology -->
+<details open>
+<summary><b>Unified (Default)</b></summary>
+
+<!-- guide:cleanup.modelserver.unified start -->
 ```bash
 # only when TOPOLOGY=unified:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+```
+<!-- guide:cleanup.modelserver.unified end -->
 
+</details>
+<details>
+<summary><b>Disaggregated (Experimental)</b></summary>
+
+<!-- guide:cleanup.modelserver.disaggregated start -->
+<!-- llm-d-cicd:skip start -->
+```bash
 # only when TOPOLOGY=disaggregated:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
 ```
-<!-- guide:cleanup.modelserver end -->
+<!-- llm-d-cicd:skip end -->
+<!-- guide:cleanup.modelserver.disaggregated end -->
+
+</details>
+<!-- tabs:end -->
 
 <!-- guide:cleanup.rest start -->
 ```bash

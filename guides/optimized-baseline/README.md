@@ -186,20 +186,13 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 
 **(Rebellions NPU only) Layer the NPU router values**, which drop the prefix-cache affinity filter because the NPU overlay serves with prefix caching off:
 
-<!-- guide:deploy.accelerator_values start -->
-<!-- variants:start -->
-<details data-when="ACCELERATOR_TYPE=npu">
-<summary><b>Rebellions NPU</b></summary>
-
+<!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:deploy.accelerator_values end -->
+<!-- guide:deploy.accelerator_values[0] end -->
 
 **Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
 

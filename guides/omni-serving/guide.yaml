@@ -71,22 +71,30 @@ prerequisites:
 
 deploy:
   router_values:
-    base:
-      - run: |
-          # Paths to values files
-          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
     omni:
       - when: {TASK: [omni]}
-        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/omni.values.yaml"
+        run: |
+          # Paths to values files
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/omni.values.yaml"
     text-to-image:
       - when: {TASK: [text-to-image]}
-        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-image.values.yaml"
+        run: |
+          # Paths to values files
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-image.values.yaml"
     image-to-image:
       - when: {TASK: [image-to-image]}
-        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/image-to-image.values.yaml"
+        run: |
+          # Paths to values files
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/image-to-image.values.yaml"
     text-to-speech:
       - when: {TASK: [text-to-speech]}
-        run: export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
+        run: |
+          # Paths to values files
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}

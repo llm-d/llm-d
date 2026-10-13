@@ -156,11 +156,7 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 
 **(NVIDIA GPU only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
 
-<!-- guide:prerequisites.lws start -->
-<!-- variants:start -->
-<details open data-when="ACCELERATOR_TYPE=gpu">
-<summary><b>NVIDIA GPU</b></summary>
-
+<!-- guide:prerequisites.lws[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
@@ -170,10 +166,7 @@ helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
   --wait --timeout 300s
 ```
 <!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:prerequisites.lws end -->
+<!-- guide:prerequisites.lws[0] end -->
 
 **Install the Gateway API Inference Extension CRDs:**
 
@@ -237,20 +230,13 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 
 **(Rebellions NPU only) Layer the NPU router values**, which list every decode rank port:
 
-<!-- guide:deploy.accelerator_values start -->
-<!-- variants:start -->
-<details data-when="ACCELERATOR_TYPE=npu">
-<summary><b>Rebellions NPU</b></summary>
-
+<!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:deploy.accelerator_values end -->
+<!-- guide:deploy.accelerator_values[0] end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
