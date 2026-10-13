@@ -138,7 +138,8 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path) -> None:
     assert "--set router.epp.flags.v=4" in router
     assert router.endswith(f"-n {NS} --version v0")
     async_ = _helm(tmp_path, "llm-d-async")
-    assert f"-f {GUIDE}/values/redis/quota-only.yaml" in async_ and async_.endswith(f"-n {NS} --version v0.10.0")
+    async_version = yaml.safe_load((GUIDE / "guide.yaml").read_text())["env"]["static"]["ASYNC_VERSION"]["default"]
+    assert f"-f {GUIDE}/values/redis/quota-only.yaml" in async_ and async_.endswith(f"-n {NS} --version {async_version}")
     sequence = [
         f"kubectl apply -n {NS} -k {GUIDE}/manifests/objectives",
         router,

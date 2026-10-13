@@ -95,7 +95,7 @@ Both engines run on NVIDIA GPU with the same router configuration and move KV ca
   | Accelerator | `INFRA_PROVIDER` | Cluster requirements | Setup |
   | --- | --- | --- | --- |
   | NVIDIA GPU | `gke`, `gke/a4x`, `gke/a4xmax` | GPU DRA (manual node labels and driver install, not yet GKE-managed) and managed DRANET for RoCE; `gke` targets A3/A4, `gke/a4x` / `gke/a4xmax` target A4X / A4X Max (GB200 / GB300); DRANet must support hairpin (same-node) and cross-rail (inter-node multi-rail) routing | [GKE: GPU DRA and DRANET](../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke), [GKE A4X setup](../../docs/infrastructure/providers/gke/README.md#gke-a4x-gb200-setup) |
-  | | `coreweave` | An RDMA device plugin exposing `rdma/ib` inside pods (one per pod) | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
+  | | `coreweave` | An RDMA device plugin exposing `rdma/ib` inside pods (one per pod); a default StorageClass supporting `ReadWriteMany` for the model cache PVC | [CoreWeave](../../docs/infrastructure/providers/coreweave/README.md), [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
   | | `cks-mooncake` | vLLM only. GPUs via `nvidia.com/gpu`; InfiniBand devices exposed inside pods via an `rdma/ib` device plugin (NVIDIA Network Operator, Multus with SR-IOV, or equivalent); a vLLM image with `mooncake-transfer-engine` (the standard image may not include it); `VLLM_MOONCAKE_BOOTSTRAP_PORT` (default `8998`) unique per co-located instance. Configures `MooncakeConnector` transport only, not Mooncake Store | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities), [verify RDMA in a pod](../../docs/infrastructure/rdma/README.md#2-inter-pod-network), [Mooncake installation](https://kvcache-ai.github.io/Mooncake/) |
   | | `aws` | `p5en.48xlarge` nodes with the EFA device plugin exposing `vpc.amazonaws.com/efa` | [AWS EFA notes](../../docs/infrastructure/rdma/README.md#aws-efa-deprecated---use-upstream-aws-images) |
   | AMD GPU | `oci` | OKE `BM.GPU.MI300X.8` nodes; NVIDIA Network Operator SR-IOV VFs as `nvidia.com/sriov-rdma-vf`, with a `sriov-rdma-vf` SriovNetwork in namespace `default` | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
@@ -184,6 +184,15 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 ```
 <!-- guide:prerequisites.namespace end -->
+
+**On CoreWeave, create the model cache PVC** before applying the model server overlay, which mounts the HuggingFace cache from an RWX PVC named `model-pvc` rather than a node-local `hostPath`. See [Caching model weights on a shared PVC](../../docs/infrastructure/providers/coreweave/README.md#caching-model-weights-on-a-shared-pvc) for why, and for the cold-cache caveat with multiple replicas.
+
+<!-- guide:prerequisites.model-cache start -->
+```bash
+# only when INFRA_PROVIDER=coreweave:
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
+```
+<!-- guide:prerequisites.model-cache end -->
 
 **Create the `llm-d-hf-token` secret** in your target namespace with the key [`HF_TOKEN`](../../helpers/hf-token.md) matching a valid HuggingFace token to pull models:
 
