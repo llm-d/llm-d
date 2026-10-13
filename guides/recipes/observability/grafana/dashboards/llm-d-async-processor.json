@@ -518,6 +518,164 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       }
+    },
+    {
+      "title": "Dispatch budget by queue (queue gates)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "min by (queue_name) (llm_d_async_async_dispatch_budget{namespace=\"$namespace\"})",
+          "legendFormat": "{{ queue_name }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          },
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    {
+      "title": "Gate decisions by reason",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (reason) (rate(llm_d_async_async_gate_decisions_total{namespace=\"$namespace\"}[$__rate_interval]))",
+          "legendFormat": "{{ reason }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        }
+      }
+    },
+    {
+      "title": "In-flight requests vs worker limit by pool",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (pool_name) (llm_d_async_async_inflight_requests{namespace=\"$namespace\"})",
+          "legendFormat": "{{ pool_name }} in flight"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (pool_name) (llm_d_async_async_pool_worker_limit{namespace=\"$namespace\"})",
+          "legendFormat": "{{ pool_name }} worker limit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        }
+      }
+    },
+    {
+      "title": "Metric gate reading vs threshold",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "min by (pool_name, queue_name) (llm_d_async_async_gate_metric_value{namespace=\"$namespace\"})",
+          "legendFormat": "{{ pool_name }} {{ queue_name }} value"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (pool_name, queue_name) (llm_d_async_async_gate_metric_threshold{namespace=\"$namespace\"})",
+          "legendFormat": "{{ pool_name }} {{ queue_name }} closes at"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "min by (pool_name, queue_name) (llm_d_async_async_gate_metric_source_available{namespace=\"$namespace\"})",
+          "legendFormat": "{{ pool_name }} {{ queue_name }} source available"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        }
+      }
     }
   ],
   "schemaVersion": 39,
