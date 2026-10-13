@@ -1,0 +1,50 @@
+# The Encode role: one single-pod group per replica, like the other roles. Overlays set the
+# image, launch command and resources by patching the role by name.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: encode
+      spec:
+        replicas: 1  # per slice
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            maxSurge: 0
+            maxUnavailable: 1
+        leaderWorkerTemplate:
+          size: 1  # single-host: each group is one pod
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/role: encode
+            spec:
+              serviceAccountName: pd-disagg
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command: []
+                  args: []
+                  env: []
+                  ports:
+                    - name: modelserver
+                      containerPort: 8000
+                      protocol: TCP
+                    - name: ec-nixl
+                      containerPort: 5610
+                      protocol: TCP
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                  readinessProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                  startupProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver

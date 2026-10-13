@@ -1,13 +1,14 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../../../../recipes/modelserver/base/single-host/e-pd
+  - ../../../../../../../recipes/modelserver/base/single-host/pd-disaggregatedset/e-pd
 
-namePrefix: e-pd-disaggregation-nvidia-gpu-vllm-
+nameSuffix: -e-pd
 
 components:
   - ../../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 labels:
   - pairs:
@@ -16,8 +17,10 @@ labels:
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
       llm-d.ai/engine-type: vllm
-    includeSelectors: true
-    includeTemplates: true
+    fields:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        kind: DisaggregatedSet
+        create: true
 patches:
   - path: patch-encode.yaml
   - path: patch-decode.yaml
@@ -25,11 +28,22 @@ patches:
   # and PD decode) use the CPU EC connector, which fails at startup without the
   # V2 model runner, see
   # https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/
-  - target:
-      kind: Deployment
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: VLLM_USE_V2_MODEL_RUNNER
-          value: "1"
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg
+      spec:
+        roles:
+          - name: encode
+            spec: &env
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        env:
+                          - name: VLLM_USE_V2_MODEL_RUNNER
+                            value: "1"
+          - name: decode
+            spec: *env
