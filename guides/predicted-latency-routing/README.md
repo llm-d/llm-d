@@ -22,9 +22,8 @@ flowchart LR
     subgraph RouterPod["Router Pod (4 containers)"]
         Envoy --> EPP["epp (predicted-latency-producer)"]
         EPP <-->|"1. /predict/bulk"| Pred["prediction-server-1 (:8001)"]
-        EPP -->|"2. /add_training_samples"| Train["training-server (:8000)"]
-        Train -->|"3. Write .joblib (every 10s)"| Vol["/models (shared emptyDir)"]
-        Vol -->|"3. Reload weights"| Pred
+        EPP -->|"2. /add_training_data_bulk"| Train["training-server (:8000)"]
+        Pred -->|"3. Download models (every 30s)"| Train
     end
     Envoy -->|"Route to chosen pod"| MS["Model Servers (2x Qwen3-32B)"]
 ```
@@ -32,8 +31,8 @@ flowchart LR
 Each request moves through a 3-phase closed loop inside the router pod:
 
 1. **Hot-path scoring:** On request arrival, `epp` (`predicted-latency-producer`) queries `prediction-server-1:8001` (`/predict/bulk`) with each candidate server's live state (`kv_cache_percentage`, `input_token_length`, `num_request_waiting`, `num_request_running`, `prefix_cache_score`) to obtain predicted TTFT and TPOT.
-2. **Response telemetry:** On response completion, `epp` sends the observed TTFT and TPOT alongside the dispatch-time server state features to `training-server:8000` (`/add_training_samples`).
-3. **Periodic model sync:** `training-server` retrains its `xgboost` models every `10s` (`LATENCY_RETRAINING_INTERVAL_SEC`) once at least `100` samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH`) are collected and writes updated `.joblib` weights to `/models` for `prediction-server-1` to reload.
+2. **Response telemetry:** On response completion, `epp` sends the observed TTFT and TPOT alongside the dispatch-time server state features to `training-server:8000` (`/add_training_data_bulk`).
+3. **Periodic model sync:** `training-server` retrains each `xgboost` model every `10s` (`LATENCY_RETRAINING_INTERVAL_SEC`) once that model has at least `10` training samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH`, which applies because every new pod starts with no saved model), and `prediction-server-1` downloads the retrained models over HTTP every `30s` (`MODEL_SYNC_INTERVAL_SEC`).
 
 For full architectural details on stratified sample bucketing, feature definitions, and horizontal sidecar scaling, see [Latency Predictor](../../docs/architecture/router/latency-predictor.md).
 
@@ -41,10 +40,10 @@ For full architectural details on stratified sample bucketing, feature definitio
 
 Two router configurations ship with this guide, selected with `SLO_AWARE`:
 
-| `SLO_AWARE` | Values file | Scoring pipeline & weights | Trained targets | Behavior & wire contract |
+| `SLO_AWARE` | Values file | Scheduling pipeline | Trained targets | Behavior & wire contract |
 | --- | --- | --- | --- | --- |
-| `false` (default) | [`router/predicted-latency.values.yaml`](router/predicted-latency.values.yaml) | `loose-affinity-filter` → `latency-scorer` (`predicted-latency-scorer: 1`) → `weighted-random-picker` | `ttft` (end-to-end latency) | Routing only; no SLO headers required. Sets `streamingMode: false`, so it works with both streaming and non-streaming clients. |
-| `true` | [`router/predicted-latency-slo.values.yaml`](router/predicted-latency-slo.values.yaml) | `latency-slo-admitter` + `strict-affinity-filter` → `slo-headroom-tier-filter` → `loose-affinity-filter` → `latency-scorer` (`latency-slo-scorer: 10`, `predicted-latency-scorer: 1`, `prefix-cache-scorer: 1`, `kv-cache-utilization-scorer: 1`, `queue-scorer: 1`) → `weighted-random-picker` | `ttft + tpot` | Enforces `x-llm-d-slo-ttft-ms` and/or `x-llm-d-slo-tpot-ms`: sheddable requests (priority < 0) that no server can meet are rejected at admission, while priority >= 0 requests fall back to the server with the most headroom. Sets `streamingMode: true`, so **every request must be sent with `"stream": true`**. |
+| `false` (default) | [`router/predicted-latency.values.yaml`](router/predicted-latency.values.yaml) | `loose-affinity-filter` → `latency-scorer` → `weighted-random-picker` | `ttft` (end-to-end latency) | Routing only; no SLO headers required. Sets `streamingMode: false`, so it works with both streaming and non-streaming clients. |
+| `true` | [`router/predicted-latency-slo.values.yaml`](router/predicted-latency-slo.values.yaml) | `latency-slo-admitter` + `strict-affinity-filter` → `slo-headroom-tier-filter` → `loose-affinity-filter` → `latency-scorer` → `weighted-random-picker` | `ttft + tpot` | Enforces `x-llm-d-slo-ttft-ms` and/or `x-llm-d-slo-tpot-ms`: sheddable requests (priority < 0) that no server can meet are rejected at admission, while priority >= 0 requests fall back to the server with the smallest predicted SLO deficit. Sets `streamingMode: true`, so **every request must be sent with `"stream": true`**. |
 
 The [Latency Predictor](../../docs/architecture/router/latency-predictor.md#scheduling-strategy) page describes the plugins behind each mode and when to use each [streaming mode](../../docs/architecture/router/latency-predictor.md#streaming-mode).
 
@@ -53,12 +52,10 @@ The [Latency Predictor](../../docs/architecture/router/latency-predictor.md#sche
 | Parameter | Component | Default in this guide | Role |
 | --- | --- | --- | --- |
 | `streamingMode` | `predicted-latency-producer` (`epp`) | `false` (`true` when `SLO_AWARE=true`) | When `false`, trains `ttft` on end-to-end request latency; when `true`, measures first-chunk TTFT and inter-token TPOT on streamed responses (`"stream": true`). |
-| `samplingMean` | `predicted-latency-producer` (`epp`) | `100` | Mean Poisson sampling interval (tokens/ms) for recording inter-token decode timestamps during streaming responses, bounding per-token telemetry overhead. |
-| `maxSampledTokens` | `predicted-latency-producer` (`epp`) | `20` | Maximum number of output tokens sampled per streamed response for TPOT estimation and training. |
 | `maxPrefixTokensToMatch` | `approx-prefix-cache-producer` (`epp`) | `262144` (`131072` in P/D & multimodal values) | Maximum prompt prefix tokens hashed to compute `prefix_cache_score`. Sized for long-context agentic prompts; lower to match shorter max prompt lengths and reduce EPP CPU/memory. |
 | `LATENCY_RETRAINING_INTERVAL_SEC` | `training-server` (`:8000`) | `10` | Interval in seconds between background `xgboost` retraining cycles. |
-| `LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH` | `training-server` (`:8000`) | `100` | Minimum collected training samples required before replacing the startup synthetic bootstrap prior with an online-trained `xgboost` model. |
-| `LATENCY_TEST_TRAIN_RATIO` | `training-server` (`:8000`) | `0.1` | Fraction of incoming samples (`10%`) routed to the test holdout deque for validation while `90%` enter the stratified training buckets. |
+| `LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH` | `training-server` (`:8000`) | `10` (predictor default) | Training samples a model needs before it is retrained when the pod started with no saved model, which is every new pod (`/models` is an `emptyDir`). It overrides the chart's `LATENCY_MIN_SAMPLES_FOR_RETRAIN=100`, which applies only when saved models are loaded at startup, such as after a `training-server` container restart. |
+| `LATENCY_TEST_TRAIN_RATIO` | `training-server` (`:8000`) | `0.1` | Fraction of incoming samples (`10%`, selected by a hash of each sample) held out as a test set; the other `90%` enter the stratified training buckets (capped at `500` samples each). |
 
 ### Composing with other paths
 
@@ -354,7 +351,7 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8001/proxy/st
 ```
 <!-- guide:verify.tests.predictor end -->
 
-What to expect: after 200 requests, `training_samples_count` reports roughly `175–190` samples rather than `200` because `LATENCY_TEST_TRAIN_RATIO=0.1` routes 10% of incoming samples into a separate test holdout deque while 90% enter the stratified training buckets (each bucket is also capped, so the count stops growing on long runs). With `SLO_AWARE=false`, `tpot` stays at `0`; with `SLO_AWARE=true`, `"stream": ${SLO_AWARE}` streams the responses so both `ttft` and `tpot` samples are recorded. The prediction server's status reports `"is_ready": true` and updates `last_model_load` once the 10-second retraining loop (`LATENCY_RETRAINING_INTERVAL_SEC=10`) trains on at least 100 samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH=100`):
+What to expect: after 200 requests, `training_samples_count` reports roughly `175–190` samples rather than `200` because `LATENCY_TEST_TRAIN_RATIO=0.1` holds out about 10% of samples as a test set (each training bucket is also capped, so the count stops growing on long runs). With `SLO_AWARE=false`, `tpot` stays at `0`; with `SLO_AWARE=true`, `"stream": ${SLO_AWARE}` streams the responses so both `ttft` and `tpot` samples are recorded. The prediction server reports `"is_ready": true` from startup (see the placeholder-model note in [Observability & Troubleshooting](#3-observability--troubleshooting)); a `last_model_load` that advances after the traffic shows it loaded a model trained on these samples:
 
 - With `SLO_AWARE=false`:
   ```text
@@ -457,7 +454,7 @@ HTTP 200
 
 The request returns `HTTP 200` and is placed on a server predicted to meet both SLOs (`slo-headroom-tier-filter` + `latency-scorer`). When no candidate server is predicted to meet the requested SLOs, `latency-slo-admitter` checks the request's priority—set via an `InferenceObjective` CRD referenced by the `x-llm-d-inference-objective` header (or its legacy alias `x-gateway-inference-objective`; default priority is `0` when omitted):
 
-- **Sheddable traffic (`priority < 0`):** Rejected at admission before consuming GPU capacity.
+- **Sheddable traffic (`priority < 0`):** Rejected at admission before consuming GPU capacity. The admitter fails open, admitting the request anyway, when no predictions are available or when some server is idle or has a nearly empty KV cache.
 - **Standard and high-priority traffic (`priority >= 0`):** Admitted on a best-effort basis and routed to the candidate server with the smallest predicted SLO deficit (most headroom).
 
 > [!IMPORTANT]
@@ -476,12 +473,12 @@ With monitoring enabled, three router metrics tell you whether predicted-latency
 | `llm_d_epp_request_slo_violation_total` | With achievable SLOs and a matching `streamingMode`, stays near zero under normal load and increments only under genuine saturation (if it climbs at low QPS, see the symptom table below). |
 
 > [!NOTE]
-> **Synthetic bootstrap prior on cold start:** At container startup, `training-server` writes a default synthetic bootstrap model to `/models` before any traffic arrives so `prediction-server-1` immediately reports `"is_ready": true` and serves baseline prior predictions. Once real traffic accumulates at least `100` training samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH=100`), the next 10-second retraining cycle (`LATENCY_RETRAINING_INTERVAL_SEC=10`) overwrites the bootstrap prior with an online-trained `xgboost` model and advances `last_model_load`.
+> **Placeholder model on cold start:** At startup, `training-server` has no saved model, so it fits a placeholder `xgboost` model on a single synthetic row that predicts a near-constant ~10 ms. `prediction-server-1` downloads it at startup and reports `"is_ready": true` before any traffic arrives, but its predictions carry no information. Once a model has at least `10` training samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH`), the next 10-second retraining cycle replaces the placeholder, and `last_model_load` advances on the prediction server's next 30-second sync.
 
 | Symptom | Likely cause |
 | --- | --- |
 | Prediction metrics empty | Prediction server unreachable: the router falls back to a composite heuristic score. Check sidecar readiness and `PREDICTION_SERVER_URL`. |
-| `"is_ready": true` before 100 requests, or constant predictions during cold start | `prediction-server-1` is serving the synthetic bootstrap prior generated at startup. Send at least 100–200 requests so `training_samples_count` exceeds `LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH=100` and wait `10s` for `last_model_load` to advance. |
+| `"is_ready": true` before any traffic, or constant predictions during cold start | `prediction-server-1` is serving the placeholder model. Send traffic until `training_samples_count` reaches `10` per model, then allow up to `40s` (one retraining cycle plus one sync) for `last_model_load` to advance. |
 | Large, persistent drift between predicted and actual TTFT | `streamingMode` does not match the traffic (e.g. `false` on a streaming workload when you want true TTFT), or the workload drifted outside the training window. |
 | High TPOT SLO violation rate at low QPS | `streamingMode: false`: TPOT is not being trained. Use the SLO-aware values file, which sets it to `true`, and stream requests. |
 | Prediction-based routing degrades to baseline | Predictor error or sidecar restart: an expected fallback, not a failure. Investigate the sidecar logs. |
