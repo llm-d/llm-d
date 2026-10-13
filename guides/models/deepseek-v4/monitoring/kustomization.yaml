@@ -1,14 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-# Wide-EP / DP-aware monitoring overlay.
+# DeepSeek-V4 monitoring overlay.
 #
 # This is an overlay of the generic recipes/modelserver/components/monitoring-pd
-# component, which defines the decode and prefill PodMonitors. DeepSeek-V4 uses
-# --data-parallel-hybrid-lb, exposing a single "modelserver" port per pod.
-#
-# The patch below tightens the scrape interval on both PodMonitors to 5s, and
-# the labels transformer scopes the PodMonitors to this guide's pods.
+# component, which defines the decode and prefill PodMonitors on the
+# "modelserver" port. Each DeepSeek-V4 pod exposes one API port per role (the
+# prefill API servers share 8000 behind --data-parallel-hybrid-lb, decode serves
+# vLLM on 8200), so the component's port is the right one. The patch below only
+# tightens the scrape interval to 5s, and the labels transformer scopes the
+# PodMonitors to this guide's pods.
 components:
   - ../../../recipes/modelserver/components/monitoring-pd
 

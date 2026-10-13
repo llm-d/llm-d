@@ -30,10 +30,11 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # oneCCL (xccl backend, tensor-parallel-size > 1) uses the OFI transport, but the
-            # bundled libfabric exposes no providers unless the Intel MPI provider path is set.
+            # oneCCL (xccl backend, tensor-parallel-size > 1) uses the OFI transport.
+            # Newer images bundle providers in /opt/venv/lib instead of oneAPI MPI.
+            # Search the wheel location first, retaining the legacy image fallback.
             - name: FI_PROVIDER_PATH
-              value: /opt/intel/oneapi/mpi/latest/opt/mpi/libfabric/lib/prov
+              value: /opt/venv/lib:/opt/intel/oneapi/mpi/latest/opt/mpi/libfabric/lib/prov
             - name: FI_PROVIDER
               value: tcp
           resources:

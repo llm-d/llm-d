@@ -33,7 +33,7 @@ This guide includes configurations for the following accelerator and model serve
 **NVIDIA GPU** (DeepSeek-R1-0528): prefill DP16 and decode DP16 on 32 H200, with DeepEP (high-throughput prefill, low-latency decode) and NIXL KV transfer. Validated on a 32×H200 cluster with InfiniBand networking (`coreweave`) and a 32×H200 cluster on GKE with RoCE networking (`gke`); `base` is the provider-neutral overlay the others patch.
 
 > [!NOTE]
-> The NVIDIA GPU configuration uses a custom vLLM image built by llm-d to solve two issues: an NVSHMEM bug on RoCE impacting DeepEP high-throughput mode (llm-d vendors a custom patch), and a vLLM v0.23.0-v0.24.0 bug with the DP supervisor. We plan to migrate to the upstream vLLM images in an upcoming release.
+> The NVIDIA GPU overlays run the upstream `vllm/vllm-openai` image pinned by the `gpu-vllm/release` image component. The custom llm-d vLLM image that earlier releases needed for DeepEP on RoCE is no longer used.
 
 **AMD GPU** (DeepSeek-V3): prefill and decode each run 1 replica of 2 nodes, DP16 (TP=1), on 32 MI355X, with the `mori_high_throughput` all-to-all backend and MoRI-IO KV transfer. `amd-ci` adapts `base` to the AMD CI cluster (MI355X, Pensando AINIC, rail-isolated RoCE fabric).
 
@@ -178,7 +178,7 @@ kubectl apply -n ${NAMESPACE} \
 
 ### 3. (Optional) Enable Monitoring
 
-With DP-aware scheduling, each DP rank is available at `podIP:port`, where the ports are named `rank0`-`rank7`. This guide ships a monitoring overlay that scrapes each rank's port:
+On the NVIDIA GPU deployment each DP rank is available at `podIP:port`, where the ports are named `rank0`-`rank7`, and this guide ships a monitoring overlay that scrapes each rank's port. The overlay selects the DeepSeek-R1-0528 pods only; the AMD and Intel XPU overlays expose a single `modelserver` port and are not covered by it:
 
 <!-- guide:deploy.monitoring start -->
 ```bash

@@ -553,9 +553,9 @@ This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — 
 In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a generic load workload against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
 
 > [!IMPORTANT]
-> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).**
 >
-> The Benchmarking section below contains only the **flow-control-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **flow-control-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
@@ -563,7 +563,7 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 > Benchmarking flow-control's QoS differentiation and fairness behaviors requires a specialized multi-tenant load harness that does NOT yet ship in `llm-d-benchmark` or `inference-perf`. The command below exercises the stack under load and validates the end-to-end path, but it does NOT measure QoS slicing across priority classes or tenant isolation. A dedicated `guide_flow-control_1.yaml` will be added upstream once multi-tenant load shaping is supported.
 
 > [!TIP]
-> To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
+> To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a `sanity_*.yaml` profile (e.g. `sanity_random.yaml`) as described in [`docs/operations/validation/benchmark.md` → Available workload profiles](../../docs/operations/validation/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
 ### 1. Install the `llmdbenchmark` CLI
 
@@ -638,9 +638,9 @@ llmdbenchmark \
 > The harness pod requests 16 vCPU by default
 > ([resource requirements](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/resource_requirements.md)),
 > and its `workload-pvc` requires a `ReadWriteMany`-capable StorageClass. If the run stalls on a `Pending` pod or a PVC
-> timeout, see [Troubleshooting in `helpers/benchmark.md`](../../helpers/benchmark.md#troubleshooting)
+> timeout, see [Troubleshooting in `docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md#troubleshooting)
 > for the StorageClass override (including a GKE Filestore walkthrough) and the
-> [timeout knobs](../../helpers/benchmark.md#timeouts).
+> [timeout knobs](../../docs/operations/validation/benchmark.md#timeouts).
 
 ## Observability
 
@@ -670,7 +670,7 @@ kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
 
 If you ran the Benchmarking section, also delete the harness leftovers. The workload PVC
 is backed by shared storage that bills until removed. Follow
-[Cleaning up harness resources in `helpers/benchmark.md`](../../helpers/benchmark.md#cleaning-up-harness-resources)
+[Cleaning up benchmark resources in `docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md#cleaning-up-benchmark-resources)
 with `<namespace>` set to `${NAMESPACE}`.
 
 Afterward `kubectl get all,inferenceobjectives,pvc -n ${NAMESPACE}` returns

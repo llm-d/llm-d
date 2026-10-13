@@ -34,7 +34,7 @@ The [Latency Predictor](../../docs/architecture/router/latency-predictor.md#sche
 The predictor runs entirely in the router pod, so it layers onto other model server topologies unchanged. Two more values files ship with this guide for that purpose; they are not part of this guide's deployment. To use one, deploy the other guide's model servers and install the router with the file in place of `ROUTER_VALUES`:
 
 - [`router/predicted-latency-pd.values.yaml`](router/predicted-latency-pd.values.yaml) for the [P/D disaggregation](../pd-disaggregation/README.md) pods (`llm-d.ai/guide=pd-disaggregation`).
-- [`router/predicted-latency-multimodal.values.yaml`](router/predicted-latency-multimodal.values.yaml) for the [multimodal serving](../multimodal-serving/README.md) aggregated pool (`llm-d.ai/guide=multimodal-aggregation`).
+- [`router/predicted-latency-multimodal.values.yaml`](router/predicted-latency-multimodal.values.yaml) for the [multimodal serving](../multimodal-serving/README.md) aggregated pool (`llm-d.ai/guide=aggregation`).
 
 How the scoring changes in each is described in [Composing with other topologies](../../docs/architecture/router/latency-predictor.md#composing-with-other-topologies).
 
