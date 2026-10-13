@@ -210,7 +210,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- guide:deploy.monitoring_values end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router.
-The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. A single pool needs no `HTTPRoute`: the standalone proxy sends every path to the router. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router) and, for `omni`, [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode) below.
+Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name (and [`httproutes.yaml`](httproutes.yaml) references the `${GUIDE_NAME}` `InferencePool`). A single pool needs no `HTTPRoute`: the standalone proxy sends every path to the router. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router) and, for `omni`, [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode) below.
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -299,7 +299,7 @@ kubectl apply -n ${NAMESPACE} \
 
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and MODEL_SERVER=vllmomni:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -377,7 +377,7 @@ kubectl run chat-audio-test --rm -i --restart=Never \
   --env="MODEL=${MODEL}" \
   -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
     -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"Say hello to llm-d in one short sentence.\"}], \"modalities\": [\"text\", \"audio\"]}" \
-    | jq -r ".choices[] | if .message.audio then \"audio: \(.message.audio.data | length) base64 characters\" else \"text: \(.message.content)\" end"'
+    | jq -r ".choices[].message | (if .content then \"text: \(.content)\" else empty end), (if .audio then \"audio: \(.audio.data | length) base64 characters\" else empty end)"'
 ```
 <!-- guide:verify.tests.omni.chat_audio end -->
 
@@ -459,7 +459,7 @@ kubectl run tts-test --rm -i --restart=Never \
 Expect `HTTP 200` with a non-zero size and an audio content type, and `header: RIFF`, the start of a valid WAV file.
 
 The endpoint also streams through the router: `"stream_format": "sse"` returns `speech.audio.delta` events with base64 audio chunks and a final `speech.audio.done` event carrying token usage, and `"stream_format": "audio"` returns raw PCM chunks as they are generated, with time-to-first-byte in the tens of milliseconds.
-vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.29.0, which reports them.
+vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.30.0, which reports them.
 
 </details>
 <!-- tabs:end -->
