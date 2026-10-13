@@ -42,9 +42,18 @@ Gates can be configured at two distinct levels:
 | --- | --- |
 | `constant` | Always open — no throttling. |
 | `redis` | Reads budget values from Redis keys, allowing external orchestrators to dynamically adjust rate limits per queue or pool. |
-| `prometheus-saturation` | Queries Prometheus for model server saturation metrics (e.g., KV cache pressure, queue depth). Allows ingestion and admission when saturation is below a configurable threshold. |
-| `prometheus-budget` | Computes available downstream capacity directly from metrics. |
+| `redis-leased-rate` | Enforces an externally leased, absolute dispatch-rate ceiling shared through Redis; fails closed when the lease is missing or expired. |
+| `redis-quota` | Per-tenant concurrency quota in Redis, keyed on a request attribute; in `classifying` mode it tags requests `reserved` or `overflow` instead of blocking them. |
+| `prometheus-saturation` | Queries Prometheus for the EPP's pool saturation metric. Allows ingestion and admission when saturation is below a configurable threshold. |
+| `prometheus-budget` | Computes available downstream capacity from a cascade of EPP and model server metrics. |
+| `prometheus-query` | Evaluates a user-supplied PromQL expression as the dispatch budget. |
+| `endpoint-scrape` | Scrapes a metrics endpoint directly and reads one metric as saturation or budget. |
 | `local-max-concurrency` | Restricts local concurrency within a worker pool to cap in-flight requests. |
+| `composite` | Combines several gates into one. |
+| `wait-on-refuse` | Wraps an inner gate; parks the worker in memory while the inner gate refuses, instead of returning the message to the queue. Worker pool level only. |
+| `tier-priority-admission` | Three-way verdict from an inner saturation gate × tier × classification: reserved requests park, overflow interactive requests are dropped with a `429` payload, other overflow requests are refused back to the queue. Worker pool level only. |
+
+`wait-on-refuse` and `tier-priority-admission` only take effect as worker pool admission gates: a `Wait` verdict from a queue-level gate falls through as `Continue`. The complete parameter reference is the [llm-d-async README](https://github.com/llm-d/llm-d-async/blob/main/README.md#dispatch-gate-reference).
 
 ## Worker Pools & Request Merge Policies
 
@@ -117,9 +126,9 @@ The Async Processor defines standardized JSON schemas for requests published to 
 | Field | Type | Description |
 | --- | --- | --- |
 | `id` | `string` | Unique identifier mapped to the corresponding request. |
-| `payload` | `bytes` / `object` | Inference result payload returned from downstream model server. |
-| `status_code` | `int` | HTTP response status code (non-zero value indicates an HTTP response was received). |
-| `error_code` | `string` | Error classification code (e.g., `DEADLINE_EXCEEDED`, `GATE_DROPPED`, `GATE_ERROR`, `INFERENCE_ERROR`, `INVALID_REQUEST`). |
+| `payload` | `string` | The downstream response body, carried as a JSON string (decode it a second time to get the completion object). |
+| `status_code` | `int` | HTTP response status code. Omitted when no HTTP response was received; `error_code` then explains why. |
+| `error_code` | `string` | Error classification code: `DEADLINE_EXCEEDED`, `CANCELLED`, `GATE_DROPPED`, `GATE_ERROR`, `INFERENCE_ERROR`, `INVALID_REQUEST`, `PAYLOAD_UNAVAILABLE`. |
 | `error_message` | `string` | Human-readable explanation of the error. |
 
 **Example Result Messages:**
@@ -129,13 +138,7 @@ The Async Processor defines standardized JSON schemas for requests published to 
 ```json
 {
   "id": "19933123533434",
-  "payload": {
-    "choices": [
-      {
-        "text": "Great food!"
-      }
-    ]
-  },
+  "payload": "{\"choices\":[{\"text\":\"Great food!\"}]}",
   "status_code": 200
 }
 ```
