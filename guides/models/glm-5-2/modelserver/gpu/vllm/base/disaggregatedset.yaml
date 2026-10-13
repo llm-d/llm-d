@@ -257,28 +257,28 @@ spec:
 
                 ports:
                   - containerPort: 8000
-                    name: rank0
+                    name: dp0
                     protocol: TCP
                   - containerPort: 8001
-                    name: rank1
+                    name: dp1
                     protocol: TCP
                   - containerPort: 8002
-                    name: rank2
+                    name: dp2
                     protocol: TCP
                   - containerPort: 8003
-                    name: rank3
+                    name: dp3
                     protocol: TCP
                   - containerPort: 8004
-                    name: rank4
+                    name: dp4
                     protocol: TCP
                   - containerPort: 8005
-                    name: rank5
+                    name: dp5
                     protocol: TCP
                   - containerPort: 8006
-                    name: rank6
+                    name: dp6
                     protocol: TCP
                   - containerPort: 8007
-                    name: rank7
+                    name: dp7
                     protocol: TCP
                   - containerPort: 8208
                     name: supervisor
