@@ -453,13 +453,13 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 <details>
 <summary><b>SGLang</b></summary>
 
-SGLang deployments expose the equivalent signals under `sglang_*`; the [PromQL reference](../../docs/operations/observability/promql.md) lists both engines.
+SGLang deployments expose the equivalent signals under `sglang:*`; the [PromQL reference](../../docs/operations/observability/promql.md) lists both engines.
 
 | Signal | Why it matters for the optimized baseline | Where to look |
 |--------|-------------------------------------------|---------------|
-| Per-pod load (`llm_d_epp_request_total`, `sglang_num_running_reqs`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
-| Prefix cache hit rate (`sglang_cache_hit_rate`, or `sglang_cached_tokens_total{cache_source="device"}` / `sglang_prompt_tokens_total` on images where `sglang_cache_hit_rate` reports `0`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
-| Per-pod KV cache utilization (`sglang_token_usage`) | Drives the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
+| Per-pod load (`llm_d_epp_request_total`, `sglang:num_running_reqs`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
+| Prefix cache hit rate (`sglang:cache_hit_rate`, or `sglang:cached_tokens_total{cache_source="device"}` / `sglang:prompt_tokens_total` on images where `sglang:cache_hit_rate` reports `0`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
+| Per-pod KV cache utilization (`sglang:token_usage`) | Drives the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
 | Routing decision latency (`llm_d_epp_plugin_duration_seconds`) | Rising scheduler latency with healthy model servers localizes the problem to the routing layer, not the pods | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
 
 </details>

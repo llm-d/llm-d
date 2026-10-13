@@ -137,8 +137,13 @@ kubectl apply -f servicemonitor-vllm.yaml
 
 ```bash
 kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &
-curl -sk 'http://localhost:9090/api/v1/targets' | jq '.data.activeTargets[] | select(.labels.namespace=="'${NAMESPACE}'") | {job: .labels.job, health: .health}'
+PF_PID=$!
+sleep 3
+curl -s 'http://localhost:9090/api/v1/targets' | jq '.data.activeTargets[] | select(.labels.namespace=="'${NAMESPACE}'") | {job: .labels.job, health: .health}'
+kill ${PF_PID}
 ```
+
+If you installed with `--enable-tls`, Prometheus serves HTTPS with a self-signed certificate, so query `curl -sk 'https://localhost:9090/api/v1/targets'` instead.
 
 Targets should show `"health": "up"`. Then proceed to Step 2 for dashboards.
 
