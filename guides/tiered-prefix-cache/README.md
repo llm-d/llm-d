@@ -53,7 +53,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - For `VARIANT=fs`, a storage system that provides ReadWriteMany PVCs (see [Filesystem tier](#filesystem-tier)). For `HOST_TYPE=multi-host` on TPU v7, the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/multi-node.md).
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collects model server metrics without installing Prometheus or setting `MONITORING=true`; for the OSS Prometheus stack, install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
 
 ### Get the guide
 

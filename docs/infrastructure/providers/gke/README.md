@@ -286,10 +286,20 @@ For production workloads on GKE, store model weights in a Google Cloud Storage (
 
 ### Monitoring & Telemetry
 
-We recommend enabling:
+GKE provides a managed monitoring and telemetry stack that integrates with llm-d deployments without requiring a separate Prometheus or OpenTelemetry installation:
 
-* **Google Managed Prometheus** and [automatic application monitoring](https://cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) for automatic metrics collection and dashboards for model servers deployed on the cluster (see also [Monitor GKE TPUs](../../../operations/observability/tpu.md)).
-* **[Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke)** to collect OTLP telemetry such as distributed traces across the llm-d stack. Passing `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` during cluster creation deploys both the OpenTelemetry Collector (in the `gke-managed-otel` namespace) and the `Instrumentation` CRD for workload auto-injection.
+* **[Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) and [Automatic Application Monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring):** GMP is enabled by default on GKE clusters. Enabling automatic application monitoring (`--auto-monitoring-scope=ALL`) automatically detects supported model server workloads, provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources, collects metrics at a 15-second interval without manually creating `PodMonitor` resources, and installs out-of-the-box Cloud Monitoring dashboards:
+
+  ```bash
+  gcloud container clusters update <cluster-name> \
+    --location=<region-or-zone> \
+    --enable-managed-prometheus \
+    --auto-monitoring-scope=ALL
+  ```
+
+  See [Set Up the Monitoring Stack](../../../operations/observability/setup.md) and [Collect Metrics](../../../operations/observability/metrics.md) for details on metric collection (including `PodMonitoring` configuration for custom workloads and the optional OSS Prometheus/Grafana stack), and [Monitor GKE TPUs](../../../operations/observability/tpu.md) for TPU hardware telemetry.
+* **[GKE Inference Gateway Dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard):** When deploying the llm-d Router in Gateway Mode with [GKE Gateway](../../gateway/gke.md) (`GW_PROVIDER_NAME=gke`), GKE provides an out-of-the-box Inference Gateway dashboard in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) showing request throughput, latency, error rates, and Endpoint Picker (EPP) extension metrics.
+* **[Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke):** Collects OTLP telemetry such as distributed traces across the llm-d stack. Passing `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` during cluster creation or update deploys the OpenTelemetry Collector in the `gke-managed-otel` namespace and installs the `Instrumentation` CRD for workload auto-injection.
 
 ---
 

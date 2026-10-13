@@ -55,7 +55,7 @@ For wide-EP LWS deployments (multi-port DP model servers), use the precise prefi
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell. The router also reads it to reach gated tokenizers.
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collects model server metrics without installing Prometheus or setting `MONITORING=true`; for the OSS Prometheus stack, install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
 
 ### Get the guide
 

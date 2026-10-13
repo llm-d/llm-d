@@ -85,7 +85,7 @@ Both engines run on NVIDIA GPU with the same router configuration and move KV ca
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collects model server metrics without installing Prometheus or setting `MONITORING=true`; for the OSS Prometheus stack, install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
 
 - For NVIDIA GPU and TPU7x dynamic sub-slices, the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it for `ACCELERATOR_TYPE=gpu`; skip that step if your cluster already runs it.
   For TPU7x dynamic sub-slices, install or upgrade it through the [GKE dynamic slicing](../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke) cluster preparation instead, whose GKE-documented minimum LWS version is older.

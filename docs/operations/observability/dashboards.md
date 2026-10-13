@@ -2,6 +2,9 @@
 
 llm-d provides pre-built Grafana dashboards for common monitoring scenarios.
 
+> [!NOTE]
+> On GKE with [Google Cloud Managed Service for Prometheus (GMP) and automatic application monitoring](../../infrastructure/providers/gke/README.md#monitoring--telemetry), out-of-the-box dashboards for model servers and the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) are available directly in Cloud Monitoring (**Monitoring → Dashboards**). You can also connect Grafana to GMP using the [GMP Grafana integration guide](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-grafana) to use the Grafana dashboards below.
+
 ## Access Grafana
 
 > [!NOTE]

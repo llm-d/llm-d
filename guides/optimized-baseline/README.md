@@ -74,7 +74,7 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [Google Cloud Managed Service for Prometheus (GMP) and automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collect model server metrics and provide out-of-the-box Cloud Monitoring dashboards—no Prometheus installation or `MONITORING=true` resources are required. On other platforms (or if using the OSS Prometheus and Grafana stack on GKE), install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
 
 ### Get the guide
 
@@ -175,7 +175,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trt
 > [!NOTE]
 > The `prefix-cache-affinity-filter` in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml) defaults to `peakPrefillThroughput` tuned for the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2). On a different model or accelerator, miscalibrated `peakPrefillThroughput` can prevent the saturation override from spreading load across pods — measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) (or check the [configuration matrix](../recipes/router/calibration/configuration-matrix.md) for pre-measured values).
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable OSS Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (creates a `ServiceMonitor` for the OSS Prometheus Operator; skip if using GKE automatic application monitoring):
 
 <!-- guide:deploy.monitoring_values start -->
 ```bash
@@ -318,7 +318,7 @@ Notes:
 </details>
 <!-- tabs:end -->
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Deploy the OSS Prometheus `PodMonitor` resources for model servers** (skip if using GKE automatic application monitoring, which provisions `PodMonitoring` resources automatically):
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -329,7 +329,12 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 3. Observability & Troubleshooting
 
-Once monitoring is enabled, use the signals below to operate the optimized baseline. This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
+Once monitoring is enabled, use the signals below to operate the optimized baseline:
+
+- **GKE Managed Monitoring:** With [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) enabled, model server metrics (`vllm:*`, `sglang:*`) are scraped automatically into Google Cloud Managed Service for Prometheus (GMP) via auto-generated `PodMonitoring` resources (`kubectl get podmonitoring -n ${NAMESPACE} -l source=gke-auto-monitoring`). When deployed in Gateway Mode with [GKE Gateway](../../docs/infrastructure/gateway/gke.md) (`GW_PROVIDER_NAME=gke`), use the out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) alongside the model server dashboards.
+- **OSS Prometheus & Grafana:** View the imported [Grafana dashboards](../../docs/operations/observability/dashboards.md) or query Prometheus directly.
+
+This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
 
 This path is defined by its two routing objectives: **prefix-cache affinity** (route to endpoints that already hold the prompt prefix) and **load-aware** balancing (spread work by token load), with a saturation override that trades cache locality for spread once endpoints get hot. Most issues show up as those two objectives pulling against each other, so watch **load balance** and **cache hit rate** together rather than either one alone.
 

@@ -210,6 +210,10 @@ curl -X POST http://${IP}/v1/completions \
     }' | jq
 ```
 
+## Monitoring
+
+GKE provides an out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) showing request throughput, latency, error rates, and Endpoint Picker (EPP) extension metrics. For model server metric collection on GKE, see [GKE Monitoring & Telemetry](../providers/gke/README.md#monitoring--telemetry).
+
 ## Cleanup
 
 ```bash
