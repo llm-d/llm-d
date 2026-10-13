@@ -36,14 +36,14 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8)"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · `INFRA_PROVIDER`: `base`, `gke`"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8)"
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · `INFRA_PROVIDER`: `base`, `gke`"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
@@ -93,7 +93,6 @@ prerequisites:
   secrets:
     - skip_in: [ci]
       run: |
-        export HF_TOKEN=<your HuggingFace token>
         kubectl create secret generic llm-d-hf-token \
           --from-literal="HF_TOKEN=${HF_TOKEN}" \
           --namespace "${NAMESPACE}" \

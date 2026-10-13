@@ -79,13 +79,13 @@ This guide includes configurations for the following accelerator and model serve
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · vLLM runs a RoPE-scaled 131,072-token context · `INFRA_PROVIDER`: `base`, `gke` |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · RoPE-scaled 131,072-token context |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | 2 replicas × 1 GPU via DRA · single-GPU pods have no room for the long-context `Qwen3-32B` config |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · `INFRA_PROVIDER`: `base`, `gke` |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · `INFRA_PROVIDER`: `base`, `gke` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-The latency predictor is engine-agnostic: it reads the same server state the router already collects. The SGLang and TPU (`tpu/v6`, `tpu/v7`) overlays reuse the Optimized Baseline model servers unchanged (32,768-token context, without the 131,072-token RoPE patch).
+The latency predictor is engine-agnostic: it reads the same server state the router already collects. The SGLang and TPU (`tpu/v6`, `tpu/v7`) overlays reuse the Optimized Baseline model servers unchanged (40,960-token native context, without the 131,072-token RoPE patch).
 
 > [!NOTE]
 > On OpenShift, the latency predictor sidecars may require additional OpenShift-specific runtime adjustments beyond the manifests in this guide.
@@ -155,7 +155,6 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 <!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export HF_TOKEN=<your HuggingFace token>
 kubectl create secret generic llm-d-hf-token \
   --from-literal="HF_TOKEN=${HF_TOKEN}" \
   --namespace "${NAMESPACE}" \
@@ -265,11 +264,7 @@ No manual `PodMonitor` deployment is required when [GKE automatic application mo
 </details>
 <!-- tabs:end -->
 
-Wait for the router (`${GUIDE_NAME}-epp-*`, `4/4 Running`) and both model server pods (`optimized-baseline-*`, labeled `llm-d.ai/guide=optimized-baseline`, `1/1 Running`) to become `Ready` before starting [Verification](#verification):
-
-```bash
-kubectl wait --for=condition=Ready pod --all -n ${NAMESPACE} --timeout=600s
-```
+Wait for the router (`${GUIDE_NAME}-epp-*`, `4/4 Running`) and both model server pods (`optimized-baseline-*`, labeled `llm-d.ai/guide=optimized-baseline`, `1/1 Running`) to become `Ready` (`kubectl get pods -n ${NAMESPACE}`) before starting [Verification](#verification).
 
 ## Verification
 
