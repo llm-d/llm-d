@@ -17,7 +17,7 @@
 > an HPA driven by the `wva_desired_replicas` external metric, which is the
 > approach this guide covers.
 
-The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
+The [Workload Variant Autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
 ## Overview
 
@@ -101,7 +101,7 @@ kubectl create secret generic prometheus-tls-cert \
 ```
 <!-- guide:deploy.prometheus_ca end -->
 
-1. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+3. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
    controller's `--watch-namespace` to match (this edits
    `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
    `wva/controller/base/controller-deployment-patch.yaml`; revert both with
@@ -139,7 +139,7 @@ This guide configures the controller deployment with `replicas: 2` and leader el
 
 ## Enabling Saturation Engine V2 (Recommended)
 
-Saturation engine v2 will be the default in the next release (0.9.0), but for now it must be enabled manually. The v1 saturation engine will be deprecated in 0.9.0 and removed in 0.10.0.
+In WVA `v0.9.0`, the v2 token-based saturation engine can be enabled in the controller ConfigMap.
 
 > [!CAUTION]
 > Enabling the v2 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
@@ -280,6 +280,7 @@ kubectl delete -k ${CONSUMPTION_ROOT}/keda/${PLATFORM} -n ${NAMESPACE} --ignore-
 
 (cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
 kubectl delete -k ${CONTROLLER_ROOT}/platform/${PLATFORM} --ignore-not-found=true
+kubectl delete secret prometheus-tls-cert -n ${WVA_NAMESPACE} --ignore-not-found=true
 ```
 <!-- guide:cleanup end -->
 

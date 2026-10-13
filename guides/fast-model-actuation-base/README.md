@@ -56,7 +56,7 @@ This guide assumes you have a Kubernetes cluster with GPU nodes and the [llm-d r
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH:-main}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.clone end -->

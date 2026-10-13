@@ -1,6 +1,6 @@
 # GKE-only backend and health-check policies for Service/agentic-api.
 #
-# The matching policies for InferencePool/wide-ep are NOT here: the llm-d router
+# The matching policies for InferencePool/agentic-api are NOT here: the llm-d router
 # chart renders them itself when installed with `provider.name=gke` (see the
 # Gateway Mode step in README.md). Only the agentic-api Service is invisible to
 # the chart, so only its policies live in this file.

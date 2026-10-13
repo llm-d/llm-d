@@ -67,7 +67,8 @@ A client requests the model `small-segment-lora`. We want to ensure this maps st
 Install the `InferenceModelRewrite` CRD:
 
   ```bash
-  kubectl apply -f https://github.com/llm-d/llm-d-router/releases/download/v0.9.0/manifests.yaml
+  source ${REPO_ROOT}/guides/env.sh
+  kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
   ```
 
 Apply the following `InferenceModelRewrite` CR to map `small-segment-lora` → `small-segment-lora-v1`:
@@ -172,8 +173,11 @@ spec:
 Run the [test traffic script](#test-traffic-script) as follows:
 
 ```bash
-❯ ./test-traffic-splitting.sh
----
+./test-traffic-splitting.sh
+```
+
+```text
+------------------------------------------------
 Traffic Split Results, total requests: 20
 small-segment-lora-v1: 17 requests
 small-segment-lora-v2: 3 requests
@@ -194,8 +198,11 @@ To increase traffic to the new model, simply adjust the weights.
 Run the [test traffic script](#test-traffic-script) again:
 
 ```bash
-❯ ./test-traffic-splitting.sh
-___
+./test-traffic-splitting.sh
+```
+
+```text
+------------------------------------------------
 Traffic Split Results, total requests: 20
 small-segment-lora-v1: 10 requests
 small-segment-lora-v2: 10 requests
@@ -214,7 +221,10 @@ Once the new model is verified, shift all traffic to it.
 Run the [test traffic script](#test-traffic-script) one last time:
 
 ```bash
-❯ ./test-traffic-splitting.sh
+./test-traffic-splitting.sh
+```
+
+```text
 ------------------------------------------------
 Traffic Split Results, total requests: 20
 small-segment-lora-v1: 0 requests

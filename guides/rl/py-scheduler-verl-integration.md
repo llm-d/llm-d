@@ -38,7 +38,7 @@ Key components:
 
 ## Deploy
 
-For prerequisites, cluster setup, scheduler configuration, and step-by-step job submission instructions, see the full [verl Integration Guide][verl-guide] in the `py-rl-scheduler` repository.
+For prerequisites, cluster setup, scheduler configuration, and step-by-step job submission instructions, see the full [verl Integration Guide][verl-guide] in the `py-inference-scheduler` repository.
 
 At a high level:
 

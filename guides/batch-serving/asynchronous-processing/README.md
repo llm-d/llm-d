@@ -4,7 +4,7 @@ The [Async Processor](https://github.com/llm-d/llm-d-async) provides a way to pr
 
 This page deploys the Async Processor for a single model. The queue backend — GCP Pub/Sub (default) or a Redis Sorted Set — is chosen in [Installation](#step-2-set-up-the-queue-backend), in tabs.
 
-The **[Multi-tenant guide](./multitenant/README.md)** builds on it: the **advanced** setup of **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. It runs on either queue backend.
+The **[Multi-tenant guide](./multitenant/README.md)** builds on it: the **advanced** setup of **team × tier** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and pool saturation back-off. It runs on either queue backend.
 
 > [!NOTE]
 > For production sizing, scaling, and container-resource guidance, see [Async Processor Operations](../../../docs/operations/components/async-processor.md).

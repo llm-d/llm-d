@@ -19,6 +19,8 @@ For how KEDA+EPP scaling works and why demand signals beat utilization, see
    Confirm that Prometheus is scraping the EPP metrics endpoint before
    configuring autoscaling.
 
+### Set Environment Variables
+
 Set the guide environment variables. `SIGNAL` selects the scaling signal
 (`queue` or `saturation`) and `ENV` selects the platform (`existing` or `ocp`);
 together they name the overlay you apply.
@@ -67,6 +69,8 @@ Source the common guide environment variables:
 source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
+
+### Configure Prerequisites
 
 1. Configure observability by following the shared
    [observability setup guide](../../../docs/operations/observability/setup.md).

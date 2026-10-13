@@ -186,11 +186,10 @@ helm uninstall ipp -n ${NAMESPACE}
 
 # Clean up cloned IPP repo
 rm -rf /tmp/ipp
-
-# Remove namespace (if no longer needed)
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
+# Remove namespace (if no longer needed)
 kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->

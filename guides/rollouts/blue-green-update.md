@@ -15,11 +15,11 @@ This method allows you to introduce changes incrementally, monitor their impact,
 
 Use Cases for InferencePool Rollout:
 
-- Node(compute, accelerator) update roll out
+- Node (compute, accelerator) update roll out
 - Base model roll out
 - Model server framework rollout
 
-### Node(compute, accelerator) update roll out
+### Node (compute, accelerator) update roll out
 
 Node update roll outs safely migrate inference workloads to new node hardware or accelerator configurations.
 This process happens in a controlled manner without interrupting model service.
@@ -40,14 +40,14 @@ teams can ensure stability and performance, quickly identifying and reverting an
 
 ## How to do InferencePool rollout
 
-1. **Deploy new infrastructure**: Create a new InferencePool configured with the new node(compute/accelerator) / model server / base model that you chose.
+1. **Deploy new infrastructure**: Create a new InferencePool configured with the new node (compute/accelerator) / model server / base model that you chose.
 1. **Optionally mirror traffic**: Copy a share of live requests to the new InferencePool to validate it before it serves clients.
 1. **Configure traffic splitting**: Use an HTTPRoute to split traffic between the existing InferencePool and the new InferencePool. The `backendRefs.weight` field controls the traffic percentage allocated to each pool.
 1. **Preserve rollback capability**: Retain the original nodes and InferencePool during the roll out to facilitate a rollback if necessary.
 
 ## Example
 
-This is an example of InferencePool rollout with node(compute, accelerator) update roll out
+This is an example of InferencePool rollout with node (compute, accelerator) update roll out
 
 ### Prerequisites
 
@@ -79,7 +79,7 @@ spec:
   parentRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: inference-gateway
+      name: llm-d-inference-gateway
   rules:
     - backendRefs:
         - group: inference.networking.k8s.io
@@ -125,7 +125,7 @@ spec:
   parentRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: inference-gateway
+      name: llm-d-inference-gateway
   rules:
     - backendRefs:
         - group: inference.networking.k8s.io
@@ -147,7 +147,7 @@ The above configuration means one in every ten requests should be sent to the ne
 1. Get the gateway IP:
 
 ```bash
-IP=$(kubectl get gateway/inference-gateway -o jsonpath='{.status.addresses[0].value}'); PORT=80
+IP=$(kubectl get gateway/llm-d-inference-gateway -o jsonpath='{.status.addresses[0].value}'); PORT=80
 ```
 
 1. Send a few requests as follows:
@@ -174,7 +174,7 @@ spec:
   parentRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: inference-gateway
+      name: llm-d-inference-gateway
   rules:
     - backendRefs:
         - group: inference.networking.k8s.io
