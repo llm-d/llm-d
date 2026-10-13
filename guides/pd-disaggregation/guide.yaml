@@ -36,11 +36,11 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL (SGLang: TP=1, NIXL over TCP)"
+      notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL (SGLang: TP=1, TCP or RDMA)"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-        - {name: rdma, label: "RDMA", engines: [vllm]}
+        - {name: rdma, label: "RDMA"}
       engines: {vllm: validated, sglang: community}
     "tpu/v5p":
       label: Google TPU v5p
