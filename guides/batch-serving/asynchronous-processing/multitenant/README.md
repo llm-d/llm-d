@@ -175,6 +175,8 @@ export INFRA_PROVIDER=base # options: base, gke; model server overlay variant
 export GPUS=2 # options: 2, 1; GPUs for the model server; 1 serves Qwen/Qwen3-8B instead
 export FLOW_CONTROL=evictable # options: evictable, holdback; router values: in-flight eviction (recommended), or priority holdback
 export QUEUE_BACKEND=redis # options: redis, pubsub
+export MONITORING=false # options: false, true; router EPP ServiceMonitor; needs the monitoring stack, required for Scenarios C and D
+export MONITORING_VALUES=
 export POOL_NAME=llm-d-router # constant: the router release and its InferencePool (objectives, PodMonitor, saturation gates)
 export MODEL=Qwen/Qwen3-32B # served model name (goes in payload.model)
 export PROM_URL=http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090 # Scenarios C and D only: the Prometheus the saturation gates read
@@ -298,11 +300,25 @@ selectors differ.
 </details>
 
 > [!TIP]
-> **Prometheus and Grafana:** If you do not already have Prometheus running, deploy the standard stack using the central [Observability Setup Guide](../../../../docs/operations/observability/setup.md) (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
+> **Prometheus and Grafana:** Scenarios C and D and the [Observability](#observability) section read
+> Prometheus. If you plan to run them, deploy the standard stack now using the central
+> [Observability Setup Guide](../../../../docs/operations/observability/setup.md)
+> (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`) and `export MONITORING=true`
+> before step 2, so the router is installed with its EPP `ServiceMonitor`. With the default `MONITORING=false`
+> the router installs on a cluster without the Prometheus Operator; you can add the scrape later, as shown in
+> [Observability](#observability). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
 
 ### 2. Configure llm-d-router and Apply InferenceObjectives
 
-Deploy llm-d Router configured with Flow Control and in-flight eviction, and apply the 6 lane `InferenceObjective`s:
+Deploy llm-d Router configured with Flow Control and in-flight eviction, and apply the 6 lane `InferenceObjective`s.
+With `MONITORING=true`, the install also layers the router monitoring values that create the EPP `ServiceMonitor`:
+
+<!-- guide:deploy.monitoring_values start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+<!-- guide:deploy.monitoring_values end -->
 
 <!-- guide:deploy.router start -->
 ```bash
@@ -313,6 +329,7 @@ kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/objectives
 helm upgrade --install ${POOL_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    ${MONITORING_VALUES} \
     -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
     ${EXTRA_ROUTER_HELM_ARGS} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -726,7 +743,7 @@ kubectl rollout status deploy/llm-d-async -n ${NAMESPACE}
 The inner `prometheus-saturation` gate queries the Prometheus server (`${PROM_URL}`) for the metric `llm_d_epp_flow_control_pool_saturation` exported by llm-d Router's EPP `/metrics` endpoint.
 
 > [!IMPORTANT]
-> **Router Metrics Scraping:** both router values files under `values/router/` configure `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `llm_d_epp_flow_control_pool_saturation`. Without this metric in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
+> **Router Metrics Scraping:** the EPP's `ServiceMonitor/llm-d-router-epp-monitor` exists only if the router was installed with `MONITORING=true` (step 2). Prometheus must be scraping `llm_d_epp_flow_control_pool_saturation`; otherwise the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), and never closes under saturation. If you installed the router with the default `MONITORING=false`, add the scrape with the router upgrade in [Observability](#observability) before running this scenario.
 
 Verify that the metric is being scraped and that the gate evaluates metrics live:
 
@@ -758,8 +775,21 @@ to install the standard Prometheus and Grafana stack:
 # 1. Install standard Prometheus + Grafana stack
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
-# 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
+# 2. Scrape the vLLM model server
 kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/monitoring
+
+# 3. Scrape the llm-d Router EPP. Skip this if step 2 ran with MONITORING=true; otherwise
+#    re-run the router install with the monitoring values layered in, which adds the
+#    ServiceMonitor without touching the flow-control configuration:
+export MONITORING=true
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+helm upgrade --install ${POOL_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    ${MONITORING_VALUES} \
+    -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
+    ${EXTRA_ROUTER_HELM_ARGS} \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**

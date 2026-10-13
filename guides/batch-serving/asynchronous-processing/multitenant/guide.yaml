@@ -12,6 +12,13 @@ env:
     FLOW_CONTROL: {default: evictable, values: [evictable, holdback], comment: "router values: in-flight eviction (recommended), or priority holdback"}
     QUEUE_BACKEND: {default: redis, values: [redis, pubsub]}
 
+    # Prometheus monitoring is opt-in, as in optimized-baseline: MONITORING=true
+    # layers the router's ServiceMonitor values in step 2. It needs the
+    # Prometheus Operator CRDs from the monitoring stack (README "Observability"),
+    # and Scenarios C and D need the scrape.
+    MONITORING: {default: "false", values: ["false", "true"], comment: "router EPP ServiceMonitor; needs the monitoring stack, required for Scenarios C and D"}
+    MONITORING_VALUES: {default: ""}
+
     POOL_NAME: {default: llm-d-router, comment: "constant: the router release and its InferencePool (objectives, PodMonitor, saturation gates)"}
     MODEL: {default: Qwen/Qwen3-32B, comment: "served model name (goes in payload.model)"}
 
@@ -68,6 +75,12 @@ deploy:
         # Downloading and loading the model takes several minutes
         kubectl -n ${NAMESPACE} rollout status deploy/async-multitenant-optimized-baseline-nvidia-gpu-vllm-decode --timeout=30m
 
+  # README step 2. The EPP ServiceMonitor only renders with MONITORING=true;
+  # without the Prometheus Operator CRDs the router install would fail on it.
+  monitoring_values:
+    - when: {MONITORING: ["true"]}
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
   # README step 2. FLOW_CONTROL picks how the router protects realtime traffic
   # (README "Protecting realtime traffic").
   router:
@@ -79,6 +92,7 @@ deploy:
         helm upgrade --install ${POOL_NAME} \
             ${ROUTER_STANDALONE_CHART} \
             -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+            ${MONITORING_VALUES} \
             -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
             ${EXTRA_ROUTER_HELM_ARGS} \
             -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
