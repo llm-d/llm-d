@@ -33,11 +33,22 @@ Before installing Async Processor, ensure you have:
 2. **Gateway control plane** (Gateway mode only): if you run the optimized baseline behind a Gateway, configure and deploy your [Gateway control plane](../../../docs/infrastructure/gateway/README.md) (e.g., Istio) before installation. In Standalone mode the Async Processor dispatches to the llm-d Router directly and no Gateway is needed.
 3. **llm-d Inference Stack**: Async Processor requires an existing [optimized baseline](../../optimized-baseline/README.md) stack to dispatch requests to.
 
+### Get the guide
+
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the Helm values it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+
 ## Installation
 
 Async Processor can be installed via Helm. We recommend following the pattern used in the [optimized baseline](../../optimized-baseline/README.md) guide.
 
-#### Step 1: Deploy llm-d Router
+### Step 1: Deploy llm-d Router
 
 Apply the [optimized baseline](../../optimized-baseline/README.md) guide and get the llm-d Router's IP address:
 
@@ -50,7 +61,7 @@ export IP=$(kubectl get service optimized-baseline-epp -n llm-d-optimized-baseli
 export IP=$(kubectl get gateway llm-d-inference-gateway -n llm-d-optimized-baseline -o jsonpath='{.status.addresses[0].value}')
 ```
 
-#### Step 2: Set up the Queue Backend
+### Step 2: Set up the Queue Backend
 
 Set up one queue backend and fill in its `values.yaml`; [Step 3](#step-3-deploy-async-processor) installs the chart with it.
 
@@ -75,7 +86,7 @@ gcloud pubsub topics create $RESULT_TOPIC_NAME
 ```
 <!-- llm-d-cicd:skip end -->
 
-Give each request topic a subscription with exactly-once delivery, retries with exponential backoff, and a DLQ. Without a DLQ, retried messages are counted multiple times in the *number_of_requests* metric. Also subscribe to the DLQ topic so dead-lettered messages are not lost:
+Give each request topic a subscription with exactly-once delivery, retries with exponential backoff, and a DLQ. Without a DLQ, every redelivery of an undeliverable message is counted again in the `llm_d_async_async_request_total` metric. Also subscribe to the DLQ topic so dead-lettered messages are not lost:
 
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -173,7 +184,7 @@ kubectl create secret generic redis-creds -n llm-d-async \
 </details>
 <!-- tabs:end -->
 
-#### Step 3: Deploy Async Processor
+### Step 3: Deploy Async Processor
 
 Deploy the Async Processor using the selected queue implementation's configuration:
 
