@@ -49,7 +49,7 @@ spec:
   resources:
     requests:
       storage: 18000Gi # Range from 18000Gi to 954000Gi, must be in multiples of 9000 Gi
-  storageClassName: lustre
+  storageClassName: lustre-class
 ```
 
 ### Check the PVC
@@ -62,7 +62,7 @@ Output should show the PVC as `Bound`:
 
 ```
 NAME                     STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
-llm-d-kv-cache-storage   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre         <unset>                 6d
+llm-d-kv-cache-storage   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre-class   <unset>                 6d
 ```
 
 ## Cleanup

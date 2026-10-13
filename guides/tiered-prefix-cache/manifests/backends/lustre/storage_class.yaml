@@ -1,7 +1,7 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: lustre
+  name: lustre-class
 provisioner: lustre.csi.storage.gke.io
 volumeBindingMode: Immediate
 reclaimPolicy: Delete

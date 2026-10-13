@@ -159,7 +159,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trt
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> The `prefix-cache-affinity-filter` in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml) defaults to `peakPrefillThroughput` tuned for the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2). On a different model or accelerator, miscalibrated `peakPrefillThroughput` can prevent the saturation override from spreading load across pods — measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) (or check the [configuration matrix](../recipes/router/calibration/configuration-matrix.md) for pre-measured values). When deploying on Rebellions NPU (`ACCELERATOR_TYPE=npu`), also pass `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml` after `-f ${ROUTER_VALUES}`.
+> The `prefix-cache-affinity-filter` in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml) defaults to `peakPrefillThroughput` tuned for the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2). On a different model or accelerator, miscalibrated `peakPrefillThroughput` can prevent the saturation override from spreading load across pods — measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) (or check the [configuration matrix](../recipes/router/calibration/configuration-matrix.md) for pre-measured values).
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
