@@ -84,7 +84,7 @@ deploy:
     - skip_in: [ci]
       run: |
         kubectl wait --for=condition=Available deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=300s
-        kubectl wait --for=condition=Ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+        kubectl wait --for=condition=Available deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
 
   # The priority bands the EPP maps queues to. Without the objectives, tagged
   # traffic falls back to band 0 and per-band behavior is unobservable.

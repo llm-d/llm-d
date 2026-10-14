@@ -252,13 +252,13 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
 
 </details>
 
-Wait for the router deployment (`${GUIDE_NAME}-epp`) and the model server pods (`-l llm-d.ai/guide=${GUIDE_NAME}`, e.g., `flow-control-nvidia-gpu-vllm-decode-*`) to become `Ready` before continuing (`Qwen/Qwen3-32B` takes several minutes to download weights and compile graphs):
+Wait for the router deployment (`${GUIDE_NAME}-epp`) and the model server deployments (`-l llm-d.ai/guide=${GUIDE_NAME}`, e.g., `flow-control-nvidia-gpu-vllm-decode`) to become `Available` before continuing (`Qwen/Qwen3-32B` takes several minutes to download weights and compile graphs):
 
 <!-- guide:deploy.wait start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl wait --for=condition=Available deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=300s
-kubectl wait --for=condition=Ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+kubectl wait --for=condition=Available deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.wait end -->
@@ -378,7 +378,8 @@ grep llm_d_epp_flow_control_pool_saturation metrics.txt
 ```
 
 Expected: `stage="decode"` and `stage="effective"` series for the pool, both `0` on an
-idle pool (confirming the Flow Control layer is active and exporting metrics; per-flow
+idle pool (confirming the Flow Control layer is active and exporting metrics; a
+disaggregated pool also exports `stage="prefill"`; per-flow
 series such as `llm_d_epp_flow_control_queue_size` are registered lazily after a flow
 receives its first request). A `401` means the request carried no valid token; a `403`
 means the `${GUIDE_NAME}-metrics-reader` grant above was skipped; a `500` means the EPP's
@@ -558,13 +559,13 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     exit
     ```
 
-5. **Restore the model server replica count** recorded in step 2 and wait for all replicas
-   to become `Ready` (model server pods take several minutes to download weights and
-   compile graphs):
+5. **Restore the model server replica count** recorded in step 2 and wait for the rollout
+   to complete (model server pods take several minutes to download weights and compile
+   graphs):
 
     ```bash
     kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=${ORIG_REPLICAS}
-    kubectl wait --for=condition=Ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+    kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
     ```
 
 ## Production Tuning: Deriving `maxConcurrency`
