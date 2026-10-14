@@ -146,7 +146,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always() && inputs.update_badge != 'false'
+    if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: agentic-api-gke

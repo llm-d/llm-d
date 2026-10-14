@@ -82,6 +82,7 @@ concurrency:
 
 jobs:
   nightly:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
@@ -114,7 +115,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: tiered-prefix-cache-gke-cpu-native
