@@ -1,18 +1,18 @@
 name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)
 
 # Nightly regression test for the queue-based KEDA + EPP autoscaling path
-# (guides/workload-autoscaling/keda-epp-queue/README.md) on OpenShift. Deploys the
+# (guides/workload-autoscaling/keda-epp/README.md) on OpenShift. Deploys the
 # optimized-baseline modelserver + EPP router and scales the decode Deployment
-# directly from EPP queue metrics via KEDA (keda-epp-queue/ocp) — there is NO
-# WVA controller on this path.
+# directly from EPP queue metrics via KEDA
+# (keda-epp/optimized-baseline/overlays/ocp/queue) -- there is no WVA controller
+# on this path.
 #
-# Runs ALONGSIDE nightly-e2e-workload-autoscaling-ibm-acc-gpu-vllm-x.yaml (the
-# WVA path); the two test different autoscalers and must not replace each other.
+# OCP (GPU) sibling of
+# nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml (the AMD ROCm lane).
 
 on:
-  # Scheduled execution temporarily disabled.
-  # schedule:
-  #   - cron: '0 5 * * *'  # 05:00 UTC daily (staggered from the WVA path at 03:00)
+  schedule:
+    - cron: '0 5 * * *'  # 05:00 UTC daily (consolidate-status runs after, at 11:00 UTC)
   workflow_dispatch:
     inputs:
       # decode_pods/prefill_pods/harness/workload are accepted only for
@@ -101,7 +101,7 @@ jobs:
       # autoscaler DECISION, not the 2nd pod becoming Ready (it may stay Pending on a
       # contended cluster). This is the Phase-2 scale-event proof on top of the
       # deploy script's Fallback=False signal-liveness gate.
-      e2e_validate_args: '--extra-validate scale-event'
+      e2e_validate_args: '--extra-validate scale-event -- --require-queue-size'
       custom_deploy_script: |
         bash guides/workload-autoscaling/scripts/nightly-deploy-ocp-keda-epp.sh
       required_gpus: 2

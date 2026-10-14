@@ -16,6 +16,8 @@ Options:
   --extra-validate NAME       After the smoke loop, hand off to e2e-validate-NAME.sh
                               for guide-specific validation (e.g. NAME=predicted-latency
                               runs e2e-validate-predicted-latency.sh).
+  -- ARGS...                  Everything after -- is forwarded verbatim to the
+                              --extra-validate script (e.g. -- --require-queue-size).
   -h, --help                  Show this help and exit
 EOF
   exit 0
@@ -26,6 +28,7 @@ NAMESPACE="llm-d"
 CLI_MODEL_ID=""
 VERBOSE=false
 EXTRA_VALIDATE=""
+EXTRA_ARGS=()
 
 # ── Flag parsing ────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -34,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     -m|--model)          CLI_MODEL_ID="$2"; shift 2 ;;
     -v|--verbose)        VERBOSE=true; shift ;;
     --extra-validate)    EXTRA_VALIDATE="$2"; shift 2 ;;
+    --)                  shift; EXTRA_ARGS=("$@"); break ;;
     -h|--help)           show_help ;;
     *) echo "Unknown option: $1"; show_help ;;
   esac
@@ -236,5 +240,5 @@ if [[ -n "$EXTRA_VALIDATE" ]]; then
   echo "=== Running extra validation: ${EXTRA_VALIDATE} ==="
   cleanup_curl_pod
   trap - EXIT
-  exec "$EXTRA_SCRIPT" -n "$NAMESPACE" -m "$MODEL_ID"
+  exec "$EXTRA_SCRIPT" -n "$NAMESPACE" -m "$MODEL_ID" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 fi
