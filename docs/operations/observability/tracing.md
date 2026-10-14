@@ -16,8 +16,8 @@ export NAMESPACE=<your-llm-d-namespace>
 | Component | Config Method | Traced Operations |
 |-----------|--------------|-------------------|
 | **vLLM** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans |
-| **Routing proxy** (P/D sidecar) | Kustomize: container env vars | KV transfer coordination |
-| **EPP** | Helm: llm-d Router `router.tracing:` | Request routing, endpoint scoring, KV-cache indexing |
+| **Routing proxy** (P/D sidecar) | Kustomize: container args + env vars | KV transfer coordination |
+| **EPP** | Helm: [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) | Request routing, endpoint scoring, KV-cache indexing |
 
 All components export traces via OTLP gRPC to an OpenTelemetry Collector, which filters noise (e.g., `/metrics` scraping spans), batches traces, and forwards them to a backend like Jaeger.
 
@@ -67,14 +67,18 @@ Verify with the same `kubectl get pods` commands above.
 
 ## Step 2: Enable Tracing on the Model Server and Routing Proxy
 
-Model servers are deployed with kustomize. The example below uses vLLM; SGLang and other OpenTelemetry-capable model servers use the same `OTEL_*` environment variables — set `OTEL_SERVICE_NAME` to match your engine and role. Add the engine's tracing flags to its serve command and the OTEL env vars to the container:
+Model servers are deployed with Kustomize. Several guide overlays (such as [`guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml`](../../../guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml)) include commented-out tracing blocks that can be uncommented before applying the overlay.
+
+### Model Server (`modelserver` container)
+
+The example below uses vLLM; SGLang and other OpenTelemetry-capable model servers use the same `OTEL_*` environment variables with `OTEL_SERVICE_NAME` set to match the engine and role. Add the engine's tracing flags to its serve command and the `OTEL_*` environment variables to the `modelserver` container:
 
 ```yaml
-# Add to the model server's serve command (vLLM shown):
-#   --otlp-traces-endpoint http://otel-collector:4317
-#   --collect-detailed-traces all
+# Add to the modelserver container args (vLLM shown):
+#   - "--otlp-traces-endpoint=http://otel-collector:4317"
+#   - "--collect-detailed-traces=all"
 
-# Add to the container env (applies to any OpenTelemetry-capable engine):
+# Add to the modelserver container env (applies to any OpenTelemetry-capable engine):
 env:
 - name: OTEL_SERVICE_NAME
   value: "vllm-decode"  # name per engine/role, e.g. vllm-decode, vllm-prefill, sglang-decode
@@ -86,20 +90,50 @@ env:
   value: "1.0"
 ```
 
-## Step 3: Enable Tracing on EPP
+### Routing Proxy (`routing-proxy` sidecar, P/D disaggregation only)
 
-Add the tracing configuration to your llm-d Router values:
+For prefill/decode disaggregated deployments, enable tracing on the `routing-proxy` initContainer on the decode pod by adding `--tracing=true` to `args` and the `OTEL_*` environment variables to `env`:
 
 ```yaml
-# In your router values file
+initContainers:
+- name: routing-proxy
+  args:
+  - --tracing=true
+  env:
+  - name: OTEL_SERVICE_NAME
+    value: "routing-proxy"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://otel-collector:4317"
+  - name: OTEL_TRACES_SAMPLER
+    value: "parentbased_traceidratio"
+  - name: OTEL_TRACES_SAMPLER_ARG
+    value: "1.0"
+```
+
+> [!NOTE]
+> Updating container `args` or `env` on an existing model server `Deployment` triggers a rolling pod restart and model reload. Wait for the rollout to complete before sending test requests:
+>
+> ```bash
+> kubectl rollout status deployment -n ${NAMESPACE} -l llm-d.ai/role=decode
+> ```
+
+## Step 3: Enable Tracing on EPP
+
+Layer [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) when installing or upgrading the router Helm chart (see [Router Recipes — Enable Distributed Tracing](../../../guides/recipes/router/README.md#enable-distributed-tracing-optional)):
+
+```yaml
+# guides/recipes/router/features/tracing.values.yaml
 router:
   tracing:
     enabled: true
     otelExporterEndpoint: "http://otel-collector:4317"
     sampling:
       sampler: "parentbased_traceidratio"
-      samplerArg: "1.0"
+      samplerArg: "0.05"
 ```
+
+> [!TIP]
+> `tracing.values.yaml` defaults to `samplerArg: "0.05"` (5% sampling) for production workloads. When verifying tracing with a small number of test requests, pass `--set router.tracing.sampling.samplerArg="1.0"` to sample 100% of requests.
 
 ## Step 4: View Traces
 
@@ -109,6 +143,9 @@ Access the Jaeger UI:
 kubectl port-forward -n ${NAMESPACE} svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
+
+> [!TIP]
+> When running `kubectl` on a remote workstation or cloud VM and opening the browser on your local machine, either forward port `16686` over SSH (`ssh -N -L 16686:localhost:16686 <remote-host>`) and open `http://localhost:16686`, or pass `--address 0.0.0.0,::` to `kubectl port-forward` and open `http://<remote-host>:16686`.
 
 Verify traces are flowing:
 
