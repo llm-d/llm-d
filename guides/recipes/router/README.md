@@ -127,7 +127,13 @@ helm upgrade <release-name> \
 
 ## Enable Distributed Tracing (Optional)
 
-To enable OpenTelemetry tracing on the EPP, deploy an OpenTelemetry Collector (see [Trace Requests](../../../docs/operations/observability/tracing.md)) and layer [`features/tracing.values.yaml`](features/tracing.values.yaml) when installing or upgrading the router Helm chart:
+To enable OpenTelemetry tracing on the EPP, set up your tracing collector (see [Trace Requests](../../../docs/operations/observability/tracing.md)) and layer the tracing values file for your platform when installing or upgrading the router Helm chart (override `--set router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests):
+
+<!-- tabs:start group=tracing -->
+<details open>
+<summary><b>Jaeger (OSS / OpenShift)</b></summary>
+
+`features/tracing.values.yaml` exports traces to `http://otel-collector:4317` with a 5% sampling ratio (`samplerArg: "0.05"`):
 
 ```bash
 helm upgrade <release-name> \
@@ -139,7 +145,24 @@ helm upgrade <release-name> \
   --version ${ROUTER_CHART_VERSION}
 ```
 
-`features/tracing.values.yaml` exports traces to `http://otel-collector:4317` with a 5% sampling ratio (`samplerArg: "0.05"`). Override `--set router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests.
+</details>
+<details>
+<summary><b>GKE (Google Cloud Trace)</b></summary>
+
+`features/tracing-gke.values.yaml` exports traces to the [GKE Managed OpenTelemetry](../../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) collector (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) with a 5% sampling ratio (`samplerArg: "0.05"`):
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/tracing-gke.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
+<!-- tabs:end -->
 
 ## Calibration
 
@@ -155,7 +178,8 @@ Both modes share a common `base.values.yaml` containing the router image, ports,
 base.values.yaml                              # shared defaults (this directory)
   + features/monitoring.values.yaml           # optional Prometheus Operator ServiceMonitor
   + features/monitoring-gke.values.yaml       # optional GKE Managed Prometheus PodMonitoring
-  + features/tracing.values.yaml              # optional OpenTelemetry distributed tracing
+  + features/tracing.values.yaml              # optional OpenTelemetry distributed tracing (Jaeger)
+  + features/tracing-gke.values.yaml          # optional GKE Managed OpenTelemetry tracing (Cloud Trace)
   + features/agentgateway-proxy.values.yaml   # required for agentgateway config args
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```

@@ -214,13 +214,9 @@ If Jaeger runs in more than one namespace, set `TRACING_NAMESPACE` to the one to
 <details>
 <summary><b>GKE (Google Cloud Trace)</b></summary>
 
-On GKE, grant `roles/cloudtrace.agent` to the collector's ServiceAccount via Workload Identity (see [Trace Requests](./tracing.md#step-1-deploy-otel-collector-and-tracing-backend)) and deploy the OTel Collector configured with the Google Cloud Trace exporter:
+Enable [GKE Managed OpenTelemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry) (`--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS`), which runs a managed OpenTelemetry Collector in the `gke-managed-otel` namespace (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) and exports traces directly to [Google Cloud Trace](https://cloud.google.com/trace/docs) without deploying a collector in your workload namespace.
 
-```bash
-./guides/recipes/observability/install-otel-collector-jaeger.sh --gke -n ${NAMESPACE}
-```
-
-View traces and per-span latency distributions in [Google Cloud Trace Explorer](https://console.cloud.google.com/traces/explorer).
+If `--managed-otel-scope` is not enabled on your cluster, you can deploy a standalone collector configured for Cloud Trace with `./guides/recipes/observability/install-otel-collector-jaeger.sh --gke -n ${NAMESPACE}` (see [Trace Requests](./tracing.md)).
 
 </details>
 <!-- tabs:end -->

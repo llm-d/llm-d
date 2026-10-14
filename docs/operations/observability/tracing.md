@@ -17,11 +17,11 @@ export NAMESPACE=<your-llm-d-namespace>
 |-----------|--------------|-------------------|
 | **vLLM / SGLang** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans (`llm_request`, model loading, compilation) |
 | **Routing proxy** (P/D sidecar) | Kustomize: container env vars | KV transfer coordination |
-| **EPP** | Helm: [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) | Request routing, endpoint filtering/scoring, KV-cache indexing, tokenization |
+| **EPP** | Helm: [`tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) or [`tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) | Request routing, endpoint filtering/scoring, KV-cache indexing, tokenization |
 
-All components export traces via OTLP gRPC (`http://otel-collector:4317`) to an OpenTelemetry Collector, which filters `/metrics` scraping spans, batches traces, and forwards them to Jaeger or Google Cloud Trace.
+All components export traces via OTLP gRPC to an OpenTelemetry Collector (`http://otel-collector:4317` for the in-namespace collector or `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317` for GKE Managed OpenTelemetry), which batches traces and forwards them to Jaeger or Google Cloud Trace.
 
-## Step 1: Deploy OTel Collector and Tracing Backend
+## Step 1: Set Up the Tracing Collector and Backend
 
 <!-- tabs:start group=tracing -->
 <details open>
@@ -71,47 +71,34 @@ kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/tracing/jaeger-all
 <details>
 <summary><b>GKE (Google Cloud Trace)</b></summary>
 
-On GKE, the OpenTelemetry Collector can export spans directly to [Google Cloud Trace](https://cloud.google.com/trace/docs) via the built-in `googlecloud` exporter without deploying Jaeger.
-
-### 1. Grant Cloud Trace Permissions (Workload Identity)
-
-Grant `roles/cloudtrace.agent` to a Google Service Account (`${GSA_EMAIL}`) and bind it to the `default` Kubernetes `ServiceAccount` in `${NAMESPACE}`:
+Enable [GKE Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke) (`--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)):
 
 ```bash
-export PROJECT_ID=$(gcloud config get-value project)
-export GSA_EMAIL=<your-gcp-service-account>@${PROJECT_ID}.iam.gserviceaccount.com
-
-gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-  --member="serviceAccount:${GSA_EMAIL}" \
-  --role="roles/cloudtrace.agent"
-
-gcloud iam service-accounts add-iam-policy-binding ${GSA_EMAIL} \
-  --project=${PROJECT_ID} \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="serviceAccount:${PROJECT_ID}.svc.id.goog[${NAMESPACE}/default]"
-
-kubectl annotate serviceaccount default -n ${NAMESPACE} \
-  iam.gke.io/gcp-service-account=${GSA_EMAIL} --overwrite
+gcloud container clusters update <cluster-name> \
+  --location=<region-or-zone> \
+  --managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS
 ```
 
-### 2. Deploy the OTel Collector for Cloud Trace
+GKE deploys and manages an OpenTelemetry Collector in the `gke-managed-otel` namespace (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317` for OTLP gRPC, `:4318` for OTLP HTTP) with built-in authentication to [Google Cloud Trace](https://cloud.google.com/trace/docs) and automatic Kubernetes resource attribute enrichment (`k8s.cluster.name`, `k8s.namespace.name`, `k8s.pod.name`, `k8s.node.name`). No collector deployment or Workload Identity IAM configuration is required in your workload namespace.
 
-Deploy the collector with [`otel-collector-gke.yaml`](../../../guides/recipes/observability/tracing/otel-collector-gke.yaml):
+Verify the managed collector is running:
 
 ```bash
-./guides/recipes/observability/install-otel-collector-jaeger.sh --gke -n ${NAMESPACE}
-# Or apply the manifest directly:
-# kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/tracing/otel-collector-gke.yaml
+kubectl get pods,svc -n gke-managed-otel
 ```
 
-Verify the collector is running:
+Expected output:
 
-```bash
-kubectl get pods -n ${NAMESPACE} -l app=otel-collector
+```text
+NAME                                         READY   STATUS    RESTARTS   AGE
+pod/opentelemetry-collector-xxxxxxxx-xxxxx   1/1     Running   0          1m
+
+NAME                              TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+service/opentelemetry-collector   ClusterIP   34.118.234.183   <none>        4317/TCP,4318/TCP   1m
 ```
 
-> [!TIP]
-> **GKE Managed OpenTelemetry:** If your cluster has [GKE Managed OpenTelemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry) enabled (`--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS`), GKE runs a managed collector at `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317` (gRPC) / `:4318` (HTTP) and you can point your `OTEL_EXPORTER_OTLP_ENDPOINT` and `router.tracing.otelExporterEndpoint` directly to that service.
+> [!NOTE]
+> **Fallback (Self-Managed Collector for Cloud Trace):** If `--managed-otel-scope` is not enabled on your cluster, grant `roles/cloudtrace.agent` to the `default` ServiceAccount in `${NAMESPACE}` via Workload Identity and deploy the standalone Cloud Trace collector with `./guides/recipes/observability/install-otel-collector-jaeger.sh --gke -n ${NAMESPACE}` (which applies [`otel-collector-gke.yaml`](../../../guides/recipes/observability/tracing/otel-collector-gke.yaml) at `http://otel-collector:4317`).
 
 </details>
 <!-- tabs:end -->
@@ -122,6 +109,10 @@ Model servers are deployed with Kustomize. Several guide overlays (such as [`gui
 
 > [!NOTE]
 > Modifying container `args` or `env` on an already-running model server triggers a rolling restart and model reload. Wait for `kubectl rollout status deployment/<modelserver-deployment> -n ${NAMESPACE}` to complete before sending test requests in Step 4.
+
+Set the collector endpoint according to your Step 1 backend:
+- **Jaeger (OSS / OpenShift):** `http://otel-collector:4317`
+- **GKE (Managed OpenTelemetry):** `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`
 
 ### Model Server (`vLLM` / `SGLang`)
 
@@ -164,9 +155,13 @@ env:
 
 ## Step 3: Enable Tracing on EPP
 
-Layer [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) when installing or upgrading the router Helm chart (see [Router Recipes — Enable Distributed Tracing](../../../guides/recipes/router/README.md#enable-distributed-tracing-optional)).
+Layer the tracing values file for your platform when installing or upgrading the router Helm chart (see [Router Recipes — Enable Distributed Tracing](../../../guides/recipes/router/README.md#enable-distributed-tracing-optional)). Because the recipes default to a 5% sampling ratio (`samplerArg: "0.05"`), override `router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests:
 
-Because `tracing.values.yaml` defaults to a 5% sampling ratio (`samplerArg: "0.05"`), override `router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests:
+<!-- tabs:start group=tracing -->
+<details open>
+<summary><b>Jaeger (OSS / OpenShift)</b></summary>
+
+Layer [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) (`http://otel-collector:4317`):
 
 ```bash
 helm upgrade ${GUIDE_NAME} \
@@ -177,6 +172,25 @@ helm upgrade ${GUIDE_NAME} \
   --set router.tracing.sampling.samplerArg="1.0" \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+
+</details>
+<details>
+<summary><b>GKE (Google Cloud Trace)</b></summary>
+
+Layer [`guides/recipes/router/features/tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`):
+
+```bash
+helm upgrade ${GUIDE_NAME} \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/tracing-gke.values.yaml \
+  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+  --set router.tracing.sampling.samplerArg="1.0" \
+  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
+<!-- tabs:end -->
 
 Wait for the EPP rollout to complete:
 
