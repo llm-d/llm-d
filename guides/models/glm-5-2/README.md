@@ -17,10 +17,10 @@ best earlier main-agent turn). Each layer addresses a specific pressure of that 
 - **P/D disaggregation** (NIXL KV transfer) — input processing and token generation use
   separate pools, so each side can use the backend and replica count suited to its work.
   Prefill runs DeepEP high-throughput all-to-all; decode runs low-latency (IBGDA + NVSHMEM).
-- **Token-aware, dual-tier prefix-cache routing** — the EPP keeps prefix groups on
-  GPU-cache-warm ranks with the prefix-cache affinity filter, picks by queued prefill token
-  load, and adds a CPU-resident prefix-cache score, so resumed sessions land where their context
-  can be restored rather than recomputed.
+- **Token-aware, dual-tier prefix-cache routing** — the EPP keeps prefix groups on ranks that
+  hold them in GPU or CPU memory with the prefix-cache affinity filter, and picks by queued
+  prefill token load, so resumed sessions land where their context can be restored rather than
+  recomputed.
 - **CPU+NVMe tiered KV offloading** — CPU memory keeps evicted prefixes reusable after HBM
   fills. Local NVMe supplies a lower tier when needed.
 - **MTP speculative decoding** (3 draft tokens) — cuts median time between output tokens by
@@ -60,7 +60,7 @@ with MTP and tiered KV offloading enabled.
 | KV cache offloading      | CPU + NVMe tiered on prefill (`offloading-tiered` component)                 |
 | MTP speculative decoding | On (3 draft tokens)                                                          |
 | `gpu-memory-utilization` | 0.935 (prefill), 0.95 (decode)                                               |
-| Routing                  | GPU prefix-cache affinity + token load, with CPU prefix-cache scoring ([`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml)) |
+| Routing                  | GPU+CPU prefix-cache affinity + token load ([`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml)) |
 | Reasoning / tool-call    | glm45 / glm47                                                                |
 
 If your SLO target is throughput rather than TTFT, `p2w2d2w2` (2 prefill + 2 decode, also
@@ -97,9 +97,9 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 This guide supports two prefix-cache routing modes (`ROUTING`), selected with tabs in
 [Deploy the llm-d Router](#1-deploy-the-llm-d-router):
 
-- **Approximate prefix routing (`ROUTING=approximate`, default)** — gates on GPU-resident
-  prefix-cache affinity and token load, and scores CPU-resident prefix caches, using approximate
-  prefix indexes (`glm-5.2-overrides.values.yaml`), paired with the `default`
+- **Approximate prefix routing (`ROUTING=approximate`, default)** — gates on prefix-cache
+  affinity across GPU- and CPU-resident KV and on token load, using an approximate prefix index
+  (`glm-5.2-overrides.values.yaml`), paired with the `default`
   (`p3w2d1w2` + tiered offloading) or any raw topology overlay.
 - **Precise prefix-cache routing (`ROUTING=precise`)** — replaces the approximate
   prefix index with exact KV-event-backed routing (`precise-routing.values.yaml`) on the 3-node
@@ -218,11 +218,10 @@ All 8 DP rank ports (8000-8007) are exposed as `targetPorts` on the `InferencePo
 <details open>
 <summary><b>Approximate Prefix Routing (Default)</b></summary>
 
-Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), adding a CPU-tier prefix index to the prefill profile for P/D routing:
+Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), sizing the prefix index to cover CPU-offloaded KV as well as GPU-resident KV:
 
-- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks warm in the auto-tuned GPU-resident prefix index, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585`, measured on an H200 DP8 cell).
-- **Token-load scorer** (prefill, weight 3) — picks by queued prefill tokens.
-- **CPU prefix-cache scorer** (prefill, weight 1) — fixed LRU capacity (200k entries per server), favors ranks holding CPU-offloaded prefix blocks.
+- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks that hold them in GPU or CPU memory, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585`, measured on an H200 DP8 cell). The approximate prefix index has a fixed capacity of 31,000 blocks per rank: ~3,700 GPU-resident plus ~27,300 for the 100 GiB per-rank CPU offload tier.
+- **Token-load scorer** (prefill) — picks by queued prefill tokens.
 - **Active-request scorer** (decode) — load balancing.
 
 With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is layered instead: it parses OpenAI bodies with the `openai-parser` and `/generate` bodies with the `sglanghttp-parser`, and scores with GPU and CPU (HiCache) approximate prefix-cache scorers and the active-request scorer only, because the SGLang Rust listeners expose no `/metrics`. The cache sizes in the router values are for a DEP8 prefill rank on H200.
