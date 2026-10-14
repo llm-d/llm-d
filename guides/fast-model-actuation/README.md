@@ -358,3 +358,8 @@ kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
+
+## Related
+
+- [Fast Model Actuation + KEDA](./fast-model-actuation-keda/README.md): scale-from-zero autoscaling of FMA requesters on EPP flow-control metrics.
+- [FMA repository](https://github.com/llm-d-incubation/llm-d-fast-model-actuation): controllers, CRDs and design docs.
