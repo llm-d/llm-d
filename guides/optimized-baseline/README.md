@@ -74,7 +74,7 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [Google Cloud Managed Service for Prometheus (GMP) and automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collect model server metrics and provide out-of-the-box Cloud Monitoring dashboards—no Prometheus installation or `MONITORING=true` resources are required. On other platforms (or if using the OSS Prometheus and Grafana stack on GKE), install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
+- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 ### Get the guide
 
@@ -175,14 +175,34 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trt
 > [!NOTE]
 > The `prefix-cache-affinity-filter` in [`router/optimized-baseline.values.yaml`](router/optimized-baseline.values.yaml) defaults to `peakPrefillThroughput` tuned for the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2). On a different model or accelerator, miscalibrated `peakPrefillThroughput` can prevent the saturation override from spreading load across pods — measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) (or check the [configuration matrix](../recipes/router/calibration/configuration-matrix.md) for pre-measured values).
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
 # only when MONITORING=true:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 **(Rebellions NPU only) Layer the NPU router values**, which drop the prefix-cache affinity filter because the NPU overlay serves with prefix caching off:
 
@@ -311,7 +331,11 @@ Notes:
 </details>
 <!-- tabs:end -->
 
-**(Optional) Deploy the OSS Prometheus `PodMonitor` resources for model servers** (skip if using GKE automatic application monitoring, which provisions `PodMonitoring` resources automatically):
+**(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -319,6 +343,15 @@ Notes:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+
+</details>
+<!-- tabs:end -->
 
 ## Verification
 
@@ -431,10 +464,22 @@ If the requests are spread evenly and hit rates stay near zero, prefix-cache aff
 
 ## Observability & Troubleshooting
 
-Once monitoring is enabled, use the signals below to operate the optimized baseline under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state load or saturation signals):
+Once [metric collection](../../docs/operations/observability/metrics.md) is enabled, use the signals below to operate the optimized baseline under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state load or saturation signals):
 
-- **GKE Managed Monitoring:** With [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) enabled, model server metrics (`vllm:*`, `sglang:*`) are scraped automatically into Google Cloud Managed Service for Prometheus (GMP) via auto-generated `PodMonitoring` resources (`kubectl get podmonitoring -n ${NAMESPACE} -l source=gke-auto-monitoring`). When deployed in Gateway Mode with [GKE Gateway](../../docs/infrastructure/gateway/gke.md) (`GW_PROVIDER_NAME=gke`), use the out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) alongside the model server dashboards.
-- **OSS Prometheus & Grafana:** View the imported [Grafana dashboards](../../docs/operations/observability/dashboards.md) or query Prometheus directly.
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+View the imported [Grafana dashboards](../../docs/operations/observability/dashboards.md) or query Prometheus directly.
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+View the out-of-the-box Cloud Monitoring dashboards for vLLM/SGLang and, when deployed in Gateway Mode with [GKE Gateway](../../docs/infrastructure/gateway/gke.md) (`GW_PROVIDER_NAME=gke`), the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) (**Monitoring → Dashboards → Integrations → GMP → Gateway**), or query metrics in [Cloud Monitoring Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer).
+
+</details>
+<!-- tabs:end -->
 
 This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
 

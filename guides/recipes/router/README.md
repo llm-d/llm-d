@@ -80,14 +80,13 @@ vLLM and requests return 503), `istio` renders a `DestinationRule`, and `agentga
 
 ## Enable Prometheus Monitoring (Optional)
 
-The Router's monitoring values file (`features/monitoring.values.yaml`) renders a
-`ServiceMonitor` CR, which requires the **Prometheus Operator** CRDs to be present in the
-cluster. On a fresh cluster without those CRDs, layering this file onto the initial install
-will fail Helm validation.
+To enable monitoring, set up the [monitoring stack](../../../docs/operations/observability/setup.md) first, then layer the monitoring values file for your platform on top of an existing release (or add `-f` to the initial `helm install` command):
 
-To enable monitoring, deploy the monitoring stack first (see the
-[Observability guide](../../../docs/operations/observability/setup.md)) and then layer the
-monitoring values file on top of an existing release:
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+`features/monitoring.values.yaml` renders a `ServiceMonitor` (`monitoring.coreos.com/v1`), which requires the **Prometheus Operator** CRDs in the cluster:
 
 ```bash
 helm upgrade <release-name> \
@@ -99,6 +98,25 @@ helm upgrade <release-name> \
   --version ${ROUTER_CHART_VERSION}
 ```
 
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+`features/monitoring-gke.values.yaml` renders a GMP `PodMonitoring` (`monitoring.googleapis.com/v1`), a metrics-reader `ServiceAccount` and token `Secret`, and the RBAC bindings required for the GMP collector to scrape the EPP (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot):
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
+<!-- tabs:end -->
+
 > [!NOTE]
 > `helm upgrade` does not inherit the previous release's values. Re-supply every `-f` and
 > `--set` the original install used, or the upgrade reverts them to chart defaults. For an
@@ -106,12 +124,6 @@ helm upgrade <release-name> \
 > `-f ${REPO_ROOT}/guides/recipes/router/features/agentgateway-proxy.values.yaml` and the
 > `router.proxy.proxyType`, `router.inferencePool.create` and
 > `router.epp.flags.secure-serving` flags to the command above.
-
-If your cluster already has the Prometheus Operator CRDs installed, you can also add
-`-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the initial
-`helm install` command above instead.
-
-On **GKE Managed Prometheus**, pass `--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true` (instead of `features/monitoring.values.yaml`, and add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot) so the chart creates a GMP `PodMonitoring` (`monitoring.googleapis.com/v1`), a metrics-reader `ServiceAccount` and token `Secret`, and the RBAC bindings required for the GMP collector to scrape the EPP.
 
 ## Calibration
 
@@ -125,7 +137,8 @@ Both modes share a common `base.values.yaml` containing the router image, ports,
 
 ```
 base.values.yaml                              # shared defaults (this directory)
-  + features/monitoring.values.yaml           # optional feature toggles
+  + features/monitoring.values.yaml           # optional Prometheus Operator ServiceMonitor
+  + features/monitoring-gke.values.yaml       # optional GKE Managed Prometheus PodMonitoring
   + features/agentgateway-proxy.values.yaml   # required for agentgateway config args
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```

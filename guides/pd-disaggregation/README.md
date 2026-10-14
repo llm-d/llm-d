@@ -85,7 +85,7 @@ Both engines run on NVIDIA GPU with the same router configuration and move KV ca
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collects model server metrics without installing Prometheus or setting `MONITORING=true`; for the OSS Prometheus stack, install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
+- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 - For NVIDIA GPU and TPU7x dynamic sub-slices, the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it for `ACCELERATOR_TYPE=gpu`; skip that step if your cluster already runs it.
   For TPU7x dynamic sub-slices, install or upgrade it through the [GKE dynamic slicing](../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke) cluster preparation instead, whose GKE-documented minimum LWS version is older.
@@ -226,16 +226,36 @@ The router configuration in [`router/pd-disaggregation.values.yaml`](router/pd-d
 > [!NOTE]
 > The `prefix-cache-affinity-filter` uses a `peakPrefillThroughput` of `33821`, calibrated for gpt-oss-120b on TP=1 H200 prefill workers through the full P/D path (including the NIXL KV transfer). On a different model or accelerator, measure and set your value with the [calibration guide](../recipes/router/calibration/README.md) before performance work.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when MONITORING=true:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 **(Rebellions NPU only) Layer the NPU router values**, which list every decode rank port:
 
@@ -499,7 +519,11 @@ Treat the vLLM path as a compatibility smoke test until a clean multi-hour soak 
 
 ### 3. Enable Monitoring (optional)
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites) and `MONITORING=true` when deploying the router):
+**(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -507,6 +531,15 @@ Treat the vLLM path as a compatibility smoke test until a clean multi-hour soak 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 ```
 <!-- guide:deploy.monitoring end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+
+</details>
+<!-- tabs:end -->
 
 ## Operating the DisaggregatedSet
 

@@ -55,7 +55,7 @@ For wide-EP LWS deployments (multi-port DP model servers), use the precise prefi
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell. The router also reads it to reach gated tokenizers.
 
-- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collects model server metrics without installing Prometheus or setting `MONITORING=true`; for the OSS Prometheus stack, install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
+- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 ### Get the guide
 
@@ -157,14 +157,34 @@ export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.
 > [!NOTE]
 > The `prefix-cache-affinity-filter` in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml) uses a `peakPrefillThroughput` measured on the reference setup (`Qwen3-32B` on H100 80&nbsp;GB, TP=2; SGLang measures the same value as vLLM). On a different model or accelerator, measure and set your value with the [calibration guide](../recipes/router/calibration/README.md).
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
 # only when MONITORING=true:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -238,7 +258,11 @@ These render pods deliberately do **not** carry the `llm-d.ai/guide` label: the 
 </details>
 <!-- tabs:end -->
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -246,6 +270,15 @@ These render pods deliberately do **not** carry the `llm-d.ai/guide` label: the 
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+
+</details>
+<!-- tabs:end -->
 
 ## Verification
 

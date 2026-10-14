@@ -53,7 +53,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - For `VARIANT=fs`, a storage system that provides ReadWriteMany PVCs (see [Filesystem tier](#filesystem-tier)). For `HOST_TYPE=multi-host` on TPU v7, the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/multi-node.md).
 
-- (Optional) Configure [monitoring](../../docs/operations/observability/setup.md). On GKE, [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) (`--auto-monitoring-scope=ALL`) automatically collects model server metrics without installing Prometheus or setting `MONITORING=true`; for the OSS Prometheus stack, install the [monitoring stack](../../docs/operations/observability/setup.md) and set `MONITORING=true`.
+- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 ### Get the guide
 
@@ -138,16 +138,36 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 > [!NOTE]
 > The router values configure two prefix-cache scorers: one for the accelerator (HBM) cache and one for the CPU tier. vLLM does not report how full its CPU tier is, so the CPU producer's capacity is set by hand (`lruCapacityPerServer`): the `single-host` values are sized for Qwen3-32B and the `multi-host` values for Qwen3-Coder-480B. Recompute it for other models.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (for the OSS Prometheus Operator stack, use the values file below to create a `ServiceMonitor`; for GKE Managed Prometheus, set `export MONITORING_VALUES="--set router.monitoring.provider.name=gmp --set router.monitoring.prometheus.enabled=true"` to create an authenticated `PodMonitoring` for the EPP):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when MONITORING=true:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -230,7 +250,11 @@ kubectl apply -n ${NAMESPACE} \
 
 The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path (the filesystem overlay leaves it unchanged); see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -238,6 +262,15 @@ The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU lo
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+
+</details>
+<!-- tabs:end -->
 
 ## Verification
 

@@ -147,8 +147,13 @@ deploy:
         export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-trtllm.values.yaml"
 
   monitoring_values:
-    - when: {MONITORING: ["true"]}
-      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"]}
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   # The Rebellions NPU overlay serves gpt-oss-120b with prefix caching off, so the
   # router drops the prefix-cache-affinity-filter (router/npu.rbln.values.yaml).

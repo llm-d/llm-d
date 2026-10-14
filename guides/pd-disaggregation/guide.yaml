@@ -171,9 +171,14 @@ deploy:
   # so this MONITORING step renders as a plain fence; skip_in: [ci] keeps the
   # README-parsing nightlies from harvesting the export.
   monitoring_values:
-    - when: {MONITORING: ["true"]}
-      skip_in: [ci]
-      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   # The Rebellions NPU decode role serves one API server per data-parallel
   # rank; the router must list every rank port. No nightly covers this
