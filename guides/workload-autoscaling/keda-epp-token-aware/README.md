@@ -351,11 +351,11 @@ Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscale
 
 ## Benchmarking
 
-Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) at `9415d5e1`:
+Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
-cd llm-d-benchmark && git checkout 9415d5e1 && source .venv/bin/activate
+cd llm-d-benchmark && source .venv/bin/activate
 
 SPEC=guides/keda-epp-token-aware                     # P+D
 # SPEC=guides/keda-epp-token-aware-pd-disaggregation # P/D
