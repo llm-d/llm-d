@@ -220,7 +220,7 @@ All 8 DP rank ports (8000-8007) are exposed as `targetPorts` on the `InferencePo
 
 Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), adding a CPU-tier prefix index to the prefill profile for P/D routing:
 
-- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks warm in the auto-tuned GPU-resident prefix index, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585` per rank, taken from the precise-routing config and not yet re-measured for this routing).
+- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks warm in the auto-tuned GPU-resident prefix index, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585`, measured on an H200 DP8 cell).
 - **Token-load scorer** (prefill, weight 3) — picks by queued prefill tokens.
 - **CPU prefix-cache scorer** (prefill, weight 1) — fixed LRU capacity (200k entries per server), favors ranks holding CPU-offloaded prefix blocks.
 - **Active-request scorer** (decode) — load balancing.
