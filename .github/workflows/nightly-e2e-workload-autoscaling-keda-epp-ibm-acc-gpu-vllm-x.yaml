@@ -12,7 +12,7 @@ name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)
 
 on:
   schedule:
-    - cron: '0 5 * * *'  # 05:00 UTC daily (consolidate-status runs after, at 11:00 UTC)
+    - cron: '30 3 * * *'  # 03:30 UTC daily
   workflow_dispatch:
     inputs:
       # decode_pods/prefill_pods/harness/workload are accepted only for

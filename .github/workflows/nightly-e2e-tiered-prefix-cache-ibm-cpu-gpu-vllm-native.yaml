@@ -67,17 +67,18 @@ on:
 #    branches:
 #      - main
 
-  # Scheduled execution temporarily disabled.
-  # schedule:
-  #   - cron: '0 3 * * *'  # 03:00 UTC daily
+  schedule:
+    - cron: '20 2 * * *'  # 02:20 UTC daily (the "lmcache" lane follows at 02:55, same namespace)
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
+  # Shared with the "lmcache" lane: both stand up in the same namespace and helm release,
+  # so they must not overlap. Queue the second run instead of cancelling the first.
   group: nightly-e2e-tiered-prefix-cache-ibm
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   nightly:

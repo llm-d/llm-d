@@ -71,7 +71,7 @@ on:
 #      - main
 
   schedule:
-    - cron: '37 13 * * *'  # 13:37 UTC daily (staggered ~1.5h after the FMA-only nightly at 12:00)
+    - cron: '15 5 * * *'  # 05:15 UTC daily (staggered after the FMA-only nightly at 04:40)
 
 permissions:
   contents: write

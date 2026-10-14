@@ -73,10 +73,13 @@ channels:
     - nightly-e2e-tiered-prefix-cache-amd-cpu-rocm-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-cks-cpu-gpu-vllm-lmcache.yaml
+    - nightly-e2e-tiered-prefix-cache-cks-cpu-gpu-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml
