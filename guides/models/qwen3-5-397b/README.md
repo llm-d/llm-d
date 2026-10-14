@@ -1,4 +1,4 @@
-# Qwen3-Coder-480B on TPU 7x
+# Qwen3.5-397B on TPU 7x
 
 This recipe is optimized for agentic code generation; see the
 [agentic workloads section of the Models overview](../../../docs/well-lit-paths/models/README.md#agentic-workloads)
@@ -11,18 +11,19 @@ against the same workload.
 This guide deploys the optimal llm-d configuration for agentic code-generation workload. The configuration includes multiple llm-d optimizations in terms of routing and KV cache management:
 
 - **Prefix-aware routing** to optimize prefix cache reuse
-- **KV cache offloading** to CPU DRAM to handle multi-turn conversations with long contexts (via KV offloading connector)
+- **KV cache offloading** to host DRAM on the prefill tier (`TOPOLOGY=disaggregated`, Torch TPU Raiden offloading connector) to handle multi-turn conversations with long contexts
 - **Load balancing** to increase cluster-wide accelerator utilization and prevent hot-spotting from bursty request patterns
 
 ## Default Configuration
 
 | Parameter          | Value                                                                                      |
 | ------------------ | ------------------------------------------------------------------------------------------ |
-| Model              | [Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8) |
-| Replicas           | 8                                                                                          |
+| Model              | [Qwen/Qwen3.5-397B-A17B-FP8](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8) |
+| Replicas           | 2 (`unified`) · 1 prefill + 1 decode (`disaggregated`)                                     |
 | Accelerator        | Google TPU 7x (tpu7x)                                                                      |
 | Topology           | 2x2x1                                                                                      |
-| TP size / EP size  | TP=8, EP enabled                                                                           |
+| Parallelism        | `unified`: DP=2 × TP=4, EP · `disaggregated`: prefill PCP=8, decode DP=8, EP               |
+| Model server       | vLLM on Torch TPU (`torch-tpu-vllm` image)                                                 |
 
 ## Supported Accelerators and Model Servers
 
@@ -31,21 +32,24 @@ This guide includes configurations for the following accelerator and model serve
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
-| Google TPU v7x | `tpu` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | GKE only · 8 replicas × 4 chips (`tpu7x` `2x2x1`, TP=8) with CPU KV offloading · `TOPOLOGY=disaggregated` (experimental): 2 prefill + 6 decode |
+| Google TPU v7x | `tpu` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | GKE only · Torch TPU vLLM · `unified`: 2 replicas × 4 chips (`tpu7x` `2x2x1`, DP=2 × TP=4, EP) · `TOPOLOGY=disaggregated`: a DisaggregatedSet with 1 prefill (PCP=8) + 1 decode (DP=8), Raiden P/D transfer and prefill host KV offload; scale to xPyD by raising the role replicas |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-Set `TOPOLOGY` to pick the serving topology: `unified` (default) runs one pool of 8 replicas
-with CPU KV offloading; `disaggregated` is the experimental Prefill/Decode configuration
-(2 prefill + 6 decode, see [Prefill/Decode Disaggregated Results](#prefilldecode-disaggregated-results)).
+Set `TOPOLOGY` to pick the serving topology: `unified` (default) runs one pool of 2 replicas;
+`disaggregated` runs the Torch TPU Raiden Prefill/Decode configuration as a `DisaggregatedSet`
+(1 prefill + 1 decode, prefill host KV offload; the same overlay as the TPU7x row of the
+[P/D disaggregation guide](../../pd-disaggregation/README.md)). Raise a role's `replicas` for xPyD.
 
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 
-- A GKE cluster with a TPU v7x (`tpu7x`, `2x2x1`) node pool large enough for 8 replicas
-  (4 chips each).
+- A GKE cluster with a TPU v7x (`tpu7x`, `2x2x1`) node pool: 2 nodes for `unified`, 2 nodes
+  (one prefill, one decode) for `disaggregated`, 4 chips each. Nodes need a boot disk that
+  fits the 406 GB checkpoint above the kubelet eviction threshold and `roles/artifactregistry.reader`
+  on the Torch TPU image repository.
 
 - Create a [HuggingFace token](../../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -71,14 +75,14 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 <!-- guide:env.static start -->
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export GUIDE_NAME=qwen3-coder-480b
-export NAMESPACE=llm-d-qwen3-coder-480b
+export GUIDE_NAME=qwen3-5-397b
+export NAMESPACE=llm-d-qwen3-5-397b
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_TYPE=tpu # options: tpu
 export MODEL_SERVER=vllm # options: vllm
 export TOPOLOGY=unified # options: unified, disaggregated
-export MODEL=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 # the model both topologies serve
+export MODEL=Qwen/Qwen3.5-397B-A17B-FP8 # the model both topologies serve
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
@@ -138,7 +142,7 @@ kubectl create secret generic llm-d-hf-token \
 
 **Prepare the paths to the `helm` values files** for the `llm-d` router. The P/D disaggregated
 topology uses its own router values
-([`router/qwen3-coder-480b-disagg.values.yaml`](router/qwen3-coder-480b-disagg.values.yaml)):
+([`router/qwen3-5-397b-disagg.values.yaml`](router/qwen3-5-397b-disagg.values.yaml)):
 
 <!-- tabs:start group=topology -->
 <details open>
@@ -180,9 +184,9 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 
 > [!NOTE]
 > **`peakPrefillThroughput` is hardware/model-specific.** The router values set
-> `peakPrefillThroughput: 16444`, calibrated for Qwen3-Coder-480B-FP8 on TPU 7x. If you
+> `peakPrefillThroughput: 16444`, calibrated for Qwen3.5-397B-FP8 on TPU 7x. If you
 > deploy a different model or hardware, measure your own value and update
-> `router/qwen3-coder-480b.values.yaml`. See the shared
+> `router/qwen3-5-397b.values.yaml`. See the shared
 > [router calibration tool](../../recipes/router/calibration/README.md).
 
 **Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
@@ -332,15 +336,18 @@ kubectl logs -n ${NAMESPACE} job/inference-perf -f
 
 > [!TIP]
 > **Tuning Prefill-to-Decode Ratios:**
-> The `vllm-disaggregated` overlay (`TOPOLOGY=disaggregated`) deploys the optimal 2:6 ratio (2 prefillers, 6 decoders). If you want to evaluate different ratios from the benchmarking report (such as 5:3 or 6:2), you can scale the set's roles directly (role 0 is prefill, role 1 is decode):
+> The `vllm-disaggregated` overlay (`TOPOLOGY=disaggregated`) deploys 1 prefill + 1 decode. Each pod derives its Raiden engine ID from its own name, so other ratios are a replica change on the `DisaggregatedSet` roles (role 0 = prefill, role 1 = decode):
 >
 > ```bash
 > kubectl patch disaggregatedset/pd-disagg-tpu -n ${NAMESPACE} --type=json \
->   -p '[{"op": "replace", "path": "/spec/roles/0/spec/replicas", "value": 5},
->        {"op": "replace", "path": "/spec/roles/1/spec/replicas", "value": 3}]'
+>   -p '[{"op": "replace", "path": "/spec/roles/0/spec/replicas", "value": 2},
+>        {"op": "replace", "path": "/spec/roles/1/spec/replicas", "value": 6}]'
 > ```
 
 ## Benchmark Results
+
+> [!WARNING]
+> The numbers below were measured with the previous revision of this guide (`Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`, 8 replicas, JAX `tpu_inference` backend). They are kept as a reference for the workload and the routing effect; results for `Qwen/Qwen3.5-397B-A17B-FP8` on Torch TPU will replace them once the benchmark runs complete.
 
 The results below are with 8 replicas of TPU 7x (2x2x1) on the benchmark workload described above.
 

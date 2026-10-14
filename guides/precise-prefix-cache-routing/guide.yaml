@@ -43,8 +43,8 @@ support:
       engines: {vllm: validated}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29"
-      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM"
+      model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}

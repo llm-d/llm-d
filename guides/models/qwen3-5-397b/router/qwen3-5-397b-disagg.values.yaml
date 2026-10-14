@@ -1,11 +1,11 @@
-## Qwen3-Coder-480B (TPU / P/D-disaggregated) guide overrides for the llm-d router.
+## Qwen3.5-397B (TPU / P/D-disaggregated) guide overrides for the llm-d router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## This deployment serves the agentic code-generation workload on Google TPUs with
 ## prefill/decode disaggregation, so the router runs disagg-aware scheduling profiles
 ## (separate prefill and decode profiles with token-load awareness)
 ## rather than the single default profile used
-## by the non-disaggregated TPU deployment in qwen3-coder-480b.values.yaml.
+## by the non-disaggregated TPU deployment in qwen3-5-397b.values.yaml.
 ##
 ## The `llm-d.ai/guide: agentic-serving` pod selector is kept from the former
 ## agentic-serving guide; it must match the labels set in

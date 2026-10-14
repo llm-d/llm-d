@@ -5,7 +5,7 @@
 ## prefill/decode disaggregation, so the router runs disagg-aware scheduling profiles
 ## (separate prefill and decode profiles with token-load awareness)
 ## rather than the single default profile used
-## by the non-disaggregated Qwen3-Coder-480B TPU deployment.
+## by the non-disaggregated Qwen3.5-397B TPU deployment.
 ##
 ## The plugin config name and the `llm-d.ai/guide: agentic-serving-gpu` pod
 ## selector are kept from the former agentic-serving guide; they must match the
