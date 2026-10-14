@@ -33,7 +33,8 @@ router:
                 discoverPods: true
                 podDiscoveryConfig:
                   socketPort: 5556
-                  replaySocketPort: 5559
+                  # No replaySocketPort: SGLang has no replay buffer, and a
+                  # failed replay dial clears the pod's index entries.
           - type: inflight-load-producer
             parameters:
               prefixMatchInfoProducerName: precise-prefix-cache-producer

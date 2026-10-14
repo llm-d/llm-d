@@ -17,7 +17,7 @@ spec:
             - "--tensor-parallel-size=2"
             - "--block-size=64"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
@@ -29,6 +29,9 @@ spec:
             # socket bound by vLLM (KV_EVENTS_ENDPOINT=tcp://*:5556).
             - containerPort: 5556
               name: kv-events
+              protocol: TCP
+            - containerPort: 5559
+              name: kv-replay
               protocol: TCP
           env:
             - name: HF_TOKEN
@@ -50,6 +53,10 @@ spec:
             # replica can dial each pod's socket independently.
             - name: KV_EVENTS_ENDPOINT
               value: "tcp://*:5556"
+            # Replay buffer: the router asks for buffered events here on connect
+            # and after a sequence gap (podDiscoveryConfig.replaySocketPort).
+            - name: KV_EVENTS_REPLAY_ENDPOINT
+              value: "tcp://*:5559"
             # Disable vLLM usage telemetry — its writes to /.config fail
             # under restricted SecurityContexts (e.g. OpenShift).
             - name: DO_NOT_TRACK

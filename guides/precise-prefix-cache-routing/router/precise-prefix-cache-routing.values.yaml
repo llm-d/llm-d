@@ -17,9 +17,10 @@
 ## Single EPP replica: the token-load-scorer's in-flight token accounting is
 ## local to each EPP process, so active-active HA (replicas: 2) would halve the
 ## per-endpoint load each replica sees and mis-gate the affinity filter. Keep
-## replicas: 1 while this routing config is in use. (The precise KV index itself
-## is HA-safe — each replica converges via pod-discovery — so HA can return if
-## in-flight state becomes shared across replicas.)
+## replicas: 1 while this routing config is in use. (The precise KV index is not
+## HA-safe either: a replica that starts after the pods have warmed misses the
+## prefixes cached before its replay window, so active-active HA also needs a
+## complete index at start, which today means the experimental snapshot option.)
 
 router:
   epp:
@@ -86,8 +87,9 @@ router:
                 # tracing: true
                 podDiscoveryConfig:
                   socketPort: 5556
-                  # Replay buffered events on connect and after a sequence gap
-                  # (vLLM GPU backend binds this ZMQ ROUTER socket).
+                  # Replay buffered events on connect and after a sequence gap.
+                  # Every vLLM overlay binds this ZMQ ROUTER socket
+                  # (KV_EVENTS_REPLAY_ENDPOINT); the SGLang values drop it.
                   replaySocketPort: 5559
                   # Subscribe only to pool members that publish KV events, e.g.
                   # prefill pods in a P/D pool. Empty (default) matches every pod.

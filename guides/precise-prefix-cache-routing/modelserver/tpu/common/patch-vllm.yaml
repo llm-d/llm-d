@@ -13,6 +13,9 @@ spec:
             - containerPort: 5556
               name: kv-events
               protocol: TCP
+            - containerPort: 5559
+              name: kv-replay
+              protocol: TCP
           env:
             - name: NAMESPACE
               valueFrom:
@@ -26,6 +29,10 @@ spec:
               value: "8000"
             - name: KV_EVENTS_ENDPOINT
               value: "tcp://*:5556"
+            # Replay buffer: the router asks for buffered events here on connect
+            # and after a sequence gap (podDiscoveryConfig.replaySocketPort).
+            - name: KV_EVENTS_REPLAY_ENDPOINT
+              value: "tcp://*:5559"
             - name: DO_NOT_TRACK
               value: "1"
             - name: HF_TOKEN
