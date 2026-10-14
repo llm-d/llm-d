@@ -36,7 +36,7 @@ support:
       engines: {vllm: validated, sglang: community}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}

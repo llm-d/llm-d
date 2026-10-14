@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=4) · `CONNECTOR=native`, `VARIANT=cpu` · nightly runs on Spot capacity |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -262,6 +262,17 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver end -->
+
+<details data-when="ACCELERATOR_TYPE=tpu/v6,tpu/v7">
+<summary><b>Google TPU notes</b></summary>
+
+- **v6e host tier is Torch TPU's Raiden store.** `tpu/v6` uses `TPURaidenOffloadingConnector` (`vllm_torchtpu.offload.raiden_connector`, `kv_role: kv_both`, 64 GiB per engine) with the Raiden KV cache manager and unified HBM/host block pool (`TPU_USE_RAIDEN_KV_CACHE_MANAGER=1`, `TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL=1`) instead of vLLM's generic `OffloadingConnector`. Each TP worker pins a 16 GiB staging buffer (`TPU_PREMAPPED_BUFFER_SIZE`) next to the host tier, so the pod requests 900Gi (`ct6e-standard-8t` has 1440 GB); 256Gi is OOMKilled while the `KVCacheStore` is built.
+- **Verifying the host tier.** With the auto-selected fp8 KV cache the v6e HBM pool holds on the order of 10^6 tokens, so the host tier is only read back after real HBM eviction. Watch `vllm:external_prefix_cache_hits_total` on the model server; `prefix_cache_hits_total` alone means the hit came from HBM.
+- **GKE TPU node requirements.** ≥ 200 GB boot disk (100 GB node-auto-provisioning default is evicted during the weight download), `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` under the `OPTIMIZE_UTILIZATION` autoscaler profile, `roles/artifactregistry.reader` for the node service account on the Torch TPU image repository. The Deployment uses `strategy: Recreate` (fixed-size TPU pools).
+- v6e validated 2026-10-12 (`torchtpu-vllm-prod@sha256:a8de2075…` = `nightly-20261006`): a 4.4k-token prompt evicted from HBM was fully restored from host RAM (`external_prefix_cache_hits_total` 0 → 4352).
+
+</details>
+
 
 The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path (the filesystem overlay leaves it unchanged); see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
 

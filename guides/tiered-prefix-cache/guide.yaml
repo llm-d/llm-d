@@ -43,7 +43,7 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}

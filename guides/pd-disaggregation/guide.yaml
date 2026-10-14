@@ -44,7 +44,7 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector"
+      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · `vllm_torchtpu` TPUConnector"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
