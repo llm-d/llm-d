@@ -889,39 +889,35 @@ class RetryTests(unittest.TestCase):
     def _retry(self, plans, collected, retries=2, dry_run=False):
         import run
 
-        cfg = type("Cfg", (), {"dry_run": dry_run, "retries": retries, "levels": (20,),
-                               "workdir": Path(tempfile.gettempdir())})()
-        runs, excludes = [], []
+        cfg = type("Cfg", (), {"dry_run": dry_run, "retries": retries, "levels": (20,)})()
+        runs, drains = [], []
         plans, collected = list(plans), list(collected)
-        patches = {
-            "render_experiment": lambda c, cap, levels, include_async_only, name: Path(name),
-            "run_experiment": lambda c, clone, cli, exp, log_name: runs.append((str(exp), log_name)) or 0,
-            "results_roots": lambda c: {Path("before")},
-            "collect_results": lambda c, exclude=frozenset(): excludes.append(exclude) or collected.pop(0),
-        }
-        saved = {k: getattr(run, k) for k in patches}
+
+        def run_groups(c, cap, clone, cli, sampler, levels, include_async_only, tag=""):
+            runs.append((tuple(levels), include_async_only, tag))
+            return 0, collected.pop(0), [{"part": f"retry{tag}"}]
+
+        saved = run.run_groups
         saved_plan, saved_load = run.analysis.rerun_plan, run.analysis.load_treatment
         try:
-            for k, v in patches.items():
-                setattr(run, k, v)
+            run.run_groups = run_groups
             run.analysis.rerun_plan = lambda levels, records, env: plans.pop(0)
             run.analysis.load_treatment = lambda d: []
-            merged = run.retry_invalid_levels(cfg, 10, Path("clone"), ["cli"], dict(self.OLD))
+            merged = run.retry_invalid_levels(cfg, 10, Path("clone"), ["cli"], dict(self.OLD), "sampler", drains)
         finally:
-            for k, v in saved.items():
-                setattr(run, k, v)
+            run.run_groups = saved
             run.analysis.rerun_plan, run.analysis.load_treatment = saved_plan, saved_load
-        return merged, runs, excludes
+        return merged, runs, drains
 
     def test_nothing_to_rerun(self):
         merged, runs, _ = self._retry([([], False)], [])
         self.assertEqual((merged, runs), (self.OLD, []))
 
     def test_rerun_replaces_a_level_and_stops_when_valid(self):
-        merged, runs, excludes = self._retry([([20], False), ([], False)], [dict(self.NEW)])
+        merged, runs, drains = self._retry([([20], False), ([], False)], [dict(self.NEW)])
         self.assertEqual(merged, {**self.OLD, **self.NEW})
-        self.assertEqual(runs, [("experiment-retry1.yaml", "llmdbenchmark-retry1.log")])
-        self.assertEqual(excludes, [{Path("before")}])   # results that predate the re-run are ignored
+        self.assertEqual(runs, [((20,), False, "-retry1")])
+        self.assertEqual(drains, [{"part": "retry-retry1"}])   # re-runs drain like the first run
 
     def test_incomplete_reruns_keep_the_first_run_until_retries_run_out(self):
         merged, runs, _ = self._retry([([20], False), ([20], False)], [{}, {"baseline_20": "b3"}], retries=2)
@@ -931,6 +927,89 @@ class RetryTests(unittest.TestCase):
     def test_dry_run_never_reruns(self):
         merged, runs, _ = self._retry([], [], dry_run=True)
         self.assertEqual((merged, runs), (self.OLD, []))
+
+
+class RunGroupsTests(unittest.TestCase):
+    """run.run_groups(): one run per part, each after the async backlog drained."""
+
+    def test_parts_in_order_with_a_drain_before_each(self):
+        import run
+
+        events, excludes = [], []
+        per_part = [{"async_only": "o"}, {"baseline_20": "b20", "mixed_20_rt": "r20"}, {"baseline_100": "b100"}]
+        patches = {
+            "wait_for_drain": lambda cfg, sampler, label: events.append(("drain", label)) or {"part": label},
+            "render_experiment": lambda cfg, cap, levels, include_async_only, name:
+                events.append(("render", tuple(levels), include_async_only, name)) or Path(name),
+            "run_experiment": lambda cfg, clone, cli, exp, log_name: events.append(("run", log_name)) or
+                (3 if "level-20" in log_name else 0),
+            "results_roots": lambda cfg: {Path(f"root{len(excludes)}")},
+            "collect_results": lambda cfg, exclude=frozenset(): excludes.append(exclude) or per_part.pop(0),
+        }
+        saved = {k: getattr(run, k) for k in patches}
+        try:
+            for k, v in patches.items():
+                setattr(run, k, v)
+            rc, results, drains = run.run_groups(object(), 10, Path("clone"), ["cli"], "sampler", (20, 100), True)
+        finally:
+            for k, v in saved.items():
+                setattr(run, k, v)
+        self.assertEqual(events, [
+            ("drain", "before async-only"), ("render", (), True, "experiment-async-only.yaml"),
+            ("run", "llmdbenchmark-async-only.log"),
+            ("drain", "before level-20"), ("render", (20,), False, "experiment-level-20.yaml"),
+            ("run", "llmdbenchmark-level-20.log"),
+            ("drain", "before level-100"), ("render", (100,), False, "experiment-level-100.yaml"),
+            ("run", "llmdbenchmark-level-100.log"),
+        ])
+        self.assertEqual(rc, 3)   # the first non-zero exit code
+        self.assertEqual(results, {"async_only": "o", "baseline_20": "b20", "mixed_20_rt": "r20", "baseline_100": "b100"})
+        self.assertEqual(excludes, [{Path("root0")}, {Path("root1")}, {Path("root2")}])  # only each part's new results
+        self.assertEqual([d["part"] for d in drains], ["before async-only", "before level-20", "before level-100"])
+
+
+class WaitForDrainTests(unittest.TestCase):
+    """run.wait_for_drain(): empty queues and an idle model server, for a quiet period."""
+
+    def _wait(self, backlogs, samples, timeout=0.3):
+        import run
+
+        cfg = type("Cfg", (), {"sample_interval": 0.01, "drain_quiet": 0.05, "drain_timeout": timeout})()
+        sampler = type("S", (), {"samples": samples})()
+        backlogs = list(backlogs)
+        saved = run.async_backlog
+        try:
+            run.async_backlog = lambda c: backlogs.pop(0) if len(backlogs) > 1 else backlogs[0]
+            return run.wait_for_drain(cfg, sampler, "before level-80")
+        finally:
+            run.async_backlog = saved
+
+    @staticmethod
+    def _fresh(running, waiting=0.0):
+        import time
+        return a.Sample(t=time.time() + 60, running=running, waiting=waiting)   # always "fresh"
+
+    def test_drained_when_queues_empty_and_gpu_idle(self):
+        rec = self._wait([0], [self._fresh(0.0)])
+        self.assertTrue(rec["drained"])
+        self.assertEqual(rec["part"], "before level-80")
+
+    def test_waits_for_the_queue_then_drains(self):
+        rec = self._wait([5, 3, 0], [self._fresh(0.0)])
+        self.assertTrue(rec["drained"])
+
+    def test_times_out_while_requests_are_queued_or_running(self):
+        rec = self._wait([4], [self._fresh(0.0)], timeout=0.1)
+        self.assertFalse(rec["drained"])
+        self.assertEqual(rec["queued"], 4)
+        rec = self._wait([0], [self._fresh(2.0, 1.0)], timeout=0.1)
+        self.assertEqual((rec["drained"], rec["vllm_busy"]), (False, 3.0))
+
+    def test_a_stale_or_missing_reading_is_not_trusted(self):
+        rec = self._wait([0], [a.Sample(t=1.0, running=0.0)], timeout=0.1)   # from long ago
+        self.assertFalse(rec["drained"])
+        self.assertFalse(self._wait([0], [], timeout=0.1)["drained"])
+        self.assertFalse(self._wait([None], [self._fresh(0.0)], timeout=0.1)["drained"])  # Redis unreadable
 
 
 class MainExitCodeTests(unittest.TestCase):
@@ -963,9 +1042,10 @@ class MainExitCodeTests(unittest.TestCase):
         patches = {
             "preflight": preflight, "discover_model": lambda cfg: "m", "detect_capacity": lambda cfg: 10,
             "Sampler": FakeSampler, "install_cli": lambda cfg: (Path("clone"), ["cli"]),
-            "check_profiles": lambda clone: None, "render_experiment": lambda cfg, cap: Path("exp.yaml"),
-            "run_experiment": lambda cfg, clone, cli, exp: 0, "collect_results": lambda cfg: dict(results),
-            "retry_invalid_levels": lambda cfg, cap, clone, cli, res: res,
+            "check_profiles": lambda clone: None,
+            "run_groups": lambda cfg, cap, clone, cli, sampler, levels, ao, tag="": (0, dict(results), []),
+            "collect_results": lambda cfg, exclude=frozenset(): dict(results),
+            "retry_invalid_levels": lambda cfg, cap, clone, cli, res, sampler=None, drains=None: res,
             "analyze": lambda cfg, cap, res, samples, epp: ({"checks": [], "observations": []}, list(checks)),
             "write_outputs": lambda cfg, report, *rest, **kw: written.append(report),
         }

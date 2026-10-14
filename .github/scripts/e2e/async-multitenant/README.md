@@ -32,9 +32,11 @@ inference-perf harness pods ──HTTP──> llm-d-coordinator:8080 ──> llm
 
 ## What runs
 
-`run.py` installs the llm-d-benchmark CLI on the runner and executes one
-`llmdbenchmark run --endpoint-url` experiment (`experiment.py` renders it) with
-concurrent treatment groups:
+`run.py` installs the llm-d-benchmark CLI on the runner and executes an
+experiment (`experiment.py` renders it) of concurrent treatment groups, as one
+`llmdbenchmark run --endpoint-url` per part: async-only, then each level's
+baseline and mixed groups. Before each part it waits for the previous part's
+async work to drain (see below):
 
 | Group | Members | Purpose |
 | --- | --- | --- |
@@ -50,8 +52,18 @@ async member is a constant-rate open-loop stage far above capacity with a
 client timeout of `max(20, 4 x SERVICE_S)` seconds: undispatched requests are cancelled when the client gives up
 (verified: llm-d-async never dispatches them even after claiming them from
 Redis), so every async stage lasts `duration + timeout` seconds whatever the
-realtime level, and leaves no backlog behind. The coordinator queues dispatch
+realtime level. The coordinator queues dispatch
 from their own 16-worker llm-d-async pool so async alone can exceed `C`.
+
+An async member's queued and in-flight requests can outlive it: llm-d-async
+notices a cancellation within about a second, and a longer `ASYNC_TIMEOUT`
+leaves a larger backlog. So before each part `run.py` waits until the guide's
+team queues in Redis are empty and the sampler's latest vLLM reading shows
+nothing running or waiting, for `DRAIN_QUIET_S` in a row (`DRAIN_TIMEOUT_S` at
+most; the run then continues and `report.json`'s `drains` records it). Without
+this, a level's realtime-only baseline could run against the previous level's
+leftover async work, which inflates the baseline and loosens that level's
+bounds.
 
 The two members of a mixed group can start minutes apart when their pods land
 on freshly provisioned nodes. The async member is therefore listed first and
@@ -142,6 +154,7 @@ eviction round trip (up to about 0.5 s on H100s).
 | `START_SKEW_S` | `60` | how much later than the async pod the realtime pod may start and still run inside the backlog (use 180 on GKE Autopilot, where each harness pod may get a new node) |
 | `RETRIES` | `1` | re-runs of levels whose comparison came back unusable (0 disables) |
 | `WAIT_TIMEOUT` | `900` | seconds the CLI waits for a treatment before giving up (cuts off a hung client) |
+| `DRAIN_TIMEOUT_S` / `DRAIN_QUIET_S` | `600` / `10` | before each part: the longest wait for the async backlog to drain, and how long the queues and vLLM must stay idle to count as drained |
 | `WARMUP_S` | `15` | seconds trimmed from the front of every window |
 | `WORKDIR` | `/tmp/amt` | CLI clone, workspace and rendered experiment |
 | `RESULTS_DIR` | `/tmp/pod-logs-$GUIDE_NAME` | where `report.json` and results are copied (the reusable uploads this directory) |
@@ -199,6 +212,6 @@ python3 -m unittest discover -s .github/scripts/e2e/async-multitenant -p 'test_*
 ## Artifacts
 
 `$RESULTS_DIR/report.json` (summaries, ratios, checks), `llmdbenchmark.log`
-(plus `llmdbenchmark-retry<N>.log` when a level was re-run), `experiment.yaml`, `epp-metrics.txt`, `coordinator.log`, and a copy of every
+(one `llmdbenchmark-<part>.log` per part, plus `-retry<N>` ones when a level was re-run), `experiment-<part>.yaml`, `epp-metrics.txt`, `coordinator.log`, and a copy of every
 treatment's results directory. In CI the run's step summary shows the
 per-level table and the check list.
