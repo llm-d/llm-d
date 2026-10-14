@@ -22,9 +22,9 @@ A TPU chip puts most of its silicon into a few large matrix units and relies on 
 * **ICI (inter-chip interconnect)**: direct chip-to-chip links forming a torus. Chips joined by ICI form a **slice**, the unit you schedule.
 * **Host**: the CPU VM the chips attach to over PCIe. On GKE it is the node, and its DRAM can hold offloaded KV cache.
 
-![TPU7x chip: two chiplets, each with a TensorCore, two SparseCores and 96 GB of HBM, joined by a die-to-die ICI link](tpu7x-chip.png)
+![TPU7x chip: two chiplets, each with a TensorCore, two SparseCores and 96 GB of HBM, joined by a die-to-die ICI link](tpu7x-chip.svg)
 
-*TPU7x (Ironwood) chip. Source: [TPU7x docs](https://cloud.google.com/tpu/docs/tpu7x).*
+*TPU7x (Ironwood) chip, simplified. Figures from the [TPU7x docs](https://cloud.google.com/tpu/docs/tpu7x).*
 
 ### Chip, device, slice
 
@@ -80,7 +80,7 @@ The request path is open source from the router down to the compiler; GKE is the
 | Framework | **Torch TPU** (native PyTorch on TPU) · [JAX](https://github.com/jax-ml/jax) · [Torchax](https://github.com/google/torchax) · Pallas TPU kernels |
 | Compiler | [OpenXLA](https://github.com/openxla/xla) |
 
-![Serving stack on TPU: llm-d router and gateway, Kubernetes orchestration, vLLM on Torch TPU, XLA](serving-stack.png)
+![Serving stack on TPU: llm-d router and gateway, Kubernetes orchestration, vLLM on Torch TPU, XLA](serving-stack.svg)
 
 Each layer helps improve performance (throughput, latency, cost) for a different part of the request path: the router through placement and cache affinity, the engine through batching and kernels, the compiler through fused TPU programs.
 
@@ -140,7 +140,7 @@ Learn more: [Plan TPUs in GKE](https://cloud.google.com/kubernetes-engine/docs/c
 
 llm-d's router doesn't depend on the accelerator, so TPU and GPU pools can share one Gateway:
 
-![One Gateway with an HTTPRoute splitting traffic to a GPU InferencePool and a TPU InferencePool, each with its own EPP](tpu-gpu-pools.png)
+![One Gateway with an HTTPRoute splitting traffic to a GPU InferencePool and a TPU InferencePool, each with its own EPP](tpu-gpu-pools.svg)
 
 * **One `InferencePool` per accelerator.** Each EPP balances load across its own pool. Images, parallelism and P/D pairs differ by accelerator, and KV cache doesn't move between them.
 * **HTTPRoute weights split traffic.** Shifting traffic is a weight change, not automatic spillover: one pool's EPP can't see the other pool's capacity.
