@@ -300,7 +300,11 @@ What to expect: all 200 requests return HTTP 200. The training server reports `t
 
 **With `MONITORING=true`, compare the router's predicted and actual TTFT histograms:**
 
-<!-- guide:verify.tests.router_metrics start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:verify.tests.router_metrics.standard start -->
 ```bash
 # only when MONITORING=true:
 # Actual vs. predicted TTFT histograms of the router, read through the
@@ -308,7 +312,32 @@ What to expect: all 200 requests return HTTP 200. The training server reports `t
 kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
   | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
 ```
-<!-- guide:verify.tests.router_metrics end -->
+<!-- guide:verify.tests.router_metrics.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:verify.tests.router_metrics.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true:
+# Actual vs. predicted TTFT histograms of the router, authenticated
+# with the GMP metrics-reader secret
+TOKEN=$(kubectl get secret ${GUIDE_NAME}-metrics-reader-secret -n ${NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
+kubectl run metrics-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="GUIDE_NAME=${GUIDE_NAME}" \
+  --env="TOKEN=${TOKEN}" \
+  -- /bin/sh -c 'curl -sS -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics"' \
+  | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.router_metrics.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 `llm_d_epp_request_predicted_ttft_seconds_count` is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for the requests it routed. If it stays at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#observability--troubleshooting).
 

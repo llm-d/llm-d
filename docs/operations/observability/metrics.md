@@ -20,13 +20,13 @@ This page covers how to scrape metrics from an llm-d deployment into Prometheus 
 
 ## Step 1: Scrape Model Server Metrics
 
-Model server metrics are enabled by default (exposed on port `8000` at `/metrics`).
+Model server metrics are enabled by default on port `8000` (at `/metrics` for **vLLM** and **SGLang**, and at `/prometheus/metrics` for **TensorRT-LLM**).
 
 <!-- tabs:start group=monitoring -->
 <details open>
 <summary><b>OSS Prometheus / OpenShift</b></summary>
 
-Apply the Kustomize monitoring component to create `PodMonitor` (`monitoring.coreos.com/v1`) resources:
+Apply the Kustomize monitoring component to create `PodMonitor` (`monitoring.coreos.com/v1`) resources for `/metrics` (vLLM and SGLang):
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/recipes/modelserver/components/monitoring
@@ -40,7 +40,7 @@ components:
   # - ../../../recipes/modelserver/components/monitoring-pd  # add for prefill/decode disaggregation
 ```
 
-See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details.
+See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details (for TensorRT-LLM, set `path: /prometheus/metrics` on the `PodMonitor` endpoint).
 
 Verify the `PodMonitor` resources exist:
 
@@ -48,19 +48,18 @@ Verify the `PodMonitor` resources exist:
 kubectl get podmonitors -n ${NAMESPACE}
 ```
 
-Expected output:
+Expected output (`prefill` also appears when `monitoring-pd` is applied):
 
 ```text
 NAME                    AGE
 decode                  5m
-prefill                 5m
 ```
 
 </details>
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-When [GKE automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) is enabled (`--auto-monitoring-scope=ALL`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)), GKE automatically detects model server workloads (including **vLLM** and **SGLang**) and provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources labeled `source: gke-auto-monitoring` in your workload namespace. You do **not** need to manually create `PodMonitor` resources or apply the Kustomize monitoring component.
+When [GKE automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) is enabled (`--auto-monitoring-scope=ALL`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)), GKE automatically detects **vLLM** and **SGLang** model server workloads and provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources labeled `source: gke-auto-monitoring` in your workload namespace. You do **not** need to manually create `PodMonitor` resources or apply the Kustomize monitoring component for vLLM or SGLang.
 
 Verify the auto-generated `PodMonitoring` resource in your namespace:
 
@@ -73,6 +72,25 @@ Expected output:
 ```text
 NAME                                                                     AGE
 gke-ac-9b1b9035d7cd5d78ca0d37904b667bddb67b31c156d4822687e8c3e1725f0947   1m
+```
+
+For **TensorRT-LLM** (`trtllm-serve`), which exposes Prometheus metrics at `/prometheus/metrics` rather than `/metrics`, apply a `PodMonitoring` resource targeting `/prometheus/metrics`:
+
+```yaml
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: trtllm-decode
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/role: decode
+  endpoints:
+    - port: http
+      path: /prometheus/metrics
+      interval: 15s
 ```
 
 </details>
@@ -123,7 +141,7 @@ optimized-baseline   1m
 </details>
 <!-- tabs:end -->
 
-## Step 3: Query Metrics
+## Step 3: Query Metrics in Prometheus
 
 <!-- tabs:start group=monitoring -->
 <details open>

@@ -348,7 +348,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+For **vLLM** and **SGLang**, no manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers. For **TensorRT-LLM** (`MODEL_SERVER=trtllm`), which exposes metrics at `/prometheus/metrics`, apply a `PodMonitoring` resource targeting `/prometheus/metrics` (see [Collect Metrics](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics)).
 
 </details>
 <!-- tabs:end -->

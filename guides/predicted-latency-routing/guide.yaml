@@ -180,13 +180,29 @@ verify:
           kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8001/proxy/status"; echo
     router_metrics:
       # The router's /metrics endpoint requires authentication unless the
-      # monitoring values (MONITORING=true) are applied.
-      - when: {MONITORING: ["true"]}
-        run: |
-          # Actual vs. predicted TTFT histograms of the router, read through the
-          # API server service proxy
-          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
-            | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
+      # standard monitoring values (MONITORING=true) are applied; on GKE GMP,
+      # authenticate with the metrics-reader token secret created by the chart.
+      standard:
+        - when: {MONITORING: ["true"]}
+          run: |
+            # Actual vs. predicted TTFT histograms of the router, read through the
+            # API server service proxy
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
+              | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
+      gke:
+        - when: {MONITORING: ["true"]}
+          skip_in: [ci]
+          run: |
+            # Actual vs. predicted TTFT histograms of the router, authenticated
+            # with the GMP metrics-reader secret
+            TOKEN=$(kubectl get secret ${GUIDE_NAME}-metrics-reader-secret -n ${NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)
+            kubectl run metrics-test --rm -i --restart=Never \
+              --image=${CURL_TEST_IMAGE} \
+              --namespace="${NAMESPACE}" \
+              --env="GUIDE_NAME=${GUIDE_NAME}" \
+              --env="TOKEN=${TOKEN}" \
+              -- /bin/sh -c 'curl -sS -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics"' \
+              | grep -E '^llm_d_epp_request_(predicted_)?ttft_seconds_count' || true
     slo_request:
       # skip_in ci: SLO_AWARE is not a variant variable (see deploy.router_values).
       - when: {SLO_AWARE: ["true"]}

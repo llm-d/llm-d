@@ -65,7 +65,7 @@ To use GMP as a Grafana data source, follow the [GMP Grafana integration guide](
 ## Manual ServiceMonitor Setup (Fallback)
 
 > [!NOTE]
-> **The recommended path is the llm-d helm charts**, which create `ServiceMonitor` or GMP `PodMonitoring` resources automatically when you include [`monitoring.values.yaml` or `monitoring-gke.values.yaml`](../../../guides/recipes/router/README.md#enable-prometheus-monitoring-optional). Skip this section if you deployed that way.
+> **The recommended path is the llm-d helm charts and Kustomize components** (see [Collect Metrics](./metrics.md)), which create EPP scraping resources (`ServiceMonitor` or GMP `PodMonitoring`) when you include [`monitoring.values.yaml` or `monitoring-gke.values.yaml`](../../../guides/recipes/router/README.md#enable-prometheus-monitoring-optional) and model-server `PodMonitor` resources via the Kustomize monitoring component (or automatically on GKE via automatic application monitoring). Skip this section if you deployed that way.
 
 Use this manual setup **only as a fallback** for workloads deployed outside the llm-d helm charts — e.g. CRD, KServe, or RHAII — where `ServiceMonitor` resources are not created for you. In that case, create them manually as shown below.
 
