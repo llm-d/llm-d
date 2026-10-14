@@ -163,6 +163,8 @@ spec:
                       BLOCK_SIZE_ARGS="--block-size ${KV_BLOCK_SIZE}"
                     fi
 
+                    # --enable-scale-out serves /v1/*/render for the wide-ep-render
+                    # Service used by precise routing.
                     exec vllm serve $MTP_ARGS --kv-cache-dtype fp8 \
                       zai-org/GLM-5.2-FP8 \
                       --port 8000 \
@@ -181,6 +183,7 @@ spec:
                       --max-num-batched-tokens 2048 \
                       --data-parallel-start-rank $START_RANK \
                       --kv_transfer_config "$KV_TRANSFER_CONFIG" \
+                      --enable-scale-out \
                       $KV_EVENTS_ARGS $BLOCK_SIZE_ARGS \
                       --moe-backend deep_gemm \
                       --all2all-backend deepep_high_throughput \
