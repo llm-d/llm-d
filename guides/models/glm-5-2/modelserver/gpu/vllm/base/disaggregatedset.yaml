@@ -183,7 +183,10 @@ spec:
                       --kv_transfer_config "$KV_TRANSFER_CONFIG" \
                       $KV_EVENTS_ARGS $BLOCK_SIZE_ARGS \
                       --moe-backend deep_gemm \
-                      --all2all-backend deepep_high_throughput
+                      --all2all-backend deepep_high_throughput \
+                      --reasoning-parser glm45 \
+                      --tool-call-parser glm47 \
+                      --enable-auto-tool-choice
                 env:
                   - name: POD_IP
                     valueFrom:

@@ -1,5 +1,8 @@
 # Multi-Tenant Async Processing — Quota, Priority & Saturation
 
+[![E2E eviction (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml)
+[![E2E holdback (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml)
+
 An advanced [Async Processor](https://github.com/llm-d/llm-d-async) scenario built on the
 [asynchronous-processing](../README.md) guide, across two dimensions — **team × tier** — for one model served by one llm-d Router
 `InferencePool`. Each **team** gets a per-team quota (reserved vs. overflow) and a priority **tier**; the
@@ -88,7 +91,7 @@ When llm-d Router is deployed with Flow Control enabled (`featureGates: [flowCon
 - **Priority Holdback (`priority-holdback-policy`, in this guide's `flow-control-holdback.yaml`):** As the pool saturates, each lower priority band is admitted only up to a ceiling below full capacity, so headroom stays free for higher-priority traffic. Nothing already running is cancelled. See [Protecting realtime traffic](#protecting-realtime-traffic).
 - **In-Flight Eviction (`enableEviction: true`, the default in this guide's `flow-control-evictable.yaml`):** When eviction is enabled for Flow Control, only **negative-priority in-flight requests** (`priority < 0`: `overflow-async` at `-5` and `overflow-batch` at `-10`, lowest priority first) can be canceled and evicted after already being sent to the model server.
   While standard gated dispatch only holds back newly arriving work, in-flight eviction actively reclaims occupied GPU compute and KV cache from sheddable background requests when higher-priority traffic is blocked by pool saturation. Evicted requests are retried by `llm-d-async` and redo their generation. See [Protecting realtime traffic](#protecting-realtime-traffic).
-- For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](https://llm-d.ai/docs/architecture/router/epp.md/flow-control).
+- For detailed architecture, lifecycle, and policy plugins, see the [Flow Control Documentation](../../../../docs/architecture/router/flow-control.md).
 
 #### With Flow Control OFF (Baseline Router with Saturation Detection)
 
@@ -159,6 +162,19 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
   the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
   parallelism 2).
 
+### Get the guide
+
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the manifests, Helm values, and Kustomize overlays it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
+
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
+
 Then set this guide's environment (on top of the base guide's variables). `GPUS`, `FLOW_CONTROL` and
 `QUEUE_BACKEND` select the alternatives described in the steps below:
 
@@ -167,11 +183,13 @@ Then set this guide's environment (on top of the base guide's variables). `GPUS`
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 export NAMESPACE=llm-d-async
-export ASYNC_VERSION=v0.10.0 # llm-d-async release (supports lane_objectives & tier-priority)
+export ASYNC_VERSION=v0.11.0 # llm-d-async release (supports lane_objectives & tier-priority)
 export INFRA_PROVIDER=base # options: base, gke; model server overlay variant
 export GPUS=2 # options: 2, 1; GPUs for the model server; 1 serves Qwen/Qwen3-8B instead
 export FLOW_CONTROL=evictable # options: evictable, holdback; router values: in-flight eviction (recommended), or priority holdback
 export QUEUE_BACKEND=redis # options: redis, pubsub
+export MONITORING=false # options: false, true; router EPP ServiceMonitor; needs the monitoring stack, required for Scenarios C and D
+export MONITORING_VALUES=
 export POOL_NAME=llm-d-router # constant: the router release and its InferencePool (objectives, PodMonitor, saturation gates)
 export MODEL=Qwen/Qwen3-32B # served model name (goes in payload.model)
 export PROM_URL=http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090 # Scenarios C and D only: the Prometheus the saturation gates read
@@ -295,11 +313,25 @@ selectors differ.
 </details>
 
 > [!TIP]
-> **Prometheus and Grafana:** If you do not already have Prometheus running, deploy the standard stack using the central [Observability Setup Guide](../../../../docs/operations/observability/setup.md) (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
+> **Prometheus and Grafana:** Scenarios C and D and the [Observability](#observability) section read
+> Prometheus. If you plan to run them, deploy the standard stack now using the central
+> [Observability Setup Guide](../../../../docs/operations/observability/setup.md)
+> (`${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh`) and `export MONITORING=true`
+> before step 2, so the router is installed with its EPP `ServiceMonitor`. With the default `MONITORING=false`
+> the router installs on a cluster without the Prometheus Operator; you can add the scrape later, as shown in
+> [Observability](#observability). On GKE, you can also leverage [Google Managed Prometheus (GMP)](#observability).
 
 ### 2. Configure llm-d-router and Apply InferenceObjectives
 
-Deploy llm-d Router configured with Flow Control and in-flight eviction, and apply the 6 lane `InferenceObjective`s:
+Deploy llm-d Router configured with Flow Control and in-flight eviction, and apply the 6 lane `InferenceObjective`s.
+With `MONITORING=true`, the install also layers the router monitoring values that create the EPP `ServiceMonitor`:
+
+<!-- guide:deploy.monitoring_values start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+<!-- guide:deploy.monitoring_values end -->
 
 <!-- guide:deploy.router start -->
 ```bash
@@ -310,6 +342,7 @@ kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/objectives
 helm upgrade --install ${POOL_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    ${MONITORING_VALUES} \
     -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
     ${EXTRA_ROUTER_HELM_ARGS} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
@@ -723,7 +756,7 @@ kubectl rollout status deploy/llm-d-async -n ${NAMESPACE}
 The inner `prometheus-saturation` gate queries the Prometheus server (`${PROM_URL}`) for the metric `llm_d_epp_flow_control_pool_saturation` exported by llm-d Router's EPP `/metrics` endpoint.
 
 > [!IMPORTANT]
-> **Router Metrics Scraping:** both router values files under `values/router/` configure `router.monitoring.prometheus.enabled: true`, which automatically deploys `ServiceMonitor/llm-d-router-epp-monitor` when the router chart is installed. This ensures Prometheus actively scrapes `llm_d_epp_flow_control_pool_saturation`. Without this metric in Prometheus, the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), preventing the gate from ever closing under saturation.
+> **Router Metrics Scraping:** the EPP's `ServiceMonitor/llm-d-router-epp-monitor` exists only if the router was installed with `MONITORING=true` (step 2). Prometheus must be scraping `llm_d_epp_flow_control_pool_saturation`; otherwise the gate receives empty data and silently falls back to `fallback: 1.0` (budget 1.0, wide open), and never closes under saturation. If you installed the router with the default `MONITORING=false`, add the scrape with the router upgrade in [Observability](#observability) before running this scenario.
 
 Verify that the metric is being scraped and that the gate evaluates metrics live:
 
@@ -755,8 +788,21 @@ to install the standard Prometheus and Grafana stack:
 # 1. Install standard Prometheus + Grafana stack
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
-# 2. Scrape the vLLM model server (llm-d Router EPP is scraped automatically via its Helm chart ServiceMonitor)
+# 2. Scrape the vLLM model server
 kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/monitoring
+
+# 3. Scrape the llm-d Router EPP. Skip this if step 2 ran with MONITORING=true; otherwise
+#    re-run the router install with the monitoring values layered in, which adds the
+#    ServiceMonitor without touching the flow-control configuration:
+export MONITORING=true
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+helm upgrade --install ${POOL_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    ${MONITORING_VALUES} \
+    -f ${MT}/values/router/flow-control-${FLOW_CONTROL}.yaml \
+    ${EXTRA_ROUTER_HELM_ARGS} \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
 Open Grafana (`admin`/`admin` in the demo values) and run the Scenario-C load; the **Async Processor**
@@ -806,11 +852,33 @@ The gate-metric panels need an image newer than v0.7.2. GMP / Monarch lags real 
 is bang-bang on that timescale; the self-hosted Prometheus path reacts within one scrape.
 </details>
 
+## Nightly test
+
+Two GKE nightlies deploy this guide from its [`guide.yaml`](guide.yaml), including the optional coordinator
+from step 4, through [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) (`scripts/guide.py emit`),
+one for each router values file:
+
+- `nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x` (21:00 UTC): the default, in-flight eviction.
+  Its TTFT allowance at 100 % realtime load is wider (`AMT_LEVEL_100_TTFT_ABS=0.6`): with the pool full of
+  realtime work, a realtime request that finds an async request in its slot waits for an eviction, which adds
+  up to about half a second to the slowest requests.
+- `nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (20:00 UTC): priority holdback (`FLOW_CONTROL=holdback`).
+
+Each benchmarks realtime traffic (the coordinator's `passthrough` mode) with and without a queued llm-d-async
+backlog (`wait` mode) at 20/80/90/100 % of the router's configured capacity. What the nightlies measure and how
+their bounds are chosen is documented with the validator in
+[`.github/scripts/e2e/async-multitenant/`](../../../../.github/scripts/e2e/async-multitenant/README.md).
+
+Both lanes rely on the router protecting realtime traffic (see
+[Protecting realtime traffic](#protecting-realtime-traffic)): without holdback or eviction, async work
+admitted up to and past the router's capacity makes realtime requests wait behind it and the isolation
+checks fail (measurements in [llm-d-async#468](https://github.com/llm-d/llm-d-async/issues/468)).
+
 ## Status
 
-**Tier 2 (Deployable)**, per the [guide policy](../../../GUIDES-POLICY.md).
+**Tier 3 (Validated)**, per the [guide policy](../../../GUIDES-POLICY.md).
 Reference environment: GKE, two NVIDIA H100s, vLLM, `Qwen/Qwen3-32B`.
-Gaps to Tier 3: no nightly end-to-end job.
+Gaps to Tier 4: no reviewed benchmark results for the guide yet.
 
 ## Notes & gotchas
 

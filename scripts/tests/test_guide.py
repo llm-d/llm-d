@@ -286,6 +286,16 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
 # --------------------------------------------------------------------------
 
 NIGHTLY_SCRIPT = GUIDES_DIR / "flow-control" / "scripts" / "nightly-deploy-gke.sh"
+NIGHTLY_WORKFLOWS = {
+    ("gpu", "gke"): (
+        REPO_ROOT
+        / ".github/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml"
+    ),
+    ("amd", "base"): (
+        REPO_ROOT
+        / ".github/workflows/nightly-e2e-flow-control-amd-ci-acc-rocm-vllm-x.yaml"
+    ),
+}
 
 NIGHTLY_VARS = {
     "NAMESPACE": "llm-d-nightly-flow-control-gke-gpu",
@@ -352,6 +362,21 @@ def test_nightly_wrapper_vars_match_this_contract(flow_control):
     declared = flow_control.data["env"]["static"]
     for name in names:
         assert name in declared, f"{name} is not declared in guide.yaml env.static"
+
+
+@pytest.mark.parametrize(("accelerator", "provider"), NIGHTLY_WORKFLOWS)
+def test_nightly_wrapper_selects_workflow_modelserver_overlay(accelerator, provider):
+    script = NIGHTLY_SCRIPT.read_text()
+    workflow = NIGHTLY_WORKFLOWS[(accelerator, provider)].read_text()
+
+    assert ': "${ACCELERATOR_TYPE:?' in script
+    assert ': "${INFRA_PROVIDER:?' in script
+    assert "modelserver/${ACCELERATOR_TYPE}/vllm/${INFRA_PROVIDER}/" in script
+    assert "model-cache/model-cache-pvc.yaml" not in script
+    assert "maxConcurrency: 4" in script
+    assert "replicas: 1" in script
+    assert f"ACCELERATOR_TYPE={accelerator} INFRA_PROVIDER={provider}" in workflow
+    assert "bash guides/flow-control/scripts/nightly-deploy-gke.sh" in workflow
 
 
 def test_nightly_modelserver_mirror_matches_guide(flow_control):

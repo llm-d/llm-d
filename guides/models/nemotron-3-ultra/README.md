@@ -248,9 +248,10 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Shared System Prompt** | Constant | - | - | 3,000 tokens | - | Common base instructions, libraries, and API schemas shared across all agent instances. Highly cacheable. |
 | **Dynamic System Prompt** | Lognormal | 10,000 | 990,000 | 160,000 tokens | 233,600 | Repository context, file indexes, and user-specific code context. Large and variable context. |
-| **Turns per Conversation** | Lognormal | 1 |3,000 | 540 turns | 48,600 | The depth of the agentic reasoning/conversational loop. Multi-turn interactivetions require sustaining long-lived sessions. |
+| **Turns per Conversation** | Lognormal | 1 | 3,000 | 540 turns | 48,600 | The depth of the agentic reasoning/conversational loop. Multi-turn interactions require sustaining long-lived sessions. |
 | **Input Tokens per Turn** | Lognormal | 100 | 10,000 | 1,500 tokens | 1,200 | Ongoing prompt extensions (e.g., test logs, user follow-ups, modified code blocks) during conversation. |
 | **Output Tokens per Turn** | Lognormal | 50 | 10,000 | 425 tokens | 825 | Model generations per turn, which are generally smaller than inputs but can spike when generating large files. |
+| **Tool Call Latency** | Lognormal | 1 sec | 100 sec | 15 sec | 55 sec | Simulated delay for external tool execution (e.g., running tests, linting, or shell commands) between turns. |
 
 ### 1. Prepare the Benchmarking Suite
 
@@ -263,13 +264,7 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 
 - Prepare HuggingFace token secret `llm-d-hf-token` in the namespace.
 
-### 2. Download the Workload Template
-
-```bash
-curl -LJO "https://raw.githubusercontent.com/llm-d/llm-d/main/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml"
-```
-
-### 3. Execute Benchmark
+### 2. Execute Benchmark
 
 The request rate and workload shape are fixed in the template, so only the endpoint needs to be
 resolved before rendering:
@@ -283,7 +278,7 @@ export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
 export SEED=$((7 + CONCURRENCY_LEVEL))
 
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-envsubst < guide.yaml > config.yaml
+envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml > config.yaml
 ./run_only.sh -c config.yaml -o ./results
 ```
 

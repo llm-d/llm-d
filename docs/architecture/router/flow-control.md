@@ -284,8 +284,8 @@ sequenceDiagram
     end
     EPP_Q-->>EPP_Adm: Return (Outcome: Dispatched)
 
-    EPP_Adm->>EPP_Sched: Schedule()
-    EPP_Sched-->>EPP_Adm: Selected Endpoint
+    EPP_Adm->>EPP_Scheduler: Schedule()
+    EPP_Scheduler-->>EPP_Adm: Selected Endpoint
     EPP_Adm-->>Proxy: ExtProc Response (with endpoint)
     Proxy->>Endpoint: Route to Model Server
 ```

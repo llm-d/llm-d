@@ -74,11 +74,11 @@ The aggregated topology runs on every accelerator above; E/PD and E/P/D run on N
 
 | `TOPOLOGY` | `ACCELERATOR_TYPE` | `INFRA_PROVIDER` | Overlay |
 | --- | --- | --- | --- |
-| `aggregation` | `gpu` | `base`, `gke` | [`aggregation/modelserver/gpu/vllm/`](./aggregation/modelserver/gpu/vllm/) |
-| `aggregation` | `xpu` | `base` | [`aggregation/modelserver/xpu/vllm/base/`](./aggregation/modelserver/xpu/vllm/base/) |
-| `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/`](./aggregation/modelserver/tpu/v7/vllm/gke/) |
-| `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/`](./e-disaggregation/modelserver/gpu/vllm/e-pd/) |
-| `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/) |
+| `aggregation` | `gpu` | `base`, `gke` | [`aggregation/modelserver/gpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/gpu/vllm/base/kustomization.yaml) |
+| `aggregation` | `xpu` | `base` | [`aggregation/modelserver/xpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/xpu/vllm/base/kustomization.yaml) |
+| `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml`](./aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml) |
+| `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml) |
+| `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml) |
 
 The replica counts are sized for the reference hardware in the Notes column (16 GPUs for aggregated serving on NVIDIA GPUs, 20 for E/PD and E/P/D). To try the guide on a smaller cluster, lower `replicas` in the overlay's Deployments, keeping at least one pod per role.
 
@@ -98,7 +98,7 @@ The `aggregation/modelserver/tpu/v7/vllm/gemma4/` overlay serves `google/gemma-4
 
 - Ensure your cluster has enough accelerators for your configuration (see the Notes column above; NVIDIA GPUs with 141 GB of HBM, e.g. H200, for the reference sizing).
 
-- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma).
+- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma/kustomization.yaml).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 

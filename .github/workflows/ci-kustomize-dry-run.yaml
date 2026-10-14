@@ -140,31 +140,39 @@ jobs:
       - name: Dry-run router (precise-prefix-cache-routing)
         run: |
           CHART_VERSION=v0
-          echo ""
-          echo "========================================"
-          echo "precise-prefix-cache-routing: router (EPP, render via Service)"
-          echo "========================================"
-          echo "--- helm template ---"
-          if ! helm template precise-prefix-cache-routing \
-            "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
-            -f guides/recipes/router/base.values.yaml \
-            -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
-            --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
-            echo "FAIL: helm template failed"
-            exit 1
-          fi
-          echo "--- kubectl apply --dry-run=server ---"
-          if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-            echo "PASS: precise-prefix-cache-routing / router (EPP, render via Service)"
-          else
-            echo "FAIL: precise-prefix-cache-routing / router (EPP, render via Service)"
-            exit 1
-          fi
+          failed=0
+          for engine_values in "" "-f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.sglang.values.yaml"; do
+            name="EPP, render via Service"
+            [ -n "${engine_values}" ] && name="${name} (sglang)"
+            echo ""
+            echo "========================================"
+            echo "precise-prefix-cache-routing: router (${name})"
+            echo "========================================"
+            echo "--- helm template ---"
+            if ! helm template precise-prefix-cache-routing \
+              "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
+              ${engine_values} \
+              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for ${name}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: precise-prefix-cache-routing / router (${name})"
+            else
+              echo "FAIL: precise-prefix-cache-routing / router (${name})"
+              failed=1
+            fi
+          done
+          exit "${failed}"
 
       - name: Dry-run render Service overlays (precise-prefix-cache-routing)
         run: |
           failed=0
-          for overlay in render render/standalone; do
+          for overlay in render render/standalone render/xpu-sglang; do
             name="render (${overlay})"
             echo ""
             echo "========================================"

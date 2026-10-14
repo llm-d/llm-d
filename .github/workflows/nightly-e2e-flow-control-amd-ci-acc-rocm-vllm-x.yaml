@@ -1,0 +1,112 @@
+name: Nightly - Flow Control E2E (AMD ROCm)
+
+# ROCm sibling of the GKE GPU flow-control nightly. This is a bespoke E2E,
+# not a benchmark: flow control is work-conserving, so a generic sanity
+# workload neither forces requests into the EPP queue nor proves priority QoS.
+
+on:
+  schedule:
+    - cron: '30 13 * * *'  # 13:30 UTC daily, 30m after AMD autoscaling
+  workflow_dispatch:
+    inputs:
+      # These benchmark-shaped inputs are accepted because /test-nightly sends
+      # them to every nightly-e2e-* workflow. This bespoke lane ignores them.
+      decode_pods:
+        description: 'Ignored (bespoke E2E, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Ignored (bespoke E2E, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      harness:
+        description: 'Ignored (bespoke E2E, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'inference-perf'
+      workload:
+        description: 'Ignored (bespoke E2E, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'sanity_random.yaml'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      dry_run:
+        description: 'Affects the badge only; this lane has no dry-run path'
+        required: false
+        default: 'false'
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) or release run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      llm_d_ref:
+        description: 'llm-d ref to test (empty tests the ref this workflow runs from)'
+        required: false
+        default: ''
+        type: 'string'
+
+permissions:
+  contents: write
+  actions: read
+  packages: write
+
+concurrency:
+  group: nightly-e2e-flow-control-amd-ci-rocm
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-amd.yaml@main
+    with:
+      guide_name: flow-control
+      namespace: llm-d-nightly-flow-control-amd-ci-rocm
+      # The AMD reusable accepts a ref rather than matrix_type. Preserve an
+      # explicit ref; otherwise pass a release branch through for matrix runs.
+      llm_d_ref: ${{ inputs.llm_d_ref || ((inputs.matrix_type != '' && inputs.matrix_type != 'nightly') && inputs.matrix_type || '') }}
+      gateway_host: 'flow-control-epp'
+      custom_deploy_script: |
+        ACCELERATOR_TYPE=amd INFRA_PROVIDER=base \
+          bash guides/flow-control/scripts/nightly-deploy-gke.sh
+      e2e_validate_args: '--extra-validate flow-control'
+      accelerator_type: MI355X
+      required_gpus: 2
+      recommended_gpus: 4
+      pod_wait_timeout: '40m'
+      pod_readiness_delay: 60
+      allow_gpu_preemption: false
+      skip_cleanup: ${{ inputs.cleanup == 'false' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: flow-control-rocm
+      badge_label: "VLLM ROCm"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

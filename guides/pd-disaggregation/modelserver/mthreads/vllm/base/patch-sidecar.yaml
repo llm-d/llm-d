@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          imagePullPolicy: IfNotPresent
+          args:
+            - --port=8000
+            - --kv-connector=mooncake
+            - --mooncake-bootstrap-port=8998
+            - --zap-log-level=1
+            - --secure-proxy=false

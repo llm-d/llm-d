@@ -2,7 +2,6 @@ name: fast-model-actuation
 
 env:
   static:
-    BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
     GUIDE_NAME: fast-model-actuation
@@ -29,7 +28,9 @@ env:
 prerequisites:
   clone:
     - skip_in: [ci]
-      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   gaie:
     - run: |
         # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh

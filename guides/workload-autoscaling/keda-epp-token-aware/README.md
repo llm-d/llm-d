@@ -87,26 +87,10 @@ Before proceeding, ensure you have:
 
    The ScaledObjects then target the `pd-disagg-vllm-prefill` and `pd-disagg-vllm-decode` `DisaggregatedSetRoleScaler`s.
 
-3. **The EPP plugins that emit the prefill signal** — `inflight-load-producer` (publishes `llm_d_epp_inflight_tokens`) and `prefix-cache-affinity-filter` (carries `peakPrefillThroughput`). **Both base guides already register these in their shipped router values**, so no EPP change is required beyond step 4. If you built your own router config, add them.
+3. **The EPP plugins that emit the prefill signal** — `inflight-load-producer` (publishes `llm_d_epp_inflight_tokens`) and `prefix-cache-affinity-filter` (carries `peakPrefillThroughput`). **Both base guides already register these in their shipped router values**, so no EPP change is required beyond calibrating `peakPrefillThroughput` below. If you built your own router config, add them.
 
    > [!NOTE]
    > Keep the EPP at a single replica. The `inflight-load-producer`'s token accounting is local to each EPP process, so multiple replicas would each see — and publish — only a fraction of the per-endpoint load. The `pd-disaggregation` router values pin `replicas: 1` for this reason.
-
-4. **A calibrated `peakPrefillThroughput`** — this is the one hardware-specific constant the design needs, and the shipped values are reference figures (`15928` for Qwen3-32B / H100-80GB / TP=2; `33821` for the P/D guide's gpt-oss-120b / H200 fleet). Measure your own:
-
-<!-- guide:prerequisites.calibration start -->
-```bash
-GUIDE_NAME=${TOPOLOGY} \
-NAMESPACE=${NAMESPACE} \
-MODEL_NAME=${MODEL} \
-CHUNK_SIZE=8192 \
-${REPO_ROOT}/guides/recipes/router/calibration/calibrate.sh
-```
-<!-- guide:prerequisites.calibration end -->
-
-   `calibrate.sh` computes `V_P = CHUNK_SIZE / median(TTFT)` on an idle stack and **only prints** the value — see the [calibration guide](../../recipes/router/calibration/README.md) and the [configuration matrix](../../recipes/router/calibration/configuration-matrix.md). Because TTFT is time-to-*first*-token, the figure already includes the KV transfer to decode and the first decode step on the P/D path. `CHUNK_SIZE` must match vLLM's effective `--max-num-batched-tokens` or the result is silently wrong.
-
-   Measure through the path you will serve on. Do not borrow a published figure: the same GPU and model measured through a P/D path with a slow KV fabric can be several times slower than on the aggregated path, and the divisor changes when prefill scales — one reference stack asked for 8 replicas at `V_P = 2696` and 3 at `V_P = 15928` under identical load.
 
 ## Set Namespaces
 
@@ -132,6 +116,24 @@ Source the common guide environment variables:
 source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
+
+### Calibrate `peakPrefillThroughput`
+
+**A calibrated `peakPrefillThroughput`** is the one hardware-specific constant the design needs, and the shipped values are reference figures (`15928` for Qwen3-32B / H100-80GB / TP=2; `33821` for the P/D guide's gpt-oss-120b / H200 fleet). Measure your own:
+
+<!-- guide:prerequisites.calibration start -->
+```bash
+GUIDE_NAME=${TOPOLOGY} \
+NAMESPACE=${NAMESPACE} \
+MODEL_NAME=${MODEL} \
+CHUNK_SIZE=8192 \
+${REPO_ROOT}/guides/recipes/router/calibration/calibrate.sh
+```
+<!-- guide:prerequisites.calibration end -->
+
+`calibrate.sh` computes `V_P = CHUNK_SIZE / median(TTFT)` on an idle stack and **only prints** the value — see the [calibration guide](../../recipes/router/calibration/README.md) and the [configuration matrix](../../recipes/router/calibration/configuration-matrix.md). Because TTFT is time-to-*first*-token, the figure already includes the KV transfer to decode and the first decode step on the P/D path. `CHUNK_SIZE` must match vLLM's effective `--max-num-batched-tokens` or the result is silently wrong.
+
+Measure through the path you will serve on. Do not borrow a published figure: the same GPU and model measured through a P/D path with a slow KV fabric can be several times slower than on the aggregated path, and the divisor changes when prefill scales — one reference stack asked for 8 replicas at `V_P = 2696` and 3 at `V_P = 15928` under identical load.
 
 ## Configure
 

@@ -185,7 +185,7 @@ helm install ${RELEASE_NAME} \
 Apply the Kustomize overlays for your chosen topology:
 
 Choose the overlay matching your infrastructure provider:
-- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma).
+- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma/kustomization.yaml).
 - **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
@@ -228,10 +228,10 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 ```bash
 kubectl run curl-debug --rm -it \
+    --namespace="$NAMESPACE" \
     --image=cfmanteiga/alpine-bash-curl-jq \
     --env="IP=$IP" \
     --env="MODEL_NAME=$MODEL_NAME" \
-    --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
 ```
 

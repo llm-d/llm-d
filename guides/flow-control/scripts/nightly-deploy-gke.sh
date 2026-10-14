@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # -*- indent-tabs-mode: nil; tab-width: 2; sh-indentation: 2; -*-
 
-# Nightly deploy for the flow-control guide on GKE.
+# Nightly deploy for the flow-control guide on GKE GPU or AMD ROCm.
 #
-# Invoked as the custom_deploy_script of reusable-nightly-e2e-gke.yaml by
-# .github/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml. Runs from
-# the repo root; the reusable exports NAMESPACE and has already created the
-# namespace and the llm-d-hf-token secret.
+# Invoked as the custom_deploy_script by the GKE and AMD flow-control nightly
+# workflows. Runs from the repo root; the reusable exports NAMESPACE and has
+# already created the namespace and the llm-d-hf-token secret. The workflow
+# selects the optimized-baseline model server overlay with ACCELERATOR_TYPE
+# (gpu or amd) and INFRA_PROVIDER (gke or base).
 #
 # The deploy commands come from guides/flow-control/guide.yaml via
 # `scripts/guide.py emit`, the same source the README is rendered from, so a
@@ -19,6 +20,16 @@
 set -euo pipefail
 
 : "${NAMESPACE:?NAMESPACE must be exported by the calling workflow}"
+: "${ACCELERATOR_TYPE:?ACCELERATOR_TYPE must be exported by the calling workflow}"
+: "${INFRA_PROVIDER:?INFRA_PROVIDER must be exported by the calling workflow}"
+
+case "${ACCELERATOR_TYPE}" in
+  gpu | amd) ;;
+  *)
+    echo "ERROR: unsupported ACCELERATOR_TYPE: ${ACCELERATOR_TYPE}" >&2
+    exit 1
+    ;;
+esac
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 # shellcheck source=guides/env.sh
@@ -26,7 +37,6 @@ source "${REPO_ROOT}/guides/env.sh"
 
 GUIDE_NAME="flow-control"
 GUIDE_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}"
-INFRA_PROVIDER="gke"
 
 # guide.py needs pyyaml; GitHub runners ship python3 but not always the module.
 # PIP_BREAK_SYSTEM_PACKAGES: a PEP 668 externally-managed python3 (Ubuntu
@@ -115,23 +125,21 @@ done
 echo "=== Deploying the router (standalone mode) ==="
 emit env deploy.standalone | bash
 
-echo "=== Deploying the model servers ==="
+echo "=== Deploying the ${ACCELERATOR_TYPE} model server ==="
 # Mirrors deploy.modelserver in guide.yaml (kustomize | sed | apply), with the
 # one CI-only (3 of 3) deviation the guide's pipeline cannot express: a single
-# decode replica instead of the overlay's 8. Pool dispatch capacity is
-# maxConcurrency x ready replicas (see the README's "Proof of Queuing"), so 8
-# replicas give 8 x 4 = 32 slots against the validate script's 36-request
-# burst. The gate barely closes and the QoS assertion has no queue wait to
-# measure. One replica leaves 4 slots and queues the remaining 32. Patch
-# before apply rather than scaling after: peak GPU demand stays at 1, matching
-# the workflow's declared required_gpus, and the 7 surplus pods never exist to
-# be caught by the reusable's `kubectl wait pod --all`.
+# replica instead of the selected overlay's default. Pool dispatch capacity is
+# maxConcurrency x ready replicas (see the README's "Proof of Queuing"), so
+# multiple replicas can leave too little queue wait for the QoS assertion to
+# measure. One replica leaves 4 slots and queues the remaining requests. Patch
+# before apply rather than scaling after so surplus pods never consume GPUs or
+# get caught by the reusable's `kubectl wait pod --all`.
 MS_MANIFEST="/tmp/${GUIDE_NAME}.ci.modelserver.yaml"
-kubectl kustomize "${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/" \
+kubectl kustomize "${REPO_ROOT}/guides/optimized-baseline/modelserver/${ACCELERATOR_TYPE}/vllm/${INFRA_PROVIDER}/" \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | sed -E 's/^  replicas: [0-9]+$/  replicas: 1/' > "${MS_MANIFEST}"
 if ! grep -qE '^  replicas: 1$' "${MS_MANIFEST}"; then
-  echo "ERROR: failed to force a single decode replica in the modelserver overlay" >&2
+  echo "ERROR: failed to force a single replica in the ${ACCELERATOR_TYPE} modelserver overlay" >&2
   exit 1
 fi
 kubectl apply -n "${NAMESPACE}" -f "${MS_MANIFEST}"

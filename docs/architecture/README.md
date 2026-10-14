@@ -57,7 +57,7 @@ See [KV Cache Management](kv-management/README.md) for full details.
 
 ## 5. Model Server Orchestration
 
-The [Model Server Orchestration](model-server-orchestration/README.md) provide Kubernetes custom resources for managing distributed model groups and synchronized serving topologies:
+The [Model Server Orchestration](model-server-orchestration/README.md) layer provides Kubernetes custom resources for managing distributed model groups and synchronized serving topologies:
 
 - **[LeaderWorkerSet (LWS)](model-server-orchestration/leaderworkerset.md)**: Kubernetes SIG workload controller for deploying multi-node accelerator pod groups with leader-worker topology, gang scheduling, and all-or-nothing restart semantics.
 - **[DisaggregatedSet](model-server-orchestration/disaggregatedset.md)**: Workload controller orchestrating multi-role disaggregated serving topologies (such as prefill and decode) as synchronized, versioned slices.

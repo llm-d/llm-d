@@ -29,4 +29,5 @@ These schemas define the internal configuration for project components and are t
 
 ## See Also
 
+* [Artifacts](artifacts.md): Published container images, Helm charts, and CRDs for each llm-d component.
 * [Glossary](glossary.md): Definitions of key terms and concepts used across this project.

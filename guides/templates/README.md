@@ -437,7 +437,7 @@ paired markers is touched, and rendering is idempotent.
 scripts/guide.py check guides/optimized-baseline
 
 # every guide in the repo
-scripts/guide.py check guides/*/
+scripts/guide.py check guides --recursive
 
 # pass the files explicitly instead of a directory
 scripts/guide.py check --yaml guides/optimized-baseline/guide.yaml \
@@ -483,7 +483,7 @@ exiting, so one run surfaces every problem in the repo.
 One command covers both files across every guide:
 
 ```bash
-scripts/guide.py render guides/*/ --check
+scripts/guide.py render guides --recursive --check
 ```
 
 `--check` catches out-of-date READMEs — someone edited `guide.yaml` without

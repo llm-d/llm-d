@@ -47,7 +47,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total) and enough host memory for the CPU tier. If your cluster has fewer resources, adjust `replicas` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) and `--tensor-parallel-size` in the connector overlay you deploy (for example [native/cpu](./modelserver/gpu/vllm/native/cpu/base/patch-vllm.yaml)) for your environment.
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total) and enough host memory for the CPU tier. If your cluster has fewer resources, adjust `replicas` in the model server patch (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)) and `--tensor-parallel-size` in the connector overlay you deploy (for example [native/cpu on vLLM GPU](./modelserver/gpu/vllm/native/cpu/base/patch-vllm.yaml)) for your environment.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -239,34 +239,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
-### 3. Observability & Troubleshooting
-
-Once monitoring is enabled, use the signals below to operate tiered prefix caching. Metric definitions are in the [metric reference](../../docs/operations/observability/model-server-metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
-
-Offloading only pays off when blocks evicted from HBM are loaded back later instead of recomputed. Two views need to agree: the router keeps a separate prefix index per tier (`gpu-prefix-cache-producer` and `cpu-prefix-cache-producer` in this guide's router values), and the model server reports what it actually stored and loaded. Most problems show up as a gap between the two.
-
-#### Key metrics for this path
-
-| Signal | Why it matters for tiered prefix cache |
-| ------ | -------------------------------------- |
-| Offload tier hit rate (`vllm:external_prefix_cache_hits_total` / `vllm:external_prefix_cache_queries_total`) | Prompt tokens found in CPU RAM or the filesystem tier at scheduling time, so they are loaded instead of recomputed. Read it next to the HBM hit rate (`vllm:prefix_cache_hits_total`): under cache pressure the HBM rate drops and this one should pick up the difference |
-| Store and load volume (`vllm:kv_offload_store_bytes_total`, `vllm:kv_offload_load_bytes_total`) | Steady stores with almost no loads means evicted blocks are written but never reused, so the tier costs memory and copy time without saving any prefill |
-| Load speed (`vllm:kv_offload_load_bytes_total` / `vllm:kv_offload_load_time_total`) | A load has to finish faster than the prefill it replaces. This covers the copy from CPU RAM to the accelerator only; on the filesystem path, reading blocks from storage into CPU RAM happens first and is not included |
-| Store allocation failures (`vllm:kv_offload_allocation_failure_total`) | Stores that could not get CPU blocks because too little of the CPU tier was free or evictable. Those chunks are not offloaded, and the model server logs `cannot store chunks` |
-| Router prefix index by tier (`llm_d_epp_prefix_indexer_size`, `llm_d_epp_prefix_indexer_hit_ratio`, split by `plugin_name`) | What the router believes each tier holds. The size gauge is the total across pods, so a full CPU index reads about pods × `lruCapacityPerServer` |
-| TTFT (`vllm:time_to_first_token_seconds`) | The user-facing payoff of this path. Compare against an HBM-only run at the same load before attributing a change to offloading |
-
-vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang_hicache_host_used_tokens` / `sglang_hicache_host_total_tokens`) and attributes hits by tier with `sglang_cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
-
-#### Common failure modes
-
-- **Offload tier hit rate near zero while the HBM hit rate falls**: blocks are not reaching the offload tier, or they are evicted from it before reuse. If `vllm:kv_offload_store_bytes_total` is flat, confirm the pod started with the connector in `--kv-transfer-config`. If stores are steady but loads stay near zero, either the workload rarely repeats prefixes or the CPU tier is too small for the working set; for the second case, raise `cpu_bytes_to_use`, keeping it within the pod's memory limit.
-- **Router CPU index hit ratio well above what the model server reports**: the CPU index records the same prefixes as the HBM index with a larger capacity, so its hit ratio should roughly track HBM plus offload hits. If it runs well above that, the router is steering requests toward blocks the model servers no longer hold. The likely cause is `lruCapacityPerServer` on `cpu-prefix-cache-producer` being larger than what `cpu_bytes_to_use` actually fits, so lower it.
-- **TTFT worse than the HBM-only baseline**: loads are slower than recomputing. Check load speed, and on filesystem paths check read throughput on the storage backend.
-- **Steady store allocation failures**: the CPU tier has no free or evictable blocks when a store is prepared, usually because too many blocks are held by in-flight transfers under high concurrency. `vllm:kv_offload_cpu_cache_usage_perc` staying near 1.0 confirms it. Increase `cpu_bytes_to_use`.
-
-The bundled [alerting rules](../../docs/operations/observability/alerting.md) do not cover offloading yet.
-
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -441,6 +413,34 @@ fi
 <!-- guide:verify.tests.shared_tier end -->
 
 If the store counters stay at zero, the connector is not active: check that the pod started with the expected `--kv-transfer-config` (or the `--hicache-*` flags on SGLang) and see [Common failure modes](#common-failure-modes). Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+
+## Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate tiered prefix caching under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not create real HBM eviction or steady-state offload traffic). Metric definitions are in the [metric reference](../../docs/operations/observability/model-server-metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
+
+Offloading only pays off when blocks evicted from HBM are loaded back later instead of recomputed. Two views need to agree: the router keeps a separate prefix index per tier (`gpu-prefix-cache-producer` and `cpu-prefix-cache-producer` in this guide's router values), and the model server reports what it actually stored and loaded. Most problems show up as a gap between the two.
+
+### Key metrics for this path
+
+| Signal | Why it matters for tiered prefix cache |
+| ------ | -------------------------------------- |
+| Offload tier hit rate (`vllm:external_prefix_cache_hits_total` / `vllm:external_prefix_cache_queries_total`) | Prompt tokens found in CPU RAM or the filesystem tier at scheduling time, so they are loaded instead of recomputed. Read it next to the HBM hit rate (`vllm:prefix_cache_hits_total`): under cache pressure the HBM rate drops and this one should pick up the difference |
+| Store and load volume (`vllm:kv_offload_store_bytes_total`, `vllm:kv_offload_load_bytes_total`) | Steady stores with almost no loads means evicted blocks are written but never reused, so the tier costs memory and copy time without saving any prefill |
+| Load speed (`vllm:kv_offload_load_bytes_total` / `vllm:kv_offload_load_time_total`) | A load has to finish faster than the prefill it replaces. This covers the copy from CPU RAM to the accelerator only; on the filesystem path, reading blocks from storage into CPU RAM happens first and is not included |
+| Store allocation failures (`vllm:kv_offload_allocation_failure_total`) | Stores that could not get CPU blocks because too little of the CPU tier was free or evictable. Those chunks are not offloaded, and the model server logs `cannot store chunks` |
+| Router prefix index by tier (`llm_d_epp_prefix_indexer_size`, `llm_d_epp_prefix_indexer_hit_ratio`, split by `plugin_name`) | What the router believes each tier holds. The size gauge is the total across pods, so a full CPU index reads about pods × `lruCapacityPerServer` |
+| TTFT (`vllm:time_to_first_token_seconds`) | The user-facing payoff of this path. Compare against an HBM-only run at the same load before attributing a change to offloading |
+
+vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang_hicache_host_used_tokens` / `sglang_hicache_host_total_tokens`) and attributes hits by tier with `sglang_cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
+
+### Common failure modes
+
+- **Offload tier hit rate near zero while the HBM hit rate falls**: blocks are not reaching the offload tier, or they are evicted from it before reuse. If `vllm:kv_offload_store_bytes_total` is flat, confirm the pod started with the connector in `--kv-transfer-config`. If stores are steady but loads stay near zero, either the workload rarely repeats prefixes or the CPU tier is too small for the working set; for the second case, raise `cpu_bytes_to_use`, keeping it within the pod's memory limit.
+- **Router CPU index hit ratio well above what the model server reports**: the CPU index records the same prefixes as the HBM index with a larger capacity, so its hit ratio should roughly track HBM plus offload hits. If it runs well above that, the router is steering requests toward blocks the model servers no longer hold. The likely cause is `lruCapacityPerServer` on `cpu-prefix-cache-producer` being larger than what `cpu_bytes_to_use` actually fits, so lower it.
+- **TTFT worse than the HBM-only baseline**: loads are slower than recomputing. Check load speed (`vllm:kv_offload_load_bytes_total` / `vllm:kv_offload_load_time_total`), and on filesystem paths check read throughput on the storage backend.
+- **Steady store allocation failures**: the CPU tier has no free or evictable blocks when a store is prepared, usually because too many blocks are held by in-flight transfers under high concurrency. `vllm:kv_offload_cpu_cache_usage_perc` staying near 1.0 confirms it. Increase `cpu_bytes_to_use`.
+
+The bundled [alerting rules](../../docs/operations/observability/alerting.md) do not cover offloading yet.
 
 ## Cleanup
 

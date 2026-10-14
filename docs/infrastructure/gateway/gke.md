@@ -9,7 +9,7 @@ This guide shows how to deploy llm-d with
 
 ## Prerequisites
 
-1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
+1. The environment variables `${GUIDE_NAME}`, `${MODEL}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 2. You have verified the version in and sourced in the llm-d repo wide `env.sh` file:
 
    ```bash
@@ -27,9 +27,13 @@ This guide shows how to deploy llm-d with
 ## Step 1: Install Gateway API and Gateway API Inference Extension CRDs
 
 > [!NOTE]
-> GKE automatically installs all GA CRDs for Gateway API and Gateway API Inference Extension on GKE versions `1.34.0-gke.1626000` or later. If using this version or newer, skip to Step 2.
+> On GKE `1.34.0-gke.1626000` or later, with the Gateway API enabled as required above, GKE installs and
+> manages the Gateway API Standard-channel CRDs and the v1 `InferencePool` CRD: skip to Step 2. The release
+> GKE manages can trail the one the guides pin; see Google's
+> [GKE Inference Gateway](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway)
+> page for what GKE manages before applying a newer `InferencePool` CRD yourself.
 
-For GKE versions earlier than `1.34.0-gke.1626000`, install the CRDs manually:
+On GKE versions earlier than `1.34.0-gke.1626000`, install the Inference Extension CRDs:
 
 ```bash
 # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
@@ -110,7 +114,7 @@ helm install ${GUIDE_NAME} \
 2. **Deploy the model server with the GKE overlay:**
 
 ```bash
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm    # options: vllm, sglang, trtllm
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/gke/
 ```
@@ -153,7 +157,7 @@ Key configuration parameters (see [`values.yaml`](https://github.com/llm-d/llm-d
 #### 2. **Deploy the model server with the GKE overlay:**
 
 ```bash
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm    # options: vllm, sglang, trtllm
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/gke/
 ```
@@ -205,7 +209,7 @@ Send an inference request via the managed `Gateway`:
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": '\"${MODEL_NAME}\"',
+        "model": '\"${MODEL}\"',
         "prompt": "How are you today?"
     }' | jq
 ```

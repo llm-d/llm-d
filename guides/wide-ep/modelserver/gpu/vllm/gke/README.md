@@ -14,7 +14,7 @@ This overlay configures GKE-specific settings for DP-aware WideEP scheduling on 
 | `NVSHMEM_DISABLE_GDRCOPY` | Recommended on GKE. |
 | `UCX_IB_ROCE_REACHABILITY_MODE` | RDMA NICs sit on separate subnets. Lets UCX reach RoCE v2 GIDs across them. |
 | Host volumes | GKE-specific hostPath for model and JIT caches. |
-| `NCCL_TUNER_PLUGIN` / `NCCL_NET_PLUGIN` | Disables GKE's built-in NCCL tuner and net plugin. |
+| `NCCL_TUNER_PLUGIN` / `NCCL_NET` | Disables GKE's built-in NCCL tuner (`none`) and selects the `gIB` NCCL net plugin. |
 
 ## Hybrid Models
 

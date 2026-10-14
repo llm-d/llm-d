@@ -15,7 +15,7 @@ data:
       # llm-d-router#2908 renamed the key, and v0.11.0 does not contain it.
       secure_coordinator: false
       read_timeout: 30s
-      # Matches the Gateway/HTTPRoute request timeout (coordinator/httproute.yaml,
+      # Matches the Gateway/HTTPRoute request timeout (coordinator/base/httproute.yaml,
       # router/httproute/base/httproute.yaml: both 300s) -- otherwise the coordinator could
       # truncate a slow encode-prefill-decode response before the Gateway's own
       # timeout even kicks in.
@@ -45,9 +45,9 @@ data:
             max_concurrent_downloads: 10
         - type: render
           params:
-            # The render Service from ../render/, which fronts the prefill
+            # The render Service from ../../render/, which fronts the prefill
             # model server pods. The ".svc" suffix matches NO_PROXY in
-            # ../multimedia-downloader/patch-coordinator-ca.yaml, so render
+            # ../../multimedia-downloader/patch-coordinator-ca.yaml, so render
             # calls never go through the media proxy.
             address: "http://coord-disaggregation-render.${NAMESPACE}.svc:8000"
             timeout: 30s

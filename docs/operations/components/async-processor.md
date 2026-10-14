@@ -124,8 +124,8 @@ Memory is the dimension most likely to require tuning, and it scales predictably
 CPU consumption is low because workers are blocked on I/O most of the time. It scales with **dispatch rate**, not concurrency:
 
 - **Per-dispatch cost** comes from JSON (de)serialization of request and result payloads, gate evaluation, and queue read/write. For typical agentic payloads, budget on the order of **0.5–1.0 vCPU per 100 dispatches/second**. Larger payloads raise the serialization cost proportionally.
-- **Gate overhead.** The `prometheus-saturation` and `prometheus-budget` gates poll Prometheus on an interval; the cost is small and independent of dispatch rate. Setting `ap.prometheusCacheTTL` reduces query frequency when many workers share a gate. The `constant` and `redis` gates add negligible CPU.
-- **Redis Sorted Set polling.** With the Redis backend, `pollIntervalMs` (default `1000`) and `batchSize` (default `10`) govern queue-read frequency. Aggressive (low-interval, small-batch) polling raises idle CPU and Redis load; tune `batchSize` up before lowering the interval.
+- **Gate overhead.** The `prometheus-saturation`, `prometheus-budget` and `prometheus-query` gates query Prometheus when a worker evaluates them, with results shared for `ap.prometheusCacheTTL`; the cost is small, and a longer TTL reduces query frequency when many workers share a gate. The `constant` and `redis` gates add negligible CPU.
+- **Redis Sorted Set polling.** With the Redis backend, `poll_interval_ms` (default `1000`) and `batch_size` (default `10`) in `ap.transportConfig` govern queue-read frequency. Aggressive (low-interval, small-batch) polling raises idle CPU and Redis load; tune `batch_size` up before lowering the interval.
 
 ### Sizing Reference (starting points)
 
@@ -149,13 +149,13 @@ Set the **memory limit close to the request** (the footprint is bounded by `conc
 Prefer horizontal scaling over a single large worker pool once a replica is comfortably sized — it improves availability and spreads queue-read and gate-polling load.
 
 - **Increase replicas to raise total in-flight capacity** up to what the inference pool can absorb: `total in-flight = replicas × concurrency`. Beyond the inference pool's capacity, gates will hold requests closed and extra workers sit idle.
-- **No coordination required.** Replicas independently pull from the shared queue. Redis Sorted Set and GCP Pub/Sub both distribute messages across consumers; Redis Pub/Sub fans out (each replica sees all messages), so use Sorted Set or Pub/Sub-per-consumer semantics when load should be *shared* rather than duplicated.
+- **No coordination required.** Replicas independently pull from the shared queue. Redis Sorted Set and GCP Pub/Sub both distribute messages across consumers; the deprecated Redis Pub/Sub transport fans out (each replica sees all messages), so use Sorted Set or GCP Pub/Sub when load should be *shared* rather than duplicated.
 - **Gates remain effective across replicas.** Prometheus-based gates observe global inference-server saturation, so independent replicas converge on the same dispatch decisions without sharing state.
 - **Graceful shutdown.** The processor drains in-flight work on termination (`drainTimeout`, default `2m`). Ensure your pod `terminationGracePeriodSeconds` is at least `drainTimeout` so rolling updates and scale-down do not abandon in-flight requests.
 
 ### Helm Resource Override Example
 
-Example values overriding concurrency and container resources for a large-agentic profile (100k/1k payloads) at higher concurrency:
+Example values overriding concurrency and container resources for a large-agentic profile (100k/1k payloads) at higher concurrency. Save them as `resource_overrides.yaml` and layer the file on the guide's install:
 
 ```yaml
 ap:

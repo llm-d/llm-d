@@ -15,9 +15,11 @@ For how KEDA+EPP scaling works and why demand signals beat utilization, see
 
 1. Complete the [optimized-baseline guide](../../optimized-baseline/README.md),
    including
-   [enabling monitoring](../../optimized-baseline/README.md#3-observability--troubleshooting).
+   [enabling monitoring](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
    Confirm that Prometheus is scraping the EPP metrics endpoint before
    configuring autoscaling.
+
+### Set Environment Variables
 
 Set the guide environment variables. `SIGNAL` selects the scaling signal
 (`queue` or `saturation`) and `ENV` selects the platform (`existing` or `ocp`);
@@ -67,6 +69,8 @@ Source the common guide environment variables:
 source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
+
+### Configure Prerequisites
 
 1. Configure observability by following the shared
    [observability setup guide](../../../docs/operations/observability/setup.md).

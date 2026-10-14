@@ -57,7 +57,7 @@ helm install <release-name> \
 
 Use this when you want to route traffic through a proxy managed by the Kubernetes Gateway API (e.g., GKE Gateway, Istio, Agentgateway, Envoy AI Gateway). This requires:
 
-1. A Gateway control plane installed (see [prereq/gateway-provider](../../../docs/infrastructure/gateway/README.md))
+1. A Gateway control plane installed (see [Gateway Providers](../../../docs/infrastructure/gateway/README.md))
 2. Creating a Gateway resource (see [recipes/gateway](../gateway/))
 3. Deploying the inferencepool chart (below)
 
@@ -68,10 +68,15 @@ helm install <release-name> \
   ${ROUTER_GATEWAY_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
-  --set provider.name=<gke|istio|none> \
+  --set provider.name=<none|gke|agentgateway|istio> \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```
+
+`provider.name` selects gateway-provider-specific resources in the chart: `gke` renders a
+`HealthCheckPolicy` (required on GKE; without it the load balancer health check fails against
+vLLM and requests return 503), `istio` renders a `DestinationRule`, and `agentgateway` and
+`none` render no provider-specific resources.
 
 ## Enable Prometheus Monitoring (Optional)
 
@@ -90,7 +95,6 @@ helm upgrade <release-name> \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
   -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
-  --set provider.name=<gke|istio|none> \
   -n ${NAMESPACE} \
   --version ${ROUTER_CHART_VERSION}
 ```

@@ -136,6 +136,7 @@
   ],
   "schemaVersion": 39,
   "tags": [
+    "llm-d",
     "batch-gateway",
     "apiserver"
   ],
@@ -178,6 +179,6 @@
     "from": "now-1h",
     "to": "now"
   },
-  "title": "Batch Gateway \u2014 Apiserver",
+  "title": "llm-d Batch Gateway \u2014 Apiserver",
   "uid": "batch-gateway-apiserver"
 }

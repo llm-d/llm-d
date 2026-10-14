@@ -56,10 +56,11 @@ matters.
    deploy the router with that values file, e.g.:
 
    ```sh
+   # monitoring.values.yaml exposes port 9090 + ServiceMonitor
    helm upgrade <release> $ROUTER_STANDALONE_CHART \
-     -f ../recipes/router/base.values.yaml \
-     -f ../predicted-latency-routing/router/predicted-latency.values.yaml \
-     -f ../recipes/router/features/monitoring.values.yaml \   # <-- exposes port 9090 + ServiceMonitor
+     -f ../../recipes/router/base.values.yaml \
+     -f ../../predicted-latency-routing/router/predicted-latency.values.yaml \
+     -f ../../recipes/router/features/monitoring.values.yaml \
      ... -n <ns> --version $ROUTER_CHART_VERSION
    ```
 
@@ -116,7 +117,7 @@ source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
 
-Install KEDA (see the APIService caveat above):
+Install KEDA (see the [Revert](#revert) section below for the APIService caveat if `prometheus-adapter` is already installed):
 
 <!-- guide:prerequisites.keda start -->
 ```bash
@@ -226,7 +227,7 @@ Deleting the ScaledObject hands replica control back to you immediately:
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -f ${SLO_DIR}/scaledobject.yaml --ignore-not-found=true
+kubectl delete -f ${SLO_DIR}/scaledobject.yaml -f ${SLO_DIR}/prometheus-rule.yaml --ignore-not-found=true
 ```
 <!-- guide:cleanup end -->
 

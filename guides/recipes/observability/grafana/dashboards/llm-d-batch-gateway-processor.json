@@ -571,6 +571,7 @@
   ],
   "schemaVersion": 39,
   "tags": [
+    "llm-d",
     "batch-gateway",
     "processor"
   ],
@@ -613,6 +614,6 @@
     "from": "now-1h",
     "to": "now"
   },
-  "title": "Batch Gateway \u2014 Processor",
+  "title": "llm-d Batch Gateway \u2014 Processor",
   "uid": "batch-gateway-processor"
 }

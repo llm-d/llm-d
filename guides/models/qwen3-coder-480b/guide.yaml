@@ -54,11 +54,17 @@ prerequisites:
 
 deploy:
   router_values:
-    - run: export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-    - when: {TOPOLOGY: [unified]}
-      run: export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
-    - when: {TOPOLOGY: [disaggregated]}
-      run: export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-disagg.values.yaml"
+    unified:
+      - when: {TOPOLOGY: [unified]}
+        run: |
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+    disaggregated:
+      - when: {TOPOLOGY: [disaggregated]}
+        skip_in: [ci]
+        run: |
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-disagg.values.yaml"
 
   standalone:
     - run: |
@@ -69,14 +75,17 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
-    - when: {TOPOLOGY: [unified]}
-      run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
-    - when: {TOPOLOGY: [disaggregated]}
-      run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
+    unified:
+      - when: {TOPOLOGY: [unified]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+    disaggregated:
+      - when: {TOPOLOGY: [disaggregated]}
+        skip_in: [ci]
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
 
 verify:
   endpoint:
@@ -106,10 +115,13 @@ verify:
 
 cleanup:
   modelserver:
-    - when: {TOPOLOGY: [unified]}
-      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
-    - when: {TOPOLOGY: [disaggregated]}
-      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
+    unified:
+      - when: {TOPOLOGY: [unified]}
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+    disaggregated:
+      - when: {TOPOLOGY: [disaggregated]}
+        skip_in: [ci]
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - skip_in: [ci]

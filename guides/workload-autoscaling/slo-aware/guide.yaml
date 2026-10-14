@@ -45,4 +45,4 @@ cleanup:
   # Deleting the ScaledObject hands replica control back immediately. Removing KEDA
   # / kube-state-metrics is left to the README (it can displace another cluster's
   # external-metrics APIService — do it deliberately).
-  - run: kubectl delete -f ${SLO_DIR}/scaledobject.yaml --ignore-not-found=true
+  - run: kubectl delete -f ${SLO_DIR}/scaledobject.yaml -f ${SLO_DIR}/prometheus-rule.yaml --ignore-not-found=true

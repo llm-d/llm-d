@@ -200,23 +200,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
-### 3. Observability & Troubleshooting
-
-With monitoring enabled, three router metrics tell you whether predicted-latency routing is healthy (see the [architecture doc](../../docs/architecture/router/latency-predictor.md#observability) for the full metric reference):
-
-| Signal | What healthy looks like |
-| --- | --- |
-| `llm_d_epp_request_predicted_ttft_seconds` and `llm_d_epp_request_ttft_prediction_duration_seconds` | Non-zero samples: the router is calling the prediction server. If they stay empty, the predictor is not being called; check the router logs for `predicted-latency-producer` errors. |
-| `llm_d_epp_request_predicted_ttft_seconds` vs. `llm_d_epp_request_ttft_seconds` | Predictions track reality: over a rolling window, the two converge after warm-up. |
-| `llm_d_epp_request_slo_violation_total` | With SLO-annotated traffic, increments only under genuine saturation. |
-
-| Symptom | Likely cause |
-| --- | --- |
-| Prediction metrics empty | Prediction server unreachable: the router falls back to a composite heuristic score. Check sidecar readiness and `PREDICTION_SERVER_URL`. |
-| Large, persistent drift between predicted and actual TTFT | `streamingMode` does not match the traffic (e.g. `false` on a streaming workload when you want true TTFT), or the workload drifted outside the training window. |
-| High TPOT SLO violation rate at low QPS | `streamingMode: false`: TPOT is not being trained. Use the SLO-aware values file, which sets it to `true`, and stream requests. |
-| Prediction-based routing degrades to baseline | Predictor error or sidecar restart: an expected fallback, not a failure. Investigate the sidecar logs. |
-
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -229,7 +212,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 
 ### 2. Send Test Requests
 
-**Send a completion request from a temporary pod inside the cluster** (`MODEL` must be the model your accelerator serves, see the **Served model** column in [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)):
+**Send a completion request from a temporary pod inside the cluster:**
 
 <!-- guide:verify.tests.request start -->
 ```bash
@@ -294,7 +277,7 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 ```
 <!-- guide:verify.tests.router_metrics end -->
 
-`llm_d_epp_request_predicted_ttft_seconds_count` is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for the requests it routed. If it stays at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#3-observability--troubleshooting).
+`llm_d_epp_request_predicted_ttft_seconds_count` is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for the requests it routed. If it stays at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#observability--troubleshooting).
 
 ### 4. (Optional) Send a request with SLOs
 
@@ -321,6 +304,23 @@ kubectl run slo-test --rm -i --restart=Never \
 <!-- guide:verify.tests.slo_request end -->
 
 The request returns HTTP 200 and is placed on a server predicted to meet both SLOs, if one exists. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+
+## Observability & Troubleshooting
+
+With monitoring enabled, three router metrics tell you whether predicted-latency routing is healthy under **sustained load in production or benchmark scenarios** (note that the small request burst in [Verification](#verification) only warms up the predictor and does not reflect steady-state convergence or SLO behavior; see the [architecture doc](../../docs/architecture/router/latency-predictor.md#observability) for the full metric reference):
+
+| Signal | What healthy looks like |
+| --- | --- |
+| `llm_d_epp_request_predicted_ttft_seconds` and `llm_d_epp_request_ttft_prediction_duration_seconds` | Non-zero samples: the router is calling the prediction server. If they stay empty, the predictor is not being called; check the router logs for `predicted-latency-producer` errors. |
+| `llm_d_epp_request_predicted_ttft_seconds` vs. `llm_d_epp_request_ttft_seconds` | Predictions track reality: over a rolling window, the two converge after warm-up. |
+| `llm_d_epp_request_slo_violation_total` | With achievable SLOs and a matching `streamingMode`, stays near zero under normal load and increments only under genuine saturation (if it climbs at low QPS, see the symptom table below). |
+
+| Symptom | Likely cause |
+| --- | --- |
+| Prediction metrics empty | Prediction server unreachable: the router falls back to a composite heuristic score. Check sidecar readiness and `PREDICTION_SERVER_URL`. |
+| Large, persistent drift between predicted and actual TTFT | `streamingMode` does not match the traffic (e.g. `false` on a streaming workload when you want true TTFT), or the workload drifted outside the training window. |
+| High TPOT SLO violation rate at low QPS | `streamingMode: false`: TPOT is not being trained. Use the SLO-aware values file, which sets it to `true`, and stream requests. |
+| Prediction-based routing degrades to baseline | Predictor error or sidecar restart: an expected fallback, not a failure. Investigate the sidecar logs. |
 
 ## Cleanup
 

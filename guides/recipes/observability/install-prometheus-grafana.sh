@@ -391,7 +391,7 @@ setup_tls_certificates() {
 
   if [[ ! -f "$CERT_SCRIPT" ]]; then
     log_error "TLS certificate generation script not found at: $CERT_SCRIPT"
-    fail "Please ensure generate-prometheus-tls-certs.sh exists in the scripts directory"
+    fail "Please ensure generate-prometheus-tls-certs.sh exists in ${SCRIPT_DIR}"
   fi
 
   # Check if certificates already exist

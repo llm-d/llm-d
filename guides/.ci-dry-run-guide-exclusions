@@ -8,9 +8,6 @@
 # Not a Kubernetes deployment — kustomize dry-run does not apply
 no-kubernetes-deployment
 
-# Prerequisite setup steps — not kustomize overlays
-prereq
-
 # Composable building blocks referenced by other guides — not standalone overlays.
 # Note: recipes/gateway IS validated (it is not listed here).
 recipes/modelserver
@@ -32,4 +29,4 @@ templates
 # Base kustomizations that are patches-only (no resources) or intentionally
 # incomplete — they require an overlay to be deployable.
 recipes/gateway/base
-workload-autoscaling/wva-config/base
+workload-autoscaling/wva/controller/base

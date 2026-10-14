@@ -35,7 +35,7 @@ llm-d-vllm-overview                               1      30s
 llm-d-sglang-overview                             1      30s
 llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
-llm-d-inference-gateway                           1      30s
+llm-d-router                                      1      30s
 llm-d-performance-kv-cache                        1      30s
 llm-d-pd-coordinator-metrics                      1      30s
 llm-d-batch-gateway-apiserver                     1      30s
@@ -56,7 +56,7 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-diagnostic-drilldown-dashboard.json` | Detailed diagnostic metrics for troubleshooting |
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
 | `llm-d-pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
-| `llm-d-inference-gateway.json` | Inference Gateway (EPP) metrics: inference pool, inference objective, and flow control |
+| `llm-d-router.json` | llm-d Router (EPP) metrics: inference pool, inference objective, and flow control |
 | `llm-d-batch-gateway-apiserver.json` | Batch Gateway API server request rate, latency, and in-flight requests |
 | `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
 | `llm-d-batch-gateway-gc.json` | Batch Gateway GC reconciler cycles, orphan recovery, and errors |

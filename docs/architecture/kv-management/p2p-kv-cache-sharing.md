@@ -64,10 +64,11 @@ What the pull is worth depends on the placement in front of it:
 
 - **Affinity + P2P** sends each request to the pod that already holds its prefix, so the pull rarely fires: it is a fallback for the requests placement displaces, not a throughput feature, and it does not recover a restarted router (the prefix index loses the pre-restart cache map).
 - **Load-aware + P2P** deliberately scatters requests, and the pull is what makes scattering affordable. It wins when many concurrent sessions contend on their owner pods; when nothing contends, affinity stays ahead because a local hit is free.
+- **Token-aware + P2P** (the well-lit path's shipped default) places each request on the pod with the fewest prompt tokens still to prefill, counting what the precise index says each pod already caches, and pulls the prefix when that pod lacks it. A prefix owner is preferred until it is loaded; after that the request spills and pulls, so it pulls far less often than load-aware placement does. On document Q&A with sessions pinned to owner pods it served 1.4x load-aware + P2P and 2.2x affinity + P2P, with a shorter TTFT tail. It is unmeasured on a uniform shared-prefix pool, where affinity leads.
 - **P/D + P2P** addresses KV that no placement decision could have made local.
 - **When GPU KV capacity is the bottleneck**, cache co-location uses capacity more efficiently, because concurrent same-prefix requests on one pod share one copy of the blocks, while spreading pays a per-pod copy whether the prefix is pulled or recomputed.
 
-Re-measure both placements on your own workload before assuming either generalizes.
+Re-measure the placements on your own workload before assuming any of them generalizes.
 
 ## Requirements
 

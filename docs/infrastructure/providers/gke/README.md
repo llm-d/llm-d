@@ -6,7 +6,7 @@ This guide covers configuring Google Kubernetes Engine (GKE) clusters and worklo
 
 llm-d on GKE is tested with the following configurations:
 
-* **GKE Version**: `1.33.4+` (`1.34.0-gke.1626000+` automatically installs GA Gateway API and Gateway API Inference Extension CRDs)
+* **GKE Version**: `1.33.4+` (`1.34.0-gke.1626000+` with the Gateway API enabled installs and manages the Gateway API Standard CRDs and the v1 `InferencePool` CRD)
 * **NVIDIA GPU Machine Types**: `A3` (H100), `A3 Ultra` (H200), `A4` (B200), `A4X` (GB200)
 * **Google Cloud TPU Machine Types**: `ct5p`, `ct5lp` (v5e), `ct6e` (v6e), `tpu7x` (v7 / Ironwood)
 * **Gateway**: If using GKE Gateway as your inference gateway, complete the [GKE Inference Gateway environment prerequisites](https://cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway#prepare-environment) and see the [GKE Gateway guide](../../gateway/gke.md).
