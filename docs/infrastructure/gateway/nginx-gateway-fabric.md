@@ -74,7 +74,7 @@ LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
 Deploy a Gateway using the `nginx` GatewayClass:
 
 ```bash
-kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/nginx?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
+kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/nginx-gateway-fabric?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
 ```
 
 Verify the `Gateway` is programmed:
