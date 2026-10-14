@@ -55,27 +55,27 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - name: otel-collector
-        image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.120.0
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: [ALL]
-        args:
-        - "--config=/etc/otel/config.yaml"
-        ports:
-        - containerPort: 4317
-          name: otlp-grpc
-        - containerPort: 4318
-          name: otlp-http
-        volumeMounts:
-        - name: config
-          mountPath: /etc/otel
-          readOnly: true
+        - name: otel-collector
+          image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.120.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          args:
+            - "--config=/etc/otel/config.yaml"
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+              readOnly: true
       volumes:
-      - name: config
-        configMap:
-          name: otel-collector-config
+        - name: config
+          configMap:
+            name: otel-collector-config
 ---
 apiVersion: v1
 kind: Service
@@ -85,9 +85,9 @@ spec:
   selector:
     app: otel-collector
   ports:
-  - port: 4317
-    targetPort: 4317
-    name: otlp-grpc
-  - port: 4318
-    targetPort: 4318
-    name: otlp-http
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 4318
+      targetPort: 4318
+      name: otlp-http

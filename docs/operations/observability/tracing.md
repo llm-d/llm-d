@@ -14,7 +14,7 @@ export NAMESPACE=<your-llm-d-namespace>
 ## What Gets Traced
 
 | Component | Config Method | Traced Operations |
-|-----------|--------------|-------------------|
+| --- | --- | --- |
 | **vLLM / SGLang** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans (`llm_request`, model loading, compilation) |
 | **Routing proxy** (P/D sidecar) | Kustomize: container env vars | KV transfer coordination |
 | **EPP** | Helm: [`tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) or [`tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) | Request routing, endpoint filtering/scoring, KV-cache indexing, tokenization |
@@ -111,6 +111,7 @@ Model servers are deployed with Kustomize. Several guide overlays (such as [`gui
 > Modifying container `args` or `env` on an already-running model server triggers a rolling restart and model reload. Wait for `kubectl rollout status deployment/<modelserver-deployment> -n ${NAMESPACE}` to complete before sending test requests in Step 4.
 
 Set the collector endpoint according to your Step 1 backend:
+
 - **Jaeger (OSS / OpenShift):** `http://otel-collector:4317`
 - **GKE (Managed OpenTelemetry):** `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`
 
@@ -276,7 +277,7 @@ If you only see generic `GET` spans, check that:
 When tracing is enabled, these environment variables are set on model server and `routing-proxy` containers:
 
 | Variable | Description |
-|----------|-------------|
+| --- | --- |
 | `OTEL_SERVICE_NAME` | Service identifier (e.g., `vllm-decode`, `vllm-prefill`, `routing-proxy`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector endpoint (`http://otel-collector:4317`) |
 | `OTEL_TRACES_SAMPLER` | Sampler type (e.g., `parentbased_traceidratio`) |

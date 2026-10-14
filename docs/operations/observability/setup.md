@@ -55,7 +55,8 @@ OpenShift provides a built-in Prometheus stack via [User Workload Monitoring](ht
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-GKE clusters include [Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) by default, so no Prometheus installation is required. Enable [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) (`--auto-monitoring-scope=ALL`) as described in [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry) to automatically collect model server metrics and provision out-of-the-box Cloud Monitoring dashboards (including the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) when using GKE Gateway).
+GKE clusters include [Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) by default, so no Prometheus installation is required.
+Enable [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) (`--auto-monitoring-scope=ALL`) as described in [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry) to automatically collect model server metrics and provision out-of-the-box Cloud Monitoring dashboards (including the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) when using GKE Gateway).
 
 To use GMP as a Grafana data source, follow the [GMP Grafana integration guide](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-grafana).
 

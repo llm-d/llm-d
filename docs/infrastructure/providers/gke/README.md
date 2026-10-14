@@ -211,7 +211,8 @@ This section covers the llm-d-specific configuration for serving model servers o
 
 #### Dynamic Slicing Overview
 
-[Dynamic slicing](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dynamic-slicing) decouples TPU provisioning from slice allocation. Ironwood (TPU7x) capacity is provisioned as fixed `4x4x4` sub-blocks (16 `tpu7x-standard-4t` nodes, 64 chips) with no active Inter-Chip Interconnect, and a GKE-managed slice controller forms slices at scheduling time from `Slice` custom resources. **Dynamic sub-slicing** partitions a sub-block into independent `2x2x1`, `2x2x2`, `2x2x4`, or `2x4x4` slices, allowing aggregated replicas, prefill workers, and decode workers of different shapes to share the same pre-provisioned capacity.
+[Dynamic slicing](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dynamic-slicing) decouples TPU provisioning from slice allocation. Ironwood (TPU7x) capacity is provisioned as fixed `4x4x4` sub-blocks (16 `tpu7x-standard-4t` nodes, 64 chips) with no active Inter-Chip Interconnect, and a GKE-managed slice controller forms slices at scheduling time from `Slice` custom resources.
+**Dynamic sub-slicing** partitions a sub-block into independent `2x2x1`, `2x2x2`, `2x2x4`, or `2x4x4` slices, allowing aggregated replicas, prefill workers, and decode workers of different shapes to share the same pre-provisioned capacity.
 
 GKE supports two consumption models: a custom scheduler that manages `Slice` resources directly, or [Kueue](https://kueue.sigs.k8s.io/) with Topology-Aware Scheduling (TAS), where a Kueue admission check creates and manages `Slice` resources automatically. The llm-d recipes use the **Kueue TAS** path.
 
@@ -228,7 +229,8 @@ Prepare the cluster by following [Use dynamic slicing in GKE with Kueue](https:/
 
 #### Kueue Resources for llm-d
 
-The Kueue resources published in the GCP guide target super-slicing. Sub-slicing requires a `Topology` that enumerates the full partition hierarchy of a sub-block, from `cloud.google.com/gce-topology-block` down through each `cloud.google.com/gke-tpu-partition-<shape>-id` label to `kubernetes.io/hostname`. [`kueue-tas.yaml`](./dynamic-slicing/kueue-tas.yaml) provides that `Topology` together with a `ResourceFlavor`, an `AdmissionCheck` delegating slice formation to the slice controller (`accelerator.gke.io/slice`), and a `ClusterQueue` covering `google.com/tpu`, `cpu`, and `memory`. Apply it once per cluster:
+The Kueue resources published in the GCP guide target super-slicing. Sub-slicing requires a `Topology` that enumerates the full partition hierarchy of a sub-block, from `cloud.google.com/gce-topology-block` down through each `cloud.google.com/gke-tpu-partition-<shape>-id` label to `kubernetes.io/hostname`.
+[`kueue-tas.yaml`](./dynamic-slicing/kueue-tas.yaml) provides that `Topology` together with a `ResourceFlavor`, an `AdmissionCheck` delegating slice formation to the slice controller (`accelerator.gke.io/slice`), and a `ClusterQueue` covering `google.com/tpu`, `cpu`, and `memory`. Apply it once per cluster:
 
 ```bash
 kubectl apply -f dynamic-slicing/kueue-tas.yaml
@@ -288,7 +290,8 @@ For production workloads on GKE, store model weights in a Google Cloud Storage (
 
 GKE provides a managed monitoring and telemetry stack that integrates with llm-d deployments without requiring a separate Prometheus or OpenTelemetry installation:
 
-* **[Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) and [Automatic Application Monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring):** GMP is enabled by default on GKE clusters. Enabling automatic application monitoring (`--auto-monitoring-scope=ALL`) automatically detects supported model server workloads, provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources, collects metrics at a 15-second interval without manually creating `PodMonitor` resources, and installs out-of-the-box Cloud Monitoring dashboards:
+* **[Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) and [Automatic Application Monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring):** GMP is enabled by default on GKE clusters.
+  Enabling automatic application monitoring (`--auto-monitoring-scope=ALL`) automatically detects supported model server workloads, provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources, collects metrics at a 15-second interval without manually creating `PodMonitor` resources, and installs out-of-the-box Cloud Monitoring dashboards:
 
   ```bash
   gcloud container clusters update <cluster-name> \
@@ -299,7 +302,9 @@ GKE provides a managed monitoring and telemetry stack that integrates with llm-d
 
   See [Set Up the Monitoring Stack](../../../operations/observability/setup.md) and [Collect Metrics](../../../operations/observability/metrics.md) for details on metric collection (including `PodMonitoring` configuration for custom workloads and the optional OSS Prometheus/Grafana stack), and [Monitor GKE TPUs](../../../operations/observability/tpu.md) for TPU hardware telemetry.
 * **[GKE Inference Gateway Dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard):** When deploying the llm-d Router in Gateway Mode with [GKE Gateway](../../gateway/gke.md) (`GW_PROVIDER_NAME=gke`), GKE provides an out-of-the-box Inference Gateway dashboard in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) showing request throughput, latency, error rates, and Endpoint Picker (EPP) extension metrics.
-* **[Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke):** Collects OTLP telemetry such as distributed traces across the llm-d stack and exports them to Google Cloud Trace. Passing `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` during cluster creation or update deploys the managed OpenTelemetry Collector in the `gke-managed-otel` namespace (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) and installs the `Instrumentation` CRD for workload auto-injection. See [Trace Requests](../../../operations/observability/tracing.md) and [`tracing-gke.values.yaml`](../../../../guides/recipes/router/features/tracing-gke.values.yaml) for configuring llm-d components to export traces on GKE.
+* **[Managed OpenTelemetry](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-otel-gke):** Collects OTLP telemetry such as distributed traces across the llm-d stack and exports them to Google Cloud Trace.
+  Passing `--managed-otel-scope=COLLECTION_AND_INSTRUMENTATION_COMPONENTS` during cluster creation or update deploys the managed OpenTelemetry Collector in the `gke-managed-otel` namespace (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) and installs the `Instrumentation` CRD for workload auto-injection.
+  See [Trace Requests](../../../operations/observability/tracing.md) and [`tracing-gke.values.yaml`](../../../../guides/recipes/router/features/tracing-gke.values.yaml) for configuring llm-d components to export traces on GKE.
 
 ---
 

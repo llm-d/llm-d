@@ -174,7 +174,7 @@ hardware/model. See its [README](calibration/README.md).
 
 Both modes share a common `base.values.yaml` containing the router image, ports, and common pod selector labels. Feature values (monitoring, tracing) and guide-specific values are layered on top:
 
-```
+```text
 base.values.yaml                              # shared defaults (this directory)
   + features/monitoring.values.yaml           # optional Prometheus Operator ServiceMonitor
   + features/monitoring-gke.values.yaml       # optional GKE Managed Prometheus PodMonitoring
