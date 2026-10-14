@@ -33,6 +33,7 @@ MAX_JOBS ?= 3
 
 # BUILD_TYPE, options ['dev', 'prod']
 BUILD_TYPE ?= dev
+REGISTRY ?= $(IMAGE_REGISTRY)
 ifeq ($(BUILD_TYPE), dev)
 	REGISTRY := quay.io
 endif
