@@ -74,6 +74,7 @@ paths is which EPP metrics the triggers read and how thresholds are derived.
 
 | Signal | EPP metrics | Threshold is | Guide |
 |---|---|---|---|
+| **In-flight load** (default) | `llm_d_epp_inflight_requests` | An absolute per-replica target (concurrency), tuned per deployment; no Flow Control required | [keda-epp (inflight signal)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp (queue signal)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../guides/workload-autoscaling/keda-epp/README.md#choose-your-path) |
 | **Token backlog** | `llm_d_epp_inflight_tokens`, per-pod KV cache occupancy | Seconds of prefill queue wait, derived from a share of the TTFT SLO and a calibrated `peakPrefillThroughput` | [keda-epp-token-aware](../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
@@ -151,11 +152,11 @@ for the full comparison and each detector's tuning knobs.
 
 ### Flow Control On vs. Off
 
-The keda-epp guide enables EPP flow control, and its default thresholds assume it.
-Flow control changes *where* unmet demand accumulates, which changes what each
-trigger can see:
+The keda-epp guide's default path (`inflight`) scales without EPP flow control; the
+`queue` and `saturation` signals require it. Flow control changes *where* unmet
+demand accumulates, which changes what each trigger can see:
 
-- **Flow control on (the guide's default).** Flow control is work-conserving: it
+- **Flow control on (the `queue` and `saturation` signals).** Flow control is work-conserving: it
   dispatches whenever the pool has spare capacity and pauses dispatch only once pool
   saturation reaches the band ceiling (full saturation under the default policy),
   buffering further requests in its priority queues. Which trigger drives scale-up
@@ -169,14 +170,25 @@ trigger can see:
   does not cap concurrency per replica. Exercise the path at a concurrency high enough
   to actually saturate a replica, since moderate load is dispatched with the queue at
   zero.
-- **Flow control off.** Both flow-control signals
-  (`llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_pool_saturation`)
-  are emitted *only* when the `flowControl` feature gate is on; with it off those
-  series are not produced and the queue and saturation triggers resolve to no data.
-  The running-request trigger (`llm_d_epp_request_running`) is not gated by flow
-  control and keeps working, so scaling degrades to running-requests only. Tune its
-  threshold accordingly, or drive scaling from a vLLM-native signal such as
-  `vllm:num_requests_waiting`.
+- **Flow control off (the guide's default `inflight` path).** The queue and
+  saturation signals (`llm_d_epp_flow_control_queue_size` and
+  `llm_d_epp_flow_control_pool_saturation`) are emitted *only* when the `flowControl`
+  feature gate is on; with it off those series are not produced and the queue and
+  saturation triggers resolve to no data. The stock optimized-baseline EPP instead
+  emits in-flight-load signals from its `inflight-load-producer` plugin -
+  `llm_d_epp_inflight_requests` (in-flight requests, summed across the pool's
+  endpoints) and `llm_d_epp_inflight_tokens` (token-weighted) - which need no flow
+  control and rise directly with concurrency. The guide's default `inflight` signal
+  scales on `llm_d_epp_inflight_requests` with a per-replica `AverageValue` target,
+  the simplest path and no extra EPP components. (`llm_d_epp_request_running` is also
+  emitted without flow control and tracks concurrency similarly; the guide uses the
+  `inflight-load-producer` signals so in-flight requests and the token-weighted
+  `inflight_tokens` share one producer.) The reactive backlog signals a stock EPP can
+  expose - `per_endpoint_queue_size`, vLLM `num_requests_waiting`, and the
+  KV-cache-utilization saturation proxy - stay at zero until a replica is genuinely
+  saturated (at concurrency 40 with the decode running all 40, `num_requests_waiting`
+  and `per_endpoint_queue_size` held 0 and KV utilization barely moved), so they
+  trigger late; the in-flight-load signals rise immediately and are the better default.
 
 ### Overshoot and Startup-Time Mitigation
 

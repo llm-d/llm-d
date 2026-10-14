@@ -1,11 +1,11 @@
-name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)
+name: Nightly - Workload Autoscaling KEDA+EPP E2E (OCP GPU)
 
-# Nightly regression test for the queue-based KEDA + EPP autoscaling path
-# (guides/workload-autoscaling/keda-epp/README.md) on OpenShift. Deploys the
-# optimized-baseline modelserver + EPP router and scales the decode Deployment
-# directly from EPP queue metrics via KEDA
-# (keda-epp/optimized-baseline/overlays/ocp/queue) -- there is no WVA controller
-# on this path.
+# Nightly regression test for the in-flight-load KEDA + EPP autoscaling path
+# (guides/workload-autoscaling/keda-epp/README.md, the default flow-control-OFF
+# `inflight` signal) on OpenShift. Deploys the stock optimized-baseline modelserver
+# + EPP router and scales the decode Deployment directly from the EPP in-flight-load
+# metric via KEDA (keda-epp/optimized-baseline/overlays/ocp/inflight) -- there is no
+# WVA controller and no EPP Flow Control on this path.
 #
 # OCP (GPU) sibling of
 # nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml (the AMD ROCm lane).
@@ -79,7 +79,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: nightly-e2e-keda-epp-queue-ocp
+  group: nightly-e2e-keda-epp-ocp
   cancel-in-progress: true
 
 jobs:
@@ -88,20 +88,20 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-openshift.yaml@main
     with:
       guide_name: workload-autoscaling
-      namespace: llm-d-nightly-keda-epp-queue
+      namespace: llm-d-nightly-keda-epp-inflight
       # EPP Service name that e2e-validate.sh curls (http://<host>:80/v1/models).
       # It is `<ROUTER_RELEASE>-epp`; the deploy script installs the router as
-      # `keda-epp-queue` (a unique release name, to avoid colliding with the
+      # `keda-epp-inflight` (a unique release name, to avoid colliding with the
       # optimized-baseline InferencePools on the shared cluster), so this MUST
       # stay in sync with ROUTER_RELEASE in nightly-deploy-ocp-keda-epp.sh.
-      gateway_host: 'keda-epp-queue-epp'
+      gateway_host: 'keda-epp-inflight-epp'
       # After the gateway smoke test, e2e-validate.sh hands off to
       # e2e-validate-scale-event.sh: fires a concurrent burst and asserts KEDA's
       # scale-up decision (desiredReplicas -> 2) then scale-down (-> 1). Asserts the
       # autoscaler DECISION, not the 2nd pod becoming Ready (it may stay Pending on a
-      # contended cluster). This is the Phase-2 scale-event proof on top of the
-      # deploy script's Fallback=False signal-liveness gate.
-      e2e_validate_args: '--extra-validate scale-event -- --require-queue-size'
+      # contended cluster). Load drives llm_d_epp_inflight_requests over threshold
+      # naturally, so no queue-specific assertion is needed.
+      e2e_validate_args: '--extra-validate scale-event'
       custom_deploy_script: |
         bash guides/workload-autoscaling/scripts/nightly-deploy-ocp-keda-epp.sh
       required_gpus: 2
@@ -122,7 +122,7 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: keda-epp-queue-ocp
-      badge_label: "VLLM GPU Queue"
+      badge_label: "VLLM GPU Autoscaling"
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}

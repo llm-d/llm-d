@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Deploy the queue-based KEDA + EPP autoscaling path (keda-epp/README.md) on
-# OpenShift in a single namespace. Same code path for CI nightly runs and local
-# development.
+# Deploy the in-flight-load KEDA + EPP autoscaling path (keda-epp guide, the default
+# flow-control-OFF `inflight` signal) on OpenShift in a single namespace. Same code
+# path for CI nightly runs and local development.
 #
-# This is the EPP-direct sibling of nightly-deploy-ocp.sh (the WVA path). It
-# deploys the SAME optimized-baseline modelserver + EPP router, but drives
-# autoscaling directly from EPP queue metrics via KEDA — there is NO WVA
-# controller on this path. KEDA reads `llm_d_epp_flow_control_queue_size` (and
-# `llm_d_epp_request_running`) from Thanos and scales the decode Deployment.
+# Deploys the stock optimized-baseline modelserver + EPP router (NO Flow Control) and
+# drives autoscaling directly from the EPP in-flight-load metric via KEDA - there is
+# NO WVA controller on this path. KEDA reads `llm_d_epp_inflight_requests` (emitted by
+# the EPP's inflight-load-producer plugin, shipped by the optimized-baseline router)
+# from Thanos and scales the decode Deployment.
 #
 # Environment variables:
-#   NAMESPACE     target namespace for ALL resources (default: keda-epp-queue-nightly-XXXX)
+#   NAMESPACE     target namespace for ALL resources (default: keda-epp-inflight-nightly-XXXX)
 #   OUTPUT_DIR    where to write the generated overlay (default: mktemp -d)
-#   EPP_SERVICE   override the EPP service name in the trigger queries
+#   EPP_SERVICE   override the EPP service name used for warmup / gateway_host
 #                 (default: auto-discovered from the namespace after the router install)
-#   MODEL_NAME    model_name label in the trigger queries (default: Qwen/Qwen3-32B)
+#   MODEL_NAME    model served, used for the warmup request (default: Qwen/Qwen3-32B)
 #   ROUTER_CHART_VERSION_OVERRIDE  EPP router chart version. Defaults to env.sh's
 #                 ROUTER_CHART_VERSION (`v0`, the rolling latest), matching the
 #                 optimized-baseline guide. Set this to test a specific version.
@@ -34,20 +34,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 source "${REPO_ROOT}/guides/env.sh"
 
-NAMESPACE="${NAMESPACE:-keda-epp-queue-nightly-$(printf '%04x' $RANDOM)}"
+NAMESPACE="${NAMESPACE:-keda-epp-inflight-nightly-$(printf '%04x' $RANDOM)}"
 SCALEDOBJECT=optimized-baseline-keda-epp
 DECODE_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-32B}"
-# CI-only EPP saturation gate (see the helm install below). Low enough that a modest
-# burst overflows into the flow-control queue so the queue_size trigger is exercised,
-# but >= the running-requests threshold (16) so that trigger still fires too.
-MAX_CONCURRENCY="${MAX_CONCURRENCY:-20}"
 # EPP router Helm release. Must be UNIQUE on the cluster: `optimized-baseline`
 # collides with the many existing optimized-baseline InferencePools on the shared
 # nightly cluster and sends the EPP into a hot reconcile loop (NOT_SERVING). The
-# EPP Service name is release-derived, so we discover it at runtime rather than
-# hardcoding it (the ScaledObject query is templated to whatever is discovered).
-ROUTER_RELEASE=keda-epp-queue
+# EPP Service name is release-derived, so we discover it at runtime (used for the
+# warmup request and the workflow's gateway_host).
+ROUTER_RELEASE=keda-epp-inflight
 # Short hash used as a suffix on the ClusterRoleBinding to make it unique per namespace.
 NS_HASH="$(printf '%s' "${NAMESPACE}" | sha256sum | cut -c1-8)"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t nightly-deploy-ocp-keda-epp.XXXXXX)}"
@@ -58,7 +54,7 @@ ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION_OVERRIDE:-${ROUTER_CHART_VERSION}}"
 mkdir -p "${OUTPUT_DIR}"
 REL="$("${_realpath}" --relative-to="${OUTPUT_DIR}" "${REPO_ROOT}")"
 
-echo "==> Deploying queue-based KEDA+EPP path"
+echo "==> Deploying in-flight-load KEDA+EPP path (flow control OFF)"
 echo "  NAMESPACE: ${NAMESPACE}"
 
 # KEDA is the external metrics provider. On OpenShift it is operator-managed
@@ -77,74 +73,27 @@ kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply
 kubectl label namespace "${NAMESPACE}" openshift.io/user-monitoring=true --overwrite
 
 echo "==> Installing EPP router via Helm (release: ${ROUTER_RELEASE})"
-# Values are layered: base -> optimized-baseline -> monitoring -> keda-epp -> CI.
-#   monitoring.values.yaml      enables the router's Prometheus ServiceMonitor.
-#   keda-epp router.values.yaml enables the flowControl feature gate (the source of
-#     llm_d_epp_flow_control_queue_size) plus the queue-scoring EPP plugins. Without
-#     these the queue metric is never emitted or scraped.
-#
-# CI-ONLY override (ci-concurrency.values.yaml, generated below; NOT part of the
-# guide): the guide ships the telemetry-based `utilization-detector` saturation gate,
-# which stays open under load the backend can absorb, so the flow-control queue never
-# forms and the queue_size trigger is never exercised in a bounded test (verified live
-# 2026-10-14: queue_size held 0 at running=200). To drive the queue_size trigger
-# deterministically the nightly swaps in a `concurrency-detector` with a low
-# maxConcurrency (mirrors the flow-control nightly). Once in-flight exceeds
-# maxConcurrency the gate closes and the overflow is held in the flow-control queue,
-# so a modest burst builds queue_size while running settles near maxConcurrency. The
-# guide default (utilization-detector) is unchanged.
-cat > "${OUTPUT_DIR}/ci-concurrency.values.yaml" <<EOF
-router:
-  epp:
-    pluginsCustomConfig:
-      optimized-baseline-keda-epp-plugins.yaml: |
-        apiVersion: llm-d.ai/v1
-        kind: EndpointPickerConfig
-        featureGates:
-        - flowControl
-        plugins:
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: no-hit-lru-scorer
-        - type: concurrency-detector
-          parameters:
-            maxConcurrency: ${MAX_CONCURRENCY}
-            concurrencyMode: requests
-            headroom: 0.0
-        schedulingProfiles:
-        - name: default
-          plugins:
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: no-hit-lru-scorer
-            weight: 2
-        flowControl:
-          saturationDetector:
-            pluginRef: concurrency-detector
-EOF
-
+# Stock optimized-baseline router, values layered base -> optimized-baseline ->
+# monitoring. NO Flow Control: the in-flight-load signal (llm_d_epp_inflight_requests)
+# is emitted by the EPP's inflight-load-producer plugin, which the optimized-baseline
+# router already ships, so the keda-epp flow-control router.values.yaml is NOT applied.
+# monitoring.values.yaml enables the EPP ServiceMonitor so the metric reaches Thanos.
 helm install "${ROUTER_RELEASE}" \
   "${ROUTER_STANDALONE_CHART}" \
   -f "${REPO_ROOT}/guides/recipes/router/base.values.yaml" \
   -f "${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml" \
   -f "${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml" \
-  -f "${REPO_ROOT}/guides/workload-autoscaling/keda-epp/optimized-baseline/router.values.yaml" \
-  -f "${OUTPUT_DIR}/ci-concurrency.values.yaml" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}"
 
 # Discover the EPP Service name the chart created (release-derived; release
-# `keda-epp-queue` yields Service `keda-epp-queue-epp`). The queue metric is
-# labelled by this `service` value, so the ScaledObject query must match it exactly.
+# `keda-epp-inflight` yields Service `keda-epp-inflight-epp`). Used for the warmup
+# request and the workflow's gateway_host. (The inflight metric is labelled by
+# endpoint/producer, not the EPP service, so the ScaledObject query does not need it.)
 # We discover rather than hardcode so the nightly still works if the release name or
 # chart naming changes.
 #
-# The EPP Service is not present the instant `helm install` returns — the router/EPP
-# resources take a few seconds to appear — so poll rather than check once.
+# The EPP Service is not present the instant `helm install` returns - the router/EPP
+# resources take a few seconds to appear - so poll rather than check once.
 if [[ -z "${EPP_SERVICE:-}" ]]; then
   echo "==> Discovering EPP Service name (waiting for the router/EPP to come up)"
   for _ in $(seq 1 30); do
@@ -195,16 +144,15 @@ kind: Kustomization
 namespace: ${NAMESPACE}
 resources:
   - ${REL}/guides/optimized-baseline/modelserver/gpu/vllm/base/
-  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/overlays/ocp/queue/
+  - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/overlays/ocp/inflight/
 patches:
-  # The leaf carries \${...} placeholders that apply -k cannot resolve, so pin
-  # the target Deployment and both trigger queries here. maxReplicaCount is
-  # capped at the GPU budget the nightly reserves (2), rather than the guide's
-  # default of 8. Both scaleUp and scaleDown stabilizationWindowSeconds are
-  # lowered 300 -> 60 so the scale-event validator can observe the scale-UP and
-  # scale-DOWN decisions within the run; at the guide default of 300 the HPA
-  # holds scale-up for up to 5 min (ScaleUpStabilized), past the validator's
-  # timeout. Nightly only; the guide default stays 300.
+  # The leaf carries \${...} placeholders that apply -k cannot resolve, so pin the
+  # target Deployment and the trigger query here. maxReplicaCount is capped at the GPU
+  # budget the nightly reserves (2), rather than the guide's default of 8. Both scaleUp
+  # and scaleDown stabilizationWindowSeconds are lowered 300 -> 60 so the scale-event
+  # validator can observe the scale-UP and scale-DOWN decisions within the run; at the
+  # guide default of 300 the HPA holds scale-up for up to 5 min (ScaleUpStabilized),
+  # past the validator's timeout. Nightly only; the guide default stays 300.
   - patch: |-
       - op: replace
         path: /spec/scaleTargetRef/name
@@ -212,11 +160,7 @@ patches:
       - op: replace
         path: /spec/triggers/0/metadata/query
         value: >-
-          sum(llm_d_epp_flow_control_queue_size{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL_NAME}"})
-      - op: replace
-        path: /spec/triggers/1/metadata/query
-        value: >-
-          sum(llm_d_epp_request_running{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL_NAME}"})
+          sum(llm_d_epp_inflight_requests{namespace="${NAMESPACE}",producer_name="inflight-load-producer"})
       - op: replace
         path: /spec/maxReplicaCount
         value: 2
@@ -259,25 +203,23 @@ fi
 echo "==> Applying kustomize overlay"
 kubectl apply -k "${OUTPUT_DIR}"
 
-# llm_d_epp_flow_control_queue_size is a PER-MODEL series that only exists once the
-# EPP has a ready backend endpoint — i.e. the decode modelserver is up (verified on
-# pokprod: an idle pool with ready_endpoints=1 and zero traffic still reports
-# queue_size=0, but a pool with no ready endpoint reports no series at all). So wait
-# for the modelserver before the Fallback check below, or KEDA would query an empty
-# series and the gate would fail before the stack is even ready. vLLM startup (image
-# pull + model load) commonly takes several minutes.
+# llm_d_epp_inflight_requests is a per-endpoint series that only exists once the EPP
+# has a ready backend endpoint - i.e. the decode modelserver is up. So wait for the
+# modelserver before the gate below, or KEDA would query an empty series and the gate
+# would fail before the stack is even ready. vLLM startup (image pull + model load)
+# commonly takes several minutes.
 echo "==> Waiting for the decode modelserver to become ready (vLLM startup)"
 kubectl rollout status deployment/"${DECODE_DEPLOYMENT}" \
   -n "${NAMESPACE}" --timeout=20m
 
-# The EPP may create the per-model `flow_control_queue_size` / `request_running`
-# series LAZILY, on the first request through flow control, not at idle (even with a
-# ready endpoint). Send a short warmup so the series exist before the Fallback gate
-# queries Thanos for them; otherwise KEDA's trigger errors on an empty series and the
-# ScaledObject never goes Ready. Best-effort (`|| true`): if the warmup can't reach the
-# EPP, the Fallback gate below still catches a dead pipeline. Runs in-cluster (a curl
-# pod) because the ClusterIP EPP Service isn't reachable from the CI runner directly.
-echo "==> Warming up the EPP to register the queue metrics (lazy series)"
+# The EPP creates the per-endpoint inflight-load series LAZILY, on the first request,
+# not at idle (verified live: llm_d_epp_inflight_requests appears at 0 after one request
+# to a ready endpoint). Send a short warmup so the series exists before the gate queries
+# Thanos for it; otherwise KEDA's trigger errors on an empty series and the ScaledObject
+# never goes Ready. Best-effort (`|| true`): if the warmup can't reach the EPP, the gate
+# below still catches a dead pipeline. Runs in-cluster (a curl pod) because the ClusterIP
+# EPP Service isn't reachable from the CI runner directly.
+echo "==> Warming up the EPP to register the inflight metric (lazy series)"
 kubectl run keda-epp-warmup -n "${NAMESPACE}" --image=curlimages/curl:8.10.1 \
   --restart=Never --rm -i --quiet --command -- sh -c '
     for i in 1 2 3 4 5; do
@@ -290,7 +232,7 @@ kubectl run keda-epp-warmup -n "${NAMESPACE}" --image=curlimages/curl:8.10.1 \
 
 echo "==> Waiting for the ScaledObject to be Ready"
 # Ready only means KEDA accepted the trigger and created its HPA. It does NOT mean
-# the metric pipeline works — see the Fallback check below.
+# the metric pipeline works - see the Fallback check below.
 kubectl wait scaledobject/"${SCALEDOBJECT}" \
   -n "${NAMESPACE}" --for=condition=Ready --timeout=300s
 
@@ -315,8 +257,8 @@ for _ in $(seq 1 30); do
 done
 
 if [[ "${streak}" -lt 3 ]]; then
-  echo "ERROR: ScaledObject is in fallback (Fallback=${fallback:-unknown}) — KEDA is NOT reading" >&2
-  echo "       the EPP queue metric. Replica count is coming from spec.fallback." >&2
+  echo "ERROR: ScaledObject is in fallback (Fallback=${fallback:-unknown}) - KEDA is NOT reading" >&2
+  echo "       the EPP in-flight metric. Replica count is coming from spec.fallback." >&2
   kubectl get scaledobject/"${SCALEDOBJECT}" -n "${NAMESPACE}" \
     -o jsonpath='{range .status.conditions[*]}  {.type}={.status} ({.reason}: {.message}){"\n"}{end}' >&2
   echo "--- KEDA operator errors for this namespace ---" >&2
