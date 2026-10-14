@@ -160,8 +160,12 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 <!-- guide:prerequisites.lws[0] start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+# helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
+# "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
+helm pull oci://registry.k8s.io/lws/charts/lws --version=${LWS_VERSION} --untar
+kubectl apply --server-side --force-conflicts -f lws/crds
 helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
-  --version=0.11.1 \
+  --version=${LWS_VERSION} \
   --namespace lws-system --create-namespace \
   --set enableDisaggregatedSet=true \
   --wait --timeout 300s

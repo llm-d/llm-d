@@ -1,0 +1,109 @@
+# inference-perf job for the NVIDIA-Nemotron-3-Ultra guide: replays the agentic code-generation
+# workload against the nemotron-3-ultra-epp Service. Render with envsubst after exporting
+# CONCURRENCY_LEVEL, NUM_REQUESTS and SEED (see the guide's Benchmarking section).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-perf-config
+  labels:
+    app: inference-perf
+data:
+  config.yaml: |
+    load:
+      type: concurrent
+      num_workers: 8
+      worker_max_concurrency: 1000
+      request_timeout: 600
+      stages:
+      - num_requests: ${NUM_REQUESTS}
+        concurrency_level: ${CONCURRENCY_LEVEL}
+    api:
+      type: completion
+      streaming: true
+    server:
+      type: vllm
+      model_name: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+      base_url: http://nemotron-3-ultra-epp
+    data:
+      type: conversation_replay
+      conversation_replay:
+        seed: ${SEED}
+        max_model_len: 262144
+        num_conversations: ${CONCURRENCY_LEVEL}
+        shared_system_prompt_len: 3000
+        dynamic_system_prompt_len:
+          type: lognormal
+          min: 10000
+          max: 990000
+          mean: 160000
+          std_dev: 233600
+        turns_per_conversation:
+          type: lognormal
+          min: 1
+          max: 3000
+          mean: 540
+          std_dev: 48600
+        input_tokens_per_turn:
+          type: lognormal
+          min: 100
+          max: 10000
+          mean: 1500
+          std_dev: 1200
+        output_tokens_per_turn:
+          type: lognormal
+          min: 50
+          max: 10000
+          mean: 425
+          std_dev: 825
+        tool_call_latency_sec:
+          type: lognormal
+          min: 1
+          max: 100
+          mean: 15
+          std_dev: 55
+    report:
+      request_lifecycle:
+        summary: true
+        per_stage: true
+        per_request: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inference-perf
+  labels:
+    app: inference-perf
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: inference-perf
+    spec:
+      containers:
+        - name: inference-perf
+          image: quay.io/inference-perf/inference-perf:v0.6.0
+          command: ["inference-perf"]
+          args: ["--config_file", "/etc/config/config.yaml"]
+          env:
+            - name: RAYON_NUM_THREADS
+              value: "4"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            requests:
+              cpu: "4"
+              memory: 16Gi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: config-volume
+          configMap:
+            name: inference-perf-config

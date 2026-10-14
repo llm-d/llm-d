@@ -58,6 +58,8 @@ This guide includes configurations for the following accelerator and model serve
 
 - Create a [HuggingFace token](../../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
+- (Optional) Install the [monitoring stack](../../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+
 - (`INFRA_PROVIDER=gke` only) Copy the model to a Google Cloud Storage bucket the cluster can
   mount, as described in [Downloading the Model to Your GCS Bucket](modelserver/gpu/vllm/gke/README.md).
 
@@ -83,6 +85,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=nemotron-3-ultra
 export NAMESPACE=llm-d-nemotron-3-ultra
+export MONITORING=false # options: false, true
+export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu
 export MODEL_SERVER=vllm # options: vllm
 export INFRA_PROVIDER=base # options: base, gke
@@ -105,8 +109,12 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 <!-- guide:prerequisites.lws start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+# helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
+# "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
+helm pull oci://registry.k8s.io/lws/charts/lws --version=${LWS_VERSION} --untar
+kubectl apply --server-side --force-conflicts -f lws/crds
 helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
-  --version=0.11.1 \
+  --version=${LWS_VERSION} \
   --namespace lws-system --create-namespace \
   --set enableDisaggregatedSet=true \
   --wait --timeout 300s
@@ -152,6 +160,15 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NA
 ```
 <!-- guide:deploy.router_values end -->
 
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+
+<!-- guide:deploy.monitoring_values start -->
+```bash
+# only when MONITORING=true:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+<!-- guide:deploy.monitoring_values end -->
+
 **Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
@@ -159,6 +176,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NA
 helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${ROUTER_BASE_VALUES} \
+  ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
@@ -186,6 +204,15 @@ available (model load is large; the startup probe allows about two hours):
 ```bash
 kubectl wait --for=condition=Available disaggregatedset/pd-disagg-vllm -n ${NAMESPACE} --timeout=7200s
 ```
+
+**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+
+<!-- guide:deploy.monitoring start -->
+```bash
+# only when MONITORING=true:
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
+```
+<!-- guide:deploy.monitoring end -->
 
 ## Verification
 
@@ -255,7 +282,7 @@ OPENCODE_CONFIG="${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/gpu/vllm/o
 
 ## Benchmarking
 
-This guide comes with an `inference-perf` benchmark preset (defined in [guide.yaml](benchmark-templates/guide.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
+This guide comes with an `inference-perf` benchmark preset (defined in [inference-perf.yaml](inference-perf.yaml)) designed for agentic code-generation workloads with multi-turn interactions and tool usage. The configuration parameters include:
 
 | Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -266,21 +293,11 @@ This guide comes with an `inference-perf` benchmark preset (defined in [guide.ya
 | **Output Tokens per Turn** | Lognormal | 50 | 10,000 | 425 tokens | 825 | Model generations per turn, which are generally smaller than inputs but can spike when generating large files. |
 | **Tool Call Latency** | Lognormal | 1 sec | 100 sec | 15 sec | 55 sec | Simulated delay for external tool execution (e.g., running tests, linting, or shell commands) between turns. |
 
-### 1. Prepare the Benchmarking Suite
+### 1. Run the Benchmark
 
-- Download the benchmark script:
-
-  ```bash
-  curl -L -O https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/existing_stack/run_only.sh
-  chmod u+x run_only.sh
-  ```
-
-- Prepare HuggingFace token secret `llm-d-hf-token` in the namespace.
-
-### 2. Execute Benchmark
-
-The request rate and workload shape are fixed in the template, so only the endpoint needs to be
-resolved before rendering:
+[`inference-perf.yaml`](inference-perf.yaml) runs an
+[`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) job that replays the workload
+above against the `${GUIDE_NAME}-epp` Service. Set the per-run parameters, render it, and apply it:
 
 ```bash
 # Benchmark parameters. CONCURRENCY_LEVEL is the number of concurrent coding sessions
@@ -290,9 +307,16 @@ export CONCURRENCY_LEVEL=40
 export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
 export SEED=$((7 + CONCURRENCY_LEVEL))
 
-export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark-templates/guide.yaml > config.yaml
-./run_only.sh -c config.yaml -o ./results
+kubectl delete job inference-perf -n ${NAMESPACE} --ignore-not-found
+envsubst < ${REPO_ROOT}/guides/models/${GUIDE_NAME}/inference-perf.yaml | kubectl apply -n ${NAMESPACE} -f -
+```
+
+### 2. Collect the Results
+
+Follow the job's logs until it completes:
+
+```bash
+kubectl logs -n ${NAMESPACE} job/inference-perf -f
 ```
 
 ## Benchmark Results
@@ -329,6 +353,8 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/model
 <!-- guide:cleanup.rest start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash

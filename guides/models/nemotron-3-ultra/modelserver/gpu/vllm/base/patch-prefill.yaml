@@ -79,7 +79,9 @@ spec:
                 - name: shm
                   emptyDir:
                     medium: Memory
-                    sizeLimit: 40Gi
+                    # The OffloadingConnector's CPU KV cache (cpu_bytes_to_use, 200 GiB) is
+                    # allocated in /dev/shm, so this must exceed it.
+                    sizeLimit: 256Gi
                 - name: torch-compile-cache
                   emptyDir: {}
                 - name: vllm-config

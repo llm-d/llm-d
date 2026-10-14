@@ -29,6 +29,9 @@ else
   export ROUTER_RELEASE_URL=releases/download/${ROUTER_RELEASE_VERSION}
 fi
 
+### LeaderWorkerSet release installed by guides that deploy DisaggregatedSets
+export LWS_VERSION=${LWS_VERSION:-0.11.1}
+
 ### Chart versions and OCI coordinates for router chart
 export ROUTER_CHART_VERSION=${ROUTER_CHART_VERSION:-v0}
 export ROUTER_STANDALONE_CHART=${ROUTER_STANDALONE_CHART:-oci://ghcr.io/llm-d/charts/llm-d-router-standalone}
