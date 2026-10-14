@@ -59,8 +59,10 @@ An async member's queued and in-flight requests can outlive it: llm-d-async
 notices a cancellation within about a second, and a longer `ASYNC_TIMEOUT`
 leaves a larger backlog. So before each part `run.py` waits until the guide's
 team queues in Redis are empty and the sampler's latest vLLM reading shows
-nothing running or waiting, for `DRAIN_QUIET_S` in a row (`DRAIN_TIMEOUT_S` at
-most; the run then continues and `report.json`'s `drains` records it). Without
+nothing running or waiting, for `DRAIN_QUIET_S` in a row. If Redis cannot be
+read, the vLLM check alone decides (the record's `queue_check` is
+`unavailable`). After `DRAIN_TIMEOUT_S`, by default the async client timeout
+plus 60 s, the run continues anyway; `report.json`'s `drains` records every wait. Without
 this, a level's realtime-only baseline could run against the previous level's
 leftover async work, which inflates the baseline and loosens that level's
 bounds.
@@ -154,7 +156,7 @@ eviction round trip (up to about 0.5 s on H100s).
 | `START_SKEW_S` | `60` | how much later than the async pod the realtime pod may start and still run inside the backlog (use 180 on GKE Autopilot, where each harness pod may get a new node) |
 | `RETRIES` | `1` | re-runs of levels whose comparison came back unusable (0 disables) |
 | `WAIT_TIMEOUT` | `900` | seconds the CLI waits for a treatment before giving up (cuts off a hung client) |
-| `DRAIN_TIMEOUT_S` / `DRAIN_QUIET_S` | `600` / `10` | before each part: the longest wait for the async backlog to drain, and how long the queues and vLLM must stay idle to count as drained |
+| `DRAIN_TIMEOUT_S` / `DRAIN_QUIET_S` | `ASYNC_TIMEOUT` + 60 / `10` | before each part: the longest wait for the async backlog to drain, and how long the queues and vLLM must stay idle to count as drained |
 | `WARMUP_S` | `15` | seconds trimmed from the front of every window |
 | `WORKDIR` | `/tmp/amt` | CLI clone, workspace and rendered experiment |
 | `RESULTS_DIR` | `/tmp/pod-logs-$GUIDE_NAME` | where `report.json` and results are copied (the reusable uploads this directory) |

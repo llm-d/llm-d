@@ -1009,7 +1009,33 @@ class WaitForDrainTests(unittest.TestCase):
         rec = self._wait([0], [a.Sample(t=1.0, running=0.0)], timeout=0.1)   # from long ago
         self.assertFalse(rec["drained"])
         self.assertFalse(self._wait([0], [], timeout=0.1)["drained"])
-        self.assertFalse(self._wait([None], [self._fresh(0.0)], timeout=0.1)["drained"])  # Redis unreadable
+
+    def test_unreadable_redis_falls_back_to_the_vllm_idle_check(self):
+        # An unreadable Redis must not cost the full timeout on every drain.
+        rec = self._wait([None], [self._fresh(0.0)], timeout=5.0)
+        self.assertEqual((rec["drained"], rec["queue_check"]), (True, "unavailable"))
+        self.assertLess(rec["waited_s"], 1.0)
+        rec = self._wait([None], [self._fresh(1.0)], timeout=0.1)   # still busy on the GPU
+        self.assertEqual((rec["drained"], rec["queue_check"]), (False, "unavailable"))
+        self.assertEqual(self._wait([0], [self._fresh(0.0)])["queue_check"], "redis")
+
+    def test_drain_timeout_follows_the_async_timeout(self):
+        import argparse
+        import run
+
+        args = argparse.Namespace(namespace="ns", model="m", verbose=False, dry_run=False)
+        saved = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith(a.ENV_PREFIX)}
+        try:
+            cfg = run.Config(args)
+            self.assertEqual(cfg.drain_timeout, cfg.async_timeout + 60)
+            os.environ[f"{a.ENV_PREFIX}ASYNC_TIMEOUT"] = "50"
+            self.assertEqual(run.Config(args).drain_timeout, 110)
+            os.environ[f"{a.ENV_PREFIX}DRAIN_TIMEOUT_S"] = "30"
+            self.assertEqual(run.Config(args).drain_timeout, 30)
+        finally:
+            for k in [k for k in os.environ if k.startswith(a.ENV_PREFIX)]:
+                del os.environ[k]
+            os.environ.update(saved)
 
 
 class MainExitCodeTests(unittest.TestCase):

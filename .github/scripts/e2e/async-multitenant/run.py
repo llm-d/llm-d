@@ -133,10 +133,9 @@ class Config:
         # client (seen occasionally after aiohttp timeouts) is cut off here and
         # its level re-run, instead of holding the job for the CLI's default hour.
         self.wait_timeout = int(env("WAIT_TIMEOUT", "900"))
-        # Between benchmark parts: how long to wait for the previous part's async
-        # work to leave the queues and the model server, and how long the pool must
-        # stay idle to count as drained (see wait_for_drain).
-        self.drain_timeout = float(env("DRAIN_TIMEOUT_S", "600"))
+        # Between benchmark parts: how long the pool must stay idle to count as
+        # drained (see wait_for_drain). The longest wait is set below, once the
+        # async client timeout is known.
         self.drain_quiet = float(env("DRAIN_QUIET_S", "10"))
         self.async_queues = queue_names_from_values(GUIDE_DIR / "values" / "redis" / "quota-only.yaml")
         self.retries = int(env("RETRIES", "1"))
@@ -173,6 +172,10 @@ class Config:
             self.async_duration = int(env("DRY_RUN_ASYNC_DURATION", "45"))
             self.async_timeout = 10
             self.enforce = False
+        # No async request outlives its client's timeout by more than about a
+        # second (llm-d-async polls for cancellation), so the backlog is gone a
+        # minute after it at the latest; this bounds the five drain waits.
+        self.drain_timeout = float(env("DRAIN_TIMEOUT_S", str(self.async_timeout + 60)))
 
 
 # ---------------------------------------------------------------------------
@@ -706,31 +709,37 @@ def wait_for_drain(cfg: Config, sampler, label: str) -> dict:
     realtime-only baseline before they are gone measures realtime against
     leftover async work. Drained means the team queues are empty and the
     sampler's latest fresh vLLM reading shows nothing running or waiting, for
-    DRAIN_QUIET_S in a row. After DRAIN_TIMEOUT_S the run continues anyway, and
-    the record says so.
+    DRAIN_QUIET_S in a row. If Redis cannot be read, the vLLM idle check alone
+    decides (warned once, and recorded as queue_check "unavailable") rather than
+    waiting out the timeout. After DRAIN_TIMEOUT_S the run continues anyway,
+    and the record says so.
     """
     start = time.time()
     quiet_since: float | None = None
     backlog = busy = None
+    queue_check = "redis"
     while True:
         now = time.time()
         backlog = async_backlog(cfg)
+        if backlog is None and queue_check == "redis":
+            queue_check = "unavailable"
+            log(f"WARNING {label}: cannot read the async queues in Redis; draining on the vLLM idle check alone")
         latest = sampler.samples[-1] if sampler.samples else None
         fresh = latest is not None and latest.running is not None and latest.t >= now - 3 * cfg.sample_interval
         busy = (latest.running or 0) + (latest.waiting or 0) if fresh else None
-        if backlog == 0 and busy == 0:
+        if backlog in (0, None) and busy == 0:
             quiet_since = quiet_since if quiet_since is not None else now
             if now - quiet_since >= cfg.drain_quiet:
                 waited = now - start
                 log(f"{label}: async backlog drained after {waited:.0f}s")
-                return {"part": label, "drained": True, "waited_s": round(waited, 1)}
+                return {"part": label, "drained": True, "waited_s": round(waited, 1), "queue_check": queue_check}
         else:
             quiet_since = None
         if now - start >= cfg.drain_timeout:
             log(f"WARNING {label}: async backlog not drained after {cfg.drain_timeout:.0f}s "
                 f"(queued {backlog}, vLLM running+waiting {busy}); continuing")
             return {"part": label, "drained": False, "waited_s": round(now - start, 1),
-                    "queued": backlog, "vllm_busy": busy}
+                    "queued": backlog, "vllm_busy": busy, "queue_check": queue_check}
         time.sleep(max(0.01, min(cfg.sample_interval, 5.0)))
 
 
