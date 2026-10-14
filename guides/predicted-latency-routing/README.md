@@ -176,7 +176,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- guide:deploy.monitoring_values.gke start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and INFRA_PROVIDER=gke:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
@@ -321,7 +321,7 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 <!-- guide:verify.tests.router_metrics.gke start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and INFRA_PROVIDER=gke:
 # Actual vs. predicted TTFT histograms of the router, authenticated
 # with the GMP metrics-reader secret
 TOKEN=$(kubectl get secret ${GUIDE_NAME}-metrics-reader-secret -n ${NAMESPACE} -o jsonpath='{.data.token}' | base64 -d)

@@ -160,7 +160,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- guide:deploy.monitoring_values.gke start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and INFRA_PROVIDER=gke:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->

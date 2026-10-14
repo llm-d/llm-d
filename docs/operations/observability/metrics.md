@@ -85,10 +85,10 @@ metadata:
 spec:
   selector:
     matchLabels:
-      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: optimized-baseline
       llm-d.ai/role: decode
   endpoints:
-    - port: http
+    - port: modelserver
       path: /prometheus/metrics
       interval: 15s
 ```
