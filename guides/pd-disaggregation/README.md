@@ -349,7 +349,7 @@ Tool calling and reasoning parsing are enabled with the parsers for the model ea
 **Known issues:**
 
 <details>
-<summary><h4>Other Models (TPU7x)</h4></summary>
+<summary><b>Other Models (TPU7x)</b></summary>
 
 ```bash
 # Google TPU v7 / vLLM — Qwen/Qwen3-32B

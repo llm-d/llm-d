@@ -332,14 +332,13 @@ Notes:
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
 
-
 **GKE TPU node requirements (v6e and TPU7x):**
 
-- **Boot disk**: weights are cached on the node boot disk; Qwen3-32B (~65 GB) does not fit the 100 GB default from node auto-provisioning. Use ≥ 200 GB or the pod is evicted for ephemeral storage and the node recycled.
-- **Cluster autoscaler**: under `OPTIMIZE_UTILIZATION` a one-pod TPU node is scaled down beneath the model server; annotate pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`.
-- **Image registry**: node service account needs `roles/artifactregistry.reader` on `cloud-ullm-inference-ci-cd/vllm-torchtpu`, or mirror the image. Pin the digest you validated; `release` tracks `:latest`.
-- The Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
-- v6e validated 2026-10-11 (`ct6e-standard-8t`, `torchtpu-vllm-prod@sha256:a8de2075…` = `nightly-20261006`).
+* **Boot disk**: weights are cached on the node boot disk; Qwen3-32B (~65 GB) does not fit the 100 GB default from node auto-provisioning. Use ≥ 200 GB or the pod is evicted for ephemeral storage and the node recycled.
+* **Cluster autoscaler**: under `OPTIMIZE_UTILIZATION` a one-pod TPU node is scaled down beneath the model server; annotate pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`.
+* **Image registry**: node service account needs `roles/artifactregistry.reader` on `cloud-ullm-inference-ci-cd/vllm-torchtpu`, or mirror the image. Pin the digest you validated; `release` tracks `:latest`.
+* The Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
+* v6e validated 2026-10-11 (`ct6e-standard-8t`, `torchtpu-vllm-prod@sha256:a8de2075…` = `nightly-20261006`).
 
 </details>
 <!-- tabs:end -->
