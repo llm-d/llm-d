@@ -447,7 +447,7 @@ training samples: ttft=177 tpot=181
 # Actual vs. predicted TTFT/TPOT histograms of the router, read through the
 # API server service proxy
 kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
-  | grep -E '^llm_d_epp_request_(predicted_|streaming_)?(ttft|tpot)_seconds_count' || true
+  | grep -E '^llm_d_epp_request_(predicted_)?(ttft|tpot)_seconds_count' || true
 ```
 <!-- guide:verify.tests.router_metrics.standard end -->
 
@@ -468,7 +468,7 @@ kubectl run metrics-test --rm -i --restart=Never \
   --env="GUIDE_NAME=${GUIDE_NAME}" \
   --env="TOKEN=${TOKEN}" \
   -- /bin/sh -c 'curl -sS -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics"' \
-  | grep -E '^llm_d_epp_request_(predicted_|streaming_)?(ttft|tpot)_seconds_count' || true
+  | grep -E '^llm_d_epp_request_(predicted_)?(ttft|tpot)_seconds_count' || true
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:verify.tests.router_metrics.gke end -->
@@ -493,12 +493,11 @@ llm_d_epp_request_ttft_seconds_count{fairness_id="default-flow",model_name="Qwen
 <details>
 <summary><b>SLO-aware</b></summary>
 
-Expected output (adds `predicted_tpot_seconds_count` and `streaming_tpot_seconds_count`):
+Expected output (adds `predicted_tpot_seconds_count`):
 
 ```text
 llm_d_epp_request_predicted_tpot_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
 llm_d_epp_request_predicted_ttft_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
-llm_d_epp_request_streaming_tpot_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",target_model_name="Qwen/Qwen3-32B"} 201
 llm_d_epp_request_ttft_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",streaming="true",target_model_name="Qwen/Qwen3-32B"} 201
 ```
 

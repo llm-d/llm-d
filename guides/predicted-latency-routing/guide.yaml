@@ -228,7 +228,7 @@ verify:
             # Actual vs. predicted TTFT/TPOT histograms of the router, read through the
             # API server service proxy
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:9090/proxy/metrics" \
-              | grep -E '^llm_d_epp_request_(predicted_|streaming_)?(ttft|tpot)_seconds_count' || true
+              | grep -E '^llm_d_epp_request_(predicted_)?(ttft|tpot)_seconds_count' || true
       gke:
         - when: {MONITORING: ["true"], INFRA_PROVIDER: [gke]}
           skip_in: [ci]
@@ -242,7 +242,7 @@ verify:
               --env="GUIDE_NAME=${GUIDE_NAME}" \
               --env="TOKEN=${TOKEN}" \
               -- /bin/sh -c 'curl -sS -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics"' \
-              | grep -E '^llm_d_epp_request_(predicted_|streaming_)?(ttft|tpot)_seconds_count' || true
+              | grep -E '^llm_d_epp_request_(predicted_)?(ttft|tpot)_seconds_count' || true
     slo_request:
       # skip_in ci: see deploy.router_values.
       - when: {SLO_AWARE: ["true"]}
