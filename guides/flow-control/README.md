@@ -351,7 +351,7 @@ kubectl create clusterrolebinding ${GUIDE_NAME}-epp-auth-delegator \
 ```
 <!-- guide:verify.tests.metrics_rbac end -->
 
-Without the `${GUIDE_NAME}-metrics-reader` grant (when metrics auth is enabled), the metrics endpoint returns `401 Unauthorized`/`403 Forbidden`, and every metrics check in this guide reads as empty `grep` output.
+Without the `${GUIDE_NAME}-metrics-reader` grant (when metrics auth is enabled), the metrics endpoint returns `403 Forbidden`, and every metrics check in this guide reads as empty `grep` output.
 
 **Open a temporary interactive shell inside the cluster:**
 
@@ -380,9 +380,9 @@ grep llm_d_epp_flow_control_pool_saturation metrics.txt
 Expected: `stage="decode"` and `stage="effective"` series for the pool, both `0` on an
 idle pool (confirming the Flow Control layer is active and exporting metrics; per-flow
 series such as `llm_d_epp_flow_control_queue_size` are registered lazily after a flow
-receives its first request). A `401` means the metrics-access grants above were skipped; a
-`500` means the EPP's service account lacks the auth-delegator binding (the EPP log shows
-a failed TokenReview).
+receives its first request). A `401` means the request carried no valid token; a `403`
+means the `${GUIDE_NAME}-metrics-reader` grant above was skipped; a `500` means the EPP's
+service account lacks the auth-delegator binding (the EPP log shows a failed TokenReview).
 
 ## Use Cases
 
@@ -570,7 +570,7 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 ## Production Tuning: Deriving `maxConcurrency`
 
 > [!IMPORTANT]
-> The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) (`132`) is a **per-replica** threshold empirically tuned **only** for the default reference workload (`Qwen/Qwen3-32B` on H100 80 GB, TP=2 — 2 GPUs per replica). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
+> The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) is a **per-replica** threshold empirically tuned **only** for the default reference workload (`Qwen/Qwen3-32B` on H100 80 GB, TP=2 — 2 GPUs per replica). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
 
 For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 

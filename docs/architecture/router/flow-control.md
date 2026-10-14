@@ -463,7 +463,7 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `llm_d_epp_flow_control_dispatch_cycle_duration_seconds` | Histogram | Time taken for each internal dispatch cycle. | None |
 | `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Histogram | Time taken to enqueue requests into the Flow Control layer. | `fairness_id`, `priority`, `outcome` |
 | `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool`, `stage` |
-| `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector`, `stage` |
+| `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector` |
 | `llm_d_epp_flow_control_detector_saturation` | Gauge | Saturation signal reported by each child of a `max-saturation-detector` on evaluation. | `detector`, `stage` |
 | `llm_d_epp_flow_control_capacity_utilization_requests` | Gauge | Fraction of a priority band's effective request-count capacity currently occupied (0.0–1.0). | `priority`, `inference_pool` |
 | `llm_d_epp_flow_control_capacity_utilization_bytes` | Gauge | Fraction of a priority band's effective byte-size capacity currently occupied (0.0–1.0). | `priority`, `inference_pool` |
