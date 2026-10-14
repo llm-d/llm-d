@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "ATOM ROCm",
-  "message": "infra-error",
-  "color": "orange"
+  "message": "benchmark-error",
+  "color": "yellow"
 }
