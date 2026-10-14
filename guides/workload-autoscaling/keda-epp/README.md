@@ -52,8 +52,6 @@ export MONITORING_NAMESPACE=llm-d-monitoring
 export KEDA_NAMESPACE=keda # options: keda, openshift-keda
 export MODEL=Qwen/Qwen3-32B
 export TARGET_DEPLOYMENT=optimized-baseline-nvidia-gpu-vllm-decode
-export SCALEDOBJECT_NAME=optimized-baseline-keda-epp
-export HPA_NAME=keda-hpa-optimized-baseline
 export EPP_SERVICE=optimized-baseline-epp
 export INFERENCE_POOL=optimized-baseline
 export SIGNAL=queue # options: queue, saturation
@@ -225,7 +223,7 @@ Pick one signal, set the matching environment variables, and apply the leaf over
 below. Do not apply two `ScaledObject`s to one Deployment.
 
 | `SIGNAL` | Leaf overlay | Use when |
-|---|---|---|
+| --- | --- | --- |
 | `queue` (default) | `overlays/{k8s,ocp}/queue` | Mature, nightly-covered path; portable startup smoothing. |
 | `saturation` (experimental) | `overlays/{k8s,ocp}/saturation` | Scale before requests queue; validate thresholds first. |
 
@@ -242,7 +240,7 @@ The checked-in `ScaledObject` provides the following default configuration for
 this guide:
 
 | Parameter | Value |
-|---|---|
+| --- | --- |
 | Target Deployment | `optimized-baseline-nvidia-gpu-vllm-decode` |
 | Minimum replicas | 1 |
 | Maximum replicas | 8 (queue) / 10 (saturation) |
@@ -287,6 +285,8 @@ scale-up is observable. Scale the target Deployment down before creating the
 
 <!-- guide:deploy.prepare start -->
 ```bash
+# Validate before changing replicas, not only before applying the overlay.
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
 kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 ```
@@ -312,6 +312,7 @@ Queue signal (default):
 <!-- guide:deploy.apply_k8s_queue start -->
 ```bash
 # only when SIGNAL=queue and ENV=existing:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_queue end -->
@@ -321,6 +322,7 @@ Saturation signal (experimental):
 <!-- guide:deploy.apply_k8s_saturation start -->
 ```bash
 # only when SIGNAL=saturation and ENV=existing:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_saturation end -->
@@ -336,6 +338,7 @@ Queue signal (default):
 <!-- guide:deploy.apply_ocp_queue start -->
 ```bash
 # only when SIGNAL=queue and ENV=ocp:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_queue end -->
@@ -345,6 +348,7 @@ Saturation signal (experimental):
 <!-- guide:deploy.apply_ocp_saturation start -->
 ```bash
 # only when SIGNAL=saturation and ENV=ocp:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_saturation end -->
@@ -355,8 +359,9 @@ Check the `ScaledObject` status and events:
 
 <!-- guide:verify.tests.scaledobject start -->
 ```bash
-kubectl get scaledobject ${SCALEDOBJECT_NAME} -n ${NAMESPACE}
-kubectl wait --for=condition=Ready scaledobject/${SCALEDOBJECT_NAME} -n ${NAMESPACE} --timeout=120s
+# All four overlays use the fixed ScaledObject name optimized-baseline-keda-epp.
+kubectl get scaledobject optimized-baseline-keda-epp -n ${NAMESPACE}
+kubectl wait --for=condition=Ready scaledobject/optimized-baseline-keda-epp -n ${NAMESPACE} --timeout=120s
 ```
 <!-- guide:verify.tests.scaledobject end -->
 
@@ -370,8 +375,9 @@ KEDA creates the HPA named in `horizontalPodAutoscalerConfig`:
 
 <!-- guide:verify.tests.hpa start -->
 ```bash
-kubectl get hpa ${HPA_NAME} -n ${NAMESPACE}
-kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.currentMetrics}' | jq
+# The ScaledObject explicitly sets the HPA name; it is not derived from TARGET_DEPLOYMENT.
+kubectl get hpa keda-hpa-optimized-baseline -n ${NAMESPACE}
+kubectl get hpa keda-hpa-optimized-baseline -n ${NAMESPACE} -o jsonpath='{.status.currentMetrics}' | jq
 ```
 <!-- guide:verify.tests.hpa end -->
 
@@ -521,15 +527,19 @@ available, and the generated HPA has no scaling-limited conditions.
 <!-- guide:cleanup start -->
 ```bash
 # only when SIGNAL=queue and ENV=existing:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=existing:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=queue and ENV=ocp:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=ocp:
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 ```
 <!-- guide:cleanup end -->
