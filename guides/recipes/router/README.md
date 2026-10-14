@@ -125,6 +125,22 @@ helm upgrade <release-name> \
 > `router.proxy.proxyType`, `router.inferencePool.create` and
 > `router.epp.flags.secure-serving` flags to the command above.
 
+## Enable Distributed Tracing (Optional)
+
+To enable OpenTelemetry tracing on the EPP, deploy an OpenTelemetry Collector (see [Trace Requests](../../../docs/operations/observability/tracing.md)) and layer [`features/tracing.values.yaml`](features/tracing.values.yaml) when installing or upgrading the router Helm chart:
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/tracing.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+`features/tracing.values.yaml` exports traces to `http://otel-collector:4317` with a 5% sampling ratio (`samplerArg: "0.05"`). Override `--set router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests.
+
 ## Calibration
 
 [`calibration/`](calibration/) provides a reusable tool to measure
@@ -139,6 +155,7 @@ Both modes share a common `base.values.yaml` containing the router image, ports,
 base.values.yaml                              # shared defaults (this directory)
   + features/monitoring.values.yaml           # optional Prometheus Operator ServiceMonitor
   + features/monitoring-gke.values.yaml       # optional GKE Managed Prometheus PodMonitoring
+  + features/tracing.values.yaml              # optional OpenTelemetry distributed tracing
   + features/agentgateway-proxy.values.yaml   # required for agentgateway config args
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```

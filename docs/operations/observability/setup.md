@@ -185,6 +185,10 @@ When [automatic application monitoring](../../infrastructure/providers/gke/READM
 
 ## Step 3: Install Distributed Tracing (Optional)
 
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
 Deploy the OTel Collector and Jaeger into the same namespace as your llm-d workload:
 
 ```bash
@@ -205,6 +209,21 @@ To link the exemplar dots on the latency panel to their traces, re-run the Step 
 ```
 
 If Jaeger runs in more than one namespace, set `TRACING_NAMESPACE` to the one to link. If you open the Jaeger UI somewhere other than `http://localhost:16686`, set `JAEGER_UI_URL`.
+
+</details>
+<details>
+<summary><b>GKE (Google Cloud Trace)</b></summary>
+
+On GKE, grant `roles/cloudtrace.agent` to the collector's ServiceAccount via Workload Identity (see [Trace Requests](./tracing.md#step-1-deploy-otel-collector-and-tracing-backend)) and deploy the OTel Collector configured with the Google Cloud Trace exporter:
+
+```bash
+./guides/recipes/observability/install-otel-collector-jaeger.sh --gke -n ${NAMESPACE}
+```
+
+View traces and per-span latency distributions in [Google Cloud Trace Explorer](https://console.cloud.google.com/traces/explorer).
+
+</details>
+<!-- tabs:end -->
 
 For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 
