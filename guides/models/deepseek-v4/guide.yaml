@@ -98,9 +98,8 @@ deploy:
           -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
 
   monitoring:
-    # PodMonitors for the prefill and decode model servers (one API port per pod)
     - when: {MONITORING: ["true"]}
-      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 
 verify:
   endpoint:
@@ -133,6 +132,6 @@ cleanup:
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring --ignore-not-found=true
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true
     - skip_in: [ci]
       run: kubectl delete namespace ${NAMESPACE}

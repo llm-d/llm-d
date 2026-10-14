@@ -213,7 +213,7 @@ kubectl get pods -n ${NAMESPACE} -l llm-d.ai/model=DeepSeek-V4-Pro -w
 <!-- guide:deploy.monitoring start -->
 ```bash
 # only when MONITORING=true:
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 ```
 <!-- guide:deploy.monitoring end -->
 
@@ -277,7 +277,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/model
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
