@@ -324,7 +324,7 @@ flowControl:
     if interactive:
         print_header("AUTOMATION REPRODUCER")
         print("To reproduce this exact calculation via CLI in the future:")
-        cmd =["python3 scripts/tuning_wizard.py"]
+        cmd = ["python3 guides/flow-control/scripts/tuning_wizard.py"]
 
         def add(flag: str, val: any):
             if val is not None:

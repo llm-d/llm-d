@@ -80,6 +80,12 @@ deploy:
           | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
           | kubectl apply -n ${NAMESPACE} -f -
 
+  wait:
+    - skip_in: [ci]
+      run: |
+        kubectl wait --for=condition=Available deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=300s
+        kubectl wait --for=condition=Ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+
   # The priority bands the EPP maps queues to. Without the objectives, tagged
   # traffic falls back to band 0 and per-band behavior is unobservable.
   objectives:
@@ -168,14 +174,17 @@ benchmark:
 
 cleanup:
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-  - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
+  - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE} --ignore-not-found=true
   - run: |
       # INFRA_PROVIDER must match the value used at deploy time. This command
       # cleans up the default NVIDIA GPU deployment; the AMD ROCm and Intel XPU
       # alternatives are documented immediately below this generated block.
       kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
         | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-        | kubectl delete -n ${NAMESPACE} -f -
+        | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
   - run: |
-      kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator
-      kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
+      kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator --ignore-not-found=true
+      kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
+  - skip_in: [ci]
+    run: kubectl delete namespace ${NAMESPACE}
