@@ -78,8 +78,6 @@ spec:
             # -- TPU / XLA runtime
             - {name: PYTHONNOUSERSITE, value: "1"}
             - {name: PJRT_DEVICE, value: TPU}
-            - {name: JAX_PLATFORMS, value: "tpu,cpu"}
-            - {name: TPU_BACKEND_TYPE, value: jax}
             - {name: TPU_ACCELERATOR_TYPE, value: tpu7x}
             - {name: VLLM_XLA_CHECK_RECOMPILATION, value: "0"}
             - {name: VLLM_ALLOW_LONG_MAX_MODEL_LEN, value: "1"}
