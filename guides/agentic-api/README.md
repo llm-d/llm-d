@@ -1,6 +1,6 @@
 # Serve the Stateful OpenAI Responses API (Experimental)
 
-[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-responses-api-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-responses-api-gke-acc-gpu-vllm-x.yaml)
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-agentic-api-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-agentic-api-gke-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -20,7 +20,7 @@ flowchart LR
     C["Client / verify.py<br>(HTTP /v1/responses, webhooks, WS)"]
     A["Service: agentic-api:9000"]
     PG[("PostgreSQL 17<br>agentic-api-postgres:5432")]
-    R["Service: responses-api-epp:80<br>(standalone Envoy + EPP)"]
+    R["Service: agentic-api-epp:80<br>(standalone Envoy + EPP)"]
     V["vLLM model servers"]
 
     C -->|"/v1/responses"| A
@@ -75,8 +75,8 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 <!-- guide:env.static start -->
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-export GUIDE_NAME=responses-api
-export NAMESPACE=llm-d-responses-api
+export GUIDE_NAME=agentic-api
+export NAMESPACE=llm-d-agentic-api
 export ACCELERATOR_TYPE=gpu # options: gpu
 export MODEL_SERVER=vllm # options: vllm
 export INFRA_PROVIDER=base # options: base, gke
@@ -150,7 +150,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/optimized-baseline/router/optimized-ba
 ```
 <!-- guide:deploy.router_values end -->
 
-**Deploy the router** in Standalone Mode, with an Envoy sidecar in front of the router. Its helm release name, `${GUIDE_NAME}`, names the `Service/responses-api-epp` that `LLM_API_BASE` points at:
+**Deploy the router** in Standalone Mode, with an Envoy sidecar in front of the router. Its helm release name, `${GUIDE_NAME}`, names the `Service/agentic-api-epp` that `LLM_API_BASE` points at:
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -252,7 +252,7 @@ It needs only the Python 3 standard library, discovers the served model from `/v
 4. **WebSocket mode `[4/4]`**: upgrades an RFC 6455 connection to `ws://<endpoint>/v1/responses`, sends a `response.create` frame and verifies streaming completion (pass `--skip-websocket` to explicitly skip this check when testing through an HTTP-only proxy).
 
 These steps run nightly on GKE with one model server replica:
-[`nightly-e2e-responses-api-gke-acc-gpu-vllm-x.yaml`](../../.github/workflows/nightly-e2e-responses-api-gke-acc-gpu-vllm-x.yaml)
+[`nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml`](../../.github/workflows/nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml)
 deploys this guide from its `guide.yaml` with
 [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) and then runs this section.
 

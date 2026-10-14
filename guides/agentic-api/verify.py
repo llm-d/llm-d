@@ -228,7 +228,7 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
             f"      --enable-auto-tool-choice\n"
             f"      --tool-call-parser <parser for this model>\n"
             f"      --reasoning-parser <parser for this model>\n"
-            f"  See \"Add agentic-api to Another Guide\" in guides/responses-api/README.md.\n"
+            f"  See \"Add agentic-api to Another Guide\" in guides/agentic-api/README.md.\n"
             f"  Raw output was: {body1.get('output')}"
         )
         fcall = func_calls[0]

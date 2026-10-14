@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # -*- indent-tabs-mode: nil; tab-width: 2; sh-indentation: 2; -*-
 
-# Nightly deploy for the responses-api guide on GKE.
+# Nightly deploy for the agentic-api guide on GKE.
 #
 # Invoked as the custom_deploy_script of reusable-nightly-e2e-gke.yaml by
-# .github/workflows/nightly-e2e-responses-api-gke-acc-gpu-vllm-x.yaml. Runs from
+# .github/workflows/nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml. Runs from
 # the repo root; the reusable exports NAMESPACE and has already created the
 # namespace and the llm-d-hf-token secret.
 #
@@ -16,7 +16,7 @@
 # Every deviation from the guide defaults is a CI-only override marked below.
 #
 # Environment knobs (all optional): OUTPUT_DIR (emitted scripts and rendered
-# files, default /tmp/responses-api.ci), CRD_RETRY_DELAY, MODELSERVER_TIMEOUT
+# files, default /tmp/agentic-api.ci), CRD_RETRY_DELAY, MODELSERVER_TIMEOUT
 # (default 30m), POSTGRES_STORAGE_CLASS (default standard-rwo).
 
 set -euo pipefail
@@ -29,8 +29,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # git work tree.
 REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
 
-GUIDE_DIR="${REPO_ROOT}/guides/responses-api"
-OUTPUT_DIR="${OUTPUT_DIR:-/tmp/responses-api.ci}"
+GUIDE_DIR="${REPO_ROOT}/guides/agentic-api"
+OUTPUT_DIR="${OUTPUT_DIR:-/tmp/agentic-api.ci}"
 INFRA_PROVIDER="gke"
 CRD_RETRY_DELAY="${CRD_RETRY_DELAY:-10}"
 MODELSERVER_TIMEOUT="${MODELSERVER_TIMEOUT:-30m}"

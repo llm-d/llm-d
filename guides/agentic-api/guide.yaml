@@ -1,4 +1,4 @@
-name: responses-api
+name: agentic-api
 
 # Which model server runs on which accelerator. `validated` = covered by a
 # nightly E2E workflow; `community` = an overlay exists but is not run nightly;
@@ -27,8 +27,8 @@ env:
   static:
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
-    GUIDE_NAME: responses-api
-    NAMESPACE: llm-d-responses-api
+    GUIDE_NAME: agentic-api
+    NAMESPACE: llm-d-agentic-api
 
     ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
     MODEL_SERVER: {default: vllm, values: [vllm]}

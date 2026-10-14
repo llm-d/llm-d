@@ -2,19 +2,19 @@
 set -Eeuo pipefail
 
 # -----------------------------------------------------------------------------
-# e2e-validate-responses-api.sh
+# e2e-validate-agentic-api.sh
 # -----------------------------------------------------------------------------
-# Validates the responses-api guide beyond the default smoke test.
+# Validates the agentic-api guide beyond the default smoke test.
 #
 # The smoke loop only proves the guide's router serves chat and text
 # completions. This script runs the guide's own verification, the verify
-# section of guides/responses-api/guide.yaml emitted by scripts/guide.py: a
-# port-forward to Service/agentic-api and guides/responses-api/verify.py, which
+# section of guides/agentic-api/guide.yaml emitted by scripts/guide.py: a
+# port-forward to Service/agentic-api and guides/agentic-api/verify.py, which
 # checks health and model discovery, stateful /v1/responses continuation from
 # PostgreSQL, the webhook tool loop (function_call -> function_call_output) and
 # WebSocket /v1/responses.
 #
-# Expects the deploy from guides/responses-api/scripts/nightly-deploy-gke.sh.
+# Expects the deploy from guides/agentic-api/scripts/nightly-deploy-gke.sh.
 # -----------------------------------------------------------------------------
 
 show_help() {
@@ -43,17 +43,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-VERIFY_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/responses-api-verify.XXXXXX")"
+VERIFY_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/agentic-api-verify.XXXXXX")"
 trap 'rm -f "${VERIFY_SCRIPT}"' EXIT
 
 echo "Namespace:  ${NAMESPACE}"
 echo "Router model: ${MODEL_ID:-not given}"
 
-python3 "${REPO_ROOT}/scripts/guide.py" emit "${REPO_ROOT}/guides/responses-api" \
+python3 "${REPO_ROOT}/scripts/guide.py" emit "${REPO_ROOT}/guides/agentic-api" \
   --context ci \
   --var REPO_ROOT="${REPO_ROOT}" \
   --var NAMESPACE="${NAMESPACE}" \
   env verify > "${VERIFY_SCRIPT}"
 
-echo "=== Running the responses-api guide verification ==="
+echo "=== Running the agentic-api guide verification ==="
 bash "${VERIFY_SCRIPT}"

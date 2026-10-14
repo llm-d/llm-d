@@ -27,4 +27,4 @@ These guides teach single architectural capabilities that you can configure inde
 
 ### Stateful APIs
 
-- **[Serve the Stateful OpenAI Responses API](../../../guides/responses-api/README.md)** (Experimental): Serving `/v1/responses` with conversation state kept in PostgreSQL by vLLM Agentic API in front of the llm-d Router, so agentic clients and coding harnesses continue a conversation by `previous_response_id`, run tool loops, and stream over WebSocket.
+- **[Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md)** (Experimental): Serving `/v1/responses` with conversation state kept in PostgreSQL by vLLM Agentic API in front of the llm-d Router, so agentic clients and coding harnesses continue a conversation by `previous_response_id`, run tool loops, and stream over WebSocket.
