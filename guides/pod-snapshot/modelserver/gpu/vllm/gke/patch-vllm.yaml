@@ -18,7 +18,7 @@ spec:
         sandbox.gke.io/runtime: gvisor
       containers:
         - name: modelserver
-          command: ["python3", "-m", "docker.scripts.snapshot.launcher"]
+          command: ["python3", "-m", "docker.scripts.snapshot.vllm.launcher"]
           args:
             - "--model"
             - "Qwen/Qwen3-32B"

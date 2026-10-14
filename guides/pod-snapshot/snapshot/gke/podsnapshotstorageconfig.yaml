@@ -1,7 +1,7 @@
 apiVersion: podsnapshot.gke.io/v1
 kind: PodSnapshotStorageConfig
 metadata:
-  name: pod-snapshot-storage-config
+  name: storage-config
 spec:
   snapshotStorageConfig:
     gcs:

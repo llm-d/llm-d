@@ -8,7 +8,7 @@ A modular container snapshot provider and model server wrapper that enables fast
 
 Deploying large language models (LLMs) on Kubernetes often incurs high cold-start latencies due to downloading weights, loading them into memory, allocating GPU VRAM, and compiling CUDA graphs.
 
-This package provides drop-in launchers (`docker.scripts.snapshot.launcher` for vLLM, `docker.scripts.snapshot.sglang.launcher` for SGLang) and a snapshot provider that hook into model server startup to:
+This package provides drop-in launchers (`docker.scripts.snapshot.vllm.launcher` for vLLM, `docker.scripts.snapshot.sglang.launcher` for SGLang) and a snapshot provider that hook into model server startup to:
 
 1. Initialize the engine, allocate KV cache, and capture CUDA graphs during container cold start.
 2. Release physical GPU VRAM while preserving virtual memory mappings and host RAM weight backups (`engine.sleep(level=1)` in vLLM; `POST /release_memory_occupation` in SGLang).
@@ -42,7 +42,6 @@ flowchart LR
 docker/scripts/snapshot/
 ├── __init__.py           # Package exports (GKESnapshotProvider, SnapshotError, get_snapshot_provider)
 ├── kustomization.yaml    # Kustomize configMapGenerator for snapshot-scripts, vllm, and sglang
-├── launcher.py           # CLI entrypoint wrapping vllm serve
 ├── providers.py          # GKESnapshotProvider and provider factory
 ├── test_providers.py     # Unit test suite
 ├── README.md             # Developer documentation
@@ -52,12 +51,13 @@ docker/scripts/snapshot/
 │   └── wrapper.py        # Warmup hook and snapshot callback
 └── vllm/
     ├── __init__.py       # vLLM integration exports
+    ├── launcher.py       # CLI entrypoint wrapping vllm serve
     └── wrapper.py        # FastAPI lifespan context manager patch
 ```
 
 ### Component Details
 
-- **[`launcher.py`](launcher.py)**:
+- **[`vllm/launcher.py`](vllm/launcher.py)**:
   CLI entrypoint intended to replace `vllm serve` or `python3 -m vllm.entrypoints.openai.api_server`. It dynamically intercepts `vllm.entrypoints.launchers.app.build_app` (falling back to `vllm.entrypoints.openai.api_server.build_app` on vLLM `< v0.29.0`) to apply `patch_vllm_lifespan()` to the FastAPI application before passing control to `vllm.entrypoints.cli.main()`.
 
 - **[`vllm/wrapper.py`](vllm/wrapper.py) (`patch_vllm_lifespan`)**:
