@@ -136,9 +136,14 @@ kubectl apply -f servicemonitor-vllm.yaml
 ### Verify
 
 ```bash
-kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090
-curl -sk 'https://localhost:9090/api/v1/targets' | jq '.data.activeTargets[] | select(.labels.namespace=="'${NAMESPACE}'") | {job: .labels.job, health: .health}'
+kubectl port-forward -n llm-d-monitoring svc/llmd-kube-prometheus-stack-prometheus 9090:9090 &
+PF_PID=$!
+sleep 3
+curl -s 'http://localhost:9090/api/v1/targets' | jq '.data.activeTargets[] | select(.labels.namespace=="'${NAMESPACE}'") | {job: .labels.job, health: .health}'
+kill ${PF_PID}
 ```
+
+If you installed with `--enable-tls`, Prometheus serves HTTPS with a self-signed certificate, so query `curl -sk 'https://localhost:9090/api/v1/targets'` instead.
 
 Targets should show `"health": "up"`. Then proceed to Step 2 for dashboards.
 
@@ -171,6 +176,14 @@ Then access the Jaeger UI:
 kubectl port-forward -n ${NAMESPACE} svc/jaeger-collector 16686:16686
 # Open http://localhost:16686
 ```
+
+To link the exemplar dots on the latency panel to their traces, re-run the Step 1 installer the same way you ran it before. It finds Jaeger and adds the Jaeger datasource and the exemplar link to the existing install:
+
+```bash
+./guides/recipes/observability/install-prometheus-grafana.sh
+```
+
+If Jaeger runs in more than one namespace, set `TRACING_NAMESPACE` to the one to link. If you open the Jaeger UI somewhere other than `http://localhost:16686`, set `JAEGER_UI_URL`.
 
 For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 

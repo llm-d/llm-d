@@ -2,7 +2,7 @@
 
 Operational Excellence guidelines focus on overarching Day-2 site reliability engineering, cluster-wide telemetry frameworks, and safe lifecycle rollout strategies for generative AI inference deployments.
 
-While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, and integrations such as AI gateways and the Responses API. These capabilities are model-agnostic and layer onto any deployment.
+While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, integrations such as AI gateways and the Responses API, and post-deployment validation. These capabilities are model-agnostic and layer onto any deployment.
 
 ## Monitor and Troubleshoot
 
@@ -30,11 +30,11 @@ Load one replica from storage and transfer weights to peer replicas over GPU-to-
 
 Checkpoint and restore single-GPU vLLM model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
 
-### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation-base/README.md)
+### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation/README.md)
 
 Cut vLLM startup time with resident sleep/wake instances and a pre-warmed launcher that spawns new instances without re-importing modules, so replica scale-up and model swaps avoid the cold-start penalty on a shared GPU pool.
 
-### [Scale from Zero with FMA and KEDA](../../guides/fast-model-actuation-keda/README.md)
+### [Scale from Zero with FMA and KEDA](../../guides/fast-model-actuation/fast-model-actuation-keda/README.md)
 
 Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
 
@@ -62,7 +62,7 @@ Production rollout strategies including [Blue-Green updates](../../guides/rollou
 
 ### [Disaggregated Serving Operations](disaggregation/README.md): [vLLM](disaggregation/vllm.md), [SGLang](disaggregation/sglang.md) and [DisaggregatedSet](disaggregation/disaggregatedset.md)
 
-Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/advanced/disaggregation/README.md).
+Engine-specific operations for disaggregated (prefill/decode) serving: dynamic connections, request cancellation, fault tolerance, and safe rollouts. For the architecture, see [Disaggregated Serving Concepts](../architecture/disaggregation/pd-disaggregation.md).
 
 ## Manage Traffic and Tenants
 
@@ -92,15 +92,7 @@ Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggabl
 
 ### [Queue Async Requests (Async Processor)](../../guides/batch-serving/asynchronous-processing/README.md)
 
-Consume requests from a message queue and dispatch them with metric-gated back-off based on live model server saturation, including Async Processor sizing and scaling.
-
-### [Use Redis as the Async Queue](../../guides/batch-serving/asynchronous-processing/redis/README.md)
-
-Configure the Async Processor with a Redis or Valkey sorted set.
-
-### [Use GCP Pub/Sub as the Async Queue](../../guides/batch-serving/asynchronous-processing/gcp-pubsub/README.md)
-
-Configure the Async Processor with Google Cloud Pub/Sub topics and subscriptions.
+Consume requests from a message queue (GCP Pub/Sub or a Redis Sorted Set) and dispatch them with metric-gated back-off based on live model server saturation, including Async Processor sizing and scaling.
 
 ### [Enforce Tenant Quotas and Priorities](../../guides/batch-serving/asynchronous-processing/multitenant/README.md)
 
@@ -127,3 +119,15 @@ Operational best practices, high availability scaling modes, standalone proxy ar
 ### [Async Processor Operations](components/async-processor.md)
 
 Concurrency selection, container resource sizing, and horizontal scaling for the Async Processor dispatch agent.
+
+## Validate
+
+Functional and performance validation of a deployed llm-d stack.
+
+### [Run a Smoke Test](validation/smoke-test/README.md)
+
+Verify a freshly deployed stack end to end: API readiness, model discovery, and completion and chat-completion inference with latency measurements.
+
+### [Benchmark Performance](validation/benchmark.md)
+
+Run performance benchmarks against a deployed stack with the `llmdbenchmark` CLI: workload profiles, harnesses, results layout, and analysis.

@@ -9,7 +9,7 @@ kind: Kustomization
 # (see docs/infrastructure/gateway/) so every llm-d guide in the namespace shares
 # one Gateway, each contributing its own HTTPRoute.
 #
-# On GKE, build ./gke instead of this directory to also apply the
+# On GKE, build ../gateway-gke instead of this directory to also apply the
 # networking.gke.io policies for Service/agentic-api.
 resources:
   - ../base

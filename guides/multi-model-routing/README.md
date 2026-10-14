@@ -47,8 +47,8 @@ During the standard request flow:
 * Checkout llm-d repo:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  export BRANCH="main" # branch, tag, or commit hash
+  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   ```
 
 * Set the following environment variables:
@@ -186,11 +186,10 @@ helm uninstall ipp -n ${NAMESPACE}
 
 # Clean up cloned IPP repo
 rm -rf /tmp/ipp
-
-# Remove namespace (if no longer needed)
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
+# Remove namespace (if no longer needed)
 kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -232,5 +231,5 @@ curl -X POST "http://${GATEWAY_IP}/v1/chat/completions" \
 
 ## Further Reading
 
-* [IPP Architecture](../../docs/architecture/advanced/inference-payload-processing/README.md) — Technical details of the Inference Payload Processor
+* [IPP Architecture](../../docs/architecture/router/ipp.md) — Technical details of the Inference Payload Processor
 * [IPP Repository](https://github.com/llm-d/llm-d-inference-payload-processor) — Source code, configuration reference, and plugin documentation

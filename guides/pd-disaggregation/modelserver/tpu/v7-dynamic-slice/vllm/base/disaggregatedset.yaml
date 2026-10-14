@@ -92,12 +92,16 @@ spec:
                         export VLLM_HOST_IP="${POD_IP}"
                       fi
 
+                      # Qwen3-Coder emits XML tool calls (qwen3_xml) and does not think,
+                      # so no reasoning parser is set here.
                       exec vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
                         --host "${HOST_ADDR}" \
                         --max-model-len=262144 \
                         --max-num-batched-tokens=8192 \
                         --max-num-seqs=64 \
                         --tensor-parallel-size=8 \
+                        --enable-auto-tool-choice \
+                        --tool-call-parser=qwen3_xml \
                         --kv-cache-dtype=fp8 \
                         --gpu-memory-utilization=0.80 \
                         --async-scheduling \
@@ -282,12 +286,16 @@ spec:
                         export VLLM_HOST_IP="${POD_IP}"
                       fi
 
+                      # Qwen3-Coder emits XML tool calls (qwen3_xml) and does not think,
+                      # so no reasoning parser is set here.
                       exec vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
                         --host "${HOST_ADDR}" \
                         --max-model-len=262144 \
                         --max-num-batched-tokens=8192 \
                         --max-num-seqs=64 \
                         --tensor-parallel-size=8 \
+                        --enable-auto-tool-choice \
+                        --tool-call-parser=qwen3_xml \
                         --kv-cache-dtype=fp8 \
                         --gpu-memory-utilization=0.80 \
                         --async-scheduling \

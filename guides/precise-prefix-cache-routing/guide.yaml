@@ -29,11 +29,11 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "2 replicas × 1 GPU via DRA · fp16"
+      notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool)"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: community}
     "tpu/v6":
       label: Google TPU v6e
       notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29"
@@ -68,6 +68,7 @@ env:
     # monitoring stack) to run the deploy.monitoring* steps.
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
+    ENGINE_VALUES: {default: ""}
 
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", cpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
@@ -101,10 +102,17 @@ prerequisites:
 
 deploy:
   router_values:
-    - run: |
+    - when: {MODEL_SERVER: [vllm]}
+      run: |
         # Paths to values files
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
         export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+    - when: {MODEL_SERVER: [sglang]}
+      run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+        export ENGINE_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.sglang.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}
@@ -117,6 +125,7 @@ deploy:
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
           -f ${ROUTER_VALUES} \
+          ${ENGINE_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
@@ -129,8 +138,10 @@ deploy:
     - when: {MODEL_SERVER: [vllm]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
     # SGLang has no render endpoints: a dedicated, GPU-less vLLM render pool.
-    - when: {MODEL_SERVER: [sglang]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -179,7 +190,7 @@ verify:
           for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
             echo "== ${pod}"
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|num_requests_total))' || true
+              | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
           done
 
 cleanup:
@@ -188,8 +199,10 @@ cleanup:
   render:
     - when: {MODEL_SERVER: [vllm]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
-    - when: {MODEL_SERVER: [sglang]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true

@@ -84,6 +84,13 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
+    mthreads:
+      label: Moore Threads GPU
+      notes: "MTT S5000 · vLLM 1P TP=4 + 1D TP=4, Mooncake TCP; SGLang 1P+1D TP=8, Mooncake RDMA"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community, sglang: community}
     npu:
       label: Rebellions NPU
       notes: "4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector"
@@ -106,7 +113,7 @@ env:
     # Extra router values for accelerators that need them (set by deploy.accelerator_values).
     ACCELERATOR_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, npu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     # The leaf selects the platform and, where an accelerator offers more than
@@ -146,6 +153,12 @@ prerequisites:
           --wait --timeout 300s
   namespace:
     - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  # CoreWeave caches the model weights on an RWX PVC rather than a node-local
+  # hostPath -- see docs/infrastructure/providers/coreweave/README.md.
+  model-cache:
+    - when: {INFRA_PROVIDER: [coreweave]}
+      run: kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
+
   secrets:
     - skip_in: [ci]
       run: |
@@ -227,6 +240,11 @@ deploy:
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     biren:
       - when: {ACCELERATOR_TYPE: [biren]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    mthreads:
+      - when: {ACCELERATOR_TYPE: [mthreads]}
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/

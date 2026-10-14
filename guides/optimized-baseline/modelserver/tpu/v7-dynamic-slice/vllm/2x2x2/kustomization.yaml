@@ -3,7 +3,7 @@ kind: Kustomization
 
 # Aggregated multi-host vLLM on a GKE TPU7x 2x2x2 dynamic sub-slice
 # (8 chips, 2 hosts, TP=16), scheduled via Kueue TAS. Prerequisites:
-# docs/infrastructure/providers/gke/dynamic-slicing/README.md
+# docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke
 resources:
   - lws.yaml
 

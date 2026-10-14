@@ -40,14 +40,14 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 
 ## 2. llm-d Router
 
-llm-d Router is deployed via Helm. We offer a chart both Standalone and Gateway Mode:
+llm-d Router is deployed via Helm. We offer charts for both Standalone and Gateway Mode:
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
 | **Standalone Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-standalone` | Deploys an InferencePool and EPP with a standalone sidecar proxy (Envoy by default, agentgateway also supported via `router.proxy.proxyType=agentgateway`) in the EPP pod  |
 | **Gateway Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-gateway` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, Envoy AI Gateway, GKE) |
 
-The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)). Each well-lit path guides provides values files on top of the chart defaults to enable the functionality implemented in EPP.
+The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)). Each well-lit path guide provides values files on top of the chart defaults to enable the functionality implemented in EPP.
 
 > [!NOTE]
 > In a future release, the Helm Charts will be published
@@ -148,15 +148,15 @@ The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional compo
 
 | Chart | Version | OCI Registry | Description |
 |-------|---------|--------------|-------------|
-| **Async Processor** | v0.10.0 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
+| **Async Processor** | v0.11.0 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
 
 ### Images
 
 | Image | Description | Version |
 |-------|-------------|---------|
-| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.10.0 |
+| `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v0.11.0 |
 
-Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.10.0`.
+Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v0.11.0`.
 
 > [!NOTE]
 > The chart was renamed from `async-processor` to `llm-d-async` in v0.8.0, and chart versions now

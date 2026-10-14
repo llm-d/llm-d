@@ -14,7 +14,8 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
-| MetaX | C500X | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
+| MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
+| Moore Threads | MTT S5000 GPU | Jingzhi Xue (@gingerXue, <jingzhi.xue@mthreads.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
 | Rebellions | NPU | Jinmoo Seok (@rebel-jinmoo, <jinmoo_seok@rebellions.ai>), Minwook Ahn (@rebel-minwook, <minwook.ahn@rebellions.ai>), Minho Park (@rebel-minhopark, <minho.park@rebellions.ai>) |
 
@@ -29,7 +30,7 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 > [!NOTE]
 > We aim to increase our requirements to have active CI coverage for all hardware guide variants in a future release.
->
+
 > [!NOTE]
 > The community can assist but is not responsible for keeping hardware guide variants updated. We reserve the right to remove stale examples and documentation with regard to hardware support.
 
@@ -58,11 +59,11 @@ For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Not
 
 Google Cloud TPUs (v6e, v7) are supported when running on GKE. See the [GKE infrastructure provider docs](../infrastructure/providers/gke/README.md) for cluster setup.
 
-On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/dynamic-slicing/README.md).
+On TPU7x, model servers can be scheduled onto dynamically formed sub-slices (`2x2x1` through `2x4x4`) instead of statically provisioned node pool topologies. See [TPU Dynamic Slicing on GKE](../infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke).
 
 ## AMD ROCm
 
-AMD GPUs are supported via ROCm. The specific GPU models supported are determined by the inference container image. See the AMD device plugin or DRA driver below for cluster setup.
+AMD GPUs are supported via ROCm. The specific GPU models supported are determined by the inference container image. Depending on your cluster, the GPU resource is exposed as `amd.com/gpu` (AMD GPU device plugin — the default in the guides) or through a Dynamic Resource Allocation `ResourceClaimTemplate` (AMD GPU DRA driver, used by the `tiered-prefix-cache` AMD overlays). See the [AMD Instinct K8s Device Plugin](https://instinct.docs.amd.com/projects/k8s-device-plugin/en/latest/) or [AMD GPU Operator](https://instinct.docs.amd.com/projects/gpu-operator/en/latest/) documentation for cluster setup.
 
 ## Intel XPU
 
@@ -108,6 +109,23 @@ Biren 166M GPUs are supported for community-contributed well-lit paths. The devi
 - [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, two `TP=8` replicas of Qwen3-32B.
 - [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
 
+## Moore Threads MTT S5000
+
+Moore Threads MTT S5000 GPUs are supported for community-contributed well-lit
+paths. The device plugin must expose `mthreads.com/gpu`.
+
+**vLLM**
+
+- **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
+- **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
+
+**SGLang**
+
+- **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/sglang/base`](../../guides/optimized-baseline/modelserver/mthreads/sglang/base/) — Prefill and Decode in one process (`--tp 8 --ep 8`).
+- **P/D disaggregation** (two 8-GPU nodes): [`guides/pd-disaggregation/modelserver/mthreads/sglang/base`](../../guides/pd-disaggregation/modelserver/mthreads/sglang/base/) — 1P+1D, each TP=8, Mooncake KV transfer.
+
+See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) and the [optimized-baseline guide](../../guides/optimized-baseline/README.md).
+
 ## Rebellions NPU
 
 Rebellions NPUs are supported through `vllm-rbln`, an out-of-tree vLLM platform
@@ -143,7 +161,7 @@ file go away once the runtime supports prefix caching here.
 `openai/gpt-oss-120b`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export
 `MODEL=openai/gpt-oss-120b` so the validation and benchmark steps address the served model.
 
-**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation-base/README.md),
+**Out of scope for this release:** [fast model actuation](../../guides/fast-model-actuation/README.md),
 because the runtime does not support sleep and wake; LoRA adapters; and multimodal models,
 which on this runtime need a code path that cannot run alongside a KV connector.
 

@@ -16,7 +16,7 @@ Skip it when the pool is heterogeneous (mixed accelerators, model variants or se
 
 The reference deployment reuses the Optimized Baseline model servers (on NVIDIA GPU, two `Qwen/Qwen3-32B` replicas with tensor parallelism 2 and a RoPE-scaled 131,072-token context) and deploys the router with the latency predictor's training and prediction sidecars in the router (EPP) pod. Two replicas is the smallest pool in which the router has a choice to make.
 
-For why predicted latency helps, how the predictor is trained and queried on the request path, and the filters and scorers it drives, see [Latency Predictor](../../docs/architecture/advanced/latency-predictor.md).
+For why predicted latency helps, how the predictor is trained and queried on the request path, and the filters and scorers it drives, see [Latency Predictor](../../docs/architecture/router/latency-predictor.md).
 
 ### Scheduling modes
 
@@ -27,16 +27,16 @@ Two router configurations ship with this guide, selected with `SLO_AWARE`:
 | `false` (default) | [`router/predicted-latency.values.yaml`](router/predicted-latency.values.yaml) | Routing only, no request headers needed. Trains on end-to-end latency (`streamingMode: false`), so it works for streaming and non-streaming clients. |
 | `true` | [`router/predicted-latency-slo.values.yaml`](router/predicted-latency-slo.values.yaml) | SLO-aware: requests carry `x-llm-d-slo-ttft-ms` and/or `x-llm-d-slo-tpot-ms`; sheddable requests (priority < 0) that no server can meet are rejected at admission. Sets `streamingMode: true`, so **every request must be sent with `"stream": true`**. |
 
-The [Latency Predictor](../../docs/architecture/advanced/latency-predictor.md#scheduling-strategy) page describes the plugins behind each mode and when to use each [streaming mode](../../docs/architecture/advanced/latency-predictor.md#streaming-mode).
+The [Latency Predictor](../../docs/architecture/router/latency-predictor.md#scheduling-strategy) page describes the plugins behind each mode and when to use each [streaming mode](../../docs/architecture/router/latency-predictor.md#streaming-mode).
 
 ### Composing with other paths
 
 The predictor runs entirely in the router pod, so it layers onto other model server topologies unchanged. Two more values files ship with this guide for that purpose; they are not part of this guide's deployment. To use one, deploy the other guide's model servers and install the router with the file in place of `ROUTER_VALUES`:
 
 - [`router/predicted-latency-pd.values.yaml`](router/predicted-latency-pd.values.yaml) for the [P/D disaggregation](../pd-disaggregation/README.md) pods (`llm-d.ai/guide=pd-disaggregation`).
-- [`router/predicted-latency-multimodal.values.yaml`](router/predicted-latency-multimodal.values.yaml) for the [multimodal serving](../multimodal-serving/README.md) aggregated pool (`llm-d.ai/guide=multimodal-aggregation`).
+- [`router/predicted-latency-multimodal.values.yaml`](router/predicted-latency-multimodal.values.yaml) for the [multimodal serving](../multimodal-serving/README.md) aggregated pool (`llm-d.ai/guide=aggregation`).
 
-How the scoring changes in each is described in [Composing with other topologies](../../docs/architecture/advanced/latency-predictor.md#composing-with-other-topologies).
+How the scoring changes in each is described in [Composing with other topologies](../../docs/architecture/router/latency-predictor.md#composing-with-other-topologies).
 
 ## Supported Accelerators and Model Servers
 
@@ -165,7 +165,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router and the latency predictor sidecars (one training server, one prediction server) next to it. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router and the latency predictor sidecars (one training server, one prediction server) next to it. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -200,23 +200,6 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 ```
 <!-- guide:deploy.monitoring end -->
 
-### 3. Observability & Troubleshooting
-
-With monitoring enabled, three router metrics tell you whether predicted-latency routing is healthy (see the [architecture doc](../../docs/architecture/advanced/latency-predictor.md#observability) for the full metric reference):
-
-| Signal | What healthy looks like |
-| --- | --- |
-| `llm_d_epp_request_predicted_ttft_seconds` and `llm_d_epp_request_ttft_prediction_duration_seconds` | Non-zero samples: the router is calling the prediction server. If they stay empty, the predictor is not being called; check the router logs for `predicted-latency-producer` errors. |
-| `llm_d_epp_request_predicted_ttft_seconds` vs. `llm_d_epp_request_ttft_seconds` | Predictions track reality: over a rolling window, the two converge after warm-up. |
-| `llm_d_epp_request_slo_violation_total` | With SLO-annotated traffic, increments only under genuine saturation. |
-
-| Symptom | Likely cause |
-| --- | --- |
-| Prediction metrics empty | Prediction server unreachable: the router falls back to a composite heuristic score. Check sidecar readiness and `PREDICTION_SERVER_URL`. |
-| Large, persistent drift between predicted and actual TTFT | `streamingMode` does not match the traffic (e.g. `false` on a streaming workload when you want true TTFT), or the workload drifted outside the training window. |
-| High TPOT SLO violation rate at low QPS | `streamingMode: false`: TPOT is not being trained. Use the SLO-aware values file, which sets it to `true`, and stream requests. |
-| Prediction-based routing degrades to baseline | Predictor error or sidecar restart: an expected fallback, not a failure. Investigate the sidecar logs. |
-
 ## Verification
 
 ### 1. Get the IP of the Proxy
@@ -229,7 +212,7 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 
 ### 2. Send Test Requests
 
-**Send a completion request from a temporary pod inside the cluster** (`MODEL` must be the model your accelerator serves, see the **Served model** column in [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)):
+**Send a completion request from a temporary pod inside the cluster:**
 
 <!-- guide:verify.tests.request start -->
 ```bash
@@ -294,7 +277,7 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 ```
 <!-- guide:verify.tests.router_metrics end -->
 
-`llm_d_epp_request_predicted_ttft_seconds_count` is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for the requests it routed. If it stays at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#3-observability--troubleshooting).
+`llm_d_epp_request_predicted_ttft_seconds_count` is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for the requests it routed. If it stays at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#observability--troubleshooting).
 
 ### 4. (Optional) Send a request with SLOs
 
@@ -322,6 +305,23 @@ kubectl run slo-test --rm -i --restart=Never \
 
 The request returns HTTP 200 and is placed on a server predicted to meet both SLOs, if one exists. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
+## Observability & Troubleshooting
+
+With monitoring enabled, three router metrics tell you whether predicted-latency routing is healthy under **sustained load in production or benchmark scenarios** (note that the small request burst in [Verification](#verification) only warms up the predictor and does not reflect steady-state convergence or SLO behavior; see the [architecture doc](../../docs/architecture/router/latency-predictor.md#observability) for the full metric reference):
+
+| Signal | What healthy looks like |
+| --- | --- |
+| `llm_d_epp_request_predicted_ttft_seconds` and `llm_d_epp_request_ttft_prediction_duration_seconds` | Non-zero samples: the router is calling the prediction server. If they stay empty, the predictor is not being called; check the router logs for `predicted-latency-producer` errors. |
+| `llm_d_epp_request_predicted_ttft_seconds` vs. `llm_d_epp_request_ttft_seconds` | Predictions track reality: over a rolling window, the two converge after warm-up. |
+| `llm_d_epp_request_slo_violation_total` | With achievable SLOs and a matching `streamingMode`, stays near zero under normal load and increments only under genuine saturation (if it climbs at low QPS, see the symptom table below). |
+
+| Symptom | Likely cause |
+| --- | --- |
+| Prediction metrics empty | Prediction server unreachable: the router falls back to a composite heuristic score. Check sidecar readiness and `PREDICTION_SERVER_URL`. |
+| Large, persistent drift between predicted and actual TTFT | `streamingMode` does not match the traffic (e.g. `false` on a streaming workload when you want true TTFT), or the workload drifted outside the training window. |
+| High TPOT SLO violation rate at low QPS | `streamingMode: false`: TPOT is not being trained. Use the SLO-aware values file, which sets it to `true`, and stream requests. |
+| Prediction-based routing degrades to baseline | Predictor error or sidecar restart: an expected fallback, not a failure. Investigate the sidecar logs. |
+
 ## Cleanup
 
 To remove the deployed components:
@@ -347,7 +347,7 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Related
 
-- [Latency Predictor Architecture](../../docs/architecture/advanced/latency-predictor.md): plugin pipeline, ML model, scaling characteristics, metric reference.
+- [Latency Predictor Architecture](../../docs/architecture/router/latency-predictor.md): plugin pipeline, ML model, scaling characteristics, metric reference.
 - [llm-d/llm-d-router](https://github.com/llm-d/llm-d-router): source for the EPP plugins and per-plugin configuration references.
 - [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor): source for the training and prediction server Python code.
 - [Predicted Latency-Based Scheduling for LLMs](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms): design rationale and benchmark results.

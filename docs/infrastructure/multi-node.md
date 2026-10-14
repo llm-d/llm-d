@@ -1,10 +1,10 @@
-# Multi-Node Serving Orchestration
+# Model Server Orchestration (LWS & Kueue)
 
 ## (Optional) Install LeaderWorkerSet for multi-host inference
 
-The LeaderWorkerSet (LWS) Kubernetes workload controller specializes in deploying serving workloads where each replica is composed of multiple pods spread across hosts, specifically accelerator nodes. llm-d defaults to LWS for deployment of multi-host inference for rank to pod mappings, topology aware placement to ensure optimal accelerator network performance, and all-or-nothing failure and restart semantics to recover in the event of a bad node or accelerator.
+The [LeaderWorkerSet (LWS)](../architecture/model-server-orchestration/leaderworkerset.md) Kubernetes workload controller specializes in deploying serving workloads where each replica is composed of multiple pods spread across hosts, specifically accelerator nodes. llm-d defaults to LWS for deployment of multi-host inference for rank to pod mappings, topology aware placement to ensure optimal accelerator network performance, and all-or-nothing failure and restart semantics to recover in the event of a bad node or accelerator. For multi-role topologies such as prefill/decode disaggregation, see [DisaggregatedSet](../architecture/model-server-orchestration/disaggregatedset.md).
 
-Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to install the recommended 0.11.1 release when deploying an llm-d guide using LWS.
+Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to install the recommended 0.11.1 release when deploying an llm-d guide using LWS (see also [LeaderWorkerSet concepts](../architecture/model-server-orchestration/leaderworkerset.md)).
 
 ### Install LWS
 

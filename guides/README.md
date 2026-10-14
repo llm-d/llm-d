@@ -47,8 +47,8 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 
 ### Speed Up Model Startup
 
-* [Fast Model Actuation](./fast-model-actuation-base/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
-* [Fast Model Actuation + KEDA Autoscaling](./fast-model-actuation-keda/README.md) - saturation-based KEDA autoscaling on top of Fast Model Actuation: scale the GPU-reserving requester Deployment on EPP flow-control metrics, bringing vLLM instances online via hot start (wake a sleeping instance) or warm start (new instance on an existing launcher).
+* [Fast Model Actuation](./fast-model-actuation/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
+* [Fast Model Actuation + KEDA Autoscaling](./fast-model-actuation/fast-model-actuation-keda/README.md) - saturation-based KEDA autoscaling on top of Fast Model Actuation: scale the GPU-reserving requester Deployment on EPP flow-control metrics, bringing vLLM instances online via hot start (wake a sleeping instance) or warm start (new instance on an existing launcher).
 * [Pod Snapshots](./pod-snapshot/README.md) - checkpoint and restore single-GPU vLLM model servers to eliminate cold-start model download and initialization latencies, currently implemented on GKE with GKE Sandbox (gVisor) and GCS snapshots.
 * [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) - load one model replica from storage and transfer weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.
 
@@ -59,6 +59,7 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 ### Manage Traffic and Tenants
 
 * [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
+* [Multiple Inference Pools](./workload-autoscaling/multi-inference-pool/README.md) - Deploy multiple `InferencePool`s behind one Gateway and route between them by path or header.
 * [Multi-Model Routing](./multi-model-routing/README.md) - serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
 
 ### Process Batch and Async Requests
@@ -116,11 +117,17 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 │   ├── nightly
 ├── coordinator
 │   ├── nightly
+├── cpu-vllm
+│   ├── nightly
 ├── gpu-sglang
+│   ├── nightly
+├── gpu-vllm
 │   ├── nightly
 ├── routing-sidecar
 │   ├── nightly
 ├── tpu-vllm
+│   ├── nightly
+├── xpu-sglang
 │   ├── nightly
 └── xpu-vllm
     ├── nightly
@@ -154,4 +161,4 @@ CI dry-runs every deployable overlay in this directory. See
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
+* [Benchmark](../docs/operations/validation/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.

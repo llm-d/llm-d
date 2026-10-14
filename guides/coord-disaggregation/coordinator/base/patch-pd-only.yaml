@@ -1,5 +1,5 @@
 # PD-only pipeline: drops replace-media-urls, render, and encode -- see the
-# PD-only note in ../README.md's Installation Instructions for why (no encode
+# PD-only note in ../../README.md's Installation Instructions for why (no encode
 # role means no multimedia handling; the render step normalizes multimodal
 # input for the encode/prefill phases, so it goes too). ec_connector is dropped
 # too -- encoder-cache transfer only matters with an encode role in the pipeline.
@@ -20,6 +20,7 @@ data:
     log_level: 2
     server:
       listen_addr: ":8080"
+      secure_coordinator: false
       read_timeout: 30s
       write_timeout: 300s
 

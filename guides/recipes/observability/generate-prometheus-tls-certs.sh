@@ -226,7 +226,7 @@ print_next_steps() {
   log_info "📋 Next Steps:"
   log_info ""
   log_info "1. Update your Prometheus installation to use TLS:"
-  log_info "   Run: ./scripts/install-prometheus-grafana.sh --enable-tls"
+  log_info "   Run: ./install-prometheus-grafana.sh --enable-tls"
   log_info ""
   log_info "2. Or manually upgrade your Prometheus helm release with TLS configuration"
   log_info ""

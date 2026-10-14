@@ -1,6 +1,6 @@
 # Gateway Guides
 
-This directory contains guides for deploying a Kubernetes Gateway as a proxy for the **llm-d Router**. For more information on this capability, see [llm-d Router in Gateway Mode](../../architecture/core/router/proxy.md#gateway-mode-inference-gateway).
+This directory contains guides for deploying a Kubernetes Gateway as a proxy for the **llm-d Router**. For more information on this capability, see [llm-d Router in Gateway Mode](../../architecture/router/proxy.md#gateway-mode-inference-gateway).
 
 ## Why do you need a Gateway?
 
@@ -19,12 +19,16 @@ and take advantage of key Gateway features like:
 
 By integrating with a Gateway -- instead of developing an llm-d specific proxy layer -- llm-d can leverage the high performance of mature proxies and take advantage of existing operational tools for managing traffic to services. Compatible Gateway implementations may use proxies like [Envoy](https://www.envoyproxy.io/) or other high-performance data planes under the hood.
 
+## Installing Gateway API CRDs
+
+Before deploying any Gateway provider, see [Installing Gateway API CRDs](./install-crds.md) to install the required Gateway API and Gateway API Inference Extension CRDs.
+
 ## Supported Gateway Providers
 
 llm-d requires you select a [Gateway implementation that supports the Gateway API Inference Extension](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/). Your infrastructure may provide a default compatible implementation, or you may choose to deploy a gateway implementation onto your cluster.
 
-* [GKE Gateway](./gke.md) - GKE's implementation of the Gateway API is through the GKE Gateway controller which provisions Google Cloud Load Balancers for Pods in GKE clusters. The GKE Gateway controller supports weighted traffic splitting, mirroring, advanced routing, multi-cluster load balancing and more. [Official GKE Docs](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api).
 * [Istio](./istio.md) - Istio is an open source service mesh and gateway implementation. It provides a fully compliant implementation of the Kubernetes Gateway API for cluster ingress traffic control. [Official Istio docs](https://istio.io/)
+* [GKE Gateway](./gke.md) - GKE's implementation of the Gateway API is through the GKE Gateway controller which provisions Google Cloud Load Balancers for Pods in GKE clusters. The GKE Gateway controller supports weighted traffic splitting, mirroring, advanced routing, multi-cluster load balancing and more. [Official GKE Docs](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api).
 * [Agentgateway](./agentgateway.md) - Agentgateway is a high-performance, Rust-based AI gateway for LLM, MCP, and A2A workloads that can also serve as a Gateway API and Inference Gateway implementation. [Official Agentgateway docs](https://agentgateway.dev/).
 * [Envoy AI Gateway](./envoy-ai-gateway.md) - Envoy AI Gateway is an open source project for using Envoy Gateway to handle request traffic from application clients to GenAI services that can also serve as a Gateway API and Inference Gateway implementation. [Official Envoy AI Gateway docs](https://aigateway.envoyproxy.io/).
 
@@ -33,4 +37,4 @@ llm-d requires you select a [Gateway implementation that supports the Gateway AP
 
 ## Other Providers
 
-For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) not listed above, follow the installation instructions for your selected Gateway provider. Ensure the necessary CRDs for Gateway API and the Gateway API Inference Extension are installed.
+For other [compatible Gateway implementations](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) not listed above, follow the installation instructions for your selected Gateway provider. Ensure the necessary [CRDs for Gateway API and the Gateway API Inference Extension](./install-crds.md) are installed.

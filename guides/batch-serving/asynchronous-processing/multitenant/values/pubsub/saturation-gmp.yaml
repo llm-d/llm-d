@@ -6,18 +6,23 @@
 #  - TIER: per-topic label; tier-priority merge policy orders the lanes.
 #
 # PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml), already
-# scoped to NAMESPACE — no PROM_URL here, unlike the self-hosted Prometheus overlays.
+# scoped to the namespace — no PROM_URL here, unlike the self-hosted Prometheus overlays.
 # NOTE: GMP/Monarch lags real time ~1-2 min.
-# Replace: PROJECT_ID, NAMESPACE, IGW_HOST, POOL_NAME, SAT_CAP (concurrent
+# Replace: PROJECT_ID, POOL_NAME, SAT_CAP (concurrent
 # requests at which the pool is considered saturated).
+#
+# The router (llm-d-router-epp) and Redis are addressed by Service name: llm-d-async
+# runs in their namespace.
 #
 # One llm-d-async can serve several InferencePools independently: give each pool
 # its own worker pool and queues whose igw_base_url points at that pool's router.
+# A router in another namespace takes its full Service DNS name
+# (http://<release>-epp.<namespace>.svc.cluster.local:80).
 ap:
 
   transport: "gcp-pubsub"
 
-  prometheusURL: "http://gmp-frontend.NAMESPACE.svc.cluster.local:9090"
+  prometheusURL: "http://gmp-frontend:9090"
   prometheusCacheTTL: "5s"
 
   requestMergePolicyConfig:
@@ -42,11 +47,11 @@ ap:
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-requests-sub"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         labels: {tier: "interactive"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"
@@ -55,11 +60,11 @@ ap:
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-requests-sub"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         labels: {tier: "async"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"
@@ -68,11 +73,11 @@ ap:
       - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-requests-sub"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         labels: {tier: "batch"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"

@@ -3,7 +3,7 @@
 ##
 ## This deployment serves the agentic code-generation workload on NVIDIA GPUs with
 ## prefill/decode disaggregation, so the router runs disagg-aware scheduling profiles
-## (separate prefill and decode profiles with toke-load awareness)
+## (separate prefill and decode profiles with token-load awareness)
 ## rather than the single default profile used
 ## by the non-disaggregated Qwen3-Coder-480B TPU deployment.
 ##

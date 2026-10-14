@@ -212,10 +212,10 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: gaie-pd-epp
+      app.kubernetes.io/name: pd-disaggregation-epp
   namespaceSelector:
     matchNames:
-    - llm-d-pd
+    - llm-d-pd-disaggregation
   endpoints:
   - port: http-metrics
     path: /metrics
@@ -236,7 +236,7 @@ spec:
       llm-d.ai/role: prefill
   namespaceSelector:
     matchNames:
-    - llm-d-pd
+    - llm-d-pd-disaggregation
   endpoints:
   - port: metrics
     path: /metrics
@@ -256,7 +256,7 @@ spec:
       llm-d.ai/role: decode
   namespaceSelector:
     matchNames:
-    - llm-d-pd
+    - llm-d-pd-disaggregation
   endpoints:
   - port: metrics
     path: /metrics

@@ -452,6 +452,44 @@ def test_set_branch_cli_rerenders(tmp_path):
     assert "export BRANCH=release-1.0" in (gdir / "README.md").read_text()
 
 
+def test_set_branch_preserves_trailing_comments():
+    text = (
+        "env:\n"
+        "  static:\n"
+        "    BRANCH: main  # pinned on release cut\n"
+        "    OTHER: foo\n"
+        "prerequisites:\n"
+        "  clone:\n"
+        "    - run: |\n"
+        "        export BRANCH=main  # checkout branch\n"
+    )
+    out = guide.set_branch_text(text, "release-0.8")
+    assert "    BRANCH: release-0.8  # pinned on release cut\n" in out
+    assert "export BRANCH=release-0.8  # checkout branch" in out
+    assert "OTHER: foo" in out
+
+
+def test_set_branch_cli_recursive(tmp_path):
+    g1 = tmp_path / "g1"
+    g1.mkdir()
+    (g1 / "guide.yaml").write_text(
+        "name: g1\nenv:\n  static:\n    BRANCH: main\ndeploy:\n  - run: echo ${BRANCH}\n"
+    )
+    (g1 / "README.md").write_text("<!-- guide:env.static start -->\n<!-- guide:env.static end -->\n")
+
+    nested = tmp_path / "sub" / "g2"
+    nested.mkdir(parents=True)
+    (nested / "guide.yaml").write_text(
+        "name: g2\nenv:\n  static:\n    BRANCH: main # comment\ndeploy:\n  - run: echo ${BRANCH}\n"
+    )
+    (nested / "README.md").write_text("<!-- guide:env.static start -->\n<!-- guide:env.static end -->\n")
+
+    assert guide.main(["set-branch", "--recursive", "release-1.0", str(tmp_path)]) == 0
+    assert "export BRANCH=release-1.0" in (g1 / "README.md").read_text()
+    assert "export BRANCH=release-1.0" in (nested / "README.md").read_text()
+    assert "BRANCH: release-1.0 # comment" in (nested / "guide.yaml").read_text()
+
+
 # --------------------------------------------------------------------------
 # check-manifest
 # --------------------------------------------------------------------------

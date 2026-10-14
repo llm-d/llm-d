@@ -396,7 +396,7 @@ The same markup with `group=mode` and summaries `Standalone Mode` / `Gateway Mod
 
 ### Publishing
 
-Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/guides.yaml) (section, slug, title, sidebar position, optional child pages) and run `scripts/guide.py check-manifest`. Link to a published guide from `docs/` with its repo-relative README path (`../../../guides/<guide>/README.md`); the website rewrites it to the guide's page. At a release cut, `scripts/guide.py set-branch <release-branch> guides/*/` pins every guide's clone step to the release.
+Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/guides.yaml) (section, slug, title, sidebar position, optional child pages) and run `scripts/guide.py check-manifest`. Link to a published guide from `docs/` with its repo-relative README path (`../../../guides/<guide>/README.md`); the website rewrites it to the guide's page. At a release cut, `scripts/guide.py set-branch <release-branch> guides --recursive` (or `guides/*/`) pins every guide's clone step to the release.
 
 - - -
 
@@ -405,6 +405,14 @@ Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/g
 [`scripts/guide.py`](../../scripts/guide.py) validates and renders. Targets are guide
 directories or `guide.yaml` paths, absolute or relative — the companion file is
 discovered alongside.
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `render` | Validate and fill the README from the YAML | `scripts/guide.py render guides/optimized-baseline` |
+| `check` | Validate YAML schema and README marker structure | `scripts/guide.py check guides/*/` |
+| `emit` | Assemble executable bash from YAML sections | `scripts/guide.py emit guides/my-guide env deploy.standalone` |
+| `check-manifest` | Validate `docs/well-lit-paths/guides.yaml` | `scripts/guide.py check-manifest` |
+| `set-branch` | Pin `BRANCH` in `guide.yaml` and re-render | `scripts/guide.py set-branch release-0.8 guides --recursive` |
 
 ### `guide.py render` — fill the README from the YAML
 
@@ -429,7 +437,7 @@ paired markers is touched, and rendering is idempotent.
 scripts/guide.py check guides/optimized-baseline
 
 # every guide in the repo
-scripts/guide.py check guides/*/
+scripts/guide.py check guides --recursive
 
 # pass the files explicitly instead of a directory
 scripts/guide.py check --yaml guides/optimized-baseline/guide.yaml \
@@ -447,7 +455,7 @@ Marker-path resolution is the only check that spans both files. With `--md`
 alone it cannot run, so the tool reports what it actually covered rather than a
 bare "OK":
 
-```
+```text
 README.md: OK  (structure only — pass --yaml to resolve marker paths)
 ```
 
@@ -475,7 +483,7 @@ exiting, so one run surfaces every problem in the repo.
 One command covers both files across every guide:
 
 ```bash
-scripts/guide.py render guides/*/ --check
+scripts/guide.py render guides --recursive --check
 ```
 
 `--check` catches out-of-date READMEs — someone edited `guide.yaml` without
@@ -521,6 +529,42 @@ sub-path for any section whose children are mutually exclusive.
 `guides/flow-control/scripts/nightly-deploy-gke.sh` is the reference
 consumer: it emits the flow-control guide's CRD and deploy steps and layers
 its CI-only overrides on top via `--var`.
+
+### `guide.py check-manifest` — validate publish manifest
+
+Validate `docs/well-lit-paths/guides.yaml`, the manifest listing which guides llm-d.ai publishes and where:
+
+```bash
+# default manifest: docs/well-lit-paths/guides.yaml
+scripts/guide.py check-manifest
+
+# explicit manifest path
+scripts/guide.py check-manifest path/to/guides.yaml
+```
+
+The check verifies that:
+
+- Every listed guide directory exists and has both a `guide.yaml` and a `README.md` (or README alone for sections like Operations).
+- Slugs are unique across sections.
+- Declared child pages exist within each guide's directory.
+- Required titles and sidebar positions are present.
+
+### `guide.py set-branch` — pin `BRANCH` on release cuts
+
+Rewrite `env.static.BRANCH` and every `export BRANCH=` across guides to a release tag or branch name, validate each guide, and re-render its README:
+
+```bash
+# pin a specific guide
+scripts/guide.py set-branch release-0.8 guides/optimized-baseline
+
+# pin every guide via glob
+scripts/guide.py set-branch release-0.8 guides/*/
+
+# recursively discover and pin all guides in the repository
+scripts/guide.py set-branch release-0.8 guides --recursive
+```
+
+`set-branch` preserves comments and formatting on `BRANCH:` lines (e.g. `BRANCH: main # pinned on release cut`).
 
 ### Using it as a library
 

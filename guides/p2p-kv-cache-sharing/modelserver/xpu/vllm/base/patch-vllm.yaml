@@ -29,10 +29,13 @@ spec:
             # token-producer needs that endpoint on the model servers.
             - --enable-scale-out
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+            - --enable-auto-tool-choice
+            - --tool-call-parser=hermes
+            - --reasoning-parser=qwen3
             # The offloading config below omits `block_size`, so it defaults to
             # this engine block size. Keep it identical across all P2P peers.
             # It does not need to match the router's
-            # tokenProcessorConfig.blockSize.
+            # tokenProcessorConfig.blockSizeTokens.
             - --block-size=64
             - --max-model-len=16384
             # CI-sized CPU tier: cpu_bytes_to_use (4 GiB) is far above the

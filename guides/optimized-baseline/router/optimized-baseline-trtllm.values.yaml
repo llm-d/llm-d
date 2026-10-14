@@ -2,8 +2,10 @@
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## Use this file INSTEAD of optimized-baseline.values.yaml when the model servers
-## are trtllm-serve. It is identical to the vLLM/SGLang variant except for the two
-## TensorRT-LLM-specific knobs below (modelServers.type and the metrics path).
+## are trtllm-serve. It sets the two TensorRT-LLM-specific knobs below
+## (modelServers.type and the metrics path) and schedules with queue, KV-cache
+## utilization and prefix-cache scorers instead of the prefix-cache-affinity-filter
+## profile of the vLLM/SGLang variant.
 
 router:
   extraServicePorts:

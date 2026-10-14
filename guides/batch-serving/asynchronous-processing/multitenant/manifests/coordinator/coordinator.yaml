@@ -1,9 +1,10 @@
 # llm-d-router coordinator with the async-broker step: an optional HTTP front
 # door for this guide (README step 4). Based on llm-d-router's
-# deploy/coordinator manifests. The image placeholder is replaced by the
-# README's render() with the coordinator image and tag that guides/env.sh
-# exports (ROUTER_COORDINATOR_*). terminationGracePeriodSeconds is above the config's
-# shutdown_timeout so held wait-mode connections drain instead of being cut.
+# deploy/coordinator manifests. The image comes from the shared coordinator
+# image component (see kustomization.yaml), and the config from config.yaml
+# through the kustomization's ConfigMap generator. terminationGracePeriodSeconds
+# is above the config's shutdown_timeout so held wait-mode connections drain
+# instead of being cut.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -29,8 +30,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: coordinator
-          image: COORDINATOR_IMAGE
-          imagePullPolicy: Always
+          image: REPLACE_COORDINATOR_IMAGE
           args:
             - --config
             - /etc/coordinator/coordinator.yaml

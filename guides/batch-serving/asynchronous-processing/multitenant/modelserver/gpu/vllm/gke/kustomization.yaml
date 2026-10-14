@@ -1,0 +1,9 @@
+# GKE variant of ../base, as optimized-baseline's gke overlay is of its base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+components:
+  - ../../../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch

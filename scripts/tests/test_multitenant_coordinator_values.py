@@ -91,8 +91,21 @@ def test_coordinator_config_shape() -> None:
     assert params["tenant_header"] == "x-llm-d-tenant"
 
 
-def test_coordinator_manifest_has_one_image_placeholder() -> None:
+def test_coordinator_overlay() -> None:
     text = (MT / "manifests/coordinator/coordinator.yaml").read_text()
-    assert text.count("COORDINATOR_IMAGE") == 1
+    # The image placeholder the shared coordinator image component replaces.
+    assert text.count("image: REPLACE_COORDINATOR_IMAGE") == 1
     kinds = [d["kind"] for d in yaml.safe_load_all(text)]
     assert kinds == ["ServiceAccount", "Deployment", "Service"]
+    deploy = next(d for d in yaml.safe_load_all(text) if d["kind"] == "Deployment")
+    assert deploy["spec"]["template"]["spec"]["volumes"][0]["configMap"]["name"] == "llm-d-coordinator-config"
+    kust = _load(MT / "manifests/coordinator/kustomization.yaml")
+    assert kust["configMapGenerator"] == [
+        {"name": "llm-d-coordinator-config", "files": ["coordinator.yaml=config.yaml"]}]
+    assert [c.rsplit("/", 2)[-2:] for c in kust["components"]] == [["coordinator", "nightly"]]
+
+
+def test_coordinator_addresses_router_and_redis_by_service_name() -> None:
+    config = _load(MT / "manifests/coordinator/config.yaml")
+    assert config["gateway"]["address"] == "http://llm-d-router-epp:80"
+    assert _broker()["redis_url"] == "redis://redis:6379"

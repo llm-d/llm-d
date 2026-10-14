@@ -11,6 +11,7 @@ components:
 labels:
   - pairs:
       llm-d.ai/guide: omni-serving
+      llm-d.ai/model: Qwen3-Omni-30B-A3B-Instruct
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
       llm-d.ai/engine-type: vllm-omni

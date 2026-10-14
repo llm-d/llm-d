@@ -14,7 +14,7 @@ The default deployment serves `deepseek-ai/DeepSeek-R1-0528` on 32 NVIDIA H200 G
 
 Each accelerator serves one model, chosen to teach the mechanics: multi-node `LeaderWorkerSet`/`DisaggregatedSet` deployment, DP/EP configuration in vLLM, and routing to individual DP ranks. For state-of-the-art, benchmarked MoE recipes, see the Models guides, such as [DeepSeek-V4](../models/deepseek-v4/README.md) and [GLM-5.2](../models/glm-5-2/README.md).
 
-For why wide expert parallelism helps, how a DP/EP forward pass works, why it pairs with P/D disaggregation, and how requests flow to individual DP ranks, see [Wide Expert Parallelism](../../docs/architecture/advanced/wide-expert-parallelism.md).
+For why wide expert parallelism helps, how a DP/EP forward pass works, why it pairs with P/D disaggregation, and how requests flow to individual DP ranks, see [Wide Expert Parallelism](../../docs/architecture/disaggregation/wide-expert-parallelism.md).
 
 ## Supported Accelerators and Model Servers
 
@@ -24,7 +24,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
-| AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO |
+| AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci` |
 | Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -33,7 +33,7 @@ This guide includes configurations for the following accelerator and model serve
 **NVIDIA GPU** (DeepSeek-R1-0528): prefill DP16 and decode DP16 on 32 H200, with DeepEP (high-throughput prefill, low-latency decode) and NIXL KV transfer. Validated on a 32×H200 cluster with InfiniBand networking (`coreweave`) and a 32×H200 cluster on GKE with RoCE networking (`gke`); `base` is the provider-neutral overlay the others patch.
 
 > [!NOTE]
-> The NVIDIA GPU configuration uses a custom vLLM image built by llm-d to solve two issues: an NVSHMEM bug on RoCE impacting DeepEP high-throughput mode (llm-d vendors a custom patch), and a vLLM v0.23.0-v0.24.0 bug with the DP supervisor. We plan to migrate to the upstream vLLM images in an upcoming release.
+> The NVIDIA GPU overlays run the upstream `vllm/vllm-openai` image pinned by the `gpu-vllm/release` image component. The custom llm-d vLLM image that earlier releases needed for DeepEP on RoCE is no longer used.
 
 **AMD GPU** (DeepSeek-V3): prefill and decode each run 1 replica of 2 nodes, DP16 (TP=1), on 32 MI355X, with the `mori_high_throughput` all-to-all backend and MoRI-IO KV transfer. `amd-ci` adapts `base` to the AMD CI cluster (MI355X, Pensando AINIC, rail-isolated RoCE fabric).
 
@@ -149,7 +149,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -178,7 +178,7 @@ kubectl apply -n ${NAMESPACE} \
 
 ### 3. (Optional) Enable Monitoring
 
-With DP-aware scheduling, each DP rank is available at `podIP:port`, where the ports are named `rank0`-`rank7`. This guide ships a monitoring overlay that scrapes each rank's port:
+On the NVIDIA GPU deployment each DP rank is available at `podIP:port`, where the ports are named `rank0`-`rank7`, and this guide ships a monitoring overlay that scrapes each rank's port. The overlay selects the DeepSeek-R1-0528 pods only; the AMD and Intel XPU overlays expose a single `modelserver` port and are not covered by it:
 
 <!-- guide:deploy.monitoring start -->
 ```bash

@@ -9,11 +9,16 @@
 #  - TIER: per-queue label; the tier-priority merge policy orders the
 #    reserved/overflow × tier lanes and stamps x-llm-d-inference-objective.
 #
-# Replace: NAMESPACE, IGW_HOST, POOL_NAME (InferencePool name), PROM_URL,
+# Replace: POOL_NAME (InferencePool name), PROM_URL,
 # SAT_CAP (concurrent requests at which the pool is considered saturated).
+#
+# The router (llm-d-router-epp) and Redis are addressed by Service name: llm-d-async
+# runs in their namespace.
 #
 # One llm-d-async can serve several InferencePools independently: give each pool
 # its own worker pool and queues whose igw_base_url points at that pool's router.
+# A router in another namespace takes its full Service DNS name
+# (http://<release>-epp.<namespace>.svc.cluster.local:80).
 ap:
 
   transport: "redis-sortedset"
@@ -37,7 +42,7 @@ ap:
 
   transportConfig:
     urlSecret:
-      url: "redis://redis.NAMESPACE.svc.cluster.local:6379"
+      url: "redis://redis:6379"
     # Results go to the destination a request carries (the optional coordinator
     # gives each request its own result key) or, for requests published straight
     # to Redis, to this list. A per-queue result_queue_name would override both
@@ -51,12 +56,12 @@ ap:
       - queue_name: "team-premium"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         result_ttl_seconds: 3600
         labels: {tier: "interactive"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"
@@ -65,12 +70,12 @@ ap:
       - queue_name: "team-standard"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         result_ttl_seconds: 3600
         labels: {tier: "async"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"
@@ -79,12 +84,12 @@ ap:
       - queue_name: "team-batch"
         worker_pool_id: "teams"
         request_path_url: "/v1/completions"
-        igw_base_url: "http://IGW_HOST:80"
+        igw_base_url: "http://llm-d-router-epp:80"
         result_ttl_seconds: 3600
         labels: {tier: "batch"}
         gate_type: "redis-quota"
         gate_params:
-          address: "redis.NAMESPACE.svc.cluster.local:6379"
+          address: "redis:6379"
           attribute: "team"
           mode: "concurrency"
           gating_mode: "classifying"

@@ -132,16 +132,7 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below). Every task layers its router values on the shared base:
-
-<!-- guide:deploy.router_values.base start -->
-```bash
-# Paths to values files
-export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-```
-<!-- guide:deploy.router_values.base end -->
-
-Then select your task (`TASK`):
+**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below). Select your task (`TASK`), which layers its router values on the shared base:
 
 <!-- tabs:start group=task -->
 <details open>
@@ -152,6 +143,8 @@ The [`omni` router values](router/omni.values.yaml) schedule every request with 
 <!-- guide:deploy.router_values.omni start -->
 ```bash
 # only when TASK=omni:
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/omni.values.yaml"
 ```
 <!-- guide:deploy.router_values.omni end -->
@@ -165,6 +158,8 @@ The [`text-to-image` router values](router/text-to-image.values.yaml) schedule o
 <!-- guide:deploy.router_values.text-to-image start -->
 ```bash
 # only when TASK=text-to-image:
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-image.values.yaml"
 ```
 <!-- guide:deploy.router_values.text-to-image end -->
@@ -178,6 +173,8 @@ The [`image-to-image` router values](router/image-to-image.values.yaml) are the 
 <!-- guide:deploy.router_values.image-to-image start -->
 ```bash
 # only when TASK=image-to-image:
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/image-to-image.values.yaml"
 ```
 <!-- guide:deploy.router_values.image-to-image end -->
@@ -191,6 +188,8 @@ The [`text-to-speech` router values](router/text-to-speech.values.yaml) are the 
 <!-- guide:deploy.router_values.text-to-speech start -->
 ```bash
 # only when TASK=text-to-speech:
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
 ```
 <!-- guide:deploy.router_values.text-to-speech end -->
@@ -210,7 +209,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router.
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router.
 The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. A single pool needs no `HTTPRoute`: the standalone proxy sends every path to the router. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router) and, for `omni`, [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode) below.
 
 <!-- guide:deploy.standalone start -->
@@ -460,7 +459,7 @@ kubectl run tts-test --rm -i --restart=Never \
 Expect `HTTP 200` with a non-zero size and an audio content type, and `header: RIFF`, the start of a valid WAV file.
 
 The endpoint also streams through the router: `"stream_format": "sse"` returns `speech.audio.delta` events with base64 audio chunks and a final `speech.audio.done` event carrying token usage, and `"stream_format": "audio"` returns raw PCM chunks as they are generated, with time-to-first-byte in the tens of milliseconds.
-vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the default image (v0.26.0) omits them.
+vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.29.0, which reports them.
 
 </details>
 <!-- tabs:end -->
