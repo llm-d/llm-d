@@ -22,6 +22,7 @@ labels:
       llm-d.ai/guide: pod-snapshot
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: sglang
     includeSelectors: true
     includeTemplates: true
 

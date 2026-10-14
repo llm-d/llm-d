@@ -72,8 +72,8 @@ def _get_snapshot_provider_for_launch(server_args) -> Optional[GKESnapshotProvid
 
     if not server_args.enable_memory_saver:
         logger.warning(
-            "--enable-memory-saver is not enabled; physical GPU memory will not be released before "
-            "taking the snapshot."
+            "--enable-memory-saver is not enabled; KV cache will not be freed and all allocated "
+            "GPU memory will be included in the snapshot."
         )
 
     return snapshot_provider
