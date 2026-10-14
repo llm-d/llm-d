@@ -99,7 +99,7 @@ Each replica's capacity is modeled with two bounds:
 
 The **effective capacity** per replica is the minimum of k1 and k2. Per-variant capacity is aggregated using the median across ready replicas.
 
-**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_queue_bytes`metrics) is added to the InferencePool-level totals.
+**Demand** per replica is the sum of tokens currently in use and the queued requests multiplied by the average input token length. The EPP queue demand (from `llm_d_epp_flow_control_queue_size` and `llm_d_epp_flow_control_queue_bytes` metrics) is added to the InferencePool-level totals.
 
 Scaling signals:
 

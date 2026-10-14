@@ -290,7 +290,7 @@ All vLLM instances sharing a Mooncake Store **must** set `PYTHONHASHSEED` to the
 PYTHONHASHSEED=0 vllm serve ...
 ```
 
-#### mooncake_config.json Reference
+#### MooncakeStoreConnector — mooncake_config.json Reference
 
 Each vLLM instance requires a Mooncake configuration file, pointed to by the `MOONCAKE_CONFIG_PATH` environment variable.
 
@@ -342,7 +342,7 @@ Each vLLM instance requires a Mooncake configuration file, pointed to by the `MO
 | `MOONCAKE_CONFIG_PATH` | (required) | Path to `mooncake_config.json` |
 | `PYTHONHASHSEED` | (random) | Must be set to same fixed value across all instances sharing the store |
 
-For deployment recipes, see the [Tiered Prefix Cache Guide — Mooncake Store](../../../guides/tiered-prefix-cache/modelserver/gpu/vllm/mooncake-store).
+For deployment recipes, see the [Tiered Prefix Cache Guide](../../../guides/tiered-prefix-cache/README.md) (`CONNECTOR=mooncake-store`).
 
 ### Other Connectors
 
@@ -450,7 +450,7 @@ env:
     value: "0"
 ```
 
-For the full `mooncake_config.json` reference, see [MooncakeStoreConnector — mooncake_config.json Reference](#mooncake_configjson-reference) above.
+For the full `mooncake_config.json` reference, see [MooncakeStoreConnector — mooncake_config.json Reference](#mooncakestoreconnector--mooncake_configjson-reference) above.
 
 ## Metrics
 

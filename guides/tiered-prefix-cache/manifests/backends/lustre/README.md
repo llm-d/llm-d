@@ -31,7 +31,7 @@ Ensure [Lustre CSI driver is enabled](https://docs.cloud.google.com/kubernetes-e
 **1. Create a `StorageClass` for Lustre:**
 
 ```bash
-kubectl apply -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/lustre/storage_class.yaml -n ${NAMESPACE}
+kubectl apply -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/lustre/storage_class.yaml
 ```
 
 **2. Create a PVC:**
@@ -42,7 +42,7 @@ Once the `StorageClass` is created, you can create a PVC and mount to your pod l
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: lustre-pvc
+  name: llm-d-kv-cache-storage
 spec:
   accessModes:
   - ReadWriteMany
@@ -61,12 +61,12 @@ kubectl get pvc -n ${NAMESPACE}
 Output should show the PVC as `Bound`:
 
 ```
-NAME         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
-lustre-pvc   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre-class   <unset>                 6d
+NAME                     STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+llm-d-kv-cache-storage   Bound    pvc-3c793698-XXXXXXX   36000Gi    RWX            lustre-class   <unset>                 6d
 ```
 
 ## Cleanup
 
 ```bash
-kubectl delete -f ./storage_class.yaml -n ${NAMESPACE}
+kubectl delete -f ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/lustre/storage_class.yaml
 ```

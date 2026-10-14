@@ -18,7 +18,6 @@
 # Environment variables (set by earlier guide steps):
 #   NAMESPACE      namespace where the stack is deployed
 #   IP             EPP service ClusterIP (base_url = http://${IP})
-#   BENCHMARK_PVC  PVC name where benchmark results are stored
 # ---------------------------------------------------------------------------
 endpoint:
   stack_name: &stack_name agentic-serving-Qwen3-Coder-480B  # user defined name for the stack (results prefix)
@@ -35,7 +34,7 @@ control:
 
 harness:
   name: &harness_name inference-perf
-  results_pvc: ${BENCHMARK_PVC}   # PVC where benchmark results are stored
+  results_pvc: benchmark-results  # PVC where benchmark results are stored
   namespace: *namespace           # Namespace where harness is deployed. Typically with stack.
   parallelism: 1                  # Number of parallel workload launcher pods to create.
   wait_timeout: 6000              # Time (in seconds) to wait for workload launcher pod to complete before terminating.

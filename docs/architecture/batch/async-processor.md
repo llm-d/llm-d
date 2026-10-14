@@ -69,7 +69,7 @@ The two supported global merge policies are:
 
 | Policy | Description |
 | --- | --- |
-| `random-robin` | Default policy. Randomly picks messages from all queues configured for a each pool. |
+| `random-robin` | Default policy. Randomly picks messages from all queues configured for each pool. |
 | `tier-priority` | Buckets requests into 6 strict priority lanes using routing tags (`(classification, tier)`). Within each bucket, it round-robins across different client channels and stamps lane objectives (`x-llm-d-inference-objective`). |
 
 Because merging lanes are grouped and evaluated independently per worker pool, backpressure from one pool's merged channel only impacts its associated worker pool, maintaining multi-tenant isolation.
@@ -202,7 +202,7 @@ Worker pool configurations define dedicated worker concurrency limits and pool a
 
 | Field | Type | Required | Description | Example Value |
 | --- | --- | --- | --- | --- |
-| `id` | String | Yes | Unique pool identifier referenced by queue/topic configurations (`worker_pool_id`). | `"worker-pool_1"` |
+| `id` | String | Yes | Unique pool identifier referenced by queue/topic configurations (`worker_pool_id`). | `"worker_pool_1"` |
 | `workers` | Integer | Yes | Number of concurrent workers dedicated to this pool. Must be positive. | `32` |
 | `gate_type` | String | Optional | The type of dispatch gate to apply to the pool (e.g., `local-max-concurrency`, `prometheus-saturation`). | `"prometheus-saturation"` |
 | `gate_params` | Object | Optional | Key-value parameters configuring the pool admission gate. | `{"pool": "inference_pool_1", "threshold": "0.8"}` |
@@ -212,7 +212,7 @@ Worker pool configurations define dedicated worker concurrency limits and pool a
 ```json
 [
   {
-    "id": "worker-pool_1",
+    "id": "worker_pool_1",
     "workers": 32,
     "gate_type": "prometheus-saturation",
     "gate_params": {

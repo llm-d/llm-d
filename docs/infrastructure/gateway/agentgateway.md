@@ -10,7 +10,7 @@ your model servers via the llm-d EPP.
 
 ## Prerequisites
 
-1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
+1. The environment variables `${GUIDE_NAME}`, `${MODEL}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 2. A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
 3. [Helm](https://helm.sh/docs/intro/install/)
 4. [jq](https://jqlang.org/download/)
@@ -112,9 +112,8 @@ Send an inference request via the managed `Gateway`:
 ```bash
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
-    -H 'X-Gateway-Base-Model-Name: '"$GUIDE_NAME"'' \
     -d '{
-        "model": '\"${MODEL_NAME}\"',
+        "model": '\"${MODEL}\"',
         "prompt": "How are you today?"
     }' | jq
 ```

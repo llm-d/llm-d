@@ -20,8 +20,8 @@ Four signals share that pipeline, each with its own deployable guide:
 
 | Signal | Scales on | Guide |
 |---|---|---|
-| **Queue depth** | Absolute per-replica queued-request and running-request targets | [keda-epp-queue](../../../guides/workload-autoscaling/keda-epp-queue/README.md) |
-| **Pool saturation** | A normalized saturation ratio (0.0–1.0+), more portable across hardware | [keda-epp-saturation](../../../guides/workload-autoscaling/keda-epp-saturation/README.md) |
+| **Queue depth** | Absolute per-replica queued-request and running-request targets | [keda-epp (`SIGNAL=queue`)](../../../guides/workload-autoscaling/keda-epp/README.md) |
+| **Pool saturation** | A normalized saturation ratio (0.0–1.0+), more portable across hardware | [keda-epp (`SIGNAL=saturation`)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Token backlog** | Seconds of prefill queue wait plus KV cache occupancy — for widely varying prompt sizes | [keda-epp-token-aware](../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
 | **Estimated latency** | Predicted (or measured) TTFT/TPOT against latency SLOs | [slo-aware](../../../guides/workload-autoscaling/slo-aware/README.md) |
 

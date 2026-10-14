@@ -48,9 +48,7 @@ For more detailed information, check <https://docs.cloud.google.com/kubernetes-e
 
 To make your Cloud Storage buckets accessible by your GKE cluster, authenticate using Workload Identity Federation for GKE with the Cloud Storage bucket that you want to mount in your Pod specification:
 
-1. Make sure you have Workload Identity Federation for GKE enabled, if not, follow [these steps](
-"https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#enable_on_clusters_and_node_pools
-) to enable it
+1. Make sure you have Workload Identity Federation for GKE enabled; if not, follow [these steps](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#enable_on_clusters_and_node_pools) to enable it.
 
 2. Get credentials for your cluster:
 
@@ -59,24 +57,17 @@ gcloud container clusters get-credentials <CLUSTER_NAME> \
     --location=<LOCATION>
 ```
 
-1. Create a namespace to use for the [Kubernetes ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/). You can also use the default namespace or any existing namespace.
+3. Create a namespace to use for the [Kubernetes ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/). You can also use the default namespace or any existing namespace.
 
 ```bash
 kubectl create namespace <NAMESPACE>
 ```
 
-1. Create a Kubernetes ServiceAccount for your application to use. You can also use any existing Kubernetes ServiceAccount in any namespace.
-
-```bash
-kubectl create serviceaccount <KSA_NAME> \
-    --namespace <NAMESPACE>
-```
-
-1. Grant one of the IAM roles for Cloud Storage to the Kubernetes ServiceAccount
+4. Grant one of the IAM roles for Cloud Storage to the `agentic-serving-gpu-vllm-sa` Kubernetes ServiceAccount created by the GKE Kustomize overlay:
 
 ```bash
 gcloud storage buckets add-iam-policy-binding gs://llm-models \
-    --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/<KSA_NAME>" \
+    --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/agentic-serving-gpu-vllm-sa" \
     --role "<ROLE_NAME>"
 ```
 
@@ -90,7 +81,7 @@ For more detailed information, check <https://docs.cloud.google.com/kubernetes-e
 curl -LsSf https://hf.co/cli/install.sh | bash
 ```
 
-1. Download the model from HuggingFace to your local disk first
+2. Download the model from HuggingFace to your local disk first
 
 ```bash
 hf download RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
@@ -98,10 +89,10 @@ hf download RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
   --token <YOUR_HF_TOKEN>
 ```
 
-1. Upload to GCS
+3. Upload to GCS
 
 ```bash
-gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-models/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
 ```
 
 ## Deploy the Model Server

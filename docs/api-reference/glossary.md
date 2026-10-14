@@ -20,7 +20,7 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **ext-proc (External Processing)** — An Envoy filter protocol that offloads per-request routing decisions to an external gRPC service — in llm-d, the EPP. This is the communication channel between the Proxy and the routing logic. See [EPP](../architecture/router/epp.md).
 
-**Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [EPP](../architecture/router/epp.md).
+**Flow Control** — The EPP subsystem that manages admission, queuing, and dispatch of requests using a Priority, Fairness, and Ordering hierarchy to prevent backend overload. See [Flow Control](../architecture/router/flow-control.md).
 
 **Gateway API** — The Kubernetes-native API for configuring L7 traffic routing, succeeding Ingress. llm-d uses Gateway API resources (`HTTPRoute`, `Gateway`) to route external traffic to InferencePools. See [Proxy](../architecture/router/proxy.md).
 
@@ -76,6 +76,6 @@ Quick-reference definitions for terms used throughout the llm-d documentation. F
 
 **vLLM** — An open-source high-throughput LLM serving engine and the default Model Server in llm-d. Provides PagedAttention, continuous batching, Prefix Caching, and KV-Events for cache-aware routing. See [vLLM](../architecture/model-servers/vllm.md).
 
-**Wide Expert Parallelism** — A deployment pattern for large MoE models that combines Data Parallelism and Expert Parallelism across multiple nodes, maximizing KV-cache space for long-context serving. See [Introduction](../getting-started/README.mdx).
+**Wide Expert Parallelism** — A deployment pattern for large MoE models that combines Data Parallelism and Expert Parallelism across multiple nodes, maximizing KV-cache space for long-context serving. See [Wide Expert Parallelism](../architecture/disaggregation/wide-expert-parallelism.md).
 
-**Workload Variant Autoscaler (WVA)** — A multi-model, SLO-aware autoscaler that optimizes cost on heterogeneous hardware by measuring instance capacity, deriving load functions, and calculating the optimal mix of model variants. See [Architecture Overview](../architecture/README.md).
+**Workload Variant Autoscaler (WVA)** — A multi-model, SLO-aware autoscaler that optimizes cost on heterogeneous hardware by measuring instance capacity, deriving load functions, and calculating the optimal mix of model variants. See [Workload Variant Autoscaler (WVA)](../architecture/autoscaling/wva.md).

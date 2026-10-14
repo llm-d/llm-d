@@ -50,16 +50,10 @@ router:
           - pluginRef: active-request-scorer
 
   modelServers:
-    # targetPorts must list all 8 DP rank ports so the EPP routes requests
-    # to all ranks. Without this, only rank 0 receives traffic.
+    # One addressable port per pod: prefill's API servers share 8000 (--api-server-count
+    # with --data-parallel-hybrid-lb), and on decode the routing sidecar fronts 8000.
+    # Listing 8001-8007 would target dead ports.
     targetPorts:
       - number: 8000
-      - number: 8001
-      - number: 8002
-      - number: 8003
-      - number: 8004
-      - number: 8005
-      - number: 8006
-      - number: 8007
     matchLabels:
       llm-d.ai/guide: "wide-ep"

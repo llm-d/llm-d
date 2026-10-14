@@ -1,6 +1,6 @@
 # Model Server Orchestration
 
-Model Server Orchestration in llm-d provide declarative Kubernetes controllers for orchestrating complex distributed AI workloads, spanning multi-node accelerator clusters and heterogeneous serving roles.
+Model Server Orchestration in llm-d provides declarative Kubernetes controllers for orchestrating complex distributed AI workloads, spanning multi-node accelerator clusters and heterogeneous serving roles.
 
 ## Overview
 

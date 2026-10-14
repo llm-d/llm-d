@@ -77,8 +77,8 @@ spec:
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: hf-secret
-                  key: hf_api_token
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
                   optional: true
           volumeMounts:
             - name: config-volume

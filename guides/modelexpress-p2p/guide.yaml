@@ -2,7 +2,6 @@ name: modelexpress-p2p
 
 env:
   static:
-    BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
     GUIDE_NAME: modelexpress-p2p
@@ -27,7 +26,9 @@ env:
 prerequisites:
   clone:
     - skip_in: [ci]
-      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 
   gaie:
     - run: |

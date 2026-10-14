@@ -9,7 +9,7 @@ This guide shows how to deploy llm-d with
 
 ## Prerequisites
 
-1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
+1. The environment variables `${GUIDE_NAME}`, `${MODEL}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 2. You have verified the version in and sourced in the llm-d repo wide `env.sh` file:
 
    ```bash
@@ -110,7 +110,7 @@ helm install ${GUIDE_NAME} \
 2. **Deploy the model server with the GKE overlay:**
 
 ```bash
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm    # options: vllm, sglang, trtllm
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/gke/
 ```
@@ -153,7 +153,7 @@ Key configuration parameters (see [`values.yaml`](https://github.com/llm-d/llm-d
 #### 2. **Deploy the model server with the GKE overlay:**
 
 ```bash
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, hpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm    # options: vllm, sglang, trtllm
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/gke/
 ```
@@ -205,7 +205,7 @@ Send an inference request via the managed `Gateway`:
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": '\"${MODEL_NAME}\"',
+        "model": '\"${MODEL}\"',
         "prompt": "How are you today?"
     }' | jq
 ```

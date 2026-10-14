@@ -4,7 +4,7 @@ The [Async Processor](https://github.com/llm-d/llm-d-async) provides a way to pr
 
 This page deploys the Async Processor for a single model. The queue backend — GCP Pub/Sub (default) or a Redis Sorted Set — is chosen in [Installation](#step-2-set-up-the-queue-backend), in tabs.
 
-The **[Multi-tenant guide](./multitenant/README.md)** builds on it: the **advanced** setup of **team × tier × model** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and per-model saturation back-off across two `InferencePool`s. It runs on either queue backend.
+The **[Multi-tenant guide](./multitenant/README.md)** builds on it: the **advanced** setup of **team × tier** with per-team reserved/overflow quota (classifying `redis-quota`), tier-priority dispatch, and pool saturation back-off. It runs on either queue backend.
 
 > [!NOTE]
 > For production sizing, scaling, and container-resource guidance, see [Async Processor Operations](../../../docs/operations/components/async-processor.md).
@@ -180,7 +180,7 @@ Deploy the Async Processor using the selected queue implementation's configurati
 ```bash
 export NAMESPACE=llm-d-async
 export MQ_PROVIDER=gcp-pubsub # options are gcp-pubsub or redis
-export ASYNC_VERSION=v0.10.0   # llm-d-async release
+export ASYNC_VERSION=v0.11.0   # llm-d-async release
 
 [ "$MQ_PROVIDER" = "redis" ] && TARGET_KEY="ap.transportConfig.queues[0].igw_base_url" || TARGET_KEY="ap.transportConfig.topics[0].igw_base_url"
 

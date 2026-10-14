@@ -36,7 +36,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "# Inference Gateway Dashboard\n\nPlease see https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/metrics for more details of underlying metrics used in the dashboard.",
+        "content": "# llm-d Router Dashboard\n\nPlease see https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/metrics for more details of underlying metrics used in the dashboard.",
         "mode": "markdown"
       },
       "pluginVersion": "10.2.4",
@@ -1873,7 +1873,10 @@
   ],
   "refresh": false,
   "schemaVersion": 39,
-  "tags": [],
+  "tags": [
+    "llm-d",
+    "llm-d-router"
+  ],
   "templating": {
     "list": [
       {
@@ -1897,13 +1900,13 @@
     ]
   },
   "time": {
-    "from": "2025-05-04T16:16:14.919Z",
-    "to": "2025-05-04T16:51:40.407Z"
+    "from": "now-1h",
+    "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Inference Gateway",
-  "uid": "aeap3g4ujefb4b",
+  "title": "llm-d Router",
+  "uid": "llm-d-router",
   "version": 1,
   "weekStart": ""
 }

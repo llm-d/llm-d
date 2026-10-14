@@ -20,6 +20,13 @@ router:
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "disaggregatedset.x-k8s.io/name=wide-ep-vllm-glm-5-2"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
         - type: always-disagg-pd-decider
         - type: disagg-profile-handler
           parameters:

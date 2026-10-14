@@ -19,7 +19,7 @@ OpenCost, with its new inference capabilities, provides exactly this join. It at
 - **Hourly infrastructure cost rate** — actual GPU+CPU+RAM spend attributed per model
 - **Cache savings fraction** — the cost reduction achieved by KV-cache hits, making the value of prefix caching visible in financial terms
 
-This enables use cases that raw performance metrics cannot support: chargeback across teams, cost-based routing decisions, comparing self-hosted vs commercial API costs, and right-sizing GPU allocations. For the full motivation and design rationale, see the [inference cost proposal](https://github.com/simanadler/llm-d/blob/5c5bd7c5981ea155a9059787a63ec0ec728d409e/docs/proposals/inference-costs.md).
+This enables use cases that raw performance metrics cannot support: chargeback across teams, cost-based routing decisions, comparing self-hosted vs commercial API costs, and right-sizing GPU allocations. For the full motivation and design rationale, see [Track Inference Cost](../../../../docs/operations/observability/inference-cost.md).
 
 ## How it works
 

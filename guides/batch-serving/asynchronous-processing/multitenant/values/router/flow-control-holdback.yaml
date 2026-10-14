@@ -17,11 +17,8 @@ router:
       port: 80
       protocol: TCP
       targetPort: 8081
-  monitoring:
-    prometheus:
-      enabled: true
-      auth:
-        enabled: false
+  # Prometheus scraping of the EPP is opt-in: MONITORING=true layers
+  # guides/recipes/router/features/monitoring.values.yaml in README step 2.
   epp:
     flags:
       allow-experimental-plugins: true   # priority-holdback-policy is Alpha

@@ -59,6 +59,7 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 ### Manage Traffic and Tenants
 
 * [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
+* [Multiple Inference Pools](./workload-autoscaling/multi-inference-pool/README.md) - Deploy multiple `InferencePool`s behind one Gateway and route between them by path or header.
 * [Multi-Model Routing](./multi-model-routing/README.md) - serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
 
 ### Process Batch and Async Requests
@@ -116,11 +117,17 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 │   ├── nightly
 ├── coordinator
 │   ├── nightly
+├── cpu-vllm
+│   ├── nightly
 ├── gpu-sglang
+│   ├── nightly
+├── gpu-vllm
 │   ├── nightly
 ├── routing-sidecar
 │   ├── nightly
 ├── tpu-vllm
+│   ├── nightly
+├── xpu-sglang
 │   ├── nightly
 └── xpu-vllm
     ├── nightly
@@ -154,4 +161,4 @@ CI dry-runs every deployable overlay in this directory. See
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
+* [Benchmark](../docs/operations/validation/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
