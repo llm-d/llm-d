@@ -20,6 +20,10 @@ env:
     ROUTER_VALUES: {default: "${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"}
     EXTRA_HELM_ARGS: {default: ""}
 
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to deploy and clean up the model-server PodMonitor.
+    MONITORING: {default: "false", values: ["false", "true"]}
+
   source: ["${REPO_ROOT}/guides/env.sh"]
 
 prerequisites:
@@ -92,7 +96,8 @@ deploy:
     - run: kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
 
   monitoring:
-    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
   endpoint:
@@ -182,7 +187,8 @@ cleanup:
       kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
         | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
         | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+  - when: {MONITORING: ["true"]}
+    run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
   - run: |
       kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator --ignore-not-found=true
       kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader --ignore-not-found=true

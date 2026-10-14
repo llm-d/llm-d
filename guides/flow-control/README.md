@@ -105,6 +105,7 @@ export MODEL_NAME=Qwen/Qwen3-32B
 export INFRA_PROVIDER=base # options: base, gke
 export ROUTER_VALUES=${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml
 export EXTRA_HELM_ARGS=
+export MONITORING=false # options: false, true
 ```
 <!-- guide:env.static end -->
 
@@ -268,10 +269,11 @@ kubectl wait --for=condition=Available deployment -l llm-d.ai/guide=${GUIDE_NAME
 If you want Prometheus scraping via `ServiceMonitor` and `PodMonitor`, the [Monitoring stack](../../docs/operations/observability/setup.md) must be installed in the cluster so those CRDs exist:
 
 * Set `export EXTRA_HELM_ARGS="--values=${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"` before running the [router installation command](#1-deploy-the-router) (or re-run `helm upgrade --install` with `EXTRA_HELM_ARGS` set if you already deployed the router without it).
-* Deploy the monitoring resources (`PodMonitor`) for the model servers:
+* Set `export MONITORING=true` to deploy the monitoring resources (`PodMonitor`) for the model servers:
 
 <!-- guide:deploy.monitoring start -->
 ```bash
+# only when MONITORING=true:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -692,6 +694,7 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
 
+# only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 
 kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator --ignore-not-found=true
