@@ -47,14 +47,14 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · vLLM runs a RoPE-scaled 131,072-token context · `INFRA_PROVIDER`: `base`, `gke` |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · RoPE-scaled 131,072-token context |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | 2 replicas × 1 GPU via DRA · single-GPU pods have no room for the long-context `Qwen3-32B` config |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · single-device pods use the smaller model rather than the long-context `Qwen3-32B` config |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · `INFRA_PROVIDER`: `base`, `gke` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · `INFRA_PROVIDER`: `base`, `gke` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-The latency predictor is engine-agnostic: it reads the same server state the router already collects. The SGLang overlay is the Optimized Baseline's NVIDIA GPU SGLang model server, without the long-context patch.
+The latency predictor is engine-agnostic: it reads the same server state the router already collects. The NVIDIA GPU and Intel XPU SGLang overlays reuse their respective Optimized Baseline model servers unchanged; neither adds the long-context patch used by the NVIDIA GPU vLLM overlay.
 
 > [!NOTE]
 > On OpenShift, the latency predictor sidecars may require additional OpenShift-specific runtime adjustments beyond the manifests in this guide.
@@ -64,6 +64,8 @@ The latency predictor is engine-agnostic: it reads the same server state the rou
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
 - Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). The router pod also runs the latency predictor sidecars, which request about 10 CPU cores and 8 GiB of memory on top of the router itself.
+
+- For DRA-based overlays (Intel XPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -227,7 +229,7 @@ kubectl run curl-test --rm -i --restart=Never \
 
 ### 3. Verify predicted-latency routing
 
-A served request only proves the stack is up: if the predictor is unreachable, the router silently falls back to heuristic scoring and requests still succeed. To confirm the mechanism is engaged, send enough traffic for the predictor to learn from, then check that the router fed it training samples and that the prediction server loaded a trained model.
+A served request only proves the stack is up: if the predictor is unreachable, the router silently falls back to heuristic scoring and requests still succeed. To confirm the mechanism is engaged, send enough traffic for the predictor to learn from, then check that the router fed it training samples and that the prediction server loaded a newly trained model.
 
 **Send 200 requests with varying output lengths:**
 
@@ -263,7 +265,7 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8001/proxy/st
 ```
 <!-- guide:verify.tests.predictor end -->
 
-What to expect: all 200 requests return HTTP 200. The training server reports `ttft` samples roughly equal to the number of requests sent so far (each bucket is capped, so the count stops growing on long runs). With the routing-only values, `tpot` stays at `0`: TPOT is only trained from streamed responses (`SLO_AWARE=true`). The prediction server's status reports `"is_ready": true` once it has loaded a model trained on these samples: the training server retrains every 10 seconds once it holds at least 100 samples, so re-run the check after a few seconds if it is still `false`.
+What to expect: all 200 requests return HTTP 200. The training server reports `ttft` samples roughly equal to the number of requests sent so far (each bucket is capped, so the count stops growing on long runs). With the routing-only values, `tpot` stays at `0`: TPOT is only trained from streamed responses (`SLO_AWARE=true`). **`"is_ready": true` alone does not prove training succeeded:** the prediction server loads a cold-start model before any requests arrive. Compare `last_modified` from `kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8000/proxy/model/ttft/info"` before and after sending traffic; it should advance after the training interval. Check `kubectl logs -n "${NAMESPACE}" "${EPP_POD}" -c training-server` for training errors and confirm the prediction server's `last_model_load` advances after the new model is published.
 
 **With `MONITORING=true`, compare the router's predicted and actual TTFT histograms:**
 
