@@ -145,10 +145,13 @@ prefill; active-request scoring for decode) and pin each request to one
 
 > [!WARNING]
 > **`peakPrefillThroughput` is an estimate for DeepSeek-V4-Pro on GB200, not a measurement.**
-> The `prefix-cache-affinity-filter` ships with `5000` tokens/s per rank, estimated by scaling
-> measured MoE prefill rates to this model (plausible range 3000 to 6300). Measure your own
-> value with the [router calibration tool](../../recipes/router/calibration/README.md)
-> (`CHUNK_SIZE=32768`) and set it in `router/deepseek-v4.values.yaml`.
+> The `prefix-cache-affinity-filter` ships with `20000` tokens/s per prefill pod. Each pod is one
+> router endpoint fronting 4 DP ranks, and the value is ~5000 tokens/s per rank x 4, estimated
+> by scaling measured MoE prefill rates to this model (plausible range 12000 to 25200). Measure
+> your own value with the [router calibration tool](../../recipes/router/calibration/README.md)
+> using `CHUNK_SIZE=8192`, because a request must fit `--max-model-len 9280`. A single
+> calibration request runs on one rank, so multiply the result by 4 before setting it in
+> `router/deepseek-v4.values.yaml`.
 
 <!-- guide:deploy.router_values start -->
 ```bash

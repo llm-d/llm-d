@@ -17,7 +17,7 @@ best earlier main-agent turn). Each layer addresses a specific pressure of that 
 - **P/D disaggregation** (NIXL KV transfer) — input processing and token generation use
   separate pools, so each side can use the backend and replica count suited to its work.
   Prefill runs DeepEP high-throughput all-to-all; decode runs low-latency (IBGDA + NVSHMEM).
-- **Token-aware, dual-tier prefix-cache routing** — the EPP keeps prefix groups on ranks that
+- **Token-aware, GPU+CPU prefix-cache routing** — the EPP keeps prefix groups on ranks that
   hold them in GPU or CPU memory with the prefix-cache affinity filter, and picks by queued
   prefill token load, so resumed sessions land where their context can be restored rather than
   recomputed.
@@ -86,7 +86,7 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 | KV cache offloading      | HiCache on prefill, 64 GB per rank (`hicache`, in every SGLang topology)     |
 | MTP speculative decoding | On (EAGLE, 3 steps)                                                          |
 | `mem-fraction-static`    | 0.85 (prefill and decode)                                                    |
-| Routing                  | GPU + CPU approximate prefix-cache and active-request scoring ([`sglang.values.yaml`](router/sglang.values.yaml)) |
+| Routing                  | GPU+CPU (HiCache) prefix-cache affinity + token load ([`sglang.values.yaml`](router/sglang.values.yaml)) |
 | Reasoning / tool-call    | glm45 / glm47                                                                |
 
 </details>
@@ -224,7 +224,7 @@ Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) o
 - **Token-load scorer** (prefill) — picks by queued prefill tokens.
 - **Active-request scorer** (decode) — load balancing.
 
-With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is layered instead: it parses OpenAI bodies with the `openai-parser` and `/generate` bodies with the `sglanghttp-parser`, and scores with GPU and CPU (HiCache) approximate prefix-cache scorers and the active-request scorer only, because the SGLang Rust listeners expose no `/metrics`. The cache sizes in the router values are for a DEP8 prefill rank on H200.
+With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is layered instead: it parses OpenAI bodies with the `openai-parser` and `/generate` bodies with the `sglanghttp-parser`, and routes like the vLLM path: one approximate prefix index sized for GPU and CPU (HiCache) KV feeds the prefix-cache affinity filter, then the token-load scorer on prefill and the active-request scorer on decode. None of these need `/metrics`, which the SGLang Rust listeners do not expose. The index size in the router values is for a DEP8 prefill rank on H200.
 
 <!-- guide:deploy.router_values.approximate start -->
 <!-- variants:start -->
@@ -233,7 +233,7 @@ With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is
 
 ```bash
 # Paths to values files: the wide-EP router values, then the GLM-5.2
-# dual GPU+CPU prefix-cache scoring overrides on top
+# GPU+CPU prefix-cache affinity overrides on top
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
@@ -246,7 +246,7 @@ export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/
 <!-- llm-d-cicd:skip start -->
 ```bash
 # Paths to values files: the wide-EP router values, then the SGLang
-# overrides on top (/generate and OpenAI parsing, scorers without /metrics)
+# overrides on top (/generate and OpenAI parsing, routing without /metrics)
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/sglang.values.yaml"

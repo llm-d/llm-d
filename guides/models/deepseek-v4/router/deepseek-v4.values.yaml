@@ -40,14 +40,16 @@ router:
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
-            # TODO: ESTIMATE, not measured. Per DP rank on GB200 at the 32k
-            # prefill chunk: measured MoE prefill rates scaled to DeepSeek-V4-Pro's
-            # ~48B active parameters, with assumed gains for FP4 experts and
-            # GB200 (plausible range 3000-6300). The plugin default (15928,
-            # Qwen3-32B on H100) is ~3x too high for this model. Replace with a
-            # guides/recipes/router/calibration/calibrate.sh run through the full
-            # P/D path (CHUNK_SIZE=32768).
-            peakPrefillThroughput: 5000
+            # TODO: ESTIMATE, not measured. The value is per EPP endpoint, which
+            # here is one prefill pod: port 8000 fronts DP_SIZE_LOCAL=4 ranks
+            # (--data-parallel-hybrid-lb), so in-flight tokens add up across
+            # 4 GPUs. ~5000 tok/s per rank x 4 ranks, from measured MoE prefill
+            # rates scaled to DeepSeek-V4-Pro's ~48B active parameters with
+            # assumed FP4-expert and GB200 gains (plausible range 12000-25200).
+            # Replace with guides/recipes/router/calibration/calibrate.sh using
+            # CHUNK_SIZE=8192 (a request must fit --max-model-len 9280). One
+            # request runs on one rank, so multiply the measured value by 4.
+            peakPrefillThroughput: 20000
         - type: token-load-scorer
         - type: active-request-scorer
         - type: max-score-picker

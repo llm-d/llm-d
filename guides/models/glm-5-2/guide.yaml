@@ -80,14 +80,14 @@ deploy:
       - when: {MODEL_SERVER: [vllm]}
         run: |
           # Paths to values files: the wide-EP router values, then the GLM-5.2
-          # dual GPU+CPU prefix-cache scoring overrides on top
+          # GPU+CPU prefix-cache affinity overrides on top
           export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
           export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
           export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
       - when: {MODEL_SERVER: [sglang]}
         run: |
           # Paths to values files: the wide-EP router values, then the SGLang
-          # overrides on top (/generate and OpenAI parsing, scorers without /metrics)
+          # overrides on top (/generate and OpenAI parsing, routing without /metrics)
           export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
           export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
           export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/sglang.values.yaml"
