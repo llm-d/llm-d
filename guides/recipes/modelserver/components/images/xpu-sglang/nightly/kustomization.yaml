@@ -4,3 +4,14 @@ images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-xpu-sglang
     newTag: main
+
+# imagePullPolicy: Always: the main tag moves with every merge, so pull it again
+# instead of running an older image cached on the node (one without the NIXL/UCX
+# Level Zero layer this overlay requires).
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always

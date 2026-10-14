@@ -44,7 +44,7 @@ diff --git a/docker/xpu.Dockerfile b/docker/xpu.Dockerfile
      cp pyproject_xpu.toml pyproject.toml && \
      pip install --no-cache-dir ".[dev,diffusion]" --extra-index-url https://download.pytorch.org/whl/xpu && \
      pip install --no-cache-dir --no-deps xgrammar==0.1.33
-@@ -97,4 +114,42 @@ ARG TORCH_MEMORY_SAVER_REF=a5c99f11b18eb
+@@ -97,4 +114,45 @@ ARG TORCH_MEMORY_SAVER_REF=a5c99f11b18eb
  RUN TMS_PLATFORM=xpu pip install --no-cache-dir --no-build-isolation \
      git+https://github.com/fzyzcjy/torch_memory_saver.git@${TORCH_MEMORY_SAVER_REF}
  
@@ -73,10 +73,13 @@ diff --git a/docker/xpu.Dockerfile b/docker/xpu.Dockerfile
 +    cd /tmp/nixl && \
 +    PKG_CONFIG_PATH=/opt/ucx/lib/pkgconfig LD_LIBRARY_PATH=/opt/ucx/lib \
 +        pip wheel --no-cache-dir --no-deps -w /tmp/nixl-wheels . && \
-+    # The local wheel and NIXL_VERSION must name the same release; passing both
-+    # makes pip fail fast on a mismatch instead of silently installing an
-+    # unexpected NIXL build (keep NIXL_VERSION and NIXL_REF in lockstep).
++    # The locally built wheel installs as the "nixl-cu12" distribution, while
++    # "nixl==${NIXL_VERSION}" only pins the separate PyPI dispatcher package,
++    # so pip can install both without erroring even if NIXL_REF and
++    # NIXL_VERSION disagree. Verify the built backend's own version instead
++    # (keep NIXL_VERSION and NIXL_REF in lockstep).
 +    pip install --no-cache-dir --no-deps /tmp/nixl-wheels/nixl*.whl "nixl==${NIXL_VERSION}" && \
++    python -c "import importlib.metadata as m, sys; v = m.version('nixl-cu12'); sys.exit(0 if v == '${NIXL_VERSION}' else f'nixl-cu12 {v} != NIXL_VERSION ${NIXL_VERSION}')" && \
 +    cd / && rm -rf /tmp/ucx /tmp/nixl /tmp/nixl-wheels && \
 +    # Headers/pkgconfig/docs were only needed to build NIXL above, in this same
 +    # layer; only the runtime shared libs need to ship in the image.
