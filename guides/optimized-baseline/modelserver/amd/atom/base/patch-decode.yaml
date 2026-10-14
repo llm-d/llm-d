@@ -18,6 +18,7 @@ spec:
             - "--kv_cache_dtype=fp8"
             - "--gpu-memory-utilization=0.9"
             - "--enable_prefix_caching"
+            - "--disable-uvicorn-access-log"
           env:
             - name: HF_TOKEN
               valueFrom:
