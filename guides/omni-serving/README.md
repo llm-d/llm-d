@@ -255,7 +255,7 @@ To serve another vLLM-Omni checkpoint, change the model in [`patch-vllm-omni.yam
 Serves `Qwen/Qwen-Image` on 3 replicas × 1 GPU, with vLLM-Omni ([`patch-vllm-omni.yaml`](modelserver/gpu/vllmomni/text-to-image/base/patch-vllm-omni.yaml)) or SGLang ([`patch-sglang.yaml`](modelserver/gpu/sglang/text-to-image/base/patch-sglang.yaml)):
 
 > [!NOTE]
-> On Intel XPU, select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16), and a two-B60 `--tp-size=2` run currently fails on a missing XPU layer-norm implementation.
+> On Intel XPU, select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16), and a two-B60 `--tp-size=2` run fails on the published `v0.10.0` image's pinned SGLang, which predates an upstream XPU layer-norm fix (`sgl-project/sglang#36825`).
 
 <!-- guide:deploy.modelserver.text-to-image start -->
 ```bash
