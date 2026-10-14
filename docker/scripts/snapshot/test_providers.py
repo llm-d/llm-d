@@ -827,7 +827,6 @@ class TestSGLangLauncher(unittest.TestCase):
         cases = [
             (None, _sglang_server_args(), False),
             (unavail_provider, _sglang_server_args(), False),
-            (avail_provider, _sglang_server_args(enable_memory_saver=False, enable_weights_cpu_backup=True), False),
             (avail_provider, _sglang_server_args(enable_memory_saver=True, enable_weights_cpu_backup=False), False),
             (avail_provider, _sglang_server_args(encoder_only=True), False),
             (avail_provider, _sglang_server_args(smg_grpc_mode=True), False),
@@ -852,6 +851,31 @@ class TestSGLangLauncher(unittest.TestCase):
                 modules["sglang.srt.utils"].kill_process_tree.assert_called_once_with(
                     9999, include_parent=False
                 )
+
+    @patch("docker.scripts.snapshot.sglang.launcher.get_snapshot_provider")
+    @patch("sys.argv", ["launcher.py", "--model-path", "Qwen/Qwen3-32B"])
+    def test_sglang_launcher_warns_and_proceeds_without_memory_saver(self, mock_get_provider):
+        from docker.scripts.snapshot.sglang import launcher as sglang_launcher
+
+        mock_provider = MagicMock(spec=GKESnapshotProvider)
+        mock_provider.is_available.return_value = True
+        mock_get_provider.return_value = mock_provider
+
+        mock_server_args = _sglang_server_args(
+            enable_memory_saver=False, enable_weights_cpu_backup=False
+        )
+        modules = _sglang_modules(server_args=mock_server_args)
+        mock_http_server = modules["sglang.srt.entrypoints.http_server"]
+
+        with patch.dict("sys.modules", modules), patch(
+            "os.getpid", return_value=9999
+        ), patch("docker.scripts.snapshot.sglang.launcher.logger") as mock_logger:
+            sglang_launcher.main()
+
+        mock_logger.warning.assert_called_once()
+        self.assertIn("--enable-memory-saver is not enabled", mock_logger.warning.call_args[0][0])
+        mock_http_server.launch_server.assert_called_once()
+        modules["sglang.launch_server"].run_server.assert_not_called()
 
     def test_sglang_launcher_main_not_installed_raises(self):
         from docker.scripts.snapshot.sglang import launcher as sglang_launcher
