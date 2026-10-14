@@ -51,12 +51,8 @@ ROUTER_RELEASE=keda-epp-queue
 # Short hash used as a suffix on the ClusterRoleBinding to make it unique per namespace.
 NS_HASH="$(printf '%s' "${NAMESPACE}" | sha256sum | cut -c1-8)"
 OUTPUT_DIR="${OUTPUT_DIR:-$(mktemp -d -t nightly-deploy-ocp-keda-epp.XXXXXX)}"
-# Deploy the SAME router version as the optimized-baseline guide: env.sh's
-# ROUTER_CHART_VERSION (default `v0`, the rolling latest). An earlier `v0.9.0` pin
-# worked around llm-d-router#2323 (the -epp Service was dropped from the Helm
-# release when flowControl/monitoring were enabled, leaving the queue metric
-# unscrapeable); that is now FIXED by llm-d-router#2368, so the pin is no longer
-# needed. Set ROUTER_CHART_VERSION_OVERRIDE to test a specific chart version.
+# Track env.sh's ROUTER_CHART_VERSION (default `v0`) so this matches the
+# optimized-baseline guide.
 ROUTER_CHART_VERSION="${ROUTER_CHART_VERSION_OVERRIDE:-${ROUTER_CHART_VERSION}}"
 
 mkdir -p "${OUTPUT_DIR}"
