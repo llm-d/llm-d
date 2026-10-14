@@ -51,10 +51,11 @@ spec:
               runAsUser: 0
             command:
               - /bin/bash
+              - -euo
+              - pipefail
               - -c
             args:
               - |-
-                set -euo pipefail
                 hostname "qwen-${LWS_WORKER_INDEX:-0}"
                 find /dev/shm -type f -delete
 
