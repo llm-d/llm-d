@@ -10,31 +10,13 @@
 
 Static token-count and queue-depth heuristics break down on **long-generation workloads**—such as agentic tool loops, long-horizon coding, and reasoning-heavy decode—where output lengths vary by orders of magnitude across requests. A replica decoding a single multi-thousand-token trace looks lightly loaded by active request count while stalling incoming prefill behind decode memory bandwidth and KV-cache contention.
 
-Where the [Optimized Baseline](../optimized-baseline/README.md) gates cache affinity with a static `peakPrefillThroughput` heuristic (which must be calibrated offline per hardware/model and ignores decode TPOT), this path pairs the llm-d Router (`epp`) with online-trained `xgboost` regression sidecars that predict per-request **TTFT** and **TPOT** on every candidate server from five live features (`kv_cache_percentage`, `input_token_length`, `num_request_waiting`, `num_request_running`, and `prefix_cache_score`) and route on those predictions, optionally enforcing per-request latency SLOs.
+Where the [Optimized Baseline](../optimized-baseline/README.md) gates cache affinity with a static `peakPrefillThroughput` heuristic (which must be calibrated offline per hardware/model and ignores decode TPOT), this path pairs the llm-d Router (`epp`) with online-trained `xgboost` regression sidecars that predict per-request **TTFT** and **TPOT** on every candidate server from live server state and route on those predictions, optionally enforcing per-request latency SLOs.
 
 Skip this path when the inference pool is heterogeneous (mixed accelerators, model variants, or serving configurations): the predictor's feature vector captures pod load state without encoding hardware shape, so it assumes a homogeneous pool.
 
 The reference deployment reuses the Optimized Baseline model servers (on NVIDIA and AMD GPU, two `Qwen/Qwen3-32B` replicas with tensor parallelism 2 and a RoPE-scaled 131,072-token context) and deploys a 4-container router pod (`epp`, `envoy-proxy`, `training-server`, and `prediction-server-1`). Two replicas is the smallest pool in which the router has a routing choice to make.
 
-```mermaid
-flowchart LR
-    Client["Client Request"] --> Envoy["envoy-proxy (:8081)"]
-    subgraph RouterPod["Router Pod (4 containers)"]
-        Envoy --> EPP["epp (predicted-latency-producer)"]
-        EPP <-->|"1. /predict/bulk"| Pred["prediction-server-1 (:8001)"]
-        EPP -->|"2. /add_training_data_bulk"| Train["training-server (:8000)"]
-        Pred -->|"3. Download models (every 30s)"| Train
-    end
-    Envoy -->|"Route to chosen pod"| MS["Model Servers (2x Qwen3-32B)"]
-```
-
-Each request moves through a 3-phase closed loop inside the router pod:
-
-1. **Hot-path scoring:** On request arrival, `epp` (`predicted-latency-producer`) queries `prediction-server-1:8001` (`/predict/bulk`) with each candidate server's live state (`kv_cache_percentage`, `input_token_length`, `num_request_waiting`, `num_request_running`, `prefix_cache_score`) to obtain predicted TTFT and TPOT.
-2. **Response telemetry:** On response completion, `epp` sends the observed TTFT and TPOT alongside the dispatch-time server state features to `training-server:8000` (`/add_training_data_bulk`).
-3. **Periodic model sync:** `training-server` retrains each `xgboost` model every `10s` (`LATENCY_RETRAINING_INTERVAL_SEC`) once that model has at least `10` training samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH`, which applies because every new pod starts with no saved model), and `prediction-server-1` downloads the retrained models over HTTP every `30s` (`MODEL_SYNC_INTERVAL_SEC`).
-
-For full architectural details on stratified sample bucketing, feature definitions, and horizontal sidecar scaling, see [Latency Predictor](../../docs/architecture/router/latency-predictor.md).
+For how the predictor is trained and queried on the request path, and the features it uses, see [Latency Predictor](../../docs/architecture/router/latency-predictor.md).
 
 ### Scheduling modes
 
@@ -164,21 +146,38 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below). With `SLO_AWARE=true`, the second command switches to the SLO-aware values (see [Scheduling modes](#scheduling-modes)):
+**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment command below). Select a [scheduling mode](#scheduling-modes):
 
-<!-- guide:deploy.router_values start -->
+<!-- tabs:start group=slo -->
+<details open>
+<summary><b>Routing only (Default)</b></summary>
+
+<!-- guide:deploy.router_values.routing start -->
 ```bash
+# only when SLO_AWARE=false:
 # Paths to values files
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency.values.yaml"
 ```
+<!-- guide:deploy.router_values.routing end -->
+
+</details>
+<details>
+<summary><b>SLO-aware</b></summary>
+
+<!-- guide:deploy.router_values.slo-aware start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when SLO_AWARE=true:
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/predicted-latency-slo.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.router_values end -->
+<!-- guide:deploy.router_values.slo-aware end -->
+
+</details>
+<!-- tabs:end -->
 
 Both values files enable the latency predictor sidecars (`router.latencyPredictor.enabled: true`) and select model server pods labeled `llm-d.ai/guide=optimized-baseline`, the label of the Optimized Baseline model servers this guide reuses.
 
@@ -277,32 +276,59 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 
 **Send a completion request from a temporary pod inside the cluster:**
 
-<!-- guide:verify.tests.request start -->
+<!-- tabs:start group=slo -->
+<details open>
+<summary><b>Routing only (Default)</b></summary>
+
+<!-- guide:verify.tests.request.routing start -->
 ```bash
+# only when SLO_AWARE=false:
 kubectl run curl-test --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
   --env="IP=${IP}" \
   --env="MODEL=${MODEL}" \
-  --env="SLO_AWARE=${SLO_AWARE}" \
-  -- /bin/sh -c 'curl -sS -N -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"stream\": ${SLO_AWARE}}"'
+  -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
 ```
-<!-- guide:verify.tests.request end -->
+<!-- guide:verify.tests.request.routing end -->
 
-Expected output:
+Expected output (a non-streaming JSON completion):
 
-- With `SLO_AWARE=false` (non-streaming JSON completion):
-  ```text
-  {"id":"cmpl-1d8b1f40-c104-4169-9881-5a0ec858d14e","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" I hope you're well. I have a question about a math problem. The","finish_reason":"length"}],...}
-  ```
-- With `SLO_AWARE=true` (server-sent event stream chunks):
-  ```text
-  data: {"id":"cmpl-87bab755-e81a-4611-b7ae-99b4dc452e28","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" I","finish_reason":null}]}
+```text
+{"id":"cmpl-1d8b1f40-c104-4169-9881-5a0ec858d14e","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" I hope you're well. I have a question about a math problem. The","finish_reason":"length"}],...}
+```
 
-  data: {"id":"cmpl-87bab755-e81a-4611-b7ae-99b4dc452e28","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" hope","finish_reason":null}]}
-  ...
-  data: [DONE]
-  ```
+</details>
+<details>
+<summary><b>SLO-aware</b></summary>
+
+<!-- guide:verify.tests.request.slo-aware start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when SLO_AWARE=true:
+# streamingMode: true measures TTFT and TPOT on streamed responses only
+kubectl run curl-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS -N -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\", \"stream\": true}"'
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.request.slo-aware end -->
+
+Expected output (server-sent event stream chunks):
+
+```text
+data: {"id":"cmpl-87bab755-e81a-4611-b7ae-99b4dc452e28","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" I","finish_reason":null}]}
+
+data: {"id":"cmpl-87bab755-e81a-4611-b7ae-99b4dc452e28","object":"text_completion","model":"Qwen/Qwen3-32B","choices":[{"index":0,"text":" hope","finish_reason":null}]}
+...
+data: [DONE]
+```
+
+</details>
+<!-- tabs:end -->
 
 ### 3. Verify predicted-latency routing
 
@@ -310,26 +336,57 @@ A served request only proves the stack is up: if the predictor is unreachable, t
 
 **Send 200 requests with varying output lengths:**
 
-<!-- guide:verify.tests.traffic start -->
+<!-- tabs:start group=slo -->
+<details open>
+<summary><b>Routing only (Default)</b></summary>
+
+<!-- guide:verify.tests.traffic.routing start -->
 ```bash
+# only when SLO_AWARE=false:
 # 200 requests, 10 at a time, with output lengths from 16 to 128 tokens:
-# every completed request becomes a training sample for the predictor.
-# Passing "stream": ${SLO_AWARE} streams tokens when SLO_AWARE=true so
-# both TTFT and TPOT models train.
+# every completed request becomes a training sample for the predictor
 kubectl run traffic-test --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
   --env="IP=${IP}" \
   --env="MODEL=${MODEL}" \
-  --env="SLO_AWARE=${SLO_AWARE}" \
   -- /bin/sh -c 'for i in $(seq 1 200); do
-      curl -sS -N -o /dev/null -w "%{http_code}\n" -X POST "http://${IP}/v1/completions" \
+      curl -sS -o /dev/null -w "%{http_code}\n" -X POST "http://${IP}/v1/completions" \
         -H "Content-Type: application/json" \
-        -d "{\"model\": \"${MODEL}\", \"prompt\": \"Request ${i}: explain how an LLM router picks a model server.\", \"max_tokens\": $((16 * (i % 8 + 1))), \"stream\": ${SLO_AWARE}}" &
+        -d "{\"model\": \"${MODEL}\", \"prompt\": \"Request ${i}: explain how an LLM router picks a model server.\", \"max_tokens\": $((16 * (i % 8 + 1)))}" &
       [ $((i % 10)) -eq 0 ] && wait
     done | sort | uniq -c'
 ```
-<!-- guide:verify.tests.traffic end -->
+<!-- guide:verify.tests.traffic.routing end -->
+
+</details>
+<details>
+<summary><b>SLO-aware</b></summary>
+
+<!-- guide:verify.tests.traffic.slo-aware start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when SLO_AWARE=true:
+# 200 streamed requests, 10 at a time, with output lengths from 16 to
+# 128 tokens: streaming lets the router measure TPOT, so every
+# completed request trains both the TTFT and TPOT models
+kubectl run traffic-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'for i in $(seq 1 200); do
+      curl -sS -N -o /dev/null -w "%{http_code}\n" -X POST "http://${IP}/v1/completions" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\": \"${MODEL}\", \"prompt\": \"Request ${i}: explain how an LLM router picks a model server.\", \"max_tokens\": $((16 * (i % 8 + 1))), \"stream\": true}" &
+      [ $((i % 10)) -eq 0 ] && wait
+    done | sort | uniq -c'
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.traffic.slo-aware end -->
+
+</details>
+<!-- tabs:end -->
 
 Expected output (all 200 requests return HTTP 200):
 
@@ -351,18 +408,32 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${EPP_POD}:8001/proxy/st
 ```
 <!-- guide:verify.tests.predictor end -->
 
-What to expect: after 200 requests, `training_samples_count` reports roughly `175–190` samples rather than `200` because `LATENCY_TEST_TRAIN_RATIO=0.1` holds out about 10% of samples as a test set (each training bucket is also capped, so the count stops growing on long runs). With `SLO_AWARE=false`, `tpot` stays at `0`; with `SLO_AWARE=true`, `"stream": ${SLO_AWARE}` streams the responses so both `ttft` and `tpot` samples are recorded. The prediction server reports `"is_ready": true` from startup (see the placeholder-model note in [Observability & Troubleshooting](#3-observability--troubleshooting)); a `last_model_load` that advances after the traffic shows it loaded a model trained on these samples:
+What to expect: after 200 requests, `training_samples_count` reports roughly `175–190` samples rather than `200` because `LATENCY_TEST_TRAIN_RATIO=0.1` holds out about 10% of samples as a test set (each training bucket is also capped, so the count stops growing on long runs). The prediction server reports `"is_ready": true` from startup (see the placeholder-model note in [Observability & Troubleshooting](#observability--troubleshooting)); a `last_model_load` that advances after the traffic shows it loaded a model trained on these samples:
 
-- With `SLO_AWARE=false`:
-  ```text
-  training samples: ttft=188 tpot=0
-  {"is_ready":true,"model_type":"xgboost","objective_type":"mean","quantile":0.9,"last_model_load":"2026-10-13T18:27:40.348701Z","training_server_url":"http://localhost:8000","models_exist":{"ttft_model":true,"tpot_model":true,"ttft_gated":false,"tpot_gated":false},"ensemble_active":false}
-  ```
-- With `SLO_AWARE=true`:
-  ```text
-  training samples: ttft=177 tpot=181
-  {"is_ready":true,"model_type":"xgboost","objective_type":"mean","quantile":0.9,"last_model_load":"2026-10-13T18:30:58.085058Z","training_server_url":"http://localhost:8000","models_exist":{"ttft_model":true,"tpot_model":true,"ttft_gated":false,"tpot_gated":false},"ensemble_active":false}
-  ```
+<!-- tabs:start group=slo -->
+<details open>
+<summary><b>Routing only (Default)</b></summary>
+
+Routing only trains `ttft`; `tpot` stays at `0`:
+
+```text
+training samples: ttft=188 tpot=0
+{"is_ready":true,"model_type":"xgboost","objective_type":"mean","quantile":0.9,"last_model_load":"2026-10-13T18:27:40.348701Z","training_server_url":"http://localhost:8000","models_exist":{"ttft_model":true,"tpot_model":true,"ttft_gated":false,"tpot_gated":false},"ensemble_active":false}
+```
+
+</details>
+<details>
+<summary><b>SLO-aware</b></summary>
+
+Streamed responses train both `ttft` and `tpot`:
+
+```text
+training samples: ttft=177 tpot=181
+{"is_ready":true,"model_type":"xgboost","objective_type":"mean","quantile":0.9,"last_model_load":"2026-10-13T18:30:58.085058Z","training_server_url":"http://localhost:8000","models_exist":{"ttft_model":true,"tpot_model":true,"ttft_gated":false,"tpot_gated":false},"ensemble_active":false}
+```
+
+</details>
+<!-- tabs:end -->
 
 **With `MONITORING=true`, compare the router's predicted and actual TTFT/TPOT histograms:**
 
@@ -405,26 +476,52 @@ kubectl run metrics-test --rm -i --restart=Never \
 </details>
 <!-- tabs:end -->
 
+<!-- tabs:start group=slo -->
+<details open>
+<summary><b>Routing only (Default)</b></summary>
+
 Expected output:
 
-- With `SLO_AWARE=false`:
-  ```text
-  llm_d_epp_request_predicted_ttft_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
-  llm_d_epp_request_ttft_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",streaming="false",target_model_name="Qwen/Qwen3-32B"} 201
-  ```
-- With `SLO_AWARE=true` (adds `predicted_tpot_seconds_count` and `streaming_tpot_seconds_count`):
-  ```text
-  llm_d_epp_request_predicted_tpot_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
-  llm_d_epp_request_predicted_ttft_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
-  llm_d_epp_request_streaming_tpot_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",target_model_name="Qwen/Qwen3-32B"} 201
-  llm_d_epp_request_ttft_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",streaming="true",target_model_name="Qwen/Qwen3-32B"} 201
-  ```
+```text
+llm_d_epp_request_predicted_ttft_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
+llm_d_epp_request_ttft_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",streaming="false",target_model_name="Qwen/Qwen3-32B"} 201
+```
 
-`llm_d_epp_request_predicted_ttft_seconds_count` (and `llm_d_epp_request_predicted_tpot_seconds_count` when `SLO_AWARE=true`) is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for every request it routed. If it stays at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#observability--troubleshooting).
+`llm_d_epp_request_predicted_ttft_seconds_count` is above zero and grows with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for every request it routed.
+
+</details>
+<details>
+<summary><b>SLO-aware</b></summary>
+
+Expected output (adds `predicted_tpot_seconds_count` and `streaming_tpot_seconds_count`):
+
+```text
+llm_d_epp_request_predicted_tpot_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
+llm_d_epp_request_predicted_ttft_seconds_count{model_name="",plugin_name="predicted-latency-producer",plugin_type="predicted-latency-producer",target_model_name="Qwen/Qwen3-32B"} 201
+llm_d_epp_request_streaming_tpot_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",target_model_name="Qwen/Qwen3-32B"} 201
+llm_d_epp_request_ttft_seconds_count{fairness_id="default-flow",model_name="Qwen/Qwen3-32B",priority="0",streaming="true",target_model_name="Qwen/Qwen3-32B"} 201
+```
+
+`llm_d_epp_request_predicted_ttft_seconds_count` and `llm_d_epp_request_predicted_tpot_seconds_count` are above zero and grow with `llm_d_epp_request_ttft_seconds_count`: the router recorded a prediction for every request it routed.
+
+</details>
+<!-- tabs:end -->
+
+If the predicted counts stay at zero while the actual count grows, the router fell back to heuristic scoring; see [Observability & Troubleshooting](#observability--troubleshooting).
 
 ### 4. (Optional) Send a request with SLOs
 
-**With `SLO_AWARE=true`, send a streamed request with TTFT and TPOT SLOs:**
+<!-- tabs:start group=slo -->
+<details open>
+<summary><b>Routing only (Default)</b></summary>
+
+The routing-only pipeline has no `latency-slo-admitter` or `slo-headroom-tier-filter`, so it does not enforce `x-llm-d-slo-*` headers. Select **SLO-aware** to send a request with SLOs.
+
+</details>
+<details>
+<summary><b>SLO-aware</b></summary>
+
+**Send a streamed request with TTFT and TPOT SLOs:**
 
 <!-- guide:verify.tests.slo_request start -->
 <!-- llm-d-cicd:skip start -->
@@ -457,8 +554,11 @@ The request returns `HTTP 200` and is placed on a server predicted to meet both 
 - **Sheddable traffic (`priority < 0`):** Rejected at admission before consuming GPU capacity. The admitter fails open, admitting the request anyway, when no predictions are available or when some server is idle or has a nearly empty KV cache.
 - **Standard and high-priority traffic (`priority >= 0`):** Admitted on a best-effort basis and routed to the candidate server with the smallest predicted SLO deficit (most headroom).
 
+</details>
+<!-- tabs:end -->
+
 > [!IMPORTANT]
-> **Trust Boundary:** `x-llm-d-slo-ttft-ms`, `x-llm-d-slo-tpot-ms`, and `x-llm-d-inference-objective` (plus its legacy alias `x-gateway-inference-objective`) are client-supplied HTTP headers. In production, untrusted clients must not self-assert latency SLOs or traffic priority: sanitize or strip incoming `x-llm-d-*` and `x-slo-*` headers at your authenticated ingress gateway (or Envoy `ext_authz` filter) and inject authoritative SLO and objective headers based on the caller's authenticated tenant tier (see [EPP HTTP Headers Reference](../../docs/api-reference/epp-http-headers.md)).
+> **Trust Boundary:** `x-llm-d-slo-ttft-ms`, `x-llm-d-slo-tpot-ms`, and `x-llm-d-inference-objective` (plus its legacy alias `x-gateway-inference-objective`) are client-supplied HTTP headers. In production, untrusted clients must not self-assert latency SLOs or traffic priority: sanitize or strip incoming `x-llm-d-*`, `x-slo-*`, and `x-gateway-inference-objective` headers at your authenticated ingress gateway (or Envoy `ext_authz` filter) and inject authoritative SLO and objective headers based on the caller's authenticated tenant tier (see [EPP HTTP Headers Reference](../../docs/api-reference/epp-http-headers.md)).
 
 Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
