@@ -659,7 +659,7 @@ class ExperimentTests(unittest.TestCase):
         self.assertNotIn("description.text", text)  # not a valid run-treatment override; silently dropped
         self.assertIn("load.stages.0.rate: 10.0", text)
         self.assertIn("load.stages.0.duration: 180", text)
-        self.assertIn("load.request_timeout: 20", text)
+        self.assertIn("load.request_timeout: 120", text)
         self.assertIn("max_parallel_treatments: 2", text)
         self.assertIn(f"profile: {x.ASYNC_PROFILE}", text)
         self.assertIn(f"profile: {x.REALTIME_PROFILE}", text)

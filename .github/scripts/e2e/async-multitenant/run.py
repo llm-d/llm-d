@@ -160,10 +160,15 @@ class Config:
         self.start_skew = float(env("START_SKEW_S", "60"))
         self.async_duration = int(env("ASYNC_DURATION",
                                       str(max(120, round(self.realtime_seconds + self.start_skew)))))
-        # A dispatched async request needs several service times to finish under
-        # contention; a timeout below that abandons work the GPU has already
-        # started. 20 s suits a ~2 s service time (H100); slower GPUs scale up.
-        self.async_timeout = int(env("ASYNC_TIMEOUT", str(max(20, round(4 * self.service_seconds)))))
+        # How long an async client waits before giving up. The queue is drained
+        # oldest first, so under the deliberate overload the request at its head
+        # is always about this old: with a short timeout most dispatched
+        # requests are abandoned moments after dispatch, and llm-d-async (since
+        # v0.11.0, llm-d-async#474) aborts them in vLLM, wasting their prefills
+        # and delaying realtime at 100 % load. 120 s keeps clients waiting
+        # through the realtime member when both pods start within seconds, as
+        # on the nightly cluster; raise it with START_SKEW_S on slower starts.
+        self.async_timeout = int(env("ASYNC_TIMEOUT", str(max(120, round(4 * self.service_seconds)))))
         self.realtime_num_requests: int | None = None
         self.enforce = True
         if self.dry_run:

@@ -49,9 +49,15 @@ capacity `C = concurrency-detector maxConcurrency x vLLM replicas` (10 x 1 in
 the guide values); `k_L = round(L/100 x C)` = 2, 8, 9, 10 for 20/80/90/100 %.
 Realtime is a closed-loop `load.type: concurrent` stage, so `k` is exact. The
 async member is a constant-rate open-loop stage far above capacity with a
-client timeout of `max(20, 4 x SERVICE_S)` seconds: undispatched requests are cancelled when the client gives up
-(verified: llm-d-async never dispatches them even after claiming them from
-Redis), so every async stage lasts `duration + timeout` seconds whatever the
+client timeout of `max(120, 4 x SERVICE_S)` seconds. When a client gives up, the
+coordinator cancels its request: llm-d-async drops it if still queued and, since
+v0.11.0 (llm-d/llm-d-async#474), aborts it in vLLM if already dispatched. The
+queue is drained oldest first, so under this overload the dispatched request is
+usually one whose client is about to give up; with a short timeout (20 s
+previously) most dispatched async requests were aborted moments after their
+prefill, and the wasted prefills delayed realtime at 100 % load (TTFT p90 about
+0.5 s instead of 0.1 s). 120 s keeps clients waiting while the realtime member
+runs. Every async stage lasts up to `duration + timeout` seconds whatever the
 realtime level. The coordinator queues dispatch
 from their own 16-worker llm-d-async pool so async alone can exceed `C`.
 
@@ -152,7 +158,7 @@ eviction round trip (up to about 0.5 s on H100s).
 | `FLOW_CONTROL` | `evictable` | the guide's router values the deploy script installed (`evictable` or `holdback`); `C` and the async ceiling are read from that file |
 | `CAPACITY` | from the router values x ready replicas | override `C` |
 | `REALTIME_SECONDS` / `SERVICE_S` | `80` / `2.0` | size realtime stages (`num_requests = k x REALTIME_SECONDS / SERVICE_S`) |
-| `ASYNC_RATE` / `ASYNC_DURATION` / `ASYNC_TIMEOUT` | `max(10, 2 x C / SERVICE_S)` / `max(120, REALTIME_SECONDS + START_SKEW_S)` / `max(20, 4 x SERVICE_S)` | async member load: arrivals at twice what the pool completes keep a backlog queued; the timeout must let dispatched requests finish |
+| `ASYNC_RATE` / `ASYNC_DURATION` / `ASYNC_TIMEOUT` | `max(10, 2 x C / SERVICE_S)` / `max(120, REALTIME_SECONDS + START_SKEW_S)` / `max(120, 4 x SERVICE_S)` | async member load: arrivals at twice what the pool completes keep a backlog queued; the timeout must keep clients waiting while the realtime member runs (see above) |
 | `START_SKEW_S` | `60` | how much later than the async pod the realtime pod may start and still run inside the backlog (use 180 on GKE Autopilot, where each harness pod may get a new node) |
 | `RETRIES` | `1` | re-runs of levels whose comparison came back unusable (0 disables) |
 | `WAIT_TIMEOUT` | `900` | seconds the CLI waits for a treatment before giving up (cuts off a hung client) |

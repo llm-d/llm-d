@@ -36,7 +36,7 @@ class ExperimentParams:
     # apart (node provisioning, image pull); run.py derives it from
     # realtime_seconds plus a start-skew margin.
     async_duration: int = 180       # seconds of async arrivals
-    async_timeout: int = 20         # client timeout that cancels undispatched work (~4x service time)
+    async_timeout: int = 120        # client timeout; clients that give up cancel their requests
     realtime_timeout: int = 120
     realtime_num_requests: int | None = None  # override (dry runs)
     include_async_only: bool = True  # False when re-running only some levels
