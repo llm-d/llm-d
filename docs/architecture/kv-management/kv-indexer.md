@@ -123,7 +123,7 @@ The Token Producer runs early in the scheduling cycle: it renders chat templates
 
 This role is implemented by the `token-producer` plugin. It does not access the KV-cache Index or score endpoints.
 
-The plugin uses the tokenizer-free `estimate` backend by default. For precise routing, select the exact-tokenization `vllm` backend with `modelName` and `vllm.url`. It calls vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`, deployed either as a sidecar in the EPP pod (loopback) or as a dedicated render Service shared across EPP replicas.
+The plugin uses the tokenizer-free `estimate` backend by default. For precise routing, select the exact-tokenization `vllm` backend with `modelName` and either `vllm.url` or `vllm.endpointDiscovery`. It calls vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`. `vllm.endpointDiscovery` renders on the pool's own model servers, round-robin across `Ready` endpoints; `vllm.url` points at one address, such as a sidecar in the EPP pod (loopback) or a dedicated render Service shared across EPP replicas.
 
 ### Precise Prefix Cache Producer
 

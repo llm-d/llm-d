@@ -16,12 +16,15 @@ router:
             parameters:
               modelName: Qwen/Qwen3-32B
               vllm:
+                # Dedicated render pool (../render/standalone/): SGLang serves no
+                # /v1/*/render endpoints of its own.
                 url: "http://precise-prefix-cache-routing-render:8000"
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer
             parameters:
               tokenProcessorConfig:
                 blockSizeTokens: 64
+                hashAlgorithm: xxh64
               speculativeIndexing: true
               indexerConfig:
                 kvBlockIndexConfig:

@@ -142,8 +142,8 @@ jobs:
           CHART_VERSION=v0
           failed=0
           for engine_values in "" "-f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.sglang.values.yaml"; do
-            name="EPP, render via Service"
-            [ -n "${engine_values}" ] && name="${name} (sglang)"
+            name="EPP, render via endpoint discovery"
+            [ -n "${engine_values}" ] && name="EPP, render via Service (sglang)"
             echo ""
             echo "========================================"
             echo "precise-prefix-cache-routing: router (${name})"
@@ -169,10 +169,10 @@ jobs:
           done
           exit "${failed}"
 
-      - name: Dry-run render Service overlays (precise-prefix-cache-routing)
+      - name: Dry-run render pool overlays (precise-prefix-cache-routing)
         run: |
           failed=0
-          for overlay in render render/standalone render/xpu-sglang; do
+          for overlay in render/standalone render/xpu-sglang; do
             name="render (${overlay})"
             echo ""
             echo "========================================"

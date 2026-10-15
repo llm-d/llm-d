@@ -1,18 +1,16 @@
 ## precise-prefix-cache-routing guide overrides for the router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
-## Tokenization is served by the `../render/` Service, NOT the chart-injected
-## EPP sidecar. The chart's `router.tokenizer` sidecar is off by default, so no
-## override is needed here; the EPP `token-producer` plugin tokenizes prompts
-## over HTTP against that Service (see its `vllm.url` below).
-##
-## That Service has no pods of its own — it fronts the vLLM model servers, whose
-## overlays expose `/v1/*/render` (with --enable-scale-out on vLLM 0.30).
-## Render capacity therefore scales with the model server fleet rather than
-## with a separately-scheduled renderer pool,
-## which keeps render latency more contained at higher QPS. Backends without
-## vLLM's render endpoints (SGLang) apply `../render/standalone/` instead; it
-## publishes the same Service name, so this `vllm.url` is unchanged either way.
+## The EPP `token-producer` plugin tokenizes prompts on the vLLM model servers
+## themselves: `vllm.endpointDiscovery` sends each render call to one of the
+## Ready InferencePool endpoints, round-robin per request, and retries once on
+## another endpoint after a transport error, timeout, 408, 429 or 5xx. Render
+## capacity therefore scales with the model server fleet, and no render Service
+## or EPP sidecar is deployed (the chart's `router.tokenizer` sidecar is off by
+## default). The model server overlays serve `/v1/*/render` on their inference
+## port (`--enable-scale-out` on vLLM 0.30). SGLang has no render endpoints, so
+## its values (precise-prefix-cache-routing.sglang.values.yaml) point `vllm.url`
+## at the dedicated `../render/standalone/` pool instead.
 ##
 ## Single EPP replica: the token-load-scorer's in-flight token accounting is
 ## local to each EPP process, so active-active HA (replicas: 2) would halve the
@@ -47,15 +45,15 @@ router:
         plugins:
           - type: token-producer
             parameters:
-              # Must match the model the overlay deploys: with the default
-              # `../render/` overlay the render call lands on the model servers
-              # themselves, so a mismatch is rejected rather than silently
-              # producing token IDs from the wrong tokenizer.
+              # Must match the model the overlay deploys: the render call lands
+              # on the model servers themselves, so a mismatch is rejected
+              # rather than silently producing token IDs from the wrong
+              # tokenizer.
               modelName: Qwen/Qwen3-32B
               vllm:
-                # Guide render Service (../render/), not a loopback sidecar.
-                # `precise-prefix-cache-routing-` namePrefix + Service name `render`.
-                url: "http://precise-prefix-cache-routing-render:8000"
+                # Render on the Ready InferencePool endpoints, on their
+                # inference port (no portRules), round-robin.
+                endpointDiscovery: {}
                 # How /v1/messages (Anthropic) and /v1/responses requests are
                 # tokenized. `auto` (default) probes the render endpoint once and
                 # uses vLLM's native /v1/messages/render or /v1/responses/render
@@ -71,6 +69,10 @@ router:
             parameters:
               tokenProcessorConfig:
                 blockSizeTokens: 64
+                # Block keys are internal to the index and need not match
+                # vLLM's hashes. xxh64 hashes a prompt about 8x faster than the
+                # cbor-fnv default (llm-d/llm-d-router#2237).
+                hashAlgorithm: xxh64
               speculativeIndexing: true
               indexerConfig:
                 kvBlockIndexConfig:

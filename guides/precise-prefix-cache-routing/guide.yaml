@@ -139,10 +139,9 @@ deploy:
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
   render:
-    # vLLM serves /v1/*/render itself: a Service that fronts the model servers.
-    - when: {MODEL_SERVER: [vllm]}
-      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
-    # SGLang has no render endpoints: a dedicated, GPU-less vLLM render pool.
+    # vLLM renders on the model servers through the router's endpoint
+    # discovery, so only SGLang deploys a render pool: a dedicated, GPU-less
+    # vLLM render Deployment, because SGLang has no render endpoints.
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
@@ -158,14 +157,34 @@ verify:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
     render:
-      - run: |
-          # The render Service must return token IDs for MODEL before requests are routed
+      - when: {MODEL_SERVER: [vllm]}
+        run: |
+          # Every model server pod must return token IDs for MODEL: the router
+          # renders on each of them in turn. Exits non-zero on the first pod that
+          # does not, e.g. a 404 when vLLM runs without --enable-scale-out.
+          export POD_IPS=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}')
+          kubectl run render-check --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="POD_IPS=${POD_IPS}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'test -n "${POD_IPS}" || { echo "FAIL: no model server pods"; exit 1; }
+              for ip in ${POD_IPS}; do
+                R=$(curl -sS -X POST "http://${ip}:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
+                echo "${R}" | grep -q "\"token_ids\"" || { echo "FAIL: ${ip}: ${R}"; exit 1; }
+                echo "OK: ${ip}"
+              done'
+      - when: {MODEL_SERVER: [sglang]}
+        run: |
+          # The render pool must return token IDs for MODEL before requests are routed
           kubectl run render-check --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="GUIDE_NAME=${GUIDE_NAME}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -X POST "http://${GUIDE_NAME}-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}"'
+            -- /bin/sh -c 'R=$(curl -sS -X POST "http://${GUIDE_NAME}-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
+              echo "${R}" | grep -q "\"token_ids\"" || { echo "FAIL: ${R}"; exit 1; }
+              echo "OK: ${GUIDE_NAME}-render"'
     request:
       - run: |
           kubectl run curl-test --rm -i --restart=Never \
@@ -194,7 +213,9 @@ verify:
             -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/responses" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"max_output_tokens\": 16, \"input\": \"How are you today?\"}"'
     shared_prefix:
       - run: |
-          # 10 requests that share a ~2k-token prefix and differ only in the last sentence
+          # 10 requests that share a ~2k-token prefix and differ only in the last
+          # sentence, 3 s apart: past the router's 2 s speculative-index TTL, so
+          # each one routes on the KV-cache events of the one before it
           kubectl run prefix-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
@@ -205,6 +226,7 @@ verify:
                 curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
                   -H "Content-Type: application/json" \
                   -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+                sleep 3
               done'
     pod_metrics:
       - run: |
@@ -220,8 +242,6 @@ cleanup:
   modelserver:
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   render:
-    - when: {MODEL_SERVER: [vllm]}
-      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}

@@ -9,12 +9,12 @@ kind: Kustomization
 # Service, so the tokenizer is always vLLM's regardless of which engine serves
 # inference.
 #
-# The default (../) fronts the model server pods with a Service instead and is
-# the preferred choice for vLLM backends: at higher QPS it keeps render latency
-# more contained than this separately-scheduled pool. Both overlays produce the
-# same Service name, so `vllm.url` in
-# router/precise-prefix-cache-routing.values.yaml never changes — apply exactly
-# one of them.
+# vLLM backends render on the model server pods instead (token-producer
+# `vllm.endpointDiscovery` in router/precise-prefix-cache-routing.values.yaml):
+# at higher QPS that keeps render latency more contained than this
+# separately-scheduled pool. The SGLang router values point `vllm.url` at this
+# pool's Service; to use it with vLLM, replace `endpointDiscovery` with the same
+# `vllm.url`.
 namePrefix: precise-prefix-cache-routing-
 
 resources:
