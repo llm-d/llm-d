@@ -13,13 +13,8 @@ spec:
               labels:
                 llm-d.ai/role: encode
             spec:
-              terminationGracePeriodSeconds: 75
               containers:
                 - name: modelserver
-                  lifecycle:
-                    preStop:
-                      exec:
-                        command: ["/bin/sleep", "15"]
                   command: ["vllm", "serve"]
                   args:
                     - "Qwen/Qwen3-VL-32B-Instruct"
