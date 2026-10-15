@@ -346,60 +346,15 @@ kubectl logs -n ${NAMESPACE} job/inference-perf -f
 
 ## Benchmark Results
 
-> [!WARNING]
-> The numbers below were measured with the previous revision of this guide (`Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`, 8 replicas, JAX `tpu_inference` backend). They are kept as a reference for the workload and the routing effect; results for `Qwen/Qwen3.5-397B-A17B-FP8` on Torch TPU will replace them once the benchmark runs complete.
+Results for `Qwen/Qwen3.5-397B-A17B-FP8` on Torch TPU are being collected with the workload above
+(`inference-perf` code-generation profile and the AgentX harness) for both topologies and will be
+published here with the model, slice, image digest and benchmark parameters of each run.
 
-The results below are with 8 replicas of TPU 7x (2x2x1) on the benchmark workload described above.
-
-Scaling concurrency up to 80 sessions, the optimized configuration sustains a peak total throughput of **~120K tokens/s**, versus **~40K tokens/s** for the k8s Service baseline — roughly **3× higher**.
-
-### Summary with 40 concurrent coding sessions
-
-| Metric | k8s Service | llm-d-optimized | Δ Improvement |
-| :--- | :--- | :--- | :--- |
-| **TTFT P50 (ms)** | 17391 | 2474 | ⬇️ 85.8% |
-| **Total tokens / sec** | 37424 | 93353 | ⬆️ 149.5% |
-| **Input tokens / sec** | 36987 | 92705 | ⬆️ 150.6% |
-| **Output tokens / sec** | 436.8 | 647.5 | ⬆️ 48.2% |
-
-### Latency Profiles
-
-<p float="left">
-  <img src="./benchmark-results/latency_vs_throughput.png" width="32%" alt="Latency vs Throughput" />
-  <img src="./benchmark-results/throughput_vs_concurrency.png" width="32%" alt="Throughput vs Concurrency" />
-  <img src="./benchmark-results/ttft_vs_concurrency.png" width="32%" alt="TTFT vs Concurrency" />
-</p>
-
-### Prefill/Decode Disaggregated Results
-
-We also evaluated the P/D disaggregated configuration on TPU 7x with different prefill-to-decode ratios under the same agentic workload framework (average prompt size **~128K tokens**, output **~1.1K tokens**).
-
-At this scale, the KV cache size is extremely large (~20GB per request), shifting the bottleneck from prefill compute to **decoder HBM capacity**. Under a concurrency of 40, allocating more TPU nodes to the decode phase (**2:6** ratio) yields the best performance by providing sufficient aggregate HBM to avoid severe queueing and swapping:
-
-| Metric | 2:6 (2 Prefill, 6 Decode) | 5:3 (5 Prefill, 3 Decode) | 6:2 (6 Prefill, 2 Decode) |
-| :--- | :---: | :---: | :---: |
-| **TTFT Median (s)** | **7.3** | 158.3 | 329.5 |
-| **TTFT Mean (s)** | **31.2** | 159.2 | 317.9 |
-| **TTFT P90 (s)** | **112.6** | 258.1 | 473.6 |
-| **TPOT Median (ms)** | **260.2** | 1,610.0 | 1,652.5 |
-| **Input Throughput (tok/s)** | **33,515.2** | 14,821.9 | 9,751.2 |
-| **Output Throughput (tok/s)** | **295.1** | 128.8 | 84.2 |
-| **Error Rate** | 2.8% | **2.6%** | 2.9% |
-
-**Key Takeaways:**
-
-1. **Decoder HBM Capacity is the Bottleneck:** With ~128K context, the KV cache size (~20GB) quickly saturates the decoder HBM. Having only 2 decoders (6:2) restricts the active request capacity, leading to severe queueing (TTFT Median of 329.5s).
-2. **Optimal Ratio Shift:** Expanding decode capacity to 6 nodes (2:6) increases the aggregate HBM, reducing the TTFT Median by **45x** (7.3s) and increasing output throughput by **3.5x** (295.1 tok/s).
-3. **Prefill Capacity:** Even with only 2 prefillers (2:6), they are able to sustain the required prefill throughput without becoming the primary bottleneck.
-4. **Current Limitations:** Without CPU offloading optimizations, this disaggregated TPU configuration currently performs below the unified `llm-d-optimized` baseline. Integrating these optimizations into TPU disaggregated deployments is an active area of development.
-
-**Note**: As of June 2026 we are actively working on improving the following for TPU deployments:
-
-- Long context performance
-- P/D disaggregation
-- KV Cache offloading support
-
-This guide and performance numbers will be updated as further optimizations become available.
+> [!NOTE]
+> The previous revision of this guide served `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` on the JAX
+> `tpu_inference` backend; its results (June–July 2026) are in the
+> [git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b) and do not
+> apply to this configuration.
 
 ## Cleanup
 

@@ -348,22 +348,6 @@ Tool calling and reasoning parsing are enabled with the parsers for the model ea
 
 **Known issues:**
 
-<details>
-<summary><b>Other Models (TPU7x)</b></summary>
-
-```bash
-# Google TPU v7 / vLLM — Qwen/Qwen3-32B
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-32b/
-
-# Google TPU v7 / vLLM — deepseek-ai/DeepSeek-V4-Flash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/deepseek-v4-flash/
-
-# Google TPU v7 / vLLM — RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
-```
-
-</details>
-
 </details>
 <details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
 <summary><b>Google TPU v7 (dynamic slicing)</b></summary>

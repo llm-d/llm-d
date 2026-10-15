@@ -13,14 +13,15 @@ spec:
         - name: modelserver
           command: ["vllm", "serve"]
           args:
-            - "Qwen/Qwen3-32B"
+            - "Qwen/Qwen3.5-397B-A17B-FP8"
             - "--port=8000"
             - "--tensor-parallel-size=8"
+            - "--enable-expert-parallel"
             - "--attention-backend=CUSTOM"
             - "--max-model-len=16384"
             - "--max-num-seqs=64"
             - "--enable-auto-tool-choice"
-            - "--tool-call-parser=hermes"
+            - "--tool-call-parser=qwen3_coder"
             - "--reasoning-parser=qwen3"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             # Drain in-flight requests on SIGTERM. Sized with the grace period in

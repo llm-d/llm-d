@@ -42,7 +42,7 @@ This guide includes configurations for the following accelerator and model serve
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | ✅ validated | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | — | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8, EP) · Torch TPU vLLM (`torch-tpu-vllm` image) |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
 | Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
