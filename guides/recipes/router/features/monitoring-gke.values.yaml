@@ -1,0 +1,10 @@
+## Enables Google Cloud Managed Service for Prometheus (GMP) monitoring for the router on GKE.
+## Layer this on top of base.values.yaml to enable metrics collection with GMP PodMonitoring.
+
+router:
+  monitoring:
+    provider:
+      name: gmp
+    interval: "10s"
+    prometheus:
+      enabled: true

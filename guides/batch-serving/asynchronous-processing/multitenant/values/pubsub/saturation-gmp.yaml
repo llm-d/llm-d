@@ -1,0 +1,119 @@
+# Scenario C — team × tier with saturation back-off (GCP-native, GMP), one model
+# behind one InferencePool.
+#
+#  - SATURATION: the worker pool's gate is scoped to the InferencePool (POOL_NAME).
+#  - TEAM quota (redis-quota, classifying): reserved vs overflow.
+#  - TIER: per-topic label; tier-priority merge policy orders the lanes.
+#
+# PromQL endpoint = the GMP query frontend (manifests/gmp-frontend.yaml), already
+# scoped to the namespace — no PROM_URL here, unlike the self-hosted Prometheus overlays.
+# NOTE: GMP/Monarch lags real time ~1-2 min.
+# Replace: PROJECT_ID, POOL_NAME, SAT_CAP (concurrent
+# requests at which the pool is considered saturated).
+#
+# The router (llm-d-router-epp) and Redis are addressed by Service name: llm-d-async
+# runs in their namespace.
+#
+# One llm-d-async can serve several InferencePools independently: give each pool
+# its own worker pool and queues whose igw_base_url points at that pool's router.
+# A router in another namespace takes its full Service DNS name
+# (http://<release>-epp.<namespace>.svc.cluster.local:80).
+ap:
+
+  transport: "gcp-pubsub"
+
+  prometheusURL: "http://gmp-frontend:9090"
+  prometheusCacheTTL: "5s"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      objective_header: "x-llm-d-inference-objective"
+      fairness_header: "x-llm-d-inference-fairness-id"
+      fairness_attribute: "team"
+      lane_objectives:
+        reserved-interactive: "reserved-interactive"
+        reserved-async: "reserved-async"
+        reserved-batch: "reserved-batch"
+        overflow-interactive: "overflow-interactive"
+        overflow-async: "overflow-async"
+        overflow-batch: "overflow-batch"
+
+  transportConfig:
+    project_id: "PROJECT_ID"
+    result_topic_id: "projects/PROJECT_ID/topics/results"
+    topics:
+      # ---------- team queues (pool teams, payload.model = MODEL) ----------
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-premium-requests-sub"
+        worker_pool_id: "teams"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://llm-d-router-epp:80"
+        labels: {tier: "interactive"}
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-standard-requests-sub"
+        worker_pool_id: "teams"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://llm-d-router-epp:80"
+        labels: {tier: "async"}
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:"
+      - subscriber_id: "projects/PROJECT_ID/subscriptions/team-batch-requests-sub"
+        worker_pool_id: "teams"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://llm-d-router-epp:80"
+        labels: {tier: "batch"}
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:"
+
+  # SAT_CAP is the divisor: the concurrent-request count at which the pool counts as
+  # saturated. prometheus-query closes the gate at budget <= 0 and clamp() floors the
+  # budget at 0, so the gate closes only once SAT_CAP requests are running. A worker
+  # evaluates the gate while holding a message it has not dispatched yet, so at most
+  # `workers - 1` of this pool's requests are running at that moment: driven by async
+  # load alone, SAT_CAP must stay BELOW `workers` or the gate can never close.
+  workerPools:
+    - id: "teams"
+      workers: 16
+      gate_type: "wait-on-refuse"
+      gate_params:
+        gate: |
+          {"gate_type":"prometheus-query","gate_params":{"query":"clamp(1 - sum(vllm:num_requests_running{inference_pool=\"POOL_NAME\"})/SAT_CAP, 0, 1)","fallback":"1"}}
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: false
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  grafana:
+    dashboards:
+      enabled: false

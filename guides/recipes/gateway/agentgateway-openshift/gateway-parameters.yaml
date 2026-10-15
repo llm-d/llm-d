@@ -1,0 +1,32 @@
+# OpenShift-specific AgentgatewayParameters for the agentgateway
+# recipe. Keep the data-plane Service as ClusterIP and remove the fixed
+# runAsUser so OpenShift can assign a compatible UID at runtime.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: agentgateway-params
+  labels:
+    app.kubernetes.io/component: inference-gateway
+spec:
+  deployment:
+    spec:
+      template:
+        spec:
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: agentgateway
+              securityContext:
+                $patch: replace
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+  service:
+    spec:
+      type: ClusterIP

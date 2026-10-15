@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mooncake
+resources:
+  - ../base
+  - servicemonitor.yaml
+
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: mooncake-master-store
+      app.kubernetes.io/component: master-store
+      app.kubernetes.io/part-of: mooncake
+    includeTemplates: true
+    includeSelectors: true
+    fields:
+      - group: monitoring.coreos.com
+        version: v1
+        kind: ServiceMonitor
+        path: spec/selector/matchLabels
+        create: true

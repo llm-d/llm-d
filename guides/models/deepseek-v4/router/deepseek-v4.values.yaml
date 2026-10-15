@@ -1,0 +1,59 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    flags:
+      # The disaggregatedset-rollout-screener is Alpha stability.
+      allow-experimental-plugins: true
+    pluginsConfigFile: "wide-ep-config.yaml"
+    pluginsCustomConfig:
+      wide-ep-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        # Pin each request to a single DisaggregatedSet revision during
+        # rollouts so prefill and decode never pair across revisions.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "disaggregatedset.x-k8s.io/name=wide-ep-vllm-dsv4"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+
+  modelServers:
+    # One addressable port per pod: prefill's API servers share 8000 (--api-server-count
+    # with --data-parallel-hybrid-lb), and on decode the routing sidecar fronts 8000.
+    # Listing 8001-8007 would target dead ports.
+    targetPorts:
+      - number: 8000
+    matchLabels:
+      llm-d.ai/guide: "wide-ep"

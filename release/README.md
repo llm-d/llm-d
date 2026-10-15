@@ -1,0 +1,223 @@
+# llm-d, Release process
+
+This document describes the release process for llm-d. The release dates should be in the public calendar.
+
+## Nightly Testing
+
+<!-- NIGHTLY-MATRIX-START -->
+| Guide | IBM | CKS | GKE | AMD | Intel |
+|-------|-----|-----|-----|-----|-----|
+| [Optimized Baseline](../guides/optimized-baseline/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml) | [![SGLang GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke-sglang.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml) [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke-tpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml) | [![ATOM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-rocm-atom.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-atom-x.yaml) [![SGLang ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-rocm-sglang.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-sglang-x.yaml) [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-rocm.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml) |
+| [Precise Prefix Cache Routing](../guides/precise-prefix-cache-routing/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-gke-tpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-rocm.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml) |
+| [P/D Disaggregation](../guides/pd-disaggregation/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks-acc-gpu-vllm-x.yaml) | [![SGLang GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-gke-sglang.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-gpu-sglang-x.yaml) [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-gke-tpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm MORI](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-amd-moriio.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-moriio.yaml) [![vLLM ROCm NIXL](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-amd-nixl.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-nixl.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml) |
+| [Wide Expert Parallelism](../guides/wide-ep/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm MORI](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-amd-moriio.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-amd-ci-acc-rocm-vllm-moriio.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-intel-acc-xpu-vllm-x.yaml) |
+| [Tiered Prefix Cache (CPU Offloading)](../guides/tiered-prefix-cache/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cks-cpu-gpu-vllm-native.yaml) | [![SGLang GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-sglang-cpu-native.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml) [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-cpu-native.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-tpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-cpu-native.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-cpu-rocm-vllm-native.yaml) [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-fs-native.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-native.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml) |
+| [Tiered Prefix Cache (LMCache)](../guides/tiered-prefix-cache/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-lmcache-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-lmcache.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-lmcache-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-cks-cpu-gpu-vllm-lmcache.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-cpu-llmcache.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-cpu-lmcache.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-cpu-rocm-vllm-lmcache.yaml) [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-fs-lmcache.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-lmcache.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-lmcache-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml) |
+| [Predicted Latency-Based Routing](../guides/predicted-latency-routing/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-cks.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-rocm.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-xpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-intel-acc-xpu-vllm-x.yaml) |
+| [Flow Control](../guides/flow-control/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/flow-control-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/flow-control-rocm.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-flow-control-amd-ci-acc-rocm-vllm-x.yaml) |  |
+| [Async Processing (Multi-Tenant, Eviction)](../guides/batch-serving/asynchronous-processing/multitenant/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/async-multitenant-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml) |  |  |
+| [Async Processing (Multi-Tenant, Holdback)](../guides/batch-serving/asynchronous-processing/multitenant/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/async-multitenant-holdback-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml) |  |  |
+| [Workload Autoscaling (KEDA + EPP Queue)](../guides/workload-autoscaling/keda-epp-queue/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/keda-epp-queue-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml) |  |  | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/keda-epp-queue-rocm.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml) |  |
+| [Fast Model Actuation (FMA)](../guides/fast-model-actuation/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+| [Multimodal Serving (Aggregation)](../guides/multimodal-serving/aggregation/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/multimodal-serving-aggregation-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-multimodal-serving-aggregation-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/multimodal-serving-aggregation-gke-tpu.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-multimodal-serving-aggregation-gke-acc-tpu-vllm-x.yaml) |  |  |
+| [Multimodal Serving (E-Disaggregation)](../guides/multimodal-serving/e-disaggregation/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/multimodal-serving-e-disaggregation-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-multimodal-serving-e-disaggregation-gke-acc-gpu-vllm-x.yaml) |  |  |
+| [Fast Model Actuation + KEDA Autoscaling](../guides/fast-model-actuation/fast-model-actuation-keda/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-keda-ocp.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+| [Agentic API](../guides/agentic-api/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/agentic-api-gke.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml) |  |  |
+<!-- NIGHTLY-MATRIX-END -->
+
+## Release Testing
+
+> Guide validation per release, from e2e runs made **against the release
+> branch** — unlike the nightly matrix above, which mirrors `main`.
+>
+> These runs are dispatched manually as part of the release process; see
+> [Release work](#3-release-work). Each cell is a live badge scoped to its
+> release, so re-running a single lane updates the table on its own.
+
+<!-- RELEASE-MATRIX-START -->
+<!-- RELEASE-MATRIX-release-0.10-START -->
+### [`v0.10.0`](https://github.com/llm-d/llm-d/releases/tag/v0.10.0) — branch [`release-0.10`](https://github.com/llm-d/llm-d/tree/release-0.10)
+
+| Guide | IBM | CKS | GKE | AMD | Intel |
+|-------|-----|-----|-----|-----|-----|
+| [Optimized Baseline](../guides/optimized-baseline/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-cks_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml) | [![SGLang GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke-sglang_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml) [![TRTLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke-trtllm_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-trtllm-x.yaml) [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-gke-tpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-rocm_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-amd-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/optimized-baseline-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml) |
+| [Precise Prefix Cache Routing](../guides/precise-prefix-cache-routing/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-cks_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-gke-tpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-rocm_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/precise-prefix-cache-routing-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml) |
+| [P/D Disaggregation](../guides/pd-disaggregation/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-cks_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-cks-acc-gpu-vllm-x.yaml) | [![SGLang GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-gke-sglang_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-gpu-sglang-x.yaml) [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-gke-tpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml) | [![vLLM ROCm MORI](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-amd-moriio_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-moriio.yaml) [![vLLM ROCm NIXL](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-amd-nixl_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-amd-ci-acc-rocm-vllm-nixl.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/pd-disaggregation-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml) |
+| [Wide Expert Parallelism](../guides/wide-ep/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-cks_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm MORI](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-amd-moriio_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-amd-ci-acc-rocm-vllm-moriio.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/wide-ep-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-wide-ep-intel-acc-xpu-vllm-x.yaml) |
+| [Tiered Prefix Cache (CPU Offloading)](../guides/tiered-prefix-cache/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml) |  | [![SGLang GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-sglang-cpu-native_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml) [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-cpu-native_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-tpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-cpu-native_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-cpu-rocm-vllm-native.yaml) [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-fs-native_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-native.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml) |
+| [Tiered Prefix Cache (LMCache)](../guides/tiered-prefix-cache/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-gke-cpu-llmcache_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-cpu-lmcache_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-cpu-rocm-vllm-lmcache.yaml) [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-amd-rocm-fs-lmcache_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-lmcache.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/tiered-prefix-cache-cpu-offloading-lmcache-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml) |
+| [Predicted Latency-Based Routing](../guides/predicted-latency-routing/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-cks_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-cks-acc-gpu-vllm-x.yaml) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml) | [![vLLM ROCm](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-rocm_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml) | [![vLLM XPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/predicted-latency-routing-xpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-predicted-latency-routing-intel-acc-xpu-vllm-x.yaml) |
+| [Flow Control](../guides/flow-control/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/flow-control-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml) |  |  |
+| [Workload Autoscaling (KEDA + EPP Queue)](../guides/workload-autoscaling/keda-epp-queue/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/keda-epp-queue-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+| [Fast Model Actuation (FMA)](../guides/fast-model-actuation/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-base-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-base-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+| [Multimodal Serving (Aggregation)](../guides/multimodal-serving/aggregation/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/multimodal-serving-aggregation-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-multimodal-serving-aggregation-gke-acc-gpu-vllm-x.yaml) [![vLLM TPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/multimodal-serving-aggregation-gke-tpu_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-multimodal-serving-aggregation-gke-acc-tpu-vllm-x.yaml) |  |  |
+| [Multimodal Serving (E-Disaggregation)](../guides/multimodal-serving/e-disaggregation/README.md) |  |  | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/multimodal-serving-e-disaggregation-gke_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-multimodal-serving-e-disaggregation-gke-acc-gpu-vllm-x.yaml) |  |  |
+| [Fast Model Actuation + KEDA Autoscaling](../guides/fast-model-actuation/fast-model-actuation-keda/README.md) | [![vLLM GPU](https://img.shields.io/endpoint?url=https://llm-d.github.io/llm-d/badges/fast-model-actuation-keda-ocp_release-0.10.json)](https://github.com/llm-d/llm-d/actions/workflows/nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml) |  |  |  |  |
+<!-- RELEASE-MATRIX-release-0.10-END -->
+<!-- RELEASE-MATRIX-END -->
+
+## Phases
+
+### 1. Feature freeze
+
+  The feature freeze phase ensures that all planned work for a release is identified, tracked, and finalized before the pre-release phase begins.
+
+#### Release tracker
+
+  Each release is tracked using a GitHub [milestone](https://github.com/llm-d/llm-d/milestones). The milestone serves as the single source of truth for all features, bug fixes, and tasks targeted for the release.
+
+  **Timeline:**
+
+  1. **Sprint start (weeks 1-2):** The release leaders create the milestone for the upcoming release. SIG leads and project maintainers begin nominating issues and features for inclusion.
+  2. **Feature collection (weeks 2-4):** SIG leads propose features from their respective areas during the bi-weekly project standup (Every other Wednesday 12:30 PM ET) and SIG meetings. Each proposed feature must have a corresponding GitHub issue linked to the milestone.
+  3. **Feature freeze (end of week 4):** The milestone is frozen. No new features are added after this point unless an exception is approved by the release leaders and project maintainers. Only bug fixes and documentation updates are accepted after the freeze.
+
+#### Roles and responsibilities
+
+  | Role | Responsibility |
+  | ---- | -------------- |
+  | **Release leaders** | Creates the milestone, coordinates the freeze timeline, and ensures the tracker is up to date. |
+  | **SIG leads** | Propose and advocate for features from their SIG, ensure features are ready by the freeze date, and provide status updates during lead syncs and SIGmeetings. |
+  | **Project maintainers** | Review and approve feature nominations, resolve disputes, and approve any post-freeze exceptions. |
+
+#### Feature requirements
+
+  Each feature included in the milestone must meet the following criteria:
+
+- **GitHub issue:** A clearly described issue linked to the milestone, with acceptance criteria.
+- **Production-ready example:** The feature must include a realistic, production-ready example (e.g., a guide under `guides/`). Toy examples or placeholder demonstrations are not acceptable.
+- **Proposal (if applicable):** Features involving public APIs, new components, or cross-SIG changes must have an approved [project
+  proposal](../proposals/PROPOSAL_TEMPLATE.md) as described in the [contributing guidelines](../CONTRIBUTING.md).
+- **Test coverage:** Appropriate unit, integration, or e2e test coverage as defined in the [testing requirements](../CONTRIBUTING.md#testing-requirements).
+
+#### Coordination
+
+  Feature tracking is coordinated through:
+
+- **Weekly project standup:** Overall release progress is reviewed every Wednesday at 12:30 PM ET (see the [public calendar](https://red.ht/llm-d-public-calendar)).
+- **SIG meetings:** Each [SIG](../SIGS.md) reviews the status of their features during their regular meetings.
+- **Slack:** Day-to-day coordination happens in the [#llm-d-dev](https://llm-d.slack.com/archives/C08SH9K8JGK) Slack channel and relevant SIG channels.
+
+  > [!NOTE]
+  > The release tracker may not always be fully accurate. We are actively working to improve the tracking process so that the milestone reflects the true state of the release at all times.
+
+### 2. Pre-release
+
+Once all the features have been integrated into the repo, the next phase is the pre-release. This phase deals with all the preparation. Usually, a PR is created where we do all the version bumps.
+
+A new version release of llm-d has a version of all of the different components, a new section for each component describing the functionality and the differences between the new and previous version, a `What's Changed` section summarizing the changes in bullets, and finally, a list of the new contributors. See an example of this document in the [release notes (ex. v0.4.0)](https://github.com/llm-d/llm-d/releases/tag/v0.4.0).
+
+In the `Component Summary` section, we need to generate a matrix that shows each component name, the component version, the previous version of the component, and the type.
+
+Also in this phase, we need to include all the CI/CD changes that are required for the release based on the components that we are releasing.
+
+### 3. Release work
+
+The final release work involves creating a tag in the llm-d repo, which triggers a release [workflow](https://github.com/llm-d/llm-d/blob/main/.github/workflows/ci-release.yaml) to build images. We currently use GHCR for image storage. The prep work involves bumping to an image tag that does not exist yet, and then tagging the repo creates the necessary images.
+
+  There are two different types of container image packages: **release** and **dev**.
+
+- **Release** images are created by the release workflow (`ci-release.yaml`) when a version tag is pushed. They follow the naming pattern
+  `ghcr.io/llm-d/llm-d-{platform}:{version}` and are tagged with the release version. For example:
+  - `ghcr.io/llm-d/llm-d-rocm:v0.10.0`
+  - `ghcr.io/llm-d/llm-d-cpu:v0.10.0`
+
+- **Dev** images are created by the dev build workflow (`build-image.yaml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `quay.io/llm-d/llm-d-{platform}:{version}` and are tagged with the git short SHA or PR number. Please note these images are intentionally not signed as they represent work on open PR from contributors and the project is not responsible for verifying that every image works and is not nefarious. Here be dragons - be warned. Example:
+  - `quay.io/llm-d/llm-d-cpu:pr-123`
+  - `quay.io/llm-d/llm-d-rocm:latest` (from the default branch)
+
+  The full list of platforms includes: `cuda`, `aws`, `cpu`, `rocm`, and `xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for
+   the complete list.
+
+The process involves creating a Release Candidate (RC) tag for a dry run of the release workflow, which is a method to test the process and identify necessary updates (such as removing the deprecated images build from the CI). We typically delete RC tags after testing, while the final release is drafted from a new tag using the collected release notes.
+
+> [!NOTE]
+> The [Release Testing](#release-testing) matrix is **not** produced by tagging.
+> The nightly e2e lanes test `main`, so a matrix that reflects the release branch
+> needs those lanes dispatched against it explicitly, in two manual steps:
+>
+> 1. [`release-e2e.yaml`](../.github/workflows/release-e2e.yaml) dispatches the
+>    `nightly-e2e-*` lanes with `matrix_type=release-${MAJOR}.${MINOR}`, which makes
+>    them check out the release branch and write their badges to
+>    `badges/<badge>_release-${MAJOR}.${MINOR}.json`.
+> 2. Once those badges exist,
+>    [`release-matrix.yaml`](../.github/workflows/release-matrix.yaml) renders that
+>    release's section of the matrix and opens a PR against `main`.
+>
+> The step-by-step commands are in the [new release issue
+> template](../.github/ISSUE_TEMPLATE/new-release.md). Because the badges are live,
+> re-running a single lane updates the matrix with no re-render.
+>
+> The PR from `release-matrix.yaml` needs a human to take ownership of its commit
+> before it can merge — CI cannot produce a DCO sign-off or a signature on your
+> behalf. The PR body spells out the commands; they amount to:
+>
+> ```bash
+> gh pr checkout release-matrix/<version>
+> git commit --amend --reset-author -s -S --no-edit
+> git push --force-with-lease
+> ```
+
+It is important to fetch the tags from the upstream repo to avoid any conflicts using:
+
+```bash
+git fetch upstream --tags
+```
+
+> [!NOTE]
+> The release branches need to be created in the upstream repo because the workflow that we have, if we need to make container image changes, only works on the upstream branches.
+
+<!-- ## Example of a dry-run of the release -->
+
+<!-- We create a new tag for the dry run:
+
+```bash
+git fetch upstream --tags
+git tag v0.5.0-rc.1
+git push upstream --tags
+```
+
+This new tag triggers the release workflow. In the actions tab, you can see the `Release LLM-D Images` workflow queued.
+
+If, at some point, we want to delete the tags, we can do it using:
+
+```bash
+git tag -d v0.5.0-rc.1
+git push upstream --delete v0.5.0-rc.1
+git fetch upstream --tags -f # this should show no updates
+``` -->
+## Example of a dry-run of the release
+
+  We create a new tag for the dry run:
+
+  ```bash
+  git fetch upstream --tags
+  git tag v0.5.0-rc.1
+  git push upstream --tags
+  ```
+
+  This new tag triggers the release workflow. In the actions tab, you can see the Release LLM-D Images workflow queued.
+
+  When you push an RC tag like v0.5.0-rc.1, the release workflow builds and pushes container images to GHCR. This has two side effects that require cleanup:
+
+  1. latest tag gets overwritten: The release workflow unconditionally tags images as latest, so an RC build will overwrite the current production latest tag.
+  2. GHCR auto-generates semver package versions: GitHub automatically creates additional package version entries derived from the tag. For example, pushing v0.5.0-rc.1
+  generates:
+
+  | Auto-generated tag | Issue                                           |
+  |--------------------|-------------------------------------------------|
+  | v0                 | Production tag - should not be updated by an RC |
+  | v0.5               | Production tag - should not be updated by an RC |
+  | v0.5.0             | Production tag - should not be updated by an RC |
+  | v0.5.0-rc          | Needs cleanup after testing                     |
+  | v0.5.0-rc.1        | The actual RC tag (needs cleanup after testing) |
+
+  After verifying the dry-run, clean up the auto-generated package versions from the llm-d packages page. For each affected package (e.g., llm-d-cuda, llm-d-cpu, llm-d-aws, etc.), delete the RC-related versions (v0.5.0-rc.1, v0.5.0-rc) and verify that the production tags (v0, v0.5, v0.5.0, latest) still point to the correct release.
+
+  Delete the RC git tags from both local and upstream:
+
+```bash
+  git tag -d v0.5.0-rc.1
+  git push upstream --delete v0.5.0-rc.1
+  git fetch upstream --tags -f # this should show no updates
+  ```

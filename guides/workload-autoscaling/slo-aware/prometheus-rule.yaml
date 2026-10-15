@@ -1,0 +1,76 @@
+# Recording rules implementing the signal chain (raw -> clamp -> smooth), as a
+# Prometheus Operator PrometheusRule. The operator loads it into Prometheus
+# automatically (no reload needed). For a plain (non-operator) Prometheus,
+# instead merge the `spec.groups` below into your prometheus rule_files config.
+#
+# PromQL has no named constants, so parameters are literals in the exprs below —
+# to retune one, change it where noted.
+#
+# Parameters (guide "Tunables" table):
+#   S_ttft  TTFT SLO       = 3.0   (3000 ms)  → epp:saturation:raw, `/ 3.0`
+#   S_tpot  TPOT SLO       = 0.1   (100 ms)   → epp:saturation:raw, `/ 0.1`
+#   C       saturationCap  = 2.0              → epp:saturation:clamped, clamp_max
+#   window  smoothing      = 45s              → epp:saturation:smoothed, avg_over_time
+#
+# NaN-proofing: the predicted side is filtered with `>= 0` (a present-but-dead
+# predicted histogram yields NaN, which fails every comparison) and falls back
+# to the actual-latency histogram; a second `>= 0` guards the actual side, and
+# `or vector(0)` maps "no recent traffic" to 0 so an idle pool scales to minReplicas.
+#
+# Metric names are the llm-d EPP's (`llm_d_epp_request_*`). Note the TPOT actual
+# fallback is `llm_d_epp_request_streaming_tpot_seconds` — the EPP emits measured
+# TPOT under the "streaming" name, not `llm_d_epp_request_tpot_seconds` (predicted
+# TPOT keeps the plain `_predicted_tpot_seconds` name).
+#
+# Each raw sample is clamped (C) BEFORE smoothing, then the clamped signal is
+# averaged — so one knee-region spike cannot be averaged in at full magnitude and
+# pull the mean up to the ceiling. avg_over_time[45s] at 15s evaluation approximates
+# an EMA (alpha 0.6 at a ~30s cycle has a ~20s mean age; a 45s window matches).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-driven-autoscaling
+  # These rules are specific to one workload's SLOs, so they live in the
+  # workload's own namespace (not the shared monitoring namespace) — the tenant
+  # owns their scaling rules. The recorded series are still global in Prometheus
+  # (recording rules aren't namespaced), so today this assumes one rule-set per
+  # Prometheus; see the guide's "Scope" note.
+  namespace: llm-d-optimized-baseline
+  labels:
+    # The operator loads a PrometheusRule only if (1) its namespace matches the
+    # Prometheus CR's `ruleNamespaceSelector` and (2) its labels match the CR's
+    # `ruleSelector`. Inspect both with
+    #   kubectl get prometheus -A -o jsonpath='{range .items[*]}{.spec.ruleNamespaceSelector}{" | "}{.spec.ruleSelector}{"\n"}{end}'
+    # then set the namespace above to a selected namespace and add the matching
+    # label(s) here (e.g. release: kube-prometheus-stack), or set both selectors
+    # to `{}` on the Prometheus to match every PrometheusRule in every namespace.
+    role: recording-rules
+spec:
+  groups:
+  - name: epp-saturation
+    interval: 15s
+    rules:
+    - record: epp:latency_ttft_p90:seconds
+      expr: >-
+        ((histogram_quantile(0.9, sum(rate(llm_d_epp_request_predicted_ttft_seconds_bucket[1m])) by (le)) >= 0)
+          or (histogram_quantile(0.9, sum(rate(llm_d_epp_request_ttft_seconds_bucket[1m])) by (le)) >= 0))
+        or vector(0)
+    - record: epp:latency_tpot_p90:seconds
+      expr: >-
+        ((histogram_quantile(0.9, sum(rate(llm_d_epp_request_predicted_tpot_seconds_bucket[1m])) by (le)) >= 0)
+          or (histogram_quantile(0.9, sum(rate(llm_d_epp_request_streaming_tpot_seconds_bucket[1m])) by (le)) >= 0))
+        or vector(0)
+    # Elementwise max of the two SLO ratios: TTFT / S_ttft (3.0) vs TPOT / S_tpot
+    # (0.1). Both operands are always present (rules above emit 0 when idle), so
+    # `(A >= B) or B` is a clean max.
+    - record: epp:saturation:raw
+      expr: >-
+        ((epp:latency_ttft_p90:seconds / 3.0) >= (epp:latency_tpot_p90:seconds / 0.1))
+        or (epp:latency_tpot_p90:seconds / 0.1)
+    # Clamp each sample to C (saturationCap = 2.0) BEFORE smoothing, so a single
+    # spike cannot dominate the average. This is min(s_raw, C) from guide step 1.
+    - record: epp:saturation:clamped
+      expr: clamp_max(epp:saturation:raw, 2.0)
+    # Smooth over the 45s window (change [45s] to retune smoothing).
+    - record: epp:saturation:smoothed
+      expr: avg_over_time(epp:saturation:clamped[45s])

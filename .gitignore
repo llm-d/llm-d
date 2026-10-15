@@ -1,0 +1,21 @@
+*.swp
+*.history
+.DS_Store
+CLAUDE.md
+.release-team
+.generated-* # generated files, e.g., from codegen tools
+
+# editor and IDE paraphernalia
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# helm chart directories via kustomize
+**/charts/
+
+# AI
+.claude
+**/__pycache__/
+.envrc

@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Render (tokenizer) Service fronting the model servers. Pairs with the
+# token-producer `vllm.url` in router/p2p-kv-cache-sharing.values.yaml.
+namePrefix: p2p-kv-cache-sharing-
+
+resources:
+  - service.yaml
+
+# The guide label lands on Service metadata only. The Service selector remains
+# the explicit model-server selector in service.yaml.
+labels:
+  - pairs:
+      llm-d.ai/guide: p2p-kv-cache-sharing

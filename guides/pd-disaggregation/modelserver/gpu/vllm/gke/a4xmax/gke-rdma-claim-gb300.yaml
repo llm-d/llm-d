@@ -1,0 +1,38 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gke-rdma-claim-gb300
+spec:
+  spec:
+    devices:
+      requests:
+      - name: nic
+        firstAvailable:
+        - name: nic-group-0
+          deviceClassName: mrdma.google.com
+          count: 2
+          allocationMode: ExactCount
+          selectors:
+          - cel:
+              expression: device.attributes["dra.net"].ifName.startsWith("gpu0")
+        - name: nic-group-1
+          deviceClassName: mrdma.google.com
+          count: 2
+          allocationMode: ExactCount
+          selectors:
+          - cel:
+              expression: device.attributes["dra.net"].ifName.startsWith("gpu1")
+        - name: nic-group-2
+          deviceClassName: mrdma.google.com
+          count: 2
+          allocationMode: ExactCount
+          selectors:
+          - cel:
+              expression: device.attributes["dra.net"].ifName.startsWith("gpu2")
+        - name: nic-group-3
+          deviceClassName: mrdma.google.com
+          count: 2
+          allocationMode: ExactCount
+          selectors:
+          - cel:
+              expression: device.attributes["dra.net"].ifName.startsWith("gpu3")

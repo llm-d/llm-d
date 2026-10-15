@@ -1,0 +1,43 @@
+name: Nightly - Dev Image Build
+
+# Builds fresh dev images from main daily so nightly E2E workflows
+# always test against the latest code. Runs at 23:00 UTC (the previous
+# day) so images are ready for E2E nightlies starting at 00:00 UTC.
+
+on:
+  schedule:
+    - cron: '0 23 * * *'  # 23:00 UTC daily (before all nightly E2Es starting at 00:00)
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to build (comma-separated: cuda,rocm,xpu,sglang-xpu,cpu,all)'
+        required: false
+        default: 'cuda'
+        type: string
+      pr_number:
+        description: 'PR number (set automatically by /test-nightly)'
+        required: false
+        type: string
+      pr_repo:
+        description: 'PR repository (set automatically by /test-nightly)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+
+concurrency:
+  group: nightly-build-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'llm-d/llm-d'
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      force_build: ${{ github.event_name == 'schedule' || inputs.platforms == 'all' }}
+      platforms: ${{ inputs.platforms || '' }}
+    secrets: inherit

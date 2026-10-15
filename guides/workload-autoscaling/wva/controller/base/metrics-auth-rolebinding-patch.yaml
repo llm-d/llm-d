@@ -1,0 +1,8 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wva-metrics-auth-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: wva-controller-manager
+    namespace: llm-d-autoscaler

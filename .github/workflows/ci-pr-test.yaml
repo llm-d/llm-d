@@ -1,0 +1,83 @@
+name: CI-PR-Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-pr-test.yaml
+      - .github/workflows/build-image.yaml
+      - docker/**
+      - patches/**
+      - scripts/**
+      - guides/**/*.yaml
+      - guides/**/*.gotmpl
+  # All PRs use pull_request_target so workflow code runs from main (secrets available for forks).
+  # Secrets are gated behind a GitHub Environment with required reviewers.
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+
+concurrency:
+  group: ci-pr-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Quick check: do any image-related files have changes?
+  # Runs immediately without approval — only reads the GitHub API diff,
+  # does not execute PR code. Used to skip the approval gate when no
+  # images need building.
+  needs-build-check:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    outputs:
+      any_image_changes: ${{ steps.check.outputs.any_image_changes }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            images:
+              - 'docker/**'
+      - name: Summarize
+        id: check
+        run: |
+          echo "any_image_changes=${{ steps.filter.outputs.images }}" >> $GITHUB_OUTPUT
+
+  # Gate: require approval only when image-related files changed.
+  # For pull_request_target (fork PRs): requires approval from a maintainer via
+  # the "build-approval" GitHub Environment with required reviewers.
+  # Skipped entirely when no image files changed — builds will be skipped anyway.
+  # For push/workflow_dispatch: proceeds automatically via auto-gate.
+  pr-gate:
+    needs: [needs-build-check]
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      needs.needs-build-check.outputs.any_image_changes == 'true'
+    runs-on: ubuntu-latest
+    environment: build-approval
+    steps:
+      - run: echo "Build authorized by maintainer"
+
+  auto-gate:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Auto-authorized (push or dispatch)"
+
+  # Call the build-image workflow to build any changed images
+  # Resolves build-image.yaml from main (pull_request_target), checks out PR code via ref.
+  build-images:
+    needs: [needs-build-check, pr-gate, auto-gate]
+    if: ${{ !cancelled() && !failure() }}
+    uses: ./.github/workflows/build-image.yaml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || '' }}
+    secrets: inherit

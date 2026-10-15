@@ -1,0 +1,68 @@
+name: keda-epp
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    NAMESPACE: llm-d-optimized-baseline
+    MONITORING_NAMESPACE: llm-d-monitoring
+
+    # Namespace the KEDA operator runs in. `keda` matches a generic KEDA install
+    # (ENV=existing); on OpenShift (ENV=ocp) the Custom Metrics Autoscaler operator
+    # lives in `openshift-keda`, and the Troubleshooting `kubectl logs -n
+    # ${KEDA_NAMESPACE}` command keys off this, so set it to match your platform.
+    KEDA_NAMESPACE: {default: keda, values: [keda, openshift-keda]}
+
+    MODEL: {default: "Qwen/Qwen3-32B"}
+
+    # Deployment the ScaledObject targets, and the KEDA-managed objects it creates.
+    TARGET_DEPLOYMENT: {default: "optimized-baseline-nvidia-gpu-vllm-decode"}
+    SCALEDOBJECT_NAME: {default: "optimized-baseline-keda-epp"}
+    HPA_NAME: {default: "keda-hpa-optimized-baseline"}
+
+    # EPP service name (the `service` label on EPP metrics) and the InferencePool
+    # name (the `inference_pool` label on pool-saturation; the EPP --pool-name /
+    # Helm release name, NOT the namespace). Rendered into the overlay PromQL by
+    # envsubst at apply time.
+    EPP_SERVICE: {default: "optimized-baseline-epp"}
+    INFERENCE_POOL: {default: "optimized-baseline"}
+
+
+    # Scaling signal. `inflight` = EPP inflight-requests (default, no Flow Control
+    # required). `queue` = EPP flow-control queue size (alternative, requires Flow
+    # Control). `saturation` = EPP pool saturation (experimental - no nightly
+    # coverage yet, also requires Flow Control).
+    # Rendered as an annotation only; it selects which leaf overlay the deploy step
+    # names, it does not gate execution.
+
+  # Prereq: complete the optimized-baseline guide (incl. enabling monitoring) and
+  # install KEDA. The router upgrade below is conditional on SIGNAL.
+  #
+  # inflight (default): needs no EPP Flow Control and no router values beyond the
+  # monitoring feature values that optimized-baseline already deploys. The stock
+  # EPP inflight-load-producer plugin emits llm_d_epp_inflight_requests on every
+  # optimized-baseline EPP, so the ScaledObject is the only extra piece.
+  #
+  # queue / saturation: require EPP Flow Control. The -f ${OVERLAY_ROOT}/router.values.yaml
+  # arg below turns on the Flow Control layer while keeping the monitoring feature
+  # values enabled (EPP metrics port and its ServiceMonitor).
+  router_flow_control:
+
+    - confirm:
+        - when: {SIGNAL: [queue, saturation]}
+          run: |
+            kubectl logs deployment/optimized-baseline-epp -c epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
+  router_monitoring_only:
+    - when: {SIGNAL: [inflight]}
+      run: |
+        helm upgrade optimized-baseline \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+          -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+    - confirm:
+        - when: {SIGNAL: [inflight]}
+          run: |
+            kubectl logs deployment/optimized-baseline-epp -c epp -n ${NAMESPACE} | grep "inflight-load-producer"

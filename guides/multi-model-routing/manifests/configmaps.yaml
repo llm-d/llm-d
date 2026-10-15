@@ -1,0 +1,26 @@
+# ConfigMaps that register base models with IPP.
+# Each ConfigMap must have the label inference.llm-d.ai/ipp-managed: "true"
+#
+# Customize:
+#   - metadata.name: unique name for this mapping
+#   - data.baseModel: the model name as it appears in API requests
+#
+# For LoRA adapter support, see the Advanced section in the guide README.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qwen-model-mapping
+  labels:
+    inference.llm-d.ai/ipp-managed: "true"
+data:
+  baseModel: "Qwen/Qwen3-32B"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deepseek-model-mapping
+  labels:
+    inference.llm-d.ai/ipp-managed: "true"
+data:
+  baseModel: "deepseek/DeepSeek-r1"

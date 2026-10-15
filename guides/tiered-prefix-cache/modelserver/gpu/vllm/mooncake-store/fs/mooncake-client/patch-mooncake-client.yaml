@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mooncake-client
+spec:
+  template:
+    spec:
+      containers:
+        - name: mooncake-client
+          args:
+            - "--master_server_address=mooncake-master-store.mooncake.svc.cluster.local:50051"
+            - "--host=$(POD_IP)"
+            - "--port=50052"
+            - "--protocol=rdma"
+            - "--global_segment_size=80GB"
+            - "--enable_offload=true"
+            - "--metadata_server=P2PHANDSHAKE"
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MOONCAKE_OFFLOAD_FILE_STORAGE_PATH
+              value: /data/mooncake-offload
+            - name: MOONCAKE_OFFLOAD_STORAGE_BACKEND_DESCRIPTOR
+              value: bucket_storage_backend
+            - name: MOONCAKE_OFFLOAD_TOTAL_SIZE_LIMIT_BYTES
+              value: "1099511627776"
+          resources:
+            requests:
+              cpu: "2"
+              memory: 82Gi
+              rdma/ib: "1"
+            limits:
+              cpu: "4"
+              memory: 84Gi
+              rdma/ib: "1"

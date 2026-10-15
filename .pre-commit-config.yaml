@@ -1,0 +1,101 @@
+exclude: patches/
+repos:
+  # general pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # allows custom YAML tags used in k8s
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+      - id: check-case-conflict
+
+  # shell script linting
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        language: system
+        entry: shellcheck
+        args: [-x, --severity=warning]
+        files: ^docker/scripts/.*\.sh$
+        types: [shell]
+
+      - id: lint-envvars
+        name: lint environment variables
+        language: script
+        entry: scripts/lint-envvars.py
+        files: ^docker/scripts/.*\.sh$
+        types: [shell]
+
+  # dockerfile linting
+  - repo: local
+    hooks:
+      - id: hadolint-docker
+        name: hadolint
+        language: system
+        entry: hadolint
+        args: [--failure-threshold, error]
+        files: Dockerfile.*
+        types: [file]
+
+      - id: lint-dockerfile-envvars
+        name: lint dockerfile environment variables
+        language: script
+        entry: scripts/lint-dockerfile-envvars.py
+        args: [docker/scripts]
+        files: ^docker/Dockerfile\.
+        pass_filenames: true
+
+  # markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.47.0
+    hooks:
+      - id: markdownlint
+        args: [--fix]
+
+  # nightly matrix sync
+  - repo: local
+    hooks:
+      - id: sync-nightly-matrix
+        name: sync nightly testing matrix
+        language: python
+        entry: python scripts/sync-nightly-matrix.py --check
+        files: ^(release/README\.md|\.github/workflows/nightly-e2e-.*)$
+        pass_filenames: false
+
+  # slack channel mapping sync
+  - repo: local
+    hooks:
+      - id: sync-slack-channels
+        name: sync slack channel mapping
+        language: python
+        entry: python scripts/sync-slack-channels.py --check
+        # Also triggers on nightly-* workflows because renaming one changes the
+        # generated workflow_run trigger, and on notify-slack-nightly.yaml itself
+        # to catch hand-edits of that generated list.
+        files: ^(\.github/slack-channels\.yaml|\.github/workflows/(nightly-.*|notify-slack-nightly)\.yaml)$
+        pass_filenames: false
+        additional_dependencies: [pyyaml]
+
+  # yaml linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args:
+          - -d
+          - >-
+            {extends: default, rules: {line-length: {max: 250},
+            document-start: disable, truthy: {check-keys: false}}}
+
+  # github actions linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint

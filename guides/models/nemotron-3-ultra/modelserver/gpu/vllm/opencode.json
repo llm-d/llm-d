@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "llm-d": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "llm-d",
+      "options": {
+        "baseURL": "http://localhost:8000/v1",
+        "apiKey": ""
+      },
+      "models": {
+        "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block": {
+          "name": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
+        }
+      }
+    }
+  },
+  "model": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
+}

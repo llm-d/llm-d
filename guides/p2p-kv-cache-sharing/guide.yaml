@@ -1,0 +1,191 @@
+name: p2p-kv-cache-sharing
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# No nightly E2E workflow covers this guide yet, so every cell is community.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100/H200 80 GB+ · 2 replicas × TP=1 (2 GPUs) · 160 GiB memory per pod · `INFRA_PROVIDER`: `base` (TCP), `rdma`"
+      model: openai/gpt-oss-120b
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: rdma, label: "RDMA"}
+      engines: {vllm: community}
+    xpu:
+      label: Intel XPU
+      notes: "2 replicas × 1 GPU via DRA · TCP only (`INFRA_PROVIDER=base`)"
+      model: Qwen/Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: p2p-kv-cache-sharing
+    NAMESPACE: llm-d-p2p-kv-cache-sharing
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu]}
+    MODEL_SERVER: {default: vllm, values: [vllm]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    # rdma: base plus an InfiniBand device (`rdma/ib`) on every model server
+    # (ACCELERATOR_TYPE=gpu); base falls back to TCP.
+    INFRA_PROVIDER: {default: base, values: [base, rdma]}
+
+    MODEL: {default: "openai/gpt-oss-120b", comment: "set to the model your accelerator serves (table above)"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+
+  monitoring_values:
+    - when: {MONITORING: ["true"]}
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  rdma_resource:
+    - when: {INFRA_PROVIDER: [rdma]}
+      run: |
+        # The RDMA resource your nodes expose (the overlay requests rdma/ib)
+        kubectl get nodes -o jsonpath='{.items[0].status.allocatable}' | tr ',' '\n' | grep -i rdma
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+  rdma_device:
+    - when: {INFRA_PROVIDER: [rdma]}
+      run: |
+        # The InfiniBand device must be visible inside the model server container
+        kubectl exec -n ${NAMESPACE} deploy/${GUIDE_NAME}-decode -c modelserver -- ls /dev/infiniband
+
+  render:
+    # vLLM serves /v1/*/render itself: a Service that fronts the model servers.
+    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+  calibrate:
+    # skip_in ci: a manual tuning step that measures the deployment for
+    # minutes and prints a value to copy into the router values; no CI
+    # configuration runs it.
+    - skip_in: [ci]
+      run: |
+        NAMESPACE=${NAMESPACE} \
+        POD_SELECTOR=llm-d.ai/guide=${GUIDE_NAME} \
+        MODEL_NAME=${MODEL} \
+        ${REPO_ROOT}/guides/recipes/router/calibration/calibrate-min-cached-token-delta.sh
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    render:
+      - run: |
+          # The render Service must return token IDs for MODEL before requests are routed
+          kubectl run render-check --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="GUIDE_NAME=${GUIDE_NAME}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${GUIDE_NAME}-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}"'
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    p2p_pull:
+      - run: |
+          # Compute a new ~2k-token prefix on the first pod (the source), then send it
+          # to the second pod (the consumer), which has never seen it, naming the
+          # source in kv_transfer_params so the consumer pulls it instead of recomputing
+          PODS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'))
+          IPS=($(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}'))
+          kubectl run p2p-pull-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="SOURCE=${IPS[0]}" \
+            --env="CONSUMER=${IPS[1]}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'N=$(date +%s); P=$(for i in $(seq 1 100); do printf "Run ${N}: the consumer pulls this prefix from the CPU tier of the pod that computed it. "; done)
+              curl -sS -o /dev/null -w "source ${SOURCE}: HTTP %{http_code}\n" -X POST "http://${SOURCE}:8200/v1/completions" \
+                -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P}\", \"max_tokens\": 1}"
+              sleep 5
+              curl -sS -o /dev/null -w "consumer ${CONSUMER}: HTTP %{http_code}\n" -X POST "http://${CONSUMER}:8200/v1/completions" \
+                -H "Content-Type: application/json" \
+                -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P}\", \"max_tokens\": 1, \"kv_transfer_params\": {\"remote_kv_source\": {\"kv_request_id\": \"p2p-check-${N}\", \"remote_host\": \"${SOURCE}\", \"remote_port\": 7777}}}"'
+    pull_metrics:
+      - run: |
+          # External prefix-cache counters of the consumer pod, read through the
+          # Kubernetes API server proxy (no port-forward needed)
+          kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${PODS[1]}:8200/proxy/metrics" \
+            | grep -E '^vllm:external_prefix_cache_(hits|queries)_total' || true
+
+cleanup:
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  render:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

@@ -1,0 +1,97 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: epp-alerting-rules
+  labels:
+    app: epp-metrics
+spec:
+  groups:
+  # ---------------------------------------------------------------------------
+  # Availability and errors
+  # ---------------------------------------------------------------------------
+  - name: epp.availability
+    rules:
+    - alert: EPPHighErrorRatio
+      # Fraction of EPP requests returning an error. 0/0 yields no value, so this
+      # stays silent when there is no traffic. If your workload is low-volume and
+      # you see flapping at startup, add a request-rate floor with `and ... > N`.
+      expr: |
+        sum(rate(llm_d_epp_request_error_total[5m]))
+          / sum(rate(llm_d_epp_request_total[5m]))
+          > 0.05
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "EPP error ratio above 5%"
+        description: "EPP request error ratio has been above 5% for 10m (current {{ $value | humanizePercentage }})."
+    - alert: EPPCriticalErrorRatio
+      expr: |
+        sum(rate(llm_d_epp_request_error_total[5m]))
+          / sum(rate(llm_d_epp_request_total[5m]))
+          > 0.20
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "EPP error ratio above 20%"
+        description: "EPP request error ratio has been above 20% for 5m (current {{ $value | humanizePercentage }}). The inference path is likely degraded."
+    - alert: EPPNoReadyEndpoints
+      # The pool has zero ready endpoints, so the EPP cannot route any request.
+      expr: llm_d_epp_ready_endpoints == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "EPP pool {{ $labels.name }} has no ready endpoints"
+        description: "llm_d_epp_ready_endpoints has been 0 for pool {{ $labels.name }} for 2m. The pool is unroutable."
+    - alert: EPPMetricsAbsent
+      # absent() only fires when NO llm_d_epp_ready_endpoints series exist at all, so
+      # this is a coarse, cluster-wide signal: every EPP is down or the ServiceMonitor
+      # stopped scraping entirely. With multiple pools it will NOT catch a single
+      # pool's EPP dying while others keep reporting - a dead EPP's series vanish
+      # rather than report 0, so EPPNoReadyEndpoints stays silent for it too. For
+      # per-pool coverage, see the "vanished series" pattern in the alerting docs.
+      expr: absent(llm_d_epp_ready_endpoints)
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "No EPP metrics are being scraped (cluster-wide)"
+        description: "No llm_d_epp_ready_endpoints samples from any pool for 5m. All EPP metric scraping has stopped - every EPP is down or the ServiceMonitor is broken cluster-wide."
+
+  # ---------------------------------------------------------------------------
+  # EPP self-health
+  # ---------------------------------------------------------------------------
+  - name: epp.selfhealth
+    rules:
+    - alert: EPPDataLayerPollErrors
+      # A data source failed to poll, so scheduling may be running on stale
+      # endpoint state. This is otherwise invisible.
+      expr: sum by (source_type) (rate(llm_d_epp_datalayer_poll_errors_total[5m])) > 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "EPP data layer poll errors for source {{ $labels.source_type }}"
+        description: "llm_d_epp_datalayer_poll_errors_total is increasing for source {{ $labels.source_type }}. Scheduling may be using stale data."
+    - alert: EPPDataLayerExtractErrors
+      expr: sum by (source_type, extractor_type) (rate(llm_d_epp_datalayer_extract_errors_total[5m])) > 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "EPP data layer extract errors ({{ $labels.source_type }}/{{ $labels.extractor_type }})"
+        description: "llm_d_epp_datalayer_extract_errors_total is increasing for {{ $labels.source_type }}/{{ $labels.extractor_type }}. Scheduling may be using stale data."
+    # ext_proc stream metrics are opt-in (EPP flag --enable-grpc-stream-metrics).
+    # When the flag is unset these series are absent and the alert below simply
+    # never fires. "Abnormal" excludes OK and Canceled (the latter is a normal
+    # client disconnect); tune the matcher for your environment.
+    - alert: EPPExtProcStreamErrors
+      expr: sum by (code) (rate(llm_d_epp_extproc_streams_total{code!~"OK|Canceled"}[5m])) > 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "EPP ext_proc streams terminating with {{ $labels.code }}"
+        description: "ext_proc gRPC streams are completing with status {{ $labels.code }}. Envoy<->EPP request processing may be failing."

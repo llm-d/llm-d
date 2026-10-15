@@ -1,0 +1,15 @@
+# Prometheus Adapter Configuration
+rules:
+  # Custom rule to query the desired replicas
+  # from the wva_desired_replicas metric,
+  # which is emitted by WVA and scraped by Prometheus.
+  external:
+    - seriesQuery: wva_desired_replicas{variant_name!="",exported_namespace!=""}
+      resources:
+        overrides:
+          exported_namespace:
+            resource: namespace
+      name:
+        matches: ^wva_desired_replicas
+        as: wva_desired_replicas
+      metricsQuery: wva_desired_replicas{<<.LabelMatchers>>}

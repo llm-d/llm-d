@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wva-controller-manager
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: PROMETHEUS_BASE_URL
+              value: "https://prometheus-operated.llm-d-monitoring.svc:9090"
+            - name: PROMETHEUS_CA_CERT
+              value: "/etc/prometheus/tls/ca.crt"
+          volumeMounts:
+            - name: prom-ca
+              mountPath: /etc/prometheus/tls
+              readOnly: true
+      volumes:
+        - name: prom-ca
+          secret:
+            secretName: prometheus-tls-cert

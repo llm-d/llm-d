@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+components:
+  # Shared GKE RDMA DRA resource claim template (pcieRoot rail alignment)
+  - ../../../components/gke-rdma
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+
+patches:
+  - path: patch.yaml
+  # Prefill gets a longer startup window.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-sglang
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        startupProbe:
+                          initialDelaySeconds: 15
+                          periodSeconds: 30
+                          timeoutSeconds: 5
+                          failureThreshold: 240
+                          httpGet:
+                            path: /v1/models
+                            port: modelserver

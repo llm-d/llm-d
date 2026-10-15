@@ -1,0 +1,125 @@
+# Values for the multi-tenant scenario — team × tier (Scenarios A + B), Redis
+# SortedSet queue backend, one model behind one InferencePool.
+#
+# No placeholders: install as is. The served model name reaches the system
+# through payload.model in the publisher (${MODEL}), never through these values.
+#
+#   - TEAM -> a per-team reserved quota via redis-quota in `classifying` mode:
+#     within quota -> reserved, over quota -> overflow (dispatched, not nacked).
+#     Counters are keyed quota:team:<team>.
+#   - TIER -> a per-queue `tier` label (premium=interactive, standard=async,
+#     batch=batch).
+#
+# The tier-priority merge policy dispatches the 6 (classification × tier) lanes
+# in strict order (all reserved before any overflow; interactive > async > batch
+# within each) and stamps x-llm-d-inference-objective. Results land on
+# results-list.
+#
+# The router (llm-d-router-epp) and Redis are addressed by Service name: llm-d-async
+# runs in their namespace.
+#
+# One llm-d-async can serve several InferencePools independently: give each pool
+# its own worker pool and queues whose igw_base_url points at that pool's router.
+# A router in another namespace takes its full Service DNS name
+# (http://<release>-epp.<namespace>.svc.cluster.local:80).
+ap:
+
+  transport: "redis-sortedset"
+
+  requestMergePolicyConfig:
+    type: "tier-priority"
+    parameters:
+      objective_header: "x-llm-d-inference-objective"
+      fairness_header: "x-llm-d-inference-fairness-id"
+      fairness_attribute: "team"
+      lane_objectives:
+        reserved-interactive: "reserved-interactive"
+        reserved-async: "reserved-async"
+        reserved-batch: "reserved-batch"
+        overflow-interactive: "overflow-interactive"
+        overflow-async: "overflow-async"
+        overflow-batch: "overflow-batch"
+
+  transportConfig:
+    urlSecret:
+      url: "redis://redis:6379"
+    # Results go to the destination a request carries (the optional coordinator
+    # gives each request its own result key) or, for requests published straight
+    # to Redis, to this list. A per-queue result_queue_name would override both
+    # and break the coordinator's wait and enqueue modes. result_ttl_seconds
+    # expires result keys nobody collects.
+    result_queue_name: "results-list"
+    poll_interval_ms: 500
+    batch_size: 10
+    queues:
+      # ---------- team queues (pool teams, payload.model = MODEL) ----------
+      - queue_name: "team-premium"
+        worker_pool_id: "teams"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://llm-d-router-epp:80"
+        result_ttl_seconds: 3600
+        labels:
+          tier: "interactive"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:"
+      - queue_name: "team-standard"
+        worker_pool_id: "teams"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://llm-d-router-epp:80"
+        result_ttl_seconds: 3600
+        labels:
+          tier: "async"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "2"
+          prefix: "quota:"
+      - queue_name: "team-batch"
+        worker_pool_id: "teams"
+        request_path_url: "/v1/completions"
+        igw_base_url: "http://llm-d-router-epp:80"
+        result_ttl_seconds: 3600
+        labels:
+          tier: "batch"
+        gate_type: "redis-quota"
+        gate_params:
+          address: "redis:6379"
+          attribute: "team"
+          mode: "concurrency"
+          gating_mode: "classifying"
+          limit: "1"
+          prefix: "quota:"
+
+  # One worker pool for the one InferencePool.
+  workerPools:
+    - id: "teams"
+      workers: 16
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  metrics:
+    enabled: true
+  podMonitor:
+    enabled: false
+  modelServerMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false
+  grafana:
+    dashboards:
+      enabled: false

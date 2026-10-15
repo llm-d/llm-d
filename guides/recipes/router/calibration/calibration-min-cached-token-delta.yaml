@@ -1,0 +1,223 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calibrate-min-cached-token-delta
+  labels:
+    app: calibrate-min-cached-token-delta
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: calibrate-min-cached-token-delta
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: calibrate
+        image: python:3.11-slim
+        env:
+        - name: SRC_URL
+          value: "${SRC_URL}"
+        - name: DST_URL
+          value: "${DST_URL}"
+        - name: SRC_IP
+          value: "${SRC_IP}"
+        - name: P2P_PORT
+          value: "${P2P_PORT}"
+        - name: MODEL_NAME
+          value: "${MODEL_NAME}"
+        - name: LENGTHS
+          value: "${LENGTHS}"
+        - name: REPS
+          value: "${REPS}"
+        - name: DP_RANKS
+          value: "${DP_RANKS}"
+        - name: DST_METRICS
+          value: "${DST_URL}/metrics"
+        command: ["python3", "-u", "-c"]
+        args:
+        - |
+          # Measures the pull-versus-recompute crossover between two live model
+          # server pods and prints the recommended minCachedTokenDelta.
+          #
+          # Method (the p2p-kv-cache-sharing guide's Step 0, automated):
+          # per (length, rep) two independent prompts are used, because the
+          # consumer caches whatever it just served:
+          #   recompute: seed prompt_r on the source, send it to the consumer
+          #              with no kv_transfer_params -> the consumer prefills
+          #   pull:      seed prompt_p on the source, send it to the consumer
+          #              with kv_transfer_params.remote_kv_source -> it pulls
+          #
+          # Prompts are arrays of random token IDs, so lengths are exact and
+          # the method is model-agnostic (no text-to-token ratio to guess).
+          # Because those IDs are new to the consumer on every probe, it holds
+          # no local copy to restore, which is what makes the consumer's
+          # CPU_to_GPU byte counter attributable to the peer. The recompute leg
+          # doubles as the control for that: same seeded prefix, no pull
+          # parameter, and it must move zero bytes. A timing comparison alone
+          # cannot tell a working pull from an inert one, so a run where no
+          # probe moved bytes is reported as a failure rather than as a
+          # threshold.
+          # The mesh is warmed first: the first pull between two peers pays a
+          # one-time session-establishment cost that steady-state pulls never
+          # see, so an unwarmed probe reads the transient, not the pull.
+          #
+          # The recommendation is the smallest tested length at which the pull
+          # beats recompute. Lengths must be multiples of the vLLM block size
+          # (a partial final block is structurally uncacheable).
+          import concurrent.futures as cf
+          import json, os, random, statistics, time, urllib.request, uuid
+
+          SRC_URL = os.environ["SRC_URL"]
+          DST_URL = os.environ["DST_URL"]
+          SRC_IP  = os.environ["SRC_IP"]
+          DST_METRICS = os.environ.get("DST_METRICS", DST_URL + "/metrics")
+          P2P_PORT = int(os.environ.get("P2P_PORT", "7777"))
+          DP_RANKS = int(os.environ.get("DP_RANKS", "1"))
+          MODEL = os.environ["MODEL_NAME"]
+          LENGTHS = [int(x) for x in os.environ.get("LENGTHS", "2048,4096,8192,16384,32768").split(",")]
+          REPS = int(os.environ.get("REPS", "5"))
+          TOKEN_MIN, TOKEN_MAX = 1000, 30000
+          rng = random.SystemRandom()
+
+          def fresh_ids(n):
+              return [rng.randint(TOKEN_MIN, TOKEN_MAX) for _ in range(n)]
+
+          def post(url, ids, pull=False):
+              body = {"model": MODEL, "prompt": ids, "max_tokens": 1, "temperature": 0}
+              if pull:
+                  body["kv_transfer_params"] = {"remote_kv_source": {
+                      "kv_request_id": str(uuid.uuid4()),
+                      "remote_host": SRC_IP,
+                      "remote_port": P2P_PORT,
+                  }}
+              req = urllib.request.Request(url + "/v1/completions",
+                                           data=json.dumps(body).encode(),
+                                           headers={"Content-Type": "application/json"})
+              t0 = time.monotonic()
+              urllib.request.urlopen(req, timeout=300).read()
+              return (time.monotonic() - t0) * 1000.0
+
+          def seed(ids):
+              # vLLM offsets the P2P listener by GLOBAL DP rank, so P2P_PORT
+              # addresses rank 0. A single seed suffices on an idle engine,
+              # where the balancer sends it to the least-loaded rank, i.e.
+              # rank 0. Seeding every rank concurrently is what keeps that true
+              # when the engine is busy and the balancer picks some other rank.
+              if DP_RANKS <= 1:
+                  return post(SRC_URL, ids)
+              with cf.ThreadPoolExecutor(max_workers=DP_RANKS) as ex:
+                  return max(f.result()
+                             for f in [ex.submit(post, SRC_URL, ids)
+                                       for _ in range(DP_RANKS)])
+
+          def loaded_bytes():
+              # Bytes the consumer moved INTO GPU from the offload tier. This
+              # counter also serves local CPU-tier restores, so it is only
+              # peer-attributable because every probe below uses token IDs the
+              # consumer has never seen - there is no local copy to restore.
+              # vllm:kv_offload_load_bytes_total is the current flat counter;
+              # vllm:kv_offload_total_bytes_total{transfer_type="CPU_to_GPU"}
+              # is its deprecated predecessor on older engine pins. Exactly one
+              # family is summed - adding both would double-count on engines
+              # that emit the deprecated counter alongside the current one.
+              try:
+                  txt = urllib.request.urlopen(DST_METRICS, timeout=30).read().decode()
+              except Exception:
+                  return None
+
+              def family_total(match):
+                  total, seen = 0.0, False
+                  for line in txt.splitlines():
+                      if line.startswith("#") or not match(line):
+                          continue
+                      try:
+                          total += float(line.rsplit(" ", 1)[1])
+                          seen = True
+                      except (IndexError, ValueError):
+                          pass
+                  return total, seen
+
+              total, seen = family_total(
+                  lambda ln: "kv_offload_load_bytes_total" in ln)
+              if seen:
+                  return total
+              total, seen = family_total(
+                  lambda ln: "kv_offload_total_bytes_total" in ln
+                  and "CPU_to_GPU" in ln)
+              return total if seen else None
+
+          print(f"src={SRC_URL} dst={DST_URL} pull_source={SRC_IP}:{P2P_PORT} "
+                f"model={MODEL} lengths={LENGTHS} reps={REPS} dp_ranks={DP_RANKS}", flush=True)
+          ids = fresh_ids(4096)
+          seed(ids); time.sleep(3)
+          dt = post(DST_URL, ids, pull=True)
+          print(f"mesh warm: first pull {dt:.0f} ms (one-time session cost, discarded)", flush=True)
+
+          crossover = None
+          engaged = 0
+          contaminated = False
+          print(f"{'tokens':>8} {'recompute_ms':>13} {'pull_ms':>10} {'delta':>8} {'pulled_MB':>10}", flush=True)
+          for n in LENGTHS:
+              rec, pul, mbs = [], [], []
+              for _ in range(REPS):
+                  # Recompute leg doubles as the control: the same seeded fresh
+                  # prefix, asked for WITHOUT the pull parameter. It must move
+                  # zero bytes; if it does not, the byte delta below is not
+                  # peer-attributable and the run should be discarded.
+                  a = fresh_ids(n)
+                  seed(a); time.sleep(2)
+                  c0 = loaded_bytes()
+                  rec.append(post(DST_URL, a))
+                  time.sleep(2)
+                  c1 = loaded_bytes()
+                  if c0 is not None and c1 is not None and (c1 - c0) > 0:
+                      contaminated = True
+                      print(f"CONTROL CONTAMINATED: moved {(c1 - c0) / 1e6:.1f} MB without a "
+                            f"pull request at {n} tokens - byte attribution is unreliable",
+                            flush=True)
+
+                  b = fresh_ids(n)
+                  seed(b); time.sleep(2)
+                  m0 = loaded_bytes()
+                  pul.append(post(DST_URL, b, pull=True))
+                  time.sleep(2)
+                  m1 = loaded_bytes()
+                  mbs.append((m1 - m0) / 1e6 if (m0 is not None and m1 is not None) else 0.0)
+
+              mr, mp = statistics.median(rec), statistics.median(pul)
+              mb = statistics.median(mbs)
+              if mb > 0:
+                  engaged += 1
+              d = 100.0 * (mp - mr) / mr
+              print(f"{n:>8} {mr:>13.1f} {mp:>10.1f} {d:>+7.1f}% {mb:>10.1f}", flush=True)
+              # A length only qualifies when its own pulls moved bytes -
+              # a faster median with zero bytes is recompute vs recompute.
+              if crossover is None and mp < mr and mb > 0:
+                  crossover = n
+
+          if engaged == 0:
+              print("NO PULL EVER FIRED: every probe moved zero bytes into the "
+                    "consumer, so these timings compare recompute against "
+                    "recompute and no threshold can be derived from them. "
+                    "Check that the P2P secondary tier is configured, that its "
+                    "listener is reachable from the consumer pod, and that "
+                    "PYTHONHASHSEED is pinned fleet-wide. If the engine is "
+                    "serving other traffic, set DP_RANKS to its "
+                    "--data-parallel-size so every rank is seeded.", flush=True)
+              raise SystemExit(1)
+          if contaminated:
+              print("RUN DISCARDED: the no-pull control moved bytes, so the "
+                    "pulled_MB column is not peer-attributable and no threshold "
+                    "can be derived. Use a consumer with an empty CPU tier "
+                    "(fresh pod) and fresh prefixes per probe, then rerun.",
+                    flush=True)
+              raise SystemExit(1)
+          if crossover is None:
+              print("NO CROSSOVER in the tested range: the pull fired but never "
+                    "beat recompute. Check the transport (an IB device missing "
+                    "from the container moves the crossover out by an order of "
+                    "magnitude) or extend LENGTHS upward.", flush=True)
+              raise SystemExit(1)
+          print(f"MIN_CACHED_TOKEN_DELTA={crossover}", flush=True)

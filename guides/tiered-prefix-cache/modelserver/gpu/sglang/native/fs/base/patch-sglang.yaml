@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--tensor-parallel-size=2"
+            # Matches the router scorer's tokenProcessorConfig.blockSizeTokens
+            # (default 64); SGLang uses --page-size (vLLM uses --block-size).
+            - "--page-size=64"
+            - "--mem-fraction-static=0.9"
+            - "--enable-metrics"
+            - "--enable-hierarchical-cache"
+            # Keep flags in "--flag=value" form so llm-d-infra's CI model
+            # detection does not mistake bare option values for the model name.
+            - "--hicache-write-policy=write_through"
+            - "--hicache-io-backend=kernel"
+            - "--hicache-size=200"
+            # L3 filesystem tier (Lustre / shared FS).
+            - "--hicache-storage-backend=file"
+            - "--hicache-storage-prefetch-policy=wait_complete"
+          env:
+            - name: SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR
+              value: "/mnt/files-storage"
+            - name: SGLANG_HICACHE_FILE_BACKEND_ENABLE_METADATA_CACHE
+              value: "true"
+            - name: SGLANG_HICACHE_FILE_BACKEND_METADATA_TTL
+              value: "5.0"
+            - name: PYTHONHASHSEED
+              value: "42"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

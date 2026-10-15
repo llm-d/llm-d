@@ -1,0 +1,5 @@
+# Python dependencies for plot_run.py.
+# Everything else it uses (json, math, os, subprocess, sys, datetime, re,
+# urllib) is in the standard library; series are fetched by shelling out to
+# `kubectl`, which must be on your PATH and pointed at the benchmark cluster.
+matplotlib>=3.5

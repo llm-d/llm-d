@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interactive-pod
+  labels:
+    app: interactive-pod
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate  # don't run two interactive pods at once during updates
+  selector:
+    matchLabels:
+      app: interactive-pod
+  template:
+    metadata:
+      labels:
+        app: interactive-pod
+    spec:
+      serviceAccountName: interactive-pod
+      containers:
+        - name: benchmark-runner
+          # image: "ghcr.io/llm-d/interactive-pod:latest"
+          image: "quay.io/grpereir/interactive-pod:v1.0.5"
+          imagePullPolicy: Always
+          command: ["bash", "-lc", "sleep infinity"]
+          tty: true
+          stdin: true
+          resources:
+            requests:
+              cpu: "8"
+              memory: "16Gi"
+            limits:
+              cpu: "8"
+              memory: "16Gi"
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+      # optional: shorten shutdowns for faster restarts
+      terminationGracePeriodSeconds: 10

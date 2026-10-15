@@ -1,0 +1,62 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+    # No metrics entry here: the chart always exposes http-metrics:9090 on the
+    # EPP Service, so declaring it again produces a duplicate-port conflict
+    # that fails the install.
+  epp:
+    pluginsConfigFile: "custom-plugins.yaml"
+    pluginsCustomConfig:
+      custom-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        plugins:
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: round-robin-fairness-policy
+        - type: fcfs-ordering-policy
+        - type: concurrency-detector
+          parameters:
+            maxConcurrency: 132
+            concurrencyMode: requests
+            headroom: 0.0
+
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+
+        flowControl:
+          maxBytes: "10Gi"
+          maxRequests: "1k"
+          defaultRequestTTL: "60s"
+          saturationDetector:
+            pluginRef: concurrency-detector
+          priorityBands:
+          - priority: 100
+            maxRequests: "500"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: 0
+            maxRequests: "200"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+          - priority: -10
+            maxRequests: "50"
+            fairnessPolicyRef: round-robin-fairness-policy
+            orderingPolicyRef: fcfs-ordering-policy
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "flow-control"

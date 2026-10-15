@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Optional: share the torch.compile/inductor cache across pods via an RWX PVC
+# so receivers skip recompilation. Cudagraph capture is NOT AOT-cached, so it
+# still costs per pod. Requires an RWX-capable StorageClass (see
+# compile-cache-pvc.yaml).
+resources:
+  - compile-cache-pvc.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: decode
+    path: patch-shared-cache.yaml

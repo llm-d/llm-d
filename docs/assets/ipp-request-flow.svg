@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 320" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#000000"/>
+    </marker>
+    <marker id="arr-back" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto">
+      <polygon points="8 0, 0 3, 8 6" fill="#666666"/>
+    </marker>
+  </defs>
+
+  <!-- White Canvas with Purple Border (llm-d branding) -->
+  <rect x="2" y="2" width="746" height="316" rx="0" fill="#ffffff" stroke="#9f659f" stroke-width="3"/>
+
+  <!-- Title -->
+  <text x="375" y="28" text-anchor="middle" font-size="13" font-weight="bold" fill="#000000">IPP Request Flow</text>
+
+  <!-- Client -->
+  <rect x="20" y="100" width="100" height="80" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="70" y="125" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">Client</text>
+  <text x="70" y="145" text-anchor="middle" font-size="8" fill="#666666">POST /v1/completions</text>
+  <text x="70" y="160" text-anchor="middle" font-size="8" fill="#444444">{"model": "..."}</text>
+
+  <!-- Client to Gateway -->
+  <line x1="120" y1="140" x2="198" y2="140" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="159" y="132" text-anchor="middle" font-size="8" fill="#444444">1</text>
+
+  <!-- Proxy (central hub) -->
+  <rect x="200" y="80" width="180" height="120" rx="3" fill="#e6e6fa" stroke="#9f659f" stroke-width="2"/>
+  <text x="290" y="105" text-anchor="middle" font-size="12" font-weight="bold" fill="#000000">Proxy</text>
+  <text x="290" y="125" text-anchor="middle" font-size="8" fill="#666666">1. Receive request</text>
+  <text x="290" y="140" text-anchor="middle" font-size="8" fill="#666666">2. Call llm-d IPP (ext-proc)</text>
+  <text x="290" y="155" text-anchor="middle" font-size="8" fill="#666666">3. Route by header</text>
+  <text x="290" y="170" text-anchor="middle" font-size="8" fill="#666666">4. Call llm-d EPP (ext-proc)</text>
+  <text x="290" y="185" text-anchor="middle" font-size="8" fill="#666666">5. Forward to endpoint</text>
+
+  <!-- llm-d IPP (ext-proc service) - below proxy -->
+  <rect x="220" y="220" width="140" height="75" rx="3" fill="#e8f4e8" stroke="#82b366" stroke-width="1.5"/>
+  <text x="290" y="242" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">llm-d IPP</text>
+  <text x="290" y="256" text-anchor="middle" font-size="8" fill="#666666">Process payload</text>
+  <text x="290" y="270" text-anchor="middle" font-size="8" fill="#666666">(pluggable pipeline)</text>
+  <text x="290" y="284" text-anchor="middle" font-size="7" fill="#888888">(ext-proc)</text>
+
+  <!-- Gateway to IPP (bidirectional) -->
+  <line x1="270" y1="200" x2="270" y2="218" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="310" y1="218" x2="310" y2="200" stroke="#666666" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+  <text x="253" y="212" text-anchor="middle" font-size="7" fill="#444444">2</text>
+
+  <!-- llm-d EPP (ext-proc service) - right of proxy -->
+  <rect x="430" y="110" width="100" height="60" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="480" y="132" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">llm-d EPP</text>
+  <text x="480" y="148" text-anchor="middle" font-size="8" fill="#666666">Select endpoint</text>
+  <text x="480" y="161" text-anchor="middle" font-size="7" fill="#888888">(ext-proc)</text>
+
+  <!-- Gateway to EPP (bidirectional) -->
+  <line x1="380" y1="130" x2="428" y2="130" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="428" y1="150" x2="380" y2="150" stroke="#666666" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+  <text x="404" y="122" text-anchor="middle" font-size="7" fill="#444444">4</text>
+
+  <!-- Model Server -->
+  <rect x="580" y="100" width="140" height="80" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="650" y="125" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">Model Server</text>
+  <text x="650" y="145" text-anchor="middle" font-size="8" fill="#666666">vLLM / SGLang</text>
+  <text x="650" y="162" text-anchor="middle" font-size="8" fill="#444444">InferencePool</text>
+
+  <!-- Gateway to Model Server -->
+  <line x1="530" y1="140" x2="578" y2="140" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="554" y="132" text-anchor="middle" font-size="7" fill="#444444">5</text>
+
+  <!-- Caption -->
+  <text x="375" y="308" text-anchor="middle" font-size="9" fill="#888888">Proxy consults llm-d IPP and llm-d EPP via ext-proc, then forwards request to selected endpoint</text>
+</svg>

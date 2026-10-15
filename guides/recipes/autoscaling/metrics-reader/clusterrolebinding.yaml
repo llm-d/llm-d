@@ -1,0 +1,22 @@
+# Grants the metrics-reader ServiceAccount read access to cluster monitoring
+# (Thanos Querier / user-workload-monitoring) — the role Thanos requires to
+# answer KEDA's trigger queries. The consumer overlay's namespace transformer
+# rewrites the subject namespace to the deployment namespace.
+#
+# ClusterRoleBindings are cluster-scoped: when the same guide is deployed to
+# multiple namespaces on a shared cluster, give this binding a namespace-unique
+# name via a targeted patch on metadata.name in the consumer overlay (a global
+# nameSuffix would rename the token Secret too and break the CRD-level
+# TriggerAuthentication -> Secret reference, which kustomize cannot rewrite).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: keda-epp-metrics-reader-monitoring-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: keda-epp-metrics-reader
+    namespace: llm-d-optimized-baseline

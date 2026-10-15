@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - serviceaccount.yaml
+  - disaggregatedset.yaml
+
+# NOTE: the model server image component is intentionally not set here.
+# Each overlay sets its own (e.g. gpu-vllm/release, gpu-vllm/aws-efa) because
+# kustomize resolves component image transforms at the base level, preventing
+# overlays from overriding the resolved image name with a different component.
+components:
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/graceful-shutdown

@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Persist the model cache on an RWX PVC instead of an emptyDir, so the model
+# downloads once and is reused across runs (and across replicas that share the
+# volume). HF_HOME points at the persistent volume; include
+# this component from a guide's cluster-specific overlay (e.g. amd-ci/) — only
+# where an RWX default StorageClass is available.
+
+# Manually deploy ahead of time in the targeted namespace
+# resources:
+#   - model-cache-pvc.yaml
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /model-cache
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /model-cache
+          name: model-cache
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: model-cache
+          persistentVolumeClaim:
+            claimName: model-pvc
+  # The same for a DisaggregatedSet's prefill and decode roles.
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: any
+      spec:
+        roles:
+          - name: prefill
+            spec: &model-cache
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        env:
+                          - name: HF_HOME
+                            value: /model-cache
+                        volumeMounts:
+                          - mountPath: /model-cache
+                            name: model-cache
+                    volumes:
+                      - name: model-cache
+                        persistentVolumeClaim:
+                          claimName: model-pvc
+          - name: decode
+            spec: *model-cache

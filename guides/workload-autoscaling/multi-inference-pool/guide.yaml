@@ -1,0 +1,37 @@
+name: multi-inference-pool
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    NAMESPACE: llm-d-optimized-baseline
+
+    # Additional Helm release + values for the extra pool (repeat per pool).
+    RELEASE: { default: "model-b" }
+    VALUES:  { default: "model-b.values.yaml" }
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+deploy:
+  # Install an additional router release in the same namespace as optimized-baseline.
+  # Each release must use a unique matchLabels selector so its InferencePool
+  # discovers only its own model's pods. (If the standalone chart's `envoy`
+  # ConfigMap ownership conflicts, reassign it first — see the README note.)
+  helm:
+    - run: |
+        helm install ${RELEASE} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/workload-autoscaling/multi-inference-pool/${VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+verify:
+  tests:
+    pools:
+      - run: |
+          kubectl get inferencepools,svc -n ${NAMESPACE}
+          kubectl get pods -n ${NAMESPACE} --show-labels
+
+cleanup:
+  - run: helm uninstall ${RELEASE} -n ${NAMESPACE}

@@ -1,0 +1,24 @@
+---
+failure-threshold: warning  # only fail on warnings and errors, not info
+
+ignored:
+  # already ignored in pre-commit
+  - DL3008  # pin versions for apt-get
+  - DL3009  # delete apt-get cache
+
+  # workflow/build patterns
+  - DL3003  # use WORKDIR instead of cd
+  - DL3059  # multiple consecutive RUN instructions
+  - DL4001  # using both wget and curl
+
+  # package manager preferences
+  - DL3015  # avoid additional packages (--no-install-recommends)
+  - DL3041  # specify version with dnf install
+  - DL3042  # avoid cache directory with pip
+  - DL3047  # wget without progress bar
+
+  # shellcheck rules embedded in hadolint
+  - SC1091  # not following sourced files
+  - SC2034  # variable appears unused
+  - SC2046  # quote to prevent word splitting
+  - SC2086  # double quote to prevent globbing

@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+#TODO-MORI extend from pd/vllm/moriio instead to get the mori-io patch-sidecar.yaml?
+  - ../../../../../../recipes/modelserver/base/single-host/pd-disaggregatedset/vllm
+
+nameSuffix: -moriio
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/amd-vllm/beta
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-32B
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+      llm-d.ai/engine-type: vllm
+    fields:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        kind: DisaggregatedSet
+        create: true
+
+patches:
+  - path: patch-prefill.yaml
+  - path: patch-decode.yaml
+  # patch-sidecar overrides the recipe-default routing-proxy on the decode role (only
+  # decode runs the routing sidecar in P/D disagg) with the MoRI-IO sidecar image and
+  # the additional --moriio-* CLI flags.
+  - path: patch-sidecar.yaml

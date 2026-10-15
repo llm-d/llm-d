@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+echo "▶️  Running lint…"
+make lint
+
+echo "▶️  Running tests…"
+make test
+
+echo "✔️  All checks passed!"

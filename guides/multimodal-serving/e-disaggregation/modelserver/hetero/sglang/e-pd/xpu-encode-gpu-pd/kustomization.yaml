@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../../../../recipes/modelserver/base/single-host/default
+  - ../../common
+  - ../../common/xpu-encoder
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/lmsysorg/sglang
+    newTag: v0.5.15.post1-cu130
+    digest: sha256:00c53fe4c31bf22d7b37537f28bbdfd924c02de13cdfb4bff7378c9c34d75ab2
+
+# These labels are shared by both accelerator roles. Hardware labels remain on
+# each workload so the XPU Encode and GPU PD workers are identified correctly.
+labels:
+  - pairs:
+      app.kubernetes.io/name: sglang-xpu-encode-gpu-pd
+      llm-d.ai/engine-type: sglang
+      llm-d.ai/guide: e-disaggregation
+      llm-d.ai/model: Kimi-VL-A3B-Instruct
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-pd.yaml
+    target:
+      kind: Deployment
+      name: decode

@@ -1,0 +1,10 @@
+## Replaces the Envoy-specific sidecar args from base.values.yaml.
+## Layer this on top of base.values.yaml when proxyType=agentgateway,
+## since the chart passes router.proxy.args verbatim to whichever
+## sidecar container is deployed.
+
+router:
+  proxy:
+    args:
+      - "-f"
+      - "/config/config.yaml"

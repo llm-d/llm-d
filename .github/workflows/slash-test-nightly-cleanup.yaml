@@ -1,0 +1,68 @@
+name: Cleanup test-nightly branches
+
+# Deletes temporary test-nightly/* branches that were created by
+# the /test-nightly slash command for fork PRs.
+# Runs daily and removes branches older than 24 hours.
+
+on:
+  schedule:
+    - cron: '0 12 * * *'  # Noon UTC daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.repository == 'llm-d/llm-d'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale test-nightly branches
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const BRANCH_PREFIX = 'test-nightly/';
+            const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+            const now = Date.now();
+
+            // Use paginate to handle many temp branches
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/test-nightly/',
+            });
+
+            if (refs.length === 0) {
+              console.log('No test-nightly branches found.');
+              return;
+            }
+
+            console.log(`Found ${refs.length} test-nightly branch(es).`);
+
+            for (const ref of refs) {
+              const branchName = ref.ref.replace('refs/heads/', '');
+
+              // Get the commit date of the branch tip. The /test-nightly
+              // command adds an empty commit with a fresh timestamp, so this
+              // reflects when the branch was created — not the PR commit age.
+              const { data: commit } = await github.rest.git.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: ref.object.sha,
+              });
+
+              const commitDate = new Date(commit.committer.date).getTime();
+              const ageMs = now - commitDate;
+              const ageHours = Math.round(ageMs / (60 * 60 * 1000));
+
+              if (ageMs > MAX_AGE_MS) {
+                console.log(`Deleting ${branchName} (${ageHours}h old)`);
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${branchName}`,
+                });
+              } else {
+                console.log(`Keeping ${branchName} (${ageHours}h old, < 24h)`);
+              }
+            }

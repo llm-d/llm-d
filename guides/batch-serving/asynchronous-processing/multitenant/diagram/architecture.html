@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>llm-d Async Processor — multi-tenant: team × tier</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141d33; --panel2:#0f1730; --stroke:#2f4068;
+    --ink:#e6edf7; --muted:#93a6c9; --wire:#6f8ad0;
+    --premium:#8b7bff; --standard:#2dd4bf; --batch:#f5a623;
+    --ok:#37d67a; --bad:#ff5d6c; --warn:#ffcc4d;
+    --loop:18s;   /* one shared loop period; all timed effects use % of it */
+  }
+  html,body{margin:0;background:#0b1020;}
+  .wrap{width:1300px;height:900px;margin:0 auto;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+  text{fill:var(--ink);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+  .title{font-size:24px;font-weight:700;} .sub{font-size:13px;fill:var(--muted);}
+  .lbl{font-size:13px;} .small{font-size:11px;fill:var(--muted);} .tag{font-size:12px;fill:var(--muted);}
+  .gl{font-size:10px;fill:var(--muted);} .modeltag{font-size:14px;font-weight:700;}
+  .node{fill:var(--panel);stroke:var(--stroke);stroke-width:1.5;rx:10;filter:url(#soft);}
+  .band{fill:var(--panel2);stroke:var(--stroke);stroke-width:1.5;}
+  .wire{fill:none;stroke:var(--wire);stroke-width:2.2;}
+  .wire.dim{stroke:#3a4f7d;stroke-width:2;stroke-dasharray:5 6;}
+  .dot{filter:url(#glow);}
+  .dot.premium{fill:var(--premium);} .dot.standard{fill:var(--standard);} .dot.batch{fill:var(--batch);}
+
+  /* NOTE: animate fill/fill-opacity (main-thread paint), NOT opacity/transform
+     (compositor-only), so headless --virtual-time-budget capture renders each state. */
+
+  /* The InferencePool saturates mid-loop: lanes halt (batch/overflow first, then all),
+     the worker pool's gate goes WAIT, the vLLM meter reddens, then everything drains. */
+  @keyframes aBatchFlow{0%,33%{fill-opacity:1} 36%,74%{fill-opacity:0} 77%,100%{fill-opacity:1}}
+  @keyframes aStdFlow  {0%,44%{fill-opacity:1} 47%,70%{fill-opacity:0} 73%,100%{fill-opacity:1}}
+  @keyframes aPremFlow {0%,55%{fill-opacity:1} 58%,66%{fill-opacity:.15} 69%,100%{fill-opacity:1}}
+  .a-batch{animation:aBatchFlow var(--loop) linear infinite;}
+  .a-std  {animation:aStdFlow   var(--loop) linear infinite;}
+  .a-prem {animation:aPremFlow  var(--loop) linear infinite;}
+
+  /* worker pool gate OPEN(green) -> WAIT(amber) while saturated */
+  @keyframes aPoolGate{0%,34%{fill:var(--ok)}37%,74%{fill:var(--warn)}77%,100%{fill:var(--ok)}}
+  .a-pg{animation:aPoolGate var(--loop) linear infinite;}
+  @keyframes aShowWait{0%,34%{fill-opacity:0}37%,74%{fill-opacity:1}77%,100%{fill-opacity:0}}
+  @keyframes aShowOpen{0%,34%{fill-opacity:1}37%,74%{fill-opacity:0}77%,100%{fill-opacity:1}}
+  .a-wait{animation:aShowWait var(--loop) linear infinite;}
+  .a-open{animation:aShowOpen var(--loop) linear infinite;}
+  /* parked (in-memory) requests appear at the pool gate during WAIT */
+  @keyframes aPark{0%,34%{fill-opacity:0}38%,73%{fill-opacity:1}77%,100%{fill-opacity:0}}
+  .a-park circle{animation:aPark var(--loop) linear infinite;}
+
+  /* vLLM saturation meters (bar grows upward via scale(1,-1) group) */
+  @keyframes satA{0%{height:10px;fill:var(--ok)}30%{height:58px;fill:var(--warn)}
+                  52%{height:88px;fill:var(--bad)}80%{height:40px;fill:var(--warn)}100%{height:10px;fill:var(--ok)}}
+  .satA{animation:satA var(--loop) ease-in-out infinite;}
+
+  .flowline{stroke-dasharray:4 8;animation:dash 3.6s linear infinite;}
+  @keyframes dash{to{stroke-dashoffset:-24}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<svg viewBox="0 0 1300 900" width="1300" height="900" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/></filter>
+    <filter id="glow" x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--wire)"/></marker>
+    <marker id="ahd" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#3a4f7d"/></marker>
+
+    <!-- lane motion paths (queue -> pool), y = 318 / 400 / 482 -->
+    <path id="aP" d="M210,318 H560"/>
+    <path id="aS" d="M210,400 H560"/>
+    <path id="aB" d="M210,482 H560"/>
+  </defs>
+
+  <text class="title" x="40" y="44">llm-d Async Processor — multi-tenant: team × tier</text>
+  <text class="sub" x="40" y="66">1 model · 1 llm-d Router + InferencePool · 1 worker pool · per-team reserved/overflow quota · tier-priority lanes · saturation back-off</text>
+
+  <!-- clients -->
+  <rect class="node" x="30" y="330" width="120" height="140"/>
+  <text class="lbl" x="44" y="360">clients</text>
+  <text class="small" x="44" y="380" style="fill:var(--premium)">premium</text>
+  <text class="small" x="44" y="396" style="fill:var(--standard)">standard</text>
+  <text class="small" x="44" y="412" style="fill:var(--batch)">batch</text>
+  <text class="gl" x="44" y="448">publish(team)</text>
+  <path class="wire dim" d="M150,400 H184" marker-end="url(#ahd)"/>
+
+  <!-- ============================== llm-d-async band ============================== -->
+  <rect class="band" x="168" y="246" width="700" height="300" rx="16"/>
+  <text class="modeltag" x="186" y="272" style="fill:var(--ink)">llm-d-async · worker pool teams</text>
+
+  <!-- queues (one per team) -->
+  <rect class="node" x="188" y="300" width="118" height="36"/><text class="small" x="200" y="322" style="fill:var(--premium)">team-premium</text>
+  <rect class="node" x="188" y="382" width="118" height="36"/><text class="small" x="200" y="404" style="fill:var(--standard)">team-standard</text>
+  <rect class="node" x="188" y="464" width="118" height="36"/><text class="small" x="200" y="486" style="fill:var(--batch)">team-batch</text>
+  <text class="gl" x="188" y="540">tiers: interactive · async · batch   ·   quota gate: reserved / overflow</text>
+
+  <!-- quota gates (classifying: reserved/overflow) -->
+  <path class="wire" d="M306,318 H332" marker-end="url(#ah)"/>
+  <path class="wire" d="M306,400 H332" marker-end="url(#ah)"/>
+  <path class="wire" d="M306,482 H332" marker-end="url(#ah)"/>
+  <g>
+    <rect x="336" y="310" width="16" height="16" rx="3" fill="var(--ok)"/>
+    <rect x="336" y="392" width="16" height="16" rx="3" fill="var(--ok)"/>
+    <rect x="336" y="474" width="16" height="16" rx="3" fill="var(--ok)"/>
+  </g>
+
+  <!-- tier-priority merge into the pool -->
+  <path class="wire" d="M352,318 C420,318 430,400 452,400" marker-end="url(#ah)"/>
+  <path class="wire" d="M352,400 H452" marker-end="url(#ah)"/>
+  <path class="wire" d="M352,482 C420,482 430,400 452,400" marker-end="url(#ah)"/>
+  <rect class="node" x="452" y="300" width="52" height="200" rx="10"/>
+  <text class="gl" x="462" y="390">tier-</text><text class="gl" x="462" y="402">prio</text><text class="gl" x="462" y="414">merge</text>
+
+  <!-- worker pool -->
+  <path class="wire" d="M504,400 H556" marker-end="url(#ah)"/>
+  <rect class="node" x="556" y="372" width="112" height="56"/><text class="small" x="568" y="394">pool teams</text><text class="lbl" x="568" y="414" style="fill:var(--ink)">16 workers</text>
+
+  <!-- pool saturation gate -->
+  <path class="wire" d="M668,400 H690" marker-end="url(#ah)"/>
+  <circle cx="708" cy="400" r="12" class="a-pg"/>
+  <text class="gl" x="680" y="372">pool sat gate (POOL_NAME)</text>
+  <text class="gl a-open" x="690" y="434" style="fill:var(--ok)">OPEN</text>
+  <text class="gl a-wait" x="686" y="434" style="fill:var(--warn)">WAIT ⏸ park</text>
+  <!-- parked requests during WAIT -->
+  <g class="dot batch a-park">
+    <circle cx="690" cy="450" r="5"/><circle cx="706" cy="450" r="5"/><circle cx="722" cy="450" r="5"/>
+  </g>
+
+  <!-- lane dots (halt while saturated) -->
+  <g class="dot premium"><circle r="6" class="a-prem"><animateMotion dur="6s" begin="0s" repeatCount="indefinite"><mpath xlink:href="#aP"/></animateMotion></circle>
+    <circle r="6" class="a-prem"><animateMotion dur="6s" begin="3s" repeatCount="indefinite"><mpath xlink:href="#aP"/></animateMotion></circle></g>
+  <g class="dot standard"><circle r="6" class="a-std"><animateMotion dur="6s" begin="1s" repeatCount="indefinite"><mpath xlink:href="#aS"/></animateMotion></circle>
+    <circle r="6" class="a-std"><animateMotion dur="6s" begin="4s" repeatCount="indefinite"><mpath xlink:href="#aS"/></animateMotion></circle></g>
+  <g class="dot batch"><circle r="6" class="a-batch"><animateMotion dur="6s" begin="2s" repeatCount="indefinite"><mpath xlink:href="#aB"/></animateMotion></circle>
+    <circle r="6" class="a-batch"><animateMotion dur="6s" begin="5s" repeatCount="indefinite"><mpath xlink:href="#aB"/></animateMotion></circle></g>
+
+  <!-- ============================== router + InferencePool + vLLM ============================== -->
+  <rect class="node" x="896" y="366" width="172" height="68"/><text class="small" x="914" y="392">llm-d Router (EPP)</text><text class="small" x="914" y="408">flow control</text>
+  <text class="gl" x="914" y="424" style="fill:var(--muted)">InferencePool POOL_NAME</text>
+  <path class="wire" d="M720,400 H894" marker-end="url(#ah)"/>
+  <path class="wire" d="M1068,400 H1094" marker-end="url(#ah)"/>
+
+  <!-- vLLM (saturating) -->
+  <rect class="node" x="1096" y="340" width="170" height="120"/>
+  <text class="small" x="1110" y="364">vLLM · MODEL</text><text class="small" x="1110" y="380" style="fill:var(--muted)">Qwen3-32B</text>
+  <rect x="1224" y="356" width="24" height="92" rx="4" fill="#0b1226" stroke="var(--stroke)"/>
+  <rect x="1224" y="448" width="24" height="10" rx="3" class="satA" transform="scale(1,-1)" transform-origin="1224 448"/>
+  <text class="gl" x="1110" y="444" style="fill:var(--muted)">saturation ↑</text>
+
+  <!-- Prometheus (pool saturation feeds the worker pool's gate) -->
+  <rect class="node" x="896" y="246" width="190" height="44"/><text class="small" x="914" y="266">Prometheus</text><text class="small" x="914" y="282" style="fill:var(--muted)">vllm:...{inference_pool}</text>
+  <path class="wire dim flowline" d="M960,290 C900,330 780,330 714,386" marker-end="url(#ahd)"/>
+  <path class="wire dim flowline" d="M1072,274 C1150,290 1190,310 1196,338"/>
+
+  <!-- Redis (per-team quota counters) -->
+  <rect class="node" x="470" y="590" width="132" height="44"/><text class="small" x="482" y="610">Redis</text><text class="small" x="482" y="626" style="fill:var(--muted)">quota:team:&lt;team&gt;</text>
+  <path class="wire dim flowline" d="M536,590 V560 H344 V492" marker-end="url(#ahd)"/>
+
+  <!-- many InferencePools callout -->
+  <rect class="band" x="168" y="680" width="1098" height="120" rx="16" style="stroke-dasharray:6 6"/>
+  <text class="lbl" x="190" y="710">One llm-d-async, many InferencePools</text>
+  <text class="small" x="190" y="734">Add a worker pool and queues per InferencePool, each with igw_base_url pointing at that pool's llm-d Router.</text>
+  <text class="small" x="190" y="754">Concurrency, quota counters (one prefix per pool) and saturation gates are per worker pool,</text>
+  <text class="small" x="190" y="774">so a saturated InferencePool parks only the workers that feed it.</text>
+
+  <!-- legend -->
+  <g transform="translate(40,872)">
+    <circle cx="6" cy="-4" r="5" fill="var(--premium)"/><text class="small" x="18" y="0">premium · interactive</text>
+    <circle cx="196" cy="-4" r="5" fill="var(--standard)"/><text class="small" x="208" y="0">standard · async</text>
+    <circle cx="366" cy="-4" r="5" fill="var(--batch)"/><text class="small" x="378" y="0">batch</text>
+    <text class="gl" x="470" y="0">■ quota gate (reserved/overflow)   ● pool sat gate (wait/park)   — the pool saturates, workers park, then drain by priority</text>
+  </g>
+</svg>
+</div>
+</body>
+</html>

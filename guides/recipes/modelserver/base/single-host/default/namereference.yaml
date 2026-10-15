@@ -1,0 +1,9 @@
+nameReference:
+  - kind: ServiceAccount
+    fieldSpecs:
+      - path: spec/template/spec/serviceAccountName
+        kind: Deployment
+  - kind: ResourceClaimTemplate
+    fieldSpecs:
+      - path: spec/template/spec/resourceClaims/resourceClaimTemplateName
+        kind: Deployment

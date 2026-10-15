@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# DETECTION-ONLY overlay -- NOT part of the FMA standup.
+#
+# The llm-d-benchmark CI ("Apply overrides to kustomize manifests" step) runs
+#   kubectl kustomize modelserver/<accelerator>/<backend>/.../base
+# and reads the served model from a Deployment's container args. FMA's real
+# model is declared in an InferenceServerConfig (../../../inferenceserverconfig.yaml),
+# which has no container args, so that step cannot detect it and fails.
+#
+# This overlay exists ONLY to satisfy that model auto-detection: it emits a
+# tiny, never-scheduled Deployment (replicas: 0) whose args carry the served
+# model name. The flat modelserver/kustomization.yaml does NOT reference this
+# directory, so `kubectl apply -k modelserver/` (the actual standup) never
+# applies it. Keep the model here in sync with inferenceserverconfig.yaml.
+resources:
+  - model-detect.yaml

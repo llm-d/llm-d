@@ -1,0 +1,35 @@
+
+# KEDA ScaledObject - Generic Kubernetes, flow-control-off inflight signal.
+#
+# Scales ${TARGET_DEPLOYMENT} on the stock EPP inflight-load signal
+# (llm_d_epp_inflight_requests) via the inflight-load-producer plugin that
+# every optimized-baseline EPP already ships with. No EPP Flow Control is
+# required and the optimized-baseline router needs no changes beyond the
+# monitoring feature values; this overlay is a pure ScaledObject wiring.
+#
+# The inflight signal is more responsive than the queue (lagging backlog)
+# and saturation (sampled utilization) alternatives: inflight requests rise
+# the moment a new replica accepts traffic, so scale-up follows immediately
+# instead of waiting for a queue to form or a utilization sample to cross.
+#
+# Triggers scrape the bundled kube-prometheus-stack over plain in-cluster HTTP
+# (no client auth). Do NOT enable TLS on the bundled Prometheus for this path:
+# KEDA's prometheus scaler ignores a TriggerAuthentication CA unless authModes is
+# also set, so a CA-only trigger silently fails (PR #2571). On OpenShift use
+# overlays/ocp/inflight, which points at the Thanos Querier with
+# authModes:bearer.
+
+  # Applies to scale-to-zero. The generated HPA behavior below controls ordinary
+  # scale-down while minReplicaCount is 1 or greater.
+
+      # Startup-time mitigation. Model-server pods take minutes to load a model
+      # and become Ready; while a replica starts it serves nothing, so demand
+      # stays elevated (scale-up overshoot) then collapses once Ready (scale-down
+      # flap). Both windows damp that. Size scaleUp near the Deployment's
+      # cold-start time. See "Startup-time mitigation" in the README.
+
+    # Stock EPP inflight-load signal from the inflight-load-producer plugin.
+    # Needs no EPP Flow Control and no router upgrade. Per-replica target 16:
+    # same concurrency ceiling as the queue path's running-requests trigger.
+
+          sum(llm_d_epp_inflight_requests{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})

@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: optimized-baseline-nvidia-gpu-vllm-decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      priorityClassName: nightly-gpu-critical
+      volumes:
+        - name: triton-cache
+          emptyDir: {}
+      containers:
+        - name: modelserver
+          volumeMounts:
+            - mountPath: /.triton
+              name: triton-cache

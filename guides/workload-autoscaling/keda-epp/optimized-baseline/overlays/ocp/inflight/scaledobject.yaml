@@ -1,0 +1,16 @@
+
+# KEDA ScaledObject - OpenShift, flow-control-off inflight signal.
+#
+# Same as overlays/k8s/inflight (single inflight trigger on
+# llm_d_epp_inflight_requests, per-replica target 16; no Flow Control required),
+# but the trigger queries the OpenShift Thanos Querier over HTTPS with
+# authModes:bearer and authenticationRef:keda-prometheus-auth. The
+# TriggerAuthentication and the metrics-reader RBAC it needs are added by this
+# overlay's kustomization.yaml.
+
+  # Applies to scale-to-zero. The generated HPA behavior below controls ordinary
+  # scale-down while minReplicaCount is 1 or greater.
+
+      # Startup-time mitigation; see overlays/k8s/inflight for the full rationale.
+
+          sum(llm_d_epp_inflight_requests{namespace="${NAMESPACE}",service="${EPP_SERVICE}",model_name="${MODEL}"})

@@ -1,0 +1,91 @@
+# SGLang overrides for glm-5-2.values.yaml. Apply after glm-5-2.values.yaml;
+# targetPorts (the 8 per-rank ports) and matchLabels are inherited from it,
+# and the plugin config below replaces its vLLM one.
+#
+# The SGLang Rust frontend serves the native /generate API and the OpenAI
+# /v1/chat/completions and /v1/completions routes on every DP rank, and keeps
+# the P/D bootstrap fields on all of them. The EPP
+# parses /generate bodies (text or input_ids) with the sglanghttp-parser
+# and OpenAI bodies with the openai-parser. The explicit parser list means
+# other paths are rejected with 400 rather than forwarded to a listener that
+# does not serve them.
+#
+# The Rust listeners expose no /metrics endpoint yet, so
+# only signals the EPP computes itself are used: the approximate prefix-cache
+# scorers (from the request it parsed) and the active-request scorer. The
+# queue and KV-cache utilization scorers would have no data, and
+# dataLayer.injectDefaults: false turns off the default /metrics scrape, which
+# would only return 404s.
+#
+# Like the vLLM overrides, prefill scores the GPU and the CPU (HiCache) prefix
+# caches separately. autoTune reads the KV size from /metrics, so both
+# producers are sized by hand per DP rank (one rank = one endpoint) in 64-token
+# blocks (the SGLang page size), for a DEP8 prefill rank on H200:
+# - GPU: 125,696 KV tokens per DEP8 prefill rank -> 1,964 blocks;
+# - CPU: hicache component, 64 GB per rank = 1,235,008 tokens -> 19,297 blocks.
+#
+# The CPU scorer needs the hicache component. Every SGLang deployment overlay
+# includes hicache. If you remove hicache from an overlay, also remove
+# cpu-prefix-cache-producer, cpu-prefix-cache-scorer and the
+# cpu-prefix-cache-scorer entry in the prefill profile. If you do not remove
+# them, the router scores CPU cache blocks that do not exist. Then prefill
+# requests go to ranks that do not have the prefix.
+router:
+  modelServers:
+    type: sglang
+  epp:
+    pluginsCustomConfig:
+      wide-ep-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: sglanghttp-parser
+        - type: openai-parser
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          name: gpu-prefix-cache-producer
+          parameters:
+            autoTune: false
+            blockSizeTokens: 64
+            lruCapacityPerServer: 1964
+        - type: approx-prefix-cache-producer
+          name: cpu-prefix-cache-producer
+          parameters:
+            autoTune: false
+            blockSizeTokens: 64
+            lruCapacityPerServer: 19297
+        - type: prefix-cache-scorer
+          name: gpu-prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
+        - type: prefix-cache-scorer
+          name: cpu-prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: cpu-prefix-cache-producer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: gpu-prefix-cache-scorer
+            weight: 5
+          - pluginRef: cpu-prefix-cache-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 1
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+        requestHandler:
+          parsers:
+          - pluginRef: sglanghttp-parser
+          - pluginRef: openai-parser
+        dataLayer:
+          injectDefaults: false

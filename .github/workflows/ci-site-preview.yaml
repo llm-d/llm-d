@@ -1,0 +1,143 @@
+name: CI Site Preview
+
+# Builds an llm-d.ai preview with this PR's docs, guides and community pages:
+# checks out the llm-d.ai site (llm-d/llm-d.github.io@main), syncs content from
+# the PR checkout instead of llm-d/llm-d@main, and runs the site's normal build.
+# The static site is uploaded as the `site-preview` artifact.
+#
+# This job runs the PR's content with a read-only token and no secrets, so it
+# is safe for fork PRs. Publishing the artifact (Netlify) and commenting on the
+# PR happen in site-preview-deploy.yaml, which runs from main via workflow_run.
+# That workflow matches this one by its display name: keep `name:` above in sync
+# with its `workflows:` list.
+
+on:
+  pull_request:
+    branches: [main]
+    # What llmd-site sync reads from llm-d/llm-d: docs/**, the guides listed
+    # in docs/well-lit-paths/guides.yaml (all under guides/), and the
+    # community pages mirrored from the repo root (llm-d.github.io's
+    # docs-sync.yaml). Same list as dispatch-website-sync.yaml.
+    paths:
+      - .github/workflows/ci-site-preview.yaml
+      - docs/**
+      - guides/**
+      - CONTRIBUTING.md
+      - CODE_OF_CONDUCT.md
+      - SECURITY.md
+      - SIGS.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-site-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # For pull_request events this is the PR merged into main, i.e. what
+      # llm-d.ai would show after merging.
+      - name: Check out llm-d
+        uses: actions/checkout@v7
+        with:
+          path: llm-d
+          persist-credentials: false
+
+      - name: Check out the llm-d.ai site
+        uses: actions/checkout@v7
+        with:
+          repository: llm-d/llm-d.github.io
+          ref: main
+          path: site
+          persist-credentials: false
+
+      # Same toolchain as the site's own CI (.github/actions/setup-llmd-site):
+      # Node 24 (package.json engines: >=24) and the Go version from go.mod.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: site/tools/llmd-site/go.mod
+          cache-dependency-path: site/tools/llmd-site/go.sum
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Build the llmd-site CLI
+        working-directory: site
+        run: make llmd-site
+
+      # With LLMD_REPO set, llmd-site reads the checkout as-is: no clone, fetch
+      # or checkout, so the shallow PR checkout is enough. `main` is only the
+      # ref used in "edit this page" / source links, so those point at
+      # llm-d/llm-d@main (where the content lands on merge).
+      - name: Sync docs from this PR
+        working-directory: site
+        env:
+          LLMD_REPO: ${{ github.workspace }}/llm-d
+        run: ./bin/llmd-site sync main
+
+      - name: Build the site
+        working-directory: site
+        run: ./bin/llmd-site build
+
+      - name: Upload the site preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-preview
+          path: site/build
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+      # Read by site-preview-deploy.yaml, which cross-checks it against the
+      # workflow_run event before deploying.
+      - name: Write preview metadata
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/site-preview-meta"
+          jq -n --argjson pr "$PR_NUMBER" --arg sha "$HEAD_SHA" \
+            '{pr: $pr, head_sha: $sha}' > "$RUNNER_TEMP/site-preview-meta/pr.json"
+          cat "$RUNNER_TEMP/site-preview-meta/pr.json"
+
+      - name: Upload preview metadata
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-preview-meta
+          path: ${{ runner.temp }}/site-preview-meta/pr.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Job summary
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## llm-d.ai preview
+
+          The site was built with this change's docs and guides. If Netlify is
+          configured, site-preview-deploy.yaml publishes it and comments the
+          URL on the PR. To view it locally instead:
+
+          1. Download the \`site-preview\` artifact from [this run](${RUN_URL}#artifacts) and unzip it into \`build/\`.
+          2. Serve it with \`npx serve build\` and open http://localhost:3000/docs/dev.
+             (\`python3 -m http.server -d build\` also works, but only for URLs ending in \`.html\`.)
+
+          PR content appears under the **dev** docs version (/docs/dev/...).
+          EOF

@@ -1,0 +1,12 @@
+apiVersion: fma.llm-d.ai/v1alpha1
+kind: LauncherPopulationPolicy
+metadata:
+  name: fma-lpp
+spec:
+  enhancedNodeSelector:
+    labelSelector:
+      matchLabels:
+        nvidia.com/gpu.present: "true"
+  countForLauncher:
+    - launcherConfigName: "fma-launcher"
+      launcherCount: 1

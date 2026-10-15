@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: encode
+  labels:
+    app.kubernetes.io/component: encode
+    llm-d.ai/role: encode
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: encode
+    llm-d.ai/role: encode
+  ports:
+    - name: modelserver
+      port: 8000
+      targetPort: modelserver
+      protocol: TCP

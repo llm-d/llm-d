@@ -1,0 +1,153 @@
+## p2p-kv-cache-sharing guide overrides for the router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Tokenization is served by the model servers through the Service deployed
+## from `../render/`. The EPP `token-producer` plugin tokenizes prompts over
+## HTTP against that Service (see its `vllm.url` below). The opt-in
+## `../render/standalone/` overlay provides a dedicated render pool when model
+## server CPU is contended; see the guide's Best Practices.
+##
+## The deployed EPP config is token-aware + P2P: the token-load-scorer places
+## each request on the pod with the fewest prompt tokens still to prefill,
+## counting (through the inflight-load-producer) what the precise index says
+## each pod already caches, and the p2p-source-producer emits the KV cache
+## source header when a peer out-caches the scheduled pod by at least
+## minCachedTokenDelta tokens. A prefix owner is therefore preferred until it
+## is loaded; after that the request spills to a lighter pod and pulls the
+## prefix instead of recomputing it. On the guide's document Q&A profile
+## (8 x gpt-oss-120b TP=1 on H200, pull over TCP) this served 6.3 req/s
+## against 4.4 for load-aware + P2P and 2.75 for affinity + P2P; see the
+## guide's "When to use this path".
+##
+## Affinity + P2P (prefix-cache-scorer, queue-scorer,
+## kv-cache-utilization-scorer and no-hit-lru-scorer ahead of the
+## max-score-picker, in place of the inflight-load-producer and
+## token-load-scorer) is the alternative when nothing contends on an owner
+## pod or GPU KV capacity is the bottleneck: on a uniform shared-prefix pool
+## affinity measured ahead of load-aware placement, and token-aware placement
+## is unmeasured there. Under affinity the pull rarely fires and is a
+## fallback for displaced requests, not a throughput feature. No placement
+## recovers a restarted router: the index loses the pre-restart cache map.
+##
+## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
+## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
+
+router:
+  epp:
+    replicas: 2
+    # TEMPORARY, tracked under the v0.9 "Multi-tier offloading: NIXL P/D +
+    # P2P backends" goal: the chart's default EPP image (the chart version's
+    # tag) predates the `p2p-source-producer` plugin and rejects this config
+    # with "plugin type 'p2p-source-producer' is not registered". Switch to
+    # the next release once it ships the plugin.
+    #
+    # REPRODUCIBILITY: `main` floats. To reproduce a measurement, resolve
+    # this tag to a digest and pin it here and in
+    # ../modelserver/gpu/vllm/base/kustomization.yaml.
+    image:
+      tag: main
+      pullPolicy: Always
+    flags:
+      ha-enable-leader-election: false
+      allow-experimental-plugins: true
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: llm-d-hf-token
+            key: HF_TOKEN
+    pluginsConfigFile: "p2p-kv-cache-sharing-plugins.yaml"
+    pluginsCustomConfig:
+      p2p-kv-cache-sharing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              modelName: openai/gpt-oss-120b # Must match the render Service model (../render/) and the deployed model server
+              vllm:
+                # Model-server render Service (../render/):
+                # `p2p-kv-cache-sharing-` namePrefix + Service name `render`.
+                url: "http://p2p-kv-cache-sharing-render:8000"
+          - type: endpoint-notification-source
+          - type: metrics-data-source
+            parameters: {scheme: "http", path: "/metrics", insecureSkipVerify: true}
+          - type: core-metrics-extractor
+          - type: inflight-load-producer
+            parameters:
+              # Discount each pod's in-flight prompt tokens by what the precise
+              # index says it already caches, so the token-load-scorer prices a
+              # pod by the tokens it would still have to prefill for this
+              # request.
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: precise-prefix-cache-producer
+            parameters:
+              indexerConfig:
+                kvBlockIndexConfig:
+                  inMemoryConfig:
+                    # Per-key LRU of (endpoint, tier) holders. The default of
+                    # 10 is smaller than the number of legitimate holders a
+                    # hot shared-prefix block has on any fleet above five
+                    # pods, so real holders are evicted, cached-token counts
+                    # collapse toward zero, and p2p-source-producer stops
+                    # finding a peer to pull from. Size it at
+                    # (discovered endpoints x tiers); 32 covers fleets of up
+                    # to 16 pods with a GPU and a CPU tier per pod.
+                    podCacheSize: 32
+                kvCacheBackendConfigs:
+                - name: gpu
+                  weight: 1.0
+                # A CPU-resident prefix is nearly as cheap to serve as a
+                # GPU-resident one once the pull exists, so it is weighted
+                # close to the GPU tier.
+                - name: cpu
+                  weight: 0.9
+              tokenProcessorConfig:
+                # Router indexing granularity. This is independent of the model
+                # server and offloading block sizes; see Best Practices.
+                blockSizeTokens: 64
+              # The inflight-load-producer already charges each pod for the
+              # requests routed to it, which is what speculative entries
+              # approximate; the token-aware measurements ran with this off.
+              speculativeIndexing: false
+              kvEventsConfig:
+                topicFilter: "kv@"
+                concurrency: 8
+                discoverPods: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+          - type: p2p-source-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              prefillProfileName: default
+              # Minimum extra cached-prefix tokens a peer must hold beyond the
+              # scheduled pod before a pull is requested; set from the measured
+              # pull-versus-recompute crossover; calibrate it with
+              # ../../recipes/router/calibration/calibrate-min-cached-token-delta.sh.
+              minCachedTokenDelta: 2048
+          - type: token-load-scorer
+          - type: max-score-picker
+          - type: single-profile-handler
+        dataLayer:
+          sources:
+            - pluginRef: metrics-data-source
+              extractors:
+                - pluginRef: core-metrics-extractor
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: token-load-scorer
+              - pluginRef: max-score-picker
+
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "p2p-kv-cache-sharing"

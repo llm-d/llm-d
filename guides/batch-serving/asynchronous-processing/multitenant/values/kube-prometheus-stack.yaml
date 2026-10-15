@@ -1,0 +1,45 @@
+# Lean kube-prometheus-stack for the demo's self-hosted Prometheus + Grafana
+# observability path (alternative to GMP). Keeps Prometheus + Grafana + the
+# Prometheus Operator; drops node-exporter / kube-state-metrics / alertmanager
+# and the built-in k8s alert rules to stay light.
+#
+# Prometheus is configured to select PodMonitors / ServiceMonitors /
+# PrometheusRules cluster-wide (so the async-processor chart's PodMonitor,
+# modelServerMonitor, and PrometheusRule in the demo namespace are picked up), and the
+# Grafana dashboard sidecar searches all namespaces (so the chart's bundled
+# Async Processor dashboard ConfigMap is auto-imported).
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+kubeStateMetrics:
+  enabled: false
+defaultRules:
+  create: false
+
+grafana:
+  enabled: true
+  adminPassword: admin   # demo only
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    # Select monitors/rules regardless of release label, in any namespace.
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    podMonitorNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleNamespaceSelector: {}
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1Gi

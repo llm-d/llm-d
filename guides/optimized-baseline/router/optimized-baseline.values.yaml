@@ -1,0 +1,34 @@
+## optimized-baseline guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "optimized-baseline-plugins.yaml"
+    pluginsCustomConfig:
+      optimized-baseline-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        # Plugins run with their built-in defaults: the prefix-cache-affinity-filter's
+        # peakPrefillThroughput default (15928) is calibrated for this guide's reference
+        # setup (Qwen3-32B on H100 80 GB, TP=2). For other hardware/models, measure your
+        # own value with guides/recipes/router/calibration and set it on the filter.
+        plugins:
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "optimized-baseline"

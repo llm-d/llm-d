@@ -1,0 +1,318 @@
+# GKE Pod Snapshot CRDs (podsnapshot.gke.io/v1) for CI dry-run validation.
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: podsnapshotpolicies.podsnapshot.gke.io
+spec:
+  conversion:
+    strategy: None
+  group: podsnapshot.gke.io
+  names:
+    kind: PodSnapshotPolicy
+    listKind: PodSnapshotPolicyList
+    plural: podsnapshotpolicies
+    shortNames:
+      - psp
+    singular: podsnapshotpolicy
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - description: The name of PodSnapshotStorageConfig used for the PodSnapshotPolicy.
+          jsonPath: .spec.storageConfigName
+          name: StorageConfig
+          type: string
+        - description: The selector used for the PodSnapshotPolicy.
+          jsonPath: .spec.selector
+          name: Selector
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v1
+      schema:
+        openAPIV3Schema:
+          description: PodSnapshotPolicy defines matching conditions to trigger checkpoints for selected workloads.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: PodSnapshotPolicySpec defines the desired state of PodSnapshotPolicy.
+              properties:
+                retentionConfig:
+                  description: RetentionConfig defines the retention policy for created snapshots.
+                  properties:
+                    lastAccessTimeout:
+                      description: 'LastAccessTimeout is the duration after which a PodSnapshot will be considered stale.
+
+                        If set, the PodSnapshot will be deleted if it has not been accessed within this duration.
+
+                        Supported units are:
+
+                        - y: years
+
+                        - mo: months
+
+                        - d: days
+
+                        - h: hours
+
+                        - min: minutes
+
+                        Example: "30d" means the PodSnapshot under this policy will be deleted if it has not been accessed
+                        in the last 30 days.
+
+                        If not set, the PodSnapshot will always persist unless manually deleted.'
+                      pattern: ^(\d+)\s*(y|mo|d|h|min)$
+                      type: string
+                  required:
+                    - lastAccessTimeout
+                  type: object
+                selector:
+                  description: "Selector defines the set of pods managed by this policy. The policy's checkpoint and restore\
+                    \ settings\nwill apply to all pods that match the policy's label selector.\nExample:\n  selector:\n  \
+                    \  matchLabels:\n      app.kubernetes.io/name: MyApp"
+                  properties:
+                    matchExpressions:
+                      description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                      items:
+                        description: 'A label selector requirement is a selector that contains values, a key, and an operator
+                          that
+
+                          relates the key and values.'
+                        properties:
+                          key:
+                            description: key is the label key that the selector applies to.
+                            type: string
+                          operator:
+                            description: 'operator represents a key''s relationship to a set of values.
+
+                              Valid operators are In, NotIn, Exists and DoesNotExist.'
+                            type: string
+                          values:
+                            description: 'values is an array of string values. If the operator is In or NotIn,
+
+                              the values array must be non-empty. If the operator is Exists or DoesNotExist,
+
+                              the values array must be empty. This array is replaced during a strategic
+
+                              merge patch.'
+                            items:
+                              type: string
+                            type: array
+                            x-kubernetes-list-type: atomic
+                        required:
+                          - key
+                          - operator
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    matchLabels:
+                      additionalProperties:
+                        type: string
+                      description: 'matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+
+                        map is equivalent to an element of matchExpressions, whose key field is "key", the
+
+                        operator is "In", and the values array contains only "value". The requirements are ANDed.'
+                      type: object
+                  type: object
+                  x-kubernetes-map-type: atomic
+                snapshotGroupingRules:
+                  description: 'SnapshotGroupingRules defines special grouping logic that can be used to further group pod
+                    snapshots under the same policy.
+
+                    This allows restoration to select pod snapshots from a specific group rather than from all snapshots under
+                    the policy.'
+                  properties:
+                    groupByLabelValue:
+                      description: GroupByLabelValue defines a grouping rule based on label values.
+                      properties:
+                        groupRetentionPolicy:
+                          description: 'GroupRetentionPolicy defines the retention policy for each group.
+
+                            Note: Group-level retention does not override the policy-level retention.
+
+                            For example, if policy-level LastAccessTimeout is 30 days, snapshots will be
+
+                            cleaned up after 30 days even if they satisfy the group retention policy.'
+                          properties:
+                            maxSnapshotCountPerGroup:
+                              default: 0
+                              description: 'MaxSnapshotCountPerGroup is the maximum number of snapshots that can be created
+                                under each group.
+
+                                A value of 0 indicates no restriction.'
+                              format: int64
+                              minimum: 0
+                              type: integer
+                          type: object
+                        labels:
+                          description: "Labels is a list of label keys from the source Pod used to group PodSnapshots.\nFor\
+                            \ each label key in this list, if it exists on the source Pod, its key-value pair\nwill be added\
+                            \ to the PodSnapshot's labels.\n\nIt is possible that not all label keys specified in this list\
+                            \ will be present on a\nPod. In such cases, only the available labels will be added to the PodSnapshot.\n\
+                            \nNote: Grouping is based on the exact match of all labels extracted from this list.\nFor example,\
+                            \ if Labels is [\"key1\", \"key2\"]:\n1. A Pod with {key1: val1} results in a PS with {key1: val1}.\n\
+                            2. A Pod with {key1: val1, key2: val2} results in a PS with {key1: val1, key2: val2}.\nThese two\
+                            \ PodSnapshots will belong to DIFFERENT groups because their label sets differ.\n\nBest Practice:\
+                            \ To ensure consistent grouping, use 'matchExpressions' in the\npolicy's 'selector' to guarantee\
+                            \ all governed Pods contain the full set of labels.\nExample:\n  selector:\n    matchExpressions:\n\
+                            \      - {key: tenant-id, operator: Exists}\n      - {key: corp-id, operator: Exists}\n\nExample:\
+                            \ [\"tenant-id\", \"corp-id\"]"
+                          items:
+                            type: string
+                          minItems: 1
+                          type: array
+                      required:
+                        - labels
+                      type: object
+                  type: object
+                snapshotScope:
+                  default: whole-pod
+                  description: 'SnapshotScope defines the snapshot scope. "whole-pod" scope checkpoints
+
+                    the entire Pod including application state, application memory and
+
+                    filesystems. "rootfs-only" checkpoints only the container root
+
+                    filesystems.'
+                  enum:
+                    - whole-pod
+                    - rootfs-only
+                  type: string
+                storageConfigName:
+                  description: Name of the PodSnapshotStorageConfig this policy depends on.
+                  type: string
+                triggerConfig:
+                  description: Configuration for checkpoint triggers.
+                  properties:
+                    postCheckpoint:
+                      default: resume
+                      description: 'PostCheckpoint defines pod behavior after a checkpoint is taken.
+
+                        `stop`: the pod turns to completed status after the checkpoint is taken.
+
+                        `resume`: workload will resume after being checkpointed.'
+                      enum:
+                        - stop
+                        - resume
+                      type: string
+                    type:
+                      description: 'Type of checkpoint trigger.
+
+                        `readinessProbe`: checkpoint will be triggered externally when the pod turns ready.
+
+                        `workload`: checkpoint will be triggered by the workload container itself.
+
+                        `manual`: policy will not generate any checkpoint but wait for PodSnapshotTrigger to be created.'
+                      enum:
+                        - readinessProbe
+                        - workload
+                        - manual
+                      type: string
+                  required:
+                    - type
+                  type: object
+              required:
+                - selector
+                - storageConfigName
+                - triggerConfig
+              type: object
+            status:
+              type: object
+          required:
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: podsnapshotstorageconfigs.podsnapshot.gke.io
+spec:
+  conversion:
+    strategy: None
+  group: podsnapshot.gke.io
+  names:
+    kind: PodSnapshotStorageConfig
+    listKind: PodSnapshotStorageConfigList
+    plural: podsnapshotstorageconfigs
+    shortNames:
+      - pssc
+    singular: podsnapshotstorageconfig
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          description: PodSnapshotStorageConfig is the general storage configuration for customers to define how snapshots
+            are stored and managed.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: PodSnapshotStorageConfigSpec defines the desired state of PodSnapshotStorageConfig.
+              properties:
+                snapshotStorageConfig:
+                  description: SnapshotStorageConfig defines the configuration for the snapshot's underlying storage.
+                  properties:
+                    gcs:
+                      description: GCS contains the configuration for the GCS setups
+                      properties:
+                        bucket:
+                          description: 'Bucket is the bucket name going to be used for the storing pod snapshots.
+
+                            Example: "bucket-for-abc"'
+                          pattern: ^[a-z0-9._-]+$
+                          type: string
+                        path:
+                          description: 'Path is the path inside the bucket defined in the above field that
+
+                            indicates a child directory that going to be used for storing pod
+
+                            snapshots.
+
+                            Example: "a/b/c", then the stored path for pod snapshots will be
+
+                            "gs://bucket-for-abc/a/b/c"'
+                          type: string
+                        tokenSource:
+                          default: podKSA
+                          description: 'TokenSource determines the authentication strategy for GCS operations.
+
+                            "podKSA" (default) utilizes the Pod''s own Kubernetes Service Account (Workload Identity).
+
+                            "federatedP4SA" utilizes the central GKE Project Service Agent to mint path-restricted, downscoped
+                            tokens on-demand.'
+                          enum:
+                            - podKSA
+                            - federatedP4SA
+                          type: string
+                      required:
+                        - bucket
+                      type: object
+                  type: object
+              required:
+                - snapshotStorageConfig
+              type: object
+            status:
+              type: object
+          required:
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

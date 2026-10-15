@@ -1,0 +1,47 @@
+# OpenShift overlay for the FMA + KEDA scale-from-zero autoscaling guide.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+# Shared OCP metrics-reader auth (SA + token Secret; its ClusterRoleBinding is
+# removed below and created imperatively in the guide's RBAC step), plus the
+# bearer+CA TriggerAuthentication.
+components:
+  - ../../../../recipes/autoscaling/metrics-reader
+  - ../../../../workload-autoscaling/keda-epp/optimized-baseline/components/ocp-trigger-auth
+
+patches:
+  # Drop the Component's ClusterRoleBinding: it pins a subject namespace and
+  # relies on a namespace transformer this overlay deliberately omits. The guide
+  # creates the equivalent binding imperatively, with a namespace-unique name, in
+  # its RBAC step.
+  - patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: keda-epp-metrics-reader-monitoring-view
+  # Drop the ${NAMESPACE} placeholder; `kubectl apply -n` sets it.
+  - patch: |-
+      - op: remove
+        path: /metadata/namespace
+    target:
+      kind: TriggerAuthentication
+      name: keda-prometheus-auth
+  # Point the queue-depth trigger at Thanos Querier with bearer authentication.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+      - op: add
+        path: /spec/triggers/0/metadata/authModes
+        value: "bearer"
+      - op: add
+        path: /spec/triggers/0/authenticationRef
+        value:
+          name: keda-prometheus-auth
+    target:
+      kind: ScaledObject
+      name: fast-model-actuation-keda-queue

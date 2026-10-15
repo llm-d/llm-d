@@ -1,0 +1,91 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: interactive-pod-editor
+rules:
+  # Core API group resources
+  - apiGroups: [""]
+    resources:
+      - logs
+      - pods
+      - pods/log
+      - secrets
+      - configmaps
+      - services
+      - endpoints
+      - serviceaccounts
+      - events
+      - namespaces
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list", "watch"]
+
+  # Workloads in the apps group
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - replicasets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Gateway API (Kubernetes Gateway)
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources:
+      - gateways
+      - httproutes
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # RBAC debugging
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+      - clusterroles
+      - clusterrolebindings
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # LeaderWorkerSet (group varies by installation; allow any group match for this resource name)
+  # If you know the exact group, replace ["*"] with it (e.g., ["leaderworkerset.x-k8s.io"]).
+  - apiGroups: ["*"]
+    resources:
+      - leaderworkersets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # kgateway parameters
+  - apiGroups: ["gateway.kgateway.dev"]
+    resources: [gatewayparameters]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # istio telemetry
+  - apiGroups: ["telemetry.istio.io"]
+    resources:
+      - telemetries
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Monitoring
+  - apiGroups: ["monitoring.coreos.com"]
+    resources:
+      - servicemonitors
+      - podmonitors
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # GAIE stuff
+  - apiGroups: ["inference.networking.k8s.io", "llm-d.ai", "serving.kserve.io"]
+    resources: ["*"]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: interactive-pod-editor-binding
+subjects:
+  - kind: ServiceAccount
+    name: interactive-pod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: interactive-pod-editor

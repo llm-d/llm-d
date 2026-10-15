@@ -1,0 +1,20 @@
+## modelexpress-p2p guide overrides for the llm-d Router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## This guide reuses the chart's default scoring profile. The
+## differentiator vs the optimized-baseline guide lives in the
+## modelserver overlay, which uses `--load-format mx` to receive
+## weights via NIXL/RDMA from a peer pod instead of HuggingFace. We
+## only override the label selector so the llm-d Router selects this
+## guide's model server pods.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "modelexpress-p2p"

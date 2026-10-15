@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-store-config
+data:
+  mooncake_config.json: |
+    {
+      "mode": "embedded",
+      "metadata_server": "P2PHANDSHAKE",
+      "master_server_address": "mooncake-master-store.mooncake.svc.cluster.local:50051",
+      "global_segment_size": "80GB",
+      "local_buffer_size": "4GB",
+      "protocol": "rdma",
+      "device_name": "",
+      "enable_offload": false
+    }

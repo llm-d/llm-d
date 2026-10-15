@@ -1,0 +1,13 @@
+# By default, Envoy Gateway sets the buffer limit to 32kiB which is not sufficient for AI workloads.
+# This ClientTrafficPolicy sets the buffer limit to 50MiB as an example.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: client-buffer-limit
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  connection:
+    bufferLimit: 50Mi

@@ -1,0 +1,26 @@
+opencost:
+  exporter:
+    defaultClusterId: "${CLUSTER_ID}"   # filled by installer
+    extraEnv:
+      INFERENCE_COST_ENABLED: "true"
+      INFERENCE_MODEL_LABEL: "llm-d.ai/model"
+      INFERENCE_SHARED_INFRA_LABEL: "llm-d.ai/inference-shared"
+      INFERENCE_SHARED_INFRA_LABEL_VALUE: "true"
+  prometheus:
+    internal:
+      enabled: true
+      serviceName: "${PROMETHEUS_SVC}"  # filled by installer
+      namespaceName: "${PROMETHEUS_NS}" # filled by installer
+      port: 80        # 80 for standalone prometheus chart; 9090 for kube-prometheus-stack
+  metrics:
+    serviceMonitor:
+      enabled: true                     # requires Prometheus Operator CRDs
+      scrapeInterval: 1m
+      honorLabels: true
+      additionalLabels:
+        release: llmd                   # must match kube-prometheus-stack serviceMonitorSelector
+  ui:
+    enabled: true
+  customPricing:
+    enabled: true
+    configmapName: opencost-custom-pricing  # created by installer from interactive pricing prompt

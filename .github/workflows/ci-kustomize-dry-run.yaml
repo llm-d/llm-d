@@ -1,0 +1,330 @@
+name: CI Guide Dry Run
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-kustomize-dry-run.yaml
+      - .github/scripts/**
+      - guides/**
+      - helpers/client-setup/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Test observability kubeconfig targeting
+        run: guides/recipes/observability/tests/test-kubeconfig-targeting.sh
+
+      - name: Install client dependencies
+        run: helpers/client-setup/install-deps.sh
+
+      # After install-deps.sh, which provides yq for the assertions.
+      - name: Test observability exemplar wiring
+        run: guides/recipes/observability/tests/test-prometheus-exemplar-config.sh
+
+      - name: Create kind cluster
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa  # v1.15.1
+        with:
+          cluster_name: kustomize-dry-run
+          node_image: kindest/node:v1.35.0  # 1.35+ required for stable DRA (resource.k8s.io/v1)
+          version: v0.31.0
+          wait: 120s
+
+      - name: Install Gateway API and GAIE CRDs
+        run: guides/recipes/gateway/install-gateway-crds.sh
+
+      # llm-d.ai InferenceObjective, used by guides/batch-serving/.../multitenant.
+      # Same apply as the guides' CRD prerequisite; URL from guides/env.sh.
+      - name: Install llm-d-router CRDs
+        run: |
+          source guides/env.sh
+          kubectl apply -f "https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml"
+
+      - name: Install monitoring CRDs
+        run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
+
+      - name: Install LWS and DisaggregatedSet CRDs
+        run: .github/scripts/install-disaggregatedset-crds.sh
+
+      - name: Install GKE CRDs
+        run: .github/scripts/install-gke-crds.sh
+
+      - name: Install FMA CRDs
+        run: .github/scripts/install-fma-crds.sh
+
+      - name: Install KEDA CRDs
+        run: .github/scripts/install-keda-crds.sh
+
+      - name: Install Kueue CRDs
+        run: .github/scripts/install-kueue-crds.sh
+
+      - name: Install Envoy Gateway CRDs
+        run: .github/scripts/install-envoy-gateway-crds.sh
+
+      - name: Install agentgateway CRDs
+        run: .github/scripts/install-agentgateway-crds.sh
+
+      - name: Install NVIDIA DRA CRDs
+        run: .github/scripts/install-nvidia-dra-crds.sh
+
+      - name: Dry-run router charts (optimized-baseline)
+        run: |
+          CHART_VERSION=v0
+          failed=0
+          for chart in llm-d-router-standalone llm-d-router-gateway; do
+            echo ""
+            echo "========================================"
+            echo "optimized-baseline: router (${chart})"
+            echo "========================================"
+            echo "--- helm template ---"
+            if ! helm template optimized-baseline-router \
+              "oci://ghcr.io/llm-d/charts/${chart}" \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/recipes/router/features/monitoring.values.yaml \
+              -f guides/optimized-baseline/router/optimized-baseline.values.yaml \
+              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for ${chart}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: optimized-baseline / router (${chart})"
+            else
+              echo "FAIL: optimized-baseline / router (${chart})"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Dry-run router charts (pd-disaggregation)
+        run: |
+          CHART_VERSION=v0
+          failed=0
+          for chart in llm-d-router-standalone llm-d-router-gateway; do
+            echo ""
+            echo "========================================"
+            echo "pd-disaggregation: router (${chart})"
+            echo "========================================"
+            echo "--- helm template ---"
+            if ! helm template pd-disaggregation-router \
+              "oci://ghcr.io/llm-d/charts/${chart}" \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/recipes/router/features/monitoring.values.yaml \
+              -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
+              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for ${chart}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: pd-disaggregation / router (${chart})"
+            else
+              echo "FAIL: pd-disaggregation / router (${chart})"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Dry-run router (precise-prefix-cache-routing)
+        run: |
+          CHART_VERSION=v0
+          failed=0
+          for engine_values in "" "-f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.sglang.values.yaml"; do
+            name="EPP, render via endpoint discovery"
+            [ -n "${engine_values}" ] && name="EPP, render via Service (sglang)"
+            echo ""
+            echo "========================================"
+            echo "precise-prefix-cache-routing: router (${name})"
+            echo "========================================"
+            echo "--- helm template ---"
+            if ! helm template precise-prefix-cache-routing \
+              "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
+              ${engine_values} \
+              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for ${name}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: precise-prefix-cache-routing / router (${name})"
+            else
+              echo "FAIL: precise-prefix-cache-routing / router (${name})"
+              failed=1
+            fi
+          done
+          exit "${failed}"
+
+      - name: Dry-run render pool overlays (precise-prefix-cache-routing)
+        run: |
+          failed=0
+          for overlay in render/standalone render/xpu-sglang; do
+            name="render (${overlay})"
+            echo ""
+            echo "========================================"
+            echo "precise-prefix-cache-routing: ${name}"
+            echo "========================================"
+            echo "--- kustomize build ---"
+            if ! kustomize build "guides/precise-prefix-cache-routing/${overlay}" > /tmp/rendered.yaml; then
+              echo "FAIL: kustomize build failed for ${overlay}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: precise-prefix-cache-routing / ${name}"
+            else
+              echo "FAIL: precise-prefix-cache-routing / ${name}"
+              failed=1
+            fi
+          done
+          exit "${failed}"
+
+      - name: Kustomize build and dry-run all guide overlays
+        run: |
+          # Exclusions are read from guides/.ci-dry-run-guide-exclusions.
+          # Each non-comment, non-blank line is a path prefix relative to guides/
+          # that should be skipped. To add or remove a guide from CI coverage,
+          # edit that file rather than this workflow.
+          mapfile -t exclusions < <(grep -v '^\s*#' guides/.ci-dry-run-guide-exclusions | grep -v '^\s*$')
+
+          failed=0
+          # results entries: "PASS <name>" or "FAIL <name>"
+          results=()
+
+          for guide_dir in guides/*/; do
+            guide="${guide_dir%/}"
+            guide_name="${guide##*/}"
+
+            # Skip directories listed in the exclusions file (top-level match)
+            skip=0
+            for excl in "${exclusions[@]}"; do
+              if [[ "${guide_name}" == "${excl}" || "${guide_name}" == "${excl%%/*}" ]]; then
+                skip=1; break
+              fi
+            done
+            [[ $skip -eq 1 ]] && continue
+
+            # Find every kustomization.yaml under this guide, skipping:
+            #   components/   - shared building blocks, not standalone overlays
+            #   subpaths from the exclusions file (e.g. recipes/modelserver)
+            #   render/       - precise-prefix-cache-routing render overlays (dry-run above)
+            #   kind: Component - composable fragments, not independently buildable
+            while IFS= read -r -d '' kustfile; do
+              kust_dir="${kustfile%kustomization.yaml}"
+              case "${kust_dir}" in
+                */components/*) continue ;;
+                guides/precise-prefix-cache-routing/render/*) continue ;;
+              esac
+
+              # Skip subpaths listed in the exclusions file
+              skip=0
+              for excl in "${exclusions[@]}"; do
+                if [[ "${kust_dir}" == "guides/${excl}/"* || "${kust_dir}" == "guides/${excl}" ]]; then
+                  skip=1; break
+                fi
+              done
+              [[ $skip -eq 1 ]] && continue
+
+              grep -q '^kind: Component' "${kustfile}" && continue
+
+              name="${kust_dir#guides/}"
+              name="${name%/}"
+
+              echo ""
+              echo "========================================"
+              echo "${name}"
+              echo "========================================"
+              echo "--- kustomize build ---"
+              if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
+                echo "FAIL: kustomize build failed for ${name}"
+                results+=("FAIL ${name}")
+                failed=1
+                continue
+              fi
+
+              # Pre-create any namespaces referenced by the rendered manifest.
+              # Some guides target non-default namespaces (workload-autoscaling,
+              # mooncake-store) that don't exist in the bare kind cluster.
+              grep -E '^\s+namespace:\s' /tmp/rendered.yaml \
+                | awk '{print $2}' | tr -d '"'"'" | sort -u \
+                | while read -r ns; do
+                    kubectl create namespace "$ns" --dry-run=client -o yaml \
+                      | kubectl apply -f - 2>/dev/null || true
+                  done
+
+              # Skip server dry-run for overlays that contain unresolved shell-style
+              # variable placeholders (e.g. ${REPLICAS}). These are intentional
+              # template bases that require the overlay to substitute concrete values;
+              # kustomize build above already validated the manifest structure.
+              if grep -qE '\$\{[A-Z_]+\}' /tmp/rendered.yaml; then
+                echo "SKIP dry-run: unresolved template variables in ${name}"
+                results+=("PASS ${name}")
+                continue
+              fi
+
+              echo "--- kubectl apply --dry-run=server ---"
+              if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+                echo "PASS: ${name}"
+                results+=("PASS ${name}")
+              else
+                echo "FAIL: ${name}"
+                results+=("FAIL ${name}")
+                failed=1
+              fi
+            done < <(find "${guide}" -name kustomization.yaml -print0 | sort -z)
+          done
+
+          # Write a tree-style summary to the GitHub job summary.
+          # Each path like "guide/sub/leaf" is rendered as an indented tree entry
+          # with ✅ or ❌ based on pass/fail, grouped under their parent guide.
+          {
+            echo "## Kustomize Dry-Run Results"
+            echo ""
+            current_guide=""
+            current_l2=""
+            for entry in "${results[@]}"; do
+              result="${entry%% *}"
+              name="${entry#* }"
+              icon=$([[ "$result" == "PASS" ]] && echo "✅" || echo "❌")
+
+              guide="${name%%/*}"
+              rest="${name#*/}"
+
+              if [[ "$guide" != "$current_guide" ]]; then
+                echo "- **${guide}**"
+                current_guide="$guide"
+                current_l2=""
+              fi
+
+              # Render up to 3 levels: guide / l2 / remainder
+              if [[ "$rest" == */* ]]; then
+                l2="${rest%%/*}"
+                leaf="${rest#*/}"
+                if [[ "$l2" != "$current_l2" ]]; then
+                  echo "  - **${l2}**"
+                  current_l2="$l2"
+                fi
+                echo "    - ${icon} \`${leaf}\`"
+              else
+                current_l2=""
+                echo "  - ${icon} \`${rest}\`"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $failed
