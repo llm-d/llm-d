@@ -216,7 +216,7 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Monitoring
 
-GKE provides an out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**) showing request throughput, latency, error rates, and Endpoint Picker (EPP) extension metrics. For model server metric collection on GKE, see [GKE Monitoring & Telemetry](../providers/gke/README.md#monitoring--telemetry).
+Cloud Monitoring provides the out-of-the-box [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) (**Monitoring → Dashboards → Integrations → llm-d**), which includes Application Load Balancer metrics alongside GPU networking, llm-d EPP, and vLLM metrics; see [GKE Monitoring & Telemetry](../providers/gke/README.md#monitoring--telemetry).
 
 ## Cleanup
 
