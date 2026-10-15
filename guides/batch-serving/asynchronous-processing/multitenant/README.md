@@ -183,7 +183,7 @@ Then set this guide's environment (on top of the base guide's variables). `GPUS`
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 export NAMESPACE=llm-d-async
-export ASYNC_VERSION=v0.11.0 # llm-d-async release (supports lane_objectives & tier-priority)
+export ASYNC_VERSION=v1.0.0 # llm-d-async release (supports lane_objectives & tier-priority)
 export INFRA_PROVIDER=base # options: base, gke; model server overlay variant
 export GPUS=2 # options: 2, 1; GPUs for the model server; 1 serves Qwen/Qwen3-8B instead
 export FLOW_CONTROL=evictable # options: evictable, holdback; router values: in-flight eviction (recommended), or priority holdback
