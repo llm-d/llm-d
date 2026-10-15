@@ -111,10 +111,13 @@ initContainers:
 ```
 
 > [!NOTE]
-> Updating container `args` or `env` on an existing model server `Deployment` triggers a rolling pod restart and model reload. Wait for the rollout to complete before sending test requests:
+> Updating container `args` or `env` restarts the model server pods and reloads the model. Wait for the rollout before sending test requests:
 >
 > ```bash
-> kubectl rollout status deployment -n ${NAMESPACE} -l llm-d.ai/role=decode
+> # Deployment-based guides (e.g. optimized-baseline)
+> kubectl rollout status deployment -n ${NAMESPACE} -l llm-d.ai/role
+> # P/D and wide-EP guides (DisaggregatedSet)
+> kubectl wait --for=condition=Available disaggregatedset -n ${NAMESPACE} --all --timeout=1800s
 > ```
 
 ## Step 3: Enable Tracing on EPP
