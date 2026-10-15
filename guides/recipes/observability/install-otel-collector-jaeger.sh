@@ -6,27 +6,33 @@ set -euo pipefail
 ### GLOBALS ###
 NAMESPACE=""
 ACTION="install"
+GKE_CLOUD_TRACE="false"
 
 ### HELP & LOGGING ###
 print_help() {
   cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Deploy or remove an OpenTelemetry Collector and Jaeger backend for llm-d
-distributed tracing. Both are deployed into the same namespace so that
-llm-d components can export traces to http://otel-collector:4317.
+Deploy or remove an OpenTelemetry Collector and tracing backend (Jaeger or
+Google Cloud Trace on GKE) for llm-d distributed tracing. Components in the
+same namespace export traces to http://otel-collector:4317.
 
-If the OpenTelemetry Operator CRD is detected, the collector is deployed
-as an OpenTelemetryCollector CR. Otherwise a standalone Deployment is used.
+If --gke is set, the collector is deployed with the Google Cloud Trace
+exporter (no Jaeger Deployment is created). Otherwise, Jaeger is deployed and,
+if the OpenTelemetry Operator CRD is detected, the collector is deployed as an
+OpenTelemetryCollector CR (or a standalone Deployment when the operator is not
+installed).
 
 Options:
   -n, --namespace NAME   Target namespace (required)
+  --gke                  Export traces to Google Cloud Trace instead of Jaeger
   -u, --uninstall        Remove OTel Collector and Jaeger
   -h, --help             Show this help and exit
 
 Examples:
-  $(basename "$0") -n my-namespace    # Install in 'my-namespace'
-  $(basename "$0") -u -n my-namespace # Uninstall from 'my-namespace'
+  $(basename "$0") -n my-namespace          # Install OTel Collector + Jaeger
+  $(basename "$0") --gke -n my-namespace    # Install OTel Collector for Google Cloud Trace
+  $(basename "$0") -u -n my-namespace       # Uninstall from 'my-namespace'
 EOF
 }
 
@@ -46,6 +52,7 @@ parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -n|--namespace) NAMESPACE="$2"; shift 2 ;;
+      --gke)          GKE_CLOUD_TRACE="true"; shift ;;
       -u|--uninstall) ACTION="uninstall"; shift ;;
       -h|--help)      print_help; exit 0 ;;
       *)              fail "Unknown option: $1" ;;
@@ -66,20 +73,38 @@ otel_operator_available() {
 
 ### ACTIONS ###
 install() {
-  log_info "Deploying OTel Collector + Jaeger into namespace '${NAMESPACE}'..."
-
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   TRACING_DIR="${SCRIPT_DIR}/tracing"
-  JAEGER_MANIFEST="${TRACING_DIR}/jaeger-all-in-one.yaml"
-
-  if [[ ! -f "$JAEGER_MANIFEST" ]]; then
-    fail "Jaeger manifest not found at: ${JAEGER_MANIFEST}"
-  fi
 
   # Create namespace if needed
   if ! kubectl get namespace "${NAMESPACE}" &>/dev/null; then
     log_info "Creating namespace '${NAMESPACE}'..."
     kubectl create namespace "${NAMESPACE}"
+  fi
+
+  if [[ "$GKE_CLOUD_TRACE" == "true" ]]; then
+    GKE_MANIFEST="${TRACING_DIR}/otel-collector-gke.yaml"
+    if [[ ! -f "$GKE_MANIFEST" ]]; then
+      fail "GKE OTel Collector manifest not found at: ${GKE_MANIFEST}"
+    fi
+    log_info "Deploying OTel Collector (Google Cloud Trace exporter) into namespace '${NAMESPACE}'..."
+    kubectl apply -n "${NAMESPACE}" -f "${GKE_MANIFEST}"
+    log_success "OTel Collector (Google Cloud Trace) deployed successfully."
+    echo ""
+    log_info "Components should export OTLP traces to:"
+    echo "  http://otel-collector.${NAMESPACE}.svc.cluster.local:4317"
+    echo "  (or simply http://otel-collector:4317 from the same namespace)"
+    echo ""
+    log_info "View traces in Google Cloud Trace Explorer:"
+    echo "  https://console.cloud.google.com/traces/explorer"
+    return
+  fi
+
+  log_info "Deploying OTel Collector + Jaeger into namespace '${NAMESPACE}'..."
+
+  JAEGER_MANIFEST="${TRACING_DIR}/jaeger-all-in-one.yaml"
+  if [[ ! -f "$JAEGER_MANIFEST" ]]; then
+    fail "Jaeger manifest not found at: ${JAEGER_MANIFEST}"
   fi
 
   # Deploy Jaeger
@@ -126,7 +151,7 @@ uninstall() {
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   TRACING_DIR="${SCRIPT_DIR}/tracing"
 
-  # Remove OTel Collector (try both variants)
+  # Remove OTel Collector (try all variants)
   if otel_operator_available; then
     OPERATOR_MANIFEST="${TRACING_DIR}/otel-collector-operator.yaml"
     if [[ -f "$OPERATOR_MANIFEST" ]]; then
@@ -134,10 +159,11 @@ uninstall() {
     fi
   fi
 
-  STANDALONE_MANIFEST="${TRACING_DIR}/otel-collector.yaml"
-  if [[ -f "$STANDALONE_MANIFEST" ]]; then
-    kubectl delete -n "${NAMESPACE}" -f "${STANDALONE_MANIFEST}" --ignore-not-found
-  fi
+  for manifest in "${TRACING_DIR}/otel-collector.yaml" "${TRACING_DIR}/otel-collector-gke.yaml"; do
+    if [[ -f "$manifest" ]]; then
+      kubectl delete -n "${NAMESPACE}" -f "$manifest" --ignore-not-found
+    fi
+  done
 
   # Remove Jaeger
   JAEGER_MANIFEST="${TRACING_DIR}/jaeger-all-in-one.yaml"
