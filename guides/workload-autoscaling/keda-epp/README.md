@@ -286,8 +286,8 @@ scale-up is observable. Scale the target Deployment down before creating the
 <!-- guide:deploy.prepare start -->
 ```bash
 # Validate before changing replicas, not only before applying the overlay.
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
-kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
+kubectl scale deployment ${TARGET_DEPLOYMENT} -n ${NAMESPACE} --replicas=1 && \
 kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 ```
 <!-- guide:deploy.prepare end -->
@@ -312,7 +312,7 @@ Queue signal (default):
 <!-- guide:deploy.apply_k8s_queue start -->
 ```bash
 # only when SIGNAL=queue and ENV=existing:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_queue end -->
@@ -322,7 +322,7 @@ Saturation signal (experimental):
 <!-- guide:deploy.apply_k8s_saturation start -->
 ```bash
 # only when SIGNAL=saturation and ENV=existing:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_saturation end -->
@@ -338,7 +338,7 @@ Queue signal (default):
 <!-- guide:deploy.apply_ocp_queue start -->
 ```bash
 # only when SIGNAL=queue and ENV=ocp:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_queue end -->
@@ -348,7 +348,7 @@ Saturation signal (experimental):
 <!-- guide:deploy.apply_ocp_saturation start -->
 ```bash
 # only when SIGNAL=saturation and ENV=ocp:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_saturation end -->
@@ -527,19 +527,19 @@ available, and the generated HPA has no scaling-limited conditions.
 <!-- guide:cleanup start -->
 ```bash
 # only when SIGNAL=queue and ENV=existing:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=existing:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=queue and ENV=ocp:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=saturation and ENV=ocp:
-: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}"
+: "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" && \
 kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
 ```
 <!-- guide:cleanup end -->

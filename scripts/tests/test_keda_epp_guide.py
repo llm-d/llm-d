@@ -90,9 +90,14 @@ def environment(keda, custom=False):
     return env
 
 
-def shell(bash, script, env):
+def shell(bash, script, env, interactive=False):
+    args = [bash, "--noprofile", "--norc", "--noediting"]
+    if interactive:
+        args.append("-i")
+        env = dict(env, PS1="", PS2="")
     return subprocess.run(
-        [bash, "--noprofile", "--norc", "-s"], input=script,
+        [*args, "-s"],
+        input=script,
         cwd=GUIDE_DIR, env=env, capture_output=True, text=True, timeout=60,
     )
 
@@ -101,13 +106,16 @@ def shell(bash, script, env):
 @pytest.mark.parametrize("emitted", [False, True], ids=["snippet", "emitted"])
 @pytest.mark.parametrize("key", REQUIRED)
 @pytest.mark.parametrize("state", ["unset", "empty"])
-def test_missing_variable_stops_before_any_tool(keda, bash, step, emitted, key, state):
+@pytest.mark.parametrize("interactive", [False, True], ids=["script", "interactive"])
+def test_missing_variable_stops_before_any_tool(
+    keda, bash, step, emitted, key, state, interactive
+):
     env = environment(keda)
     if state == "unset":
         env.pop(key, None)
     else:
         env[key] = ""
-    result = shell(bash, STUBS + step_script(keda, step, emitted), env)
+    result = shell(bash, STUBS + step_script(keda, step, emitted), env, interactive)
     assert result.returncode != 0
     assert key in result.stderr
     assert "KUBECTL:" not in result.stderr
@@ -117,9 +125,12 @@ def test_missing_variable_stops_before_any_tool(keda, bash, step, emitted, key, 
 @pytest.mark.parametrize("step", STEPS)
 @pytest.mark.parametrize("emitted", [False, True], ids=["snippet", "emitted"])
 @pytest.mark.parametrize("custom", [False, True], ids=["defaults", "custom"])
-def test_valid_variables_reach_only_expected_commands(keda, bash, step, emitted, custom):
+@pytest.mark.parametrize("interactive", [False, True], ids=["script", "interactive"])
+def test_valid_variables_reach_only_expected_commands(
+    keda, bash, step, emitted, custom, interactive
+):
     env = environment(keda, custom)
-    result = shell(bash, STUBS + step_script(keda, step, emitted), env)
+    result = shell(bash, STUBS + step_script(keda, step, emitted), env, interactive)
     assert result.returncode == 0, result.stderr
     calls = re.findall(r"^KUBECTL:(.*)$", result.stderr, re.MULTILINE)
     if step == "prepare":
