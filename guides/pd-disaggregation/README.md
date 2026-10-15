@@ -334,7 +334,7 @@ Tool calling and reasoning parsing are enabled with the parsers for the model ea
 **Configuration notes:**
 
 - Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again.
-- The prefill and decode Deployments use `strategy: Recreate`: TPU node pools are fixed-size, so a RollingUpdate would wait forever for a spare node to surge onto.
+- Prefill and decode run as the two roles of one `DisaggregatedSet` (`pd-disagg-tpu`); TPU node pools are fixed-size, so a rollout that needs a spare node to surge onto will leave the new pod `Pending` until the old group is deleted. For TPU7x, [`modelserver/tpu/v7/vllm/deployment/`](./modelserver/tpu/v7/vllm/deployment/) keeps the same Raiden configuration as two `Deployment`s (`strategy: Recreate`) for clusters without the `DisaggregatedSet` API; it is not selected by `ACCELERATOR_TYPE`, apply it with `kubectl apply -k` directly.
 - **TPU v6e Qwen3-32B (`tpu/v6`)**:
   - `TPU_KV_SHM_POOL_GB=8` caps the Torch TPU host staging pool; the default (128 GB) does not fit the 100Gi `/dev/shm` emptyDir. Prompts shorter than one KV block are recomputed on decode rather than transferred, so check decode's `vllm:external_prefix_cache_hits_total` with a prompt of several thousand tokens when verifying the transfer path.
   - Validated on GKE TPU v6e (`ct6e-standard-8t`, 2026-10-11/12) with `torchtpu-vllm-prod@sha256:a8de2075…` (`nightly-20261006`: vLLM v0.29.0, torch_tpu 0.1.1+release.2026.9.22), in both the standalone and the `gke-l7-rilb` Gateway router modes.
