@@ -59,6 +59,7 @@ spec:
                         --reasoning-parser=qwen3 \
                         --no-enable-log-requests \
                         --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                        --shutdown-timeout=45
                         --compilation-config='{"backend":"vllm_torchtpu.compilation.tpu_compiler.TpuCompilerAdaptor","compile_sizes":[8,16,32,4352,4384],"inductor_compile_config":{"enable_auto_functionalized_v2":false,"size_asserts":false,"alignment_asserts":false,"scalar_asserts":false}}' \
                         --kv-transfer-config='{"kv_connector":"TPURaidenConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_consumer","kv_port":14579}'
                   ports:

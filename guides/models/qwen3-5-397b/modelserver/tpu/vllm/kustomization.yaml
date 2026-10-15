@@ -6,6 +6,7 @@ resources:
 namePrefix: agentic-serving-tpu-vllm-
 
 components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
 
 labels:

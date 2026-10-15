@@ -42,7 +42,8 @@ spec:
                   --api-server-count=1 \
                   --safetensors-load-strategy=prefetch \
                   --async-scheduling \
-                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                  --shutdown-timeout=45
             env:
               - name: TPU_MULTIHOST_BACKEND
                 value: "ray"

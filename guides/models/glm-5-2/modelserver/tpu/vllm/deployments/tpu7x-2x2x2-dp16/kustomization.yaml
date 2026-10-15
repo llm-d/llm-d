@@ -6,6 +6,7 @@ resources:
 namePrefix: glm-5-2-tpu-vllm-
 
 components:
+  - ../../../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
 
 labels:

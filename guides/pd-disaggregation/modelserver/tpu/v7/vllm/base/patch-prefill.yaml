@@ -66,6 +66,7 @@ spec:
                         --reasoning-parser=qwen3 \
                         --no-enable-log-requests \
                         --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                        --shutdown-timeout=45
                         --compilation-config='{"backend":"vllm_torchtpu.compilation.tpu_compiler.TpuCompilerAdaptor","compile_sizes":[4096],"inductor_compile_config":{"enable_auto_functionalized_v2":false,"size_asserts":false,"alignment_asserts":false,"scalar_asserts":false}}' \
                         --kv-transfer-config='{"kv_connector":"TPUMultiConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_multi_connector","kv_role":"kv_producer","kv_connector_extra_config":{"connectors":[{"kv_connector":"TPURaidenOffloadingConnector","kv_connector_module_path":"vllm_torchtpu.offload.raiden_connector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":68719476736,"raiden_controller_port":47800}},{"kv_connector":"TPURaidenConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_producer","kv_port":14579}]}}'
                   ports:

@@ -30,6 +30,7 @@ spec:
             - "--tool-call-parser=hermes"
             - "--reasoning-parser=qwen3"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=45"
           env:
             - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
               value: "false"

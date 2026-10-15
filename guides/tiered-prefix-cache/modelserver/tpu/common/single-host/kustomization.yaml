@@ -16,3 +16,5 @@ labels:
     includeTemplates: true
 patches:
   - path: patch-vllm.yaml
+components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
