@@ -23,6 +23,9 @@ spec:
             - "--attention-backend=CUSTOM"
             - "--max-model-len=16384"
             - "--max-num-seqs=64"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
