@@ -338,7 +338,7 @@ Notes:
 * **Cluster autoscaler**: under `OPTIMIZE_UTILIZATION` a one-pod TPU node is scaled down beneath the model server; annotate pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`.
 * **Image registry**: node service account needs `roles/artifactregistry.reader` on `cloud-ullm-inference-ci-cd/vllm-torchtpu`, or mirror the image. Pin the digest you validated; `release` tracks `:latest`.
 * The Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
-* v6e validated 2026-10-11 (`ct6e-standard-8t`, `torchtpu-vllm-prod@sha256:a8de2075…` = `nightly-20261006`).
+* v6e validated 2026-10-11 (`ct6e-standard-8t`, `vllm-torchtpu-prod@sha256:a8de2075…` = `nightly-20261006`).
 
 </details>
 <!-- tabs:end -->

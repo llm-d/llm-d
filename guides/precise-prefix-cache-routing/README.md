@@ -241,7 +241,7 @@ kubectl apply -n ${NAMESPACE} \
 
 - **Block size on v6e.** `tpu/v6` runs `--block-size=256` (the Torch TPU attention kernel does not compile with 64 on v6e); install the router with `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v6e.values.yaml` after the guide values file so `blockSizeTokens` matches.
 - **GKE TPU node requirements.** ≥ 200 GB boot disk (weights are cached on the node; the 100 GB node-auto-provisioning default is evicted for ephemeral storage), `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on the pods under the `OPTIMIZE_UTILIZATION` autoscaler profile, and `roles/artifactregistry.reader` for the node service account on the Torch TPU image repository (`cloud-ullm-inference-ci-cd/vllm-torchtpu`). The Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
-- v6e validated 2026-10-11 on `ct6e-standard-8t` with `torchtpu-vllm-prod@sha256:a8de2075…` (`nightly-20261006`): same-prefix requests pin to one replica, KV events published on `:5556`.
+- v6e validated 2026-10-11 on `ct6e-standard-8t` with `vllm-torchtpu-prod@sha256:a8de2075…` (`nightly-20261006`): same-prefix requests pin to one replica, KV events published on `:5556`.
 
 </details>
 

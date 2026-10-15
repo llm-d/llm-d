@@ -269,7 +269,7 @@ kubectl apply -n ${NAMESPACE} \
 - **v6e host tier is Torch TPU's Raiden store.** `tpu/v6` uses `TPURaidenOffloadingConnector` (`vllm_torchtpu.offload.raiden_connector`, `kv_role: kv_both`, 64 GiB per engine) with the Raiden KV cache manager and unified HBM/host block pool (`TPU_USE_RAIDEN_KV_CACHE_MANAGER=1`, `TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL=1`) instead of vLLM's generic `OffloadingConnector`. Each TP worker pins a 16 GiB staging buffer (`TPU_PREMAPPED_BUFFER_SIZE`) next to the host tier, so the pod requests 900Gi (`ct6e-standard-8t` has 1440 GB); 256Gi is OOMKilled while the `KVCacheStore` is built.
 - **Verifying the host tier.** With the auto-selected fp8 KV cache the v6e HBM pool holds on the order of 10^6 tokens, so the host tier is only read back after real HBM eviction. Watch `vllm:external_prefix_cache_hits_total` on the model server; `prefix_cache_hits_total` alone means the hit came from HBM.
 - **GKE TPU node requirements.** ≥ 200 GB boot disk (100 GB node-auto-provisioning default is evicted during the weight download), `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` under the `OPTIMIZE_UTILIZATION` autoscaler profile, `roles/artifactregistry.reader` for the node service account on the Torch TPU image repository. The Deployment uses `strategy: Recreate` (fixed-size TPU pools).
-- v6e validated 2026-10-12 (`torchtpu-vllm-prod@sha256:a8de2075…` = `nightly-20261006`): a 4.4k-token prompt evicted from HBM was fully restored from host RAM (`external_prefix_cache_hits_total` 0 → 4352).
+- v6e validated 2026-10-12 (`vllm-torchtpu-prod@sha256:a8de2075…` = `nightly-20261006`): a 4.4k-token prompt evicted from HBM was fully restored from host RAM (`external_prefix_cache_hits_total` 0 → 4352).
 
 </details>
 
