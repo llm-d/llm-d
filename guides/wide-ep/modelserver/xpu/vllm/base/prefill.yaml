@@ -69,7 +69,8 @@ spec:
                   --kv-transfer-config '{"kv_connector":"NixlConnector",
                                           "kv_role":"kv_both",
                                           "kv_buffer_device":"xpu"}' \
-                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                  --shutdown-timeout 45
             env:
               - name: HF_TOKEN
                 valueFrom:

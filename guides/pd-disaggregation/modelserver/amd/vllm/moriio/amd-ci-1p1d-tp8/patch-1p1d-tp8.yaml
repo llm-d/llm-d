@@ -46,6 +46,7 @@ spec:
                     # WRITE-mode producer. proxy_ip intentionally omitted (no ZMQ proxy);
                     # peer discovery is via the routing sidecar on the request path.
                     - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_producer","kv_connector_extra_config":{"http_port":"8000","handshake_port":"6301","notify_port":"61005"}}'
+                    - "--shutdown-timeout=45"
                   env:
                     # Merged by name into the env inherited from ../amd-ci.
                     - name: MORI_IO_RAIL_AFFINITY
@@ -102,6 +103,7 @@ spec:
                     # WRITE-mode consumer
                     - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"http_port":"8200","handshake_port":"6301","notify_port":"61005"}}'
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   env:
                     # Merged by name into the env inherited from ../amd-ci.
                     - name: MORI_IO_RAIL_AFFINITY

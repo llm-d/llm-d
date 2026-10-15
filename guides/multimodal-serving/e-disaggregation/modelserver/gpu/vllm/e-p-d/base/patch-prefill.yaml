@@ -10,9 +10,16 @@ spec:
         leaderWorkerTemplate:
           workerTemplate:
             spec:
+              terminationGracePeriodSeconds: 75
               containers:
                 - name: modelserver
                   command: ["vllm", "serve"]
+                  lifecycle:
+                    preStop:
+                      exec:
+                        command:
+                          - /bin/sleep
+                          - "15"
                   args:
                     - "Qwen/Qwen3-VL-32B-Instruct"
                     - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
@@ -33,6 +40,7 @@ spec:
                     # each). The value must fit in the /dev/shm volume.
                     # See https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/
                     - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"ec_enable_nixl": true, "ec_cpu_bytes": 42949672960}}'
+                    - "--shutdown-timeout=45"
                   env:
                     - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                       valueFrom:

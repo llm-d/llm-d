@@ -19,7 +19,8 @@ spec:
                 --kv-transfer-config \
                 '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":107374182400}}' \
                 --max-num-seq 128 \
-                --uvicorn-log-level warning
+                --uvicorn-log-level warning \
+                --shutdown-timeout=45
           env:
             - name: HF_TOKEN
               valueFrom:

@@ -14,7 +14,8 @@ spec:
                 Qwen/Qwen3-32B \
                 --tensor-parallel-size=2 \
                 --kv-transfer-config \
-                '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":322122547200}}'
+                '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":322122547200}}' \
+                --shutdown-timeout=45
           # CPU tier: 300 GiB per pod, about 3.8x the HBM KV cache of Qwen3-32B
           # at TP=2 on 2x H100 80GB. vLLM keeps the CPU tier in /dev/shm, so the
           # tier counts toward the memory limit.

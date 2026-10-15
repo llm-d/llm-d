@@ -31,6 +31,7 @@ spec:
                     - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_connector_extra_config": {"kv_lease_duration": 300}}'
                     - "--no-disable-hybrid-kv-cache-manager"
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   env:
                     - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                       valueFrom:

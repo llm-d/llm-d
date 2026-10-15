@@ -15,6 +15,7 @@ spec:
           role: leader
           llm-d.ai/inference-serving: "true"
       spec:
+        terminationGracePeriodSeconds: 75
         initContainers:
           - name: tpu-node-setup
             image: busybox
@@ -32,6 +33,10 @@ spec:
         containers:
           - name: modelserver-leader
             image: REPLACE_MODEL_SERVER_IMAGE
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sleep", "15"]
             env:
             - name: SKIP_JAX_PRECOMPILE
               value: "0"
@@ -85,7 +90,8 @@ spec:
                   --tensor-parallel-size 16 \
                   --gpu-memory-utilization=0.8 \
                   --max-model-len=71200 \
-                  --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}'
+                  --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
+                  --shutdown-timeout=45
             resources:
               limits:
                 google.com/tpu: "4"

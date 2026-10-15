@@ -25,6 +25,7 @@ spec:
                     # WRITE-mode consumer
                     - '{"kv_connector":"MoRIIOConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"http_port":"8200","handshake_port":"6301","notify_port":"61005"}}'
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   env:
                     - name: HF_TOKEN
                       valueFrom:

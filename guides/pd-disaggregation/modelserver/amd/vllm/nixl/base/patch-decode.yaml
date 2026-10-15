@@ -26,6 +26,7 @@ spec:
                     - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_buffer_device":"cuda","kv_connector_extra_config":{"backends":["UCX"]}}'
                     - "--no-disable-hybrid-kv-cache-manager"
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   env:
                     - name: HF_TOKEN
                       valueFrom:

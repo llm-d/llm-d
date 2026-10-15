@@ -6,6 +6,7 @@ resources:
 components:
   - ../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../recipes/modelserver/components/graceful-shutdown
 
 patches:
   - path: patch-decode.yaml

@@ -5,6 +5,9 @@ resources:
 
 namePrefix: modelexpress-p2p-nvidia-gpu-vllm-
 
+components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
+
 # User-built derivative of the shared gpu-vllm image. The README reads the
 # central gpu-vllm component to set Dockerfile BASE_IMAGE, then this placeholder
 # is retagged to the derived image.

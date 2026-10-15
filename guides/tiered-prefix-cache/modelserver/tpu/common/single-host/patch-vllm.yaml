@@ -41,7 +41,8 @@ spec:
                 Qwen/Qwen3-32B \
                 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
                 --port 8000 \
-                --tensor-parallel-size 8
+                --tensor-parallel-size 8 \
+                --shutdown-timeout=45
           env:
             - name: HF_TOKEN
               valueFrom:

@@ -14,6 +14,7 @@ openapi:
 components:
   - ../../../../../recipes/modelserver/components/images/amd-vllm/beta
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

@@ -6,6 +6,7 @@ resources:
 nameSuffix: -vllm
 
 components:
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../recipes/modelserver/components/disaggregatedset-schema

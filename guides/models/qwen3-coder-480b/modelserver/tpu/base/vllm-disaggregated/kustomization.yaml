@@ -4,6 +4,7 @@ resources:
   - ../../../../../../recipes/modelserver/base/single-host/pd-disaggregatedset/vllm
 
 components:
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
 

@@ -26,6 +26,7 @@ spec:
                     - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"cpu"}'
                     - "--max-model-len=32000"
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   env:
                     - name: UCX_TLS
                       value: "tcp"

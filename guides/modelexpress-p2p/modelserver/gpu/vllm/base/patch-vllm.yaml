@@ -17,6 +17,7 @@ spec:
             - "--tensor-parallel-size=2"
             - "--gpu-memory-utilization=0.95"
             - "--load-format=mx"
+            - "--shutdown-timeout=45"
           securityContext:
             capabilities:
               add: [IPC_LOCK]

@@ -47,6 +47,7 @@ spec:
             # KV events feed the router's precise prefix index (per-pod ZMQ PUB).
             - --kv-events-config
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
+            - --shutdown-timeout=45
           env:
             - name: HF_TOKEN
               valueFrom:

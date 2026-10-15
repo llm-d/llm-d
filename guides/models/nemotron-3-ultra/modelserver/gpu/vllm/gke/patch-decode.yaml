@@ -39,6 +39,7 @@ spec:
                     - "--kv-transfer-config"
                     - '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"bidirectional_kv_xfer":true}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":214748364800,"lazy_offload":true}}]}}'
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   env:
                     - name: HF_HOME
                       value: "/huggingface"

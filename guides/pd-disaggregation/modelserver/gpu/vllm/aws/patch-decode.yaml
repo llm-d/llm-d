@@ -46,6 +46,7 @@ spec:
                     - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_connector_extra_config":{"backends":["LIBFABRIC"]}}'
                     - "--no-disable-hybrid-kv-cache-manager"
                     - "--port=8200"
+                    - "--shutdown-timeout=45"
                   securityContext:
                     capabilities:
                       add:

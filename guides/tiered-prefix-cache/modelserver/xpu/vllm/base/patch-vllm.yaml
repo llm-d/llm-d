@@ -23,7 +23,8 @@ spec:
                 --tensor-parallel-size=4 \
                 --gpu-memory-utilization 0.85 \
                 --max-num-seq 128 \
-                --uvicorn-log-level warning
+                --uvicorn-log-level warning \
+                --shutdown-timeout=45
           env:
             - name: HF_TOKEN
               valueFrom:

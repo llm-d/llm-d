@@ -86,6 +86,7 @@ patches:
                           - "--kv-transfer-config"
                           - '{"kv_connector":"NixlConnector", "kv_role":"kv_producer", "kv_buffer_device":"xpu"}'
                           - "--max-model-len=32000"
+                          - "--shutdown-timeout=45"
                         env: &rdma-env
                           - name: UCX_TLS
                             value: ib,rc,ze_copy
@@ -107,4 +108,5 @@ patches:
                           - '{"kv_connector":"NixlConnector", "kv_role":"kv_consumer", "kv_buffer_device":"xpu"}'
                           - "--max-model-len=32000"
                           - "--port=8200"
+                          - "--shutdown-timeout=45"
                         env: *rdma-env

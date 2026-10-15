@@ -22,6 +22,7 @@ spec:
         - "--trust-remote-code"
         - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
         - "--log-stats"
+        - "--shutdown-timeout=45"
         env:
         - name: HF_TOKEN
           valueFrom:
