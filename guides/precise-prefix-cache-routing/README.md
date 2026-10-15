@@ -409,7 +409,56 @@ kubectl run curl-responses --rm -i --restart=Never \
 ```
 <!-- guide:verify.tests.responses end -->
 
-### 4. Verify precise prefix-cache aware routing
+### 4. Check that the router renders
+
+The [render check](#2-check-rendering) calls the render endpoints directly, so it passes even when the router's own render calls fail. Requests still return 200 in that case, routed without cache information. Confirm that the router renders a request itself, using its render metrics.
+
+**Let the check pods read the router's metrics.** The router authenticates `/metrics` by default (a harmless no-op if `monitoring.values.yaml` turned that off), so grant the namespace's `default` service account read access:
+
+<!-- guide:verify.tests.metrics_rbac start -->
+```bash
+# Let the default service account of the check pods read the router's
+# /metrics, which the router authenticates by default. A harmless
+# no-op when monitoring.values.yaml turned metrics auth off.
+kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
+  --verb=get --non-resource-url=/metrics \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding ${GUIDE_NAME}-metrics-reader \
+  --clusterrole=${GUIDE_NAME}-metrics-reader \
+  --serviceaccount=${NAMESPACE}:default \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:verify.tests.metrics_rbac end -->
+
+**Send one request through the router and compare its render metrics before and after.** The check exits non-zero unless the request adds a successful render call (`llm_d_epp_token_producer_render_duration_seconds_count{result="success"}`) and no failed one (`llm_d_epp_token_producer_render_failures_total`):
+
+<!-- guide:verify.tests.router_render start -->
+```bash
+# The router must render a request itself: one more successful render
+# call and no new failed one across a request sent through it. The
+# render check above calls the model servers directly, so it passes
+# even when the router's own renders fail and it routes every request
+# without cache information.
+kubectl run router-render-check --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  --env="GUIDE_NAME=${GUIDE_NAME}" \
+  -- /bin/sh -c 'TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    metrics() { curl -sSf -o /tmp/metrics -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics" || { echo "FAIL: cannot read the router metrics"; exit 1; }; }
+    count() { awk -v re="$1" "\$0 ~ re {s += \$NF} END {print s + 0}" /tmp/metrics; }
+    SUCCEEDED="^llm_d_epp_token_producer_render_duration_seconds_count.*result=\"success\""
+    FAILED="^llm_d_epp_token_producer_render_failures_total"
+    metrics; OK0=$(count "${SUCCEEDED}"); FAIL0=$(count "${FAILED}")
+    curl -sS -o /dev/null -w "request: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"router render check\", \"max_tokens\": 1}"
+    metrics; OK1=$(count "${SUCCEEDED}"); FAIL1=$(count "${FAILED}")
+    echo "router renders: $((OK1 - OK0)) succeeded, $((FAIL1 - FAIL0)) failed"
+    test $((OK1 - OK0)) -ge 1 && test "${FAIL1}" = "${FAIL0}" || { echo "FAIL: the router did not render the request"; exit 1; }'
+```
+<!-- guide:verify.tests.router_render end -->
+
+### 5. Verify precise prefix-cache aware routing
 
 A served request only proves the stack is up. To confirm the routing mechanism this guide deploys is engaged, send a burst of requests that share a long prompt prefix, then check that the router kept them on the model server whose KV-cache events report that prefix.
 
@@ -471,7 +520,7 @@ even when prefix cache hits occur).
 </details>
 <!-- tabs:end -->
 
-If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render check above, confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render checks above ([2](#2-check-rendering) and [4](#4-check-that-the-router-renders)), confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
 ## How It Works
 
@@ -534,7 +583,7 @@ This section collects what an operator needs to run this guide beyond a demo. Th
 - **Supported path.** vLLM 0.30 on NVIDIA GPU is the reference: it is validated nightly. Every vLLM overlay enables index recovery through replay; SGLang does not. AMD GPU and Intel XPU are validated nightly; TPU v6e is validated on vLLM 0.29, where Responses requests use the legacy render path. See [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers) and [Supported APIs](#supported-apis).
 - **Router replicas.** Run one router replica (see the note under [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)). A router restart therefore routes from a partial index until replay completes and, on a warm fleet, until prefixes stored before the replay window are evicted and stored again (see [Index recovery](#index-recovery)).
 - **Metrics to watch.** Alert when a pod's `llm_d_epp_kv_cache_events_messages_received_total` rate is zero while it serves traffic (this catches a pod that is up but publishes on the wrong port or topic, which `active_subscribers` does not, since it counts subscribers that are still retrying), when `llm_d_epp_kv_cache_events_zmq_errors_total` rises for a pod, and when `llm_d_epp_kv_cache_events_pool_queue_depth` keeps growing. `active_subscribers` is not a health check: the router creates exactly one subscriber per pod `podLabelSelector` matches, so it equals that count by construction and a wrong selector still passes. Instead, compare it with the number of pods that run with `--kv-events-config`. Track the router's predicted cached-token share against the model servers' prefix-cache hit rate (see [Metrics](#metrics)).
-- **Render.** Every request is rendered before it is routed, so a failed render routes it without cache information and a slow one adds to its TTFT. One attempt can use the request's whole render budget (`vllm.timeout`, 5 s by default; `vllm.mmTimeout`, 30 s, for chat, Messages and Responses), so a slow endpoint leaves no time for the retry on another one; set `vllm.endpointDiscovery.attemptTimeout` to cap each attempt. Watch `llm_d_epp_token_producer_render_failures_total` and `llm_d_epp_token_producer_render_duration_seconds` (see the [router metric reference](../../docs/operations/observability/router-metrics.md)).
+- **Render.** Every request is rendered before it is routed, so a failed render routes it without cache information and a slow one adds to its TTFT. One attempt could otherwise use the request's whole render budget (`vllm.timeout`, 5 s by default; `vllm.mmTimeout`, 30 s, for chat, Messages and Responses) and leave no time for the retry on another endpoint, so this guide caps each attempt with `vllm.endpointDiscovery.attemptTimeout: 2s`; raise it for multimodal prompts. Watch `llm_d_epp_token_producer_render_failures_total` and `llm_d_epp_token_producer_render_duration_seconds` (see the [router metric reference](../../docs/operations/observability/router-metrics.md)).
 - **Recovery.** If a pod's events stop reaching the router (its `messages_received_total` rate is zero, or its ZMQ errors keep rising), check that the pod exposes port `5556` (and `5559` on vLLM) and that its `--kv-events-config` topic matches `kvEventsConfig.topicFilter`. Restarting the router (`kubectl rollout restart -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) re-subscribes to every pod without restarting the model servers, but it drops the index for every pod and rebuilds only each pod's replay window (see [Index recovery](#index-recovery)). On a warm fleet that can cost more routing quality than one broken stream, so fix the pod's configuration first and restart the router only when the index is broadly wrong. The experimental [snapshot option](#optional-configuration) is meant to make such a restart keep full coverage. If render calls fail, re-run the [render check](#2-check-rendering).
 
 <!-- TODO(#2745): define the fail-fast rollout gates (which signals block a rollout, and their thresholds) with the router owners. Per-endpoint KV-event health (llm-d/llm-d-router#1004) is the likely gating signal. -->
@@ -579,6 +628,9 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-s
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+
+kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
+kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash

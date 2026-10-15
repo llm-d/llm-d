@@ -211,6 +211,41 @@ verify:
             --env="IP=${IP}" \
             --env="MODEL=${MODEL}" \
             -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/responses" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"max_output_tokens\": 16, \"input\": \"How are you today?\"}"'
+    metrics_rbac:
+      - run: |
+          # Let the default service account of the check pods read the router's
+          # /metrics, which the router authenticates by default. A harmless
+          # no-op when monitoring.values.yaml turned metrics auth off.
+          kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
+            --verb=get --non-resource-url=/metrics \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create clusterrolebinding ${GUIDE_NAME}-metrics-reader \
+            --clusterrole=${GUIDE_NAME}-metrics-reader \
+            --serviceaccount=${NAMESPACE}:default \
+            --dry-run=client -o yaml | kubectl apply -f -
+    router_render:
+      - run: |
+          # The router must render a request itself: one more successful render
+          # call and no new failed one across a request sent through it. The
+          # render check above calls the model servers directly, so it passes
+          # even when the router's own renders fail and it routes every request
+          # without cache information.
+          kubectl run router-render-check --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            --env="GUIDE_NAME=${GUIDE_NAME}" \
+            -- /bin/sh -c 'TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              metrics() { curl -sSf -o /tmp/metrics -H "Authorization: Bearer ${TOKEN}" "http://${GUIDE_NAME}-epp:9090/metrics" || { echo "FAIL: cannot read the router metrics"; exit 1; }; }
+              count() { awk -v re="$1" "\$0 ~ re {s += \$NF} END {print s + 0}" /tmp/metrics; }
+              SUCCEEDED="^llm_d_epp_token_producer_render_duration_seconds_count.*result=\"success\""
+              FAILED="^llm_d_epp_token_producer_render_failures_total"
+              metrics; OK0=$(count "${SUCCEEDED}"); FAIL0=$(count "${FAILED}")
+              curl -sS -o /dev/null -w "request: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"router render check\", \"max_tokens\": 1}"
+              metrics; OK1=$(count "${SUCCEEDED}"); FAIL1=$(count "${FAILED}")
+              echo "router renders: $((OK1 - OK0)) succeeded, $((FAIL1 - FAIL0)) failed"
+              test $((OK1 - OK0)) -ge 1 && test "${FAIL1}" = "${FAIL0}" || { echo "FAIL: the router did not render the request"; exit 1; }'
     shared_prefix:
       - run: |
           # 10 requests that share a ~2k-token prefix and differ only in the last
@@ -249,5 +284,8 @@ cleanup:
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - run: |
+        kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
+        kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
     - skip_in: [ci]
       run: kubectl delete namespace ${NAMESPACE}

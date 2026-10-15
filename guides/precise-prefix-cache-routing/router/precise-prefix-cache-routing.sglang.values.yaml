@@ -24,6 +24,10 @@ router:
             parameters:
               tokenProcessorConfig:
                 blockSizeTokens: 64
+                # Router-internal block keys; see the vLLM values. Keep the
+                # algorithm fixed for the index's whole lifetime: with a
+                # persisted or shared index (e.g. the Redis backend), change it
+                # only together with an index flush and engine cache reset.
                 hashAlgorithm: xxh64
               speculativeIndexing: true
               indexerConfig:
