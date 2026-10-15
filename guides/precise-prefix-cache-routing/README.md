@@ -409,7 +409,7 @@ kubectl run curl-responses --rm -i --restart=Never \
 ```
 <!-- guide:verify.tests.responses end -->
 
-### 4. Check that the router renders
+### 4. Verify that the router renders
 
 The [render check](#2-check-rendering) calls the render endpoints directly, so it passes even when the router's own render calls fail. Requests still return 200 in that case, routed without cache information. Confirm that the router renders a request itself, using its render metrics.
 
@@ -520,7 +520,7 @@ even when prefix cache hits occur).
 </details>
 <!-- tabs:end -->
 
-If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render checks above ([2](#2-check-rendering) and [4](#4-check-that-the-router-renders)), confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
+If the requests are spread evenly and hit rates stay near zero, the router is not receiving KV-cache events or cannot tokenize the prompt: re-run the render checks above ([2](#2-check-rendering) and [4](#4-verify-that-the-router-renders)), confirm `--block-size` / `--page-size` match `blockSizeTokens`, and check the router logs (`kubectl logs -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) for ZMQ subscription or `token-producer` errors. Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
 ## How It Works
 
