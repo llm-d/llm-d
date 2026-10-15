@@ -145,7 +145,8 @@ AMD, CPU, Intel XPU, and Google TPU, along with their `gke`, `aws`, and `amd-ci`
 `INFRA_PROVIDER` variants) ship with this pattern, using a shorter drain window
 than the example above. Third-party vendor images with unverified vLLM versions
 (Biren, Iluvatar, MetaX, Moore Threads, and Rebellions NPU) do not set
-`--shutdown-timeout` yet.
+`--shutdown-timeout` yet (tracked in
+[llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)).
 
 | Setting | Value | Where it is set |
 | --- | --- | --- |
@@ -191,6 +192,9 @@ Expected behavior with `--shutdown-timeout` set:
 - Confirm `--shutdown-timeout` is set; without it vLLM aborts immediately.
 - Confirm `terminationGracePeriodSeconds > --shutdown-timeout`; otherwise
   `SIGKILL` fires mid-drain.
+- If vLLM is launched from a shell script (`command: ["/bin/bash", "-c"]`),
+  start it with `exec vllm serve ...`. Otherwise `SIGTERM` goes to the shell
+  running as PID 1, which ignores it, and vLLM never starts draining.
 
 **Clients see hard errors instead of retries during shutdown**
 

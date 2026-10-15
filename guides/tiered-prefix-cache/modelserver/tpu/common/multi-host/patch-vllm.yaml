@@ -80,7 +80,7 @@ spec:
             args:
               - |
                 bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader --ray_cluster_size=$(LWS_GROUP_SIZE);
-                VLLM_DISABLE_SHARED_EXPERTS_STREAM=1 vllm serve --port 8000 \
+                exec env VLLM_DISABLE_SHARED_EXPERTS_STREAM=1 vllm serve --port 8000 \
                   --model=Qwen/Qwen3-Coder-480B-A35B-Instruct \
                   --enable-prefix-caching \
                   --async-scheduling \
