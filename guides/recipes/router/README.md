@@ -149,7 +149,7 @@ helm upgrade <release-name> \
 <details>
 <summary><b>GKE (Google Cloud Trace)</b></summary>
 
-`features/tracing-gke.values.yaml` exports traces to the [GKE Managed OpenTelemetry](../../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) collector (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) with a 5% sampling ratio (`samplerArg: "0.05"`):
+`features/tracing-gke.values.yaml` exports traces to the [GKE Managed OpenTelemetry](../../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) collector (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) with a 5% sampling ratio (`samplerArg: "0.05"`). If using the self-managed fallback collector (`install-otel-collector-jaeger.sh --gke`), layer `features/tracing.values.yaml` (`http://otel-collector:4317`) instead:
 
 ```bash
 helm upgrade <release-name> \

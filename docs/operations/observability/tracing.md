@@ -113,7 +113,7 @@ Model servers are deployed with Kustomize. Several guide overlays (such as [`gui
 Set the collector endpoint according to your Step 1 backend:
 
 - **Jaeger (OSS / OpenShift):** `http://otel-collector:4317`
-- **GKE (Managed OpenTelemetry):** `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`
+- **GKE (Managed OpenTelemetry):** `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317` (or `http://otel-collector:4317` if using the self-managed fallback collector)
 
 ### Model Server (`vLLM` / `SGLang`)
 
@@ -162,33 +162,25 @@ Layer the tracing values file for your platform when installing or upgrading the
 <details open>
 <summary><b>Jaeger (OSS / OpenShift)</b></summary>
 
-Layer [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) (`http://otel-collector:4317`):
+Re-run your guide's router `helm upgrade --install` command with the tracing values file ([`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml), which exports to `http://otel-collector:4317`) added after the guide's own values files:
 
 ```bash
-helm upgrade ${GUIDE_NAME} \
-  ${ROUTER_STANDALONE_CHART} \
-  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/tracing.values.yaml \
-  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-  --set router.tracing.sampling.samplerArg="1.0" \
-  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  --set router.tracing.sampling.samplerArg="1.0"
 ```
 
 </details>
 <details>
 <summary><b>GKE (Google Cloud Trace)</b></summary>
 
-Layer [`guides/recipes/router/features/tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`):
+Re-run your guide's router `helm upgrade --install` command with [`guides/recipes/router/features/tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) added after the guide's own values files:
 
 ```bash
-helm upgrade ${GUIDE_NAME} \
-  ${ROUTER_STANDALONE_CHART} \
-  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/recipes/router/features/tracing-gke.values.yaml \
-  -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-  --set router.tracing.sampling.samplerArg="1.0" \
-  -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  --set router.tracing.sampling.samplerArg="1.0"
 ```
+
+If your cluster uses the self-managed fallback collector from Step 1 (`install-otel-collector-jaeger.sh --gke`), layer [`guides/recipes/router/features/tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) (`http://otel-collector:4317`) instead of `tracing-gke.values.yaml`.
 
 </details>
 <!-- tabs:end -->
