@@ -3,7 +3,7 @@
 `InferenceObjective` represents the desired state of a specific model use case. It allows "Inference Workload Owners" to define performance and latency goals for a model across one or more `InferencePool` resources in the same namespace.
 
 **Group:** `llm-d.ai`
-**Version:** `v1` (served; `v1alpha2` is deprecated and will be removed in v1.2)
+**Version:** `v1` (served by llm-d Router v1.0.0 and later; `v1alpha2` is deprecated and will be removed in v1.2. Router v0.11.0 and earlier serve only `v1alpha2`.)
 
 ---
 

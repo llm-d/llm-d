@@ -45,7 +45,6 @@ llm-d-batch-gateway-apiserver                     1      30s
 llm-d-batch-gateway-processor                     1      30s
 llm-d-batch-gateway-gc                            1      30s
 llm-d-async-processor                             1      30s
-llm-d-inference-cost                              1      30s
 llm-d-tpu-overview                                1      30s
 ```
 
@@ -65,7 +64,6 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
 | `llm-d-batch-gateway-gc.json` | Batch Gateway GC reconciler cycles, orphan recovery, and errors |
 | `llm-d-async-processor.json` | Async Processor request rate and outcomes, inference latency and queue residence time, deadline proximity, broker backlog and in-process queue depth per queue, plus dispatch budget, gate decisions, in-flight requests against the worker limit, and what metric gates last read |
-| `llm-d-inference-cost.json` | Per-token and hourly infrastructure cost tracking via OpenCost (requires [inference cost tracking](../../../guides/recipes/observability/inferencecost/README.md)) |
 
 The three Batch Gateway dashboards are only useful if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md), and the Async Processor dashboard only if you deployed the [asynchronous processing guide](../../../guides/batch-serving/asynchronous-processing/README.md) with the chart's `ap.podMonitor.enabled=true`; each has a `namespace` variable to select the namespace it runs in.
 
