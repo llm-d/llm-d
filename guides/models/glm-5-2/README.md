@@ -389,7 +389,7 @@ With `MODEL_SERVER=sglang`, the same OpenAI requests work, and so do native `/ge
 
 ### 3. Verify Precise Prefix-Cache Routing (`ROUTING=precise`)
 
-When running `ROUTING=precise` with `DEPLOYMENT=p2w1d1w1-precise`, verify that the `wide-ep-render` Service returns token IDs and that each engine pod maintains eight active ZMQ subscriptions (`5557`–`5564`) to the EPP:
+When running `ROUTING=precise` with `DEPLOYMENT=p2w1d1w1-precise`, verify that the `wide-ep-render` Service returns token IDs and that each engine pod maintains eight active ZMQ subscriptions (`5557`–`5564`) to the EPP. A 403 or 404 from the render Service means the prefill pods run without `--enable-scale-out`, so precise routing is inert while requests still return 200 from the remaining scorers:
 
 <!-- guide:verify.tests.precise_routing start -->
 <!-- llm-d-cicd:skip start -->
@@ -400,7 +400,10 @@ kubectl run render-check --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
   --env="MODEL=${MODEL}" \
-  -- /bin/sh -c 'curl -sS -X POST "http://wide-ep-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}"'
+  -- /bin/sh -c 'R=$(curl -sS -X POST "http://wide-ep-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
+    echo "${R}" | grep -q "\"token_ids\"" \
+      && echo "OK: render returns token IDs" \
+      || { echo "FAIL: ${R}"; exit 1; }'
 
 # only when ROUTING=precise and MODEL_SERVER=vllm:
 # Each engine pod must hold 8 established ZMQ subscriptions (ports 5557-5564) from the EPP

@@ -165,7 +165,10 @@ verify:
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'curl -sS -X POST "http://wide-ep-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}"'
+            -- /bin/sh -c 'R=$(curl -sS -X POST "http://wide-ep-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
+              echo "${R}" | grep -q "\"token_ids\"" \
+                && echo "OK: render returns token IDs" \
+                || { echo "FAIL: ${R}"; exit 1; }'
       - when: {ROUTING: [precise], MODEL_SERVER: [vllm]}
         skip_in: [ci]
         run: |

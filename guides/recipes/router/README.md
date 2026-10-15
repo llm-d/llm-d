@@ -127,13 +127,13 @@ helm upgrade <release-name> \
 
 ## Enable Distributed Tracing (Optional)
 
-To enable OpenTelemetry tracing on the EPP, set up your tracing collector (see [Trace Requests](../../../docs/operations/observability/tracing.md)) and layer the tracing values file for your platform when installing or upgrading the router Helm chart (override `--set router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests):
+To export OpenTelemetry spans from the EPP, set up your tracing collector (see [Trace Requests](../../../docs/operations/observability/tracing.md)) and layer the tracing values file for your platform onto the router release (pass `--set router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests):
 
 <!-- tabs:start group=tracing -->
 <details open>
 <summary><b>Jaeger (OSS / OpenShift)</b></summary>
 
-`features/tracing.values.yaml` exports traces to `http://otel-collector:4317` with a 5% sampling ratio (`samplerArg: "0.05"`):
+[`features/tracing.values.yaml`](features/tracing.values.yaml) exports traces to `http://otel-collector:4317` with a 5% sampling ratio (`samplerArg: "0.05"`):
 
 ```bash
 helm upgrade <release-name> \
@@ -149,7 +149,7 @@ helm upgrade <release-name> \
 <details>
 <summary><b>GKE (Google Cloud Trace)</b></summary>
 
-`features/tracing-gke.values.yaml` exports traces to the [GKE Managed OpenTelemetry](../../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) collector (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) with a 5% sampling ratio (`samplerArg: "0.05"`). If using the self-managed fallback collector (`install-otel-collector-jaeger.sh --gke`), layer `features/tracing.values.yaml` (`http://otel-collector:4317`) instead:
+[`features/tracing-gke.values.yaml`](features/tracing-gke.values.yaml) exports traces to the [GKE Managed OpenTelemetry](../../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) collector (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) with a 5% sampling ratio (`samplerArg: "0.05"`). If using the self-managed fallback collector (`install-otel-collector-jaeger.sh --gke`), layer [`features/tracing.values.yaml`](features/tracing.values.yaml) (`http://otel-collector:4317`) instead:
 
 ```bash
 helm upgrade <release-name> \
