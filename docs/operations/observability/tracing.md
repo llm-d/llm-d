@@ -16,7 +16,7 @@ export NAMESPACE=<your-llm-d-namespace>
 | Component | Config Method | Traced Operations |
 | --- | --- | --- |
 | **vLLM / SGLang** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans (`llm_request`, model loading, compilation) |
-| **Routing proxy** (P/D sidecar) | Kustomize: container env vars | KV transfer coordination |
+| **Routing proxy** (P/D sidecar) | Kustomize: container args + env vars | KV transfer coordination |
 | **EPP** | Helm: [`tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) or [`tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) | Request routing, endpoint filtering/scoring, KV-cache indexing, tokenization |
 
 All components export traces via OTLP gRPC to an OpenTelemetry Collector (`http://otel-collector:4317` for the in-namespace collector or `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317` for GKE Managed OpenTelemetry), which batches traces and forwards them to Jaeger or Google Cloud Trace.
@@ -139,10 +139,12 @@ env:
 
 ### Routing Proxy (`routing-proxy` Sidecar in P/D Disaggregation)
 
-In Prefill/Decode (P/D) disaggregation deployments, add the `OTEL_*` environment variables to the `routing-proxy` sidecar container (in `patch-sidecar.yaml` or `disaggregatedset.yaml`):
+In Prefill/Decode (P/D) disaggregation deployments, pass `--tracing=true` and the `OTEL_*` environment variables to the `routing-proxy` sidecar container (in `patch-sidecar.yaml` or `disaggregatedset.yaml`):
 
 ```yaml
-# Add to the routing-proxy initContainer/container env:
+# Add to the routing-proxy initContainer/container:
+args:
+  - --tracing=true
 env:
   - name: OTEL_SERVICE_NAME
     value: "routing-proxy"
