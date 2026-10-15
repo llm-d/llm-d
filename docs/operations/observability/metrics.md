@@ -160,7 +160,7 @@ To visualize these metrics in Grafana, see [Use Grafana Dashboards](./dashboards
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-Open [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer) in the Google Cloud console (select **PromQL** mode to run Prometheus queries) or view the out-of-the-box dashboards under **Monitoring → Dashboards** (the [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) for Standalone Mode, the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) when using [GKE Gateway](../../infrastructure/gateway/gke.md), and model server dashboards).
+Open [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-explorer) in the Google Cloud console (select **PromQL** mode to run Prometheus queries) or view the out-of-the-box Cloud Monitoring dashboards described in [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry).
 
 </details>
 <!-- tabs:end -->
