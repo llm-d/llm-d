@@ -25,9 +25,9 @@ kind: Component
 # A guide that raises --shutdown-timeout above 45 should also set a larger
 # terminationGracePeriodSeconds in its own patch, which overrides the value here.
 #
-# The patches assume the vLLM container is containers/0, and that a
-# DisaggregatedSet has exactly two roles (roles/0 and roles/1) when components
-# run. A role added later by an overlay patch must set these fields itself.
+# The patches assume the vLLM container is containers/0. For a
+# DisaggregatedSet they patch roles/0 and roles/1 only; any other role, and any
+# LeaderWorkerSet leaderTemplate, must set these fields itself.
 
 patches:
   - target:
