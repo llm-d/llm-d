@@ -216,7 +216,7 @@ curl -X POST http://${IP}/v1/completions \
 
 ## Monitoring
 
-Cloud Monitoring provides an out-of-the-box [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) (**Monitoring → Dashboards → Integrations → llm-d**) showing GPU networking, llm-d Router (EPP) metrics, and vLLM model server metrics, alongside [GKE Gateway load balancer metrics](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard). For router and model server metric collection on GKE, see [GKE Monitoring & Telemetry](../providers/gke/README.md#monitoring--telemetry).
+GKE provides an out-of-the-box [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) in Cloud Monitoring (**Monitoring → Dashboards → Integrations → GMP → Gateway**), which combines Application Load Balancer request rate and latency metrics with the [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) sections (GPU networking, llm-d EPP, and vLLM model server metrics). For router and model server metric collection on GKE, see [GKE Monitoring & Telemetry](../providers/gke/README.md#monitoring--telemetry).
 
 ## Cleanup
 

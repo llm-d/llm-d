@@ -55,7 +55,7 @@ OpenShift provides a built-in Prometheus stack via [User Workload Monitoring](ht
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-GKE clusters include [Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) by default, so no Prometheus installation is required. Enable [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) (`--auto-monitoring-scope=ALL`) as described in [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry) to automatically collect model server metrics and provision out-of-the-box Cloud Monitoring dashboards (including the [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) when router GMP monitoring is enabled).
+GKE clusters include [Google Cloud Managed Service for Prometheus (GMP)](https://cloud.google.com/stackdriver/docs/managed-prometheus) by default, so no Prometheus installation is required. Enable [automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) (`--auto-monitoring-scope=ALL`) as described in [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry) to automatically collect model server metrics and provision out-of-the-box Cloud Monitoring dashboards (the [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) for Standalone Mode, and the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) when using GKE Gateway, which adds Application Load Balancer metrics).
 
 To use GMP as a Grafana data source, follow the [GMP Grafana integration guide](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-grafana).
 
@@ -178,7 +178,7 @@ For the list of dashboards and how to verify the import, see [Use Grafana Dashbo
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-When [automatic application monitoring](../../infrastructure/providers/gke/README.md#monitoring--telemetry) and router GMP monitoring are enabled, out-of-the-box dashboards for vLLM, SGLang, and the [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) are available directly in Cloud Monitoring (**Monitoring → Dashboards**). Proceed to [Collect Metrics](./metrics.md) to verify workload scraping.
+When [automatic application monitoring](../../infrastructure/providers/gke/README.md#monitoring--telemetry) and router GMP monitoring are enabled, out-of-the-box dashboards for vLLM, SGLang, the [llm-d Overview dashboard](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/exporters/llm-d) (Standalone Mode), and the [GKE Inference Gateway dashboard](https://cloud.google.com/kubernetes-engine/docs/how-to/customize-gke-inference-gateway-configurations#inference-gateway-dashboard) (Gateway Mode with GKE Gateway) are available directly in Cloud Monitoring (**Monitoring → Dashboards**). Proceed to [Collect Metrics](./metrics.md) to verify workload scraping.
 
 </details>
 <!-- tabs:end -->
