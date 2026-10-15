@@ -22,6 +22,10 @@ router:
         - type: program-aware-fairness
           parameters:
             strategy: turn-priority
+            # The stock 3600 is shorter than a replay stage, which would
+            # re-admit a still-active session at depth one.
+            evictionTtlSeconds: 18000
+            evictionSweepSeconds: 18000
         # Only needed when clients send no explicit fairness ID.
         - type: agent-identity
         - type: queue-scorer
@@ -29,7 +33,7 @@ router:
         - type: prefix-cache-scorer
         - type: concurrency-detector
           parameters:
-            # Re-derive per fleet: see ../../flow-control/tuning.md
+            # Re-derive per fleet: see ../../docs/operations/traffic/flow-control-tuning.md
             maxConcurrency: 32
 
         schedulingProfiles:

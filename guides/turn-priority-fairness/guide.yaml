@@ -118,7 +118,7 @@ verify:
       - run: |
           # The metrics port needs a service-account token, so scrape from a pod.
           kubectl run curl-debug --rm -i --restart=Never \
-              --image=cfmanteiga/alpine-bash-curl-jq \
+              --image=${CURL_TEST_IMAGE} \
               --namespace="${NAMESPACE}" --env="GUIDE_NAME=${GUIDE_NAME}" \
               -- /bin/bash -c '
             TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -127,10 +127,10 @@ verify:
             # This one is exported as soon as the plugin loads, unlike the
             # per-program gauges, which stay empty until traffic arrives.
             grep -q "llm_d_epp_program_aware_jains_fairness_index" /tmp/m.txt \
-              || echo "program-aware fairness is not loaded" >&2
+              || { echo "program-aware fairness is not loaded" >&2; exit 1; }
             # Owned by the las strategy, so its absence is what turn-priority looks like.
-            grep -q "llm_d_epp_program_aware_attained_service_tokens" /tmp/m.txt \
-              && echo "attained_service_tokens present: las is running, not turn-priority" >&2
+            ! grep -q "llm_d_epp_program_aware_attained_service_tokens" /tmp/m.txt \
+              || { echo "attained_service_tokens present: las is running, not turn-priority" >&2; exit 1; }
           '
 
     session_ordering:
@@ -151,7 +151,7 @@ verify:
           # The per-request log line sits at v=3, above the level the chart
           # deploys, so read the band off the flow-control metrics instead.
           kubectl run curl-debug --rm -i --restart=Never \
-              --image=cfmanteiga/alpine-bash-curl-jq \
+              --image=${CURL_TEST_IMAGE} \
               --namespace="${NAMESPACE}" --env="GUIDE_NAME=${GUIDE_NAME}" \
               -- /bin/bash -c '
             TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)

@@ -17,7 +17,7 @@ Gaps to Tier 4: the benchmark was run on a separate fleet, not against this
 guide's own overlay.
 ```
 
-See [Guides: Definition and Policy](../../docs/well-lit-paths/guides-definition.md) for what the
+See [Guides: Definition and Policy](../GUIDES-POLICY.md) for what the
 tiers mean.
 
 ## Overview
@@ -104,17 +104,16 @@ Only values that differ from the defaults are set; everything else is omitted.
 | `defaultRequestTTL` (band `-1`) | `9000s` | Queue-wait budget for session traffic. Bounds the wait term above. |
 | `maxConcurrency` | `32` | Holds the backlog in llm-d instead of vLLM. See [why](#why-maxconcurrency-matters). |
 | `fairnessPolicyRef` | band `-1` | Turn-priority for sessions; other bands keep the default. |
+| `evictionTtlSeconds` | `18000` | Longer than a replay stage; a shorter TTL would reset a still-active session to depth one. |
 
 Left at their defaults, and worth knowing: `turnPriorityTimeWeight` (`0.05`),
-`turnPriorityInactivitySeconds` (`120`), the global `defaultRequestTTL` (`60s`), and
-`evictionTtlSeconds` (`3600`), which is shorter than a long replay stage — a session idle past it
-re-enters at depth one.
+`turnPriorityInactivitySeconds` (`120`), and the global `defaultRequestTTL` (`60s`).
 
 ### Supported Hardware Backends
 
 Turn-priority is a software scheduling policy in the EPP and is hardware-agnostic. It supports every
 accelerator listed in the
-[Optimized Baseline guide](../optimized-baseline/README.md#supported-hardware-backends).
+[Optimized Baseline guide](../optimized-baseline/README.md#supported-accelerators-and-model-servers).
 
 ## Tuning: the weight-TTL product
 
@@ -180,7 +179,7 @@ when the queue moves. The in-flight load producer it depends on is created autom
 > [!IMPORTANT]
 > `maxConcurrency` is fleet-specific — it is a count of concurrent requests one replica can hold
 > without starving, so it does not transfer across models, accelerators or context lengths. Derive
-> your own with the [Flow Control tuning guide](../flow-control/tuning.md); the value here is only
+> your own with the [Flow Control tuning guide](../../docs/operations/traffic/flow-control-tuning.md); the value here is only
 > the reference fleet's.
 
 ## Negative session band
@@ -446,7 +445,7 @@ per-program gauges stay empty until traffic arrives.
 ```bash
 # The metrics port needs a service-account token, so scrape from a pod.
 kubectl run curl-debug --rm -i --restart=Never \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --namespace="${NAMESPACE}" --env="GUIDE_NAME=${GUIDE_NAME}" \
     -- /bin/bash -c '
   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -455,10 +454,10 @@ kubectl run curl-debug --rm -i --restart=Never \
   # This one is exported as soon as the plugin loads, unlike the
   # per-program gauges, which stay empty until traffic arrives.
   grep -q "llm_d_epp_program_aware_jains_fairness_index" /tmp/m.txt \
-    || echo "program-aware fairness is not loaded" >&2
+    || { echo "program-aware fairness is not loaded" >&2; exit 1; }
   # Owned by the las strategy, so its absence is what turn-priority looks like.
-  grep -q "llm_d_epp_program_aware_attained_service_tokens" /tmp/m.txt \
-    && echo "attained_service_tokens present: las is running, not turn-priority" >&2
+  ! grep -q "llm_d_epp_program_aware_attained_service_tokens" /tmp/m.txt \
+    || { echo "attained_service_tokens present: las is running, not turn-priority" >&2; exit 1; }
 '
 ```
 <!-- guide:verify.tests.strategy_signature end -->
@@ -490,7 +489,7 @@ done
 # The per-request log line sits at v=3, above the level the chart
 # deploys, so read the band off the flow-control metrics instead.
 kubectl run curl-debug --rm -i --restart=Never \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --namespace="${NAMESPACE}" --env="GUIDE_NAME=${GUIDE_NAME}" \
     -- /bin/bash -c '
   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -510,9 +509,9 @@ default fairness policy and turn-priority never ran.
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
 > [!IMPORTANT]
-> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../docs/operations/validation/benchmark.md).**
 >
-> The Benchmarking section below contains only the **turn-priority-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **turn-priority-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../docs/operations/validation/benchmark.md).
 
 > [!TIP]
 > If you stood the stack up with `llmdbenchmark` rather than Helm (see
@@ -670,7 +669,7 @@ inactivity-reset counter. Use these instead:
 
 Because `fairness_id` comes from a client-controlled header, the metrics layer bounds its cardinality.
 The `program_id` label on the plugin's own gauges is not bounded that way; only the eviction sweep
-retires those series. See [flow control architecture](../../docs/architecture/core/router/epp/flow-control.md) for
+retires those series. See [flow control architecture](../../docs/architecture/router/flow-control.md) for
 the full metric set.
 
 ## Limitations
@@ -710,6 +709,6 @@ kubectl delete -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA
 ## Further Reading
 
 * [Flow Control guide](../flow-control/README.md) — the queuing layer beneath this strategy, and `maxConcurrency` tuning.
-* [Flow Control architecture](../../docs/architecture/core/router/epp/flow-control.md) — full design and metric reference.
-* [Agentic Serving](../agentic-serving/README.md) — the broader workload stack this composes with.
+* [Flow Control architecture](../../docs/architecture/router/flow-control.md) — full design and metric reference.
+* [Agentic Serving](../agentic-api/README.md) — the broader workload stack this composes with.
 * [`program-aware-fairness` plugin reference](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/flowcontrol/fairness/program-aware/README.md) — including the `las` alternative.
