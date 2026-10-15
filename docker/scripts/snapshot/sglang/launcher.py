@@ -2,8 +2,8 @@
 Launcher for SGLang with GKE Fast Pod Snapshotting support.
 
 Delegates CLI invocation to sglang.srt.entrypoints.http_server.launch_server. When a snapshot
-provider is configured and available (and both --enable-memory-saver and
---enable-weights-cpu-backup are set), plugs the snapshot lifecycle into launch_server's two
+provider is configured and available (and --enable-weights-cpu-backup is set whenever
+--enable-memory-saver is enabled), plugs the snapshot lifecycle into launch_server's two
 warmup hooks (see wrapper.py):
 
 - execute_warmup_func: sglang_warmup_and_hold runs SGLang's server warmup, then holds the
@@ -61,14 +61,20 @@ def _get_snapshot_provider_for_launch(server_args) -> Optional[GKESnapshotProvid
         )
         return None
 
-    # Without --enable-memory-saver, SGLang frees no GPU memory on release; without
-    # --enable-weights-cpu-backup, SGLang throws the weights away instead of copying them to CPU memory.
-    if not (server_args.enable_memory_saver and server_args.enable_weights_cpu_backup):
+    # With --enable-memory-saver but without --enable-weights-cpu-backup, SGLang throws the
+    # weights away on release instead of copying them to CPU memory.
+    if server_args.enable_memory_saver and not server_args.enable_weights_cpu_backup:
         logger.warning(
-            "Both --enable-memory-saver and --enable-weights-cpu-backup are required for SGLang "
+            "--enable-weights-cpu-backup is required when --enable-memory-saver is enabled for SGLang "
             "pod snapshotting; no snapshot will be taken."
         )
         return None
+
+    if not server_args.enable_memory_saver:
+        logger.warning(
+            "--enable-memory-saver is not enabled; KV cache will not be freed and all allocated "
+            "GPU memory will be included in the snapshot."
+        )
 
     return snapshot_provider
 
