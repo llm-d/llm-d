@@ -657,8 +657,25 @@ server capacity (warmup failures) and were excluded from the blog post results.
 > [!NOTE]
 > **TODO:** results for the current router config (prefix-cache affinity filter and token-load
 > scorer on prefill, active-request scorer on decode) are not yet published. Earlier results,
-> measured with the previous weighted prefix-cache, queue and active-request scorers, are in
+> measured with the previous dual GPU+CPU prefix-cache and active-request scorers, are in
 > the [blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d).
+
+### What Each Optimization Changes
+
+These matched comparisons were measured with the previous router config, which was the same in
+both runs of each comparison. They compare model-server and topology choices, not routing.
+
+- **CPU offloading keeps evicted prefixes reusable.** In matched 24-GPU runs at concurrency
+  32, offloading raises output 13%, cuts median TTFT 32%, and cuts median turn completion 27%,
+  while median ITL is unchanged. At concurrency 128, baseline output remains near 951 tok/s
+  while offloading reaches 2,776 tok/s.
+- **MTP reduces decode work.** On matched 32-GPU `p1w2d1w2` deployments with CPU offloading
+  enabled in both runs, MTP raises aggregate output 1.6-2.0x and average output per user
+  1.6-1.8x through concurrency 128.
+- **Prefill and decode replicas change different parts of the turn.** At concurrency 128,
+  `p2w2d2w2` produces 8% more output and completes the median turn 10% sooner than
+  `p3w2d1w2` at the same 64-GPU budget. `p3w2d1w2` reaches the first token 19% sooner and
+  restores 63% less KV from CPU memory.
 
 ## Cleanup
 
