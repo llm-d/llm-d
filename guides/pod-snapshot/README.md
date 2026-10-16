@@ -281,7 +281,8 @@ helm install ${GUIDE_NAME} \
 <!-- guide:deploy.snapshot start -->
 ```bash
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/snapshot/gke/ \
-  | sed "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
+  | sed -e "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
+    -e "s/pod-snapshot-storage-config/${NAMESPACE}-pod-snapshot-storage-config/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 <!-- guide:deploy.snapshot end -->
@@ -421,6 +422,7 @@ kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERV
   | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
 
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/snapshot/gke/ \
+  | sed "s/pod-snapshot-storage-config/${NAMESPACE}-pod-snapshot-storage-config/g" \
   | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
 
 kubectl delete namespace ${NAMESPACE}
