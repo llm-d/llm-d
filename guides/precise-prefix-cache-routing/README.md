@@ -29,7 +29,8 @@ This guide includes configurations for the following accelerator and model serve
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool) |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 |
+| Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29 |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
 
@@ -103,7 +104,7 @@ export NAMESPACE=llm-d-precise-prefix-cache-routing
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ENGINE_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, cpu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke
 export MODEL=Qwen/Qwen3-32B # set to the model your accelerator serves (table above)
@@ -580,7 +581,7 @@ To trace the router, deploy an OpenTelemetry collector and layer [`tracing.value
 
 This section collects what an operator needs to run this guide beyond a demo. The settings it refers to are explained in the sections above.
 
-- **Supported path.** vLLM 0.30 on NVIDIA GPU is the reference: it is validated nightly. Every vLLM overlay enables index recovery through replay; SGLang does not. AMD GPU and Intel XPU are validated nightly; TPU v6e is validated on vLLM 0.29, where Responses requests use the legacy render path. See [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers) and [Supported APIs](#supported-apis).
+- **Supported path.** vLLM 0.30 on NVIDIA GPU is the reference: it is validated nightly. Every vLLM overlay enables index recovery through replay; SGLang does not. AMD GPU and Intel XPU are validated nightly; TPU v5p is validated on vLLM 0.29, where Responses requests use the legacy render path. See [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers) and [Supported APIs](#supported-apis).
 - **Router replicas.** Run one router replica (see the note under [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)). A router restart therefore routes from a partial index until replay completes and, on a warm fleet, until prefixes stored before the replay window are evicted and stored again (see [Index recovery](#index-recovery)).
 - **Metrics to watch.** Alert when a pod's `llm_d_epp_kv_cache_events_messages_received_total` rate is zero while it serves traffic (this catches a pod that is up but publishes on the wrong port or topic, which `active_subscribers` does not, since it counts subscribers that are still retrying), when `llm_d_epp_kv_cache_events_zmq_errors_total` rises for a pod, and when `llm_d_epp_kv_cache_events_pool_queue_depth` keeps growing. `active_subscribers` is not a health check: the router creates exactly one subscriber per pod `podLabelSelector` matches, so it equals that count by construction and a wrong selector still passes. Instead, compare it with the number of pods that run with `--kv-events-config`. Track the router's predicted cached-token share against the model servers' prefix-cache hit rate (see [Metrics](#metrics)).
 - **Render.** Every request is rendered before it is routed, so a failed render routes it without cache information and a slow one adds to its TTFT. One attempt could otherwise use the request's whole render budget (`vllm.timeout`, 5 s by default; `vllm.mmTimeout`, 30 s, for chat, Messages and Responses) and leave no time for the retry on another endpoint, so this guide caps each attempt with `vllm.endpointDiscovery.attemptTimeout: 2s`; raise it for multimodal prompts. Watch `llm_d_epp_token_producer_render_failures_total` and `llm_d_epp_token_producer_render_duration_seconds` (see the [router metric reference](../../docs/operations/observability/router-metrics.md)).

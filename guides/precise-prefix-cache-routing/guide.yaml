@@ -34,13 +34,20 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated, sglang: community}
-    "tpu/v6":
-      label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29"
+    "tpu/v5p":
+      label: Google TPU v5p
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
       notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29"
@@ -70,7 +77,7 @@ env:
     MONITORING_VALUES: {default: ""}
     ENGINE_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", cpu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", cpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*, cpu)
     INFRA_PROVIDER: {default: base, values: [base, gke]}
