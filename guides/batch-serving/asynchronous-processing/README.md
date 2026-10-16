@@ -39,7 +39,7 @@ Every command below runs from a local clone of the [llm-d repository](https://gi
 
 <!-- llm-d-cicd:skip start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->

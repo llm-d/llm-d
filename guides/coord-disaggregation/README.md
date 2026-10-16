@@ -172,7 +172,7 @@ architectures tie.
 * Checkout llm-d repo:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
+  export branch="release-1.0" # branch, tag, or commit hash
   git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
   ```
 

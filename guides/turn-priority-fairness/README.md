@@ -210,7 +210,7 @@ reclaim capacity from this band.
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export BRANCH=main # branch, tag, or commit hash
+export BRANCH=release-1.0 # branch, tag, or commit hash
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->

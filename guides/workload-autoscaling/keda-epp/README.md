@@ -46,7 +46,7 @@ name (and accelerator) you chose at install time:
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING_NAMESPACE=llm-d-monitoring

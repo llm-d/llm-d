@@ -66,7 +66,7 @@ For workload-specific guidance (RL training rollouts, elastic bin-packed racks),
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->

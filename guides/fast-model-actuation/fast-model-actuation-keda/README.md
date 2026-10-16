@@ -35,7 +35,7 @@ This guide assumes you have a Kubernetes cluster with GPU nodes, the [llm-d rout
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
