@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM GPU",
-  "message": "dry-run",
-  "color": "blue"
+  "message": "guide-error",
+  "color": "red"
 }
