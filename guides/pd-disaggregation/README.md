@@ -124,7 +124,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 | `ACCELERATOR_TYPE` | `INFRA_PROVIDER` values |
 | --- | --- |
 | `gpu` | `base`, `gke`, `gke/a4x`, `gke/a4xmax`, `coreweave`, `aws`, `cks-mooncake` (SGLang: `base`, `gke`, `coreweave`, `aws`) |
-| `amd` | `base`, `amd-ci`, `oci`, `tensorwave`, `moriio/base`, `moriio/amd-ci`, `moriio/amd-ci-1p1d-tp8` |
+| `amd` | `nixl/base`, `nixl/oci`, `nixl/tensorwave`, `moriio/base` |
 | `xpu` | `base`, `rdma` (SGLang: `base`) |
 | `tpu/v6`, `tpu/v7`, `tpu/v7-dynamic-slice` | `gke` |
 | `iluvatar`, `metax`, `biren`, `mthreads`, `npu` | `base` |
@@ -294,7 +294,7 @@ For model sources, caching, and startup optimization, see the [Model Loading and
 
 <!-- tabs:start group=modelserver -->
 <details open>
-<summary><b>Default (NVIDIA GPU, AMD, Intel XPU)</b></summary>
+<summary><b>Default (NVIDIA GPU, AMD)</b></summary>
 
 <!-- guide:deploy.modelserver.standard[0] start -->
 ```bash
@@ -304,6 +304,19 @@ kubectl apply -n ${NAMESPACE} \
 <!-- guide:deploy.modelserver.standard[0] end -->
 
 The GPU overlays enable tool calling and reasoning parsing with `--enable-auto-tool-choice --tool-call-parser=openai --reasoning-parser=openai_gptoss`.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=xpu">
+<summary><b>Intel XPU</b></summary>
+
+<!-- guide:deploy.modelserver.xpu[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.xpu[0] end -->
 
 The Intel XPU SGLang overlay (`xpu/sglang/base`) uses the nightly `llm-d-xpu-sglang` image, which bundles NIXL built against a Level Zero-enabled UCX, and registers the KV cache in XPU memory directly with NIXL; UCX then copies it through host buffers via `ze_copy` over TCP. It sets `UCX_MEMTYPE_CACHE=n` so UCX detects XPU memory instead of treating it as host memory, `--disaggregation-decode-retraction-backup=cpu_tensor` on decode, and `SGLANG_DISAGG_PREFILL_EARLY_SEND_CACHED_PREFIX=0` on prefill to avoid CUDA-only code paths.
 Its prefill liveness and readiness probes allow longer response times because `/health` waits for the scheduler; a long chunked prefill can temporarily make the endpoint return 503. Client disconnects through the Router do not currently cancel the corresponding SGLang P/D work, so plan capacity accordingly.
