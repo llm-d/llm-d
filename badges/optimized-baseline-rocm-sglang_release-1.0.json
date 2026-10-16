@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "SGLang ROCm",
-  "message": "dry-run",
-  "color": "blue"
+  "message": "passing",
+  "color": "brightgreen"
 }
