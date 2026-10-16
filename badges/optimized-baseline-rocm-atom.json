@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "ATOM ROCm",
-  "message": "passing",
-  "color": "brightgreen"
+  "message": "guide-error",
+  "color": "red"
 }
