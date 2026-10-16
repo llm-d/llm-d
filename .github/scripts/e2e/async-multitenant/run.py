@@ -89,6 +89,15 @@ def load_settings(cli_values: list[str]) -> None:
     os.environ.update(parsed)
 
 
+def queue_names_from_values(path: Path) -> tuple[str, ...]:
+    """The team queues (Redis sorted sets) the guide's llm-d-async values define."""
+    try:
+        text = path.read_text()
+    except OSError:
+        return ()
+    return tuple(re.findall(r'^\s*-?\s*queue_name:\s*"?([\w.-]+)"?', text, re.MULTILINE))
+
+
 class Config:
     def __init__(self, args: argparse.Namespace) -> None:
         self.namespace = args.namespace
@@ -124,6 +133,11 @@ class Config:
         # client (seen occasionally after aiohttp timeouts) is cut off here and
         # its level re-run, instead of holding the job for the CLI's default hour.
         self.wait_timeout = int(env("WAIT_TIMEOUT", "900"))
+        # Between benchmark parts: how long the pool must stay idle to count as
+        # drained (see wait_for_drain). The longest wait is set below, once the
+        # async client timeout is known.
+        self.drain_quiet = float(env("DRAIN_QUIET_S", "10"))
+        self.async_queues = queue_names_from_values(GUIDE_DIR / "values" / "redis" / "quota-only.yaml")
         self.retries = int(env("RETRIES", "1"))
         # Optional llm-d-benchmark source, e.g. a fork carrying profile changes.
         self.bench_repo = env("BENCH_REPO", "")
@@ -146,10 +160,15 @@ class Config:
         self.start_skew = float(env("START_SKEW_S", "60"))
         self.async_duration = int(env("ASYNC_DURATION",
                                       str(max(120, round(self.realtime_seconds + self.start_skew)))))
-        # A dispatched async request needs several service times to finish under
-        # contention; a timeout below that abandons work the GPU has already
-        # started. 20 s suits a ~2 s service time (H100); slower GPUs scale up.
-        self.async_timeout = int(env("ASYNC_TIMEOUT", str(max(20, round(4 * self.service_seconds)))))
+        # How long an async client waits before giving up. The queue is drained
+        # oldest first, so under the deliberate overload the request at its head
+        # is always about this old: with a short timeout most dispatched
+        # requests are abandoned moments after dispatch, and llm-d-async (since
+        # v0.11.0, llm-d-async#474) aborts them in vLLM, wasting their prefills
+        # and delaying realtime at 100 % load. 120 s keeps clients waiting
+        # through the realtime member when both pods start within seconds, as
+        # on the nightly cluster; raise it with START_SKEW_S on slower starts.
+        self.async_timeout = int(env("ASYNC_TIMEOUT", str(max(120, round(4 * self.service_seconds)))))
         self.realtime_num_requests: int | None = None
         self.enforce = True
         if self.dry_run:
@@ -158,6 +177,10 @@ class Config:
             self.async_duration = int(env("DRY_RUN_ASYNC_DURATION", "45"))
             self.async_timeout = 10
             self.enforce = False
+        # No async request outlives its client's timeout by more than about a
+        # second (llm-d-async polls for cancellation), so the backlog is gone a
+        # minute after it at the latest; this bounds the five drain waits.
+        self.drain_timeout = float(env("DRAIN_TIMEOUT_S", str(self.async_timeout + 60)))
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +440,7 @@ def run_experiment(cfg: Config, clone: Path, cli: list[str], exp_path: Path,
     extra_env = {"PYTHONUNBUFFERED": "1"}  # stream the CLI's progress into the CI log as it happens
     if os.environ.get("HF_TOKEN") and not os.environ.get("LLMDBENCH_HF_TOKEN"):
         extra_env["LLMDBENCH_HF_TOKEN"] = os.environ["HF_TOKEN"]
-    log(f"running llmdbenchmark with {exp_path.name} (the full matrix takes ~40 minutes)")
+    log(f"running llmdbenchmark with {exp_path.name}")
     return stream(cmd, clone, cfg.workdir / log_name, extra_env)
 
 
@@ -621,7 +644,9 @@ def analyze(cfg: Config, capacity: int, results: dict[str, Path], samples: list,
             "samples": sat.count,
         }
 
-    counts = analysis.merge_band_counts(analysis.band_counts_from_samples(samples), analysis.band_counts(epp_text))
+    # Only this run's samples: the final EPP scrape (epp_text) is cumulative since the
+    # EPP started and is kept for the artifacts, not for the checks.
+    counts = analysis.band_counts_from_samples(samples)
     checks += analysis.band_checks(counts)
     report["band_requests"] = {str(k): v for k, v in counts.items()}
     report["checks"] = analysis.checks_to_dicts(checks)
@@ -646,7 +671,7 @@ def write_outputs(cfg: Config, report: dict, results: dict[str, Path], epp_text:
     (out / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True))
     (out / "epp-metrics.txt").write_text(epp_text)
     (out / "samples.json").write_text(json.dumps([s.as_dict() for s in (samples or [])], indent=1))
-    for pattern in ("llmdbenchmark*.log", "install*.log", "clone.log", "experiment-retry*.yaml"):
+    for pattern in ("llmdbenchmark*.log", "install*.log", "clone.log", "experiment*.yaml"):
         for src in sorted(cfg.workdir.glob(pattern)):
             shutil.copyfile(src, out / src.name)
     if exp_path and exp_path.exists():
@@ -668,8 +693,90 @@ def write_outputs(cfg: Config, report: dict, results: dict[str, Path], epp_text:
     log(f"artifacts written to {out}")
 
 
+def async_backlog(cfg: Config) -> int | None:
+    """Requests still queued in the guide's team queues, or None if Redis cannot be read."""
+    if not cfg.async_queues:
+        return None
+    out = kubectl_out(["exec", "deploy/redis", "-n", cfg.namespace, "--", "sh", "-c",
+                       " ; ".join(f"redis-cli ZCARD {q}" for q in cfg.async_queues)])
+    try:
+        return sum(int(x) for x in out.split())
+    except ValueError:
+        return None
+
+
+def wait_for_drain(cfg: Config, sampler, label: str) -> dict:
+    """Wait until the previous part's async work has left the queues and the GPU.
+
+    An async member's clients give up when it ends, but its queued and in-flight
+    requests can outlive it (llm-d-async notices a cancellation within about a
+    second, and longer client timeouts leave a larger backlog). Starting the next
+    realtime-only baseline before they are gone measures realtime against
+    leftover async work. Drained means the team queues are empty and the
+    sampler's latest fresh vLLM reading shows nothing running or waiting, for
+    DRAIN_QUIET_S in a row. If Redis cannot be read, the vLLM idle check alone
+    decides (warned once, and recorded as queue_check "unavailable") rather than
+    waiting out the timeout. After DRAIN_TIMEOUT_S the run continues anyway,
+    and the record says so.
+    """
+    start = time.time()
+    quiet_since: float | None = None
+    backlog = busy = None
+    queue_check = "redis"
+    while True:
+        now = time.time()
+        backlog = async_backlog(cfg)
+        if backlog is None and queue_check == "redis":
+            queue_check = "unavailable"
+            log(f"WARNING {label}: cannot read the async queues in Redis; draining on the vLLM idle check alone")
+        latest = sampler.samples[-1] if sampler.samples else None
+        fresh = latest is not None and latest.running is not None and latest.t >= now - 3 * cfg.sample_interval
+        busy = (latest.running or 0) + (latest.waiting or 0) if fresh else None
+        if backlog in (0, None) and busy == 0:
+            quiet_since = quiet_since if quiet_since is not None else now
+            if now - quiet_since >= cfg.drain_quiet:
+                waited = now - start
+                log(f"{label}: async backlog drained after {waited:.0f}s")
+                return {"part": label, "drained": True, "waited_s": round(waited, 1), "queue_check": queue_check}
+        else:
+            quiet_since = None
+        if now - start >= cfg.drain_timeout:
+            log(f"WARNING {label}: async backlog not drained after {cfg.drain_timeout:.0f}s "
+                f"(queued {backlog}, vLLM running+waiting {busy}); continuing")
+            return {"part": label, "drained": False, "waited_s": round(now - start, 1),
+                    "queued": backlog, "vllm_busy": busy, "queue_check": queue_check}
+        time.sleep(max(0.01, min(cfg.sample_interval, 5.0)))
+
+
+def run_groups(cfg: Config, capacity: int, clone: Path, cli: list[str], sampler,
+               levels: tuple[int, ...], include_async_only: bool, tag: str = "") -> tuple[int, dict[str, Path], list]:
+    """Run the experiment in parts, waiting for the async backlog to drain before each.
+
+    One llmdbenchmark run executes its groups back to back, so a level's
+    realtime-only baseline would start while the previous level's async work
+    is still queued or running. Each part is its own run instead: async-only,
+    then each level's baseline and mixed groups together. Returns the first
+    non-zero exit code, the treatments found and the drain records.
+    """
+    parts: list = (["async_only"] if include_async_only else []) + list(levels)
+    rc = 0
+    results: dict[str, Path] = {}
+    drains: list = []
+    for part in parts:
+        name = "async-only" if part == "async_only" else f"level-{part}"
+        drains.append(wait_for_drain(cfg, sampler, f"before {name}{tag}"))
+        exp = render_experiment(cfg, capacity, () if part == "async_only" else (part,),
+                                include_async_only=part == "async_only", name=f"experiment-{name}{tag}.yaml")
+        before = results_roots(cfg)
+        part_rc = run_experiment(cfg, clone, cli, exp, log_name=f"llmdbenchmark-{name}{tag}.log")
+        log(f"llmdbenchmark ({name}{tag}) exited {part_rc}")
+        rc = rc or part_rc
+        results.update(collect_results(cfg, exclude=before))
+    return rc, results, drains
+
+
 def retry_invalid_levels(cfg: Config, capacity: int, clone: Path, cli: list[str],
-                         results: dict[str, Path]) -> dict[str, Path]:
+                         results: dict[str, Path], sampler=None, drains: list | None = None) -> dict[str, Path]:
     """Re-run, once per allowed retry, the levels whose comparison is unusable.
 
     A level is re-run whole (baseline and mixed) when a treatment is missing or
@@ -685,12 +792,11 @@ def retry_invalid_levels(cfg: Config, capacity: int, clone: Path, cli: list[str]
         if not levels and not async_only:
             return results
         log(f"retry {attempt}/{cfg.retries}: re-running levels {levels}" + (" and async-only" if async_only else ""))
-        exp = render_experiment(cfg, capacity, tuple(levels), include_async_only=async_only,
-                                name=f"experiment-retry{attempt}.yaml")
-        before = results_roots(cfg)
-        rc = run_experiment(cfg, clone, cli, exp, log_name=f"llmdbenchmark-retry{attempt}.log")
-        log(f"llmdbenchmark (retry {attempt}) exited {rc}")
-        results, notes = analysis.merge_rerun(results, collect_results(cfg, exclude=before), levels, async_only)
+        _, new, part_drains = run_groups(cfg, capacity, clone, cli, sampler, tuple(levels), async_only,
+                                         tag=f"-retry{attempt}")
+        if drains is not None:
+            drains += part_drains
+        results, notes = analysis.merge_rerun(results, new, levels, async_only)
         for note in notes:
             log(f"retry {attempt}: {note}")
     return results
@@ -712,6 +818,7 @@ def main() -> int:
     cfg = Config(args)
 
     exp_path: Path | None = None
+    drains: list = []
     results: dict[str, Path] = {}
     epp_text = ""
     samples: list = []
@@ -743,15 +850,14 @@ def main() -> int:
         else:
             clone, cli = install_cli(cfg)
             check_profiles(clone)
-            for stale in [*cfg.workdir.glob("llmdbenchmark-retry*.log"), *cfg.workdir.glob("experiment-retry*.yaml")]:
+            for stale in [*cfg.workdir.glob("llmdbenchmark*.log"), *cfg.workdir.glob("experiment*.yaml")]:
                 stale.unlink()  # left by an earlier local run in the same workdir
-            exp_path = render_experiment(cfg, capacity)
             sampler.start()
             try:
-                rc = run_experiment(cfg, clone, cli, exp_path)
-                log(f"llmdbenchmark exited {rc}")
-                results = collect_results(cfg)
-                results = retry_invalid_levels(cfg, capacity, clone, cli, results)
+                log(f"running the experiment in {len(cfg.levels) + 1} parts, draining the async backlog before each "
+                    "(the full matrix takes ~45 minutes)")
+                rc, results, drains = run_groups(cfg, capacity, clone, cli, sampler, cfg.levels, True)
+                results = retry_invalid_levels(cfg, capacity, clone, cli, results, sampler, drains)
             finally:
                 sampler.stop()
             samples = list(sampler.samples)
@@ -760,6 +866,7 @@ def main() -> int:
         epp_text = sampler.scrape_epp_full()
         report, checks = analyze(cfg, capacity, results, samples, epp_text)
         report["llmdbenchmark_rc"] = rc
+        report["drains"] = drains
     except Exception as exc:  # noqa: BLE001 - surface everything with artifacts
         log(f"ERROR: {exc}")
         report = {"error": str(exc), "checks": [], "levels": [], "capacity": None}

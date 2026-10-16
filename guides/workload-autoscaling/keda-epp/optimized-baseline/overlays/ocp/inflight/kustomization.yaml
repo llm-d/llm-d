@@ -1,0 +1,36 @@
+# OpenShift + in-flight-load signal (no Flow Control).
+#
+# The ScaledObject (scaledobject.yaml) carries the Thanos Querier serverAddress
+# and authModes:bearer + authenticationRef inline. This overlay adds the pieces it
+# depends on, mirroring overlays/ocp/queue:
+#   - the namespace transformer (rendered from ${NAMESPACE} by envsubst),
+#   - components/ocp-trigger-auth: the keda-prometheus-auth TriggerAuthentication,
+#   - recipes/autoscaling/metrics-reader: the SA, token Secret, and CRB that grant
+#     cluster-monitoring-view so Thanos accepts the queries.
+#
+# The namespace transformer does not rewrite the metrics-reader ClusterRoleBinding
+# subject namespace, and the binding is cluster-scoped, so the patch sets the
+# subject namespace to ${NAMESPACE} and makes the binding name namespace-unique.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ${NAMESPACE}
+
+resources:
+  - scaledobject.yaml
+
+components:
+  - ../../../components/ocp-trigger-auth
+  - ../../../../../../recipes/autoscaling/metrics-reader
+
+patches:
+  - target:
+      kind: ClusterRoleBinding
+      name: keda-epp-metrics-reader-monitoring-view
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: keda-epp-metrics-reader-monitoring-view-${NAMESPACE}
+      - op: replace
+        path: /subjects/0/namespace
+        value: ${NAMESPACE}

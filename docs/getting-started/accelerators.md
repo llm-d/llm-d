@@ -9,6 +9,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Vendor | Models | Maintainers |
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
+| Biren | 166M | FengSibo (@fengsibo, <fengsiboacer@gmail.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
@@ -100,6 +101,13 @@ Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefi
 ## MetaX C500X
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
+
+## Biren 166M
+
+Biren 166M GPUs are supported for community-contributed well-lit paths. The device plugin must expose `birentech.com/gpu`; the P/D overlay also requests InfiniBand through an RDMA device plugin (`rdma/ib`):
+
+- [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, two `TP=8` replicas of Qwen3-32B.
+- [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
 
 ## Moore Threads MTT S5000
 

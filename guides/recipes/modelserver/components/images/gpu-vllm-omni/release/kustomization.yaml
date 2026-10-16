@@ -3,4 +3,4 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/vllm/vllm-omni
-    newTag: v0.29.0
+    newTag: v0.30.0

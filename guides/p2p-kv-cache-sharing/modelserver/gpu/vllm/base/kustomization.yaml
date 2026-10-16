@@ -11,6 +11,9 @@ resources:
 
 namePrefix: p2p-kv-cache-sharing-
 
+components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
+
 # The sidecar container is added by patch-sidecar.yaml at this level, after
 # the recipes/ images components would run, so its image is resolved here
 # rather than by recipes/modelserver/components/images/routing-sidecar.

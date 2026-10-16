@@ -288,8 +288,11 @@ A successful multimodal response does not show that the encoder output came from
 
 ```bash
 export EC_CONSUMER_ROLE=decode # use "prefill" for the E/P/D profile
-kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL=DEBUG -n ${NAMESPACE}
-kubectl rollout status deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -n ${NAMESPACE}
+# Changing one role's template rolls every role of the set.
+ROLE=$(kubectl get disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} -o json | jq --arg r "${EC_CONSUMER_ROLE}" '.spec.roles | map(.name) | index($r)')
+kubectl patch disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} --type=json \
+  -p "[{\"op\": \"add\", \"path\": \"/spec/roles/${ROLE}/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-\", \"value\": {\"name\": \"VLLM_LOGGING_LEVEL\", \"value\": \"DEBUG\"}}]"
+kubectl wait --for=condition=Available disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} --timeout=1800s
 ```
 
 Send the multimodal request from step 2 again, then search the consumer logs:
@@ -301,7 +304,9 @@ kubectl logs -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver -n ${NAMESPACE}
 One line for each transferred multimodal item shows that the transfer works. If there is no such line, make sure that the image contains the P2P NIXL mode (see [EC Connector](#ec-connector)). Remove the variable when you are done:
 
 ```bash
-kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL- -n ${NAMESPACE}
+ENV=$(kubectl get disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} -o json | jq --argjson i "${ROLE}" '.spec.roles[$i].spec.leaderWorkerTemplate.workerTemplate.spec.containers[0].env | map(.name) | index("VLLM_LOGGING_LEVEL")')
+kubectl patch disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} --type=json \
+  -p "[{\"op\": \"remove\", \"path\": \"/spec/roles/${ROLE}/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/${ENV}\"}]"
 ```
 
 ## Cleanup

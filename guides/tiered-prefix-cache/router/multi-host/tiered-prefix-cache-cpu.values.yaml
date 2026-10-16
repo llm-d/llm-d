@@ -16,6 +16,10 @@ router:
         kind: EndpointPickerConfig
         plugins:
         - type: no-hit-lru-scorer
+          parameters:
+            # Use the HBM index for the cold-request check. If you do not
+            # set this, the router adds one more prefix producer.
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer
           name: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer

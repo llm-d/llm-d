@@ -16,12 +16,19 @@ router:
             parameters:
               modelName: Qwen/Qwen3-32B
               vllm:
+                # Dedicated render pool (../render/standalone/): SGLang serves no
+                # /v1/*/render endpoints of its own.
                 url: "http://precise-prefix-cache-routing-render:8000"
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer
             parameters:
               tokenProcessorConfig:
                 blockSizeTokens: 64
+                # Router-internal block keys; see the vLLM values. Keep the
+                # algorithm fixed for the index's whole lifetime: with a
+                # persisted or shared index (e.g. the Redis backend), change it
+                # only together with an index flush and engine cache reset.
+                hashAlgorithm: xxh64
               speculativeIndexing: true
               indexerConfig:
                 kvBlockIndexConfig:
@@ -33,7 +40,8 @@ router:
                 discoverPods: true
                 podDiscoveryConfig:
                   socketPort: 5556
-                  replaySocketPort: 5559
+                  # No replaySocketPort: SGLang has no replay buffer, and a
+                  # failed replay dial clears the pod's index entries.
           - type: inflight-load-producer
             parameters:
               prefixMatchInfoProducerName: precise-prefix-cache-producer

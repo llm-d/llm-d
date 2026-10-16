@@ -140,34 +140,25 @@ Guidance:
 
 ### Defaults in the guides
 
-These vLLM model server overlays ship with this pattern, using a shorter drain
-window than the example above:
-
-- [Optimized Baseline](../../../guides/optimized-baseline/README.md): NVIDIA GPU,
-  AMD, CPU, Intel XPU, TPU v6 and TPU v7.
-- [Precise Prefix Cache Routing](../../../guides/precise-prefix-cache-routing/README.md):
-  NVIDIA GPU, AMD, CPU, Intel XPU, TPU v6 and TPU v7.
-- [Predicted Latency Routing](../../../guides/predicted-latency-routing/README.md):
-  the aggregated NVIDIA GPU, AMD, Intel XPU, TPU v6 and TPU v7 model servers.
-
-This includes their `gke` and `amd-ci` `INFRA_PROVIDER` variants, which build
-on the `base` overlays.
-
-Other overlays do not drain yet (tracked in
-[llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)), including the
-Optimized Baseline Iluvatar, MetaX, Rebellions NPU and TPU v7 dynamic-slice
-overlays, and the model servers Predicted Latency Routing reuses from other
-guides for its P/D and multimodal paths.
+The mainline vLLM model server overlays across the guides (including NVIDIA GPU,
+AMD, CPU, Intel XPU, and Google TPU, along with their `gke`, `aws`, and `amd-ci`
+`INFRA_PROVIDER` variants) ship with this pattern, using a shorter drain window
+than the example above. Third-party vendor images with unverified vLLM versions
+(Biren, Iluvatar, MetaX, Moore Threads, and Rebellions NPU) do not set
+`--shutdown-timeout` yet (tracked in
+[llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)).
 
 | Setting | Value | Where it is set |
 | --- | --- | --- |
-| `--shutdown-timeout` | 45s | The vLLM `args` in each guide's model server patch |
+| `--shutdown-timeout` | 45s | The vLLM `args` in each guide's model server manifest or patch |
 | `preStop` sleep | 15s | [`graceful-shutdown` component](../../../guides/recipes/modelserver/components/graceful-shutdown/kustomization.yaml) |
 | `terminationGracePeriodSeconds` | 75s (15s + 45s + 15s) | [`graceful-shutdown` component](../../../guides/recipes/modelserver/components/graceful-shutdown/kustomization.yaml) |
 
 If your requests run longer, raise `--shutdown-timeout` and set a matching
 `terminationGracePeriodSeconds` in the same patch. A value in the guide's patch
-overrides the component.
+overrides the component (for example, the [Tiered Prefix Cache](../../../guides/tiered-prefix-cache/README.md)
+GPU, AMD, and XPU base overlays set `terminationGracePeriodSeconds: 130` for
+storage connector teardown).
 
 ## Verification
 
@@ -201,6 +192,9 @@ Expected behavior with `--shutdown-timeout` set:
 - Confirm `--shutdown-timeout` is set; without it vLLM aborts immediately.
 - Confirm `terminationGracePeriodSeconds > --shutdown-timeout`; otherwise
   `SIGKILL` fires mid-drain.
+- If vLLM is launched from a shell script (`command: ["/bin/bash", "-c"]`),
+  start it with `exec vllm serve ...`. Otherwise `SIGTERM` goes to the shell
+  running as PID 1, which ignores it, and vLLM never starts draining.
 
 **Clients see hard errors instead of retries during shutdown**
 

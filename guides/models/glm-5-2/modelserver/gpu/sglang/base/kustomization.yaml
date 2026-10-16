@@ -1,0 +1,46 @@
+# Single DisaggregatedSet managing the SGLang prefill and decode roles.
+# Requires LWS v0.10.0+ with the DisaggregatedSet CRD and controller installed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic
+# merge patches anywhere in a build composing this base match roles,
+# containers, volumes, and env entries by name instead of array index.
+openapi:
+  path: disaggregatedset-schema.json
+
+components:
+  # The recipe needs SGLang main from October 2026 or later: per-rank Rust
+  # listeners, P/D bootstrap on every listener, --attn-dp-size and
+  # per-listener /health warmup. No release tag contains all of them yet, so
+  # use the nightly image.
+  - ../../../../../../recipes/modelserver/components/images/gpu-sglang/nightly
+  # Only the main sidecar image routes SGLang requests through the P/D
+  # handler so far.
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+# Pin the SGLang nightly this recipe was tested with
+# (nightly-dev-20261014-684fea8a): DeepEP v2 with MTP needs SGLang main from
+# October 2026, and later nightlies can change defaults without notice.
+images:
+  - name: docker.io/lmsysorg/sglang
+    newName: docker.io/lmsysorg/sglang
+    digest: sha256:ddae0e399d3d94f7827f16183301cf8dac4cf0eae0ef25590b7dac5881d713d8
+
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.2-FP8
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/engine-type: sglang
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true

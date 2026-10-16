@@ -506,8 +506,6 @@ def compare_level(level: int, baseline: Summary, mixed: Summary, env: Mapping[st
     checks.append(_upper_bound_check(f"{p} e2e p90", mixed.e2e_p90, baseline.e2e_p90, t("E2E_FACTOR"), t("E2E_ABS")))
     checks.append(_lower_bound_check(f"{p} req/s", mixed.rps, baseline.rps, t("RPS_FACTOR"), " req/s"))
     checks.append(_lower_bound_check(f"{p} output tok/s", mixed.output_tps, baseline.output_tps, t("TPS_FACTOR"), " tok/s"))
-    if level == min(LEVEL_DEFAULTS) if LEVEL_DEFAULTS else False:
-        pass
     # At 20 % the pool has spare capacity that queued async work should use. The
     # router's dispatch counter is the measure: with a deep backlog most async
     # clients time out before their turn, so client completions read near zero.
@@ -642,12 +640,19 @@ def capacity_check(name: str, sat: SaturationSummary | None, capacity: int, env:
 
 
 def band_counts_from_samples(samples: Iterable[Sample]) -> dict[int, float]:
-    """Per-priority request counters are cumulative, so the maximum seen is the total."""
-    counts: dict[int, float] = {}
-    for s in samples:
-        for prio, value in s.band_requests.items():
-            counts[prio] = max(counts.get(prio, 0.0), value)
-    return counts
+    """Requests each band dispatched during this run: last sample minus first.
+
+    The counters are cumulative since the EPP pod started, so the first sample
+    (taken before this run's traffic) is subtracted; otherwise traffic from
+    before the run, such as the smoke test or an earlier run against the same
+    EPP, would satisfy the band checks. A band missing from the first sample
+    started at zero.
+    """
+    with_bands = sorted((s for s in samples if s.band_requests), key=lambda s: s.t)
+    if not with_bands:
+        return {}
+    first, last = with_bands[0].band_requests, with_bands[-1].band_requests
+    return {prio: value - first.get(prio, 0.0) for prio, value in last.items()}
 
 
 def dispatch_rate(samples: Iterable[Sample], window: tuple[float, float] | None,
@@ -732,7 +737,6 @@ def async_only_checks(sat: SaturationSummary | None, async_summary: Summary, bas
 _SAMPLE_RE = re.compile(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+(\S+)')
 _LABEL_RE = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:[^"\\]|\\.)*)"')
 
-QUEUE_DURATION_COUNT = "llm_d_epp_flow_control_request_queue_duration_seconds_count"
 
 
 def parse_exposition(text: str) -> list[tuple[str, dict[str, str], float]]:
@@ -754,43 +758,18 @@ def parse_exposition(text: str) -> list[tuple[str, dict[str, str], float]]:
     return out
 
 
-def band_counts(text: str, metric: str = EPP_BAND_REQUESTS) -> dict[int, float]:
-    """Sum a per-priority counter across label sets; keys are band priorities.
-
-    Series with an ``outcome`` label count only when it is Dispatched (see
-    DISPATCHED); counters without one are summed whole.
-    """
-    counts: dict[int, float] = {}
-    for name, labels, value in parse_exposition(text):
-        if name != metric or "priority" not in labels or labels.get("outcome", DISPATCHED) != DISPATCHED:
-            continue
-        try:
-            prio = int(labels["priority"])
-        except ValueError:
-            continue
-        counts[prio] = counts.get(prio, 0.0) + value
-    return counts
-
 
 def band_checks(counts: Mapping[int, float], realtime_priority: int = 100,
-                async_priorities: Iterable[int] = (30, -10)) -> list[Check]:
+                async_priorities: Iterable[int] = ASYNC_PRIORITIES) -> list[Check]:
     """Per-band request counters prove the objectives were applied and honoured."""
     shown = ", ".join(f"{k}={v:g}" for k, v in sorted(counts.items(), reverse=True)) or "none"
     rt = counts.get(realtime_priority, 0.0)
     async_total = sum(counts.get(p, 0.0) for p in async_priorities)
     return [
         Check("realtime classified into band 100", rt > 0, f"flow-control requests by priority: {shown}"),
-        Check("async classified into batch bands", async_total > 0,
+        Check("async classified into async bands", async_total > 0,
               f"sum over priorities {list(async_priorities)} = {async_total:g}"),
     ]
-
-
-def merge_band_counts(*sources: Mapping[int, float]) -> dict[int, float]:
-    out: dict[int, float] = {}
-    for src in sources:
-        for k, v in src.items():
-            out[k] = max(out.get(k, 0.0), v)
-    return out
 
 
 # ---------------------------------------------------------------------------

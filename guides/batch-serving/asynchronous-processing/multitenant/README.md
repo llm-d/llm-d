@@ -1,7 +1,7 @@
 # Multi-Tenant Async Processing — Quota, Priority & Saturation
 
-[![E2E eviction (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-evictable-gke-acc-gpu-vllm-x.yaml)
-[![E2E holdback (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml)
+[![E2E eviction (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-gke-acc-gpu-vllm-x.yaml)
+[![E2E holdback (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml)
 
 An advanced [Async Processor](https://github.com/llm-d/llm-d-async) scenario built on the
 [asynchronous-processing](../README.md) guide, across two dimensions — **team × tier** — for one model served by one llm-d Router
@@ -162,6 +162,19 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
   the llm-d Router InferencePool) and a single vLLM model server serving `Qwen/Qwen3-32B` on two GPUs (tensor
   parallelism 2).
 
+### Get the guide
+
+Every command below runs from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d): the manifests, Helm values, and Kustomize overlays it applies live next to this guide. Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
+
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
+
 Then set this guide's environment (on top of the base guide's variables). `GPUS`, `FLOW_CONTROL` and
 `QUEUE_BACKEND` select the alternatives described in the steps below:
 
@@ -170,7 +183,7 @@ Then set this guide's environment (on top of the base guide's variables). `GPUS`
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export MT=${REPO_ROOT}/guides/batch-serving/asynchronous-processing/multitenant
 export NAMESPACE=llm-d-async
-export ASYNC_VERSION=v0.11.0 # llm-d-async release (supports lane_objectives & tier-priority)
+export ASYNC_VERSION=v1.0.0 # llm-d-async release (supports lane_objectives & tier-priority)
 export INFRA_PROVIDER=base # options: base, gke; model server overlay variant
 export GPUS=2 # options: 2, 1; GPUs for the model server; 1 serves Qwen/Qwen3-8B instead
 export FLOW_CONTROL=evictable # options: evictable, holdback; router values: in-flight eviction (recommended), or priority holdback
@@ -845,11 +858,11 @@ Two GKE nightlies deploy this guide from its [`guide.yaml`](guide.yaml), includi
 from step 4, through [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) (`scripts/guide.py emit`),
 one for each router values file:
 
-- `nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x` (21:00 UTC): the default, in-flight eviction.
+- `nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (21:00 UTC): the default, in-flight eviction.
   Its TTFT allowance at 100 % realtime load is wider (`AMT_LEVEL_100_TTFT_ABS=0.6`): with the pool full of
   realtime work, a realtime request that finds an async request in its slot waits for an eviction, which adds
   up to about half a second to the slowest requests.
-- `nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (20:00 UTC): priority holdback (`FLOW_CONTROL=holdback`).
+- `nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x` (20:00 UTC): priority holdback (`FLOW_CONTROL=holdback`).
 
 Each benchmarks realtime traffic (the coordinator's `passthrough` mode) with and without a queued llm-d-async
 backlog (`wait` mode) at 20/80/90/100 % of the router's configured capacity. What the nightlies measure and how

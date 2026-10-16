@@ -80,14 +80,13 @@ vLLM and requests return 503), `istio` renders a `DestinationRule`, and `agentga
 
 ## Enable Prometheus Monitoring (Optional)
 
-The Router's monitoring values file (`features/monitoring.values.yaml`) renders a
-`ServiceMonitor` CR, which requires the **Prometheus Operator** CRDs to be present in the
-cluster. On a fresh cluster without those CRDs, layering this file onto the initial install
-will fail Helm validation.
+To enable monitoring, set up the [monitoring stack](../../../docs/operations/observability/setup.md) first, then layer the monitoring values file for your platform on top of an existing release (or add `-f` to the initial `helm install` command):
 
-To enable monitoring, deploy the monitoring stack first (see the
-[Observability guide](../../../docs/operations/observability/setup.md)) and then layer the
-monitoring values file on top of an existing release:
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+`features/monitoring.values.yaml` renders a `ServiceMonitor` (`monitoring.coreos.com/v1`), which requires the **Prometheus Operator** CRDs in the cluster:
 
 ```bash
 helm upgrade <release-name> \
@@ -99,6 +98,25 @@ helm upgrade <release-name> \
   --version ${ROUTER_CHART_VERSION}
 ```
 
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+`features/monitoring-gke.values.yaml` renders a GMP `PodMonitoring` (`monitoring.googleapis.com/v1`), a metrics-reader `ServiceAccount` and token `Secret`, and the RBAC bindings required for the GMP collector to scrape the EPP (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot):
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
+<!-- tabs:end -->
+
 > [!NOTE]
 > `helm upgrade` does not inherit the previous release's values. Re-supply every `-f` and
 > `--set` the original install used, or the upgrade reverts them to chart defaults. For an
@@ -107,9 +125,44 @@ helm upgrade <release-name> \
 > `router.proxy.proxyType`, `router.inferencePool.create` and
 > `router.epp.flags.secure-serving` flags to the command above.
 
-If your cluster already has the Prometheus Operator CRDs installed, you can also add
-`-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the initial
-`helm install` command above instead.
+## Enable Distributed Tracing (Optional)
+
+To export OpenTelemetry spans from the EPP, set up your tracing collector (see [Trace Requests](../../../docs/operations/observability/tracing.md)) and layer the tracing values file for your platform onto the router release (pass `--set router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests):
+
+<!-- tabs:start group=tracing -->
+<details open>
+<summary><b>Jaeger (OSS / OpenShift)</b></summary>
+
+[`features/tracing.values.yaml`](features/tracing.values.yaml) exports traces to `http://otel-collector:4317` with a 5% sampling ratio (`samplerArg: "0.05"`):
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/tracing.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
+<details>
+<summary><b>GKE (Google Cloud Trace)</b></summary>
+
+[`features/tracing-gke.values.yaml`](features/tracing-gke.values.yaml) exports traces to the [GKE Managed OpenTelemetry](../../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) collector (`http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317`) with a 5% sampling ratio (`samplerArg: "0.05"`). If using the self-managed fallback collector (`install-otel-collector-jaeger.sh --gke`), layer [`features/tracing.values.yaml`](features/tracing.values.yaml) (`http://otel-collector:4317`) instead:
+
+```bash
+helm upgrade <release-name> \
+  ${ROUTER_STANDALONE_CHART} \
+  -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+  -f ${REPO_ROOT}/guides/recipes/router/features/tracing-gke.values.yaml \
+  -f ${REPO_ROOT}/guides/<your-guide>/router/<your-guide>.values.yaml \
+  -n ${NAMESPACE} \
+  --version ${ROUTER_CHART_VERSION}
+```
+
+</details>
+<!-- tabs:end -->
 
 ## Calibration
 
@@ -121,9 +174,12 @@ hardware/model. See its [README](calibration/README.md).
 
 Both modes share a common `base.values.yaml` containing the router image, ports, and common pod selector labels. Feature values (monitoring, tracing) and guide-specific values are layered on top:
 
-```
+```text
 base.values.yaml                              # shared defaults (this directory)
-  + features/monitoring.values.yaml           # optional feature toggles
+  + features/monitoring.values.yaml           # optional Prometheus Operator ServiceMonitor
+  + features/monitoring-gke.values.yaml       # optional GKE Managed Prometheus PodMonitoring
+  + features/tracing.values.yaml              # optional OpenTelemetry distributed tracing (Jaeger)
+  + features/tracing-gke.values.yaml          # optional GKE Managed OpenTelemetry tracing (Cloud Trace)
   + features/agentgateway-proxy.values.yaml   # required for agentgateway config args
   + <guide>/router/<guide>.values.yaml     # guide-specific overrides
 ```

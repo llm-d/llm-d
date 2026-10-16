@@ -68,6 +68,13 @@ rows because the serving engine changes prefill throughput.
 **Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
+The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per
+rank for GLM-5.2-FP8 on H200, measured on a DP8 wide-EP prefill cell (2048-token chunk). The
+[DeepSeek-V4](../../../models/deepseek-v4/README.md) guide (DeepSeek-V4-Pro on GB200) ships an
+**estimate**, `20000` per prefill pod (one endpoint fronting 4 DP ranks, ~5000 per rank), scaled
+from measured MoE prefill rates. Replace it with a `calibrate.sh` run on that hardware at
+`CHUNK_SIZE=8192` (requests must fit `--max-model-len 9280`), multiplied by 4 because a single
+request measures one rank.
 
 ## Filling a cell
 

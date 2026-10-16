@@ -434,12 +434,11 @@ def _check_env(env: Any, f: Findings) -> set[str]:
             continue
         declared.add(var)
         if not isinstance(spec, dict):
-            if spec is None or isinstance(spec, bool):
-                # YAML null/true/false would render and emit as the Python
-                # repr (`export VAR=None`). Quote the intended string.
+            if not isinstance(spec, str):
+                # Non-string YAML values can render as shell-invalid exports
+                # (for example, a list becomes `export VAR=['one', 'two']`).
                 f.error(
-                    f"env.static.{var}: value must be a string, got {spec!r} "
-                    f"(quote YAML null/booleans)"
+                    f"env.static.{var}: value must be a string, got {spec!r}"
                 )
             continue
         if "sensitive" in spec and not isinstance(spec["sensitive"], bool):
@@ -450,12 +449,10 @@ def _check_env(env: Any, f: Findings) -> set[str]:
                 f"env.static.{var}.sensitive: must be a YAML boolean, "
                 f"got {spec['sensitive']!r}"
             )
-        if "default" in spec and (
-            spec["default"] is None or isinstance(spec["default"], bool)
-        ):
+        if "default" in spec and not isinstance(spec["default"], str):
             f.error(
                 f"env.static.{var}.default: must be a string, got "
-                f"{spec['default']!r} (quote YAML null/booleans)"
+                f"{spec['default']!r}"
             )
         if spec.get("sensitive") is True:
             if "default" not in spec:

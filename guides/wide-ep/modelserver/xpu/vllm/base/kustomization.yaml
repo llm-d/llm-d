@@ -7,6 +7,7 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

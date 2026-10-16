@@ -6,9 +6,11 @@ resources:
   - ../base
 
 # Shared OCP metrics-reader auth (SA + token Secret; its ClusterRoleBinding is
-# removed below and created imperatively in the guide's RBAC step).
+# removed below and created imperatively in the guide's RBAC step), plus the
+# bearer+CA TriggerAuthentication.
 components:
   - ../../../../recipes/autoscaling/metrics-reader
+  - ../../../../workload-autoscaling/keda-epp/optimized-baseline/components/ocp-trigger-auth
 
 patches:
   # Drop the Component's ClusterRoleBinding: it pins a subject namespace and
@@ -21,22 +23,14 @@ patches:
       kind: ClusterRoleBinding
       metadata:
         name: keda-epp-metrics-reader-monitoring-view
-  # Repoint the TriggerAuthentication from CA-only to bearer+CA, using the
-  # ServiceAccount token Secret (token + service-ca.crt).
+  # Drop the ${NAMESPACE} placeholder; `kubectl apply -n` sets it.
   - patch: |-
-      - op: replace
-        path: /spec/secretTargetRef
-        value:
-          - parameter: bearerToken
-            name: keda-epp-metrics-reader-token
-            key: token
-          - parameter: ca
-            name: keda-epp-metrics-reader-token
-            key: service-ca.crt
+      - op: remove
+        path: /metadata/namespace
     target:
       kind: TriggerAuthentication
       name: keda-prometheus-auth
-  # Point the queue-depth trigger at Thanos Querier and enable bearer authentication.
+  # Point the queue-depth trigger at Thanos Querier with bearer authentication.
   - patch: |-
       - op: replace
         path: /spec/triggers/0/metadata/serverAddress
@@ -44,6 +38,10 @@ patches:
       - op: add
         path: /spec/triggers/0/metadata/authModes
         value: "bearer"
+      - op: add
+        path: /spec/triggers/0/authenticationRef
+        value:
+          name: keda-prometheus-auth
     target:
       kind: ScaledObject
       name: fast-model-actuation-keda-queue

@@ -161,7 +161,7 @@ To ground the diagram above, here are the example manifests that would produce t
 
 #### 1. InferenceObjectives (Traffic Classes)
 
-These [`InferenceObjective`](../../api-reference/inferenceobjective.md) resources (`llm-d.ai/v1`) define the priority of each traffic class and bind it to one or more `InferencePool`s in the same namespace via `poolRefs` or `poolSelector`. Note the use of a negative priority for best-effort workloads.
+These [`InferenceObjective`](../../api-reference/inferenceobjective.md) resources (`llm-d.ai/v1`) define the priority of each traffic class and bind it to one or more `InferencePool`s in the same namespace via `poolRefs` or `poolSelector`. Note the use of a negative priority for best-effort workloads. (When using `manifests.yaml` from `llm-d-router` `v0.11.0` or earlier, use `apiVersion: llm-d.ai/v1alpha2` with `spec.poolRef` instead; see [Deprecation and Migration](../../api-reference/inferenceobjective.md#deprecation-and-migration).)
 
 ```yaml
 apiVersion: llm-d.ai/v1
@@ -359,7 +359,7 @@ stateDiagram-v2
         Waiting --> Waiting: Band Ceiling Reached<br/>(Closed Gate)
     }
 
-    Queued --> Expired: TTL Expired<br/>(HTTP 503)
+    Queued --> Expired: TTL Expired<br/>(HTTP 429 / 503 if pool empty)
     Queued --> Cancelled: Client Disconnect<br/>(HTTP 503)
     Queued --> Drained: Controller Shutdown<br/>(HTTP 503)
     Queued --> Failed: Internal Error<br/>(HTTP 500)
@@ -464,6 +464,11 @@ The Flow Control layer exposes detailed metrics to track queuing dynamics and sy
 | `llm_d_epp_flow_control_request_enqueue_duration_seconds` | Histogram | Time taken to enqueue requests into the Flow Control layer. | `fairness_id`, `priority`, `outcome` |
 | `llm_d_epp_flow_control_pool_saturation` | Gauge | Pool saturation signal gating dispatch (1.0 is gating set point). | `inference_pool`, `stage` |
 | `llm_d_epp_flow_control_stale_endpoints` | Gauge | Number of candidate endpoints whose metrics are missing or older than staleness threshold. | `detector`, `stage` |
+| `llm_d_epp_flow_control_detector_saturation` | Gauge | Saturation signal reported by each child of a `max-saturation-detector` on evaluation. | `detector`, `stage` |
+| `llm_d_epp_flow_control_capacity_utilization_requests` | Gauge | Fraction of a priority band's effective request-count capacity currently occupied (0.0–1.0). | `priority`, `inference_pool` |
+| `llm_d_epp_flow_control_capacity_utilization_bytes` | Gauge | Fraction of a priority band's effective byte-size capacity currently occupied (0.0–1.0). | `priority`, `inference_pool` |
+| `llm_d_epp_flow_control_global_capacity_utilization_requests` | Gauge | Fraction of the global request-count capacity currently occupied across all priority bands (0.0–1.0). | `inference_pool` |
+| `llm_d_epp_flow_control_global_capacity_utilization_bytes` | Gauge | Fraction of the global byte-size capacity currently occupied across all priority bands (0.0–1.0). | `inference_pool` |
 | `llm_d_epp_flow_control_requests_total` | Counter | Total requests processed by the Flow Control layer by outcome. | `outcome`, `priority`, `inference_pool` |
 | `llm_d_epp_flow_control_revocations_issued_total` | Counter | Total in-flight eviction revocations issued, labeled by the demand band's priority. Emitted when `enableEviction` is set. | `priority`, `inference_pool` |
 | `llm_d_epp_flow_control_revocations_total` | Counter | Total in-flight eviction revocations by terminal outcome (`confirmed`, `timed_out`). Every issued revocation eventually increments exactly one outcome. | `outcome`, `inference_pool` |

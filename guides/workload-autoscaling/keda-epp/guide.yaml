@@ -28,11 +28,15 @@ env:
     EPP_SERVICE: {default: "optimized-baseline-epp"}
     INFERENCE_POOL: {default: "optimized-baseline"}
 
-    # Scaling signal. `queue` = EPP flow-control queue size (default, mature).
-    # `saturation` = EPP pool saturation (alternative, experimental - no nightly
-    # coverage yet). Rendered as an annotation only; it selects which leaf overlay
-    # the deploy step names, it does not gate execution.
-    SIGNAL: {default: queue, values: [queue, saturation]}
+    # Scaling signal.
+    # `inflight` = EPP in-flight requests (default, recommended): the simplest path,
+    #   no Flow Control required - the stock optimized-baseline EPP already emits it
+    #   via its inflight-load-producer plugin.
+    # `queue` = EPP flow-control queue size (requires Flow Control; mature).
+    # `saturation` = EPP pool saturation (requires Flow Control; experimental, no
+    #   nightly coverage yet).
+    # Selects which leaf overlay the deploy step applies and which prerequisite runs.
+    SIGNAL: {default: inflight, values: [inflight, queue, saturation]}
 
     # Target platform. `existing` = generic Kubernetes with the bundled
     # kube-prometheus-stack over plain in-cluster HTTP. `ocp` = OpenShift with
@@ -46,13 +50,21 @@ env:
   source: ["${REPO_ROOT}/guides/env.sh"]
 
 prerequisites:
-  # Prereq: complete the optimized-baseline guide (incl. enabling monitoring) and
-  # install KEDA. Then upgrade the router with the KEDA+EPP overlay, which turns on
-  # EPP Flow Control (both the queue-size and pool-saturation signals come from the
-  # flow-control subsystem) while keeping the monitoring feature values (EPP metrics
-  # port and its ServiceMonitor) enabled.
+  # Prereq: complete the optimized-baseline guide and install KEDA.
+  #
+  # The default `inflight` signal changes NOTHING about the optimized-baseline
+  # deployment: the stock EPP already emits llm_d_epp_inflight_requests via its
+  # inflight-load-producer plugin. Just deploy optimized-baseline with its own
+  # MONITORING=true option (which creates the EPP ServiceMonitor) - that is the only
+  # requirement; autoscaling is then only the ScaledObject applied in the deploy step
+  # below. There is deliberately no router upgrade for this path.
+  #
+  # The `queue` and `saturation` signals DO change the EPP: they enable EPP Flow
+  # Control (that subsystem is where the queue-size and pool-saturation metrics come
+  # from) by upgrading the router with the overlay's router.values.yaml.
   router:
-    - run: |
+    - when: {SIGNAL: [queue, saturation]}
+      run: |
         helm upgrade optimized-baseline \
           ${ROUTER_STANDALONE_CHART} \
           -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -61,7 +73,11 @@ prerequisites:
           -f ${OVERLAY_ROOT}/router.values.yaml \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
   confirm:
-    - run: |
+    - when: {SIGNAL: [inflight]}
+      run: |
+        kubectl get servicemonitor -n ${NAMESPACE}
+    - when: {SIGNAL: [queue, saturation]}
+      run: |
         kubectl logs deployment/optimized-baseline-epp -c epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
         kubectl get servicemonitor -n ${NAMESPACE}
 
@@ -78,6 +94,12 @@ deploy:
   # Generic Kubernetes uses the bundled kube-prometheus-stack over plain
   # in-cluster HTTP with no client auth; OpenShift uses Thanos Querier + the
   # shared metrics-reader recipe.
+  apply_k8s_inflight:
+    - when: {SIGNAL: [inflight], ENV: [existing]}
+      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+  apply_ocp_inflight:
+    - when: {SIGNAL: [inflight], ENV: [ocp]}
+      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
   apply_k8s_queue:
     - when: {SIGNAL: [queue], ENV: [existing]}
       run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
@@ -121,14 +143,14 @@ verify:
           # scaleUp/scaleDown stabilization windows (a full window can elapse before
           # the HPA acts on a decision); the nightly lowers these windows in its
           # overlay and can override the timeouts shorter.
-          # The defaults below drive scale-up through the running-request term
-          # (per-replica target 16) before any queue forms. To exercise the
-          # queue-driven trigger specifically, raise SCALE_CONCURRENCY and
-          # SCALE_MAX_TOKENS until llm_d_epp_flow_control_queue_size goes non-zero;
-          # the queue only forms once load exceeds a replica's serving capacity, and
-          # the threshold depends on the model, GPU, tensor-parallel degree, and
-          # max-model-len (a larger model queues at lower concurrency), so climb from
-          # a few hundred concurrent requests rather than assuming a fixed value.
+          # For the default inflight signal, the burst below drives scale-up directly:
+          # in-flight requests rise with concurrency and cross the per-replica target
+          # (16). The queue and saturation signals (Flow Control) instead stay near zero
+          # until a replica is genuinely saturated; to exercise those, raise
+          # SCALE_CONCURRENCY and SCALE_MAX_TOKENS until the backlog metric
+          # (llm_d_epp_flow_control_queue_size) goes non-zero - the level needed depends
+          # on the model, GPU, tensor-parallel degree, and max-model-len, so climb from a
+          # few hundred concurrent requests rather than assuming a fixed value.
           : "${SCALE_CONCURRENCY:=30}" "${SCALE_TOTAL:=400}" "${SCALE_MAX_TOKENS:=512}" "${SCALE_UP_TIMEOUT:=360}" "${SCALE_DOWN_TIMEOUT:=360}"
           MIN=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.spec.minReplicas}' 2>/dev/null); MIN=${MIN:-1}
           HOST=$(kubectl get service optimized-baseline-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}'):80
@@ -140,7 +162,7 @@ verify:
             | kubectl exec -i -n ${NAMESPACE} $POD -- tee /tmp/payload.json >/dev/null
           BASE=$(kubectl get hpa ${HPA_NAME} -n ${NAMESPACE} -o jsonpath='{.status.desiredReplicas}' 2>/dev/null); BASE=${BASE:-$MIN}
           [ "$BASE" -le "$MIN" ] || { echo "baseline desiredReplicas=$BASE already above min=$MIN"; exit 1; }
-          echo "-- firing burst (concurrency=${SCALE_CONCURRENCY} total=${SCALE_TOTAL}) to drive running-requests over threshold --"
+          echo "-- firing burst (concurrency=${SCALE_CONCURRENCY} total=${SCALE_TOTAL}) to drive the scaling signal over threshold --"
           kubectl exec -n ${NAMESPACE} $POD -- sh -c \
             "seq 1 ${SCALE_TOTAL} | xargs -I{} -P ${SCALE_CONCURRENCY} curl -sS --max-time 300 -o /dev/null -X POST http://${HOST}/v1/completions -H 'content-type: application/json' --data-binary @/tmp/payload.json" >/dev/null 2>&1 &
           BURST=$!
@@ -166,6 +188,10 @@ verify:
 cleanup:
   # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
   # the target Deployment or reset its replica count.
+  - when: {SIGNAL: [inflight], ENV: [existing]}
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+  - when: {SIGNAL: [inflight], ENV: [ocp]}
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [queue], ENV: [existing]}
     run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [saturation], ENV: [existing]}

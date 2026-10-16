@@ -17,7 +17,7 @@ The Latency Predictor closes those gaps by learning the mapping from `(pod state
 
 ## Architecture
 
-The predictor ships as a set of sidecars colocated with the EPP in the same pod. A **training server** continuously retrains on completed requests, and one or more **prediction servers** read the latest model from a shared volume and answer predictions from the EPP on the hot path.
+The predictor ships as a set of sidecars colocated with the EPP in the same pod. A **training server** continuously retrains on completed requests, and one or more **prediction servers** periodically download the latest models from it over HTTP and answer predictions from the EPP on the hot path.
 
 ```text
                 ┌──────────────────────────────────────────────────────┐
@@ -30,13 +30,9 @@ The predictor ships as a set of sidecars colocated with the EPP in the same pod.
                 │  │ latency-    │        │   requests, retrains     │ │
                 │  │ based       │        │   XGBoost models         │ │
                 │  │ plugins     │        └────────────┬─────────────┘ │
-                │  │             │                     │ writes        │
-                │  │             │                     ▼ models        │
-                │  │             │        ┌──────────────────────────┐ │
-                │  │             │        │   Shared Volume          │ │
-                │  │             │        └────────────┬─────────────┘ │
-                │  │             │                     │ reads         │
-                │  │             │                     ▼ models        │
+                │  │             │                     │ models        │
+                │  │             │                     │ (HTTP, every  │
+                │  │             │                     ▼  30s)         │
                 │  │             │        ┌──────────────────────────┐ │
                 │  │             │───────►│   Prediction Servers     │ │
                 │  │             │predict │   (horizontally scaled)  │ │
@@ -72,6 +68,14 @@ The prediction model is an **XGBoost** regression one trained in realtime. Two m
 Training uses **stratified bucketing** — samples are partitioned by KV cache utilization (10% steps), prefix cache hit rate (0.25 steps), and similar features. Each bucket has its own sample cap, so traffic regimes that are rare in the current window (for example, a cold prefix cache during low load) are not forgotten by the model. Across benchmark runs the models achieve approximately **5% Mean Absolute Percentage Error** on both targets.
 
 The predictor assumes a **homogeneous inference pool** — every pod in the pool must share the same GPU type, model weights, and serving configuration. The features the model is trained on describe pod state (KV cache utilization, queue depth, running requests, prefix hit rate) without encoding pod shape, so predictions across heterogeneous hardware or serving configs would conflate regimes the model treats as identical. Heterogeneous pools are not yet modeled.
+
+#### Training and model sync
+
+The training server retrains each model every 10 seconds (`LATENCY_RETRAINING_INTERVAL_SEC`), once the model has enough training samples. A training server that started with no saved model, which is every new pod, retrains at 10 samples (`LATENCY_MIN_SAMPLES_FOR_RETRAIN_FRESH`). One that loaded saved models at startup, for example after a container restart, waits for `LATENCY_MIN_SAMPLES_FOR_RETRAIN` samples. A hash-selected fraction of incoming samples (`LATENCY_TEST_TRAIN_RATIO`) is held out as a test set rather than trained on.
+
+Each prediction server downloads the retrained models from the training server every 30 seconds (`MODEL_SYNC_INTERVAL_SEC`), so a retrained model reaches predictions up to 40 seconds after the retrain threshold is met (one retraining cycle plus one sync).
+
+On cold start the training server has no model to serve, so it fits a placeholder model on a single synthetic row. Prediction servers load it and report ready before any traffic arrives, but its near-constant predictions carry no information until the first retrain replaces it. A prediction server's `last_model_load` timestamp advancing after traffic shows that a trained model has landed.
 
 #### TTFT features
 

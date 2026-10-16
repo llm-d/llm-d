@@ -1,7 +1,7 @@
-# GLM-5.2 overrides for glm-5-2.values.yaml: replaces the single prefix-cache
-# scorer with dual GPU+CPU prefix-cache scoring, so P/D routing accounts for
-# CPU-offloaded KV when picking an endpoint. Apply after glm-5-2.values.yaml;
-# targetPorts and matchLabels are inherited from it.
+# GLM-5.2 overrides for glm-5-2.values.yaml: sizes the approximate prefix-cache
+# index to cover both GPU-resident and CPU-offloaded KV, so the prefix-cache
+# affinity filter counts a hit on either tier when it gates prefill. Apply after
+# glm-5-2.values.yaml; replicas, targetPorts and matchLabels are inherited from it.
 router:
   epp:
     pluginsCustomConfig:
@@ -23,35 +23,41 @@ router:
               prefill: always-disagg-pd-decider
         - type: prefill-filter
         - type: decode-filter
+        # One prefix index per rank covering GPU + CPU tiers. autoTune would size
+        # it from the engine's GPU block count only, so the capacity is fixed:
+        #   GPU: ~3,700 blocks (~12-15 GB of KV left per H200 rank after the
+        #        expert-parallel FP8 weights)
+        #   CPU: ~27,300 blocks (KV_OFFLOAD_CPU_BYTES = 100 GiB per rank at
+        #        ~61.5 KB/token: 78 layers x (656 B FP8 MLA + 132 B indexer))
+        # Recompute if you change gpu-memory-utilization, KV_OFFLOAD_CPU_BYTES
+        # or the topology; without an offloading component use ~3,700.
         - type: approx-prefix-cache-producer
-          name: gpu-prefix-cache-producer
-        - type: approx-prefix-cache-producer
-          name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
-            lruCapacityPerServer: 200000
-        - type: prefix-cache-scorer
-          name: gpu-prefix-cache-scorer
+            blockSizeTokens: 64
+            lruCapacityPerServer: 31000
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
           parameters:
-            prefixMatchInfoProducerName: gpu-prefix-cache-producer
-        - type: prefix-cache-scorer
-          name: cpu-prefix-cache-scorer
-          parameters:
-            prefixMatchInfoProducerName: cpu-prefix-cache-producer
-        - type: queue-scorer
+            # Measured on an H200 GLM-5.2-FP8 DP8 cell. Re-measure for other
+            # hardware or models (guides/recipes/router/calibration).
+            peakPrefillThroughput: 3585
+        - type: token-load-scorer
         - type: active-request-scorer
+        - type: max-score-picker
         schedulingProfiles:
+        # Prefill: keep prefix groups on ranks that hold them in GPU or CPU
+        # (affinity filter), then pick by queued prefill token load.
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: gpu-prefix-cache-scorer
-            weight: 5
-          - pluginRef: cpu-prefix-cache-scorer
-            weight: 2
-          - pluginRef: active-request-scorer
-            weight: 1
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: 3
+          - pluginRef: max-score-picker

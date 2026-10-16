@@ -15,3 +15,4 @@ resources:
 components:
   - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release-v0.26.0
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown

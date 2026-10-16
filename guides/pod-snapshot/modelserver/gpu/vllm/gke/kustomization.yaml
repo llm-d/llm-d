@@ -14,6 +14,7 @@ resources:
 namePrefix: pod-snapshot-nvidia-gpu-vllm-
 
 components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
 
 labels:

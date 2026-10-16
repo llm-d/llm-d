@@ -52,9 +52,9 @@ router:
                   # endpoints x tiers or real holders evict and affinity
                   # silently zeroes.
                   podCacheSize: 128
-              # Device-tier scoring weights, mirroring the approximate
-              # overlay's gpu:cpu prefix scorer weights of 5:2. Only relevant
-              # when an offloading component adds a CPU tier.
+              # Device-tier scoring weights: a CPU-tier hit counts 0.4 of a
+              # GPU-tier hit. Only relevant when an offloading component adds
+              # a CPU tier.
               kvCacheBackendConfigs:
               - name: gpu
                 weight: 1.0

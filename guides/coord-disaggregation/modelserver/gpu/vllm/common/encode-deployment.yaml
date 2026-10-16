@@ -36,6 +36,7 @@ spec:
             # each). The value must fit in the /dev/shm volume.
             # See https://docs.vllm.ai/en/v0.30.0/features/ec_cpu_connector/
             - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_producer", "ec_connector_extra_config": {"ec_enable_nixl": true, "ec_cpu_bytes": 4294967296}}'
+            - "--shutdown-timeout=45"
           env:
             - name: MODEL_NAME
               value: "Qwen/Qwen3-VL-32B-Instruct"

@@ -19,6 +19,9 @@ router:
         kind: EndpointPickerConfig
         featureGates:
           - flowControl
+        flowControl:
+          defaultRequestTTL: "60s"
+          noEndpointRequestTTL: "300s"   # cover the cold start from zero
         plugins:
           - type: queue-scorer
           - type: kv-cache-utilization-scorer

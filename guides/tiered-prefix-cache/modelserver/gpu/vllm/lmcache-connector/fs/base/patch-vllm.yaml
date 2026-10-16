@@ -17,6 +17,7 @@ spec:
             - "1024"
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            - "--shutdown-timeout=45"
           env:
             - name: HF_TOKEN
               valueFrom:

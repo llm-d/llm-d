@@ -2,7 +2,7 @@
 
 The script is run against fake kubectl/helm binaries that only log their argv
 (``kubectl kustomize`` is passed to the real kubectl, and manifests piped to
-``kubectl apply -f -`` are kept), so the tests check which commands the two
+``kubectl apply -f -`` are kept), so the tests check which commands the
 guide.yaml emits produce for CI and what the CI-rendered manifests look like.
 yq (mikefarah v4) and envsubst must be real.
 """
@@ -10,7 +10,6 @@ yq (mikefarah v4) and envsubst must be real.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import stat
 import subprocess
@@ -23,13 +22,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "guides/agentic-api"
 SCRIPT = GUIDE / "scripts/nightly-deploy-gke.sh"
-VALIDATOR = ROOT / ".github/scripts/e2e/e2e-validate-agentic-api.sh"
 NS = "nightly-test"
-BASE = "optimized-baseline"
 
 FAKE_KUBECTL = """#!/usr/bin/env bash
 echo "kubectl $*" >> "${FAKE_CALLS}"
-# Rendering is real: the script builds the base guide's model server overlay.
+# Rendering is real: the script builds the guide's model server overlay.
 if [[ "${1:-}" == "kustomize" ]]; then exec "${REAL_KUBECTL}" "$@"; fi
 if [[ "${1:-}" == "apply" && "$*" == *"-f -"* ]]; then
   cat >> "${FAKE_STDIN_APPLIED}"
@@ -103,20 +100,20 @@ def _modelserver(tmp_path: Path) -> dict:
     return deployments[0]
 
 
-def test_happy_path_deploys_both_guides_from_guide_yaml(tmp_path: Path) -> None:
+def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path) -> None:
     result = _run(tmp_path)
     assert result.returncode == 0, result.stderr
     calls = _calls(tmp_path)
 
-    # The base guide's prerequisites.gaie, URL resolved through guides/env.sh.
+    # prerequisites.gaie, URL resolved through guides/env.sh.
     crd = _index(calls, "kubectl apply -f https://")
     assert "gateway-api-inference-extension" in calls[crd]
 
-    # The base guide's router: deploy.standalone with its own values, release
-    # name optimized-baseline, which is what agentic-api resolves the EPP from.
-    router = _index(calls, f"helm install {BASE} ")
+    # The router: deploy.standalone with the Optimized Baseline values, release
+    # name agentic-api, which is what LLM_API_BASE resolves the EPP from.
+    router = _index(calls, "helm install agentic-api ")
     assert f"-n {NS}" in calls[router]
-    assert f"guides/{BASE}/router/{BASE}.values.yaml" in calls[router]
+    assert "guides/optimized-baseline/router/optimized-baseline.values.yaml" in calls[router]
 
     # The model server: the gke overlay with the two CI-only deviations.
     ms = _modelserver(tmp_path)
@@ -141,13 +138,12 @@ def test_happy_path_deploys_both_guides_from_guide_yaml(tmp_path: Path) -> None:
     api_wait = _index(calls, f"kubectl rollout status -n {NS} deployment/agentic-api ")
     assert crd < router < ms_apply < ms_wait < secret < postgres < api_wait
 
-    # Standalone Mode: agentic-api dials the base guide's EPP Service by DNS.
+    # agentic-api dials the router's EPP Service by DNS.
     applied = [d for d in yaml.safe_load_all((tmp_path / "stdin-applied.yaml").read_text()) if d]
     api = next(d for d in applied if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentic-api")
     assert api["spec"]["template"]["spec"]["containers"][0]["args"] == [
-        "--llm-api-base", f"http://{BASE}-epp.{NS}.svc.cluster.local:80",
+        "--llm-api-base", f"http://agentic-api-epp.{NS}.svc.cluster.local:80",
     ]
-    assert not any(c.startswith("kubectl apply") and "manifests/gateway" in c for c in calls)
 
 
 def test_postgres_storage_class_can_be_overridden(tmp_path: Path) -> None:
@@ -170,9 +166,3 @@ def test_crd_install_gives_up_after_three_attempts(tmp_path: Path) -> None:
     assert "CRD install failed after 3 attempts" in result.stderr
     assert len([c for c in _calls(tmp_path) if c.startswith("kubectl apply -f https://")]) == 3
     assert not any(c.startswith("helm ") for c in _calls(tmp_path))
-
-
-def test_validator_targets_the_base_guide_the_deploy_script_installs() -> None:
-    pattern = re.compile(r'^BASE_GUIDE_NAME="([^"]+)"$', re.MULTILINE)
-    assert pattern.findall(SCRIPT.read_text()) == [BASE]
-    assert pattern.findall(VALIDATOR.read_text()) == [BASE]

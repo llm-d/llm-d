@@ -3,3 +3,6 @@ kind: Kustomization
 resources:
   - encode-deployment.yaml
   - prefill-deployment.yaml
+
+components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown

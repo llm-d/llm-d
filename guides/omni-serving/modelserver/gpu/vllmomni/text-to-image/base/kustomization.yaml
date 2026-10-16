@@ -6,6 +6,7 @@ resources:
 namePrefix: omni-serving-t2i-nvidia-gpu-vllm-omni-
 
 components:
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../../recipes/modelserver/components/images/gpu-vllm-omni/release
 
 labels:

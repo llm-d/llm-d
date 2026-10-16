@@ -102,6 +102,26 @@ def test_yaml_null_and_bool_env_values_fail_validation():
     assert "env.static.BADDEFAULT" in msgs
 
 
+@pytest.mark.parametrize(
+    "spec, finding_path",
+    [
+        (["one", "two"], "env.static.BAD"),
+        ({"default": ["one", "two"]}, "env.static.BAD.default"),
+    ],
+)
+def test_list_env_values_fail_validation_and_cli_emit(tmp_path, capsys, spec, finding_path):
+    data = _minimal()
+    data["env"]["static"]["BAD"] = spec
+    bad_yaml = yaml.safe_dump(data)
+    findings = guide.Guide.from_text(yaml_text=bad_yaml).check_yaml()
+    assert any(finding_path in str(f) and "must be a string" in str(f) for f in findings)
+
+    path = tmp_path / "guide.yaml"
+    path.write_text(bad_yaml)
+    assert guide.main(["emit", str(path), "env"]) == 1
+    assert "export BAD=" not in capsys.readouterr().out
+
+
 def test_non_bool_sensitive_flag_fails_validation():
     # `sensitive: "true"` passed validation as non-sensitive but was treated
     # as sensitive by render and emit — the export silently vanished.

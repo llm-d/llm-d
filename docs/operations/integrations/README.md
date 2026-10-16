@@ -3,7 +3,7 @@
 Layer additional APIs and gateways on top of a running **llm-d** deployment:
 
 - **AI gateways** ([LiteLLM](./litellm.md), [Kong AI Gateway](./kong.md)), described below.
-- **[Agentic API](../../../guides/agentic-api/README.md)** (Experimental): adds the OpenAI-compatible Responses API (stateful multi-turn conversations, tool loops, WebSocket streaming) in front of any guide that serves vLLM through the llm-d Router, for agentic clients and coding harnesses.
+- **The stateful OpenAI Responses API** for agentic clients and coding harnesses is a well-lit path of its own: [Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md).
 
 ## AI Gateways
 
@@ -56,4 +56,3 @@ Select a guide to proceed with deployment:
 
 - **[LiteLLM Proxy Guide](./litellm.md)**: Deploy LiteLLM with PostgreSQL for virtual API key management, user spend tracking, budget caps, and multi-provider routing.
 - **[Kong AI Gateway Guide](./kong.md)**: Deploy Kong in DB-less mode using Kubernetes Gateway API and custom resources (`KongPlugin`, `HTTPRoute`) for high-performance routing.
-- **[Agentic API](../../../guides/agentic-api/README.md)** (Experimental): Serve the stateful Responses API in front of a deployed guide's router.

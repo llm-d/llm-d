@@ -38,6 +38,7 @@ spec:
             - "--port"
             - "8000"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=45"
           env:
             # Snapshot configuration
             - name: PYTHONPATH

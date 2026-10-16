@@ -217,18 +217,18 @@ def verify_webhook_mode(base_url: str, model: str) -> None:
 
         func_calls = [item for item in body1.get("output", []) if item.get("type") == "function_call"]
         # The most common cause of an empty function_call list is not agentic-api but
-        # the base guide's model server: tool calling is off unless vLLM was started
+        # the model server: tool calling is off unless vLLM was started
         # with --enable-auto-tool-choice and a --tool-call-parser for this model.
         # Say so, rather than dumping the output and leaving the reader guessing.
         assert func_calls, (
             f"Model {model!r} returned no function_call item, so the stateful tool loop "
             f"cannot be verified.\n"
-            f"  Most likely the base guide's model server is missing the tool-calling "
+            f"  Most likely the model server is missing the tool-calling "
             f"flags. Check that its vLLM args include:\n"
             f"      --enable-auto-tool-choice\n"
             f"      --tool-call-parser <parser for this model>\n"
             f"      --reasoning-parser <parser for this model>\n"
-            f"  See the Prerequisites section of guides/agentic-api/README.md.\n"
+            f"  See \"Add agentic-api to Another Guide\" in guides/agentic-api/README.md.\n"
             f"  Raw output was: {body1.get('output')}"
         )
         fcall = func_calls[0]

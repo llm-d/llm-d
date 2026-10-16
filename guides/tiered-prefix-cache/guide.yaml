@@ -128,9 +128,14 @@ deploy:
   monitoring_values:
     # skip_in ci: the README-parsing nightlies harvest every `export`, and they
     # never enabled router monitoring for this guide.
-    - when: {MONITORING: ["true"]}
-      skip_in: [ci]
-      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"], INFRA_PROVIDER: [gke]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   standalone:
     - run: |

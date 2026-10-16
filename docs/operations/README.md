@@ -2,7 +2,7 @@
 
 Operational Excellence guidelines focus on overarching Day-2 site reliability engineering, cluster-wide telemetry frameworks, and safe lifecycle rollout strategies for generative AI inference deployments.
 
-While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, integrations such as AI gateways and the Responses API, and post-deployment validation. These capabilities are model-agnostic and layer onto any deployment.
+While [well-lit path guides](../well-lit-paths/README.md) teach how to configure llm-d's native intelligent routing algorithms and inference optimizations, this top-level section covers how to operate, scale, multiplex, queue, and lifecycle-manage an llm-d fleet in production: capacity and cold starts, multi-tenant traffic and batch, rollouts, observability, integrations such as AI gateways, and post-deployment validation. These capabilities are model-agnostic and layer onto any deployment.
 
 ## Monitor and Troubleshoot
 
@@ -28,7 +28,7 @@ Load one replica from storage and transfer weights to peer replicas over GPU-to-
 
 ### [Restore from Pod Snapshots](../../guides/pod-snapshot/README.md)
 
-Checkpoint and restore single-GPU vLLM model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
+Checkpoint and restore single-GPU vLLM and SGLang model servers to eliminate model download and engine initialization on scale-out, currently implemented with GKE Pod Snapshots and GKE Sandbox (gVisor).
 
 ### [Reuse Warm Model Servers (FMA)](../../guides/fast-model-actuation/README.md)
 
@@ -103,10 +103,6 @@ Share async queues across teams with reserved quotas, tier-priority dispatch, an
 ### Serve External APIs: [LiteLLM](integrations/litellm.md) and [Kong AI Gateway](integrations/kong.md)
 
 Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs. See [Integrations](integrations/README.md) for the architecture and integration modes.
-
-### [Serve the Responses API with Agentic API](../../guides/agentic-api/README.md) (Experimental)
-
-Add the OpenAI-compatible Responses API (stateful multi-turn conversations, tool loops, WebSocket streaming) in front of any guide that serves vLLM through the llm-d Router, for agentic clients and coding harnesses.
 
 ## Size and Scale llm-d Components
 

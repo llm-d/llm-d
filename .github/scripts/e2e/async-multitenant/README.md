@@ -1,9 +1,9 @@
 # Async multi-tenant nightly validator
 
 Validator for the two scheduled async multi-tenant lanes:
-`nightly-e2e-async-multitenant-evictable-gke-acc-gpu-vllm-x` (in-flight
+`nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (in-flight
 eviction, the guide's default router values) and
-`nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x` (priority holdback, the
+`nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x` (priority holdback, the
 alternative). It proves that realtime traffic through llm-d-router keeps its TTFT, latency and
 throughput while llm-d-async holds a backlog against the same pool, and that
 llm-d-async alone drives the pool to saturation.
@@ -32,9 +32,11 @@ inference-perf harness pods ──HTTP──> llm-d-coordinator:8080 ──> llm
 
 ## What runs
 
-`run.py` installs the llm-d-benchmark CLI on the runner and executes one
-`llmdbenchmark run --endpoint-url` experiment (`experiment.py` renders it) with
-concurrent treatment groups:
+`run.py` installs the llm-d-benchmark CLI on the runner and executes an
+experiment (`experiment.py` renders it) of concurrent treatment groups, as one
+`llmdbenchmark run --endpoint-url` per part: async-only, then each level's
+baseline and mixed groups. Before each part it waits for the previous part's
+async work to drain (see below):
 
 | Group | Members | Purpose |
 | --- | --- | --- |
@@ -47,11 +49,29 @@ capacity `C = concurrency-detector maxConcurrency x vLLM replicas` (10 x 1 in
 the guide values); `k_L = round(L/100 x C)` = 2, 8, 9, 10 for 20/80/90/100 %.
 Realtime is a closed-loop `load.type: concurrent` stage, so `k` is exact. The
 async member is a constant-rate open-loop stage far above capacity with a
-client timeout of `max(20, 4 x SERVICE_S)` seconds: undispatched requests are cancelled when the client gives up
-(verified: llm-d-async never dispatches them even after claiming them from
-Redis), so every async stage lasts `duration + timeout` seconds whatever the
-realtime level, and leaves no backlog behind. The coordinator queues dispatch
+client timeout of `max(120, 4 x SERVICE_S)` seconds. When a client gives up, the
+coordinator cancels its request: llm-d-async drops it if still queued and, since
+v0.11.0 (llm-d/llm-d-async#474), aborts it in vLLM if already dispatched. The
+queue is drained oldest first, so under this overload the dispatched request is
+usually one whose client is about to give up; with a short timeout (20 s
+previously) most dispatched async requests were aborted moments after their
+prefill, and the wasted prefills delayed realtime at 100 % load (TTFT p90 about
+0.5 s instead of 0.1 s). 120 s keeps clients waiting while the realtime member
+runs. Every async stage lasts up to `duration + timeout` seconds whatever the
+realtime level. The coordinator queues dispatch
 from their own 16-worker llm-d-async pool so async alone can exceed `C`.
+
+An async member's queued and in-flight requests can outlive it: llm-d-async
+notices a cancellation within about a second, and a longer `ASYNC_TIMEOUT`
+leaves a larger backlog. So before each part `run.py` waits until the guide's
+team queues in Redis are empty and the sampler's latest vLLM reading shows
+nothing running or waiting, for `DRAIN_QUIET_S` in a row. If Redis cannot be
+read, the vLLM check alone decides (the record's `queue_check` is
+`unavailable`). After `DRAIN_TIMEOUT_S`, by default the async client timeout
+plus 60 s, the run continues anyway; `report.json`'s `drains` records every wait. Without
+this, a level's realtime-only baseline could run against the previous level's
+leftover async work, which inflates the baseline and loosens that level's
+bounds.
 
 The two members of a mixed group can start minutes apart when their pods land
 on freshly provisioned nodes. The async member is therefore listed first and
@@ -96,7 +116,8 @@ by design and its own completion count understates what the pool processed.
 `ceiling` is priority holdback's `minCeiling` from the router values (0.5 in
 `flow-control-holdback.yaml`), the share of capacity the router admits
 `overflow-batch` to, or 1 without holdback. Finally the same counters must show
-traffic in band 100 and in the batch bands (30 / -10).
+traffic in band 100 and in the async bands (60, 30, -5, -10), counted as the
+increase across this run's samples, so traffic from before the run cannot satisfy them.
 
 Cluster metrics come from run.py's own sampler: a curl pod it polls every
 `SAMPLE_INTERVAL_S` seconds for the whole run (vLLM running/waiting requests,
@@ -137,10 +158,11 @@ eviction round trip (up to about 0.5 s on H100s).
 | `FLOW_CONTROL` | `evictable` | the guide's router values the deploy script installed (`evictable` or `holdback`); `C` and the async ceiling are read from that file |
 | `CAPACITY` | from the router values x ready replicas | override `C` |
 | `REALTIME_SECONDS` / `SERVICE_S` | `80` / `2.0` | size realtime stages (`num_requests = k x REALTIME_SECONDS / SERVICE_S`) |
-| `ASYNC_RATE` / `ASYNC_DURATION` / `ASYNC_TIMEOUT` | `max(10, 2 x C / SERVICE_S)` / `max(120, REALTIME_SECONDS + START_SKEW_S)` / `max(20, 4 x SERVICE_S)` | async member load: arrivals at twice what the pool completes keep a backlog queued; the timeout must let dispatched requests finish |
+| `ASYNC_RATE` / `ASYNC_DURATION` / `ASYNC_TIMEOUT` | `max(10, 2 x C / SERVICE_S)` / `max(120, REALTIME_SECONDS + START_SKEW_S)` / `max(120, 4 x SERVICE_S)` | async member load: arrivals at twice what the pool completes keep a backlog queued; the timeout must keep clients waiting while the realtime member runs (see above) |
 | `START_SKEW_S` | `60` | how much later than the async pod the realtime pod may start and still run inside the backlog (use 180 on GKE Autopilot, where each harness pod may get a new node) |
 | `RETRIES` | `1` | re-runs of levels whose comparison came back unusable (0 disables) |
 | `WAIT_TIMEOUT` | `900` | seconds the CLI waits for a treatment before giving up (cuts off a hung client) |
+| `DRAIN_TIMEOUT_S` / `DRAIN_QUIET_S` | `ASYNC_TIMEOUT` + 60 / `10` | before each part: the longest wait for the async backlog to drain, and how long the queues and vLLM must stay idle to count as drained |
 | `WARMUP_S` | `15` | seconds trimmed from the front of every window |
 | `WORKDIR` | `/tmp/amt` | CLI clone, workspace and rendered experiment |
 | `RESULTS_DIR` | `/tmp/pod-logs-$GUIDE_NAME` | where `report.json` and results are copied (the reusable uploads this directory) |
@@ -198,6 +220,6 @@ python3 -m unittest discover -s .github/scripts/e2e/async-multitenant -p 'test_*
 ## Artifacts
 
 `$RESULTS_DIR/report.json` (summaries, ratios, checks), `llmdbenchmark.log`
-(plus `llmdbenchmark-retry<N>.log` when a level was re-run), `experiment.yaml`, `epp-metrics.txt`, `coordinator.log`, and a copy of every
+(one `llmdbenchmark-<part>.log` per part, plus `-retry<N>` ones when a level was re-run), `experiment-<part>.yaml`, `epp-metrics.txt`, `coordinator.log`, and a copy of every
 treatment's results directory. In CI the run's step summary shows the
 per-level table and the check list.

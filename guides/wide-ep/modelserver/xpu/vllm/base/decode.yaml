@@ -81,7 +81,8 @@ spec:
                   --data-parallel-hybrid-lb \
                   --enable-expert-parallel \
                   --all2all-backend allgather_reducescatter \
-                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                  --shutdown-timeout 45
             env:
               - name: VLLM_USE_V1
                 value: "1"

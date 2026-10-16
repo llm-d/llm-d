@@ -45,6 +45,9 @@ Options:
   -e, --epp-host HOST           EPP service host (default: \$GATEWAY_HOST, else auto-discover)
   --up-timeout SECONDS          Max wait for scale-up decision (default: 120)
   --down-timeout SECONDS        Max wait for scale-down decision (default: 180)
+  --require-queue-size          Also require the queue_size trigger to cross its
+                                threshold during the burst (proves queue depth, not
+                                just running requests, drove the scale decision)
   -v, --verbose                 Verbose mode
   -h, --help                    Show help
 EOF
@@ -61,6 +64,13 @@ UP_TIMEOUT="${SCALE_UP_TIMEOUT:-120}"
 DOWN_TIMEOUT="${SCALE_DOWN_TIMEOUT:-180}"
 POLL_INTERVAL="${SCALE_POLL_INTERVAL:-5}"
 VERBOSE=false
+# When true, additionally require the queue_size trigger (not just running) to have
+# crossed its threshold during the burst - i.e. prove queue depth drove the scale,
+# not only in-flight requests. Off by default: lanes whose EPP saturation gate keeps
+# the queue empty under load (e.g. the AMD lane's utilization-detector) would never
+# build queue_size and must not fail. The OCP lane sets `-- --require-queue-size`
+# and its deploy script lowers maxConcurrency so the queue actually forms.
+REQUIRE_QUEUE_SIZE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -72,6 +82,7 @@ while [[ $# -gt 0 ]]; do
     -e|--epp-host)     EPP_HOST_OVERRIDE="$2"; shift 2 ;;
     --up-timeout)      UP_TIMEOUT="$2"; shift 2 ;;
     --down-timeout)    DOWN_TIMEOUT="$2"; shift 2 ;;
+    --require-queue-size) REQUIRE_QUEUE_SIZE=true; shift ;;
     -v|--verbose)      VERBOSE=true; shift ;;
     -h|--help)         show_help ;;
     *) echo "Unknown option: $1"; show_help ;;
@@ -109,6 +120,42 @@ fi
 MIN=$(kubectl get hpa "$HPA" -n "$NAMESPACE" -o jsonpath='{.spec.minReplicas}' 2>/dev/null || echo 1)
 MAX=$(kubectl get hpa "$HPA" -n "$NAMESPACE" -o jsonpath='{.spec.maxReplicas}' 2>/dev/null || echo 2)
 MIN="${MIN:-1}"
+
+# Resolve which KEDA external metric is the queue_size trigger. KEDA names external
+# metrics s<idx>-prometheus by trigger order, so find the trigger whose query
+# references flow_control_queue_size and derive its metric name + threshold.
+QUEUE_METRIC=""
+QUEUE_THRESHOLD=""
+for idx in 0 1 2 3 4 5 6 7; do
+  q=$(kubectl get scaledobject "$SCALEDOBJECT" -n "$NAMESPACE" \
+    -o jsonpath="{.spec.triggers[${idx}].metadata.query}" 2>/dev/null || true)
+  [[ -z "$q" ]] && break
+  case "$q" in
+    *queue_size*)
+      QUEUE_METRIC="s${idx}-prometheus"
+      QUEUE_THRESHOLD=$(kubectl get scaledobject "$SCALEDOBJECT" -n "$NAMESPACE" \
+        -o jsonpath="{.spec.triggers[${idx}].metadata.threshold}" 2>/dev/null || true)
+      break ;;
+  esac
+done
+if [[ "$REQUIRE_QUEUE_SIZE" == "true" && -z "$QUEUE_METRIC" ]]; then
+  echo "Error: --require-queue-size set but no trigger querying flow_control_queue_size found." >&2
+  kubectl get scaledobject "$SCALEDOBJECT" -n "$NAMESPACE" -o yaml >&2 || true
+  exit 1
+fi
+
+# Read a KEDA external metric's current averageValue as a plain number, normalizing
+# the Kubernetes milli-quantity suffix (e.g. "10500m" -> 10.5).
+metric_val() {
+  local v
+  v=$(kubectl get hpa "$HPA" -n "$NAMESPACE" \
+    -o jsonpath="{.status.currentMetrics[?(@.external.metric.name=='$1')].external.current.averageValue}" 2>/dev/null || true)
+  case "$v" in
+    "")  echo 0 ;;
+    *m)  awk "BEGIN{printf \"%g\", ${v%m}/1000}" ;;
+    *)   echo "$v" ;;
+  esac
+}
 
 # ── Discover the EPP service (traffic on :80) ────────────────────────────────
 HOST="${EPP_HOST_OVERRIDE:-}"
@@ -178,10 +225,20 @@ BURST_PID=$!
 # ── Assert scale-UP: desiredReplicas rises above baseline ───────────────────
 echo "── Waiting up to ${UP_TIMEOUT}s for a scale-up decision (desiredReplicas > ${MIN}) ──"
 scaled_up=false
+queue_crossed=false
+max_queue=0
 deadline=$(( SECONDS + UP_TIMEOUT ))
 while (( SECONDS < deadline )); do
   d=$(desired)
   echo "  $(hpa_line)"
+  # Track the queue_size trigger so we can assert it (not only running) drove the scale.
+  if [[ -n "$QUEUE_METRIC" ]]; then
+    qv=$(metric_val "$QUEUE_METRIC")
+    awk -v a="$qv" -v b="$max_queue" 'BEGIN{exit !(a>b)}' && max_queue="$qv"
+    if [[ -n "$QUEUE_THRESHOLD" ]] && awk -v v="$qv" -v t="$QUEUE_THRESHOLD" 'BEGIN{exit !(v>=t)}'; then
+      queue_crossed=true
+    fi
+  fi
   if [[ -n "$d" && "$d" -gt "$MIN" ]]; then
     echo "  ✓ scale-up decision observed: desiredReplicas=${d} (HPA current metric shown as TARGETS above)"
     scaled_up=true
@@ -200,6 +257,18 @@ if ! $scaled_up; then
   echo "   (the burst may have drained before a KEDA poll), or check the trigger." >&2
   kubectl describe hpa "$HPA" -n "$NAMESPACE" 2>/dev/null | grep -A6 -i "events\|metrics" >&2 || true
   exit 1
+fi
+
+# ── Optionally assert the queue_size trigger specifically drove the scale ────
+if [[ "$REQUIRE_QUEUE_SIZE" == "true" ]]; then
+  if $queue_crossed; then
+    echo "  ✓ queue_size trigger exercised: ${QUEUE_METRIC} reached ${max_queue} (threshold ${QUEUE_THRESHOLD}) during the burst"
+  else
+    echo "❌ queue_size did not cross its threshold (${QUEUE_THRESHOLD}); peak ${QUEUE_METRIC}=${max_queue}." >&2
+    echo "   Scale-up may have been driven only by running-requests. The EPP saturation gate" >&2
+    echo "   likely stayed open under the burst (check the concurrency-detector maxConcurrency)." >&2
+    exit 1
+  fi
 fi
 
 # ── Assert scale-DOWN: desiredReplicas returns to baseline ──────────────────

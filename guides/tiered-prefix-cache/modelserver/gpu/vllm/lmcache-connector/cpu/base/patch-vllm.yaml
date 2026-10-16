@@ -14,6 +14,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
             - "--max-num-seq=1024"
+            - "--shutdown-timeout=45"
           env:
             - name: HF_TOKEN
               valueFrom:

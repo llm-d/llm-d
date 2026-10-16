@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+components:
+  - ../../../../components/disaggregatedset-schema
+
+patches:
+  # Routing sidecar in front of the decode model server, speaking the vLLM NIXL protocol.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg
+      spec:
+        roles:
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    initContainers:
+                      - name: routing-proxy
+                        image: REPLACE_ROUTING_SIDECAR_IMAGE
+                        imagePullPolicy: Always
+                        args:
+                          - --port=8000
+                          - --kv-connector=nixlv2
+                          - --zap-log-level=1
+                          - --secure-serving=false
+                        ports:
+                          - name: sidecar
+                            containerPort: 8000
+                            protocol: TCP
+                        resources: {}
+                        restartPolicy: Always
+                        securityContext:
+                          allowPrivilegeEscalation: false
+                          runAsNonRoot: true

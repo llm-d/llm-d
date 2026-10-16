@@ -11,6 +11,7 @@ namePrefix: optimized-baseline-tpu-slice-vllm-
 
 components:
   - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

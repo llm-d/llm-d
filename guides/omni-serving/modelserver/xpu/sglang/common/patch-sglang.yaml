@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -eo pipefail
+              source /opt/intel/oneapi/setvars.sh --force
+              exec sglang serve \
+                --model-path=black-forest-labs/FLUX.2-klein-4B \
+                --host=0.0.0.0 \
+                --port=8000 \
+                --num-gpus=1 \
+                --performance-mode=memory
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+            - name: SGLANG_USE_SGL_XPU
+              value: "1"
+            - name: SYCL_CACHE_PERSISTENT
+              value: "1"
+          resources:
+            requests:
+              cpu: "8"
+              memory: 64Gi
+            limits:
+              cpu: "16"
+              memory: 96Gi
+            claims:
+              - name: intel-decode-claim
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: sglang-cache
+              mountPath: /root/.cache
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+        - name: sglang-cache
+          emptyDir: {}

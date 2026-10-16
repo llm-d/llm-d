@@ -1,0 +1,139 @@
+# The PodSnapshotStorageConfig uses tokenSource "podKSA", so the gVisor sandbox
+# authenticates to GCS as the Pod's KSA directly via Workload Identity
+# Federation. No `iam.gke.io/gcp-service-account` annotation is needed -- the
+# bucket IAM binding targets the `principal://.../sa/<ksa>` subject instead, so
+# the ServiceAccount from recipes/modelserver/common/sa.yaml is used unmodified.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # Start with 1 replica to create the initial PodSnapshot in GCS; scale out to
+  # N replicas (or enable HPA/KEDA) once the PodSnapshot reaches Ready=True.
+  replicas: 1
+  template:
+    spec:
+      runtimeClassName: gvisor
+      nodeSelector:
+        sandbox.gke.io/runtime: gvisor
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "docker.scripts.snapshot.sglang.launcher"]
+          args:
+            - "--model-path"
+            - "Qwen/Qwen3-32B"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            # Enables torch_memory_saver (CuMemAllocator) + CPU weight backup so
+            # release_memory_occupation / resume_memory_occupation offloads
+            # weights to CPU RAM and discards KV cache before checkpointing, then
+            # copies weights back to GPU VRAM on wake-up / restore.
+            - "--enable-memory-saver"
+            - "--enable-weights-cpu-backup"
+            - "--mem-fraction-static"
+            - "0.90"
+            - "--context-length"
+            - "8192"
+            - "--enable-metrics"
+            - "--uvicorn-access-log-exclude-prefixes"
+            - "/health"
+            - "/metrics"
+            - "/v1/models"
+          env:
+            # Snapshot configuration
+            - name: PYTHONPATH
+              value: "/workspace"
+            # Without this, SGLang's stdout is block-buffered and a slow cold start
+            # is indistinguishable from a hang in kubectl logs.
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: SNAPSHOT_PROVIDER
+              value: "gke_gvisor"
+            # After release_memory_occupation the weights exist twice -- in host
+            # RAM and in the HuggingFace cache on disk -- and both would land in
+            # the snapshot. Setting this purges the disk copy before the
+            # checkpoint; unset means "do not purge". Leave it unset when weights
+            # are mounted rather than downloaded: there is no duplicate to drop,
+            # and the purge would delete shared data. expanduser resolves this to
+            # /root/.cache/huggingface/hub, the container's writable layer --
+            # not the /.cache volume mounted below.
+            - name: MODEL_CACHE_DIR
+              value: "~/.cache/huggingface/hub"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: "16"
+              memory: 128Gi
+              nvidia.com/gpu: 1
+            requests:
+              cpu: "8"
+              memory: 96Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: sglang-config
+            # One mount per Python package level, matching the ConfigMaps
+            # generated in docker/scripts/snapshot. Nesting the second inside the
+            # first is what lets both use plain basenames as keys.
+            - mountPath: /workspace/docker/scripts/snapshot
+              name: snapshot-scripts
+              readOnly: true
+            - mountPath: /workspace/docker/scripts/snapshot/sglang
+              name: snapshot-scripts-sglang
+              readOnly: true
+          # Unlike vLLM, SGLang binds Uvicorn and serves 200 OK on /v1/models
+          # before the Scheduler finishes loading weights or warmup completes.
+          # Both startupProbe and readinessProbe must hit /health (which returns
+          # 503 while ServerStatus.Starting) so startupProbe does not pass early
+          # and hand off to livenessProbe during cold start.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 10
+            periodSeconds: 2
+            timeoutSeconds: 5
+            failureThreshold: 1800
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: sglang-config
+          emptyDir: {}
+        - name: snapshot-scripts
+          configMap:
+            name: snapshot-scripts
+        - name: snapshot-scripts-sglang
+          configMap:
+            name: snapshot-scripts-sglang

@@ -116,7 +116,8 @@ spec:
                       --no-disable-hybrid-kv-cache-manager \
                       --enable-cumem-allocator \
                       --numa-bind \
-                      --kv-cache-dtype fp8
+                      --kv-cache-dtype fp8 \
+                      --shutdown-timeout=45
                 env:
                   - name: HF_TOKEN
                     valueFrom:
@@ -360,7 +361,8 @@ spec:
                       --block-size 256 \
                       --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
                       --no-disable-hybrid-kv-cache-manager \
-                      --enable-cumem-allocator
+                      --enable-cumem-allocator \
+                      --shutdown-timeout=45
                 env:
                   - name: HF_TOKEN
                     valueFrom:

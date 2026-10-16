@@ -51,6 +51,7 @@ spec:
               - "--enable-expert-parallel"
               - "--block-size=256"
               - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+              - "--shutdown-timeout=45"
             env:
               - name: POD_IP
                 valueFrom:

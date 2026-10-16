@@ -22,7 +22,7 @@ The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas 
 | `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
 | `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
 
-Use `native` unless you need a capability it does not provide yet. The vLLM native overlays give each replica a 100 GB CPU tier (`cpu_bytes_to_use`), SGLang uses `--hicache-size=200`, LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE`, and the TPU connector uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`. Keep the CPU tier within the pod's memory limit when you change it. Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
+Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD and Intel XPU vLLM native overlays use 100 GiB. SGLang uses `--hicache-size=200` (GB per tensor-parallel rank), LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank), and the TPU connector uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`. vLLM keeps its CPU tier in `/dev/shm`, so the tier counts toward the pod's memory limit. When you change the tier size, change the pod's memory request and limit, and the router's `lruCapacityPerServer` (see the note in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
 
 For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md).
 
@@ -53,7 +53,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - For `VARIANT=fs`, a storage system that provides ReadWriteMany PVCs (see [Filesystem tier](#filesystem-tier)). For `HOST_TYPE=multi-host` on TPU v7, the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/multi-node.md).
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 ### Get the guide
 
@@ -136,18 +136,53 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> The router values configure two prefix-cache scorers: one for the accelerator (HBM) cache and one for the CPU tier. vLLM does not report how full its CPU tier is, so the CPU producer's capacity is set by hand (`lruCapacityPerServer`): the `single-host` values are sized for Qwen3-32B and the `multi-host` values for Qwen3-Coder-480B. Recompute it for other models.
+> The router values configure two prefix-cache scorers: one for the accelerator (HBM) cache and one for the CPU tier. vLLM does not report the size of its CPU tier, so you set the CPU producer's capacity (`lruCapacityPerServer`) by hand. The unit is a router block of 64 tokens:
+>
+> `lruCapacityPerServer` = CPU tier bytes per pod / (64 × KV bytes per token)
+>
+> The `single-host` value (19200) is for the default NVIDIA vLLM native overlay. If you use a different connector, model, or tier size, change it. For Qwen3-32B, the KV cache is 256 KiB per token, so one router block is 16 MiB:
+>
+> | Overlay | CPU tier per pod | `lruCapacityPerServer` |
+> | --- | --- | --- |
+> | NVIDIA vLLM `native` (default) | 300 GiB | 19200 |
+> | NVIDIA vLLM `native`, `VARIANT=fs` | 100 GiB | 6400 |
+> | AMD or Intel XPU vLLM `native` | 100 GiB | 6400 |
+> | NVIDIA or AMD vLLM `lmcache-connector` | 100 GiB × 2 ranks | 12800 |
+> | NVIDIA SGLang `native` (HiCache) | 200 GB × 2 ranks | 23800 |
+> | Intel XPU vLLM `lmcache-connector` (Qwen3-8B, 144 KiB per token) | 20 GiB | 2275 |
+>
+> For TPU, one CPU chunk is one KV block: multiply `TPU_OFFLOAD_NUM_CPU_CHUNKS` by the block size to get tokens. MooncakeStore uses one pool for all pods, so a per-pod value does not apply. The `multi-host` values are for Qwen3-Coder-480B on TPU v7.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when MONITORING=true:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true and INFRA_PROVIDER=gke:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -230,7 +265,11 @@ kubectl apply -n ${NAMESPACE} \
 
 The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU loads use the fast path (the filesystem overlay leaves it unchanged); see [ROCm vLLM native offloading](./modelserver/amd/vllm/native/README.md).
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -238,6 +277,15 @@ The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU lo
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+
+</details>
+<!-- tabs:end -->
 
 ## Verification
 
@@ -374,12 +422,12 @@ done
 <!-- llm-d-cicd:skip end -->
 <!-- guide:verify.tests.offload_metrics[1] end -->
 
-`sglang_hicache_host_used_tokens` is above zero (the `write_through` policy copies every computed block to host memory).
+`sglang:hicache_host_used_tokens` is above zero (the `write_through` policy copies every computed block to host memory).
 
 </details>
 <!-- tabs:end -->
 
-Hits from the offload tier (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang_cached_tokens_total{cache_source="host"}` and `sglang_load_back_tokens_total`) appear once a prefix has been evicted from HBM and is requested again, which happens under real cache pressure rather than with 10 requests.
+Hits from the offload tier (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang:cached_tokens_total{cache_source="host"}` and `sglang:load_back_tokens_total`) appear once a prefix has been evicted from HBM and is requested again, which happens under real cache pressure rather than with 10 requests.
 
 For vLLM `native` with `VARIANT=fs` and at least two model server pods (Intel XPU runs one, so the check is skipped there), the shared tier makes a hit easy to provoke: **send a new prefix to one pod, then to a second pod** that has never seen it. The second pod loads the blocks the first one wrote to the filesystem, so its `vllm:external_prefix_cache_hits_total` is above zero:
 
@@ -431,7 +479,7 @@ Offloading only pays off when blocks evicted from HBM are loaded back later inst
 | Router prefix index by tier (`llm_d_epp_prefix_indexer_size`, `llm_d_epp_prefix_indexer_hit_ratio`, split by `plugin_name`) | What the router believes each tier holds. The size gauge is the total across pods, so a full CPU index reads about pods × `lruCapacityPerServer` |
 | TTFT (`vllm:time_to_first_token_seconds`) | The user-facing payoff of this path. Compare against an HBM-only run at the same load before attributing a change to offloading |
 
-vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang_hicache_host_used_tokens` / `sglang_hicache_host_total_tokens`) and attributes hits by tier with `sglang_cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
+vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang:hicache_host_used_tokens` / `sglang:hicache_host_total_tokens`) and attributes hits by tier with `sglang:cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
 
 ### Common failure modes
 

@@ -7,19 +7,19 @@ This guide serves models whose output is not only text (speech, images, or both)
 | `TASK` | Model | Endpoints | Engines | Router scorer |
 | --- | --- | --- | --- | --- |
 | `omni` (default) | [`Qwen/Qwen3-Omni-30B-A3B-Instruct`](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct) | `/v1/chat/completions` (text and spoken answers) | vLLM-Omni | `queue-scorer` |
-| `text-to-image` | [`Qwen/Qwen-Image`](https://huggingface.co/Qwen/Qwen-Image) | `/v1/images/generations` | vLLM-Omni, SGLang | `active-request-scorer` |
+| `text-to-image` | [`Qwen/Qwen-Image`](https://huggingface.co/Qwen/Qwen-Image) (GPU); [`black-forest-labs/FLUX.2-klein-4B`](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) (XPU) | `/v1/images/generations` | vLLM-Omni, SGLang | `active-request-scorer` |
 | `image-to-image` | [`Qwen/Qwen-Image-Edit-2511`](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) | `/v1/images/edits` (`multipart/form-data`) | vLLM-Omni, SGLang | `active-request-scorer` |
 | `text-to-speech` | [`Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) | `/v1/audio/speech` | vLLM-Omni | `active-request-scorer` |
 
 The tasks fall into two shapes:
 
 - **An omni model: one checkpoint, many endpoints.** Qwen3-Omni takes text, images, audio, or video in and answers with text *and* speech from a multi-stage pipeline (thinker → talker → code2wav). One `InferencePool` fronts every OpenAI endpoint the checkpoint serves. The router's request parser understands the chat, speech, and image-generation request bodies, so a single router and pool serve all of them; when the pool shares a Kubernetes Gateway with other pools, exact-path `HTTPRoute` rules send the modality endpoints to it (see [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode)).
-- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool of 3 single-GPU replicas.
+- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, or, on Intel XPU, FLUX.2-klein-4B) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas, or, for Intel XPU's `text-to-image`, 2 single-XPU replicas.
 
 Either way the router **routes on load**.
 Diffusion models generate by iterative denoising rather than autoregressive token generation, and the Qwen3-Omni pipeline runs with prefix caching off, so prefix-cache and token-load scorers have no signal.
 The `omni` router picks the pod with the shortest queue (`queue-scorer`).
-The single-endpoint routers track how many requests they have dispatched to each pod and not yet seen complete, and prefer the least busy one (`active-request-scorer`); they need no model-server metrics, which SGLang's diffusion backend does not publish. The Qwen3-TTS talker is autoregressive, so prefix-aware TTS routing is possible in principle and is tracked in [llm-d-router#2483](https://github.com/llm-d/llm-d-router/issues/2483).
+The single-endpoint routers track how many requests they have dispatched to each pod and not yet seen complete, and prefer the least busy one (`active-request-scorer`); they need no model-server metrics, which SGLang's diffusion backend does not publish. Image requests log a token-estimation error (`unsupported request body type`) because the token producer cannot parse image bodies; this does not disable `active-request-scorer`, which tracks in-flight request counts independently of token estimation. The Qwen3-TTS talker is autoregressive, so prefix-aware TTS routing is possible in principle and is tracked in [llm-d-router#2483](https://github.com/llm-d/llm-d-router/issues/2483).
 
 ### Why vLLM-Omni
 
@@ -51,6 +51,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM-Omni | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-Omni-30B-A3B-Instruct` | 🟡 community | 🟡 community | Served model is `TASK=omni`'s (others in the Overview table) · H100 80 GB reference · `omni`: 1 replica × 2 GPUs · `text-to-image`, `image-to-image`, `text-to-speech`: 3 replicas × 1 GPU · SGLang: `text-to-image` and `image-to-image` only |
+| Intel XPU | `xpu` | `black-forest-labs/FLUX.2-klein-4B` | — | 🟡 community | `text-to-image` only · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -59,7 +60,9 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other tasks (3 replicas × 1 GPU). Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
+- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), or 2 Intel XPUs (Arc Pro B60) for Intel XPU's `text-to-image` (2 replicas × 1 XPU, 64 GiB host memory requested per replica). Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
+
+- For the Intel XPU overlay, install the Intel GPU DRA driver and verify the `gpu.intel.com` `DeviceClass` is available; it requires the `resource.k8s.io/v1` API (Kubernetes 1.34+).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -90,10 +93,10 @@ export NAMESPACE=llm-d-omni-serving
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export TASK=omni # options: omni, text-to-image, image-to-image, text-to-speech
-export ACCELERATOR_TYPE=gpu # options: gpu
+export ACCELERATOR_TYPE=gpu # options: gpu, xpu
 export MODEL_SERVER=vllmomni # options: vllmomni, sglang
 export INFRA_PROVIDER=base # options: base, gke
-export MODEL=Qwen/Qwen3-Omni-30B-A3B-Instruct # the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image, image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+export MODEL=Qwen/Qwen3-Omni-30B-A3B-Instruct # the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
@@ -153,7 +156,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/omni.values.yaml"
 <details>
 <summary><b>Text-to-Image</b></summary>
 
-The [`text-to-image` router values](router/text-to-image.values.yaml) schedule on the `active-request-scorer` and `max-score-picker`, and turn off the router's default metrics scraping (`injectDefaults: false`), because SGLang's diffusion backend publishes no metrics.
+The [`text-to-image` router values](router/text-to-image.values.yaml) schedule on the `active-request-scorer` and `max-score-picker` for both the GPU and XPU overlays, and turn off the router's default metrics scraping (`injectDefaults: false`), because the diffusion backend publishes no metrics.
 
 <!-- guide:deploy.router_values.text-to-image start -->
 ```bash
@@ -210,7 +213,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- guide:deploy.monitoring_values end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router.
-The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. A single pool needs no `HTTPRoute`: the standalone proxy sends every path to the router. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router) and, for `omni`, [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode) below.
+Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name (and [`httproutes.yaml`](httproutes.yaml) references the `${GUIDE_NAME}` `InferencePool`). A single pool needs no `HTTPRoute`: the standalone proxy sends every path to the router. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router) and, for `omni`, [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode) below.
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -250,6 +253,9 @@ To serve another vLLM-Omni checkpoint, change the model in [`patch-vllm-omni.yam
 <summary><b>Text-to-Image</b></summary>
 
 Serves `Qwen/Qwen-Image` on 3 replicas × 1 GPU, with vLLM-Omni ([`patch-vllm-omni.yaml`](modelserver/gpu/vllmomni/text-to-image/base/patch-vllm-omni.yaml)) or SGLang ([`patch-sglang.yaml`](modelserver/gpu/sglang/text-to-image/base/patch-sglang.yaml)):
+
+> [!NOTE]
+> On Intel XPU, select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16), and a two-B60 `--tp-size=2` run fails on the published `v0.10.0` image's pinned SGLang, which predates an upstream XPU layer-norm fix (`sgl-project/sglang#36825`).
 
 <!-- guide:deploy.modelserver.text-to-image start -->
 ```bash
@@ -299,7 +305,7 @@ kubectl apply -n ${NAMESPACE} \
 
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and MODEL_SERVER=vllmomni:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -377,7 +383,7 @@ kubectl run chat-audio-test --rm -i --restart=Never \
   --env="MODEL=${MODEL}" \
   -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" \
     -d "{\"model\": \"${MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"Say hello to llm-d in one short sentence.\"}], \"modalities\": [\"text\", \"audio\"]}" \
-    | jq -r ".choices[] | if .message.audio then \"audio: \(.message.audio.data | length) base64 characters\" else \"text: \(.message.content)\" end"'
+    | jq -r ".choices[].message | (if .content then \"text: \(.content)\" else empty end), (if .audio then \"audio: \(.audio.data | length) base64 characters\" else empty end)"'
 ```
 <!-- guide:verify.tests.omni.chat_audio end -->
 
@@ -459,7 +465,7 @@ kubectl run tts-test --rm -i --restart=Never \
 Expect `HTTP 200` with a non-zero size and an audio content type, and `header: RIFF`, the start of a valid WAV file.
 
 The endpoint also streams through the router: `"stream_format": "sse"` returns `speech.audio.delta` events with base64 audio chunks and a final `speech.audio.done` event carrying token usage, and `"stream_format": "audio"` returns raw PCM chunks as they are generated, with time-to-first-byte in the tens of milliseconds.
-vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.29.0, which reports them.
+vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.30.0, which reports them.
 
 </details>
 <!-- tabs:end -->

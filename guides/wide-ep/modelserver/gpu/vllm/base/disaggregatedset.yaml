@@ -106,7 +106,8 @@ spec:
                                           "kv_role":"kv_producer",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm \
-                  --all2all-backend deepep_v2
+                  --all2all-backend deepep_v2 \
+                  --shutdown-timeout 45
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -353,7 +354,8 @@ spec:
                                           "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
                   --all2all-backend deepep_v2 \
-                  --moe-backend deep_gemm
+                  --moe-backend deep_gemm \
+                  --shutdown-timeout 45
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all

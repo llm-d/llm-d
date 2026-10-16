@@ -14,6 +14,7 @@ openapi:
   path: disaggregatedset-schema.json
 
 components:
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 

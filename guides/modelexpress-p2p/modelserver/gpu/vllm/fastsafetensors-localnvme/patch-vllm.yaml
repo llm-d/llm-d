@@ -58,6 +58,7 @@ spec:
             # flag to fall back to the warm-NVMe POSIX-pread path:
             #   --model-loader-extra-config={"nogds": true}
             - "--load-format=fastsafetensors"
+            - "--shutdown-timeout=45"
           securityContext:
             capabilities:
               add: [IPC_LOCK]

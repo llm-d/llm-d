@@ -139,9 +139,19 @@ kubectl create secret generic llm-d-hf-token \
 
 **Prepare the paths to the `helm` values files** for the `llm-d` router. The router values
 ([`deepseek-v4.values.yaml`](router/deepseek-v4.values.yaml)) run separate `prefill` and
-`decode` scheduling profiles (prefix-cache, queue and active-request scoring for prefill;
-active-request scoring for decode) and pin each request to one
+`decode` scheduling profiles (prefix-cache affinity filtering and token-load scoring for
+prefill; active-request scoring for decode) and pin each request to one
 `DisaggregatedSet` revision during rollouts:
+
+> [!WARNING]
+> **`peakPrefillThroughput` is an estimate for DeepSeek-V4-Pro on GB200, not a measurement.**
+> The `prefix-cache-affinity-filter` ships with `20000` tokens/s per prefill pod. Each pod is one
+> router endpoint fronting 4 DP ranks, and the value is ~5000 tokens/s per rank x 4, estimated
+> by scaling measured MoE prefill rates to this model (plausible range 12000 to 25200). Measure
+> your own value with the [router calibration tool](../../recipes/router/calibration/README.md)
+> using `CHUNK_SIZE=8192`, because a request must fit `--max-model-len 9280`. A single
+> calibration request runs on one rank, so multiply the result by 4 before setting it in
+> `router/deepseek-v4.values.yaml`.
 
 <!-- guide:deploy.router_values start -->
 ```bash
@@ -261,7 +271,12 @@ kubectl run serve-check --rm -i --restart=Never \
 
 ## Benchmarking
 
-Benchmark profiles and results for this guide are not yet published.
+> [!NOTE]
+> **TODO:** benchmark profiles and results for this guide are not yet published. The first
+> published results should be measured with the current router config (prefix-cache affinity
+> filter + token-load scorer on prefill, active-request scorer on decode), after
+> `peakPrefillThroughput` has been measured for DeepSeek-V4-Pro on GB200 (see the
+> warning in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)).
 
 ## Cleanup
 
