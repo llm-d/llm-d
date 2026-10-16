@@ -660,7 +660,7 @@ inactivity-reset counter. Use these instead:
 | `llm_d_epp_flow_control_request_queue_duration_seconds` | Queue wait, the input to the score's wait term. |
 | `llm_d_epp_flow_control_requests_total{outcome="EvictedTTL"}` | Requests shed at the TTL. **Rising on shallow sessions is the expected symptom of this configuration under contention**, not a misconfiguration. |
 | `llm_d_epp_program_aware_avg_wait_time_milliseconds{program_id=...}` | Mean queue wait per session. |
-| `vllm:gpu_prefix_cache_hit_rate` | The mechanism the strategy is optimizing. |
+| `rate(vllm:prefix_cache_hits_total[5m]) / rate(vllm:prefix_cache_queries_total[5m])` | Prefix-cache hit ratio: the mechanism the strategy is optimizing. |
 
 > [!WARNING]
 > `llm_d_epp_program_aware_jains_fairness_index` measures how *equal* per-session wait times are. Turn-priority
