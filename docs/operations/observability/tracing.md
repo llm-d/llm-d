@@ -36,21 +36,21 @@ Deploy the OTel Collector and Jaeger into the same namespace as your llm-d workl
 > [!NOTE]
 > If the [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/) is installed, the script uses an `OpenTelemetryCollector` CR. Otherwise it deploys a standalone collector Deployment.
 
-Verify the components are running:
+Wait for the collector and Jaeger to become ready, then check their Deployments. These names work for both the standalone collector and the Operator-managed collector; their Pod labels differ.
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l app=otel-collector
-kubectl get pods -n ${NAMESPACE} -l app=jaeger
+kubectl wait -n "${NAMESPACE}" --for=create deployment/otel-collector --timeout=5m
+kubectl rollout status -n "${NAMESPACE}" deployment/otel-collector --timeout=5m
+kubectl rollout status -n "${NAMESPACE}" deployment/jaeger --timeout=5m
+kubectl get deployment -n "${NAMESPACE}" otel-collector jaeger
 ```
 
 Expected output:
 
 ```text
-NAME                              READY   STATUS    RESTARTS   AGE
-otel-collector-xxxxxxxxx-xxxxx    1/1     Running   0          30s
-
-NAME                      READY   STATUS    RESTARTS   AGE
-jaeger-xxxxxxxxx-xxxxx    1/1     Running   0          30s
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+otel-collector   1/1     1            1           30s
+jaeger           1/1     1            1           30s
 ```
 
 ### Manual Deployment
@@ -67,7 +67,7 @@ kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/tracing/jaeger-all
   -f guides/recipes/observability/tracing/otel-collector-operator.yaml
 ```
 
-Verify with the same `kubectl get pods` commands above.
+Verify with the same rollout and Deployment checks above.
 
 </details>
 <details>
@@ -244,6 +244,12 @@ initContainers:
 
 ## Step 3: Enable Tracing on EPP
 
+Set `ROUTER_RELEASE` to the Helm release name of your running router. The guides default to `${GUIDE_NAME}`; if you installed with a different release name, use that name from `helm list -n "${NAMESPACE}"`. Keep `GUIDE_NAME` unchanged: it selects the model server overlay and Pod labels in Step 2. When reusing the guide's installation command below, replace `helm install ${GUIDE_NAME}` with `helm upgrade --install "${ROUTER_RELEASE}"` and keep its chart, version, and existing values files.
+
+```bash
+export ROUTER_RELEASE="${ROUTER_RELEASE:-${GUIDE_NAME}}"
+```
+
 Layer the tracing values file for your platform when installing or upgrading the router Helm chart (see [Router Recipes — Enable Distributed Tracing](../../../guides/recipes/router/README.md#enable-distributed-tracing-optional)). Because the recipes default to a 5% sampling ratio (`samplerArg: "0.05"`), override `router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests:
 
 <!-- tabs:start group=tracing -->
@@ -276,7 +282,7 @@ If your cluster uses the self-managed fallback collector from Step 1 (`install-o
 Wait for the EPP rollout to complete:
 
 ```bash
-kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE}
+kubectl rollout status deployment/${ROUTER_RELEASE}-epp -n ${NAMESPACE}
 ```
 
 A ratio of `1.0` on EPP samples every request without an upstream parent. An unsampled upstream `traceparent` still prevents sampling with `parentbased_traceidratio`; increasing only the model server ratio does not change that decision.
@@ -286,16 +292,16 @@ A ratio of `1.0` on EPP samples every request without an upstream parent. An uns
 Send a request through the router using your guide's endpoint selection and served `MODEL`. For a standalone installation:
 
 ```bash
-export IP=$(kubectl get service "${GUIDE_NAME}-epp" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
+export IP=$(kubectl get service "${ROUTER_RELEASE}-epp" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
 kubectl run tracing-request --rm -i --restart=Never \
   --image="${CURL_TEST_IMAGE}" --namespace="${NAMESPACE}" \
   --env="IP=${IP}" --env="MODEL=${MODEL}" \
-  -- /bin/sh -c 'curl --fail-with-body -sS -X POST "http://${IP}/v1/completions" \
+  -- /bin/sh -c 'curl --fail-with-body --max-time 120 -sS -X POST "http://${IP}/v1/completions" \
     -H "Content-Type: application/json" \
     -d "{\"model\":\"${MODEL}\",\"prompt\":\"Explain distributed tracing briefly.\",\"max_tokens\":32}"'
 ```
 
-For a gateway installation, use the request command from its guide. Confirm a successful completion response before checking traces.
+If the request Pod reports `ImagePullBackOff`, set `CURL_TEST_IMAGE` to a registry mirror or an approved image with `/bin/sh` and `curl`, then retry. For a gateway installation, use the request command from its guide. Confirm a successful completion response before checking traces.
 
 <!-- tabs:start group=tracing -->
 <details open>
@@ -333,6 +339,8 @@ Expected output:
   "llm-d-router/epp"
 ]
 ```
+
+If services are listed but traces are absent from the selected time range, check that the model server, EPP, and Jaeger nodes have synchronized clocks. Spans timestamped in the future fall outside Jaeger's default search end time.
 
 Service discovery alone does not verify trace propagation. Inspect the trace IDs, services, operations, and parent references together:
 
@@ -404,7 +412,7 @@ kubectl rollout status -n "${NAMESPACE}" deployment \
 Repeat the configuration check from Step 2: the tracing flags and env entries should be absent. Send another completion request to verify serving still works. If EPP tracing was enabled for this test, disable it using the same chart selection and version as Step 3:
 
 ```bash
-helm upgrade "${GUIDE_NAME}" "${ROUTER_STANDALONE_CHART}" \
+helm upgrade "${ROUTER_RELEASE}" "${ROUTER_STANDALONE_CHART}" \
   -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}" --reuse-values --wait --timeout 20m \
   --set router.tracing.enabled=false
 ```
