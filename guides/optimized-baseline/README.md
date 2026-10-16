@@ -25,9 +25,9 @@ This guide deploys the recommended out of the box [configuration](https://github
 
 The optimized-baseline defaults to two main routing criteria:
 
-- **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
+* **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
 
-- **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
+* **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
 
 Both plugins are used with their built-in defaults — no per-deployment tuning is required for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2). If you deploy a **different model or accelerator**, the saturation-aware override gate keys off the `peakPrefillThroughput` of the filter, which is hardware- and model-specific; measure your own with the shared [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
 
@@ -70,15 +70,15 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
+* Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
 
-- For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
+* For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
 
-- Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
+* Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+* (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 ### Get the guide
 
@@ -87,7 +87,7 @@ Every command below runs from a local clone of the [llm-d repository](https://gi
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -528,9 +528,9 @@ SGLang deployments expose the equivalent signals under `sglang:*`; the [PromQL r
 
 ### Common failure modes
 
-- **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
-- **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
-- **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency (`llm_d_epp_plugin_duration_seconds`) and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
+* **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
+* **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
+* **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency (`llm_d_epp_plugin_duration_seconds`) and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
 
 For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
 

@@ -98,7 +98,7 @@ Set the guide environment variables:
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline # options: llm-d-optimized-baseline, llm-d-pd-disaggregation
 export MONITORING_NAMESPACE=llm-d-monitoring

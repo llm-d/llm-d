@@ -54,7 +54,7 @@ Before installing Batch Gateway, ensure you have:
 The observability steps below apply alert rules and dashboards from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d). Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
 
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 ```

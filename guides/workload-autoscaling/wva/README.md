@@ -53,7 +53,7 @@ set it separately for cluster-wide autoscaling, and `PLATFORM` selects the
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export NAMESPACE=llm-d-optimized-baseline
 export WVA_NAMESPACE=llm-d-optimized-baseline
@@ -101,7 +101,7 @@ kubectl create secret generic prometheus-tls-cert \
 ```
 <!-- guide:deploy.prometheus_ca end -->
 
-3. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+1. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
    controller's `--watch-namespace` to match (this edits
    `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
    `wva/controller/base/controller-deployment-patch.yaml`; revert both with

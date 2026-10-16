@@ -171,7 +171,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
+export BRANCH=release-1.0
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=pod-snapshot
 export NAMESPACE=llm-d-pod-snapshot
