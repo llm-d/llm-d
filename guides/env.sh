@@ -30,7 +30,7 @@ else
 fi
 
 ### LeaderWorkerSet release installed by guides that deploy DisaggregatedSets
-export LWS_VERSION=${LWS_VERSION:-0.11.1}
+export LWS_VERSION=${LWS_VERSION:-1.0.0}
 
 ### Chart versions and OCI coordinates for router chart
 export ROUTER_CHART_VERSION=${ROUTER_CHART_VERSION:-v0}
