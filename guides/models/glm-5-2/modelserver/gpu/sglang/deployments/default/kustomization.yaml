@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Default SGLang deployment of GLM-5.2-FP8. It uses the p1w1d1w1 topology:
+# 1 DEP8 prefill node + 1 DEP8 decode node -> 2 nodes / 16 GPUs. It includes
+# the hicache component. Other topologies: ../.
+resources:
+  - ../p1w1d1w1

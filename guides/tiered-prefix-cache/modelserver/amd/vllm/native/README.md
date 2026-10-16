@@ -3,8 +3,8 @@
 ## Background
 
 vLLM's Triton CPU↔GPU swap kernel (`vllm/v1/kv_offload/cpu/swap_blocks_triton.py`) has a
-`THRESHOLD_BYTES` of 28 KiB. KV pages larger than this threshold use the Triton fast path
-for CPU→GPU read-back; pages below it fall back to a slower copy path.
+`THRESHOLD_BYTES` of 28 KiB. KV pages up to this threshold (`<= THRESHOLD_BYTES`) use the Triton fast path
+for CPU→GPU read-back; pages above it fall back to a slower copy path.
 
 The threshold must exceed the KV page size for your model and TP configuration:
 

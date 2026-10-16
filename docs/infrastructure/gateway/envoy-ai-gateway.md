@@ -10,7 +10,7 @@ your model servers via the llm-d EPP.
 
 ## Prerequisites
 
-1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
+1. The environment variables `${GUIDE_NAME}`, `${MODEL}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 2. A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/) (minimum Kubernetes 1.32)
 3. [Helm](https://helm.sh/docs/intro/install/)
 4. [jq](https://jqlang.org/download/)
@@ -28,7 +28,7 @@ ENVOY_GATEWAY_VERSION=v1.8.1
 
 # Install the CRDs first, skipping the Gateway API CRDs installed in the previous step.
 #
-# Note 1: We’re using helm template piped into kubectl apply instead of helm install due to aknown Helm limitation related
+# Note 1: We’re using helm template piped into kubectl apply instead of helm install due to a known Helm limitation related
 # to large CRDs in the templates/ directory: https://github.com/helm/helm/pull/12277
 # Note 2: We filter the output of the Helm template to remove offending lines until this is fixed: https://github.com/helm/helm/pull/32217
 helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
@@ -133,7 +133,7 @@ Set the llm-d version to match your deployment:
 LLM_D_VERSION=main  # Use 'main' for latest, or a release tag like 'v0.7.0'
 ```
 
-This deploys a gateway suitable for `envoy-ai-gateway`, using the `envoy-ai-gateway` gateway class. This is the preferred self-installed inference gateway recipe in llm-d.
+This deploys a gateway suitable for `envoy-ai-gateway`, using the `envoy-ai-gateway` gateway class.
 
 ```bash
 kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/envoy-ai-gateway?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
@@ -170,9 +170,8 @@ Send an inference request via the managed `Gateway`:
 ```bash
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
-    -H 'X-Gateway-Base-Model-Name: '"$GUIDE_NAME"'' \
     -d '{
-        "model": '\"${MODEL_NAME}\"',
+        "model": "'"${MODEL}"'",
         "prompt": "How are you today?"
     }' | jq
 ```
@@ -182,6 +181,8 @@ curl -X POST http://${IP}/v1/completions \
 ```bash
 kubectl delete clienttrafficpolicy client-buffer-limit -n ${NAMESPACE}
 kubectl delete gateway llm-d-inference-gateway -n ${NAMESPACE}
+kubectl delete clusterrolebinding envoy-ai-gateway-controller-gateway-api-inference-extension --ignore-not-found=true
+kubectl delete clusterrole gateway-api-inference-extension-viewer --ignore-not-found=true
 helm uninstall envoy-ai-gateway -n envoy-ai-gateway-system
 helm uninstall envoy-ai-gateway-crd -n envoy-ai-gateway-system
 kubectl delete namespace envoy-ai-gateway-system

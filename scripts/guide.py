@@ -45,6 +45,7 @@ CLI
 
     guide.py check-manifest                         # llm-d.ai publish manifest
     guide.py set-branch release-0.8 guides/*/       # pin BRANCH, re-render
+    guide.py set-branch release-0.8 guides --recursive # pin BRANCH recursively
 
 ``render`` validates before it writes and refuses to render an invalid guide,
 so a normal authoring loop only ever needs ``guide.py render <dir>``.
@@ -433,12 +434,11 @@ def _check_env(env: Any, f: Findings) -> set[str]:
             continue
         declared.add(var)
         if not isinstance(spec, dict):
-            if spec is None or isinstance(spec, bool):
-                # YAML null/true/false would render and emit as the Python
-                # repr (`export VAR=None`). Quote the intended string.
+            if not isinstance(spec, str):
+                # Non-string YAML values can render as shell-invalid exports
+                # (for example, a list becomes `export VAR=['one', 'two']`).
                 f.error(
-                    f"env.static.{var}: value must be a string, got {spec!r} "
-                    f"(quote YAML null/booleans)"
+                    f"env.static.{var}: value must be a string, got {spec!r}"
                 )
             continue
         if "sensitive" in spec and not isinstance(spec["sensitive"], bool):
@@ -449,12 +449,10 @@ def _check_env(env: Any, f: Findings) -> set[str]:
                 f"env.static.{var}.sensitive: must be a YAML boolean, "
                 f"got {spec['sensitive']!r}"
             )
-        if "default" in spec and (
-            spec["default"] is None or isinstance(spec["default"], bool)
-        ):
+        if "default" in spec and not isinstance(spec["default"], str):
             f.error(
                 f"env.static.{var}.default: must be a string, got "
-                f"{spec['default']!r} (quote YAML null/booleans)"
+                f"{spec['default']!r}"
             )
         if spec.get("sensitive") is True:
             if "default" not in spec:
@@ -2022,7 +2020,10 @@ def _cmd_emit(args: argparse.Namespace) -> int:
 
 # -- set-branch --------------------------------------------------------------
 
-_BRANCH_VAR = re.compile(r"^(?P<indent>[ \t]+)BRANCH:[ \t]*\S.*$", re.MULTILINE)
+_BRANCH_VAR = re.compile(
+    r"^(?P<prefix>[ \t]+BRANCH:[ \t]*)\S+(?P<suffix>[ \t]*(?:#.*)?)$",
+    re.MULTILINE,
+)
 _BRANCH_EXPORT = re.compile(r"(export BRANCH=)\S+")
 _REF = re.compile(r"^[A-Za-z0-9._/-]+$")
 
@@ -2033,13 +2034,13 @@ def set_branch_text(yaml_text: str, ref: str) -> str:
     re-renders the README afterwards."""
     if not _REF.match(ref):
         raise GuideError(f"invalid ref {ref!r}")
-    out = _BRANCH_VAR.sub(lambda m: f"{m.group('indent')}BRANCH: {ref}", yaml_text)
+    out = _BRANCH_VAR.sub(lambda m: f"{m.group('prefix')}{ref}{m.group('suffix')}", yaml_text)
     return _BRANCH_EXPORT.sub(lambda m: f"{m.group(1)}{ref}", out)
 
 
 def _cmd_set_branch(args: argparse.Namespace) -> int:
     failed = seen = 0
-    for target in _iter_targets(args.targets):
+    for target in _iter_targets(args.targets, recursive=args.recursive):
         seen += 1
         g = Guide.load(target)
         if g.yaml_path is None:
@@ -2203,8 +2204,9 @@ def build_parser() -> argparse.ArgumentParser:
             "  guide.py emit guides/my-guide env deploy --context ci --var NAMESPACE=ns\n"
             "\n"
             "publishing on llm-d.ai:\n"
-            "  guide.py check-manifest                    validate docs/well-lit-paths/guides.yaml\n"
-            "  guide.py set-branch release-0.8 guides/*/  pin BRANCH and re-render (release cut)\n"
+            "  guide.py check-manifest                         validate docs/well-lit-paths/guides.yaml\n"
+            "  guide.py set-branch release-0.8 guides/*/       pin BRANCH and re-render (release cut)\n"
+            "  guide.py set-branch release-0.8 guides --recursive\n"
         ),
     )
     sub = ap.add_subparsers(dest="command", required=True)
@@ -2304,6 +2306,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     sb.add_argument("ref", metavar="REF", help="branch or tag, e.g. release-0.8")
+    sb.add_argument(
+        "--recursive",
+        action="store_true",
+        help="recursively discover directories containing guide.yaml and README.md",
+    )
     sb.add_argument("targets", nargs="+", metavar="TARGET", help="guide directory; repeatable")
     sb.set_defaults(func=_cmd_set_branch)
 

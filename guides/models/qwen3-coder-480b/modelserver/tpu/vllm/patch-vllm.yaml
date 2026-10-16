@@ -36,7 +36,7 @@ spec:
           - -c
           - --
           args:
-          - vllm serve --seed=42 --model=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --served-model-name=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --max-model-len=262144 --max-num-batched-tokens=8192 --max-num-seqs=64 --tensor-parallel-size=8 --kv-cache-dtype=fp8 --gpu-memory-utilization=0.8 --async-scheduling --enable-expert-parallel --data-parallel-size=1 --block-size=256 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}'
+          - vllm serve --seed=42 --model=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --served-model-name=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --max-model-len=262144 --max-num-batched-tokens=8192 --max-num-seqs=64 --tensor-parallel-size=8 --kv-cache-dtype=fp8 --gpu-memory-utilization=0.8 --async-scheduling --enable-expert-parallel --data-parallel-size=1 --block-size=256 --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' --shutdown-timeout=45
           env:
           - name: VLLM_LOGGING_LEVEL
             value: DEBUG

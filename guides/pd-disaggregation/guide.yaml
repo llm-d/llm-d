@@ -26,12 +26,12 @@ support:
       engines: {vllm: validated, sglang: validated}
     amd:
       label: AMD GPU
-      notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4) · NIXL"
-      model: amd/Llama-3.3-70B-Instruct-FP8-KV
+      notes: "AMD Instinct · 1P (TP=1) + 1D (TP=4), 5 GPUs · NIXL"
+      model: openai/gpt-oss-120b
       providers:
-        - {name: base, label: "Kubernetes (base)"}
-        - {name: oci, label: "OCI"}
-        - {name: tensorwave, label: "TensorWave"}
+        - {name: nixl/base, label: "NIXL (Kubernetes base)"}
+        - {name: nixl/oci, label: "NIXL (OCI)"}
+        - {name: nixl/tensorwave, label: "NIXL (TensorWave)"}
         - {name: moriio/base, label: "MoRI-IO (base)"}
       engines: {vllm: validated}
     xpu:
@@ -77,6 +77,20 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
+    biren:
+      label: Biren GPU
+      notes: "166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v)"
+      model: Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
+    mthreads:
+      label: Moore Threads GPU
+      notes: "MTT S5000 · vLLM 1P TP=4 + 1D TP=4, Mooncake TCP; SGLang 1P+1D TP=8, Mooncake RDMA"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community, sglang: community}
     npu:
       label: Rebellions NPU
       notes: "4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector"
@@ -99,15 +113,15 @@ env:
     # Extra router values for accelerators that need them (set by deploy.accelerator_values).
     ACCELERATOR_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, npu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    # The leaf selects the platform and, where an accelerator offers more than
-    # one, the KV transfer connector (cks-mooncake: MooncakeConnector on GPU;
-    # moriio/*: MoRIIOConnector on AMD; rdma: NIXL over RDMA on Intel XPU).
+    # The leaf selects the platform and, where an accelerator offers multiple
+    # connectors, includes it in the value (cks-mooncake: MooncakeConnector on
+    # GPU; nixl/* or moriio/* on AMD; rdma: NIXL over RDMA on Intel XPU).
     INFRA_PROVIDER:
       default: base
-      values: [base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, amd-ci, oci, tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma]
+      values: [base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, nixl/base, nixl/amd-ci, nixl/oci, nixl/tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma]
       comment: "valid values per accelerator: table above"
 
     MODEL: {default: "openai/gpt-oss-120b", comment: "set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B"}
@@ -125,20 +139,30 @@ prerequisites:
     - run: |
         # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
         kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
-  # NVIDIA GPU runs prefill and decode as an LWS DisaggregatedSet, as do TPU7x
-  # dynamic sub-slices (their LWS comes from the GKE cluster preparation). skip_in ci:
+  # The accelerators whose prefill and decode run as a DisaggregatedSet (TPU7x dynamic sub-slices get their LWS
+  # controller from the GKE cluster preparation). skip_in ci:
   # the nightly clusters already run LWS, and a second release would collide.
   lws:
-    - when: {ACCELERATOR_TYPE: [gpu]}
+    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, "tpu/v6", "tpu/v7", iluvatar, metax, biren, mthreads, npu]}
       skip_in: [ci]
       run: |
+        # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
+        # "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
+        helm pull oci://registry.k8s.io/lws/charts/lws --version=${LWS_VERSION} --untar
+        kubectl apply --server-side --force-conflicts -f lws/crds
         helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
-          --version=0.11.1 \
+          --version=${LWS_VERSION} \
           --namespace lws-system --create-namespace \
           --set enableDisaggregatedSet=true \
           --wait --timeout 300s
   namespace:
     - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  # CoreWeave caches the model weights on an RWX PVC rather than a node-local
+  # hostPath -- see docs/infrastructure/providers/coreweave/README.md.
+  model-cache:
+    - when: {INFRA_PROVIDER: [coreweave]}
+      run: kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml
+
   secrets:
     - skip_in: [ci]
       run: |
@@ -158,9 +182,14 @@ deploy:
   # so this MONITORING step renders as a plain fence; skip_in: [ci] keeps the
   # README-parsing nightlies from harvesting the export.
   monitoring_values:
-    - when: {MONITORING: ["true"]}
-      skip_in: [ci]
-      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"], INFRA_PROVIDER: [gke]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   # The Rebellions NPU decode role serves one API server per data-parallel
   # rank; the router must list every rank port. No nightly covers this
@@ -215,6 +244,16 @@ deploy:
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     metax:
       - when: {ACCELERATOR_TYPE: [metax]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    biren:
+      - when: {ACCELERATOR_TYPE: [biren]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    mthreads:
+      - when: {ACCELERATOR_TYPE: [mthreads]}
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/

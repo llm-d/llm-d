@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Optimized Baseline model servers, which already start vLLM with the
+# tool-calling flags agentic-api needs for Qwen3-32B: --enable-auto-tool-choice,
+# --tool-call-parser=hermes and --reasoning-parser=qwen3.
+resources:
+  - ../../../../../optimized-baseline/modelserver/gpu/vllm/gke

@@ -13,6 +13,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
             - "--max-num-seqs=1024"
+            - "--shutdown-timeout=45"
           resources:
             limits:
               memory: 500Gi

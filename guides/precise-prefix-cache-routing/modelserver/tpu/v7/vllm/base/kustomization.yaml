@@ -16,31 +16,6 @@ labels:
       llm-d.ai/accelerator-vendor: google
     includeSelectors: true
     includeTemplates: true
-    fields:
-      - version: v1
-        kind: ServiceAccount
-        path: metadata/labels
-        create: true
-      - group: leaderworkerset.x-k8s.io
-        version: v1
-        kind: LeaderWorkerSet
-        path: metadata/labels
-        create: true
-      - group: leaderworkerset.x-k8s.io
-        version: v1
-        kind: LeaderWorkerSet
-        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: metadata/labels
-        create: true
-      - group: monitoring.coreos.com
-        version: v1
-        kind: PodMonitor
-        path: spec/selector/matchLabels
-        create: true
 
 patches:
   - path: patch-vllm.yaml

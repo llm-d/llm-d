@@ -24,3 +24,7 @@ These guides teach single architectural capabilities that you can configure inde
 
 - **[Serve Multimodal Models](../../../guides/multimodal-serving/README.md)**: Routing image, video, and audio requests on prefix-cache affinity that covers the media as well as the text, with aggregated serving or dedicated Encode workers (E/PD, E/P/D).
 - **[Serve Omni Models](../../../guides/omni-serving/README.md)**: Serving a model that answers in text and audio from one vLLM-Omni pool behind the llm-d Router, or a text-to-image, image-to-image, or text-to-speech model on vLLM-Omni or SGLang.
+
+### Stateful APIs
+
+- **[Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md)** (Experimental): Serving `/v1/responses` with conversation state kept in PostgreSQL by vLLM Agentic API in front of the llm-d Router, so agentic clients and coding harnesses continue a conversation by `previous_response_id`, run tool loops, and stream over WebSocket.

@@ -7,6 +7,7 @@ keep the overlays from drifting apart as scenarios are edited one at a time.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -53,7 +54,8 @@ def test_team_queues_tiers_and_quotas(overlay: str) -> None:
         q = entries[team]
         assert q["worker_pool_id"] == "teams", team
         assert q["labels"]["tier"] == tier, team
-        assert q["igw_base_url"] == "http://IGW_HOST:80", team
+        # By Service name: llm-d-async runs in the router's namespace.
+        assert q["igw_base_url"] == "http://llm-d-router-epp:80", team
         gate = q["gate_params"]
         assert q["gate_type"] == "redis-quota", team
         assert (gate["attribute"], gate["gating_mode"], gate["prefix"], gate["limit"]) == \
@@ -72,7 +74,7 @@ def test_no_queue_level_inference_objective(overlay: str) -> None:
 @pytest.mark.parametrize("overlay", OVERLAYS)
 def test_lane_objectives_match_the_guide_objectives(overlay: str) -> None:
     objectives = {d["metadata"]["name"] for d in yaml.safe_load_all(
-        (MT / "manifests/inferenceobjectives.yaml").read_text()) if d}
+        (MT / "manifests/objectives/inferenceobjectives.yaml").read_text()) if d}
     policy = _ap(overlay)["requestMergePolicyConfig"]
     assert policy["type"] == "tier-priority"
     lanes = policy["parameters"]["lane_objectives"]
@@ -87,3 +89,39 @@ def test_prometheus_overlays_scrape_the_processor(overlay: str) -> None:
     assert ap["podMonitor"]["enabled"] is True
     assert ap["prometheusRule"]["enabled"] is True
     assert ap["grafana"]["dashboards"]["enabled"] is True
+
+
+@pytest.mark.parametrize("overlay", OVERLAYS)
+def test_no_namespace_or_router_placeholders(overlay: str) -> None:
+    # Redis and the router are addressed by Service name, so the default
+    # values install without rendering; only POOL_NAME, SAT_CAP, PROM_URL and
+    # PROJECT_ID remain, on the alternative overlays.
+    text = (MT / "values" / overlay).read_text()
+    body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    assert "NAMESPACE" not in body and "IGW_HOST" not in body, overlay
+    if overlay == "redis/quota-only.yaml":
+        assert not re.search(r"POOL_NAME|SAT_CAP|PROM_URL|PROJECT_ID", body)
+
+
+def test_objectives_and_pod_monitor_bind_the_router_pool() -> None:
+    # The router release is named llm-d-router, so its InferencePool is too.
+    objectives = [d for d in yaml.safe_load_all(
+        (MT / "manifests/objectives/inferenceobjectives.yaml").read_text()) if d]
+    assert len(objectives) == 6
+    for o in objectives:
+        assert o["spec"]["poolRef"]["name"] == "llm-d-router", o["metadata"]["name"]
+        assert "namespace" not in o["metadata"], o["metadata"]["name"]  # applied with -n
+    monitor = yaml.safe_load((MT / "manifests/monitoring/prometheus-vllm-podmonitor.yaml").read_text())
+    relabel = monitor["spec"]["podMetricsEndpoints"][0]["relabelings"][0]
+    assert relabel == {"targetLabel": "inference_pool", "replacement": "llm-d-router"}
+    assert monitor["spec"]["selector"]["matchLabels"] == {"llm-d.ai/guide": "async-multitenant"}
+
+
+def test_model_server_overlay_carries_the_label_the_router_selects() -> None:
+    kust = yaml.safe_load((MT / "modelserver/gpu/vllm/base/kustomization.yaml").read_text())
+    pairs = [lbl["pairs"] for lbl in kust["labels"]]
+    assert {"llm-d.ai/guide": "async-multitenant"} in pairs
+    assert kust["replicas"][0]["count"] == 1
+    for values in ("flow-control-holdback.yaml", "flow-control-evictable.yaml"):
+        router = yaml.safe_load((MT / "values/router" / values).read_text())
+        assert router["router"]["modelServers"]["matchLabels"] == {"llm-d.ai/guide": "async-multitenant"}, values

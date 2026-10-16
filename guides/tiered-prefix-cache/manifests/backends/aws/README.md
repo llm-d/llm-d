@@ -46,7 +46,7 @@ You will need this ID when configuring the `StorageClass`.
 
 ```bash
 cd ${REPO_ROOT}/guides/tiered-prefix-cache/manifests/backends/aws
-kubectl apply -f ./storage_class.yaml -n ${NAMESPACE}
+kubectl apply -f ./storage_class.yaml
 ```
 
 Update the `fileSystemId` in `storage_class.yaml` before applying.
@@ -97,5 +97,5 @@ Note: EFS has higher latency than local SSD or Lustre, and is best suited for sh
 ## Cleanup
 
 ```bash
-kubectl delete -f ./storage_class.yaml -n ${NAMESPACE}
+kubectl delete -f ./storage_class.yaml
 ```

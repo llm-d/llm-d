@@ -7,7 +7,7 @@ This guide shows how to deploy llm-d with [Istio](https://istio.io/) as your inf
 
 ## Prerequisites
 
-1. The environment variables `${GUIDE_NAME}`, `${MODEL_NAME}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
+1. The environment variables `${GUIDE_NAME}`, `${MODEL}` and `${NAMESPACE}` should be set as part of deploying one of the well-lit path guides.
 2. A Kubernetes cluster running one of the three most recent [Kubernetes releases](https://kubernetes.io/releases/)
 3. [Helm](https://helm.sh/docs/intro/install/)
 4. [jq](https://jqlang.org/download/)
@@ -87,7 +87,7 @@ Send an inference request via the managed `Gateway`:
 curl -X POST http://${IP}/v1/completions \
     -H 'Content-Type: application/json' \
     -d '{
-        "model": '\"${MODEL_NAME}\"',
+        "model": '\"${MODEL}\"',
         "prompt": "How are you today?"
     }' | jq
 ```

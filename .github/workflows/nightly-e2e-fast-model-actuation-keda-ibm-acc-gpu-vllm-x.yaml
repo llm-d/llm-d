@@ -61,12 +61,17 @@ on:
         required: false
         default: 'true'
         type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
 #  push:
 #    branches:
 #      - main
 
   schedule:
-    - cron: '37 13 * * *'  # 13:37 UTC daily (staggered ~1.5h after the FMA-only nightly at 12:00)
+    - cron: '15 5 * * *'  # 05:15 UTC daily (staggered after the FMA-only nightly at 04:40)
 
 permissions:
   contents: write
@@ -78,11 +83,12 @@ concurrency:
 
 jobs:
   nightly:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
       standup_method: ${{ inputs.standup_method || 'kustomize' }}
-      standup_scenario: ${{ inputs.standup_scenario || 'fast-model-actuation-keda' }}
+      standup_scenario: ${{ inputs.standup_scenario || 'fast-model-actuation/fast-model-actuation-keda' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
@@ -104,11 +110,12 @@ jobs:
       wait_timeout: ${{ inputs.wait_timeout || '1800' }}
       standup_timeout: ${{ inputs.standup_timeout || '1800' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
     secrets: inherit
 
   update-badge:
     needs: [nightly]
-    if: always() && inputs.update_badge != 'false'
+    if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: fast-model-actuation-keda-ocp
@@ -116,3 +123,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

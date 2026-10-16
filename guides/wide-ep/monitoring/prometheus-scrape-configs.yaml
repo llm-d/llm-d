@@ -13,7 +13,7 @@ scrape_configs:
         regex: vllm
         action: keep
       - source_labels: [__meta_kubernetes_pod_container_port_number]
-        regex: '8200'
+        regex: '820[0-7]'
         action: keep
       - source_labels: [__meta_kubernetes_pod_name]
         target_label: pod
@@ -38,7 +38,7 @@ scrape_configs:
         regex: vllm
         action: keep
       - source_labels: [__meta_kubernetes_pod_container_port_number]
-        regex: '8000'
+        regex: '800[0-7]'
         action: keep
       - source_labels: [__meta_kubernetes_pod_name]
         target_label: pod

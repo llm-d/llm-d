@@ -85,6 +85,9 @@ spec:
 
                     exec vllm serve \
                       deepseek-ai/DeepSeek-V4-Pro \
+                      --enable-auto-tool-choice \
+                      --tool-call-parser deepseek_v4 \
+                      --reasoning-parser deepseek_v4 \
                       --port 8000 \
                       --tokenizer-mode deepseek_v4 \
                       --gpu-memory-utilization 0.95 \
@@ -113,7 +116,8 @@ spec:
                       --no-disable-hybrid-kv-cache-manager \
                       --enable-cumem-allocator \
                       --numa-bind \
-                      --kv-cache-dtype fp8
+                      --kv-cache-dtype fp8 \
+                      --shutdown-timeout=45
                 env:
                   - name: HF_TOKEN
                     valueFrom:
@@ -332,6 +336,9 @@ spec:
 
                     exec vllm serve \
                       deepseek-ai/DeepSeek-V4-Pro \
+                      --enable-auto-tool-choice \
+                      --tool-call-parser deepseek_v4 \
+                      --reasoning-parser deepseek_v4 \
                       --port 8200 \
                       --tokenizer-mode deepseek_v4 \
                       --gpu-memory-utilization 0.9 \
@@ -354,7 +361,8 @@ spec:
                       --block-size 256 \
                       --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
                       --no-disable-hybrid-kv-cache-manager \
-                      --enable-cumem-allocator
+                      --enable-cumem-allocator \
+                      --shutdown-timeout=45
                 env:
                   - name: HF_TOKEN
                     valueFrom:

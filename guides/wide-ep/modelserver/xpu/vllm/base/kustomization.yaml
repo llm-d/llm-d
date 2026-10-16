@@ -9,6 +9,7 @@ resources:
 components:
   - ../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

@@ -9,6 +9,7 @@ resources:
 components:
   - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 # TODO(#2339): Remove override once gpu-vllm/release is bumped to v0.30.0+ (required for DeepEP v2 + NCCL GIN).
 images:

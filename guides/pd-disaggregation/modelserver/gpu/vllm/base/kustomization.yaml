@@ -10,3 +10,4 @@ resources:
 # overlays from overriding the resolved image name with a different component.
 components:
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/graceful-shutdown

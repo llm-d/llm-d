@@ -6,6 +6,11 @@ router:
       targetPort: 8081
 
   epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which the token-load-scorer and affinity filter consume) is local to each
+    # EPP process, so multiple replicas would each see only a fraction of the
+    # per-endpoint load and incorrectly gate the affinity filter.
+    replicas: 1
     flags:
       # The disaggregatedset-rollout-screener is Alpha stability.
       allow-experimental-plugins: true
@@ -31,23 +36,32 @@ router:
               prefill: always-disagg-pd-decider
         - type: prefill-filter
         - type: decode-filter
-        - type: prefix-cache-scorer
-        - type: queue-scorer
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured on an H200 GLM-5.2-FP8 DP8 cell. Re-measure for other
+            # hardware or models (guides/recipes/router/calibration).
+            peakPrefillThroughput: 3585
+        - type: token-load-scorer
         - type: active-request-scorer
+        - type: max-score-picker
         schedulingProfiles:
+        # Prefill does the prompt pass: keep prefix groups on cache-warm ranks
+        # (affinity filter) and pick by queued prefill token load.
         - name: prefill
           plugins:
           - pluginRef: prefill-filter
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: active-request-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
         - name: decode
           plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
 
   modelServers:
     # targetPorts must list all 8 DP rank ports so the EPP routes requests

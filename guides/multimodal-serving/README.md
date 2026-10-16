@@ -54,7 +54,7 @@ The request flows, the EC Connector, and the vLLM version it needs are described
 Choose **aggregated** serving when media inputs are small (low-resolution images), the model is small, you have a good prefix-cache hit rate (which already avoids repeated encoding), or you do not want to run multi-tier networking (NIXL/ZMQ) between pods.
 
 Choose **E/PD** when requests often carry large or many media items (document parsing with dozens of images, high-definition video, long audio), the vision encoder is heavy enough to stall decoding on the pods that run it, or you want to scale encoding separately.
-Choose **E/P/D** when, in addition, prefill and decode need separate scaling or parallelism: see [When to use P/D and how to tune it](../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it), and note that [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) apply to its P/D stage.
+Choose **E/P/D** when, in addition, prefill and decode need separate scaling or parallelism: see [When to use P/D and how to tune it](../../docs/architecture/disaggregation/pd-disaggregation.md#when-to-use-pd-and-how-to-tune-it), and note that [Known NIXL Connector Issues and Limitations](../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations) apply to its P/D stage.
 
 ## Supported Accelerators and Model Servers
 
@@ -74,11 +74,11 @@ The aggregated topology runs on every accelerator above; E/PD and E/P/D run on N
 
 | `TOPOLOGY` | `ACCELERATOR_TYPE` | `INFRA_PROVIDER` | Overlay |
 | --- | --- | --- | --- |
-| `aggregation` | `gpu` | `base`, `gke` | [`aggregation/modelserver/gpu/vllm/`](./aggregation/modelserver/gpu/vllm/) |
-| `aggregation` | `xpu` | `base` | [`aggregation/modelserver/xpu/vllm/base/`](./aggregation/modelserver/xpu/vllm/base/) |
-| `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/`](./aggregation/modelserver/tpu/v7/vllm/gke/) |
-| `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/`](./e-disaggregation/modelserver/gpu/vllm/e-pd/) |
-| `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/) |
+| `aggregation` | `gpu` | `base`, `gke` | [`aggregation/modelserver/gpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/gpu/vllm/base/kustomization.yaml) |
+| `aggregation` | `xpu` | `base` | [`aggregation/modelserver/xpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/xpu/vllm/base/kustomization.yaml) |
+| `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml`](./aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml) |
+| `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml) |
+| `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml) |
 
 The replica counts are sized for the reference hardware in the Notes column (16 GPUs for aggregated serving on NVIDIA GPUs, 20 for E/PD and E/P/D). To try the guide on a smaller cluster, lower `replicas` in the overlay's Deployments, keeping at least one pod per role.
 
@@ -98,7 +98,7 @@ The `aggregation/modelserver/tpu/v7/vllm/gemma4/` overlay serves `google/gemma-4
 
 - Ensure your cluster has enough accelerators for your configuration (see the Notes column above; NVIDIA GPUs with 141 GB of HBM, e.g. H200, for the reference sizing).
 
-- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma).
+- For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma/kustomization.yaml).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -145,6 +145,25 @@ source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, 
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 ```
 <!-- guide:prerequisites.gaie end -->
+
+**(`TOPOLOGY=e-pd` and `e-p-d` only) Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
+
+<!-- guide:prerequisites.lws[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when TOPOLOGY=e-pd or e-p-d:
+# helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
+# "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
+helm pull oci://registry.k8s.io/lws/charts/lws --version=${LWS_VERSION} --untar
+kubectl apply --server-side --force-conflicts -f lws/crds
+helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+  --version=${LWS_VERSION} \
+  --namespace lws-system --create-namespace \
+  --set enableDisaggregatedSet=true \
+  --wait --timeout 300s
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.lws[0] end -->
 
 **Create a target namespace for the installation:**
 
@@ -238,7 +257,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
-**Deploy the router** in [Standalone Mode](../../docs/architecture/core/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is used by the verification steps to find the router service. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
+**Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is used by the verification steps to find the router service. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -289,7 +308,7 @@ See the `estimate:` block in [`aggregation.values.yaml`](./aggregation/router/ag
 
 **Fixed estimate** (`mode: static`, for example Gemma 4). Every image costs a fixed, configured number of tokens matching the model's supported budgets (70, 140, 280, 560, or 1120 for Gemma 4), and a video costs a fixed `numTokensPerFrame` times the frames taken every `frameStride` source frames (`strided` strategy), clamped to `[minFrames, maxFrames]`. See [Model-specific notes](#model-specific-notes).
 
-**Precise prefix-cache routing.** Instead of estimating, the router can tokenize the input and subscribe to the KV-cache events of the model servers, keeping an index of which blocks each pod holds. Media items become block keys derived from the asset hash and size, so they are matched like text. See the [KV-Cache Indexer](../../docs/architecture/advanced/kv-management/kv-indexer.md) and [Precise Prefix Cache Aware Routing](../precise-prefix-cache-routing/README.md).
+**Precise prefix-cache routing.** Instead of estimating, the router can tokenize the input and subscribe to the KV-cache events of the model servers, keeping an index of which blocks each pod holds. Media items become block keys derived from the asset hash and size, so they are matched like text. See the [KV-Cache Indexer](../../docs/architecture/kv-management/kv-indexer.md) and [Precise Prefix Cache Aware Routing](../precise-prefix-cache-routing/README.md).
 
 ## Verification
 
@@ -428,7 +447,7 @@ kubectl delete namespace ${NAMESPACE}
 
 ## References
 
-- [EPP Architecture](../../docs/architecture/core/router/epp/README.md)
+- [EPP Architecture](../../docs/architecture/router/epp.md)
 - [llm-d Router Disaggregation Docs](https://github.com/llm-d/llm-d-router/blob/main/docs/disaggregation.md)
 - [vLLM: Disaggregated Encoder](https://docs.vllm.ai/en/latest/features/disagg_encoder/)
 - [vLLM: Encoder Disaggregation for Scalable Multimodal Model Serving](https://vllm.ai/blog/vllm-epd)

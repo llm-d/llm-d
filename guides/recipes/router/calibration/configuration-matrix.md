@@ -27,6 +27,8 @@ rows because the serving engine changes prefill throughput.
 | `amd/vllm`    | AMD GPU · vLLM             | rocm v0.7.0          | 2 | Qwen3-32B               | 15928 ‡ |
 | `amd/sglang`  | AMD GPU · SGLang          | v0.5.13.post1 (rocm) | 2 | Qwen3-32B               | 30720 ‡ |
 | `metax/vllm` | MetaX C500X 64 GB · vLLM-MetaX | 0.24.0 (MACA 3.8.2.1) | 8 | DeepSeek-R1-Distill-Llama-70B | **5468** |
+| `mthreads/sglang` | MTT S5000 80 GB · SGLang-dsv4 | 1.0 | 8 | DeepSeek-V4-Flash-0731-FP8-mt | **10259** |
+| `mthreads/vllm`  | MTT S5000 80 GB · vLLM-MUSA | 0.28.0 / MUSA 5.2.0 | 8 | Qwen3-32B | TBD |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
 | `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
@@ -48,9 +50,12 @@ rows because the serving engine changes prefill throughput.
   TP=8, `CHUNK_SIZE=4095`). The single-GPU value is the higher of two valid runs
   (5361 and 5773 tokens/sec). The eight-GPU chunk size stays below that profile's
   `--max-model-len=4096` so the calibration prompt plus one output token fits.
-- The other GPU/TPU paths run at the vLLM default `--max-num-batched-tokens=8192`, so
-  calibrate those with `CHUNK_SIZE=8192`. **Re-measure** if you change TP, chunk size,
-  quantization, or `--max-model-len` — those move the number more than the model identity does.
+- **10259 / 7812** — measured on Moore Threads MTT S5000 (8 GPUs, SGLang
+  `sglang-dsv4:1.0`, colocated TP=8 EP=8) for optimized-baseline
+  `mthreads/sglang` (DeepSeek-V4-Flash-0731-FP8-mt). **10259** is
+  `CHUNK_SIZE=8192` (llm-d default). The [pd-disaggregation](../../../pd-disaggregation)
+  overlay `mthreads/sglang/base` is the same model and card with Mooncake P/D; re-measure
+  before using 10259 as an operational ceiling there.
 - **`npu/vllm`** — gpt-oss-120B on one Rebellions NPU at dp1 and `--max-num-seqs=1`,
   `--max-num-batched-tokens=512`, so calibrate this path with `CHUNK_SIZE=512`. This path
   does not borrow a proxy: the closest measured value (gpt-oss-120B on H100 at TP=1, 39065, from
@@ -63,6 +68,13 @@ rows because the serving engine changes prefill throughput.
 **Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
+The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per
+rank for GLM-5.2-FP8 on H200, measured on a DP8 wide-EP prefill cell (2048-token chunk). The
+[DeepSeek-V4](../../../models/deepseek-v4/README.md) guide (DeepSeek-V4-Pro on GB200) ships an
+**estimate**, `20000` per prefill pod (one endpoint fronting 4 DP ranks, ~5000 per rank), scaled
+from measured MoE prefill rates. Replace it with a `calibrate.sh` run on that hardware at
+`CHUNK_SIZE=8192` (requests must fit `--max-model-len 9280`), multiplied by 4 because a single
+request measures one rank.
 
 ## Filling a cell
 

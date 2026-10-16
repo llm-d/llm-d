@@ -52,7 +52,7 @@ Choose between topologies:
 
 * **E/PD** - simpler deployment; best when prefill and decode do not need separate scaling, or when the primary bottleneck is encode
 * **E/P/D** - extends the [P/D Disaggregation](../../pd-disaggregation/README.md) guide by adding a dedicated encode stage. The reasons for separating prefill from decode (heterogeneous parallelism, xPyD ratios, workload specialization) are described in
-  [When to use P/D and how to tune it](../../../docs/architecture/advanced/disaggregation/README.md#when-to-use-pd-and-how-to-tune-it). That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
+  [When to use P/D and how to tune it](../../../docs/architecture/disaggregation/pd-disaggregation.md#when-to-use-pd-and-how-to-tune-it). That section also points to [Known NIXL Connector Issues and Limitations](../../../docs/operations/disaggregation/vllm.md#known-nixl-connector-issues-and-limitations), which applies equally to the P/D stage of this topology:
   * [Prefill TP > Decode TP is not supported for most model architectures](../../../docs/operations/disaggregation/vllm.md#prefill-tp--decode-tp-is-not-supported)
   * [Decode-side stale NIXL agent cache after a prefill pod restart](../../../docs/operations/disaggregation/vllm.md#stale-nixl-agent-cache-after-a-prefill-pod-restart)
 
@@ -168,7 +168,7 @@ To employ a Kubernetes Gateway managed proxy instead of the standalone one, then
 2. *Deploy the llm-d Router and an HTTPRoute*. The following deploys the llm-d Router with an HTTPRoute that connects it to the Gateway created in the previous step (set `provider.name` to the gateway provider you deployed):
 
 ```bash
-export PROVIDER_NAME=gke # other: na, agentgateway, or istio
+export PROVIDER_NAME=gke # other: none, agentgateway, or istio
 helm install ${RELEASE_NAME} \
     ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
@@ -185,7 +185,7 @@ helm install ${RELEASE_NAME} \
 Apply the Kustomize overlays for your chosen topology:
 
 Choose the overlay matching your infrastructure provider:
-- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma).
+- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma/kustomization.yaml).
 - **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
@@ -228,10 +228,10 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 ```bash
 kubectl run curl-debug --rm -it \
+    --namespace="$NAMESPACE" \
     --image=cfmanteiga/alpine-bash-curl-jq \
     --env="IP=$IP" \
     --env="MODEL_NAME=$MODEL_NAME" \
-    --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
 ```
 
@@ -288,8 +288,11 @@ A successful multimodal response does not show that the encoder output came from
 
 ```bash
 export EC_CONSUMER_ROLE=decode # use "prefill" for the E/P/D profile
-kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL=DEBUG -n ${NAMESPACE}
-kubectl rollout status deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -n ${NAMESPACE}
+# Changing one role's template rolls every role of the set.
+ROLE=$(kubectl get disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} -o json | jq --arg r "${EC_CONSUMER_ROLE}" '.spec.roles | map(.name) | index($r)')
+kubectl patch disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} --type=json \
+  -p "[{\"op\": \"add\", \"path\": \"/spec/roles/${ROLE}/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-\", \"value\": {\"name\": \"VLLM_LOGGING_LEVEL\", \"value\": \"DEBUG\"}}]"
+kubectl wait --for=condition=Available disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} --timeout=1800s
 ```
 
 Send the multimodal request from step 2 again, then search the consumer logs:
@@ -301,7 +304,9 @@ kubectl logs -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver -n ${NAMESPACE}
 One line for each transferred multimodal item shows that the transfer works. If there is no such line, make sure that the image contains the P2P NIXL mode (see [EC Connector](#ec-connector)). Remove the variable when you are done:
 
 ```bash
-kubectl set env deployment -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver VLLM_LOGGING_LEVEL- -n ${NAMESPACE}
+ENV=$(kubectl get disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} -o json | jq --argjson i "${ROLE}" '.spec.roles[$i].spec.leaderWorkerTemplate.workerTemplate.spec.containers[0].env | map(.name) | index("VLLM_LOGGING_LEVEL")')
+kubectl patch disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} --type=json \
+  -p "[{\"op\": \"remove\", \"path\": \"/spec/roles/${ROLE}/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/${ENV}\"}]"
 ```
 
 ## Cleanup

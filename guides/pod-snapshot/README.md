@@ -4,17 +4,17 @@
 
 Deploying large language models (LLMs) on Kubernetes often incurs multi-minute cold starts due to downloading model weights from HuggingFace and loading them into memory.
 
-This guide demonstrates how to checkpoint and restore a **single-GPU** vLLM model server (e.g., an NVIDIA H100 80GB GPU serving `Qwen/Qwen3-32B`), currently implemented with **GKE Pod Snapshots** and **GKE Sandbox (gVisor)** — see [Platform Support](#platform-support).
+This guide demonstrates how to checkpoint and restore a **single-GPU** vLLM or SGLang model server (e.g., an NVIDIA H100 80GB GPU serving `Qwen/Qwen3-32B`), currently implemented with **GKE Pod Snapshots** and **GKE Sandbox (gVisor)** — see [Platform Support](#platform-support).
 
-When launched with `python3 -m docker.scripts.snapshot.launcher`, the snapshot launcher orchestrates the checkpoint and restore lifecycle automatically:
+When launched with the snapshot launcher (`python3 -m docker.scripts.snapshot.launcher` for vLLM, or `python3 -m docker.scripts.snapshot.sglang.launcher` for SGLang), it orchestrates the checkpoint and restore lifecycle automatically:
 
-1. **First Pod (Cold Start & Snapshot Creation):** The initial replica loads the model weights, captures CUDA graphs, and calls `engine.sleep(level=1)` to offload weights from GPU VRAM to host CPU RAM while discarding the KV cache. It then purges the on-disk weight cache so the downloaded files are not duplicated in the container filesystem snapshot, and triggers a GKE Pod Snapshot uploaded to Google Cloud Storage (GCS).
+1. **First Pod (Cold Start & Snapshot Creation):** The initial replica loads the model weights, captures CUDA graphs, and releases GPU memory (calling `engine.sleep(level=1)` in vLLM, or `POST /release_memory_occupation` in SGLang) to offload weights from GPU VRAM to host CPU RAM while discarding the KV cache. It then purges the on-disk weight cache so the downloaded files are not duplicated in the container filesystem snapshot, and triggers a GKE Pod Snapshot uploaded to Google Cloud Storage (GCS).
 2. **Subsequent Pods (Fast Restoration):** When pods scale out or restart, GKE automatically restores the container from the GCS snapshot in seconds—bypassing model weight downloads and engine initialization.
-3. **Serve Traffic:** The restored pod immediately wakes up GPU memory and begins serving inference requests.
+3. **Serve Traffic:** The restored pod immediately wakes up GPU memory (`engine.wake_up()` in vLLM, or `POST /resume_memory_occupation` in SGLang) and begins serving inference requests.
 
 ### Platform Support
 
-This guide currently implements pod snapshotting on **GKE**, using GKE Pod Snapshots with GKE Sandbox (gVisor) and Google Cloud Storage. The snapshot mechanism is reached through a pluggable provider (`docker/scripts/snapshot/providers.py`), so the launcher, the vLLM wrapper, and the sleep/restore lifecycle are platform-independent — only the checkpoint backend is GKE-specific.
+This guide currently implements pod snapshotting on **GKE**, using GKE Pod Snapshots with GKE Sandbox (gVisor) and Google Cloud Storage. The snapshot mechanism is reached through a pluggable provider (`docker/scripts/snapshot/providers.py`), so the launchers, the engine wrappers, and the sleep/restore lifecycle are platform-independent — only the checkpoint backend is GKE-specific.
 
 We are also working on a **platform-agnostic implementation based on [CRIU](https://criu.org/)** (Checkpoint/Restore In Userspace), which would bring the same cold-start elimination to any Kubernetes cluster without depending on a managed snapshot service.
 
@@ -28,22 +28,25 @@ We are also working on a **platform-agnostic implementation based on [CRIU](http
    This guide supports single-GPU pods only (`nvidia.com/gpu: 1`, `TP=1`, `DP=1`). Tensor parallelism greater than 1 is **not supported** in this guide, and benchmark results target a single NVIDIA H100 80GB. Scale capacity horizontally by adding replicas, not by adding GPUs per replica.
 2. **Snapshot Warmup (`replicas: 1` → `N`):**
    Once a `PodSnapshot` is `Ready` in GCS, you can set any number of `replicas` in your Deployment (or use HPA/KEDA) and all pods will restore in seconds. When creating a snapshot for the **first** time (or after changing flags/images), start with `replicas: 1` until the `PodSnapshot` reaches `Ready=True` before scaling out—otherwise pods scheduled before the snapshot completes will cold-start.
-3. **Sleep Mode (`--enable-sleep-mode`):**
-   Recommended, not required. It lets `engine.sleep(level=1)` offload weights from GPU VRAM to host RAM and discard the KV cache before checkpointing. Snapshot and restore also succeed without it—GKE captures resident VRAM directly—but enabling it measured faster end to end (shorter checkpoint upload, smaller snapshot, faster restore). If omitted, `engine.sleep()` silently no-ops rather than erroring, so verify the cold-start logs report a non-zero `Sleep mode freed N GiB memory`.
-4. **Eager Safetensors Loading (`--safetensors-load-strategy eager`):**
-   Required when purging `MODEL_CACHE_DIR` before checkpointing, as default `mmap` loading leaves file-backed mappings to deleted weight files that fail or bloat the gVisor snapshot.
-5. **Workload-Triggered Policy:**
+3. **vLLM Sleep Mode (`--enable-sleep-mode`) & SGLang Memory Saver (`--enable-memory-saver --enable-weights-cpu-backup`):**
+   - **vLLM (`--enable-sleep-mode`):** Recommended, not required. It lets `engine.sleep(level=1)` offload weights from GPU VRAM to host RAM and discard the KV cache before checkpointing. Snapshot and restore also succeed without it—during the checkpoint, GKE (`nvproxy` and the NVIDIA driver) copies all allocated GPU VRAM (including the KV cache) into host memory and copies it back to GPU VRAM on restore—but enabling sleep mode measured faster end to end because the KV cache is dropped instead of copied. If omitted, `engine.sleep()` silently no-ops rather than erroring, so verify the cold-start logs report a non-zero `Sleep mode freed N GiB memory`.
+   - **SGLang (`--enable-memory-saver --enable-weights-cpu-backup`):** Recommended together (`--enable-memory-saver` is optional, but `--enable-weights-cpu-backup` is **required** whenever `--enable-memory-saver` is enabled). With both flags set, `POST /release_memory_occupation` offloads weights to host CPU RAM and unmaps physical GPU VRAM (`weights`, `kv_cache`, and `cuda_graph`), which reduces checkpoint creation time (`~45.5s` vs. `~64.0s` without it). If `--enable-memory-saver` is omitted, the launcher logs a warning and still takes the snapshot—GKE (`nvproxy` and the NVIDIA driver) copies all allocated GPU VRAM (weights, KV cache, and CUDA graphs) into host memory during the checkpoint and back to GPU VRAM on restore. However, if `--enable-memory-saver` is enabled *without* `--enable-weights-cpu-backup`, releasing GPU memory discards the model weights without a CPU backup, so the launcher refuses to snapshot.
+4. **Eager Safetensors Loading (`--safetensors-load-strategy eager`, vLLM):**
+   Required on vLLM when purging `MODEL_CACHE_DIR` before checkpointing, as default `mmap` loading leaves file-backed mappings to deleted weight files that fail or bloat the gVisor snapshot. SGLang does not need an equivalent flag because its CPU weight backup (`--enable-weights-cpu-backup`) is copied from GPU memory into anonymous host RAM, leaving no lingering file-backed `mmap`s.
+5. **SGLang Health Probes (`/health` vs `/v1/models`):**
+   Unlike vLLM (which binds Uvicorn only after the engine lifespan completes), SGLang binds Uvicorn and serves `200 OK` on `/v1/models` before the Scheduler finishes loading weights or warmup completes. In `patch-sglang.yaml`, `startupProbe` and `readinessProbe` are overridden to hit `/health`, which returns `503` while the wrapper holds `server_status` at `ServerStatus.Starting` until the snapshot and wake-up cycle finishes.
+6. **Workload-Triggered Policy:**
    The GKE `PodSnapshotPolicy` sets `spec.triggerConfig.type: workload` (with `postCheckpoint: resume`). If set to `manual`, the policy waits for a `PodSnapshotTrigger` resource instead, and the container's write to `/proc/gvisor/checkpoint` does nothing.
-6. **Snapshot Matching & `env` Changes:**
+7. **Snapshot Matching & `env` Changes:**
    Changing the container `image`, `command`, `args`, or node/driver version automatically invalidates existing snapshots and triggers a fresh cold start. However, container `env` variables are **not** hashed—if you edit an `env` variable, you must manually run `kubectl delete podsnapshots --all -n <namespace>` to force a new snapshot, or restored pods will keep the old environment captured at checkpoint time. See [How GKE Matches Pods to Snapshots](#how-gke-matches-pods-to-snapshots).
-7. **gVisor Localhost Isolation (`kubectl port-forward`):**
-   `kubectl port-forward pod/<vllm-pod>` fails with `connection refused` because `kubelet` dials `127.0.0.1` in the host CNI namespace rather than inside gVisor's user-space network stack. To test from your local machine, port-forward to the router service (`kubectl port-forward service/pod-snapshot-epp 8080:80`) or use an in-cluster test pod.
-8. **Hierarchical Namespace GCS Buckets:**
+8. **gVisor Localhost Isolation (`kubectl port-forward`):**
+   `kubectl port-forward pod/<modelserver-pod>` fails with `connection refused` because `kubelet` dials `127.0.0.1` in the host CNI namespace rather than inside gVisor's user-space network stack. To test from your local machine, port-forward to the router service (`kubectl port-forward service/pod-snapshot-epp 8080:80`) or use an in-cluster test pod.
+9. **Hierarchical Namespace GCS Buckets:**
    The snapshot bucket must be created with `--enable-hierarchical-namespace`. Hierarchical namespace cannot be turned on after the fact, so an existing flat bucket cannot be reused.
-9. **Cloud Storage FUSE CSI Driver Is Unsupported:**
-   Pods using the Cloud Storage FUSE CSI sidecar cannot be snapshotted. Model weights must be downloaded to the container filesystem, as this guide does, rather than mounted from a bucket.
-10. **Host Memory & Snapshot Sizing:**
-    Because `engine.sleep(level=1)` copies model weights from GPU VRAM into host CPU RAM before checkpointing, ensure container `memory` requests and limits (`96Gi–128Gi` in `patch-vllm.yaml`) are large enough to hold the full model weights alongside the vLLM process without being `OOMKilled`. The resulting GCS snapshot (`pages.img`) is roughly equal to the model weight footprint (purging `MODEL_CACHE_DIR` prevents storing a duplicate copy on disk).
+10. **Cloud Storage FUSE CSI Driver Is Unsupported:**
+    Pods using the Cloud Storage FUSE CSI sidecar cannot be snapshotted. Model weights must be downloaded to the container filesystem, as this guide does, rather than mounted from a bucket.
+11. **Host Memory & Snapshot Sizing:**
+    Because offloading (`engine.sleep(level=1)` in vLLM, `POST /release_memory_occupation` in SGLang) copies model weights from GPU VRAM into host CPU RAM before checkpointing, ensure container `memory` requests and limits (`96Gi–128Gi` in `patch-vllm.yaml` / `patch-sglang.yaml`) are large enough to hold the full model weights alongside the model server process without being `OOMKilled`. The resulting GCS snapshot (`pages.img`) is roughly equal to the model weight footprint (purging `MODEL_CACHE_DIR` prevents storing a duplicate copy on disk).
 
 > [!WARNING]
 > **Snapshots capture process memory and environment secrets (including `HF_TOKEN`).** Restrict GCS bucket access to least-privilege IAM principals, and note that rotating a Kubernetes Secret requires deleting existing `PodSnapshot` resources to take effect.
@@ -54,13 +57,13 @@ We are also working on a **platform-agnostic implementation based on [CRIU](http
 
 ### Snapshot Variables
 
-These are **container** environment variables set on the pod by the `gke/` deployment overlay (`patch-vllm.yaml`), not exported in your shell:
+These are **container** environment variables set on the pod by the `gke/` deployment overlay (`patch-vllm.yaml` / `patch-sglang.yaml`), not exported in your shell:
 
 | Variable | Description | Default | Set by `gke/` overlay |
 | :--- | :--- | :--- | :--- |
 | `SNAPSHOT_PROVIDER` | Snapshot provider backend read by [`docker/scripts/snapshot`](../../docker/scripts/snapshot). Any unrecognized value disables snapshotting. | `""` (disabled) | `gke_gvisor` |
 | `MODEL_CACHE_DIR` | Local model weight cache directory purged before triggering the checkpoint so downloaded files are not duplicated on disk. Unset means no purge. | `""` (no purge) | `~/.cache/huggingface/hub` |
-| `VLLM_HOST_IP` | Pins the `torch.distributed` TCPStore to loopback so restored pods do not log `Broken pipe` warnings when their pod IP changes. | Pod IP | `127.0.0.1` |
+| `VLLM_HOST_IP` | *(vLLM only)* Pins the `torch.distributed` TCPStore to loopback so restored pods do not log `Broken pipe` warnings when their pod IP changes. | Pod IP | `127.0.0.1` |
 
 ---
 
@@ -71,7 +74,7 @@ These are **container** environment variables set on the pod by the `gke/` deplo
 Before running this guide, make sure your GKE cluster, GPU node pool, and GCS storage bucket are configured.
 
 > [!NOTE]
-> Replace `<PROJECT_ID>`, `<REGION>`, `<ZONE>`, `<CLUSTER_NAME>`, `<NODE_POOL_NAME>`, `<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<GPU_COUNT>`, `<MAX_NODES>`, `<DISK_SIZE>`, `<GCS_BUCKET>`, and `<NAMESPACE>` (default: `llm-d-pod-snapshot`) below:
+> Replace `<PROJECT_ID>`, `<REGION>`, `<ZONE>`, `<CLUSTER_NAME>`, `<NODE_POOL_NAME>`, `<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<GPU_COUNT>`, `<MAX_NODES>`, `<DISK_SIZE>`, `<GCS_BUCKET>`, `<MODEL_SERVER>` (`vllm` or `sglang`), and `<NAMESPACE>` (default: `llm-d-pod-snapshot`) below:
 >
 > - **GPU Machine & Accelerator (`<GPU_MACHINE_TYPE>`, `<GPU_ACCELERATOR>`, `<GPU_COUNT>`):** e.g., `--machine-type=a3-highgpu-1g` with `--accelerator=type=nvidia-h100-80gb,count=1,gpu-driver-version=latest`. See [supported GPU machine types](https://cloud.google.com/kubernetes-engine/docs/concepts/gpus#gpu_machine_types) and [zone availability](https://cloud.google.com/compute/docs/gpus/gpu-regions-zones).
 > - **Capacity & Provisioning (`--spot` / `--flex-start`):** Depending on regional GPU availability and quota for some machine types, add `--spot` or `--flex-start` to the node pool creation command if standard on-demand capacity is unavailable.
@@ -138,8 +141,9 @@ Before running this guide, make sure your GKE cluster, GPU node pool, and GCS st
      --title="Pod Snapshot GCS Read/Writer" \
      --permissions="storage.buckets.get,storage.objects.get,storage.objects.list,storage.objects.create,storage.objects.delete,storage.folders.create"
 
+   # Replace <MODEL_SERVER> with vllm or sglang (matching your deployment overlay's namePrefix):
    gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
-     --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/pod-snapshot-nvidia-gpu-vllm-sa" \
+     --member="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/pod-snapshot-nvidia-gpu-<MODEL_SERVER>-sa" \
      --role="projects/<PROJECT_ID>/roles/podSnapshotGcsReadWriter"
    ```
 
@@ -163,7 +167,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.clone end -->
 
-- Set the guide-specific environment variables:
+- Set the guide-specific environment variables (set `MODEL_SERVER=sglang` to deploy SGLang instead of the default `vllm`):
 
 <!-- guide:env.static start -->
 ```bash
@@ -171,6 +175,7 @@ export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=pod-snapshot
 export NAMESPACE=llm-d-pod-snapshot
+export MODEL_SERVER=vllm # options: vllm, sglang
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -271,11 +276,11 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Single-GPU Model Server & Snapshot Policies
 
-Apply the Kustomize overlay to deploy the `PodSnapshotStorageConfig`, `PodSnapshotPolicy`, and single-GPU vLLM `Deployment` running under `runtimeClassName: gvisor`:
+Apply the Kustomize overlay to deploy the `PodSnapshotStorageConfig`, `PodSnapshotPolicy`, and single-GPU model server `Deployment` (`vllm` or `sglang`) running under `runtimeClassName: gvisor`:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
-kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/gke/ \
   | sed "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
@@ -314,7 +319,7 @@ Status progression:
 
 > [!IMPORTANT]
 > **The pod pauses log output during the checkpoint upload, which is normal.** It remains at `0/1 Running`
-> while `engine.sleep(level=1)` offloads VRAM and gVisor freezes the sandbox to stream the memory image to GCS (see [Benchmarking Reports](#benchmarking-reports)). Wait for the `PodSnapshot` `STATUS` to reach `AllSnapshotsAvailable` (`Ready=True`).
+> while the engine offloads VRAM (`engine.sleep(level=1)` in vLLM, or `POST /release_memory_occupation` in SGLang) and gVisor freezes the sandbox to stream the memory image to GCS (see [Benchmarking Reports](#benchmarking-reports)). Wait for the `PodSnapshot` `STATUS` to reach `AllSnapshotsAvailable` (`Ready=True`).
 
 ### 2. Scale Out & Verify Fast Restoration
 
@@ -336,14 +341,26 @@ LAST SEEN   TYPE     REASON               OBJECT                     MESSAGE
 58s         Normal   GKEPodSnapshotting   pod/<pod-name>             Successfully restored the pod from PodSnapshot <namespace>/<snapshot-id>
 ```
 
-And confirm the pod logs show `engine.wake_up()` instead of reloading weights:
+And confirm the pod logs show GPU memory wake-up instead of reloading weights:
 
-```text
-(APIServer pid=1) INFO MM-DD HH:MM:SS [wrapper.py:84] Process restored from snapshot checkpoint. Resuming engine...
-(APIServer pid=1) INFO MM-DD HH:MM:SS [wrapper.py:88] Executing engine.wake_up() to restore VRAM...
-(EngineCore pid=NN) INFO MM-DD HH:MM:SS [abstract.py:345] It took N seconds to wake up tags {'kv_cache', 'weights'}.
-(APIServer pid=1) INFO:     Application startup complete.
-```
+- **vLLM (`MODEL_SERVER=vllm`):**
+
+  ```text
+  (APIServer pid=1) INFO MM-DD HH:MM:SS [wrapper.py:84] Process restored from snapshot checkpoint. Resuming engine...
+  (APIServer pid=1) INFO MM-DD HH:MM:SS [wrapper.py:88] Executing engine.wake_up() to restore VRAM...
+  (EngineCore pid=NN) INFO MM-DD HH:MM:SS [abstract.py:345] It took N seconds to wake up tags {'kv_cache', 'weights'}.
+  (APIServer pid=1) INFO:     Application startup complete.
+  ```
+
+- **SGLang (`MODEL_SERVER=sglang`):**
+
+  ```text
+  [YYYY-MM-DD HH:MM:SS] Snapshot checkpoint created successfully.
+  [YYYY-MM-DD HH:MM:SS] Executing POST /resume_memory_occupation to restore VRAM...
+  [YYYY-MM-DD HH:MM:SS] INFO:     127.0.0.1:NNNNN - "POST /resume_memory_occupation HTTP/1.1" 200 OK
+  [YYYY-MM-DD HH:MM:SS] SGLang memory occupation resumed successfully.
+  [YYYY-MM-DD HH:MM:SS] Restored server_status to ServerStatus.Up.
+  ```
 
 ### 3. Verify Inference Endpoint
 
@@ -391,7 +408,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete podsnapshots --all -n ${NAMESPACE} --ignore-not-found=true
 
-kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/gke/ \
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/gke/ \
   | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
 
 kubectl delete namespace ${NAMESPACE}
@@ -405,7 +422,8 @@ kubectl delete namespace ${NAMESPACE}
 
 ## Benchmarking Reports
 
-- **[Qwen/Qwen3-32B on vLLM (1×H100 Snapshot & Restore)](./benchmark-results/vllm-qwen3-32b-h100.md)**: End-to-end pod lifecycle timings comparing cold start against snapshot restore.
+- **[Qwen/Qwen3-32B on vLLM (1×H100 Snapshot & Restore)](./benchmark-results/vllm-qwen3-32b-h100.md)**: End-to-end pod lifecycle timings comparing cold start against snapshot restore on vLLM.
+- **[Qwen/Qwen3-32B on SGLang (1×H100 Snapshot & Restore)](./benchmark-results/sglang-qwen3-32b-h100.md)**: End-to-end pod lifecycle timings comparing cold start against snapshot restore on SGLang.
 
 > [!NOTE]
-> GKE Pod Snapshots targets pod startup latency; because restoration resumes the initialized vLLM process and CUDA graphs in GPU memory, steady-state serving behavior is expected to match a standard deployment.
+> GKE Pod Snapshots targets pod startup latency; because restoration resumes the initialized model server process and CUDA graphs in GPU memory, steady-state serving behavior is expected to match a standard deployment.

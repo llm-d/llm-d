@@ -6,11 +6,13 @@ resources:
 namePrefix: omni-serving-nvidia-gpu-vllm-omni-
 
 components:
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../../../../recipes/modelserver/components/images/gpu-vllm-omni/release
 
 labels:
   - pairs:
       llm-d.ai/guide: omni-serving
+      llm-d.ai/model: Qwen3-Omni-30B-A3B-Instruct
       llm-d.ai/accelerator-variant: gpu
       llm-d.ai/accelerator-vendor: nvidia
       llm-d.ai/engine-type: vllm-omni

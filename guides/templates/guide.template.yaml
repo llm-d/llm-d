@@ -1,56 +1,133 @@
 # Copy to guides/<your-guide>/guide.yaml and edit.
 # Every bash code block in your README is emitted from here by
 # `scripts/guide.py render guides/<your-guide>`.
+#
+# schema_version: 1
 
 name: <guide-name>
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Note: in a real guide with a `modelserver/` directory, also declare
+# `providers: [{name: base, label: "Kubernetes (base)"}, {name: gke, label: "GKE"}]`
+# under each accelerator so llm-d.ai renders the provider selector.
+support:
+  engines: {vllm: vLLM, sglang: SGLang}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke`"
+      model: "<HuggingFace/Model-Name>"
+      engines: {vllm: community, sglang: community}
+    xpu:
+      label: Intel XPU
+      notes: "Data Center GPU Max 1550+ · 2 replicas × 1 GPU via DRA"
+      model: "<HuggingFace/Model-Name>"
+      engines:
+        vllm: community
+        sglang: {status: unsupported, issue: "https://github.com/llm-d/llm-d/issues/2665"}
 
 env:
   # Variables the renderer emits as `export VAR=…`. Referenced by `when:` filters.
   static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
     GUIDE_NAME: <guide-name>
     NAMESPACE: llm-d-<guide-name>
-    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
-    MODEL: {default: "<HuggingFace/Model-Name>"}
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu]}
+    MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
+    INFRA_PROVIDER: {default: base, values: [base, gke]}
+    MODEL: {default: "<HuggingFace/Model-Name>", comment: "set to the model your accelerator serves (table above)"}
     # Sensitive vars: `default:` is the README placeholder; compiler fails if unset.
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
-    # Target environment. Gate steps that differ per platform with
-    # `when: { ENV: [kind] }`. Name this axis ENV across guides so runners
-    # (e.g. a pre-merge Kind runner) can set it uniformly. Drop values the
-    # guide has not been validated against.
-    ENV: {default: existing, values: [kind, existing, ocp]}
-    # Include `sim` only if the guide ships a GPU-free overlay backed by
-    # llm-d-inference-sim — that is what makes a guide runnable on Kind.
-    # Never advertise a value with no overlay behind it.
-    MODEL_SERVER: {default: vllm, values: [vllm, sglang, trtllm, sim]}
-  # Files to source verbatim (write the full path including ${REPO_ROOT}/ if needed).
-  source: ["${REPO_ROOT}/guides/env.sh"]
+  # Files to source verbatim (emitted at the end of env.static when no env.source marker is present).
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
 prerequisites:
-  - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  - skip_in: [ci]
-    run: |
-      kubectl create secret generic llm-d-hf-token \
-        --from-literal="HF_TOKEN=${HF_TOKEN}" \
-        --namespace "${NAMESPACE}" \
-        --dry-run=client -o yaml | kubectl apply -f -
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
 
-# Modes (`standalone:`, `gateway:`) are inferred from `verify.endpoint:` keys below.
+# Foundation and Model guides deploy in Standalone Mode only (Gateway Mode is
+# documented once in `guides/optimized-baseline/`).
 deploy:
+  router_values:
+    - run: |
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+  monitoring_values:
+    - when: {MONITORING: ["true"]}
+      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
   standalone:
-    - run: helm install ${GUIDE_NAME} <chart> -n ${NAMESPACE}
-  gateway:
-    - run: helm install ${GUIDE_NAME} <chart> -n ${NAMESPACE}
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  modelserver:
+    - when: {MODEL_SERVER: [vllm]}
+      run: |
+        # vLLM model server overlay
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/vllm/${INFRA_PROVIDER}/
+    - when: {MODEL_SERVER: [sglang]}
+      run: |
+        # SGLang model server overlay
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/sglang/${INFRA_PROVIDER}/
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
   endpoint:
     standalone:
-      - run: export IP=$(kubectl get service <svc> -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-    gateway:
-      - run: export IP=$(kubectl get gateway <gw> -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
-    - run: curl -sS "http://${IP}/v1/completions" -d '{"model":"'"${MODEL}"'","prompt":"hi"}'
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    mechanism:
+      - when: {MODEL_SERVER: [vllm]}
+        run: |
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            echo "== ${pod}"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | grep -E '^vllm:request_success_total' || true
+          done
+      - when: {MODEL_SERVER: [sglang]}
+        run: |
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            echo "== ${pod}"
+            kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+              | grep -E '^sglang:num_requests_total' || true
+          done
 
 cleanup:
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
   - skip_in: [ci]
     run: kubectl delete namespace ${NAMESPACE}

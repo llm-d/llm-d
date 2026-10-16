@@ -29,6 +29,9 @@ else
   export ROUTER_RELEASE_URL=releases/download/${ROUTER_RELEASE_VERSION}
 fi
 
+### LeaderWorkerSet release installed by guides that deploy DisaggregatedSets
+export LWS_VERSION=${LWS_VERSION:-0.11.1}
+
 ### Chart versions and OCI coordinates for router chart
 export ROUTER_CHART_VERSION=${ROUTER_CHART_VERSION:-v0}
 export ROUTER_STANDALONE_CHART=${ROUTER_STANDALONE_CHART:-oci://ghcr.io/llm-d/charts/llm-d-router-standalone}
@@ -52,6 +55,7 @@ export CURL_TEST_IMAGE=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest}
 # `kubectl apply -k` fail on a missing directory.
 if [[ -n "${GUIDE_NAME:-}" && -n "${ACCELERATOR_TYPE:-}" && -n "${MODEL_SERVER:-}" && -n "${REPO_ROOT:-}" ]]; then
   _llmd_guide_dir="${REPO_ROOT}/guides/${GUIDE_NAME}"
+  [[ ! -d "${_llmd_guide_dir}" && -d "${REPO_ROOT}/guides/models/${GUIDE_NAME}" ]] && _llmd_guide_dir="${REPO_ROOT}/guides/models/${GUIDE_NAME}"
   # Guides that keep their overlays elsewhere (e.g. multimodal-serving's
   # per-topology sub-directories) have no top-level modelserver/ and are skipped.
   if [[ -f "${_llmd_guide_dir}/guide.yaml" ]] && grep -q '^support:' "${_llmd_guide_dir}/guide.yaml" \
@@ -63,7 +67,7 @@ if [[ -n "${GUIDE_NAME:-}" && -n "${ACCELERATOR_TYPE:-}" && -n "${MODEL_SERVER:-
     if [[ -n "${_llmd_engines}" ]]; then
       echo "       supported MODEL_SERVER values on ${ACCELERATOR_TYPE}: ${_llmd_engines}" >&2
     else
-      echo "       ${ACCELERATOR_TYPE} has no configuration in this guide; see the support table in guides/${GUIDE_NAME}/README.md" >&2
+      echo "       ${ACCELERATOR_TYPE} has no configuration in this guide; see the support table in ${_llmd_guide_dir#"${REPO_ROOT}/"}/README.md" >&2
     fi
     unset _llmd_guide_dir _llmd_engines
     return 1 2>/dev/null || exit 1

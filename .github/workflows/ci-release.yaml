@@ -19,74 +19,6 @@ env:
   IS_STABLE: ${{ !contains(github.event.release.tag_name != '' && github.event.release.tag_name || github.ref_name, 'rc') }}
 
 jobs:
-  release-rocm-llm-d:
-    runs-on: vllm-runner
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          # fetch tags for docker/metadata semver handling (if you use git describe etc.)
-          fetch-depth: 0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          buildkitd-flags: --oci-worker-gc
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build and push the image
-        id: build-and-push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/Dockerfile.rocm
-          platforms: linux/amd64
-          push: true
-          provenance: true
-          cache-from: type=gha,scope=rocm
-          cache-to: type=gha,mode=max,scope=rocm,oci-mediatypes=true,compression=zstd
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ env.TAG }}
-            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-rocm:latest', env.REGISTRY, github.repository) || '' }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-        env:
-          DOCKER_BUILDKIT: "1"
-          BUILDKIT_PROGRESS: "plain"
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-rocm:${{ env.TAG }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          scanners: vuln
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4.37.6
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
   release-xpu-llm-d:
     strategy:
       fail-fast: false
@@ -437,7 +369,6 @@ jobs:
     name: Verify all release images exist
     needs:
       - release-cpu-llm-d
-      - release-rocm-llm-d
       - release-xpu-llm-d
       - release-sglang-xpu-llm-d
       - release-rdma-tools-llm-d
@@ -459,7 +390,6 @@ jobs:
           TAG="${{ env.TAG }}"
           IMAGES=(
             "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-rocm:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu-sglang:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-rdma-tools:${TAG}"

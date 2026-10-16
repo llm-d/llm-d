@@ -5,8 +5,8 @@
 ## prompt length and leaves no prefix or KV cache to match, so the router
 ## prefers the endpoint with the fewest requests it has dispatched and not
 ## yet seen complete (active-request-scorer). The router tracks those
-## counts itself, so the data layer scrapes no model server metrics
-## (injectDefaults: false): SGLang's diffusion backend publishes none.
+## counts itself, so the data layer needs no model server metrics
+## (injectDefaults: false).
 
 router:
   extraServicePorts:

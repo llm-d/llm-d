@@ -108,7 +108,8 @@ spec:
                                                 "kv_connector_extra_config":{"http_port":"8000",
                                                                              "handshake_port":"6301",
                                                                              "notify_port":"61005",
-                                                                             "read_mode":"false"}}'
+                                                                             "read_mode":"false"}}' \
+                        --shutdown-timeout 45
                   env:
                     - name: POD_IP
                       valueFrom:
@@ -475,7 +476,8 @@ spec:
                                                 "kv_connector_extra_config":{"http_port":"8200",
                                                                              "handshake_port":"6301",
                                                                              "notify_port":"61005",
-                                                                             "read_mode":"false"}}'
+                                                                             "read_mode":"false"}}' \
+                        --shutdown-timeout 45
                   env:
                     - name: POD_IP
                       valueFrom:

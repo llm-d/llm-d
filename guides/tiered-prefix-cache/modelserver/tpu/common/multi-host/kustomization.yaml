@@ -5,6 +5,7 @@ resources:
 
 components:
   - ../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

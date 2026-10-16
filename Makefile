@@ -8,6 +8,9 @@ IMAGE_REGISTRY_ORG ?= llm-d
 IMAGE_REGISTRY_REPO ?= llm-d
 DOCKERFILE_DIR = docker
 
+# DEVICE, options: ['xpu', 'cpu']
+DEVICE ?= xpu
+
 ifeq ($(DEVICE), xpu)
 	DOCKERFILE ?= Dockerfile.xpu
 else ifeq ($(DEVICE), cpu)
@@ -18,9 +21,6 @@ VERSION ?= v0.9.0
 
 # New tag to use if you would like to use `make image-retag`
 NEW_TAG ?= sha256...
-
-# DEVICE, options: ['xpu', 'cpu']
-DEVICE ?= xpu
 
 # ARCH, options: ['amd64', 'arm64']
 ARCH ?= amd64
@@ -33,6 +33,7 @@ MAX_JOBS ?= 3
 
 # BUILD_TYPE, options ['dev', 'prod']
 BUILD_TYPE ?= dev
+REGISTRY ?= $(IMAGE_REGISTRY)
 ifeq ($(BUILD_TYPE), dev)
 	REGISTRY := quay.io
 endif
@@ -104,7 +105,7 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	elif [ "$(BUILDER)" = "docker" ]; then \
 	  echo "🐳 Docker detected: Building with buildx for linux/$(ARCH)..."; \
 	  sed -e '1 s/\(^FROM\)/FROM --platform=$${BUILDPLATFORM}/' $(DOCKERFILE_PATH) >$(DOCKERFILE_DIR)/Dockerfile.cross; \
-	  - docker buildx create --use --name image-builder || true; \
+	  docker buildx create --use --name image-builder || true; \
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
@@ -162,7 +163,7 @@ install-docker: check-container-tool ## Install app using $(CONTAINER_TOOL)
 uninstall-docker: check-container-tool ## Uninstall app from $(CONTAINER_TOOL)
 	@echo "Stopping and removing container in $(CONTAINER_TOOL)..."
 	-$(CONTAINER_TOOL) stop $(IMAGE_REGISTRY_REPO)-container && $(CONTAINER_TOOL) rm $(IMAGE_REGISTRY_REPO)-container
-@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
+	@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
 
 ### Kubernetes Targets (kubectl)
 

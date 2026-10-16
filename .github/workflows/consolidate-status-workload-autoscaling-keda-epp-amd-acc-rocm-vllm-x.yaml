@@ -24,6 +24,7 @@ on:
 
 jobs:
   check_for_success:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-query-success-past-runs.yaml@main
     with:
       workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml' }}

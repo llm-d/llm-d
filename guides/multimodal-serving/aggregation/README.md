@@ -209,9 +209,9 @@ Open a debug container within the cluster namespace:
 
 ```bash
 kubectl run curl-debug --rm -it \
+    --namespace="$NAMESPACE" \
     --image=cfmanteiga/alpine-bash-curl-jq \
     --env="IP=$IP" \
-    --env="NAMESPACE=$NAMESPACE" \
     -- /bin/bash
 ```
 

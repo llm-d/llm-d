@@ -37,13 +37,17 @@ patches:
                           - name: HF_HUB_DISABLE_XET
                             value: "1"
                         volumeMounts:
-                          # Node-local HuggingFace cache shared across pods and restarts
+                          # HuggingFace cache shared across pods and restarts
                           - mountPath: /root/.cache/huggingface
                             name: huggingface-cache
                     volumes:
+                      # Model weights on an RWX PVC rather than a node-local hostPath:
+                      # CoreWeave's /var/cache/huggingface is a 15 GB ramdisk, far too
+                      # small for the model weights. Requires the `model-pvc` PVC in the
+                      # namespace and an RWX default StorageClass -- see
+                      # docs/infrastructure/providers/coreweave/README.md.
                       - name: huggingface-cache
-                        hostPath:
-                          path: /var/cache/huggingface
-                          type: DirectoryOrCreate
+                        persistentVolumeClaim:
+                          claimName: model-pvc
           - name: decode
             spec: *coreweave

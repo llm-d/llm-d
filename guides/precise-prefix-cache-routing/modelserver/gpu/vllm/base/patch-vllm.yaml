@@ -11,6 +11,9 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-32B"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
             # vLLM 0.30 requires this to serve /v1/*/render for token-producer.
             - "--enable-scale-out"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"

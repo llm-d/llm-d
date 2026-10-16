@@ -28,6 +28,7 @@ on:
 
 jobs:
   check_for_success:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-query-success-past-runs.yaml@main
     with:
       workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml' }}

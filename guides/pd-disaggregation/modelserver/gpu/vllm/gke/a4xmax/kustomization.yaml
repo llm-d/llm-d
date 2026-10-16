@@ -41,6 +41,7 @@ patches:
                           - --no-disable-hybrid-kv-cache-manager
                           - --gpu-memory-utilization=0.9
                           - --no-enable-flashinfer-autotune
+                          - --shutdown-timeout=45
                         # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X Max)
                         resources:
                           claims:
@@ -94,6 +95,7 @@ patches:
                           - '{"kv_connector":"NixlConnector", "kv_role":"kv_both", "kv_buffer_device":"cuda"}'
                           - --no-disable-hybrid-kv-cache-manager
                           - --port=8200
+                          - --shutdown-timeout=45
                         # Re-add GPU requests & limits (managed via NVIDIA Device Plugin on A4X Max)
                         resources:
                           claims:

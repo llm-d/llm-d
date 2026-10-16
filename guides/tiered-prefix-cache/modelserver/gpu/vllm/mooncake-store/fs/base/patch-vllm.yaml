@@ -14,7 +14,8 @@ spec:
                 Qwen/Qwen3-32B \
                 --tensor-parallel-size=2 \
                 --kv-transfer-config \
-                '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both","kv_connector_extra_config":{"load_async":true}}'
+                '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both","kv_connector_extra_config":{"load_async":true}}' \
+                --shutdown-timeout=45
           env:
             - name: MOONCAKE_CONFIG_PATH
               value: /etc/mooncake/mooncake_config.json

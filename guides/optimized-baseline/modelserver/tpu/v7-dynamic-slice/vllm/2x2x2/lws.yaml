@@ -26,6 +26,7 @@ spec:
           llm-d.ai/accelerator-variant: tpu
           llm-d.ai/accelerator-vendor: google
       spec:
+        terminationGracePeriodSeconds: 75
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu7x
           cloud.google.com/gke-tpu-partition-2x2x2-state: "HEALTHY"
@@ -36,6 +37,10 @@ spec:
         containers:
           - name: modelserver
             image: REPLACE_MODEL_SERVER_IMAGE
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sleep", "15"]
             command:
               - /bin/bash
               - -c
@@ -61,7 +66,8 @@ spec:
                   --enable-expert-parallel \
                   --block-size=256 \
                   --port=8000 \
-                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                  --shutdown-timeout=45
             env:
               - name: POD_IP
                 valueFrom:
