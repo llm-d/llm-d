@@ -3,5 +3,5 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: ghcr.io/llm-d/llm-d-cpu
-    newTag: v0.10.0
+    newTag: v1.0.0
 
