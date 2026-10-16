@@ -10,9 +10,9 @@ Provider-specific cluster setup notes (AKS, DigitalOcean, GKE, minikube, OpenShi
 
 Configuring ingress controllers, Gateway API, and service meshes.
 
-### [Model Server Orchestration (LWS & Kueue)](multi-node.md)
+### [Model Server Orchestration](model-server-orchestration.md)
 
-Deploying multi-host inference workloads with LeaderWorkerSet (LWS) and Topology Aware Scheduling.
+Installing the LeaderWorkerSet controller, which serves the `LeaderWorkerSet` API for multi-host inference and the `DisaggregatedSet` API for multi-role topologies such as prefill/decode disaggregation, and Kueue for Topology Aware Scheduling.
 
 ### [Non-K8s & Bare-Metal Deployments](no-kubernetes-deployment.md)
 

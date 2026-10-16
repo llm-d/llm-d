@@ -45,7 +45,7 @@ The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerS
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Have a cluster with RDMA-capable accelerator nodes. For the networking stack and how to verify it, see [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md) and the [multi-node deployment guide](../../docs/infrastructure/multi-node.md). For GKE, see the [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the [GKE overlay cluster prerequisites](modelserver/gpu/vllm/gke/README.md#cluster-prerequisites).
+- Have a cluster with RDMA-capable accelerator nodes. For the networking stack and how to verify it, see [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md) and the [model server orchestration guide](../../docs/infrastructure/model-server-orchestration.md). For GKE, see the [provider setup doc](../../docs/infrastructure/providers/gke/README.md) and the [GKE overlay cluster prerequisites](modelserver/gpu/vllm/gke/README.md#cluster-prerequisites).
 
 > [!IMPORTANT]
 > The NVIDIA GPU and AMD configurations use an RDMA all-to-all backend (DeepEP, MoRI) for inter-node EP and require all-to-all RDMA connectivity: every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail. The Intel XPU configuration uses XCCL and `allgather_reducescatter`; it does not use DeepEP, but still requires full-mesh pod network connectivity between decode and prefill workers.

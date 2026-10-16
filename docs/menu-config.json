@@ -102,7 +102,7 @@
     "operations/validation/smoke-test/README": { "position": 1, "label": "Run a Smoke Test" },
     "operations/validation/benchmark": { "position": 2, "label": "Benchmark Performance" },
 
-    "infrastructure/multi-node": { "position": 3, "label": "Model Server Orchestration (LWS & Kueue)" },
+    "infrastructure/model-server-orchestration": { "position": 3, "label": "Model Server Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },
     "infrastructure/gateway/install-crds": { "position": 1 },
     "infrastructure/gateway/istio": { "position": 2 },
