@@ -58,8 +58,8 @@ env:
     # which is why the router install reads it rather than ACCELERATOR_TYPE.
     ACCELERATOR: {default: "${ACCELERATOR_TYPE}", comment: "keep equal to ACCELERATOR_TYPE"}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    # gpu: base, gke, coreweave; amd: base, amd-ci; xpu: base.
-    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, amd-ci], comment: "valid values per accelerator: table above"}
+    # gpu: base, gke, coreweave; amd: base, amd-ci; xpu: base, xpu-ci.
+    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, amd-ci, xpu-ci], comment: "valid values per accelerator: table above"}
 
     # Each accelerator serves one model: NVIDIA GPU serves
     # deepseek-ai/DeepSeek-R1-0528, AMD serves deepseek-ai/DeepSeek-V3, and

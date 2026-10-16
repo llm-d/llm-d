@@ -39,7 +39,7 @@ This guide includes configurations for the following accelerator and model serve
 
 The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerSet` pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
-**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill and decode each run TP2 with expert parallelism on 4 XPUs in total, with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
+**Intel XPU** (Qwen3-235B-A22B): one aggregated `LeaderWorkerSet` runs two TP8 pods across two nodes, with data and expert parallelism across all 16 XPUs.
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu
 export MODEL_SERVER=vllm # options: vllm
 export ACCELERATOR=${ACCELERATOR_TYPE} # keep equal to ACCELERATOR_TYPE
-export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci; valid values per accelerator: table above
+export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci, xpu-ci; valid values per accelerator: table above
 export MODEL=deepseek-ai/DeepSeek-R1-0528 # set to the model your accelerator serves (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```

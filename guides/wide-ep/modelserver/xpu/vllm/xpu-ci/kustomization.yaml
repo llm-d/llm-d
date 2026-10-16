@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# XPU CI has eight XPUs across two nodes, so run two TP4 pods with EP across all eight ranks.
+resources:
+  - ../base
+
+patches:
+  - target:
+      group: resource.k8s.io
+      version: v1
+      kind: ResourceClaimTemplate
+      name: xpu-qwen3-235b-claim
+    path: patch-xpu-ci-claim.yaml
+  - target:
+      group: leaderworkerset.x-k8s.io
+      version: v1
+      kind: LeaderWorkerSet
+      name: wide-ep-xpu-qwen3-235b
+    path: patch-xpu-ci-lws.yaml
