@@ -51,16 +51,6 @@ Ready to achieve SOTA performance? Follow our [Quickstart Guide](https://llm-d.a
 > [!TIP]
 > Most users begin with our [Optimized Baseline](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline), which provides a high-performance foundation for a wide range of LLM serving use cases.
 
-## Latest News 🔥
-
-* [2026-05] The v0.7 release introduces an optimized baseline renamed and stabilized, kustomize-first migrated guides, expanded nightly CI (OpenShift, GKE, CoreWeave), predicted-latency scheduling GA, batch gateway (experimental), and revamped project-wide documentation.
-* [2026-03] llm-d [joins the CNCF as a Sandbox project](https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/)! Founded by Red Hat, Google Cloud, IBM Research, CoreWeave, and NVIDIA, with support from AMD, Cisco, Hugging Face, Intel, Lambda, Mistral AI, UC Berkeley, and University of Chicago. We're excited to collaborate openly on building flexible, future-proof AI infrastructure.
-* [2026-02] The [v0.5](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale) introduces reproducible benchmark workflows, hierarchical KV offloading, cache-aware LoRA routing, active-active HA, UCCL-based transport resilience, and scale-to-zero autoscaling; validated ~3.1k tok/s per B200 decode GPU (wide-EP) and up to 50k output tok/s on a 16×16 B200 prefill/decode topology with order-of-magnitude TTFT reduction vs round-robin baseline.
-* [2025-12] The [v0.4](https://llm-d.ai/blog/llm-d-v0.4-achieve-sota-inference-across-accelerators) release demonstrates 40% reduction in per output token latency for DeepSeek V3.1 on H200 GPUs, Intel XPU and Google TPU disaggregation support for lower time to first token, a new well-lit path for prefix cache offload to vLLM-native CPU memory tiering, and a preview of the workload variant autoscaler improving model-as-a-service efficiency.
-
-<!-- Previous News  -->
-<!-- - [2025-08] Read more about the [optimized-baseline](https://llm-d.ai/blog/intelligent-optimized-baseline-with-llm-d), including a deep dive on how different balancing techniques are composed to improve throughput without overloading replicas. -->
-
 ## 🧱 Architecture
 
 llm-d accelerates distributed inference by integrating industry-standard open technologies like vLLM and Kubernetes. For more details, see our full [Architecture Documentation](https://llm-d.ai/docs/architecture).
