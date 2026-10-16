@@ -1,5 +1,0 @@
-nameReference:
-  - kind: ServiceAccount
-    fieldSpecs:
-      - path: spec/template/spec/serviceAccountName
-        kind: Deployment

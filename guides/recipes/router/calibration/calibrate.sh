@@ -9,7 +9,7 @@
 # helm upgrade the router release and restart the EPP.
 #
 # Usage:
-#   GUIDE_NAME=agentic-serving NAMESPACE=llm-d-agentic-serving \
+#   GUIDE_NAME=qwen3-coder-480b NAMESPACE=llm-d-qwen3-coder-480b \
 #   MODEL_NAME=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 CHUNK_SIZE=8192 ./calibrate.sh
 #
 # Required environment:

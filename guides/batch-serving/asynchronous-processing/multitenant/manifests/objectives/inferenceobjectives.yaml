@@ -1,0 +1,89 @@
+# InferenceObjectives mapping llm-d-async tier-priority lanes to llm-d-router Flow Control priority bands.
+#
+# Lane -> Objective -> Priority:
+#   reserved-interactive -> priority 100
+#   reserved-async       -> priority 60
+#   reserved-batch       -> priority 30
+#   overflow-interactive -> priority 10
+#   overflow-async       -> priority -5   (negative: sheddable, evictable)
+#   overflow-batch       -> priority -10  (negative: sheddable, evictable)
+#
+# Each objective binds to the InferencePool the guide's router release creates,
+# llm-d-router. Apply into the router's namespace with -n.
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: reserved-interactive
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "interactive"
+    llm-d.ai/classification: "reserved"
+spec:
+  priority: 100
+  poolRef:
+    name: llm-d-router
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: reserved-async
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "async"
+    llm-d.ai/classification: "reserved"
+spec:
+  priority: 60
+  poolRef:
+    name: llm-d-router
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: reserved-batch
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "batch"
+    llm-d.ai/classification: "reserved"
+spec:
+  priority: 30
+  poolRef:
+    name: llm-d-router
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: overflow-interactive
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "interactive"
+    llm-d.ai/classification: "overflow"
+spec:
+  priority: 10
+  poolRef:
+    name: llm-d-router
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: overflow-async
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "async"
+    llm-d.ai/classification: "overflow"
+spec:
+  priority: -5
+  poolRef:
+    name: llm-d-router
+---
+apiVersion: llm-d.ai/v1alpha2
+kind: InferenceObjective
+metadata:
+  name: overflow-batch
+  labels:
+    llm-d.ai/guide: "multitenant"
+    llm-d.ai/tier: "batch"
+    llm-d.ai/classification: "overflow"
+spec:
+  priority: -10
+  poolRef:
+    name: llm-d-router

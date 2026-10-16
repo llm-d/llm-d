@@ -24,10 +24,11 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 13 * * *'  # 13:00 UTC daily
+    - cron: '0 14 * * *'  # 14:00 UTC daily
 
 jobs:
   check_for_success:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-query-success-past-runs.yaml@main
     with:
       workflow_name_query: ${{ inputs.workflow_name_query || 'nightly-e2e-tiered-prefix-cache-amd-fs-rocm-vllm-native.yaml' }}

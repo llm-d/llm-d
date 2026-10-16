@@ -9,6 +9,8 @@ ahd = "ahd"      # SVG arrowhead marker id in diagram HTML
 mis = "mis"      # intentional hyphenated compounds (mis-gate, mis-price)
 retuned = "retuned"   # re-tuning (adjusting tuning parameters, e.g. maxConcurrency)
 aimd = "aimd"    # Additive Increase Multiplicative Decrease (congestion control)
+Asser = "Asser"  # Author's name in the llm-d performance simulator proposal
+HSA = "HSA"      # AMD ROCm Heterogeneous System Architecture (HSA_* env vars)
 
 [default.extend-identifiers]
 OFO = "OFO"      # TCP OutOfOrder netstat counter (used in a metrics regex)

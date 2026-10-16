@@ -28,8 +28,12 @@ jobs:
       - name: Install client dependencies
         run: helpers/client-setup/install-deps.sh
 
+      # After install-deps.sh, which provides yq for the assertions.
+      - name: Test observability exemplar wiring
+        run: guides/recipes/observability/tests/test-prometheus-exemplar-config.sh
+
       - name: Create kind cluster
-        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2  # v1.15.0
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa  # v1.15.1
         with:
           cluster_name: kustomize-dry-run
           node_image: kindest/node:v1.35.0  # 1.35+ required for stable DRA (resource.k8s.io/v1)
@@ -38,6 +42,13 @@ jobs:
 
       - name: Install Gateway API and GAIE CRDs
         run: guides/recipes/gateway/install-gateway-crds.sh
+
+      # llm-d.ai InferenceObjective, used by guides/batch-serving/.../multitenant.
+      # Same apply as the guides' CRD prerequisite; URL from guides/env.sh.
+      - name: Install llm-d-router CRDs
+        run: |
+          source guides/env.sh
+          kubectl apply -f "https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml"
 
       - name: Install monitoring CRDs
         run: guides/recipes/observability/install-prometheus-grafana.sh --crds-only
@@ -129,31 +140,39 @@ jobs:
       - name: Dry-run router (precise-prefix-cache-routing)
         run: |
           CHART_VERSION=v0
-          echo ""
-          echo "========================================"
-          echo "precise-prefix-cache-routing: router (EPP, render via Service)"
-          echo "========================================"
-          echo "--- helm template ---"
-          if ! helm template precise-prefix-cache-routing \
-            "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
-            -f guides/recipes/router/base.values.yaml \
-            -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
-            --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
-            echo "FAIL: helm template failed"
-            exit 1
-          fi
-          echo "--- kubectl apply --dry-run=server ---"
-          if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-            echo "PASS: precise-prefix-cache-routing / router (EPP, render via Service)"
-          else
-            echo "FAIL: precise-prefix-cache-routing / router (EPP, render via Service)"
-            exit 1
-          fi
+          failed=0
+          for engine_values in "" "-f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.sglang.values.yaml"; do
+            name="EPP, render via endpoint discovery"
+            [ -n "${engine_values}" ] && name="EPP, render via Service (sglang)"
+            echo ""
+            echo "========================================"
+            echo "precise-prefix-cache-routing: router (${name})"
+            echo "========================================"
+            echo "--- helm template ---"
+            if ! helm template precise-prefix-cache-routing \
+              "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
+              -f guides/recipes/router/base.values.yaml \
+              -f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.values.yaml \
+              ${engine_values} \
+              --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
+              echo "FAIL: helm template failed for ${name}"
+              failed=1
+              continue
+            fi
+            echo "--- kubectl apply --dry-run=server ---"
+            if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
+              echo "PASS: precise-prefix-cache-routing / router (${name})"
+            else
+              echo "FAIL: precise-prefix-cache-routing / router (${name})"
+              failed=1
+            fi
+          done
+          exit "${failed}"
 
-      - name: Dry-run render Service overlays (precise-prefix-cache-routing)
+      - name: Dry-run render pool overlays (precise-prefix-cache-routing)
         run: |
           failed=0
-          for overlay in render render/standalone; do
+          for overlay in render/standalone render/xpu-sglang; do
             name="render (${overlay})"
             echo ""
             echo "========================================"

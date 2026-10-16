@@ -14,6 +14,7 @@ spec:
             - "--tensor-parallel-size=2"
             - "--mm-processor-cache-gb"
             - "20"
+            - "--shutdown-timeout=45"
 
             # Uncomment for distributed tracing
             # - "--otlp-traces-endpoint=http://otel-collector:4317"

@@ -48,8 +48,8 @@ Options:
     -h, --help              Show this help message
 
 After this completes, run the standard deployment:
-    cd ../../../guides/pd-disaggregation
-    helmfile apply -e digitalocean
+    cd ../../../../guides/pd-disaggregation
+    # Follow guides/pd-disaggregation/README.md to deploy the router and model server
 
 EOF
 }
@@ -191,9 +191,9 @@ main() {
 
     print_success "DigitalOcean-specific prerequisites completed!"
     echo
-    print_status "Next step: Run standard Helm deployment"
-    echo "    cd ../../../guides/pd-disaggregation"
-    echo "    helmfile apply -e digitalocean"
+    print_status "Next step: Run standard deployment"
+    echo "    cd ../../../../guides/pd-disaggregation"
+    echo "    # Follow guides/pd-disaggregation/README.md to deploy the router and model server"
 }
 
 main "$@"

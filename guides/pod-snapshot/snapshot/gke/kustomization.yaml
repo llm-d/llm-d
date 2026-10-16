@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - podsnapshotstorageconfig.yaml
+  - podsnapshotpolicy.yaml
+
+namePrefix: pod-snapshot-
+
+labels:
+  - pairs:
+      llm-d.ai/guide: pod-snapshot
+    includeSelectors: false
+    includeTemplates: false

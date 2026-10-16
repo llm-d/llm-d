@@ -12,17 +12,26 @@ router:
     pluginsConfigFile: "tiered-prefix-cache-plugins.yaml"
     pluginsCustomConfig:
       tiered-prefix-cache-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
         - type: no-hit-lru-scorer
+          parameters:
+            # Use the HBM index for the cold-request check. If you do not
+            # set this, the router adds one more prefix producer.
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer
           name: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
-            lruCapacityPerServer: 82000  # Allocating ~200GB for Qwen-32B: 82,000 blocks * 2.5MB/block (based on 160KB/token * 16 block size).
+            # Unit: router blocks of 64 tokens.
+            # Value = CPU tier bytes per pod / (64 * KV bytes per token).
+            # Qwen3-32B KV is 256 KiB per token, so one block is 16 MiB.
+            # The default vLLM native overlay has 300 GiB: 300 GiB / 16 MiB = 19200.
+            # For other connectors, see the README.
+            lruCapacityPerServer: 19200
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
         - type: prefix-cache-scorer

@@ -1,0 +1,203 @@
+name: Site Preview Deploy
+
+# Publishes the llm-d.ai preview built by ci-site-preview.yaml ("CI Site
+# Preview") and keeps one sticky comment on the PR pointing at it.
+#
+# Security model: the build runs the PR's content (it may come from a fork)
+# with a read-only token and no secrets. This workflow is triggered by
+# workflow_run, so it always runs the workflow file from main, in the base
+# repository's context, with access to secrets. It never checks out or runs
+# anything from the PR: it downloads the built static files, checks the
+# metadata against the workflow_run event, and uploads the files to Netlify.
+#
+# Netlify is optional. With the NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID
+# repository secrets set, each PR gets a stable alias deploy
+# (https://pr-<number>--<site>.netlify.app). Without them, the comment links
+# to the run's `site-preview` artifact. See README.md in this directory.
+#
+# workflow_run only fires for workflows on the default branch, so changes to
+# this file take effect after they merge.
+
+on:
+  workflow_run:
+    workflows: ["CI Site Preview"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  # One deploy per PR branch at a time; a newer build supersedes an older one.
+  group: site-preview-deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read        # download artifacts from the triggering run
+      pull-requests: read  # resolve the PR for fork branches
+    outputs:
+      pr: ${{ steps.pr.outputs.number }}
+      url: ${{ steps.netlify.outputs.url }}
+    steps:
+      # The PR number comes from the event or the API, never from the artifact
+      # alone. workflow_run.pull_requests is empty for fork PRs, so fall back to
+      # looking up the open PR for the head branch.
+      - name: Resolve the pull request
+        id: pr
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+            let number = (run.pull_requests || []).find((p) => p.head.sha === run.head_sha)?.number;
+            if (!number && run.head_repository) {
+              const { data } = await github.rest.pulls.list({
+                owner, repo, state: 'open', per_page: 20,
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+              });
+              number = data.find((p) => p.head.sha === run.head_sha)?.number;
+            }
+            if (!number) {
+              core.notice(`No open PR has head ${run.head_sha} (closed, or a newer push); nothing to deploy.`);
+              return;
+            }
+            core.setOutput('number', String(number));
+
+      - name: Download the site preview
+        if: steps.pr.outputs.number != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: site-preview
+          path: ${{ runner.temp }}/site-preview/build
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download preview metadata
+        if: steps.pr.outputs.number != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: site-preview-meta
+          path: ${{ runner.temp }}/site-preview/meta
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # The artifact is data written by PR-controlled code: only read it, and
+      # only accept it if it agrees with the event.
+      - name: Validate the artifact
+        if: steps.pr.outputs.number != ''
+        env:
+          EXPECTED_PR: ${{ steps.pr.outputs.number }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          meta="$RUNNER_TEMP/site-preview/meta/pr.json"
+          pr=$(jq -r '.pr' "$meta")
+          sha=$(jq -r '.head_sha' "$meta")
+          if ! [[ "$pr" =~ ^[0-9]+$ ]] || [ "$pr" != "$EXPECTED_PR" ]; then
+            echo "::error::Artifact PR number does not match PR #${EXPECTED_PR}"
+            exit 1
+          fi
+          if [ "$sha" != "$EXPECTED_SHA" ]; then
+            echo "::error::Artifact head SHA does not match ${EXPECTED_SHA}"
+            exit 1
+          fi
+          if [ ! -f "$RUNNER_TEMP/site-preview/build/index.html" ]; then
+            echo "::error::site-preview artifact has no index.html"
+            exit 1
+          fi
+
+      - name: Check for Netlify configuration
+        id: config
+        if: steps.pr.outputs.number != ''
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          if [ -n "$NETLIFY_AUTH_TOKEN" ] && [ -n "$NETLIFY_SITE_ID" ]; then
+            echo "netlify=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "netlify=false" >> "$GITHUB_OUTPUT"
+            echo "NETLIFY_AUTH_TOKEN / NETLIFY_SITE_ID not set; the PR comment will link to the artifact." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Set up Node
+        if: steps.config.outputs.netlify == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      # Static upload only (--no-build). Runs from a directory that holds just
+      # the downloaded files, so no netlify.toml or functions are picked up.
+      - name: Deploy to Netlify
+        id: netlify
+        if: steps.config.outputs.netlify == 'true'
+        working-directory: ${{ runner.temp }}/site-preview
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          npx --yes netlify-cli@27.12.0 deploy \
+            --dir build \
+            --no-build \
+            --alias "pr-${PR_NUMBER}" \
+            --message "llm-d/llm-d#${PR_NUMBER} @ ${HEAD_SHA}" \
+            --json > deploy.json
+          url=$(jq -r '.deploy_url' deploy.json)
+          if ! [[ "$url" =~ ^https://[A-Za-z0-9.-]+$ ]]; then
+            echo "::error::Unexpected deploy URL: ${url}"
+            exit 1
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "Preview deployed: ${url}/docs/dev" >> "$GITHUB_STEP_SUMMARY"
+
+  comment:
+    needs: deploy
+    if: needs.deploy.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write  # create/update the sticky comment
+    steps:
+      - name: Create or update the preview comment
+        uses: actions/github-script@v9
+        env:
+          PR_NUMBER: ${{ needs.deploy.outputs.pr }}
+          PREVIEW_URL: ${{ needs.deploy.outputs.url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        with:
+          script: |
+            const marker = '<!-- llm-d-site-preview -->';
+            const { owner, repo } = context.repo;
+            const issue_number = Number(process.env.PR_NUMBER);
+            const { PREVIEW_URL: url, HEAD_SHA: sha, RUN_URL: runUrl } = process.env;
+            const lines = [marker, '### llm-d.ai preview', ''];
+            if (url) {
+              lines.push(
+                `Preview for ${sha.slice(0, 7)}: ${url}/docs/dev`,
+                '',
+                'This PR\'s docs and guides are under the **dev** docs version.',
+              );
+            } else {
+              lines.push(
+                `The site was built for ${sha.slice(0, 7)}. Download the \`site-preview\` artifact from [the CI run](${runUrl}#artifacts), unzip it into \`build/\` and run \`npx serve build\`, then open http://localhost:3000/docs/dev.`,
+              );
+            }
+            const body = lines.join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const mine = comments.find(
+              (c) => c.user?.type === 'Bot' && c.user?.login === 'github-actions[bot]' && c.body?.includes(marker),
+            );
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

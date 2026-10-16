@@ -102,6 +102,26 @@ def test_yaml_null_and_bool_env_values_fail_validation():
     assert "env.static.BADDEFAULT" in msgs
 
 
+@pytest.mark.parametrize(
+    "spec, finding_path",
+    [
+        (["one", "two"], "env.static.BAD"),
+        ({"default": ["one", "two"]}, "env.static.BAD.default"),
+    ],
+)
+def test_list_env_values_fail_validation_and_cli_emit(tmp_path, capsys, spec, finding_path):
+    data = _minimal()
+    data["env"]["static"]["BAD"] = spec
+    bad_yaml = yaml.safe_dump(data)
+    findings = guide.Guide.from_text(yaml_text=bad_yaml).check_yaml()
+    assert any(finding_path in str(f) and "must be a string" in str(f) for f in findings)
+
+    path = tmp_path / "guide.yaml"
+    path.write_text(bad_yaml)
+    assert guide.main(["emit", str(path), "env"]) == 1
+    assert "export BAD=" not in capsys.readouterr().out
+
+
 def test_non_bool_sensitive_flag_fails_validation():
     # `sensitive: "true"` passed validation as non-sensitive but was treated
     # as sensitive by render and emit — the export silently vanished.
@@ -286,6 +306,16 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
 # --------------------------------------------------------------------------
 
 NIGHTLY_SCRIPT = GUIDES_DIR / "flow-control" / "scripts" / "nightly-deploy-gke.sh"
+NIGHTLY_WORKFLOWS = {
+    ("gpu", "gke"): (
+        REPO_ROOT
+        / ".github/workflows/nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml"
+    ),
+    ("amd", "base"): (
+        REPO_ROOT
+        / ".github/workflows/nightly-e2e-flow-control-amd-ci-acc-rocm-vllm-x.yaml"
+    ),
+}
 
 NIGHTLY_VARS = {
     "NAMESPACE": "llm-d-nightly-flow-control-gke-gpu",
@@ -352,6 +382,21 @@ def test_nightly_wrapper_vars_match_this_contract(flow_control):
     declared = flow_control.data["env"]["static"]
     for name in names:
         assert name in declared, f"{name} is not declared in guide.yaml env.static"
+
+
+@pytest.mark.parametrize(("accelerator", "provider"), NIGHTLY_WORKFLOWS)
+def test_nightly_wrapper_selects_workflow_modelserver_overlay(accelerator, provider):
+    script = NIGHTLY_SCRIPT.read_text()
+    workflow = NIGHTLY_WORKFLOWS[(accelerator, provider)].read_text()
+
+    assert ': "${ACCELERATOR_TYPE:?' in script
+    assert ': "${INFRA_PROVIDER:?' in script
+    assert "modelserver/${ACCELERATOR_TYPE}/vllm/${INFRA_PROVIDER}/" in script
+    assert "model-cache/model-cache-pvc.yaml" not in script
+    assert "maxConcurrency: 4" in script
+    assert "replicas: 1" in script
+    assert f"ACCELERATOR_TYPE={accelerator} INFRA_PROVIDER={provider}" in workflow
+    assert "bash guides/flow-control/scripts/nightly-deploy-gke.sh" in workflow
 
 
 def test_nightly_modelserver_mirror_matches_guide(flow_control):

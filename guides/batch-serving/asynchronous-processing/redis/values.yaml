@@ -5,7 +5,7 @@ ap:
     urlSecret:
       url: "redis://redis-master.redis.svc.cluster.local:6379"
     # Option 2 (auth): reference a pre-existing Secret holding the full redis URL
-    # (see the "With Authentication" prerequisite). When set, `urlSecret.url` is ignored.
+    # (see the Redis tab in Step 2 of the guide). When set, `urlSecret.url` is ignored.
     # urlSecret:
     #   name: "redis-creds"
     #   key: "url"

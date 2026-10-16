@@ -1,0 +1,124 @@
+# Manages rebase and re-approval labels for open PRs:
+# 1. On push to `main`, labels conflicting non-draft PRs with `needs-rebase` and notifies the author.
+# 2. When a PR with `needs-rebase` is updated (or marked ready for review) and conflict-free,
+#    removes `needs-rebase`, adds `re-approve`, and pings the previous approver(s) if the PR was
+#    approved before the rebase.
+# 3. Removes `re-approve` once the PR is re-approved (via `/lgtm` or `/approve` comment, `lgtm` or
+#    `approved` label, or an approving PR review).
+
+name: PR Needs Rebase
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    types: [synchronize, reopened, ready_for_review, labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.action }}-${{ github.event.pull_request.number || github.event.issue.number || 'main' }}
+  cancel-in-progress: ${{ github.event_name != 'push' && github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  clear-re-approve:
+    name: Clear re-approve label on approval
+    if: >-
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.issue.labels.*.name, 're-approve') &&
+        (contains(github.event.comment.body, '/lgtm') || contains(github.event.comment.body, '/approve'))
+      ) ||
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.action == 'labeled' &&
+        (github.event.label.name == 'lgtm' || github.event.label.name == 'approved') &&
+        contains(github.event.pull_request.labels.*.name, 're-approve')
+      ) ||
+      (
+        github.event_name == 'pull_request_review' &&
+        github.event.review.state == 'approved' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 're-approve')
+      )
+    concurrency:
+      group: ${{ github.workflow }}-clear-re-approve-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow script
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
+          sparse-checkout: .github/scripts/pr-needs-rebase.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Remove re-approve label
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { clearReApprove } = require('./.github/scripts/pr-needs-rebase.cjs');
+            await clearReApprove({ github, context });
+
+  check-single-pr:
+    name: Update needs-rebase and re-approve on PR update
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      (
+        github.event.action == 'synchronize' ||
+        github.event.action == 'reopened' ||
+        github.event.action == 'ready_for_review'
+      ) &&
+      github.event.pull_request.draft == false
+    concurrency:
+      group: ${{ github.workflow }}-check-single-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow script
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
+          sparse-checkout: .github/scripts/pr-needs-rebase.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Check mergeability and prior approval state
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { checkSinglePr } = require('./.github/scripts/pr-needs-rebase.cjs');
+            await checkSinglePr({ github, context });
+
+  check-open-prs:
+    name: Check open PRs for merge conflicts
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: ${{ github.workflow }}-check-open-prs-${{ github.ref_name || 'main' }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow script
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts/pr-needs-rebase.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Scan open PRs targeting base branch
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { checkOpenPrs } = require('./.github/scripts/pr-needs-rebase.cjs');
+            await checkOpenPrs({ github, context });

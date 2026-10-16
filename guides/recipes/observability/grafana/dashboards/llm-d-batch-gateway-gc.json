@@ -173,6 +173,7 @@
   ],
   "schemaVersion": 39,
   "tags": [
+    "llm-d",
     "batch-gateway",
     "gc",
     "reconciler"
@@ -216,6 +217,6 @@
     "from": "now-3h",
     "to": "now"
   },
-  "title": "Batch Gateway \u2014 GC Reconciler",
+  "title": "llm-d Batch Gateway \u2014 GC Reconciler",
   "uid": "batch-gateway-gc"
 }

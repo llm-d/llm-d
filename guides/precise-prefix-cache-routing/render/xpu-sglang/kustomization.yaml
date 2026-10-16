@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../standalone
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: precise-prefix-cache-routing-render
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args/0
+        value: Qwen/Qwen3-0.6B

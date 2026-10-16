@@ -1,0 +1,29 @@
+# Single DisaggregatedSet managing the prefill and decode roles. Requires LWS v0.11.1+ with the
+# DisaggregatedSet CRD.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+# The schema teaches kustomize the DisaggregatedSet merge keys, so strategic merge patches in
+# provider overlays match roles, containers, volumes, and env entries by name, not index.
+openapi:
+  path: disaggregatedset-schema.json
+
+components:
+  - ../../../../../recipes/modelserver/components/images/amd-vllm/beta
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
+
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-V3
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true

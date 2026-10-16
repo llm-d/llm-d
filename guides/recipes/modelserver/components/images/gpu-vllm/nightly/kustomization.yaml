@@ -5,34 +5,28 @@ images:
     newName: docker.io/vllm/vllm-openai
     newTag: nightly
 
-# Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+# imagePullPolicy: Always for the vLLM container (containers/0): the nightly tag moves every day.
+# With IfNotPresent, a node that cached an older nightly runs a different vLLM build than the
+# other pods of the same guide.
 patches:
   - target:
       kind: Deployment
     patch: |-
       - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: USER
-          value: llm-d
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
   - target:
       kind: LeaderWorkerSet
     patch: |-
       - op: add
-        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: USER
-          value: llm-d
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+        value: Always
   - target:
       kind: DisaggregatedSet
     patch: |-
       - op: add
-        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: USER
-          value: llm-d
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+        value: Always
       - op: add
-        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
-        value:
-          name: USER
-          value: llm-d
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+        value: Always

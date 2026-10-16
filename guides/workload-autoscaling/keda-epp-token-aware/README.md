@@ -37,7 +37,7 @@ replicas = ceil(  queued_tokens ÷ peakPrefillThroughput  ÷  threshold  )
 | | [P+D co-located](./optimized-baseline/) | [P/D-disaggregated](./pd-disaggregation/) |
 | --- | --- | --- |
 | **Base guide** | [optimized-baseline](../../optimized-baseline/README.md) | [pd-disaggregation](../../pd-disaggregation/README.md) |
-| **Objects** | one `ScaledObject`, two triggers, one Deployment | one `ScaledObject` per role, two Deployments |
+| **Objects** | one `ScaledObject`, two triggers, one Deployment | one `ScaledObject` per role, two `DisaggregatedSet` roles |
 | **Scaling rule** | `max(ceil(backlog_s / 1.5), ceil(kv / 0.8))` — the current bottleneck wins | prefill and decode scale independently |
 | **Trade-off** | simpler: one calibration, one object. A prompt-heavy burst and a generation-heavy burst both scale the whole pod | tracks lopsided load between phases, at the cost of two objects and a calibration through the KV-transfer path |
 
@@ -52,9 +52,9 @@ The token math is identical across both. Only the query *shape* (role selectors)
 
 For details on these metrics, see:
 
-- [EPP Request Handling Metrics](../../../docs/architecture/core/router/epp/request-handling.md)
-- [EPP Scheduling Metrics](../../../docs/architecture/core/router/epp/scheduling.md)
-- [Metric reference](../../../docs/operations/observability/metrics.md) and [PromQL reference](../../../docs/operations/observability/promql.md)
+- [EPP Request Handling Metrics](../../../docs/architecture/router/request-handling.md)
+- [EPP Scheduling Metrics](../../../docs/architecture/router/scheduling.md)
+- [Metric reference](../../../docs/operations/observability/metrics.md#metric-reference) and [PromQL reference](../../../docs/operations/observability/promql.md)
 
 ### Endpoint-removal note for older EPP images
 
@@ -77,28 +77,20 @@ Before proceeding, ensure you have:
 
 1. **Monitoring stack with Prometheus over HTTPS** — See [autoscaling prerequisites](../README.md#prerequisites) and [Prometheus Setup Guide](../../../docs/operations/observability/setup.md). This includes KEDA installation. The decode trigger additionally needs the model servers scraped, so apply your base guide's monitoring component (`recipes/modelserver/components/monitoring`, or `monitoring-pd` for P/D) — without it `vllm:kv_cache_usage_perc` never reaches Prometheus and that trigger reads 0 forever.
 
-2. **A deployed base guide** — complete either the [optimized-baseline guide](../../optimized-baseline/README.md) (P+D co-located) or the [pd-disaggregation guide](../../pd-disaggregation/README.md) (P/D-disaggregated), and set `TOPOLOGY` below to match.
+2. **A deployed base guide** — complete either the [optimized-baseline guide](../../optimized-baseline/README.md) (P+D co-located) or the [pd-disaggregation guide](../../pd-disaggregation/README.md) (P/D-disaggregated), and set `TOPOLOGY` below to match. For P/D, hand both roles' replica counts to KEDA, which requires a single slice:
 
-3. **The EPP plugins that emit the prefill signal** — `inflight-load-producer` (publishes `llm_d_epp_inflight_tokens`) and `prefix-cache-affinity-filter` (carries `peakPrefillThroughput`). **Both base guides already register these in their shipped router values**, so no EPP change is required beyond step 4. If you built your own router config, add them.
+   ```bash
+   kubectl get disaggregatedset pd-disagg-vllm -n llm-d-pd-disaggregation -o json \
+     | jq '.spec.slices = 1 | .spec.roles |= map(.scaling = {"mode": "External"})' \
+     | kubectl replace -f -
+   ```
+
+   The ScaledObjects then target the `pd-disagg-vllm-prefill` and `pd-disagg-vllm-decode` `DisaggregatedSetRoleScaler`s.
+
+3. **The EPP plugins that emit the prefill signal** — `inflight-load-producer` (publishes `llm_d_epp_inflight_tokens`) and `prefix-cache-affinity-filter` (carries `peakPrefillThroughput`). **Both base guides already register these in their shipped router values**, so no EPP change is required beyond calibrating `peakPrefillThroughput` below. If you built your own router config, add them.
 
    > [!NOTE]
    > Keep the EPP at a single replica. The `inflight-load-producer`'s token accounting is local to each EPP process, so multiple replicas would each see — and publish — only a fraction of the per-endpoint load. The `pd-disaggregation` router values pin `replicas: 1` for this reason.
-
-4. **A calibrated `peakPrefillThroughput`** — this is the one hardware-specific constant the design needs, and the shipped values are reference figures (`15928` for Qwen3-32B / H100-80GB / TP=2; `33821` for the P/D guide's gpt-oss-120b / H200 fleet). Measure your own:
-
-<!-- guide:prerequisites.calibration start -->
-```bash
-GUIDE_NAME=${TOPOLOGY} \
-NAMESPACE=${NAMESPACE} \
-MODEL_NAME=${MODEL} \
-CHUNK_SIZE=8192 \
-${REPO_ROOT}/guides/recipes/router/calibration/calibrate.sh
-```
-<!-- guide:prerequisites.calibration end -->
-
-   `calibrate.sh` computes `V_P = CHUNK_SIZE / median(TTFT)` on an idle stack and **only prints** the value — see the [calibration guide](../../recipes/router/calibration/README.md) and the [configuration matrix](../../recipes/router/calibration/configuration-matrix.md). Because TTFT is time-to-*first*-token, the figure already includes the KV transfer to decode and the first decode step on the P/D path. `CHUNK_SIZE` must match vLLM's effective `--max-num-batched-tokens` or the result is silently wrong.
-
-   Measure through the path you will serve on. Do not borrow a published figure: the same GPU and model measured through a P/D path with a slow KV fabric can be several times slower than on the aggregated path, and the divisor changes when prefill scales — one reference stack asked for 8 replicas at `V_P = 2696` and 3 at `V_P = 15928` under identical load.
 
 ## Set Namespaces
 
@@ -124,6 +116,24 @@ Source the common guide environment variables:
 source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
+
+### Calibrate `peakPrefillThroughput`
+
+**A calibrated `peakPrefillThroughput`** is the one hardware-specific constant the design needs, and the shipped values are reference figures (`15928` for Qwen3-32B / H100-80GB / TP=2; `33821` for the P/D guide's gpt-oss-120b / H200 fleet). Measure your own:
+
+<!-- guide:prerequisites.calibration start -->
+```bash
+GUIDE_NAME=${TOPOLOGY} \
+NAMESPACE=${NAMESPACE} \
+MODEL_NAME=${MODEL} \
+CHUNK_SIZE=8192 \
+${REPO_ROOT}/guides/recipes/router/calibration/calibrate.sh
+```
+<!-- guide:prerequisites.calibration end -->
+
+`calibrate.sh` computes `V_P = CHUNK_SIZE / median(TTFT)` on an idle stack and **only prints** the value — see the [calibration guide](../../recipes/router/calibration/README.md) and the [configuration matrix](../../recipes/router/calibration/configuration-matrix.md). Because TTFT is time-to-*first*-token, the figure already includes the KV transfer to decode and the first decode step on the P/D path. `CHUNK_SIZE` must match vLLM's effective `--max-num-batched-tokens` or the result is silently wrong.
+
+Measure through the path you will serve on. Do not borrow a published figure: the same GPU and model measured through a P/D path with a slow KV fabric can be several times slower than on the aggregated path, and the divisor changes when prefill scales — one reference stack asked for 8 replicas at `V_P = 2696` and 3 at `V_P = 15928` under identical load.
 
 ## Configure
 
@@ -348,6 +358,45 @@ Every HPA should report `True ValidMetricFound`, and every `TARGETS` pair should
 That distinction is the one worth internalising. `0` means the query ran and the pool is quiet; `<unknown>` means KEDA could not evaluate the trigger at all — a 401 from Thanos, a mistyped label, a metric that does not exist — and KEDA reports the failure only as an HPA condition while serving `fallback` replicas. `kubectl describe hpa -n ${NAMESPACE}` prints the same pair under `Metrics:` alongside the `ScalingActive` message if you need the underlying error.
 
 Responsiveness is governed by the HPA's sync period (`--horizontal-pod-autoscaler-sync-period`, 15 s by default), not by a `pollingInterval` on the ScaledObject: KEDA honours that field only when it owns activation or caching — `minReplicaCount: 0`, `idleReplicaCount: 0`, or a trigger with `useCachedMetrics`. Setting it otherwise is inert and makes KEDA 2.20 warn on every apply, so these overlays omit it. Use the `behavior` block to change how fast replicas are added or removed; if you set `minReplicaCount: 0` to scale to zero, `pollingInterval` starts mattering and should be set deliberately.
+
+## Benchmarking
+
+Uses [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
+cd llm-d-benchmark && source .venv/bin/activate
+
+SPEC=guides/keda-epp-token-aware                     # P+D
+# SPEC=guides/keda-epp-token-aware-pd-disaggregation # P/D
+
+for SHAPE in prefill_heavy symmetrical decode_heavy; do
+  llmdbenchmark --spec ${SPEC} standup -p ${NAMESPACE}
+  make calibrate-peak-prefill NAMESPACE=${NAMESPACE} APPLY=1
+  llmdbenchmark --spec ${SPEC} --workspace results/${SHAPE} run -p ${NAMESPACE} \
+    --harness inference-perf --workload random_${SHAPE}.yaml --monitoring --analyze
+  llmdbenchmark --spec ${SPEC} teardown -p ${NAMESPACE}
+done
+```
+
+To run a static baseline without autoscaling, add `--set=eppKedaSaturation.enabled=false` to `standup`, `run` and `teardown`; the stack stays at 1 replica per role. To fix it at 4 replicas per role instead, also add `--set=decode.replicas=4`, plus `--set=prefill.replicas=4` for P/D, and pass `--modelservice-deploy-timeout 3600` to `standup`: 4 replicas loading the model at once can exceed the default readiness wait. On OpenShift, pass a `--cluster-config` from `config/cluster-configs/examples/` to all three. Charts are written to `results/${SHAPE}/latest/analysis/*/graphs/replica_status.png`.
+
+### Sizing
+
+Decode runs at TP=2: Qwen3-32B weights (~64 GB) on TP=1 leave ~12 GB of KV cache (~48k tokens), while TP=2 leaves ~88 GB (~350k tokens). Prefill runs at TP=1, so each extra prefill replica costs one GPU.
+
+To change TP, add these overrides to the loop's `standup`. GPU requests follow `tensor`. `prefill.*` applies to P/D only.
+
+```bash
+llmdbenchmark --spec ${SPEC} standup -p ${NAMESPACE} \
+  --set prefill.parallelism.tensor=2 \
+  --set decode.parallelism.tensor=4 \
+  --set eppKedaSaturation.scaledObject.maxReplicas=2
+```
+
+- `peakPrefillThroughput` depends on prefill TP. The loop's `calibrate-peak-prefill` step re-measures it.
+- Peak GPUs = `maxReplicas` × TP (P+D), or `maxReplicas` × (prefill TP + decode TP) (P/D). Lower `maxReplicas` to fit your GPU budget.
+- The thresholds (`1.5` s, `0.8`) are per replica and don't change with TP.
 
 ## Cleanup
 

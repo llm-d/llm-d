@@ -54,7 +54,7 @@ if [[ "$MODE" == "delete" ]]; then
   KUBECTL_FLAGS=(--ignore-not-found)
 fi
 
-GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-"v1.5.1"}
+GATEWAY_API_VERSION=${GATEWAY_API_VERSION:-"v1.6.2"}
 ### Base CRDs (standard GA APIs only)
 log_success "📜 Base CRDs: ${LOG_ACTION_NAME}..."
 kubectl "$MODE" "${KUBECTL_FLAGS[@]}" -f "https://github.com/kubernetes-sigs/gateway-api/$(release_url "$GATEWAY_API_VERSION")/standard-install.yaml"
@@ -62,7 +62,7 @@ kubectl "$MODE" "${KUBECTL_FLAGS[@]}" -f "https://github.com/kubernetes-sigs/gat
 
 # guides/env.sh exports the short-form GAIE_VERSION; honor it when the long
 # form is unset so a sourced shell pins both installs consistently.
-GATEWAY_API_INFERENCE_EXTENSION_VERSION=${GATEWAY_API_INFERENCE_EXTENSION_VERSION:-${GAIE_VERSION:-"v1.5.0"}}
+GATEWAY_API_INFERENCE_EXTENSION_VERSION=${GATEWAY_API_INFERENCE_EXTENSION_VERSION:-${GAIE_VERSION:-"v1.6.2"}}
 ### GAIE CRDs
 log_success "🚪 GAIE CRDs: ${LOG_ACTION_NAME}..."
 kubectl "$MODE" "${KUBECTL_FLAGS[@]}" -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/$(release_url "$GATEWAY_API_INFERENCE_EXTENSION_VERSION")/v1-manifests.yaml"

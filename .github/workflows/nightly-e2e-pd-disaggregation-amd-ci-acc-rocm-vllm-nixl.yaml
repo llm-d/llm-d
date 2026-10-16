@@ -68,7 +68,7 @@ on:
 #      - main
 
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 4 * * *'  # 04:00 UTC daily
 
 permissions:
   contents: write
@@ -80,6 +80,7 @@ concurrency:
 
 jobs:
   nightly:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
@@ -90,7 +91,7 @@ jobs:
       accelerator_type: ${{ inputs.accelerator_type || 'amd' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'amd-ci' }}
-      connector: ${{ inputs.connector || '' }}
+      connector: ${{ inputs.connector || 'nixl' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-pd-disaggregation-amd-rocm' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-amd' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-amd' }}
@@ -111,7 +112,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always() && inputs.update_badge != 'false'
+    if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: pd-disaggregation-amd-nixl

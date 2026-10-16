@@ -58,9 +58,19 @@ on:
         default: 'nightly'
         type: 'string'
       harness_resources:
-        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 4/16Gi)'
         required: false
-        default: '32/64Gi'
+        default: '4/16Gi'
+        type: 'string'
+      cluster_name:
+        description: 'GKE cluster name'
+        required: false
+        default: 'wide-ep-cluster-us-west8'
+        type: 'string'
+      cluster_zone:
+        description: 'GKE cluster zone or region'
+        required: false
+        default: 'us-west8'
         type: 'string'
 
 #  push:
@@ -80,6 +90,7 @@ concurrency:
 
 jobs:
   nightly:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
@@ -88,12 +99,12 @@ jobs:
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
-      backend_type: ${{ inputs.backend_type || 'vllm-deepseek-r1-0528' }}
+      backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || 'gke' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-wide-ep-gke-gpu' }}
-      cluster_name: ${{ inputs.cluster_name || 'llm-d-e2e-us-south1-2' }}
-      cluster_zone: ${{ inputs.cluster_zone || 'us-south1' }}
+      cluster_name: ${{ inputs.cluster_name || 'wide-ep-cluster-us-west8' }}
+      cluster_zone: ${{ inputs.cluster_zone || 'us-west8' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-gke' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-gke' }}
       bucket_project: ${{ inputs.bucket_project || 'llm-d-scale' }}
@@ -108,12 +119,12 @@ jobs:
 #      workload: ${{ inputs.workload || 'guide_wide-ep_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
-      harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
+      harness_resources: ${{ inputs.harness_resources || '4/16Gi' }}
     secrets: inherit
 
   update-badge:
     needs: [nightly]
-    if: always() && inputs.update_badge != 'false'
+    if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: wide-ep-gke

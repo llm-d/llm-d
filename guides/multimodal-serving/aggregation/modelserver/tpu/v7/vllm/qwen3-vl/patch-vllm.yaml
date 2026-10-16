@@ -20,6 +20,7 @@ spec:
             - "--tensor-parallel-size=4"
             - "--mm-processor-cache-gb"
             - "20"
+            - "--shutdown-timeout=45"
           env:
             - name: MODEL_IMPL_TYPE # Need to add this as vllm tpu doesn't fully support qwen3-vl now, see https://github.com/vllm-project/tpu-inference/issues/3350
               value: "vllm"

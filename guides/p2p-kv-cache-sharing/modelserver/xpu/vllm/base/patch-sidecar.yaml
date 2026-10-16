@@ -15,10 +15,10 @@ spec:
         - name: routing-proxy
           args:
             - --port=8000
-            - --vllm-port=8200
+            - --model-server-port=8200
             - --kv-connector=offloading
             - --p2p-connector-port=7777
-            - --secure-proxy=false
+            - --secure-serving=false
           env:
             - name: POD_IP
               valueFrom:

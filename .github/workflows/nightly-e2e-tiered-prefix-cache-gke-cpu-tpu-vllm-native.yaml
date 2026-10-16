@@ -56,12 +56,17 @@ on:
         description: 'Total TPU chips to request (0 for simulated)'
         required: false
         type: 'string'
-        default: '16'
+        default: '12'
       tpu_topology:
         description: 'GKE TPU topology (e.g. 2x4, 2x2x1)'
         required: false
         type: 'string'
-        default: '2x4'
+        default: '2x2x1'
+      tpu_provisioning:
+        description: 'TPU capacity type for the placeholder ("flex-start", "spot", "any")'
+        required: false
+        type: 'string'
+        default: 'spot'
       matrix_type:
         description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
         required: false
@@ -89,6 +94,7 @@ concurrency:
 
 jobs:
   nightly:
+    if: github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-ci-nightly-benchmark.yaml@main
     with:
       scenario_dir: ${{ inputs.scenario_dir || 'guides' }}
@@ -96,7 +102,9 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'tiered-prefix-cache' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v6' }}
+      # TPU v6e is stocked out in us-east5 (on-demand, Spot and Flex-start), so
+      # the nightly runs on TPU v5p Spot (3 x ct5p-hightpu-4t), which is obtainable.
+      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v5p' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || '' }}
       offloading_target: ${{ inputs.offloading_target || 'cpu' }}
@@ -115,8 +123,9 @@ jobs:
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
 #      workload: ${{ inputs.workload || 'guide_tiered-prefix-cache_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
-      tpu_chips: ${{ inputs.tpu_chips || '16' }}
-      tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
+      tpu_chips: ${{ inputs.tpu_chips || '12' }}
+      tpu_topology: ${{ inputs.tpu_topology || '2x2x1' }}
+      tpu_provisioning: ${{ inputs.tpu_provisioning || 'spot' }}
       data_access_timeout: '3600'
       wait_timeout: '3600'
       job_timeout: '3600s'
@@ -126,7 +135,7 @@ jobs:
 
   update-badge:
     needs: [nightly]
-    if: always()
+    if: always() && github.repository == 'llm-d/llm-d'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
     with:
       badge_name: tiered-prefix-cache-gke-tpu

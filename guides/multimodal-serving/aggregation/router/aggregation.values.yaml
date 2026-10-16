@@ -12,7 +12,7 @@ router:
     pluginsConfigFile: "aggregation-plugins.yaml"
     pluginsCustomConfig:
       aggregation-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         # Token-based routing, matching the aggregation reference stack:
         # prefix-cache-affinity-filter selects the endpoint set, token-load-scorer

@@ -15,7 +15,7 @@ metadata:
   namespace: llm-d-optimized-baseline
 data:
   optimized-baseline-plugins.yaml: |
-    apiVersion: llm-d.ai/v1alpha1
+    apiVersion: llm-d.ai/v1
     kind: EndpointPickerConfig
     # Plugins run with their built-in defaults: the prefix-cache-affinity-filter's
     # peakPrefillThroughput default (15928) is calibrated for this reference

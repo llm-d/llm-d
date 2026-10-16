@@ -1,6 +1,6 @@
-# Alerting
+# Configure Alerts
 
-This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker) and for the Batch Gateway. For Prometheus and Grafana installation, see [Observability Setup](./setup.md) first, and for the metrics these alerts are built on, see [Metrics](./metrics.md).
+This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker) and for the Batch Gateway. For Prometheus and Grafana installation, see [Set Up the Monitoring Stack](./setup.md) first, and for the metrics these alerts are built on, see [Router (EPP) Metrics](./router-metrics.md) and [Batch Gateway Metrics](./batch-gateway-metrics.md).
 
 The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/getting-started/design/#prometheusrule) custom resource, so they require the Prometheus Operator (bundled with the kube-prometheus-stack installed by the [setup guide](./setup.md)).
 
@@ -14,8 +14,8 @@ The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/gett
 ## Prerequisites
 
 - A running llm-d deployment with an InferencePool — see the [quickstart](../../getting-started/quickstart.md) if needed
-- Prometheus and the Prometheus Operator installed — see [Observability Setup](./setup.md)
-- EPP metrics being scraped — see [Metrics](./metrics.md) (verify the `epp-servicemonitor` ServiceMonitor exists)
+- Prometheus and the Prometheus Operator installed — see [Set Up the Monitoring Stack](./setup.md)
+- EPP metrics being scraped — see [Collect Metrics](./metrics.md#step-2-scrape-epp-metrics) (verify the `epp-servicemonitor` ServiceMonitor exists)
 
 ## Step 1: Apply the Alerting Rules
 
@@ -43,7 +43,7 @@ NAME                 AGE
 epp-alerting-rules   10s
 ```
 
-Then open the Prometheus UI and check that the rules loaded under **Status → Rule Health** (or `http://localhost:9090/rules` after port-forwarding — see [Metrics](./metrics.md#step-5-query-metrics)). You should see the `epp.availability` and `epp.selfhealth` groups.
+Then open the Prometheus UI and check that the rules loaded under **Status → Rule Health** (or `http://localhost:9090/rules` after port-forwarding — see [Collect Metrics](./metrics.md#step-3-query-metrics-in-prometheus)). You should see the `epp.availability` and `epp.selfhealth` groups.
 
 ## Alert Reference
 
