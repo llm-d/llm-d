@@ -7,7 +7,7 @@ llm-d deploys model servers that span several hosts or several roles with two Ku
 
 See [Model Server Orchestration](../architecture/model-server-orchestration/README.md) for how the two APIs work and when to use each. This page covers installing the LWS controller, and Kueue for topology-aware scheduling.
 
-## (Optional) Install the LeaderWorkerSet Controller
+## Install the LeaderWorkerSet Controller
 
 Install the LWS controller when deploying an llm-d guide that uses `LeaderWorkerSet` or `DisaggregatedSet`. llm-d recommends release 1.0.0; see the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) for other installation methods.
 
