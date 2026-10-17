@@ -24,6 +24,13 @@ support:
         - {name: gke, label: "GKE"}
         - {name: coreweave, label: "CoreWeave"}
       engines: {vllm: validated}
+    amd:
+      label: AMD GPU
+      notes: "MI300X / MI355X (192 GB HBM) · aggregated (2 replicas × TP=2), E/PD (2 Encode + 8 PD, TP=2), and E/P/D (2 Encode + 4 Prefill + 4 Decode, TP=2) · `INFRA_PROVIDER=base`"
+      model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
     xpu:
       label: Intel XPU
       notes: "Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base`"
@@ -55,7 +62,7 @@ env:
     # dedicated Encode pods in front of PD (or separate P and D) pods,
     # NVIDIA GPU only.
     TOPOLOGY: {default: aggregation, values: [aggregation, e-pd, e-p-d]}
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu, tpu/v7]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, tpu/v7]}
     MODEL_SERVER: {default: vllm, values: [vllm]}
     # The overlay is <topology dir>/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/[<TOPOLOGY>/]<INFRA_PROVIDER>/
     # (see the Notes column for the providers each accelerator supports).

@@ -64,21 +64,25 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | H200 reference · aggregated 8 replicas × TP=2 (16 GPUs), E/PD 2 Encode + 8 PD, E/P/D 2 Encode + 4 Prefill + 4 Decode (TP=2) · `INFRA_PROVIDER` `base`, `gke` (+ `coreweave` for E/PD and E/P/D) · E/P/D is not run nightly |
+| AMD GPU | `amd` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | MI300X / MI355X (192 GB HBM) · aggregated (2 replicas × TP=2), E/PD (2 Encode + 8 PD, TP=2), and E/P/D (2 Encode + 4 Prefill + 4 Decode, TP=2) · `INFRA_PROVIDER=base` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | GKE only (`INFRA_PROVIDER=gke`) · aggregated only · 8 replicas × 4 chips (`2x2x1`, TP=4) · needs the `medium` PriorityClass |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-The aggregated topology runs on every accelerator above; E/PD and E/P/D run on NVIDIA GPUs only. The overlay each combination deploys:
+The aggregated topology runs on every accelerator above; E/PD and E/P/D run on NVIDIA and AMD GPUs. The overlay each combination deploys:
 
 | `TOPOLOGY` | `ACCELERATOR_TYPE` | `INFRA_PROVIDER` | Overlay |
 | --- | --- | --- | --- |
 | `aggregation` | `gpu` | `base`, `gke` | [`aggregation/modelserver/gpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/gpu/vllm/base/kustomization.yaml) |
+| `aggregation` | `amd` | `base` | [`aggregation/modelserver/amd/vllm/base/kustomization.yaml`](./aggregation/modelserver/amd/vllm/base/kustomization.yaml) |
 | `aggregation` | `xpu` | `base` | [`aggregation/modelserver/xpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/xpu/vllm/base/kustomization.yaml) |
 | `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml`](./aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml) |
 | `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml) |
+| `e-pd` | `amd` | `base` | [`e-disaggregation/modelserver/amd/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-pd/base/kustomization.yaml) |
 | `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml) |
+| `e-p-d` | `amd` | `base` | [`e-disaggregation/modelserver/amd/vllm/e-p-d/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-p-d/base/kustomization.yaml) |
 
 The replica counts are sized for the reference hardware in the Notes column (16 GPUs for aggregated serving on NVIDIA GPUs, 20 for E/PD and E/P/D). To try the guide on a smaller cluster, lower `replicas` in the overlay's Deployments, keeping at least one pod per role.
 
@@ -129,7 +133,7 @@ export NAMESPACE=llm-d-multimodal-serving
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export TOPOLOGY=aggregation # options: aggregation, e-pd, e-p-d
-export ACCELERATOR_TYPE=gpu # options: gpu, xpu, tpu/v7
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v7
 export MODEL_SERVER=vllm # options: vllm
 export INFRA_PROVIDER=base # options: base, gke, coreweave
 export MODEL=Qwen/Qwen3-VL-32B-Instruct # the model the overlays serve (table above)
