@@ -14,7 +14,7 @@ import logging
 import sys
 from typing import Optional
 
-from .vllm.wrapper import patch_vllm_lifespan
+from .wrapper import patch_vllm_lifespan
 
 try:
     from vllm.logger import init_logger
@@ -70,7 +70,7 @@ def main() -> None:
         from vllm.entrypoints.cli.main import main as vllm_main
     except ImportError as err:
         raise RuntimeError(
-            "vLLM must be installed to run snapshot launcher (python3 -m docker.scripts.snapshot.launcher)"
+            "vLLM must be installed to run snapshot launcher (python3 -m docker.scripts.snapshot.vllm.launcher)"
         ) from err
 
     sys.argv = ["vllm", "serve", *sys.argv[1:]]

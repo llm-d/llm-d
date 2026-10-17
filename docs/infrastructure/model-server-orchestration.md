@@ -1,17 +1,24 @@
-# Model Server Orchestration (LWS & Kueue)
+# Model Server Orchestration
 
-## (Optional) Install LeaderWorkerSet for multi-host inference
+llm-d deploys model servers that span several hosts or several roles with two Kubernetes SIG Apps APIs, both served by the LeaderWorkerSet (LWS) controller:
 
-The [LeaderWorkerSet (LWS)](../architecture/model-server-orchestration/leaderworkerset.md) Kubernetes workload controller specializes in deploying serving workloads where each replica is composed of multiple pods spread across hosts, specifically accelerator nodes. llm-d defaults to LWS for deployment of multi-host inference for rank to pod mappings, topology aware placement to ensure optimal accelerator network performance, and all-or-nothing failure and restart semantics to recover in the event of a bad node or accelerator. For multi-role topologies such as prefill/decode disaggregation, see [DisaggregatedSet](../architecture/model-server-orchestration/disaggregatedset.md).
+* **`LeaderWorkerSet`** runs each replica as a group of pods across hosts, for multi-host inference.
+* **`DisaggregatedSet`** runs several roles, such as prefill and decode, as one versioned unit. The prefill/decode disaggregation and wide expert parallelism guides deploy their model servers this way.
 
-Use the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) to install the recommended 0.11.1 release when deploying an llm-d guide using LWS (see also [LeaderWorkerSet concepts](../architecture/model-server-orchestration/leaderworkerset.md)).
+See [Model Server Orchestration](../architecture/model-server-orchestration/README.md) for how the two APIs work and when to use each. This page covers installing the LWS controller, and Kueue for topology-aware scheduling.
+
+## Install the LeaderWorkerSet Controller
+
+Install the LWS controller when deploying an llm-d guide that uses `LeaderWorkerSet` or `DisaggregatedSet`. llm-d recommends release 1.0.0; see the [LWS installation guide](https://lws.sigs.k8s.io/docs/installation/) for other installation methods.
+
+Every install includes the `DisaggregatedSet` CRD and controller. Installing with `enableDisaggregatedSet=true`, as below, also adds the `DisaggregatedSet` validating webhook and editor, viewer, and admin ClusterRoles, which the guides that deploy a `DisaggregatedSet` expect.
 
 ### Install LWS
 
-To install LWS release 0.11.1 into the `lws-system` namespace:
+To install LWS release 1.0.0, with the `DisaggregatedSet` API enabled, into the `lws-system` namespace:
 
 ```bash
-export LWS_VERSION="0.11.1"
+export LWS_VERSION="1.0.0"
 export LWS_NAMESPACE="lws-system"
 
 helm install lws oci://registry.k8s.io/lws/charts/lws \

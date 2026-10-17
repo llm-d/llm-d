@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-30B-A3B-Instruct-2507"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=4"
+            - "--enable-prefix-caching"
+            - "--max-model-len=1010000"
+            - '--hf-overrides={"rope_scaling":{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":262144}}'
+            - "--block-size=64"
+            - "--gpu-memory-utilization=0.95"
+            - "--prefix-caching-hash-algo=sha256_cbor"
+            - '--kv-transfer-config={"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"num_cpu_blocks":1280,"cpu_bytes_to_use":549755813888,"block_size":256}}'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: PYTHONHASHSEED
+              value: "42"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 768Gi
+              nvidia.com/gpu: 4
+            requests:
+              cpu: '8'
+              memory: 576Gi
+              nvidia.com/gpu: 4
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          startupProbe:
+            initialDelaySeconds: 240
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2700
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 12
+          readinessProbe:
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 516Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

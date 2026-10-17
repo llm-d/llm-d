@@ -25,7 +25,7 @@ support:
       engines: {vllmomni: community, sglang: community}
     xpu:
       label: Intel XPU
-      notes: "`text-to-image` only · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`)"
+      notes: "`text-to-image`, `image-to-image` · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`)"
       model: black-forest-labs/FLUX.2-klein-4B
       providers:
         - {name: base, label: "Kubernetes (base)", engines: [sglang]}
@@ -51,7 +51,7 @@ env:
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<TASK>/<INFRA_PROVIDER>/.
     INFRA_PROVIDER: {default: base, values: [base, gke]}
 
-    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"}
+    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511 (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 

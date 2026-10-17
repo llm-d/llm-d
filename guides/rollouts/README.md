@@ -52,6 +52,12 @@ A Blue-Green Update creates a second complete InferencePool and uses HTTPRoute t
 
 **Guide:** [Blue-Green Update](./blue-green-update.md)
 
+### Disaggregated (P/D) Rollouts
+
+Prefill/decode deployments on a `DisaggregatedSet` need every request's prefill and decode pods to run the same version, and prefill pods to stay up until decode pods have pulled their KV cache. The router's rollout screener and graceful drain settings cover both, with either an automatic rolling update or a step-by-step canary across two sets.
+
+**Guide:** [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md)
+
 ### LoRA Adapter Rollout
 
 LoRA (Low-Rank Adaptation) adapter rollouts allow you to update model customizations without changing the base model or infrastructure. This works in both standalone and llm-d router gateway modes.

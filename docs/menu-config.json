@@ -84,6 +84,7 @@
     "operations/disaggregation/vllm": { "position": 1, "label": "vLLM" },
     "operations/disaggregation/sglang": { "position": 2, "label": "SGLang" },
     "operations/disaggregation/disaggregatedset": { "position": 3, "label": "DisaggregatedSet" },
+    "operations/disaggregation/safe-rollouts": { "position": 4, "label": "Safe Rollouts" },
     "operations/components/router": { "position": 1, "label": "Router Operations" },
     "operations/components/async-processor": { "position": 2, "label": "Async Processor Operations" },
     "operations/observability/setup": { "position": 1, "label": "Set Up the Monitoring Stack" },
@@ -102,7 +103,7 @@
     "operations/validation/smoke-test/README": { "position": 1, "label": "Run a Smoke Test" },
     "operations/validation/benchmark": { "position": 2, "label": "Benchmark Performance" },
 
-    "infrastructure/multi-node": { "position": 3, "label": "Model Server Orchestration (LWS & Kueue)" },
+    "infrastructure/model-server-orchestration": { "position": 3, "label": "Model Server Orchestration" },
     "infrastructure/no-kubernetes-deployment": { "position": 4, "label": "Non-K8s & Bare-Metal Deployments" },
     "infrastructure/gateway/install-crds": { "position": 1 },
     "infrastructure/gateway/istio": { "position": 2 },

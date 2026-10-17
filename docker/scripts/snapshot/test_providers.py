@@ -438,7 +438,7 @@ class TestLauncher(unittest.TestCase):
     @patch("sys.argv", ["launcher.py", "--model", "meta-llama/Llama-2-7b"])
     def test_launcher_main(self):
         import sys
-        from docker.scripts.snapshot import launcher
+        from docker.scripts.snapshot.vllm import launcher
 
         mock_vllm_main = MagicMock()
         with patch.dict("sys.modules", {"vllm.entrypoints.cli.main": MagicMock(main=mock_vllm_main)}):
@@ -447,7 +447,7 @@ class TestLauncher(unittest.TestCase):
             mock_vllm_main.assert_called_once()
 
     def test_launcher_main_vllm_not_installed_raises(self):
-        from docker.scripts.snapshot import launcher
+        from docker.scripts.snapshot.vllm import launcher
 
         with patch.dict("sys.modules", {"vllm.entrypoints.cli.main": None}):
             with self.assertRaises(RuntimeError) as ctx:
@@ -455,7 +455,7 @@ class TestLauncher(unittest.TestCase):
             self.assertIn("vLLM must be installed to run snapshot launcher", str(ctx.exception))
 
     def test_launcher_api_server_not_importable_warning(self):
-        from docker.scripts.snapshot import launcher
+        from docker.scripts.snapshot.vllm import launcher
 
         with patch.dict(
             "sys.modules",
@@ -463,15 +463,15 @@ class TestLauncher(unittest.TestCase):
                 "vllm.entrypoints.launchers.app": None,
                 "vllm.entrypoints.openai.api_server": None,
             },
-        ), patch("docker.scripts.snapshot.launcher.logger") as mock_logger:
+        ), patch("docker.scripts.snapshot.vllm.launcher.logger") as mock_logger:
             result = launcher._hook_api_server()
             self.assertFalse(result)
             mock_logger.warning.assert_called_once()
             self.assertIn("vLLM API server is not importable", mock_logger.warning.call_args[0][0])
 
-    @patch("docker.scripts.snapshot.launcher.patch_vllm_lifespan", return_value="patched_app")
+    @patch("docker.scripts.snapshot.vllm.launcher.patch_vllm_lifespan", return_value="patched_app")
     def test_launcher_hook_launchers_app_and_entry(self, mock_patch_lifespan):
-        from docker.scripts.snapshot import launcher
+        from docker.scripts.snapshot.vllm import launcher
 
         orig_build_app = MagicMock(return_value="raw_app")
         mock_launchers_app = MagicMock(build_app=orig_build_app)
@@ -496,7 +496,7 @@ class TestLauncher(unittest.TestCase):
             mock_patch_lifespan.assert_called_once_with("raw_app")
 
     def test_launcher_hook_launchers_app_without_build_app_falls_back(self):
-        from docker.scripts.snapshot import launcher
+        from docker.scripts.snapshot.vllm import launcher
 
         mock_launchers_app = MagicMock(spec=[])
         mock_api_server = MagicMock()
@@ -514,7 +514,7 @@ class TestLauncher(unittest.TestCase):
             self.assertIsNot(mock_api_server.build_app, orig)
 
     def test_launcher_hook_api_server_success(self):
-        from docker.scripts.snapshot import launcher
+        from docker.scripts.snapshot.vllm import launcher
 
         mock_api_server = MagicMock()
         orig = mock_api_server.build_app = MagicMock(return_value="app")

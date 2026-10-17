@@ -56,12 +56,17 @@ on:
         description: 'Total TPU chips to request (0 for simulated)'
         required: false
         type: 'string'
-        default: '16'
+        default: '8'
       tpu_topology:
         description: 'GKE TPU topology (e.g. 2x4, 2x2x1)'
         required: false
         type: 'string'
-        default: '2x4'
+        default: '2x2x1'
+      tpu_provisioning:
+        description: 'TPU capacity type for the placeholder ("flex-start", "spot", "any")'
+        required: false
+        type: 'string'
+        default: 'spot'
       matrix_type:
         description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
         required: false
@@ -97,7 +102,9 @@ jobs:
       standup_scenario: ${{ inputs.standup_scenario || 'optimized-baseline' }}
       decode_pods: ${{ inputs.decode_pods || 'auto' }}
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
-      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v6' }}
+      # TPU v6e is stocked out in us-east5 (on-demand, Spot and Flex-start), so
+      # the nightly runs on TPU v5p Spot (2 x ct5p-hightpu-4t), which is obtainable.
+      accelerator_type: ${{ inputs.accelerator_type || 'tpu/v5p' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
       infra_provider: ${{ inputs.infra_provider || '' }}
       connector: ${{ inputs.connector || '' }}
@@ -115,8 +122,9 @@ jobs:
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
 #      workload: ${{ inputs.workload || 'guide_optimized-baseline_1.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
-      tpu_chips: ${{ inputs.tpu_chips || '16' }}
-      tpu_topology: ${{ inputs.tpu_topology || '2x4' }}
+      tpu_chips: ${{ inputs.tpu_chips || '8' }}
+      tpu_topology: ${{ inputs.tpu_topology || '2x2x1' }}
+      tpu_provisioning: ${{ inputs.tpu_provisioning || 'spot' }}
       matrix_type: ${{ inputs.matrix_type || 'nightly' }}
       harness_resources: ${{ inputs.harness_resources || '32/64Gi' }}
     secrets: inherit

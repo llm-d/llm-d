@@ -135,7 +135,7 @@ This guide includes configurations for the following accelerator and model serve
 - Provide H200 nodes on an all-to-all RDMA fabric: DeepEP requires every NIC on a host to reach
   every NIC on all other hosts (rail-only networks fail). See
   [RDMA and Networking Configuration](../../../docs/infrastructure/rdma/README.md) and the
-  [multi-node deployment guide](../../../docs/infrastructure/multi-node.md).
+  [model server orchestration guide](../../../docs/infrastructure/model-server-orchestration.md).
 
 - For `MODEL_SERVER=sglang` on GKE A3 Ultra, prepare the cluster as described in the
   [GKE provider docs](../../../docs/infrastructure/providers/gke/README.md) (GPUDirect RDMA, DRA

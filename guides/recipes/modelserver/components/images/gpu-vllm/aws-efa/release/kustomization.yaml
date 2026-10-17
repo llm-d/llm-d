@@ -3,5 +3,5 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: public.ecr.aws/deep-learning-containers/vllm
-    newTag: 0.30.0-gpu-py312-cu130-ubuntu24.04-ec2
+    newTag: 0.31.0-gpu-py312-cu130-ubuntu24.04-ec2
 

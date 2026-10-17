@@ -22,10 +22,9 @@ env:
     # SNAPSHOT_PROVIDER is deliberately absent. It is a *container* env var set
     # by the overlay (modelserver/gpu/${MODEL_SERVER}/gke/patch-${MODEL_SERVER}.yaml)
     # and read by docker/scripts/snapshot/providers.py — not a shell variable.
-    # Its value is fixed per overlay because it must agree with the manifests
-    # beside it: the gke/ overlay applies podsnapshot.gke.io CRDs that only
-    # gke_gvisor honors. A second provider is a sibling overlay directory, not
-    # a different export.
+    # Its value is fixed per overlay because it must agree with the snapshot/gke/
+    # overlay, which applies podsnapshot.gke.io CRs that only gke_gvisor honors.
+    # A second provider is a sibling overlay directory, not a different export.
 
     MODEL: {default: "Qwen/Qwen3-32B"}
 
@@ -77,13 +76,19 @@ deploy:
           --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
-  # GCS_BUCKET lands in a GKE CRD field that Kustomize cannot parameterise. The
-  # placeholder is suffixed so the global substitution cannot match the Python
-  # sources carried in the snapshot-scripts ConfigMap.
+  # GCS_BUCKET lands in a GKE CRD field that Kustomize cannot parameterise, and
+  # cluster-scoped PodSnapshotStorageConfig is prefixed with NAMESPACE so
+  # concurrent deployments in different namespaces do not collide.
+  snapshot:
+    - run: |
+        kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/snapshot/gke/ \
+          | sed -e "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
+            -e "s/pod-snapshot-storage-config/${NAMESPACE}-pod-snapshot-storage-config/g" \
+          | kubectl apply -n ${NAMESPACE} -f -
+
   modelserver:
     - run: |
         kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/gke/ \
-          | sed "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
           | kubectl apply -n ${NAMESPACE} -f -
 
 verify:
@@ -137,5 +142,9 @@ cleanup:
   - run: kubectl delete podsnapshots --all -n ${NAMESPACE} --ignore-not-found=true
   - run: |
       kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/gke/ \
+        | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
+  - run: |
+      kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/snapshot/gke/ \
+        | sed "s/pod-snapshot-storage-config/${NAMESPACE}-pod-snapshot-storage-config/g" \
         | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
   - run: kubectl delete namespace ${NAMESPACE}

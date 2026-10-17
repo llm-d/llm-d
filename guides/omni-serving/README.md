@@ -8,13 +8,13 @@ This guide serves models whose output is not only text (speech, images, or both)
 | --- | --- | --- | --- | --- |
 | `omni` (default) | [`Qwen/Qwen3-Omni-30B-A3B-Instruct`](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct) | `/v1/chat/completions` (text and spoken answers) | vLLM-Omni | `queue-scorer` |
 | `text-to-image` | [`Qwen/Qwen-Image`](https://huggingface.co/Qwen/Qwen-Image) (GPU); [`black-forest-labs/FLUX.2-klein-4B`](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) (XPU) | `/v1/images/generations` | vLLM-Omni, SGLang | `active-request-scorer` |
-| `image-to-image` | [`Qwen/Qwen-Image-Edit-2511`](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) | `/v1/images/edits` (`multipart/form-data`) | vLLM-Omni, SGLang | `active-request-scorer` |
+| `image-to-image` | [`Qwen/Qwen-Image-Edit-2511`](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) (GPU); [`black-forest-labs/FLUX.2-klein-4B`](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) (XPU) | `/v1/images/edits` (`multipart/form-data`) | vLLM-Omni, SGLang | `active-request-scorer` |
 | `text-to-speech` | [`Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) | `/v1/audio/speech` | vLLM-Omni | `active-request-scorer` |
 
 The tasks fall into two shapes:
 
 - **An omni model: one checkpoint, many endpoints.** Qwen3-Omni takes text, images, audio, or video in and answers with text *and* speech from a multi-stage pipeline (thinker → talker → code2wav). One `InferencePool` fronts every OpenAI endpoint the checkpoint serves. The router's request parser understands the chat, speech, and image-generation request bodies, so a single router and pool serve all of them; when the pool shares a Kubernetes Gateway with other pools, exact-path `HTTPRoute` rules send the modality endpoints to it (see [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode)).
-- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, or, on Intel XPU, FLUX.2-klein-4B) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas, or, for Intel XPU's `text-to-image`, 2 single-XPU replicas.
+- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, or, on Intel XPU, FLUX.2-klein-4B) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas, or, for Intel XPU's `text-to-image` and `image-to-image`, 2 single-XPU replicas.
 
 Either way the router **routes on load**.
 Diffusion models generate by iterative denoising rather than autoregressive token generation, and the Qwen3-Omni pipeline runs with prefix caching off, so prefix-cache and token-load scorers have no signal.
@@ -51,7 +51,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM-Omni | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-Omni-30B-A3B-Instruct` | 🟡 community | 🟡 community | Served model is `TASK=omni`'s (others in the Overview table) · H100 80 GB reference · `omni`: 1 replica × 2 GPUs · `text-to-image`, `image-to-image`, `text-to-speech`: 3 replicas × 1 GPU · SGLang: `text-to-image` and `image-to-image` only |
-| Intel XPU | `xpu` | `black-forest-labs/FLUX.2-klein-4B` | — | 🟡 community | `text-to-image` only · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`) |
+| Intel XPU | `xpu` | `black-forest-labs/FLUX.2-klein-4B` | — | 🟡 community | `text-to-image`, `image-to-image` · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -60,7 +60,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), or 2 Intel XPUs (Arc Pro B60) for Intel XPU's `text-to-image` (2 replicas × 1 XPU, 64 GiB host memory requested per replica). Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
+- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), or 2 Intel XPUs (Arc Pro B60) for Intel XPU's `text-to-image` or `image-to-image` (2 replicas × 1 XPU, 64 GiB host memory requested per replica). Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
 
 - For the Intel XPU overlay, install the Intel GPU DRA driver and verify the `gpu.intel.com` `DeviceClass` is available; it requires the `resource.k8s.io/v1` API (Kubernetes 1.34+).
 
@@ -96,7 +96,7 @@ export TASK=omni # options: omni, text-to-image, image-to-image, text-to-speech
 export ACCELERATOR_TYPE=gpu # options: gpu, xpu
 export MODEL_SERVER=vllmomni # options: vllmomni, sglang
 export INFRA_PROVIDER=base # options: base, gke
-export MODEL=Qwen/Qwen3-Omni-30B-A3B-Instruct # the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511, text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+export MODEL=Qwen/Qwen3-Omni-30B-A3B-Instruct # the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511 (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
@@ -252,10 +252,22 @@ To serve another vLLM-Omni checkpoint, change the model in [`patch-vllm-omni.yam
 <details>
 <summary><b>Text-to-Image</b></summary>
 
-Serves `Qwen/Qwen-Image` on 3 replicas × 1 GPU, with vLLM-Omni ([`patch-vllm-omni.yaml`](modelserver/gpu/vllmomni/text-to-image/base/patch-vllm-omni.yaml)) or SGLang ([`patch-sglang.yaml`](modelserver/gpu/sglang/text-to-image/base/patch-sglang.yaml)):
+Serves an image-generation checkpoint, one model server per accelerator:
 
-> [!NOTE]
-> On Intel XPU, select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16), and a two-B60 `--tp-size=2` run fails on the published `v0.10.0` image's pinned SGLang, which predates an upstream XPU layer-norm fix (`sgl-project/sglang#36825`).
+<!-- tabs:start group=omni-accelerator -->
+<details open>
+<summary><b>NVIDIA GPU</b></summary>
+
+`Qwen/Qwen-Image` on 3 replicas × 1 GPU, with vLLM-Omni ([`patch-vllm-omni.yaml`](modelserver/gpu/vllmomni/text-to-image/base/patch-vllm-omni.yaml)) or SGLang ([`patch-sglang.yaml`](modelserver/gpu/sglang/text-to-image/base/patch-sglang.yaml)).
+
+</details>
+<details>
+<summary><b>Intel XPU</b></summary>
+
+Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16), and a two-B60 `--tp-size=2` run fails on the published `v0.10.0` image's pinned SGLang, which predates an upstream XPU layer-norm fix (`sgl-project/sglang#36825`).
+
+</details>
+<!-- tabs:end -->
 
 <!-- guide:deploy.modelserver.text-to-image start -->
 ```bash
@@ -269,7 +281,22 @@ kubectl apply -n ${NAMESPACE} \
 <details>
 <summary><b>Image-to-Image</b></summary>
 
-Serves `Qwen/Qwen-Image-Edit-2511` on 3 replicas × 1 GPU, with vLLM-Omni ([`patch-vllm-omni-edit.yaml`](modelserver/gpu/vllmomni/image-to-image/base/patch-vllm-omni-edit.yaml)) or SGLang ([`patch-sglang.yaml`](modelserver/gpu/sglang/image-to-image/base/patch-sglang.yaml)). An edit-capable checkpoint is required: `Qwen/Qwen-Image` reports task type `T2I` and rejects edits (`input_reference is not supported for T2I models`), and `Qwen/Qwen-Image-Edit-2511` reports `I2I` and rejects `/v1/images/generations`.
+Serves an edit-capable checkpoint, one model server per accelerator. An edit-capable checkpoint is required: `Qwen/Qwen-Image` reports task type `T2I` and rejects edits (`input_reference is not supported for T2I models`), and `Qwen/Qwen-Image-Edit-2511` reports `I2I` and rejects `/v1/images/generations`.
+
+<!-- tabs:start group=omni-accelerator -->
+<details open>
+<summary><b>NVIDIA GPU</b></summary>
+
+`Qwen/Qwen-Image-Edit-2511` on 3 replicas × 1 GPU, with vLLM-Omni ([`patch-vllm-omni-edit.yaml`](modelserver/gpu/vllmomni/image-to-image/base/patch-vllm-omni-edit.yaml)) or SGLang ([`patch-sglang.yaml`](modelserver/gpu/sglang/image-to-image/base/patch-sglang.yaml)).
+
+</details>
+<details>
+<summary><b>Intel XPU</b></summary>
+
+Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=image-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)), the same overlay component `text-to-image` uses; this is community support, **not** nightly E2E coverage. FLUX.2-klein-4B supports both generation and reference-image editing, so the same checkpoint serves `text-to-image` and `image-to-image`. `Qwen/Qwen-Image-Edit-2511` does not fit a single B60 (~57 GB bf16), even with `--performance-mode=memory`.
+
+</details>
+<!-- tabs:end -->
 
 <!-- guide:deploy.modelserver.image-to-image start -->
 ```bash

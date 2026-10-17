@@ -11,3 +11,7 @@ Operational behavior differs by model server engine:
 * **[vLLM Operations](./vllm.md)** — Dynamic connections via NIXL peer-to-peer handshake, lease-based KV block management, fault tolerance policies (`fail` vs `recompute`), and rollout compatibility.
 * **[SGLang Operations](./sglang.md)** — Lazy connection establishment via prefill bootstrap server, heartbeat-based fault isolation, waiting timeouts, and rollout compatibility.
 * **[DisaggregatedSet Operations](./disaggregatedset.md)** — Slices, rollouts, placement policy, router slice affinity, and per-role autoscaling for the `DisaggregatedSet` that runs the P/D and wide-ep paths.
+
+## Rollout Guides
+
+* **[Safe Rollouts with DisaggregatedSet](./safe-rollouts.md)** — Roll out a new P/D version under live traffic without failed requests or cross-version prefill/decode pairs: the router's rollout screener, graceful drain settings, and automatic or step-by-step canary rollouts.

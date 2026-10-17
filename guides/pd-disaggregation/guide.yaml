@@ -42,13 +42,20 @@ support:
         - {name: base, label: "Kubernetes (base)"}
         - {name: rdma, label: "RDMA"}
       engines: {vllm: validated}
-    "tpu/v6":
-      label: Google TPU v6e
-      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector"
+    "tpu/v5p":
+      label: Google TPU v5p
+      notes: "`2x2x1` v5p nodes on GKE · 1P + 1D, 4 chips each (TP=4) · TPUConnector · nightly runs on Spot capacity"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: validated}
+    "tpu/v6":
+      label: Google TPU v6e
+      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
       notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA"
@@ -113,7 +120,7 @@ env:
     # Extra router values for accelerators that need them (set by deploy.accelerator_values).
     ACCELERATOR_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     # The leaf selects the platform and, where an accelerator offers multiple
@@ -143,7 +150,7 @@ prerequisites:
   # controller from the GKE cluster preparation). skip_in ci:
   # the nightly clusters already run LWS, and a second release would collide.
   lws:
-    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, "tpu/v6", "tpu/v7", iluvatar, metax, biren, mthreads, npu]}
+    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", iluvatar, metax, biren, mthreads, npu]}
       skip_in: [ci]
       run: |
         # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
@@ -222,7 +229,7 @@ deploy:
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     tpu:
-      - when: {ACCELERATOR_TYPE: ["tpu/v6", "tpu/v7"]}
+      - when: {ACCELERATOR_TYPE: ["tpu/v5p", "tpu/v6", "tpu/v7"]}
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/

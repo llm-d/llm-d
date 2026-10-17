@@ -3,5 +3,5 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/vllm/vllm-openai-xpu
-    newTag: v0.30.0
+    newTag: v0.31.0
 

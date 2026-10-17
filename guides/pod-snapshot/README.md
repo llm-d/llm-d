@@ -6,7 +6,7 @@ Deploying large language models (LLMs) on Kubernetes often incurs multi-minute c
 
 This guide demonstrates how to checkpoint and restore a **single-GPU** vLLM or SGLang model server (e.g., an NVIDIA H100 80GB GPU serving `Qwen/Qwen3-32B`), currently implemented with **GKE Pod Snapshots** and **GKE Sandbox (gVisor)** — see [Platform Support](#platform-support).
 
-When launched with the snapshot launcher (`python3 -m docker.scripts.snapshot.launcher` for vLLM, or `python3 -m docker.scripts.snapshot.sglang.launcher` for SGLang), it orchestrates the checkpoint and restore lifecycle automatically:
+When launched with the snapshot launcher (`python3 -m docker.scripts.snapshot.vllm.launcher` for vLLM, or `python3 -m docker.scripts.snapshot.sglang.launcher` for SGLang), it orchestrates the checkpoint and restore lifecycle automatically:
 
 1. **First Pod (Cold Start & Snapshot Creation):** The initial replica loads the model weights, captures CUDA graphs, and releases GPU memory (calling `engine.sleep(level=1)` in vLLM, or `POST /release_memory_occupation` in SGLang) to offload weights from GPU VRAM to host CPU RAM while discarding the KV cache. It then purges the on-disk weight cache so the downloaded files are not duplicated in the container filesystem snapshot, and triggers a GKE Pod Snapshot uploaded to Google Cloud Storage (GCS).
 2. **Subsequent Pods (Fast Restoration):** When pods scale out or restart, GKE automatically restores the container from the GCS snapshot in seconds—bypassing model weight downloads and engine initialization.
@@ -274,14 +274,24 @@ helm install ${GUIDE_NAME} \
 
 </details>
 
-### 2. Deploy the Single-GPU Model Server & Snapshot Policies
+### 2. Deploy the Snapshot Policies & Single-GPU Model Server
 
-Apply the Kustomize overlay to deploy the `PodSnapshotStorageConfig`, `PodSnapshotPolicy`, and single-GPU model server `Deployment` (`vllm` or `sglang`) running under `runtimeClassName: gvisor`:
+- Apply the GKE snapshot overlay (`PodSnapshotStorageConfig` and `PodSnapshotPolicy`):
+
+<!-- guide:deploy.snapshot start -->
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/snapshot/gke/ \
+  | sed -e "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
+    -e "s/pod-snapshot-storage-config/${NAMESPACE}-pod-snapshot-storage-config/g" \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+<!-- guide:deploy.snapshot end -->
+
+- Apply the single-GPU model server overlay (`vllm` or `sglang`) running under `runtimeClassName: gvisor`:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/gke/ \
-  | sed "s/gcs-bucket-placeholder/${GCS_BUCKET}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 <!-- guide:deploy.modelserver end -->
@@ -409,6 +419,10 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete podsnapshots --all -n ${NAMESPACE} --ignore-not-found=true
 
 kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/${MODEL_SERVER}/gke/ \
+  | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
+
+kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/snapshot/gke/ \
+  | sed "s/pod-snapshot-storage-config/${NAMESPACE}-pod-snapshot-storage-config/g" \
   | kubectl delete -n ${NAMESPACE} --ignore-not-found=true -f -
 
 kubectl delete namespace ${NAMESPACE}

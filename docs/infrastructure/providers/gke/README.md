@@ -170,7 +170,7 @@ In addition, expert-parallel deployments using DeepEP with NVIDIA NVSHMEM must e
 
 Multi-host replicas should be co-located on the same high-bandwidth network fabric. On RDMA-enabled GKE nodes, the `cloud.google.com/gce-topology-block` and `cloud.google.com/gce-topology-subblock` labels identify machines within the same fast network domain.
 
-GKE recommends [Topology Aware Scheduling with Kueue and LeaderWorkerSet](https://cloud.google.com/ai-hypercomputer/docs/workloads/schedule-gke-workloads-tas) for multi-host inference workloads (see [Model Server Orchestration (LWS & Kueue)](../../multi-node.md)). For smaller expert-parallel deployments (2- or 4-node replicas) without Kueue, set a pod affinity rule to prefer placing pods within the same `cloud.google.com/gce-topology-block` and `cloud.google.com/gce-topology-subblock`:
+GKE recommends [Topology Aware Scheduling with Kueue and LeaderWorkerSet](https://cloud.google.com/ai-hypercomputer/docs/workloads/schedule-gke-workloads-tas) for multi-host inference workloads (see [Model Server Orchestration](../../model-server-orchestration.md)). For smaller expert-parallel deployments (2- or 4-node replicas) without Kueue, set a pod affinity rule to prefer placing pods within the same `cloud.google.com/gce-topology-block` and `cloud.google.com/gce-topology-subblock`:
 
 ```yaml
   affinity:

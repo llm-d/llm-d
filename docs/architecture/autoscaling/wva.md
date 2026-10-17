@@ -141,7 +141,7 @@ Metrics used by the SLO analyzer:
 
 - `llm_d_epp_scheduler_attempts_total{status="success"}` -- per-pod arrival rate (requests/sec)
 - `vllm:time_to_first_token_seconds` -- TTFT histogram (sum/count for average)
-- `vllm:time_per_output_token_seconds` -- ITL histogram (sum/count for average)
+- `vllm:inter_token_latency_seconds` -- ITL histogram (sum/count for average)
 - `vllm:request_generation_tokens` -- average output tokens (sum/count)
 - `vllm:request_prompt_tokens` -- average input tokens (sum/count)
 
@@ -207,7 +207,7 @@ Each metrics source provides three main capabilities:
 |---|---|---|
 | `scheduler_dispatch_rate` | `sum by (endpoint_name) (rate(llm_d_epp_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
 | `avg_ttft` | `rate(vllm:time_to_first_token_seconds_sum[1m]) / rate(..._count[1m])` | Average time to first token |
-| `avg_itl` | `rate(vllm:time_per_output_token_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
+| `avg_itl` | `rate(vllm:inter_token_latency_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
 
 **Scale-to-zero query**:
 

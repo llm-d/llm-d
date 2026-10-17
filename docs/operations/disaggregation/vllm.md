@@ -204,7 +204,7 @@ By default, vLLM checks for [compatibility between instances](https://github.com
 ```
 
 > [!IMPORTANT]
-> The llm-d EPP currently assumes all P and D instances within an `InferencePool` are compatible and will therefore schedule requests to any arbitrary pair of P and D instances. As a result, it is currently recommended to create a new `InferencePool` for upgrading model servers. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`.
+> By default, the llm-d EPP assumes all P and D instances within an `InferencePool` are compatible and will therefore schedule requests to any arbitrary pair of P and D instances. For deployments on a `DisaggregatedSet`, the EPP's rollout screener keeps each request inside one revision; see [Safe Rollouts with DisaggregatedSet](./safe-rollouts.md). Otherwise, create a new `InferencePool` for upgrading model servers. When deploying with a `Gateway`, traffic can be gradually shifted to the new `InferencePool` by modifying the `HTTPRoute`.
 
 ## Known NIXL Connector Issues and Limitations
 
