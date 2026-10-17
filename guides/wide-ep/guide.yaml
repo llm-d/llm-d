@@ -31,8 +31,8 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base`"
-      model: deepseek-ai/DeepSeek-V2-Lite-Chat
+      notes: "16 XPUs via DRA · aggregated `LeaderWorkerSet`: 2 pods × TP8, DP2/EP across pods · XCCL over RDMA · `INFRA_PROVIDER`: `base`"
+      model: Qwen/Qwen3-235B-A22B
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: validated}
@@ -58,12 +58,12 @@ env:
     # which is why the router install reads it rather than ACCELERATOR_TYPE.
     ACCELERATOR: {default: "${ACCELERATOR_TYPE}", comment: "keep equal to ACCELERATOR_TYPE"}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    # gpu: base, gke, coreweave; amd: base, amd-ci; xpu: base.
-    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, amd-ci], comment: "valid values per accelerator: table above"}
+    # gpu: base, gke, coreweave; amd: base, amd-ci; xpu: base, xpu-ci.
+    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, amd-ci, xpu-ci], comment: "valid values per accelerator: table above"}
 
     # Each accelerator serves one model: NVIDIA GPU serves
     # deepseek-ai/DeepSeek-R1-0528, AMD serves deepseek-ai/DeepSeek-V3, and
-    # Intel XPU serves deepseek-ai/DeepSeek-V2-Lite-Chat.
+    # Intel XPU serves Qwen/Qwen3-235B-A22B.
     MODEL: {default: "deepseek-ai/DeepSeek-R1-0528", comment: "set to the model your accelerator serves (table above)"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
@@ -148,9 +148,9 @@ verify:
     dp_requests:
       - run: |
           # 32 requests, 8 at a time, each with a distinct ~1k-token prompt (no shared
-          # prefix, so prefix-cache affinity does not pin them to one DP rank): each is
-          # prefilled on a prefill DP rank, and its KV cache is transferred to a decode
-          # DP rank
+          # prefix, so prefix-cache affinity does not pin them to one DP rank). NVIDIA
+          # and AMD transfer KV from a prefill rank to a decode rank; Intel XPU serves
+          # each request on one of the aggregated DP/EP ranks.
           kubectl run dp-test --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
@@ -168,8 +168,9 @@ verify:
           # Requests and connector (KV transfer) prefix-cache hits per DP rank, read from
           # every running model server pod through the Kubernetes API server proxy (no
           # port-forward needed). NVIDIA GPU runs one API server per DP rank (prefill on
-          # ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD and
-          # Intel XPU serve all of a pod's ranks on one port (prefill 8000, decode 8200)
+          # ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD serves
+          # all ranks of each role on one port, while aggregated Intel XPU uses decode
+          # role labels and port 8200 only.
           for role in prefill decode; do
             first=8000; [ "${role}" = decode ] && first=8200
             ports=${first}; [ "${ACCELERATOR_TYPE}" = gpu ] && ports=$(seq ${first} $((first + 7)))

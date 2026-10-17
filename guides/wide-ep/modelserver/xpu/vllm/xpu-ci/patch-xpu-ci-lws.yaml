@@ -1,0 +1,19 @@
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/7/value
+  value: !!str 4
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/20/value
+  value: !!str 4
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/14/value
+  value: tcp
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/15/value
+  value: tcp
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
+  value:
+    name: hf-cache
+    hostPath:
+      path: /mnt/local/hf-cache
+      type: DirectoryOrCreate
