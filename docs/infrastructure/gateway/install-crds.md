@@ -6,9 +6,11 @@ Before deploying any Gateway provider, you must install the Gateway API and Gate
 > On GKE `1.34.0-gke.1626000` or later **with the Gateway API enabled** (`--gateway-api=standard`; always on
 > in Autopilot), GKE installs and manages the Gateway API Standard-channel CRDs and the v1 `InferencePool` CRD,
 > and you can skip the steps below. A cluster without the Gateway API enabled has neither, whatever its version.
-> The release GKE manages can trail the one the guides pin (`latest` via `guides/env.sh`); see
+> Applying an upstream `InferencePool` manifest to an addon-managed cluster may report success, but GKE restores
+> its bundled schema shortly afterwards. The release GKE manages can trail the one the guides pin (`latest` via
+> `guides/env.sh`); see
 > [GKE Inference Gateway](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway)
-> for what GKE manages before applying a newer `InferencePool` CRD yourself.
+> for what GKE manages. A newer upstream apply does not override the addon.
 
 ## Option 1: Using the Installation Script
 
@@ -48,6 +50,15 @@ kubectl api-resources --api-group=inference.networking.k8s.io
 ```
 
 You should see resources like `gateways`, `httproutes`, and `inferencepools`.
+
+On GKE, verify the effective owner and `InferencePool` schema version after the addon has reconciled it:
+
+```bash
+kubectl get crd inferencepools.inference.networking.k8s.io \
+  -o jsonpath='{.metadata.annotations.components\.gke\.io/component-name}{"\t"}{.metadata.annotations.inference\.networking\.k8s\.io/bundle-version}{"\n"}'
+```
+
+If the first value is `gateway-api-crds`, the second value is the schema version that remains effective.
 
 ## Uninstalling Gateway API CRDs
 
