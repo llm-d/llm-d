@@ -1,0 +1,62 @@
+## optimized-baseline guide overrides for the llm-d router (TokenSpeed variant).
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Use this file INSTEAD of optimized-baseline.values.yaml when the model servers
+## are `tokenspeed serve`. It schedules with the queue, KV-cache utilization,
+## prefix-cache and no-hit-LRU scorers, and declares the metrics data layer
+## itself: `tokenspeed serve` exports its engine metrics on a separate
+## --metrics-port rather than on the API port, and router.epp.metricsDataSource
+## has no port setting. With a custom plugins file the chart-level
+## metricsDataSource and modelServers.type values are not part of the EPP
+## configuration, so the metrics source and extractor are listed below.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "optimized-baseline-plugins.yaml"
+    pluginsCustomConfig:
+      optimized-baseline-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        # Scrape /metrics on the port every TokenSpeed pod passes as
+        # --metrics-port; the port is shared by all endpoints of the pool.
+        - type: metrics-data-source
+          parameters:
+            path: /metrics
+            port: 9100
+        # Map tokenspeed:num_requests_waiting, tokenspeed:num_requests_running
+        # and tokenspeed:kv_cache_usage_perc onto the scorers' inputs.
+        - type: core-metrics-extractor
+          parameters:
+            defaultEngine: tokenspeed
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+        - type: no-hit-lru-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: no-hit-lru-scorer
+            weight: 2
+        dataLayer:
+          sources:
+          - pluginRef: metrics-data-source
+            extractors:
+            - pluginRef: core-metrics-extractor
+
+  modelServers:
+    type: tokenspeed
+    matchLabels:
+      llm-d.ai/guide: "optimized-baseline"
