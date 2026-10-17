@@ -177,6 +177,26 @@ def test_repo_checks_missing_overlay_and_stray_overlay(tmp_path):
     assert any("overlay modelserver/tpu/sglang/ exists" in e for e in errs)
 
 
+def test_repo_checks_tracing_overlays_against_supported_accelerators(tmp_path):
+    gdir = _repo(
+        tmp_path,
+        ["gpu/vllm", "gpu/sglang", "tpu/vllm", "tracing/gpu/vllm", "tracing/tpu/vllm"],
+        [("nightly-e2e-sup-guide-gke-acc-gpu-vllm-x.yaml", "gpu")],
+    )
+    assert guide.check_support_repo(_guide(), gdir).ok()
+
+
+def test_repo_rejects_unsupported_tracing_overlays(tmp_path):
+    gdir = _repo(
+        tmp_path,
+        ["gpu/vllm", "gpu/sglang", "tpu/vllm", "tracing/hpu/vllm", "tracing/unknown/vllm"],
+        [("nightly-e2e-sup-guide-gke-acc-gpu-vllm-x.yaml", "gpu")],
+    )
+    errs = _errors(guide.check_support_repo(_guide(), gdir))
+    assert any("overlay modelserver/tracing/hpu/vllm/ exists but support marks hpu/vllm as unsupported" in e for e in errs)
+    assert any("overlay modelserver/tracing/unknown/vllm/ exists but 'unknown' is not" in e for e in errs)
+
+
 def test_repo_checks_nightly_must_match_validated(tmp_path):
     gdir = _repo(
         tmp_path,

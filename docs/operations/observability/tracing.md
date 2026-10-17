@@ -36,21 +36,21 @@ Deploy the OTel Collector and Jaeger into the same namespace as your llm-d workl
 > [!NOTE]
 > If the [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/) is installed, the script uses an `OpenTelemetryCollector` CR. Otherwise it deploys a standalone collector Deployment.
 
-Verify the components are running:
+Wait for the collector and Jaeger to become ready, then check their Deployments. These names work for both the standalone collector and the Operator-managed collector; their Pod labels differ.
 
 ```bash
-kubectl get pods -n ${NAMESPACE} -l app=otel-collector
-kubectl get pods -n ${NAMESPACE} -l app=jaeger
+kubectl wait -n "${NAMESPACE}" --for=create deployment/otel-collector --timeout=5m
+kubectl rollout status -n "${NAMESPACE}" deployment/otel-collector --timeout=5m
+kubectl rollout status -n "${NAMESPACE}" deployment/jaeger --timeout=5m
+kubectl get deployment -n "${NAMESPACE}" otel-collector jaeger
 ```
 
 Expected output:
 
 ```text
-NAME                              READY   STATUS    RESTARTS   AGE
-otel-collector-xxxxxxxxx-xxxxx    1/1     Running   0          30s
-
-NAME                      READY   STATUS    RESTARTS   AGE
-jaeger-xxxxxxxxx-xxxxx    1/1     Running   0          30s
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+otel-collector   1/1     1            1           30s
+jaeger           1/1     1            1           30s
 ```
 
 ### Manual Deployment
@@ -67,7 +67,7 @@ kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/tracing/jaeger-all
   -f guides/recipes/observability/tracing/otel-collector-operator.yaml
 ```
 
-Verify with the same `kubectl get pods` commands above.
+Verify with the same rollout and Deployment checks above.
 
 </details>
 <details>
@@ -107,16 +107,93 @@ service/opentelemetry-collector   ClusterIP   34.118.234.183   <none>        431
 
 ## Step 2: Enable Tracing on the Model Server and Routing Proxy
 
-Model servers are deployed with Kustomize. Several guide overlays (such as [`guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml`](../../../guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml)) include commented-out tracing blocks that can be uncommented before applying the overlay.
-
 Set the collector endpoint according to your Step 1 backend:
 
 - **Jaeger (OSS / OpenShift):** `http://otel-collector:4317`
 - **GKE (Managed OpenTelemetry):** `http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317` (or `http://otel-collector:4317` if using the self-managed fallback collector)
 
-### Model Server (`modelserver` container)
+### vLLM Deployment Overlays
 
-The example below uses vLLM; SGLang and other OpenTelemetry-capable model servers use the same `OTEL_*` environment variables with `OTEL_SERVICE_NAME` set to match the engine and role. Add the engine's tracing flags to its serve command and the `OTEL_*` environment variables to the `modelserver` container:
+The [Optimized Baseline](../../../guides/optimized-baseline/README.md) and [Precise Prefix-Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) guides provide opt-in tracing overlays for vLLM Deployments. Use the environment variables from your running guide, including `REPO_ROOT`, `GUIDE_NAME`, `NAMESPACE`, `ACCELERATOR_TYPE`, `MODEL_SERVER`, and `INFRA_PROVIDER`.
+
+| Guide | Accelerator | Provider |
+|-------|-------------|----------|
+| Both guides | `gpu`, `cpu`, `tpu/v6`, `tpu/v7` | `base`, `gke` |
+| Both guides | `amd`, `xpu` | `base` |
+| Optimized Baseline | `amd` | `amd-ci` |
+| Optimized Baseline | `npu`, `metax` | `base` |
+
+These overlays configure containers that execute `vllm serve`. Iluvatar shell launchers, TPU dynamic-slice LeaderWorkerSets, DisaggregatedSets, routing proxies, and other serving engines require separate configuration.
+
+Select the overlay for the same accelerator and provider as your deployment:
+
+```bash
+export MODEL_SERVER_BASE="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
+export MODEL_SERVER_TRACING="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tracing/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
+
+# A missing overlay means this engine/accelerator/provider combination is unsupported.
+test -f "${MODEL_SERVER_TRACING}/kustomization.yaml"
+kubectl kustomize "${MODEL_SERVER_TRACING}"
+kubectl apply --dry-run=server -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}"
+kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}"
+kubectl rollout status -n "${NAMESPACE}" deployment \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
+```
+
+Applying the tracing overlay updates the existing model server Deployment and restarts its pods. It preserves the selected provider's configuration, model arguments, credentials, and KV-cache event settings. Keep the guide's other deployment steps, including the render Service for Precise Prefix-Cache Routing.
+
+The shared [vLLM Deployment component](../../../guides/recipes/observability/tracing/components/vllm-deployment/kustomization.yaml) adds `--collect-detailed-traces=all` and `--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)`. Kubernetes expands the endpoint variable when starting the container. The component exports to the same-namespace collector as `vllm-decode`, with a `parentbased_traceidratio` sampler and a `0.1` ratio for root spans. Child spans follow the parent's sampling decision.
+
+Check the deployed configuration:
+
+```bash
+kubectl get deployment -n "${NAMESPACE}" \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" -o json | \
+  jq '.items[].spec.template.spec.containers[] | select(.name == "modelserver") |
+      {args, tracingEnv: [.env[] | select(.name | startswith("OTEL_"))]}'
+```
+
+For GKE Managed OpenTelemetry, update the endpoint to the managed collector before sending requests:
+
+```bash
+kubectl set env -n "${NAMESPACE}" deployment \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" \
+  --containers=modelserver \
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317
+kubectl rollout status -n "${NAMESPACE}" deployment \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
+```
+
+For a manual trace test, sample all model server root spans:
+
+```bash
+kubectl set env -n "${NAMESPACE}" deployment \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" \
+  --containers=modelserver OTEL_TRACES_SAMPLER_ARG=1.0
+kubectl rollout status -n "${NAMESPACE}" deployment \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
+```
+
+Reapplying the tracing overlay restores its default collector endpoint and sampling ratio. For persistent endpoint or sampling customization, create another Kustomization that references the tracing overlay and patches the `modelserver` env entries by name. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to the collector's full Service DNS name when it runs in another namespace; the CLI endpoint follows that env value.
+
+### Composing the Component
+
+The tracing overlays reference a complete accelerator/provider overlay as a resource and apply the component afterward. For example, `guides/optimized-baseline/modelserver/tracing/gpu/vllm/base/kustomization.yaml` contains:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../gpu/vllm/base
+components:
+  - ../../../../../../recipes/observability/tracing/components/vllm-deployment
+```
+
+Keep this outer overlay parallel to the original accelerator directories. Kustomize rejects a descendant overlay that references its own ancestor. Components run before patches in the same Kustomization, so adding the component directly to a guide's base allows the guide's full `args` patch to overwrite the tracing flags. The component checks the first container's name and command before appending flags.
+
+### Other Workloads and Serving Engines
+
+Configure tracing for other workloads in their own manifests. Set `OTEL_SERVICE_NAME` for the engine and role, and use the engine's tracing flags. The vLLM example is:
 
 ```yaml
 # Add to the modelserver container args (vLLM shown):
@@ -167,6 +244,12 @@ initContainers:
 
 ## Step 3: Enable Tracing on EPP
 
+Set `ROUTER_RELEASE` to the Helm release name of your running router. The guides default to `${GUIDE_NAME}`; if you installed with a different release name, use that name from `helm list -n "${NAMESPACE}"`. Keep `GUIDE_NAME` unchanged: it selects the model server overlay and Pod labels in Step 2. When reusing the guide's installation command below, replace `helm install ${GUIDE_NAME}` with `helm upgrade --install "${ROUTER_RELEASE}"` and keep its chart, version, and existing values files.
+
+```bash
+export ROUTER_RELEASE="${ROUTER_RELEASE:-${GUIDE_NAME}}"
+```
+
 Layer the tracing values file for your platform when installing or upgrading the router Helm chart (see [Router Recipes — Enable Distributed Tracing](../../../guides/recipes/router/README.md#enable-distributed-tracing-optional)). Because the recipes default to a 5% sampling ratio (`samplerArg: "0.05"`), override `router.tracing.sampling.samplerArg="1.0"` when verifying with a small number of test requests:
 
 <!-- tabs:start group=tracing -->
@@ -199,12 +282,26 @@ If your cluster uses the self-managed fallback collector from Step 1 (`install-o
 Wait for the EPP rollout to complete:
 
 ```bash
-kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE}
+kubectl rollout status deployment/${ROUTER_RELEASE}-epp -n ${NAMESPACE}
 ```
+
+A ratio of `1.0` on EPP samples every request without an upstream parent. An unsampled upstream `traceparent` still prevents sampling with `parentbased_traceidratio`; increasing only the model server ratio does not change that decision.
 
 ## Step 4: View Traces
 
-Send a few inference requests through the router (for example, using the verification commands in your guide), then inspect the traces in your backend:
+Send a request through the router using your guide's endpoint selection and served `MODEL`. For a standalone installation:
+
+```bash
+export IP=$(kubectl get service "${ROUTER_RELEASE}-epp" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
+kubectl run tracing-request --rm -i --restart=Never \
+  --image="${CURL_TEST_IMAGE}" --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl --fail-with-body --max-time 120 -sS -X POST "http://${IP}/v1/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${MODEL}\",\"prompt\":\"Explain distributed tracing briefly.\",\"max_tokens\":32}"'
+```
+
+If the request Pod reports `ImagePullBackOff`, set `CURL_TEST_IMAGE` to a registry mirror or an approved image with `/bin/sh` and `curl`, then retry. For a gateway installation, use the request command from its guide. Confirm a successful completion response before checking traces.
 
 <!-- tabs:start group=tracing -->
 <details open>
@@ -226,7 +323,9 @@ Verify traces are flowing:
 2. Select a service (e.g., `llm-d-router/epp` or `vllm-decode`).
 3. Click **Find Traces**.
 
-You should see traces with multiple spans covering the request lifecycle. You can also verify via the Jaeger API:
+Open a trace for the request and verify that the same trace ID contains EPP routing spans and vLLM inference engine spans, with parent references connecting the spans. These single-stage overlays do not deploy a routing proxy. A separately configured P/D deployment should also include its proxy and model server roles in the same trace.
+
+List services via the Jaeger API:
 
 ```bash
 curl -s http://localhost:16686/api/services | jq '.data'
@@ -239,6 +338,18 @@ Expected output:
   "vllm-decode",
   "llm-d-router/epp"
 ]
+```
+
+If services are listed but traces are absent from the selected time range, check that the model server, EPP, and Jaeger nodes have synchronized clocks. Spans timestamped in the future fall outside Jaeger's default search end time.
+
+Service discovery alone does not verify trace propagation. Inspect the trace IDs, services, operations, and parent references together:
+
+```bash
+curl -fsSG http://localhost:16686/api/traces \
+  --data-urlencode service=vllm-decode --data-urlencode limit=20 \
+  --data-urlencode lookback=1h | \
+  jq '.data[] | {traceID, services: ([.processes[].serviceName] | unique),
+      spans: [.spans[] | {operationName, references}]}'
 ```
 
 ### Inspecting Per-Span Latency Distributions in Jaeger
@@ -268,6 +379,8 @@ If you only see generic `GET` spans, check that:
 - The vLLM container args include `--collect-detailed-traces=all`
 - The EPP deployment has `router.tracing.enabled=true` and `samplerArg` is high enough to sample your test traffic
 
+If EPP and vLLM appear in separate traces, check `traceparent` propagation through the request path. If vLLM traces are missing, check the model server startup logs for unsupported flags or missing OpenTelemetry dependencies, verify collector connectivity, and check the sampling configuration on both components.
+
 ## Production Recommendations
 
 - **Sampling**: Set `samplerArg` to `"0.05"` (5%, the default in [`tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml)) or `"0.1"` (10%) to bound tracing overhead under production load
@@ -287,6 +400,26 @@ When tracing is enabled, these environment variables are set on model server and
 | `OTEL_TRACES_SAMPLER_ARG` | Sampling ratio (`1.0` = 100%, `0.1` = 10%, `0.05` = 5%) |
 
 ## Cleanup
+
+To disable model server tracing while keeping inference running, reapply the original overlay:
+
+```bash
+kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_BASE}"
+kubectl rollout status -n "${NAMESPACE}" deployment \
+  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
+```
+
+Repeat the configuration check from Step 2: the tracing flags and env entries should be absent. Send another completion request to verify serving still works. If EPP tracing was enabled for this test, disable it using the same chart selection and version as Step 3:
+
+```bash
+helm upgrade "${ROUTER_RELEASE}" "${ROUTER_STANDALONE_CHART}" \
+  -n "${NAMESPACE}" --version "${ROUTER_CHART_VERSION}" --reuse-values --wait --timeout 20m \
+  --set router.tracing.enabled=false
+```
+
+For a gateway installation, use `${ROUTER_GATEWAY_CHART}` instead.
+
+Use the guide's cleanup commands to remove the workload, or keep it running with tracing disabled. Remove the collector and Jaeger when they are no longer needed:
 
 ```bash
 ./guides/recipes/observability/install-otel-collector-jaeger.sh -u -n ${NAMESPACE}
