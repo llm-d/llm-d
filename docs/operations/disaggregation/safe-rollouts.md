@@ -2,7 +2,7 @@
 
 This guide shows how to replace one version of a prefill/decode (P/D) deployment with another under live traffic, without failing requests and without pairing a prefill pod of one version with a decode pod of another. It applies to deployments that run prefill and decode as a [`DisaggregatedSet`](./disaggregatedset.md), such as the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) and [wide-ep](../../../guides/wide-ep/README.md) guides.
 
-A version change is anything that changes a role's pod template: the model server image, engine flags, the KV connector, resources, or node placement.
+A version change is anything that changes a role's pod template: the model server image, engine flags, the KV connector, resources, `nodeSelector`, or affinity. Changing a DisaggregatedSet `placementPolicy` alone does not create a revision.
 
 ## Why P/D Rollouts Need Care
 
@@ -137,6 +137,12 @@ With the screener in place, you roll out a new version by changing the set's tem
 
 ```yaml
 roles:
+- name: prefill
+  spec:
+    rolloutStrategy:
+      rollingUpdateConfiguration:
+        maxSurge: 1        # bring one new prefill up before an old one drains
+        maxUnavailable: 0
 - name: decode
   spec:
     rolloutStrategy:
@@ -145,7 +151,7 @@ roles:
         maxUnavailable: 0
 ```
 
-The default is `maxSurge: 0`, `maxUnavailable: 1`, which needs no spare accelerators but removes capacity during the rollout. The P/D recipe surges the decode role (`maxSurge: 1`, `maxUnavailable: 0`) so a slice never loses its only decode.
+Set both values explicitly for every role instead of relying on a version-specific default: LWS `v0.11.1` defaults to `maxSurge: 1`, `maxUnavailable: 0`, whereas LWS main defaults to `maxSurge: 0`, `maxUnavailable: 1`. The latter needs no spare accelerators but permits a singleton role to become unavailable. The P/D recipe keeps both the prefill and decode roles available by setting `maxSurge: 1`, `maxUnavailable: 0`, so a slice never loses its only prefill or decode.
 
 1. Change the template (for example the image) in your overlay and apply it:
 
