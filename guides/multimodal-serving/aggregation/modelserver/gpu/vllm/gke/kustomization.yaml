@@ -4,3 +4,4 @@ resources:
   - ../base
 components:
   - ../../../../../../recipes/modelserver/components/disable-gke-nccl-tuner-patch
+  - ../../../../../../recipes/modelserver/components/gke-hf-node-cache

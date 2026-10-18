@@ -4,6 +4,7 @@ resources:
   - ../base
 components:
   - ../../../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../../../recipes/modelserver/components/gke-hf-node-cache
 patches:
   # Disable GKE's built-in NCCL tuner plugin (the disable-gke-nccl-tuner-patch component
   # only covers Deployment and LeaderWorkerSet).
@@ -28,3 +29,41 @@ patches:
             spec: *env
           - name: decode
             spec: *env
+
+  # Cache the model weights once per node (the gke-hf-node-cache component only
+  # covers Deployment; this overlay renders a DisaggregatedSet).
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-e-p-d
+      spec:
+        roles:
+          - name: encode
+            spec: &hf
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        env:
+                          - name: HF_HOME
+                            value: /root/.cache/huggingface
+                          - name: HF_HUB_DOWNLOAD_TIMEOUT
+                            value: "60"
+                          # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+                          - name: HF_HUB_DISABLE_XET
+                            value: "1"
+                        volumeMounts:
+                          # Node-local HuggingFace cache shared across pods and restarts
+                          - mountPath: /root/.cache/huggingface
+                            name: huggingface-cache
+                    volumes:
+                      - name: huggingface-cache
+                        hostPath:
+                          path: /var/cache/huggingface
+                          type: DirectoryOrCreate
+          - name: prefill
+            spec: *hf
+          - name: decode
+            spec: *hf
