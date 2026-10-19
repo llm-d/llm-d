@@ -16,6 +16,7 @@ spec:
                   args:
                     - "Qwen/Qwen3-32B"
                     - "--port=8000"
+                    - "--shutdown-timeout=45"
                     - "--tensor-parallel=2"
                     - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
                     - "--max-num-batched-tokens=8192"
