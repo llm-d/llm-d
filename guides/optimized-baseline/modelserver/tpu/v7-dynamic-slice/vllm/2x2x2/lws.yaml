@@ -64,11 +64,15 @@ spec:
                   --gpu-memory-utilization=0.80 \
                   --async-scheduling \
                   --enable-expert-parallel \
+                  --enable-ep-weight-filter \
                   --block-size=256 \
                   --port=8000 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                   --shutdown-timeout=45
             env:
+              # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+              - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                value: "1"
               - name: POD_IP
                 valueFrom:
                   fieldRef:
@@ -193,6 +197,9 @@ spec:
                 exec bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker \
                   --ray_address=${LWS_LEADER_ADDRESS} --ray_init_timeout=1800
             env:
+              # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+              - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                value: "1"
               - name: POD_IP
                 valueFrom:
                   fieldRef:

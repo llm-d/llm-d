@@ -4,7 +4,7 @@ This section covers the hardware and software requirements for llm-d, cluster co
 
 ### [Kubernetes Infrastructure Providers](providers/README.md)
 
-Provider-specific cluster setup notes (AKS, DigitalOcean, GKE, minikube, OpenShift, and OpenShift on AWS).
+Provider-specific cluster setup notes (AKS, DigitalOcean, GKE and [Google Cloud TPU](providers/gke/tpu/README.md), minikube, OpenShift, and OpenShift on AWS).
 
 ### [Kubernetes Gateways](gateway/README.md)
 

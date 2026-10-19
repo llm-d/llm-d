@@ -1,5 +1,5 @@
-# inference-perf job for the Qwen3-Coder-480B guide: replays the agentic code-generation
-# workload against the qwen3-coder-480b-epp Service. Render with envsubst after exporting
+# inference-perf job for the Qwen3.5-397B guide: replays the agentic code-generation
+# workload against the qwen3-5-397b-epp Service. Render with envsubst after exporting
 # CONCURRENCY_LEVEL, NUM_REQUESTS and SEED (see the guide's Benchmarking section).
 apiVersion: v1
 kind: ConfigMap
@@ -22,8 +22,8 @@ data:
       streaming: true
     server:
       type: vllm
-      model_name: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
-      base_url: http://qwen3-coder-480b-epp
+      model_name: Qwen/Qwen3.5-397B-A17B-FP8
+      base_url: http://qwen3-5-397b-epp
     data:
       type: conversation_replay
       conversation_replay:
