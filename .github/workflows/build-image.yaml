@@ -153,6 +153,7 @@ jobs:
             xpu:
               - 'docker/Dockerfile.xpu'
               - 'docker/common-versions'
+              - 'patches/lmcache_torch_cpp_standard.patch'
             sglang-xpu:
               - 'docker/common-versions'
               - 'patches/sglang_xpu_source_pins.patch'

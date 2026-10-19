@@ -1,0 +1,26 @@
+# Backport the common and SYCL extension changes from LMCache PR #5564:
+# https://github.com/LMCache/LMCache/commit/28f35f865ee7ba132e483dad8143d552ac165593
+# Let PyTorch's BuildExtension select the C++ standard required by its headers.
+diff --git a/setup_extensions/common_cpp.py b/setup_extensions/common_cpp.py
+--- a/setup_extensions/common_cpp.py
++++ b/setup_extensions/common_cpp.py
+@@ -88,7 +88,7 @@ def build_common_cpp(
+             extra_compile_args={
+                 "cxx": (
+                     (profile.extra_cxx_flags_for(spec) if profile else [])
+-                    + ["-O3", "-std=c++17"]
++                    + ["-O3"]
+                 ),
+             },
+         )
+diff --git a/setup_extensions/build_profiles/sycl.py b/setup_extensions/build_profiles/sycl.py
+--- a/setup_extensions/build_profiles/sycl.py
++++ b/setup_extensions/build_profiles/sycl.py
+@@ -57,7 +57,6 @@ class SyclProfile(BuildProfile):
+                 library_dirs=library_dirs,
+                 extra_compile_args={
+                     "cxx": [
+-                        "-std=c++17",
+                         "-D_GLIBCXX_USE_CXX11_ABI=1",
+                         "-O3",
+                         "-fsycl",

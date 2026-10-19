@@ -46,6 +46,7 @@ jobs:
           filters: |
             images:
               - 'docker/**'
+              - 'patches/lmcache_torch_cpp_standard.patch'
       - name: Summarize
         id: check
         run: |

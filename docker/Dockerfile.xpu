@@ -2,7 +2,7 @@
 # Override at build time via --build-arg BASE_IMAGE=...
 # The default value here is informational only; the workflow always passes
 # BASE_IMAGE explicitly from docker/common-versions (VLLM_XPU_BASE_IMAGE).
-ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.30.0
+ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.31.0
 FROM ${BASE_IMAGE}
 
 # Invalidate subsequent layers to make sure builds are fresh
@@ -11,23 +11,33 @@ RUN if [ -n "${CACHE_BUSTER}" ]; then \
         echo "$CACHE_BUSTER" > /tmp/builder-buster; \
     fi;
 
-SHELL ["/bin/bash", "-c"]
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # vLLM no longer ships the oneAPI development environment, but LMCache's
-# SYCL extension still needs icpx. Match the PyTorch 2.13 XPU toolchain.
-ARG ONEAPI_COMPILER_VERSION=2026.0.0-947
+# SYCL extension still needs icpx. Match the Intel 2026.1.1 runtime shipped
+# with the base image's PyTorch 2.14 XPU build.
+ARG ONEAPI_COMPILER_VERSION=2026.1.1-325
 RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | \
         gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
         > /etc/apt/sources.list.d/oneAPI.list && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        intel-oneapi-compiler-dpcpp-cpp-2026.0=${ONEAPI_COMPILER_VERSION} && \
+        intel-oneapi-compiler-dpcpp-cpp-2026.1=${ONEAPI_COMPILER_VERSION} && \
     rm -rf /var/lib/apt/lists/*
 # Keep UMF available at runtime, when setvars.sh has not been sourced.
 ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
 
+# Backport LMCache#5564 so PyTorch selects the required extension C++ standard.
+COPY patches/lmcache_torch_cpp_standard.patch /tmp/lmcache_torch_cpp_standard.patch
+# Keep the official base's Intel runtime overrides when resolving dependencies.
 RUN source /opt/intel/oneapi/setvars.sh --force && \
+    uv pip freeze | sed -n -E '/^(intel-|dpcpp-cpp-rt==|oneccl)/p' \
+        > /tmp/xpu-runtime-overrides.txt && \
     git clone https://github.com/LMCache/LMCache.git -b v0.5.0 && \
-    cd LMCache && pip install -r requirements/build.txt && \
-    BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .
+    cd LMCache && \
+    git apply /tmp/lmcache_torch_cpp_standard.patch && \
+    pip install -r requirements/build.txt && \
+    BUILD_WITH_SYCL=1 uv pip install --overrides /tmp/xpu-runtime-overrides.txt \
+        --no-build-isolation -e . && \
+    rm /tmp/lmcache_torch_cpp_standard.patch /tmp/xpu-runtime-overrides.txt
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
