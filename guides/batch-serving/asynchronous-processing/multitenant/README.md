@@ -788,7 +788,7 @@ to install the standard Prometheus and Grafana stack:
 # 1. Install standard Prometheus + Grafana stack
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
-# 2. Scrape the vLLM model server
+# 2. Scrape the vLLM model server and, once step 4 has deployed it, the coordinator
 kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/monitoring
 
 # 3. Scrape the llm-d Router EPP. Skip this if step 2 ran with MONITORING=true; otherwise

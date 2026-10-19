@@ -495,6 +495,13 @@ instead of through a cache.
 
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* To scrape the Coordinator's own metrics (`llm_d_coordinator_*`, listed under
+  [Coordinator Metrics](../../docs/operations/observability/router-metrics.md#coordinator-metrics)),
+  apply its PodMonitor once the Coordinator from step 3 is running:
+
+  ```bash
+  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring
+  ```
 
 ## Verification
 
@@ -771,6 +778,7 @@ done
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring
 
 kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
