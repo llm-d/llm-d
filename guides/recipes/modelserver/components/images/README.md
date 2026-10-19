@@ -46,12 +46,15 @@ This directory contains Kustomize Components that define the **default container
 ├── npu-vllm
 │   └── release
 ├── routing-sidecar
-│   ├── nightly
-│   └── release
+│   ├── nightly
+│   └── release
+├── torch-tpu-vllm
+│   ├── nightly
+│   └── release
 ├── tpu-vllm
-│   ├── nightly
-│   ├── release
-│   └── release-v0.26.0
+│   ├── nightly
+│   ├── release
+│   └── release-v0.26.0
 ├── xpu-sglang
 │   ├── nightly
 │   └── release

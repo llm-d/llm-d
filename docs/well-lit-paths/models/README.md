@@ -9,7 +9,7 @@ self-contained deployment and backs it with benchmark results.
 - **[DeepSeek-V4](../../../guides/models/deepseek-v4/README.md)**: `DeepSeek-V4-Pro` on GB200 NVL72 — wide expert-parallel P/D disaggregation over cross-node NVLink, with operating points from low latency to maximum throughput.
 - **[GLM-5.2](../../../guides/models/glm-5-2/README.md)** *(optimized for agentic workloads)*: `GLM-5.2-FP8` on H200 — wide expert-parallel P/D disaggregation with MTP speculative decoding, dual-tier prefix-cache routing, and CPU+NVMe KV offloading; benchmarked on production agentic traces.
 - **[NVIDIA Nemotron 3 Ultra](../../../guides/models/nemotron-3-ultra/README.md)** *(optimized for agentic workloads)*: `NVIDIA-Nemotron-3-Ultra-550B` on H200 — P/D disaggregation with disaggregation-aware prefix-cache routing and CPU KV offloading, plus ready-to-use coding-agent client configs.
-- **[Qwen3-Coder-480B](../../../guides/models/qwen3-coder-480b/README.md)** *(optimized for agentic workloads)*: `Qwen3-Coder-480B-A35B-Instruct-FP8` on TPU 7x — prefix-aware routing and CPU KV offloading, with an experimental P/D-disaggregated configuration.
+- **[Qwen3.5-397B](../../../guides/models/qwen3-5-397b/README.md)** *(optimized for agentic workloads)*: `Qwen3.5-397B-A17B-FP8` on TPU 7x with Torch TPU — prefix-aware routing and host-DRAM KV offloading, with a TPU Sync P/D-disaggregated configuration.
 
 ## Agentic Workloads
 
@@ -39,7 +39,7 @@ Agentic clients and coding harnesses that speak the OpenAI Responses API (statef
 tool loops) can sit on top of any of these vLLM deployments, as
 [Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md) (Experimental) describes.
 
-Nemotron 3 Ultra and Qwen3-Coder-480B are benchmarked with
+Nemotron 3 Ultra and Qwen3.5-397B are benchmarked with
 [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) through
 [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark); GLM-5.2 replays production agentic
 traces with [`aiperf`](https://github.com/ai-dynamo/aiperf). Workloads and metrics differ by

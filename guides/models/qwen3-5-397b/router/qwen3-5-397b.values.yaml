@@ -17,7 +17,6 @@ router:
         - type: approx-prefix-cache-producer
           parameters:
             maxPrefixTokensToMatch: 262144
-            # WORKAROUND: autoTune is disabled and the LRU is sized manually.
             # autoTune derives lruCapacityPerServer from on-device (HBM) blocks
             # only (num_gpu_blocks) and ignores the KV-cache offload tier. With
             # offloading enabled this under-counts cached prefixes.
@@ -26,8 +25,9 @@ router:
             # upstream — tracked by the llm-d-router offload-aware-LRU issue.
             # https://github.com/llm-d/llm-d-router/issues/1650
             autoTune: false
-            lruCapacityPerServer: 1570000
-            blockSizeTokens: 256
+            lruCapacityPerServer: 262000
+            # Engine --block-size on TPU7x (same as the P/D prefill).
+            blockSizeTokens: 768
         - type: prefix-cache-affinity-filter
           parameters:
             peakPrefillThroughput: 16444

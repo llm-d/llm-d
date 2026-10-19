@@ -13,17 +13,33 @@ spec:
           args:
             - "Qwen/Qwen3-32B"
             - "--port=$(POD_PORT)"
-            - "--max-model-len=4096"
             - "--tensor-parallel-size=8"
-            - "--block-size=64"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=16384"
+            - "--enable-prefix-caching"
+            - "--block-size=256"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--kv-events-config"
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
+          env:
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
           resources:
             limits:
-              google.com/tpu: "8"
+              google.com/tpu: 8
             requests:
-              google.com/tpu: "8"
+              google.com/tpu: 8

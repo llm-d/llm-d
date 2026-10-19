@@ -1,4 +1,4 @@
-name: qwen3-coder-480b
+name: qwen3-5-397b
 
 # Which model server runs on which accelerator. `validated` = covered by a
 # nightly E2E workflow; `community` = an overlay exists but is not run nightly;
@@ -11,16 +11,18 @@ support:
   accelerators:
     tpu:
       label: Google TPU v7x
-      notes: "GKE only · 8 replicas × 4 chips (`tpu7x` `2x2x1`, TP=8) with CPU KV offloading · `TOPOLOGY=disaggregated` (experimental): 2 prefill + 6 decode"
-      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      notes: >-
+        GKE only · Torch TPU vLLM · `unified`: 2 replicas × 4 chips (`tpu7x` `2x2x1`, DP=8 × TP=1, EP, 262k context, host KV offload) ·
+        `TOPOLOGY=disaggregated`: a DisaggregatedSet with 1 prefill (PCP=8) + 1 decode (DP=8), TPU Sync P/D transfer and prefill host KV offload; scale to xPyD by raising the role replicas
+      model: Qwen/Qwen3.5-397B-A17B-FP8
       engines: {vllm: community}
 
 env:
   static:
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
-    GUIDE_NAME: qwen3-coder-480b
-    NAMESPACE: llm-d-qwen3-coder-480b
+    GUIDE_NAME: qwen3-5-397b
+    NAMESPACE: llm-d-qwen3-5-397b
 
     # Prometheus monitoring is opt-in: set MONITORING=true (requires the
     # monitoring stack) to run the deploy.monitoring* steps.
@@ -29,10 +31,10 @@ env:
 
     ACCELERATOR_TYPE: {default: tpu, values: [tpu]}
     MODEL_SERVER: {default: vllm, values: [vllm]}
-    # unified: one serving pool (default); disaggregated: experimental P/D
+    # unified: one serving pool with host KV offload (default); disaggregated: TPU Sync P/D DisaggregatedSet with prefill host KV offload
     TOPOLOGY: {default: unified, values: [unified, disaggregated]}
 
-    MODEL: {default: "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8", comment: "the model both topologies serve"}
+    MODEL: {default: "Qwen/Qwen3.5-397B-A17B-FP8", comment: "the model both topologies serve"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
