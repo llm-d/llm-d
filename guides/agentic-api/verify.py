@@ -15,6 +15,7 @@ import http.server
 import json
 import os
 import socket
+import ssl
 import struct
 import sys
 import threading
@@ -355,6 +356,9 @@ def verify_websocket_responses(base_url: str, model: str) -> None:
 
     sock = socket.create_connection((host, port), timeout=120)
     try:
+        if parsed.scheme == "https":
+            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=host)
+        ws_scheme = "wss" if parsed.scheme == "https" else "ws"
         ws_key = base64.b64encode(os.urandom(16)).decode("ascii")
         handshake = (
             f"GET /v1/responses HTTP/1.1\r\n"
@@ -373,11 +377,11 @@ def verify_websocket_responses(base_url: str, model: str) -> None:
             resp_header += chunk
         status_line = resp_header.split(b"\r\n", 1)[0].decode("ascii", errors="replace")
         assert "101" in status_line, (
-            f"WebSocket upgrade to ws://{host}:{port}/v1/responses failed with '{status_line}' "
+            f"WebSocket upgrade to {ws_scheme}://{host}:{port}/v1/responses failed with '{status_line}' "
             f"(pass --skip-websocket if your proxy/Gateway does not support WebSocket upgrades)"
         )
 
-        print(f"  OK  Connected to ws://{host}:{port}/v1/responses ({status_line})")
+        print(f"  OK  Connected to {ws_scheme}://{host}:{port}/v1/responses ({status_line})")
         frame1 = {
             "type": "response.create",
             "stream_id": "ws-verify-1",
