@@ -50,11 +50,13 @@ spec:
               cpu: "16"
               google.com/tpu: 4
           volumeMounts:
-            - mountPath: /.cache
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /root/.cache
               name: torch-compile-cache
-            - mountPath: /.triton
+            - mountPath: /root/.triton
               name: triton-cache
-            - mountPath: /.config
+            - mountPath: /root/.config
               name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
@@ -70,6 +72,10 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
       volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
         - name: torch-compile-cache
           emptyDir: {}
         - name: triton-cache

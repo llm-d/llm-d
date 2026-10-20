@@ -29,3 +29,11 @@ spec:
               google.com/tpu: "4"
             limits:
               google.com/tpu: "4"
+      volumes:
+        # Back /root/.cache (including /root/.cache/huggingface) with tmpfs from
+        # host RAM (~448 GiB on ct5p-hightpu-4t, ~190 GiB used by CPU KV chunks)
+        # so ~65.5 GB Qwen/Qwen3-32B downloads do not exhaust 100 GB boot disks.
+        - name: torch-compile-cache
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Gi

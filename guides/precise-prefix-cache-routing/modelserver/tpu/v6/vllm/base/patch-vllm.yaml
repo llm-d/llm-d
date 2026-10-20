@@ -27,3 +27,11 @@ spec:
               google.com/tpu: "8"
             requests:
               google.com/tpu: "8"
+      volumes:
+        # Back /root/.cache (including /root/.cache/huggingface) with tmpfs from
+        # host RAM (~376 GiB on ct6e-standard-8t) so ~65.5 GB Qwen/Qwen3-32B
+        # downloads do not exhaust 100 GB GKE TPU node boot disks.
+        - name: torch-compile-cache
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Gi
