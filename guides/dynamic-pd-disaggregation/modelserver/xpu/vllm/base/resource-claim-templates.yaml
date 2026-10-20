@@ -1,0 +1,25 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: dynamic-pd-prefill-xpu
+spec:
+  spec:
+    devices:
+      requests:
+        - name: xpu
+          exactly:
+            deviceClassName: gpu.intel.com
+            count: 1
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: dynamic-pd-decode-xpu
+spec:
+  spec:
+    devices:
+      requests:
+        - name: xpu
+          exactly:
+            deviceClassName: gpu.intel.com
+            count: 1
