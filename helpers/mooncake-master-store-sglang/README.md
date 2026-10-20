@@ -17,7 +17,8 @@ differs in two ways that can't be expressed as an overlay on it:
   kustomize overlay can override a base's `namespace:` value but cannot remove
   the transformation, so an unpinned result needs its own base.
 - **It pins a mooncake version matched to the SGLang image** (see below), where
-  the shared helper uses `ghcr.io/llm-d/mooncake-master-store:v0.8.0`.
+  the shared helper uses `ghcr.io/llm-d/mooncake-master-store:v0.8.0`, whose tag
+  is unrelated to any mooncake release.
 
 The tradeoff is an isolated cache and a separate DRAM/PVC footprint per
 namespace, instead of one pool shared across tenants.
@@ -38,17 +39,13 @@ the master goes to your current context's namespace.
 ## Keeping the master and client versions matched
 
 The master and the mooncake client inside the model server speak a versioned
-protocol, so the two must be built from the same mooncake release. SGLang's
-own `docker/Dockerfile` decides the client version:
+protocol, so both must come from the same mooncake release. SGLang's own
+`docker/Dockerfile` decides the client version, and Mooncake publishes an
+official image for each release, so the master image tag simply follows it:
 
 | SGLang image tag | mooncake client it installs | master image to use |
 |---|---|---|
-| `v0.5.16` | `0.3.11.post1` | `ghcr.io/amit-berman/mooncake-master:0.3.11.post1` |
-| `v0.5.19` | `0.3.13` | needs rebuilding — see below |
-
-The tag on the shared helper's image (`v0.8.0`) is an image version unrelated
-to any mooncake release, which is why this path builds its own from
-[Dockerfile](./Dockerfile) instead.
+| `v0.5.22` | `0.3.13.post1` | `docker.io/kvcacheai/mooncake:0.3.13.post1` |
 
 To re-pin after changing the SGLang tag in
 [guides/recipes/modelserver/components/images/gpu-sglang/release/kustomization.yaml](../../guides/recipes/modelserver/components/images/gpu-sglang/release/kustomization.yaml),
@@ -58,25 +55,27 @@ read the new `MOONCAKE_VERSION` out of SGLang's Dockerfile at that tag:
 curl -fsSL https://raw.githubusercontent.com/sgl-project/sglang/<tag>/docker/Dockerfile | grep MOONCAKE_VERSION
 ```
 
-then rebuild and update `image:` in [base/deployment.yaml](./base/deployment.yaml):
-
-```bash
-docker build --build-arg MOONCAKE_VERSION=<version> \
-  -t <your-registry>/mooncake-master:<version> \
-  ${REPO_ROOT}/helpers/mooncake-master-store-sglang/
-```
-
-The Dockerfile installs the `-non-cuda` wheel because the master is
-metadata-only and needs no GPU; SGLang installs the CUDA build of the same
-release for the client side.
+then set `image:` in [base/deployment.yaml](./base/deployment.yaml) to
+`kvcacheai/mooncake:<that version>`. Use the exact version, including any
+`.postN` suffix: `0.3.13` and `0.3.13.post1` are different releases.
 
 ## Cluster-specific settings to review
 
-Two things in [base/deployment.yaml](./base/deployment.yaml) are specific to
-the cluster this was developed on and likely need adjusting elsewhere:
+- `nodeSelector: scale=true` in [base/deployment.yaml](./base/deployment.yaml)
+  pins the master to nodes running the Spectrum Scale CSI driver, which
+  provisions the snapshots PVC on the cluster this was developed on. Change or
+  remove it if your snapshot volume uses a different storage class.
 
-- `nodeSelector: scale=true` — pins the master to nodes running the Spectrum
-  Scale CSI driver, which provisions the snapshots PVC. Change or remove it if
-  your snapshot volume uses a different storage class.
-- `securityContext.runAsUser: 0` — required by the image as built. Drop it if
-  you rebuild the image to run unprivileged.
+## Snapshots and file ownership
+
+The image runs as a non-root user (uid 65532, or a namespace-assigned uid on
+OpenShift), and the master writes snapshots under `/data/snapshots` on the PVC
+every `snapshot_interval_seconds`. If the PVC already holds directories created
+by a master that ran as root, the new master cannot write into them and logs
+`Permission denied` on every snapshot, while RPC keeps working. Start from a
+fresh PVC in that case. To confirm snapshots succeed, check that the master's
+periodic metrics line reports `Snapshots: Success=<n>, Fail=0`:
+
+```bash
+kubectl logs deploy/mooncake-master-store -n ${NAMESPACE} | grep -o 'Snapshots: [^}]*' | tail -1
+```

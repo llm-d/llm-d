@@ -4,7 +4,6 @@ kind: Kustomization
 # namespace, alongside the model servers that use it, so placement comes from
 # `kubectl apply -n ${NAMESPACE}`. See ../README.md.
 resources:
-  - serviceaccount.yaml
   - configmap.yaml
   - pvc.yaml
   - deployment.yaml

@@ -6,12 +6,16 @@ metadata:
 spec:
   resourceName: ${SRIOV_RESOURCE_NAME}
   networkNamespace: ${NAMESPACE}
-  # A /24 (or smaller) slice that nothing else on the fabric is already handing
-  # out -- see the "picking SRIOV_IPAM_RANGE" note in ./README.md.
+  # range is the fabric's whole subnet, shared with the other networks on it, so
+  # they all allocate from one whereabouts pool and can't hand out the same IP.
+  # range_start/range_end pick this network's slice of it -- see "Picking the
+  # IP range" in ./README.md.
   ipam: |
     {
       "type": "whereabouts",
-      "range": "${SRIOV_IPAM_RANGE}"
+      "range": "${SRIOV_IPAM_RANGE}",
+      "range_start": "${SRIOV_IPAM_RANGE_START}",
+      "range_end": "${SRIOV_IPAM_RANGE_END}"
     }
   # No "rdma" metaPlugin: it requires the node's RDMA subsystem in netns
   # "exclusive" mode, but a cluster running "shared" mode (required by

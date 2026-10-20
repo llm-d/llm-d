@@ -6,13 +6,14 @@ spec:
   template:
     metadata:
       annotations:
-        # Dedicated SR-IOV VF on the p1 RDMA pool, one per pod -- avoids the
-        # rdma/roce_gdr shared-pool ambiguity (that resource grants verbs access
-        # to any of p0-p15/q0/q1 on the node, not a specific device) and the
-        # macvlan fan-out's node-local-vs-cross-node GID guessing.
+        # One dedicated RDMA-capable SR-IOV VF per pod, attached as net1 from the
+        # ${RDMA_NETWORK} NetworkAttachmentDefinition. A PCI-backed VF lets
+        # render_config.py find exactly one matching RDMA device, unlike a
+        # shared RDMA device pool (verbs access to every HCA on the node) or a
+        # macvlan interface (no PCI function to match).
         k8s.v1.cni.cncf.io/networks: |
           [
-            {"name":"${NAMESPACE}-rdma","namespace":"${NAMESPACE}","interface":"net1"}
+            {"name":"${RDMA_NETWORK}","interface":"net1"}
           ]
     spec:
       containers:
@@ -30,7 +31,7 @@ spec:
             - "--model-path=Qwen/Qwen3-32B"
             - "--host=0.0.0.0"
             - "--port=8000"
-            - "--tensor-parallel-size=1"
+            - "--tensor-parallel-size=2"
             # KV-block granularity. Must match the router scorer's
             # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
             # --page-size, where vLLM uses --block-size.
@@ -46,6 +47,9 @@ spec:
             - "100"
             - "--hicache-storage-backend"
             - "mooncake"
+            - "--disable-custom-all-reduce"
+            - "--hicache-storage-prefetch-policy"
+            - "wait_complete"
           env:
             - name: SGLANG_HICACHE_MOONCAKE_CONFIG_PATH
               value: /etc/mooncake/mooncake_config.json
@@ -61,10 +65,8 @@ spec:
             # Read straight from env by Mooncake's C++ lib (storage_backend.cpp), not the JSON.
             - name: MOONCAKE_OFFLOAD_STORAGE_BACKEND_DESCRIPTOR
               value: bucket_storage_backend
-            # Left unset, sizes itself from the mount's statvfs (whole node disk for an
-            # emptyDir) and overruns the volume before Mooncake ever evicts.
             - name: MOONCAKE_OFFLOAD_BUCKET_MAX_TOTAL_SIZE
-              value: "429496729600" # 400Gi, matching the mooncake-offload volume
+              value: "204010946560" # 190Gi per TP rank; 2 ranks share the 400Gi sizeLimit
             # Anything other than "fifo"/"lru" falls through to no eviction at all.
             - name: MOONCAKE_OFFLOAD_BUCKET_EVICTION_POLICY
               value: "lru"
@@ -73,12 +75,12 @@ spec:
               nvidia.com/gpu: "2"
               cpu: "16"
               memory: 400Gi
-              openshift.io/${SRIOV_RESOURCE_NAME}: "1"
+              ${RDMA_VF_RESOURCE}: "1"
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
               memory: 200Gi
-              openshift.io/${SRIOV_RESOURCE_NAME}: "1"
+              ${RDMA_VF_RESOURCE}: "1"
           volumeMounts:
             - mountPath: /scripts
               name: mooncake-render-script

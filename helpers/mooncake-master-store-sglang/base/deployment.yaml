@@ -13,9 +13,6 @@ spec:
         prometheus.io/port: "9003"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: mooncake-master-store
-      securityContext:
-        runAsUser: 0
       # The snapshots PVC is provisioned by the Spectrum Scale CSI driver, which only runs
       # on nodes labelled scale=true (the same selector its own DaemonSet uses). Without
       # this, the Recreate strategy can place the master on a node lacking the driver, where
@@ -23,11 +20,10 @@ spec:
       #   AttachVolume.Attach failed ... CSINode <node> does not contain driver
       #   spectrumscale.csi.ibm.com
       # Adjust or remove this if the snapshot volume uses a different storage class.
-      nodeSelector:
-        scale: "true"
+
       containers:
         - name: mooncake-master-store
-          image: ghcr.io/amit-berman/mooncake-master:0.3.11.post1
+          image: kvcacheai/mooncake:0.3.13.post1
           command: ["mooncake_master"]
           args:
             - "--config_path=/etc/mooncake/master.yaml"

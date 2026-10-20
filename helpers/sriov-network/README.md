@@ -45,94 +45,87 @@ export NAMESPACE=your-namespace
 export SRIOV_RESOURCE_NAME=p1_sriov_nodepolicy   # RESOURCE_NAME column above
 ```
 
-## Picking `SRIOV_IPAM_RANGE`
+## Picking the IP range
 
-The range you choose has to satisfy two separate constraints:
+Each pod's VF needs an IP address on the RoCE fabric. You set three values:
 
-1. **It must sit inside the subnet the fabric actually routes.** Pod VFs are
-   only reachable within the VLAN/subnet block the network owner set aside for
-   them. A range picked outside that block will allocate addresses fine and
-   then fail to carry traffic.
-2. **It must not overlap another whereabouts pool.** Two pools with
-   overlapping ranges hand the same IP to different pods. Nothing rejects this
-   at apply time; it surfaces later as flaky or refused RDMA connections.
+| Variable | Meaning | Example |
+|---|---|---|
+| `SRIOV_IPAM_RANGE` | The fabric's whole subnet | `172.24.0.0/16` |
+| `SRIOV_IPAM_RANGE_START` | First address this network may hand out | `172.24.0.1` |
+| `SRIOV_IPAM_RANGE_END` | Last address this network may hand out | `172.24.0.255` |
 
-Confirm the reserved block with your cluster/network owner if you can. Failing
-that, two commands are needed, because neither one sees everything.
+Why the subnet and a start/end, instead of just a small CIDR: whereabouts
+(the IPAM plugin) keeps one pool per `range` value, named after it. Networks
+with the same `range` share that pool, so whereabouts never gives the same IP
+to two pods, even when their start/end slices overlap. A network with a
+different `range`, even one inside the same subnet, gets a separate pool that
+can't see the others' allocations, and duplicate IPs only show up later as
+flaky or refused RDMA connections.
 
-First, the existing `SriovNetwork` resources — this is the only place the VLAN
-is visible, and it includes ranges that are reserved but not yet in use:
+### Find the fabric's subnet and the slice for your NIC
+
+Confirm with your cluster or network owner if you can. Otherwise, list the
+existing `SriovNetwork` resources:
 
 ```bash
 oc get sriovnetwork -A \
-  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.vlan}{"\t"}{.spec.ipam}{"\n"}{end}'
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.resourceName}{"\t"}{.spec.ipam}{"\n"}{end}'
 ```
 
-Example output:
+Example output (trimmed):
 
 ```
-compute-p1v0            {
-  "type": "whereabouts",
-  "range": "172.24.0.0/16",
-  "range_start": "172.24.0.1",
-  "range_end": "172.24.0.255"
-}
+compute-p1v0   p1_sriov_nodepolicy   { "type": "whereabouts", "range": "172.24.0.0/16",
+                                       "range_start": "172.24.0.1", "range_end": "172.24.0.255" }
+compute-p2v0   p2_sriov_nodepolicy   { "type": "whereabouts", "range": "172.24.0.0/16",
+                                       "range_start": "172.24.1.1", "range_end": "172.24.1.255" }
 ```
 
-Read `range_start`/`range_end` before assuming `range` is all taken. When
-present they narrow allocation to a sub-block, and that sub-block is the only
-part actually consumed — above, a `/16` is declared but only `172.24.0.0/24` is
-ever handed out, leaving the rest of `172.24.0.0/16` available.
+Read it as:
 
-Second, the whereabouts pools. This matters because whereabouts is a generic
-IPAM plugin: any `NetworkAttachmentDefinition` can use it, not just ones the
-SR-IOV operator generates. Ranges consumed by macvlan/ipvlan/multi-nic
-attachments are therefore **invisible** to the listing above, while showing up
-here. Each pool is named after the CIDR it serves:
+- `range` is the fabric's subnet. Use the same value for `SRIOV_IPAM_RANGE`.
+- Each NIC (`p1`, `p2`, ...) has its own slice, given by `range_start` and
+  `range_end`. Use the slice of the network whose `resourceName` matches your
+  `SRIOV_RESOURCE_NAME`. With per-NIC routing, a VF on `p1` is only reachable
+  with an address from `p1`'s slice, so don't take another NIC's slice.
+
+Sharing that slice with the existing network is safe, because both use the
+same `range` and therefore the same pool.
+
+### Check what is already allocated
+
+Whereabouts pools are listed with:
 
 ```bash
 oc get ippools.whereabouts.cni.cncf.io -A
 ```
 
-Example output:
+Each pool is named after its `range`, so `172.24.0.0/16` appears as
+`172.24.0.0-16`. Pools also include ranges used by non-SR-IOV attachments
+(macvlan, ipvlan, multi-nic), which the `SriovNetwork` listing doesn't show.
+Never pick a `range` that overlaps one of these unless it is exactly the same
+value.
 
-```
-NAMESPACE          NAME                AGE
-openshift-multus   172.24.0.0-16       24d
-openshift-multus   172.24.1.0-24       5h7m
-openshift-multus   p1-172.23.0.0-16    240d
-```
-
-A range appearing here with no matching `SriovNetwork` is the normal case, not
-an anomaly — it usually belongs to some other attachment type sharing the
-cluster. It is still a collision if you pick into it.
-
-Pools are also created lazily: whereabouts writes one only once a pod first
-requests an address from that range, and deleting a `SriovNetwork` does not
-remove the pool it fed. So this list can both miss a range that is reserved but
-idle, and retain one no longer referenced by anything.
-
-To see which pods hold addresses in a specific pool:
+To see which pods hold addresses in a pool:
 
 ```bash
-oc get ippools.whereabouts.cni.cncf.io 172.24.1.0-24 -n openshift-multus -o yaml
+oc get ippools.whereabouts.cni.cncf.io 172.24.0.0-16 -n openshift-multus -o yaml
 ```
 
-`spec.allocations` maps each allocated IP to the pod holding it, and is the only
-ownership signal a pool carries — there is no back-reference to the
-`SriovNetwork` that fed it. **An empty `allocations` means the range is free, even
-though the pool object itself lingers.**
-
-
-With the reserved block and the claimed ranges known, pick a `/24` (or smaller)
-from inside the block that no existing pool covers.
+`spec.allocations` maps each allocated address to the pod holding it.
 
 ## Usage
 
 ```bash
-export SRIOV_IPAM_RANGE=  # your unused /24 inside the RoCE subnet
+export SRIOV_IPAM_RANGE=172.24.0.0/16
+export SRIOV_IPAM_RANGE_START=172.24.0.1
+export SRIOV_IPAM_RANGE_END=172.24.0.255
+: "${NAMESPACE:?}" "${SRIOV_RESOURCE_NAME:?}" "${SRIOV_IPAM_RANGE:?}" \
+  "${SRIOV_IPAM_RANGE_START:?}" "${SRIOV_IPAM_RANGE_END:?}"
 
-envsubst < ${REPO_ROOT}/helpers/sriov-network/sriovnetwork.yaml | kubectl apply -f -
+envsubst '${NAMESPACE} ${SRIOV_RESOURCE_NAME} ${SRIOV_IPAM_RANGE} ${SRIOV_IPAM_RANGE_START} ${SRIOV_IPAM_RANGE_END}' \
+  < ${REPO_ROOT}/helpers/sriov-network/sriovnetwork.yaml | kubectl apply -f -
 ```
 
 Confirm the operator rendered the attachment definition into your namespace:
@@ -143,3 +136,14 @@ oc get net-attach-def ${NAMESPACE}-rdma -n ${NAMESPACE}
 
 If that returns `NotFound`, the `SriovNetwork` was created but not reconciled —
 usually `SRIOV_RESOURCE_NAME` not matching any policy's `spec.resourceName`.
+
+## Consuming the network
+
+Pods attach it through a Multus annotation and request one VF from the pool
+by its full resource name, which carries the operator's `openshift.io/`
+prefix. Guides that use this helper take both as variables:
+
+```bash
+export RDMA_NETWORK=${NAMESPACE}-rdma
+export RDMA_VF_RESOURCE=openshift.io/${SRIOV_RESOURCE_NAME}
+```

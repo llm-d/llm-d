@@ -275,23 +275,62 @@ version matched to the SGLang image; see its README before changing either.
 kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store-sglang/monitoring/ -n ${NAMESPACE}
 ```
 
-Then follow [helpers/sriov-network/README.md](../../helpers/sriov-network/README.md) to create
-the namespaced RDMA network `${NAMESPACE}-rdma` — it covers the
-`SriovNetworkNodePolicy` prerequisite, picking `SRIOV_RESOURCE_NAME` and
-`SRIOV_IPAM_RANGE` for your cluster, and how a pod ends up consuming the VF it
-creates.
+Each decode pod also needs its own RDMA-backed SR-IOV VF. The model server
+is configured through two variables, so it works with whichever method your
+cluster uses to provide them:
+
+- `RDMA_NETWORK` - the NetworkAttachmentDefinition in `${NAMESPACE}` that the
+  pod attaches as `net1`. Defaults to `${NAMESPACE}-rdma`.
+- `RDMA_VF_RESOURCE` - the full extended-resource name that hands the pod one
+  VF together with its `/dev/infiniband` devices, e.g.
+  `openshift.io/p1_sriov_nodepolicy`. No default.
+
+**Option: the SR-IOV network helper (OpenShift).** Follow
+[helpers/sriov-network/README.md](../../helpers/sriov-network/README.md) to
+create `${NAMESPACE}-rdma`. It covers the `SriovNetworkNodePolicy`
+prerequisite, picking `SRIOV_RESOURCE_NAME` and the IP range for your
+cluster, and how a pod ends up consuming the VF it creates. Then:
+
+```bash
+export RDMA_VF_RESOURCE=openshift.io/${SRIOV_RESOURCE_NAME}
+```
+
+**Other options.** Any setup that provides a NetworkAttachmentDefinition and a
+VF resource works, for example the upstream SR-IOV Network Operator, the
+NVIDIA Network Operator, or the SR-IOV device plugin with a hand-written
+NetworkAttachmentDefinition. The attached interface must be a PCI-backed VF,
+not macvlan or ipvlan, because each pod finds its RDMA device by the VF's PCI
+address. Set the variables to match your setup:
+
+```bash
+export RDMA_NETWORK=your-rdma-network       # name of your NetworkAttachmentDefinition
+export RDMA_VF_RESOURCE=nvidia.com/sriov_rdma   # resource your device plugin advertises
+```
 
 **Deploy the model server:**
 
-The Deployment's Multus annotation and SR-IOV resource request are also
-namespace-templated, so this variant needs its kustomize output piped through
-`envsubst` before applying (every other path here can go straight through
-`kubectl apply -k`):
+The Deployment's Multus annotation and VF resource request are templated, so
+this variant needs its kustomize output piped through `envsubst` before
+applying (every other path here can go straight through `kubectl apply -k`).
+`envsubst` turns an unset variable into an empty string, so check them first:
 
 ```bash
+export RDMA_NETWORK="${RDMA_NETWORK:-${NAMESPACE}-rdma}"
+: "${NAMESPACE:?must be set}" \
+  "${RDMA_VF_RESOURCE:?must be set, e.g. openshift.io/p1_sriov_nodepolicy}"
+
 kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/mooncake-store | \
-  envsubst | kubectl apply -n ${NAMESPACE} -f -
+  envsubst '${RDMA_NETWORK} ${RDMA_VF_RESOURCE}' | \
+  kubectl apply -n ${NAMESPACE} -f -
 ```
+
+**Sizing host RAM:** with this SGLang version, `--hicache-size` is the L2 host
+cache size in GB **per TP rank**, not per pod. With `--tensor-parallel-size=2`,
+the default `--hicache-size 100` allocates about 200 GB of host RAM per pod
+(762,944 tokens for Qwen3-32B), plus a few GB for Mooncake's
+`global_segment_size` and `local_buffer_size`. Keep the total within the pod's
+`memory` limit (400Gi here). To check the allocated L2 size on a running pod,
+read `sglang:hicache_host_total_tokens` from its `/metrics` endpoint.
 
 Each pod matches its attached VF to the right RDMA device itself at startup —
 `configmap-render-config.yaml` walks the PCI address the VF's netdev sits on
