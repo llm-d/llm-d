@@ -1565,7 +1565,7 @@
     {
       "type": "timeseries",
       "title": "Scrape Up",
-      "description": "Whether Prometheus can scrape each EPP replica hosting the index.",
+      "description": "Whether Prometheus can scrape each EPP replica hosting the index. A replica stays listed for an hour after it stops exporting KV-cache metrics, so a failing scrape shows as 0 instead of disappearing.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1617,7 +1617,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max by (pod) (up{namespace=~\"$namespace\", pod=~\"$pod\"} and on (namespace, pod) llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"})",
+          "expr": "max by (pod) (up{namespace=~\"$namespace\", pod=~\"$pod\"} and on (namespace, pod) max_over_time(llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]))",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
@@ -1751,7 +1751,7 @@
     {
       "type": "timeseries",
       "title": "EPP Restarts",
-      "description": "Container restarts of EPP replicas over the last hour (requires kube-state-metrics). A restart empties the in-memory index.",
+      "description": "Container restarts of EPP replicas over the last hour (requires kube-state-metrics). A restart empties the in-memory index. Crash-looping replicas stay listed for an hour after they stop exporting KV-cache metrics.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1803,7 +1803,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]) and on (namespace, pod) llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"})",
+          "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]) and on (namespace, pod) max_over_time(llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]))",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
