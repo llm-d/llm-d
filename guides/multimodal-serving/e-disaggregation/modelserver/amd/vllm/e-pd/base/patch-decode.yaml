@@ -1,0 +1,101 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: decode
+      spec:
+        replicas: 8
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              initContainers:
+                - name: routing-proxy
+                  imagePullPolicy: Always
+                  args:
+                    - --port=8000
+                    - --kv-connector=nixlv2
+                    - --ec-connector=ec-nixl
+                    - --zap-log-level=1
+                    - --secure-serving=false
+                  ports:
+                    - containerPort: 8000
+                      name: sidecar
+                      protocol: TCP
+                  resources: {}
+                  restartPolicy: Always
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+              containers:
+                - name: modelserver
+                  command: ["vllm", "serve"]
+                  imagePullPolicy: Always
+                  args:
+                    - "Qwen/Qwen3-VL-32B-Instruct"
+                    - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+                    - "--tensor-parallel-size=2"
+                    - "--mm-processor-cache-gb"
+                    - "20"
+                    - "--port=8200"
+                    - "--ec-transfer-config"
+                    # 1 GiB holds about 26,000 encoder tokens for Qwen3-VL-32B (40,960 bytes each).
+                    # Keep it at or below ~2 GiB: the ionic NIC driver fails to register more for RDMA.
+                    # It must also fit in /dev/shm.
+                    - '{"ec_connector": "ECCPUConnector", "ec_role": "ec_consumer", "ec_connector_extra_config": {"ec_enable_nixl": true, "ec_cpu_bytes": 1073741824}}'
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                  ports:
+                    - name: modelserver
+                      containerPort: 8200
+                      protocol: TCP
+                    - name: nixl
+                      containerPort: 5600
+                      protocol: TCP
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "2"
+                    requests:
+                      cpu: "8"
+                      memory: 128Gi
+                      amd.com/gpu: "2"
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                    - mountPath: /.triton
+                      name: triton-cache
+                    - mountPath: /.config
+                      name: config-cache
+                  startupProbe:
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 120
+                  livenessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                    failureThreshold: 3
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 20Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
+                - name: triton-cache
+                  emptyDir: {}
+                - name: config-cache
+                  emptyDir: {}

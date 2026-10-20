@@ -1,0 +1,54 @@
+## AMD overlay for aggregation.values.yaml: layer it after that file.
+## Identical to it except peakPrefillThroughput. Helm cannot override one field inside the
+## pluginsCustomConfig text block, so the block is repeated: keep it in sync.
+
+router:
+  epp:
+    pluginsCustomConfig:
+      aggregation-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        # See aggregation.values.yaml for what each plugin and value does.
+        plugins:
+        - type: token-producer
+          parameters:
+            estimate:
+              image:
+                mode: dynamic
+                defaultResolution:
+                  width: 1280
+                  height: 720
+                dynamic:
+                  # Qwen3-VL: one visual token per 32x32-pixel region (patch 16 x merge 2).
+                  factor: 1024
+              video:
+                defaultResolution:
+                  width: 1280
+                  height: 720
+                defaultDuration: 10
+                maxVideoTokens: 12288
+                tokensPerFrame:
+                  mode: dynamic
+                  dynamic:
+                    factor: 1024
+                frames:
+                  mode: sampled
+                  maxFrames: 768
+                  minFrames: 4
+                  sampled:
+                    sampleFPS: 2
+                    temporalPatchSize: 2
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # MI355X, TP=2: see guides/recipes/router/calibration/configuration-matrix.md.
+            peakPrefillThroughput: 12767
+            affinityThreshold: 0.6
+            maxTTFTPenaltyMs: 36000
+        - type: token-load-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
