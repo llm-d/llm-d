@@ -33,9 +33,12 @@ spec:
             limits:
               google.com/tpu: "4"
       volumes:
-        # Back /root/.cache (including /root/.cache/huggingface) with tmpfs from
-        # host RAM (~448 GiB on ct5p-hightpu-4t, ~190 GiB used by CPU KV chunks)
-        # so ~65.5 GB Qwen/Qwen3-32B downloads do not exhaust 100 GB boot disks.
+        # TODO(https://github.com/llm-d/llm-d/issues/2884): Temporary workaround
+        # until the tpu-v5p-spot node pool boot disk on llm-d-e2e-us-east5 is
+        # resized from 100 GB to >= 250 GB. Back /root/.cache (including
+        # /root/.cache/huggingface) with tmpfs from host RAM (~448 GiB on
+        # ct5p-hightpu-4t, ~190 GiB used by CPU KV chunks) so ~65.5 GB
+        # Qwen/Qwen3-32B downloads do not trigger ephemeral-storage eviction.
         - name: torch-compile-cache
           emptyDir:
             medium: Memory
