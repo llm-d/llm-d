@@ -145,6 +145,8 @@ This guide layers on the base [asynchronous-processing](../README.md) guide — 
 [optimized-baseline](../../../optimized-baseline/README.md) guide they cover the client tools, the cluster,
 the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh), then add the following.
 
+- **jq.** Cleanup uses `jq` to inspect API discovery without requiring access to cluster-scoped CRDs.
+
 - **llm-d router with Flow Control.** This guide uses llm-d Router configured with **Flow Control**
   enabled rather than the standard baseline router. Flow Control assigns incoming requests to priority bands
   based on the `InferenceObjective` CRD referenced by each request.
@@ -904,9 +906,12 @@ kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/objectives
 kubectl delete -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/redis
 # --ignore-not-found does not handle an unregistered monitoring API.
-MONITORING_RESOURCES=$(kubectl api-resources --api-group=monitoring.coreos.com -o name)
-if grep -qx 'podmonitors.monitoring.coreos.com' <<< "${MONITORING_RESOURCES}"; then
-  kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
+MONITORING_API_VERSIONS=$(kubectl get --raw /apis | jq -r '.groups[].versions[].groupVersion')
+if grep -qx 'monitoring.coreos.com/v1' <<< "${MONITORING_API_VERSIONS}"; then
+  MONITORING_RESOURCES=$(kubectl get --raw /apis/monitoring.coreos.com/v1 | jq -r '.resources[].name')
+  if grep -qx 'podmonitors' <<< "${MONITORING_RESOURCES}"; then
+    kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
+  fi
 fi
 ```
 <!-- guide:cleanup[0] end -->
@@ -919,9 +924,12 @@ fi
 ```bash
 # only when QUEUE_BACKEND=pubsub:
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml --ignore-not-found
-GMP_RESOURCES=$(kubectl api-resources --api-group=monitoring.googleapis.com -o name)
-if grep -qx 'podmonitorings.monitoring.googleapis.com' <<< "${GMP_RESOURCES}"; then
-  kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-podmonitoring.yaml --ignore-not-found
+GMP_API_VERSIONS=$(kubectl get --raw /apis | jq -r '.groups[].versions[].groupVersion')
+if grep -qx 'monitoring.googleapis.com/v1' <<< "${GMP_API_VERSIONS}"; then
+  GMP_RESOURCES=$(kubectl get --raw /apis/monitoring.googleapis.com/v1 | jq -r '.resources[].name')
+  if grep -qx 'podmonitorings' <<< "${GMP_RESOURCES}"; then
+    kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-podmonitoring.yaml --ignore-not-found
+  fi
 fi
 gcloud monitoring dashboards list --project ${PROJECT_ID} --filter='displayName:"Async Processor"' \
   --format='value(name)' | xargs -r -n1 gcloud monitoring dashboards delete --project ${PROJECT_ID} --quiet

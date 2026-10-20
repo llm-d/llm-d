@@ -1,4 +1,4 @@
-"""Contract tests for the async-multitenant GKE nightly deploy helper.
+"""Contract tests for the async-multitenant GKE nightly deploy helper and cleanup.
 
 The script is run against fake kubectl/helm binaries that only log their argv
 (``kubectl kustomize`` is passed to the real kubectl), so the tests check which
@@ -9,6 +9,7 @@ manifest, the model server, looks like. yq (mikefarah v4) must be real.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import stat
@@ -223,3 +224,115 @@ def test_ci_applies_the_overlay_guide_yaml_applies() -> None:
     script = SCRIPT.read_text()
     assert 'kubectl kustomize "${GUIDE_DIR}/modelserver/gpu/vllm/${INFRA_PROVIDER}"' in script
     assert "deploy.modelserver" not in script.split("emit env deploy.router")[1]  # not emitted twice
+
+
+@pytest.mark.parametrize(
+    "step,crd,manifest",
+    [
+        (0, "podmonitors.monitoring.coreos.com", "manifests/monitoring"),
+        (1, "podmonitorings.monitoring.googleapis.com", "manifests/gmp-podmonitoring.yaml"),
+    ],
+)
+@pytest.mark.parametrize(
+    "api_state,error",
+    [
+        ("present", None),
+        ("missing_group", None),
+        ("missing_version", None),
+        ("missing_resource", None),
+        ("missing_object", None),
+        ("root_forbidden", "root_forbidden"),
+        ("forbidden", "forbidden"),
+        ("unreachable", "unreachable"),
+        ("invalid_json", "parse error"),
+        ("delete_forbidden", "delete_forbidden"),
+    ],
+)
+def test_cleanup_checks_optional_monitoring_apis(
+    tmp_path: Path, step: int, crd: str, manifest: str, api_state: str, error: str | None
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    _write_executable(fake_bin / "kubectl", """#!/usr/bin/env bash
+echo "kubectl $*" >> "${FAKE_CALLS}"
+case "${1:-} ${2:-}" in
+  "api-resources "*)
+    echo "unrelated API discovery failed" >&2
+    exit 1 ;;
+  "get crd")
+    echo "CRD reads forbidden" >&2
+    exit 1 ;;
+  "get --raw")
+    if [[ "$3" == "/apis" ]]; then
+      if [[ "${FAKE_API_STATE}" == "root_forbidden" ]]; then
+        echo "${FAKE_API_STATE}" >&2
+        exit 1
+      fi
+      echo "${FAKE_API_GROUPS}"
+    elif [[ "$3" == "${FAKE_API_PATH}" ]]; then
+      case "${FAKE_API_STATE}" in
+        forbidden|unreachable) echo "${FAKE_API_STATE}" >&2; exit 1 ;;
+        invalid_json) echo "invalid JSON" ;;
+        *) echo "${FAKE_API_RESOURCES}" ;;
+      esac
+    else
+      echo "unexpected discovery request: $3" >&2
+      exit 1
+    fi ;;
+esac
+if [[ "${1:-}" == "delete" && " $* " == *" ${FAKE_MONITORING_MANIFEST} "* ]]; then
+  case "${FAKE_API_STATE}" in
+    delete_forbidden) echo "${FAKE_API_STATE}" >&2; exit 1 ;;
+    missing_object) [[ " $* " == *" --ignore-not-found "* ]] || exit 1 ;;
+  esac
+fi
+exit 0
+""")
+    _write_executable(fake_bin / "helm", FAKE_HELM)
+    _write_executable(fake_bin / "gcloud", "#!/usr/bin/env bash\nexit 0\n")
+    teardown = tmp_path / "scripts/gcp-teardown.sh"
+    teardown.parent.mkdir()
+    _write_executable(teardown, "#!/usr/bin/env bash\nexit 0\n")
+    calls_file = tmp_path / "calls.log"
+    resource, group = crd.split(".", 1)
+    api_version = f"{group}/v1"
+    versions = [{"groupVersion": f"{group}/v1beta1" if api_state == "missing_version" else api_version}]
+    groups = [] if api_state == "missing_group" else [{"name": group, "versions": versions}]
+    groups.append({"name": "metrics.k8s.io", "versions": [{"groupVersion": "metrics.k8s.io/v1beta1"}]})
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "FAKE_CALLS": str(calls_file),
+        "FAKE_API_STATE": api_state,
+        "FAKE_API_PATH": f"/apis/{api_version}",
+        "FAKE_API_GROUPS": json.dumps({"groups": groups}),
+        "FAKE_API_RESOURCES": json.dumps({
+            "resources": [] if api_state == "missing_resource" else [{"name": resource}],
+        }),
+        "FAKE_MONITORING_MANIFEST": str(tmp_path / manifest),
+        "NAMESPACE": NS,
+        "MT": str(tmp_path),
+        "POOL_NAME": "llm-d-router",
+        "INFRA_PROVIDER": "base",
+        "PROJECT_ID": "test-project",
+    }
+    cleanup = yaml.safe_load((GUIDE / "guide.yaml").read_text())["cleanup"][step]["run"]
+    result = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", cleanup],
+        env=env, text=True, capture_output=True, check=False,
+    )
+    calls = calls_file.read_text().splitlines()
+    deleted = any(c.startswith("kubectl delete ") and f" {tmp_path / manifest} " in c for c in calls)
+    assert deleted == (api_state in ("present", "missing_object", "delete_forbidden"))
+    if error is None:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode != 0
+        assert error in result.stderr
+    assert "kubectl get --raw /apis" in calls
+    assert not any(c.startswith(("kubectl get crd ", "kubectl api-resources ")) for c in calls)
+    assert (f"kubectl get --raw /apis/{api_version}" in calls) == (
+        api_state not in ("missing_group", "missing_version", "root_forbidden")
+    )
+    if step == 1:
+        assert f"kubectl delete -n {NS} -f {tmp_path}/manifests/gmp-frontend.yaml --ignore-not-found" in calls
