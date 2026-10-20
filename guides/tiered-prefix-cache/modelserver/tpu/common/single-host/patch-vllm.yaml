@@ -62,6 +62,8 @@ spec:
           volumeMounts:
             - mountPath: /dev/shm
               name: dshm
+            - mountPath: /root/.cache
+              name: torch-compile-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -79,3 +81,5 @@ spec:
         - name: dshm
           emptyDir:
             medium: Memory
+        - name: torch-compile-cache
+          emptyDir: {}
