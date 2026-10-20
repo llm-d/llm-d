@@ -104,7 +104,7 @@ WVA is designed for operators running multiple variants of the same model across
 
 Autoscaling is a closed loop, so the useful view is not a single metric but the **composed signal** across the model servers, the autoscaler, and the resulting pool. Watch the loop end to end: a demand signal rises, the autoscaler raises a replica target, new replicas become ready, and the demand signal comes back down. When scaling misbehaves, the break is almost always at one of those handoffs.
 
-Full definitions for the model-server and EPP signals live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and [PromQL reference](../../docs/operations/observability/promql.md); WVA's own metrics are defined in the [WVA Prometheus reference](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/developer-guide/prometheus.md).
+Full definitions for the model-server and EPP signals live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and [PromQL reference](../../docs/operations/observability/promql.md); WVA's own metrics are defined in the [WVA Prometheus reference](https://github.com/llm-d/llm-d-autoscaling/blob/main/legacy/docs/developer-guide/prometheus.md).
 
 ### Key metrics for this path
 
