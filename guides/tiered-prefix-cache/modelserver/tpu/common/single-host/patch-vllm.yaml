@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 3
+  # TPU node pools are fixed-size: a RollingUpdate needs a spare 8-chip node to
+  # surge onto, so the rollout deadlocks with the new pod Pending.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        llm-d.ai/inference-serving: "true"
+    spec:
+      initContainers:
+        - name: tpu-node-setup
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # WARNING: This changes the HOST memory settings, not just the container.
+              # Required to prevent vLLM crashes due to memory mapping limits.
+              sysctl -w vm.max_map_count=33554432
+
+              # Check if the VFIO IOMMU module parameter exists, and if so, increase the
+              # limit on DMA mappings. This allows the TPU driver to pin and map a
+              # larger number of memory pages for direct hardware access.
+              if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+                echo 8000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+                echo "Successfully increased dma_entry_limit to 8000000"
+              else
+                echo "Warning: vfio_iommu_type1 module parameter not found. Ensure the module is loaded."
+              fi
+
+              echo "Final vm.max_map_count: $(cat /proc/sys/vm.max_map_count)"
+          securityContext:
+            privileged: true
+      containers:
+        - name: modelserver
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
+                --port 8000 \
+                --tensor-parallel-size 8 \
+                --shutdown-timeout=45
+          env:
+            # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          # vLLM's TP worker ring buffer (ShmRingBuffer) and the Torch TPU host
+          # KV pool both live in /dev/shm; the container default (64 MiB) is
+          # too small and the engine core fails at startup.
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /root/.cache
+              name: torch-compile-cache
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+        - name: torch-compile-cache
+          emptyDir: {}

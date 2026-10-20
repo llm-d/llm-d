@@ -18,6 +18,9 @@ set -Eeuo pipefail
 # - VAR_NAME: description of what this var is for
 # - ANOTHER_VAR: another description
 # - THIRD_VAR: yet another description
+#
+# Optional environment variables:
+# - OPTIONAL_VAR: description; must have a shell default (e.g. `${OPTIONAL_VAR:-...}`)
 ```
 
 ## Rules
@@ -26,7 +29,15 @@ set -Eeuo pipefail
 2. Each variable must be listed on its own line with the pattern:
    `# - VAR_NAME: description`
 3. Variable names must be uppercase with underscores (e.g., `CUDA_MAJOR`, `VIRTUAL_ENV`)
-4. The block ends at the first non-comment line
+4. The `Required` block ends at the first non-comment line, or at an
+   `# Optional environment variables:` heading — whichever comes first.
+   Vars listed under `Optional` still satisfy `lint-envvars.py` (a script
+   using an optional var still counts it as declared), but they are **not**
+   required to be present as `ARG`/`ENV` in the invoking Dockerfile —
+   `lint-dockerfile-envvars.py` stops collecting once it sees the `Optional`
+   heading. Use `Optional` for anything the script gives a shell default to,
+   or that's intentionally set outside the Dockerfile (e.g. inline on the
+   `RUN` line, or by the calling environment rather than the image).
 5. All environment variables referenced in the script (via `${VAR}` or `$VAR`)
    must be declared
 
@@ -44,15 +55,11 @@ The linter runs automatically via pre-commit hooks. You can also run it manually
 
 ```bash
 # single script
-./scripts/lint-envvars.py docker/scripts/cuda/builder/build-nvshmem.sh
+./scripts/lint-envvars.py docker/scripts/common/build-uccl.sh
 
 # multiple scripts
 ./scripts/lint-envvars.py docker/scripts/**/*.sh
 ```
-
-## Example
-
-See `docker/scripts/cuda/builder/build-compiled-wheels.sh` for a complete example.
 
 ## Dockerfile Validation
 
@@ -70,11 +77,11 @@ declare all environment variables required by scripts they execute.
 
 ```bash
 # check specific dockerfile
-./scripts/lint-dockerfile-envvars.py docker/Dockerfile.cuda docker/scripts
+./scripts/lint-dockerfile-envvars.py docker/scripts docker/Dockerfile.cuda
 
 # check all dockerfiles
 for df in docker/Dockerfile.*; do
-  ./scripts/lint-dockerfile-envvars.py "$df" docker/scripts
+  ./scripts/lint-dockerfile-envvars.py docker/scripts "$df"
 done
 ```
 

@@ -8,6 +8,7 @@ Aggregates produced by llm-d-benchmark's process_metrics.py _compute_stats:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -93,6 +94,9 @@ def find_results_dirs(workspace: str, namespace: str) -> list[Path] | None:
     All experiments belonging to the winning run are returned (a single
     `llmdbenchmark run` invocation can produce multiple `<exp>/` subdirs).
     """
+    if not isinstance(workspace, str) or not workspace.strip():
+        error("LLMDBENCH_WORKSPACE is empty; refusing to search the current directory")
+        return None
     ws = Path(workspace)
     matches: list[Path] = []
     for meta in ws.rglob("run_metadata.yaml"):
@@ -121,12 +125,19 @@ def get_vllm_version(namespace: str, pod: str) -> tuple[int, ...] | None:
     ).strip()
     if not out:
         return None
+    segments = out.split(".")
     parts: list[int] = []
-    for seg in out.split("."):
+    for seg in segments:
         m = re.match(r"\d+", seg)
         if not m:
             break
         parts.append(int(m.group()))
+    # PEP 440 permits omitting a trailing zero, e.g. ``0.24rc1``.  Keep the
+    # tuple shape stable for callers that compare it with ``(major, minor,
+    # patch)``.  A dotted pre-release such as ``0.24.dev0`` deliberately keeps
+    # its two-part tuple so it remains below the corresponding final release.
+    if len(parts) == 2 and len(segments) == 2:
+        parts.append(0)
     return tuple(parts) if parts else None
 
 # ---------------------------------------------------------------------------
@@ -171,10 +182,42 @@ class MetricsSummary:
             except json.JSONDecodeError as e:
                 error(f"{path} is not valid JSON: {e}")
                 return None
+
+        if not isinstance(raw, dict):
+            error(f"{path} must contain a JSON object")
+            return None
+
         info = raw.get("_info", {})
+        if not isinstance(info, dict):
+            error(f"{path} has an invalid _info object")
+            return None
         if info.get("status") == "no_data":
             error(f"metrics_summary.json has no data: {info.get('message')}")
             return None
+
+        aggregated = raw.get("_aggregated", {})
+        if not isinstance(aggregated, dict):
+            error(f"{path} has an invalid _aggregated object")
+            return None
+        metrics = aggregated.get("metrics", {})
+        if not isinstance(metrics, dict):
+            error(f"{path} has an invalid _aggregated.metrics object")
+            return None
+        if any(not isinstance(stats, dict) for stats in metrics.values()):
+            error(f"{path} has invalid metric statistics in _aggregated.metrics")
+            return None
+
+        for pod, data in raw.items():
+            if pod.startswith("_") or not isinstance(data, dict):
+                continue
+            pod_metrics = data.get("metrics", {})
+            if not isinstance(pod_metrics, dict):
+                error(f"{path} has invalid metrics for pod {pod!r}")
+                return None
+            if any(not isinstance(stats, dict) for stats in pod_metrics.values()):
+                error(f"{path} has invalid metric statistics for pod {pod!r}")
+                return None
+
         return cls(raw)
 
     @property
@@ -184,6 +227,15 @@ class MetricsSummary:
     @property
     def metric_count(self) -> int:
         return len(self.aggregated)
+
+    @staticmethod
+    def _coerce_metric_value(value: object) -> float | None:
+        """Return a finite metric value, or None for malformed data."""
+        try:
+            value = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return value if math.isfinite(value) else None
 
     # -- Check factories ----------------------------------------------------
 
@@ -205,7 +257,10 @@ class MetricsSummary:
         if actual is None:
             return Check(f"{metric}.{aggregate}", False,
                          detail=f"aggregate '{aggregate}' missing in data.")
-        actual = float(actual)
+        actual = self._coerce_metric_value(actual)
+        if actual is None:
+            return Check(f"{metric}.{aggregate}", False,
+                         detail=f"aggregate '{aggregate}' is not numeric")
         passed = OPS[op](actual, float(bound))
         return Check(
             name=f"{metric}.{aggregate}",
@@ -248,7 +303,11 @@ class MetricsSummary:
             v = stats.get(aggregate)
             if v is None:
                 continue
-            values.append(float(v))
+            value = self._coerce_metric_value(v)
+            if value is None:
+                return Check(name, False,
+                             detail=f"aggregate '{aggregate}' is not numeric")
+            values.append(value)
 
         if not values:
             return Check(name, False,

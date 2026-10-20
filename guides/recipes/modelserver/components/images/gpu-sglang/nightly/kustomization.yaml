@@ -4,3 +4,26 @@ images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: docker.io/lmsysorg/sglang
     newTag: dev
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: LeaderWorkerSet
+    patch: |-
+      - op: add
+        path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+        value: Always
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/imagePullPolicy
+        value: Always

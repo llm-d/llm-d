@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# DeepSeek-V4 monitoring overlay.
+#
+# This is an overlay of the generic recipes/modelserver/components/monitoring-pd
+# component, which defines the decode and prefill PodMonitors on the
+# "modelserver" port. Each DeepSeek-V4 pod exposes one API port per role (the
+# prefill API servers share 8000 behind --data-parallel-hybrid-lb, decode serves
+# vLLM on 8200), so the component's port is the right one. The patch below only
+# tightens the scrape interval to 5s, and the labels transformer scopes the
+# PodMonitors to this guide's pods.
+components:
+  - ../../../recipes/modelserver/components/monitoring-pd
+
+labels:
+  - pairs:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/model: DeepSeek-V4-Pro
+    includeSelectors: true
+    fields:
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
+
+patches:
+  - target:
+      group: monitoring.coreos.com
+      version: v1
+      kind: PodMonitor
+    patch: |-
+      - op: replace
+        path: /spec/podMetricsEndpoints
+        value:
+          - port: modelserver
+            path: /metrics
+            interval: 5s

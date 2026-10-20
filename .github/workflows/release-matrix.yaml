@@ -1,13 +1,28 @@
 name: Update Release Testing Matrix
 
-# Captures a frozen snapshot of the guide testing badges whenever a version tag
-# is pushed (including pre-releases like v0.9.0-rc1) and opens a PR against main
-# updating the "Release Testing" matrix in release/README.md.
+# Renders one release's section of the "Release Testing" matrix in
+# release/README.md and opens a PR against main.
+#
+# Each cell is a live shields endpoint pointing at
+# badges/<badge_name>_<release branch>.json, which the e2e lanes write when
+# dispatched by release-e2e.yaml. Run this *after* those lanes have produced
+# badges: rendering earlier points the cells at files that do not exist yet.
+#
+# Because the badges are live, re-running a single lane updates the matrix on its
+# own — re-render only when the tag changes (e.g. an RC becoming the final tag).
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag the section is captioned with, e.g. "v0.9.0" or "v0.9.0-rc.1"'
+        required: true
+        type: string
+      release_branch:
+        description: 'Release branch / series (default: derived from the version, e.g. release-0.9)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -15,18 +30,9 @@ permissions:
 
 jobs:
   update-release-matrix:
+    if: github.repository == 'llm-d/llm-d'
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve tag and release branch
-        id: tag
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          # v0.8.1 -> release-0.8 ; v0.9.0-rc1 -> release-0.9 (informational)
-          BASE="${TAG#v}"
-          MAJOR_MINOR="$(echo "$BASE" | cut -d. -f1-2)"
-          echo "branch=release-${MAJOR_MINOR}" >> "$GITHUB_OUTPUT"
-
       - name: Checkout main
         uses: actions/checkout@v7
         with:
@@ -39,71 +45,57 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Snapshot current badge status
+      - name: Render the release matrix section
+        id: render
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          import re
-          import urllib.request
-          from pathlib import Path
 
-          wf_dir = Path(".github/workflows")
-          statuses = {}
-          for path in sorted(wf_dir.glob("nightly-e2e-*.yaml")):
-              match = re.search(r"badge_name:\s*(\S+)", path.read_text(encoding="utf-8"))
-              if not match:
-                  continue
-              name = match.group(1)
-              url = f"https://llm-d.github.io/llm-d/badges/{name}.json"
-              try:
-                  with urllib.request.urlopen(url, timeout=20) as resp:
-                      data = json.load(resp)
-                  statuses[name] = {
-                      "message": data.get("message", "unknown"),
-                      "color": data.get("color", "lightgrey"),
-                  }
-              except Exception as exc:  # noqa: BLE001 - best-effort snapshot
-                  print(f"warn: could not read badge '{name}': {exc}")
+          args=(--fix --version "$VERSION")
+          if [[ -n "$RELEASE_BRANCH" ]]; then
+            args+=(--branch "$RELEASE_BRANCH")
+          fi
+          python scripts/sync-release-matrix.py "${args[@]}"
 
-          Path("release-status.json").write_text(json.dumps(statuses, indent=2), encoding="utf-8")
-          print(f"Captured {len(statuses)} badge status(es)")
-          PY
-
-      - name: Regenerate release matrix
-        run: |
-          python scripts/sync-release-matrix.py --fix \
-            --version "${{ steps.tag.outputs.tag }}" \
-            --status-file release-status.json
+          # Derived here too, for the PR branch name and body.
+          series="${RELEASE_BRANCH:-release-$(echo "${VERSION#v}" | cut -d. -f1-2)}"
+          echo "series=$series" >> "$GITHUB_OUTPUT"
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v8
         with:
-          branch: release-matrix/${{ steps.tag.outputs.tag }}
+          branch: release-matrix/${{ inputs.version }}
           base: main
           add-paths: release/README.md
           delete-branch: true
-          commit-message: "docs(release): update release testing matrix for ${{ steps.tag.outputs.tag }}"
-          title: "docs(release): snapshot release testing matrix for ${{ steps.tag.outputs.tag }}"
+          commit-message: "docs(release): update release testing matrix for ${{ inputs.version }}"
+          title: "docs(release): release testing matrix for ${{ inputs.version }}"
           body: |
-            Automated snapshot of the guide testing badges captured when tag
-            `${{ steps.tag.outputs.tag }}` was pushed.
+            Renders the `${{ steps.render.outputs.series }}` section of the
+            **Release Testing** matrix in `release/README.md`, captioned
+            `${{ inputs.version }}`.
 
-            - Release branch: `${{ steps.tag.outputs.branch }}`
-            - Updates the **Release Testing** matrix in `release/README.md`.
+            The cells are live badges reading
+            `badges/<badge_name>_${{ steps.render.outputs.series }}.json`, written by
+            the e2e lanes dispatched from `release-e2e.yaml` against
+            `${{ steps.render.outputs.series }}`. Re-running a lane updates the matrix
+            without re-rendering; a cell showing an error badge means that lane has
+            not published a badge for this release yet.
 
             > [!IMPORTANT]
             > This commit was written by CI, so it carries no DCO sign-off and no
             > signature. A human has to take ownership of it before it can merge:
             >
             > ```bash
-            > gh pr checkout release-matrix/${{ steps.tag.outputs.tag }}
+            > gh pr checkout release-matrix/${{ inputs.version }}
             > git commit --amend --reset-author -s -S --no-edit
             > git push --force-with-lease
             > ```
             >
             > `--reset-author` makes you the author, `-s` adds the `Signed-off-by`
             > trailer the DCO check requires, and `-S` signs the commit so GitHub
-            > marks it verified. Nothing else about the snapshot changes.
+            > marks it verified. Nothing else about the section changes.
 
             Generated by `.github/workflows/release-matrix.yaml`.

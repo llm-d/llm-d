@@ -29,7 +29,7 @@ BASELINE_NAMESPACE="${BASELINE_NAMESPACE:-llm-d-optimized-baseline}"
 BASELINE_GUIDE="${BASELINE_GUIDE:-optimized-baseline}"
 
 MODEL="${MODEL:-facebook/opt-125m}"        # tiny, ungated, CPU-friendly
-ASYNC_VERSION="${ASYNC_VERSION:-v0.9.0}"     # chart + image are public under ghcr.io/llm-d (latest llm-d-async release)
+ASYNC_VERSION="${ASYNC_VERSION:-v1.0.0}"     # chart + image are public under ghcr.io/llm-d (latest llm-d-async release)
 
 BASELINE_TIMEOUT="${BASELINE_TIMEOUT:-1800}"  # seconds to wait for vLLM ready
 ASYNC_POLL_TRIES="${ASYNC_POLL_TRIES:-120}"   # smoke-test result polls
@@ -65,6 +65,26 @@ fi
 log()  { printf '\033[1;34m[%s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*"; }
 ok()   { printf '\033[1;32m[ OK ]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[FAIL]\033[0m %s\n' "$*" >&2; }
+
+# Dump everything needed to diagnose a failure post-mortem from CI logs: pod
+# list, recent events, and per-pod describe + current and previous-crash logs.
+# The namespaces here hold only a handful of pods, so dump all of them.
+dump_debug() {
+  local ns="$1"
+  log "---- debug dump: namespace ${ns} ----"
+  kubectl get pods -n "${ns}" -o wide || true
+  kubectl get events -n "${ns}" --sort-by=.lastTimestamp 2>/dev/null | tail -n 40 || true
+  local pod
+  for pod in $(kubectl get pods -n "${ns}" -o name); do
+    log "describe ${pod}"
+    kubectl describe -n "${ns}" "${pod}" | tail -n 40 || true
+    log "logs ${pod} (current)"
+    kubectl logs -n "${ns}" "${pod}" --all-containers --tail=100 2>/dev/null || true
+    log "logs ${pod} (previous crash)"
+    kubectl logs -n "${ns}" "${pod}" --all-containers --previous --tail=100 2>/dev/null || true
+  done
+  log "---- end debug dump: namespace ${ns} ----"
+}
 
 cleanup() {
   local rc=$?
@@ -171,7 +191,7 @@ log "Waiting up to ${BASELINE_TIMEOUT}s for the baseline stack to become ready"
 if ! kubectl wait --for=condition=available --timeout="${BASELINE_TIMEOUT}s" \
       deployment --all -n "${BASELINE_NAMESPACE}"; then
   fail "Baseline stack did not become ready"
-  kubectl get pods -n "${BASELINE_NAMESPACE}"
+  dump_debug "${BASELINE_NAMESPACE}"
   exit 1
 fi
 ok "Baseline stack ready"
@@ -196,16 +216,20 @@ IP="$(kubectl get service "${BASELINE_GUIDE}-epp" -n "${BASELINE_NAMESPACE}" -o 
 log "llm-d Router (EPP) endpoint: http://${IP}:80"
 
 log "Deploying Async Processor (${ASYNC_VERSION}, redis backend)"
+# Set the per-queue URL exactly as the guide's README does. With ap.transport
+# set, the chart does not fold the global ap.igwBaseURL into the transport
+# config, so setting that instead leaves the queue pointed at the values file's
+# REPLACE_WITH_IGW_HOST placeholder and every dispatch fails on DNS.
 helm install llm-d-async \
   oci://ghcr.io/llm-d/charts/llm-d-async \
   -f "${REPO_ROOT}/guides/batch-serving/asynchronous-processing/redis/values.yaml" \
-  --set ap.igwBaseURL="http://${IP}:80" \
+  --set "ap.transportConfig.queues[0].igw_base_url=http://${IP}:80" \
   -n "${NAMESPACE}" --create-namespace --version "${ASYNC_VERSION}"
 
 if ! kubectl wait --for=condition=available --timeout=300s \
       deployment --all -n "${NAMESPACE}"; then
   fail "Async Processor did not become ready"
-  kubectl get pods -n "${NAMESPACE}"
+  dump_debug "${NAMESPACE}"
   exit 1
 fi
 ok "Async Processor ready"
@@ -222,14 +246,29 @@ kubectl run async-publish --rm -i --restart=Never --image=redis -- \
   "{\"request_kind\":\"redis\",\"data\":{\"id\":\"smoketest\",\"deadline\":1999999999,\"payload\":{\"model\":\"${MODEL}\",\"prompt\":\"Hi, good morning \"}}}"
 
 log "Polling result-list (${ASYNC_POLL_TRIES} x ${ASYNC_POLL_INTERVAL}s)"
-if kubectl run async-smoketest --rm -i --restart=Never --image=redis -- \
-    bash -c "for i in \$(seq 1 ${ASYNC_POLL_TRIES}); do R=\$(redis-cli -h ${REDIS_HOST} RPOP result-list); if [ -n \"\$R\" ]; then echo \"RESULT: \$R\"; exit 0; fi; sleep ${ASYNC_POLL_INTERVAL}; done; echo 'TIMEOUT: no async result'; exit 1"; then
-  ok "Smoke test PASSED — async result returned"
-else
-  fail "Smoke test FAILED — no result on result-list"
-  log "Async Processor logs (tail):"
-  kubectl logs -n "${NAMESPACE}" deployment/llm-d-async --tail=50 2>/dev/null || true
+# The processor writes dispatch *failures* to result-list too (status_code 0
+# plus error_code), so a non-empty pop only proves the processor consumed the
+# message. Capture the payload and require a real model response.
+RESULT="$(kubectl run async-smoketest --rm -i --restart=Never --image=redis -- \
+    bash -c "for i in \$(seq 1 ${ASYNC_POLL_TRIES}); do R=\$(redis-cli -h ${REDIS_HOST} RPOP result-list); if [ -n \"\$R\" ]; then echo \"RESULT: \$R\"; exit 0; fi; sleep ${ASYNC_POLL_INTERVAL}; done; echo 'TIMEOUT: no async result'; exit 1")" || true   # keep the TIMEOUT line for the log; checked below
+printf '%s\n' "${RESULT}"
+
+smoke_failed() {
+  fail "$1"
+  # A smoke-test failure can also be the backing stack's fault (EPP or model
+  # server), so dump both namespaces.
+  dump_debug "${NAMESPACE}"
+  dump_debug "${BASELINE_NAMESPACE}"
   exit 1
+}
+
+if ! grep -q '^RESULT: ' <<<"${RESULT}"; then
+  smoke_failed "Smoke test FAILED — no result on result-list"
+fi
+if grep -q '"status_code":200' <<<"${RESULT}" && ! grep -q '"error_code"' <<<"${RESULT}"; then
+  ok "Smoke test PASSED — async result returned with status_code 200"
+else
+  smoke_failed "Smoke test FAILED — result-list holds an error payload, not a model response"
 fi
 
 ok "End-to-end install from zero succeeded."

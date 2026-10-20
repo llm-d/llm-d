@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Node-local HuggingFace cache on GKE: mount the node's /var/cache/huggingface into the
+# model server and point HF_HOME at it, so weights download once per node and survive pod
+# restarts and re-creations. Without it the download lands in the container's writable
+# layer: it is lost on every restart, and a model larger than the free boot disk (for
+# example Qwen3.5-397B-A17B-FP8, ~406 GB) fills the disk and the pod is evicted for
+# ephemeral storage. Size the boot disk for the model plus headroom (see the guide's
+# GKE TPU node requirements). This is the same cache the GKE GPU P/D overlays use.
+#
+# Deployments only: a strategic-merge patch keyed on the shared bases' `modelserver`
+# container, so it applies whether or not the base already has env/volumeMounts.
+# LeaderWorkerSet overlays carry the same volume inline in their own patch (kustomize has
+# no merge schema for LWS, so a component patch would replace the overlay's lists).
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: any
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                env:
+                  - name: HF_HOME
+                    value: /root/.cache/huggingface
+                volumeMounts:
+                  - name: huggingface-cache
+                    mountPath: /root/.cache/huggingface
+            volumes:
+              - name: huggingface-cache
+                hostPath:
+                  path: /var/cache/huggingface
+                  type: DirectoryOrCreate

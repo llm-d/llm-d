@@ -219,7 +219,7 @@ EPP plugins run within the gateway-api-inference-extension process but are provi
 **Implementation Notes:**
 
 * All three spans form a parent-child relationship during pod scoring
-* Spans are only created when precise-prefix-cache-scorer plugin is enabled and invoked
+* Spans are only created when the prefix-cache-scorer plugin is enabled and invoked
 * Block hit ratio calculation: `blocks_found / block_keys_count` measures cache effectiveness at the block level
 
 #### **P/D Proxy (llm-d-inference-scheduler/pkg/sidecar)**

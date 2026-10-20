@@ -1,10 +1,23 @@
 # Autoscaling Workloads with HPA and WVA Metrics
 
 > [!WARNING]
-> The VariantAutoscaling CRD has been deprecated in llm-d 0.8.0 in favor of
-HPA with the `wva_desired_replicas` external metric. This guide covers the new recommended approach using HPA + WVA Metric. The VariantAutoscaling CRD will be removed in 0.9.0.
+> **The Workload Variant Autoscaler (WVA) is deprecated.** WVA is no longer
+> developed and receives no further releases. `v0.9.0` is the final version, and
+> the manifests in this guide are pinned to it — the controller overlays track
+> the upstream `release-0.9` branch and pin the controller image to
+> `ghcr.io/llm-d/llm-d-workload-variant-autoscaler:v0.9.0`. This guide is kept
+> for existing deployments only; it will not gain new features.
+>
+> New deployments should use a KEDA + EPP path instead — see the
+> [KEDA + EPP Metrics guide](../keda-epp/README.md) and its saturation signal
+> overlay, the closest replacement for WVA's saturation signal, or the other
+> paths in the [autoscaling overview](../README.md#paths).
+>
+> The VariantAutoscaling CRD was already deprecated in llm-d 0.8.0 in favor of
+> an HPA driven by the `wva_desired_replicas` external metric, which is the
+> approach this guide covers.
 
-The [Workload Variant Autoscaler](https://github.com/llm-d/workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
+The [Workload Variant Autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) (WVA) provides dynamic autoscaling capabilities for llm-d inference deployments, automatically adjusting replica counts based on inference server saturation.
 
 ## Overview
 
@@ -26,7 +39,7 @@ Before installing WVA, ensure you have:
     > WVA requires HTTPS connections to Prometheus for metric collection. When installing the [monitoring stack](../../../docs/operations/observability/setup.md), ensure to enable HTTPS/TLS support.
 
     > [!NOTE]
-    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#3-optional-enable-monitoring).
+    > Make sure to enable monitoring as described in the [optimized-baseline well-lit path guide](../../optimized-baseline/README.md#2-deploy-the-model-server).
 
 1. [KEDA](https://keda.sh/) installed in your cluster as the external metrics provider. HPA relies on the external metric exposed by WVA, `wva_desired_replicas`, to make scaling decisions. See [Using KEDA with WVA (Recommended)](#using-keda-with-wva-recommended) for setup instructions.
 
@@ -88,7 +101,7 @@ kubectl create secret generic prometheus-tls-cert \
 ```
 <!-- guide:deploy.prometheus_ca end -->
 
-1. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
+3. Install the WVA controller. Point the overlay at `${WVA_NAMESPACE}` and set the
    controller's `--watch-namespace` to match (this edits
    `wva/controller/platform/${PLATFORM}/kustomization.yaml` and
    `wva/controller/base/controller-deployment-patch.yaml`; revert both with
@@ -126,7 +139,7 @@ This guide configures the controller deployment with `replicas: 2` and leader el
 
 ## Enabling Saturation Engine V2 (Recommended)
 
-Saturation engine v2 will be the default in the next release (0.9.0), but for now it must be enabled manually. The v1 saturation engine will be deprecated in 0.9.0 and removed in 0.10.0.
+In WVA `v0.9.0`, the v2 token-based saturation engine can be enabled in the controller ConfigMap.
 
 > [!CAUTION]
 > Enabling the v2 saturation engine may change the output of the scaling decisions (i.e. `wva_desired_replicas`) for *all* deployments. This may cause a temporary burst of scaling activity.
@@ -176,6 +189,8 @@ The manifests follow the same `${PLATFORM}` split as the WVA install above:
 
 - [`keda/base`](optimized-baseline/keda/base/wva-scaledobject.yaml) — the ScaledObject, targeting an unauthenticated in-cluster Prometheus.
 - [`keda/ocp`](optimized-baseline/keda/ocp/kustomization.yaml) — points the trigger at Thanos Querier and bearer-authenticates with the WVA ServiceAccount token.
+
+The ScaledObject in `keda/base` is named and labelled for the NVIDIA model server. On AMD, layer the [`keda/components/amd`](optimized-baseline/keda/components/amd/kustomization.yaml) component onto your overlay to retarget it at the ROCm model server and MI355X.
 
 Before applying, update `serverAddress` and the `namespace` in the trigger query to match your cluster.
 
@@ -265,6 +280,7 @@ kubectl delete -k ${CONSUMPTION_ROOT}/keda/${PLATFORM} -n ${NAMESPACE} --ignore-
 
 (cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
 kubectl delete -k ${CONTROLLER_ROOT}/platform/${PLATFORM} --ignore-not-found=true
+kubectl delete secret prometheus-tls-cert -n ${WVA_NAMESPACE} --ignore-not-found=true
 ```
 <!-- guide:cleanup end -->
 
@@ -347,7 +363,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Avg Queue Depth | Mean pending-request queue depth at the endpoint proxy (EPP) |
 | Pod Startup | Average time for a new replica to become ready (s) |
 
-> Full per-run data and additional WVA tuning variants are in the [upstream benchmark doc](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/benchmark.md).
+> Full per-run data and additional WVA tuning variants are in the [upstream benchmark doc](https://github.com/llm-d/llm-d-autoscaling/blob/main/legacy/docs/benchmark.md).
 
 ## FAQ
 

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-config
+  # namespace is set by the installer to match the OpenCost namespace
+data:
+  metrics.json: |
+    {
+      "useLabelsWhitelist": true,
+      "labelsWhiteList": {
+        "llm_d_ai_role": true,
+        "llm_d_ai_model": true,
+        "llm_d_ai_accelerator_vendor": true,
+        "llm_d_ai_accelerator_variant": true,
+        "llm_d_ai_engine_type": true,
+        "llm_d_ai_inference_serving": true,
+        "llm_d_ai_managed": true,
+        "llm_d_ai_inference_shared": true
+      }
+    }

@@ -2,6 +2,8 @@
 
 ## Overview
 
+Organizations often need to serve multiple large language models behind a single API endpoint. A chatbot application might use a Qwen model for conversational tasks, while a recommendation system uses DeepSeek for complex reasoning. Each base model may also have multiple Low-Rank Adaptation (LoRA) fine-tuned variants serving different use cases. Traditional path-based routing cannot distinguish between these models when they share the same API path (`/v1/chat/completions`).
+
 This guide deploys the **Inference Payload Processor (IPP)** to enable serving multiple LLMs behind a single Gateway endpoint. IPP extracts the model name from the request body and sets routing headers. HTTPRoutes then match these headers to direct traffic to the appropriate InferencePool.
 
 Use this guide when you need to:
@@ -13,14 +15,40 @@ For LoRA adapter routing, see [Advanced: LoRA Adapter Routing](#advanced-lora-ad
 
 For simpler single-model deployments, see the [Optimized Baseline](../optimized-baseline/README.md) guide instead.
 
+### Architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/multi-pool-routing.svg" alt="Multi-Model Routing Architecture">
+  </picture>
+</p>
+
+The setup creates multiple `InferencePools`, each serving a different base model:
+
+* Each **InferencePool** serves one base model and its LoRA adapters.
+* **IPP** extracts the model name from the request body and maps it to the base model.
+* **HTTPRoutes** match on the `X-Gateway-Base-Model-Name` header to route to the correct pool.
+* **EPP** selects the optimal endpoint within each pool.
+
+During the standard request flow:
+
+* Request arrives at the Proxy with `{"model": "food-review-1"}` in the body
+* Proxy invokes IPP via ext-proc
+* IPP looks up `food-review-1` → base model `Qwen/Qwen3-32B`
+* IPP sets header `X-Gateway-Base-Model-Name: Qwen/Qwen3-32B`
+* Proxy matches HTTPRoute and routes to `qwen-pool`
+* EPP selects endpoint, preserving the original model name
+* Model server loads the `food-review-1` LoRA adapter
+
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 * Checkout llm-d repo:
 
   ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
+  export BRANCH="main" # branch, tag, or commit hash
+  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   ```
 
 * Set the following environment variables:
@@ -158,11 +186,10 @@ helm uninstall ipp -n ${NAMESPACE}
 
 # Clean up cloned IPP repo
 rm -rf /tmp/ipp
-
-# Remove namespace (if no longer needed)
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
+# Remove namespace (if no longer needed)
 kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -204,6 +231,5 @@ curl -X POST "http://${GATEWAY_IP}/v1/chat/completions" \
 
 ## Further Reading
 
-* [Multi-Model Routing Capability](../../docs/well-lit-paths/foundations/multi-model-routing.md) — High-level overview and architecture
-* [IPP Architecture](../../docs/architecture/advanced/inference-payload-processing/README.md) — Technical details of the Inference Payload Processor
+* [IPP Architecture](../../docs/architecture/router/ipp.md) — Technical details of the Inference Payload Processor
 * [IPP Repository](https://github.com/llm-d/llm-d-inference-payload-processor) — Source code, configuration reference, and plugin documentation

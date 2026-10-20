@@ -16,6 +16,8 @@ Options:
   --extra-validate NAME       After the smoke loop, hand off to e2e-validate-NAME.sh
                               for guide-specific validation (e.g. NAME=predicted-latency
                               runs e2e-validate-predicted-latency.sh).
+  -- ARGS...                  Everything after -- is forwarded verbatim to the
+                              --extra-validate script (e.g. -- --require-queue-size).
   -h, --help                  Show this help and exit
 EOF
   exit 0
@@ -26,6 +28,7 @@ NAMESPACE="llm-d"
 CLI_MODEL_ID=""
 VERBOSE=false
 EXTRA_VALIDATE=""
+EXTRA_ARGS=()
 
 # ── Flag parsing ────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -34,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     -m|--model)          CLI_MODEL_ID="$2"; shift 2 ;;
     -v|--verbose)        VERBOSE=true; shift ;;
     --extra-validate)    EXTRA_VALIDATE="$2"; shift 2 ;;
+    --)                  shift; EXTRA_ARGS=("$@"); break ;;
     -h|--help)           show_help ;;
     *) echo "Unknown option: $1"; show_help ;;
   esac
@@ -88,6 +92,22 @@ run_curl() {
   CURL_OUTPUT=""
   CURL_EXIT=0
   CURL_OUTPUT=$(kubectl exec -n "$NAMESPACE" "$CURL_POD_NAME" -- "$@" 2>&1) || CURL_EXIT=$?
+}
+
+# Keep HTTP failures distinct from curl/kubectl failures and malformed responses.
+# run_curl retains the response body and curl diagnostics for the CI log.
+check_completion_response() {
+  local endpoint="$1"
+  if [[ "$CURL_EXIT" -eq 22 ]]; then
+    echo "Error: POST ${endpoint} failed: gateway returned HTTP 4xx/5xx; see response body and status above." >&2
+  elif [[ "$CURL_EXIT" -ne 0 ]]; then
+    echo "Error: POST ${endpoint} failed: curl/kubectl exited ${CURL_EXIT}; see request execution diagnostics above." >&2
+  elif [[ "$CURL_OUTPUT" != *'{'* ]]; then
+    echo "Error: POST ${endpoint} failed: response contains no JSON object; see response body and status above." >&2
+  else
+    return 0
+  fi
+  return 1
 }
 
 # ── Discover Gateway address ────────────────────────────────────────────────
@@ -170,16 +190,14 @@ for i in {1..10}; do
     "model":"'"$MODEL_ID"'",
     "messages":[{"role":"user","content":"Hello!  Who are you?"}]
   }'
-  run_curl curl -sS --max-time 120 --retry 2 --retry-delay 5 \
+  run_curl curl -sS --fail-with-body --max-time 120 --retry 2 --retry-delay 5 \
+    -w '\nHTTP status: %{http_code}\n' \
     -X POST "http://${SVC_HOST}/v1/chat/completions" \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d "$chat_payload"
-  output="$CURL_OUTPUT"
-  ret="$CURL_EXIT"
-  echo "$output"
-  [[ $ret -ne 0 || "$output" != *'{'* ]] && {
-    echo "Error: POST /v1/chat/completions failed (exit $ret or no JSON)" >&2; failed=true; }
+  echo "$CURL_OUTPUT"
+  check_completion_response /v1/chat/completions || failed=true
   echo
 
   # 2) POST /v1/completions
@@ -188,16 +206,14 @@ for i in {1..10}; do
     "model":"'"$MODEL_ID"'",
     "prompt":"You are a helpful AI assistant."
   }'
-  run_curl curl -sS --max-time 120 --retry 2 --retry-delay 5 \
+  run_curl curl -sS --fail-with-body --max-time 120 --retry 2 --retry-delay 5 \
+    -w '\nHTTP status: %{http_code}\n' \
     -X POST "http://${SVC_HOST}/v1/completions" \
     -H 'accept: application/json' \
     -H 'Content-Type: application/json' \
     -d "$payload"
-  output="$CURL_OUTPUT"
-  ret="$CURL_EXIT"
-  echo "$output"
-  [[ $ret -ne 0 || "$output" != *'{'* ]] && {
-    echo "Error: POST /v1/completions failed (exit $ret or no JSON)" >&2; failed=true; }
+  echo "$CURL_OUTPUT"
+  check_completion_response /v1/completions || failed=true
   echo
 
   if $failed; then
@@ -224,5 +240,5 @@ if [[ -n "$EXTRA_VALIDATE" ]]; then
   echo "=== Running extra validation: ${EXTRA_VALIDATE} ==="
   cleanup_curl_pod
   trap - EXIT
-  exec "$EXTRA_SCRIPT" -n "$NAMESPACE" -m "$MODEL_ID"
+  exec "$EXTRA_SCRIPT" -n "$NAMESPACE" -m "$MODEL_ID" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 fi

@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+# The schema teaches kustomize the DisaggregatedSet merge keys so the
+# strategic merge patch below matches roles, containers, volumes, and env
+# entries by name instead of array index.
+openapi:
+  path: disaggregatedset-schema.json
+
+# CoreWeave-specific configuration: provider hostPath cache volumes,
+# InfiniBand HCA selection, and RDMA device limits on both roles.
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-nvidia-gpu-vllm
+      spec:
+        roles:
+          - name: prefill
+            spec: &cw-common
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: NCCL_IB_HCA
+                            value: "ibp"
+                          - name: NVSHMEM_HCA_PREFIX
+                            value: "ibp"
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+                    volumes:
+                      - name: hf-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/local/hf-cache
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/local/jit-cache
+                          type: DirectoryOrCreate
+          - name: decode
+            spec: *cw-common

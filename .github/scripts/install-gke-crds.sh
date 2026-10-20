@@ -28,4 +28,8 @@ for crd in \
   kubectl apply --server-side --validate=false -f "${GKE_NET_CRD_BASE}/${crd}"
 done
 
+# GKE Pod Snapshot CRDs (PodSnapshotPolicy, PodSnapshotStorageConfig)
+echo "Installing GKE Pod Snapshot CRDs..."
+kubectl apply --server-side --validate=false -f "$(dirname "$0")/gke-podsnapshot-crds.yaml"
+
 echo "GKE CRDs installed."

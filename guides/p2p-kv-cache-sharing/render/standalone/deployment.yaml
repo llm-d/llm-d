@@ -4,10 +4,10 @@ metadata:
   name: render
 spec:
   # The EPP token-producer tokenizes every request by calling this pool's
-  # /v1/completions/render endpoint. Long-prompt workloads (this guide uses
-  # ~48K-token documents) saturate a single render replica near ~10 req/s;
-  # size for peak stage rate (see the guide's Best Practices render bullet).
-  replicas: 6
+  # /v1/completions/render endpoint. Long-prompt workloads (~48K-token
+  # documents) saturate a single render replica near ~10 req/s; scale for
+  # peak request rate (see the guide's Best Practices render bullet).
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/component: vllm-render

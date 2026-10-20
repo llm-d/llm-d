@@ -75,3 +75,4 @@ cleanup:
   - run: |
       (cd ${CONTROLLER_ROOT}/platform/${PLATFORM} && kustomize edit set namespace ${WVA_NAMESPACE})
       kubectl delete -k ${CONTROLLER_ROOT}/platform/${PLATFORM} --ignore-not-found=true
+      kubectl delete secret prometheus-tls-cert -n ${WVA_NAMESPACE} --ignore-not-found=true

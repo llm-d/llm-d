@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+    llm-d.ai/model: Qwen3-VL-32B-Instruct
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  template:
+    metadata:
+      labels:
+        app: llm-d-coordinator
+        llm-d.ai/model: Qwen3-VL-32B-Instruct
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: coordinator
+        image: REPLACE_COORDINATOR_IMAGE
+        args:
+        - --config
+        - /etc/coordinator/coordinator.yaml
+        env:
+        - name: GOMAXPROCS
+          value: "16"
+        - name: GOMEMLIMIT
+          value: "28800MiB"
+        resources:
+          requests:
+            cpu: "8"
+            memory: 16Gi
+          limits:
+            cpu: "16"
+            memory: 32Gi
+        ports:
+        - name: http
+          containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /etc/coordinator
+      volumes:
+      - name: config
+        configMap:
+          name: llm-d-coordinator-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    app: llm-d-coordinator
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080

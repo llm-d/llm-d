@@ -17,6 +17,7 @@ One script — [`scripts/guide.py`](../../scripts/guide.py) — validates and re
 - [The marker system](#the-marker-system)
 - [Adding markers to an existing guide](#adding-markers-to-an-existing-guide)
 - [Writing steps and filters](#writing-steps-and-filters)
+- [Accelerators, model servers and llm-d.ai](#accelerators-model-servers-and-llm-dai)
 - [The script](#the-script)
 - [Schema quick reference](#schema-quick-reference)
 
@@ -207,7 +208,7 @@ The reader picks the line matching their config.
 >
 > Mutually exclusive steps flatten into a single fence, annotated with `# only when …` comments. A human reads the annotations and picks one. A runner scraping the rendered fence would execute *every* branch, which for some guides is destructive (workload-autoscaling explicitly warns against applying both its KEDA and HPA overlays).
 >
-> `guide.yaml` is the machine interface: `when:` is still structured there, so a runner resolves it against its own variable values and gets exactly one branch. The `<!-- llm-d-cicd:skip -->` markers exist for the *legacy* README-scraping path and should not be read as an endorsement of it.
+> `guide.yaml` is the machine interface: `when:` is still structured there, so a runner resolves it against its own variable values and gets exactly one branch. `guide.py emit` (see [Emitting bash for automation](#emitting-bash-for-automation)) performs that resolution. The `<!-- llm-d-cicd:skip -->` markers exist for the *legacy* README-scraping path and should not be read as an endorsement of it.
 
 ### Sensitive variables
 
@@ -299,11 +300,119 @@ Declare a value only when the guide has an overlay behind it. `values:` is what 
 
 - - -
 
+## Accelerators, model servers and llm-d.ai
+
+Guides listed in [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/guides.yaml) are published on [llm-d.ai](https://llm-d.ai) straight from their `README.md`: the website syncs the file, keeps it verbatim, and adds a "Run this guide" banner (clone at the published branch) and an accelerator/model-server selector. The README must therefore read well in both places — plain GitHub-flavoured markdown, no frontmatter, relative links. A guide opts in to the features below by declaring a support matrix; guides without one render exactly as before.
+
+### The `support:` matrix
+
+```yaml
+support:
+  engines: {vllm: vLLM, sglang: SGLang, trtllm: TensorRT-LLM}   # label per MODEL_SERVER value
+  accelerators:                                                  # one entry per ACCELERATOR_TYPE value
+    gpu:
+      label: NVIDIA GPU
+      model: Qwen/Qwen3-32B          # optional: model this overlay serves (llm-d.ai sets MODEL from it)
+      notes: "Default configuration" # optional, one line: Notes column of the support table
+      providers:                     # optional: INFRA_PROVIDER values on this accelerator (llm-d.ai provider selector)
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+        - {name: cks-mooncake, label: "CKS + Mooncake", engines: [vllm]}  # engines: subset; default = all supported here
+      engines: {vllm: validated, sglang: validated, trtllm: validated}
+    tpu/v7:
+      label: Google TPU v7
+      engines: {vllm: community}     # a missing engine means unsupported
+    hpu:
+      label: Intel Gaudi (HPU)
+      engines:
+        vllm: {status: unsupported, issue: https://github.com/llm-d/llm-d/issues/NNN}
+```
+
+Statuses: `validated` (a nightly E2E workflow runs it), `community` (an overlay exists, not run nightly), `unsupported` (must link a tracking `issue:`). `guide.py check` enforces that:
+
+- the keys match the `ACCELERATOR_TYPE` / `MODEL_SERVER` `values:`, and the default pair is supported;
+- no `when:` filter targets an unsupported pairing;
+- every supported cell has an overlay at `modelserver/<accelerator>/<engine>/`, and every engine overlay on disk is a supported cell;
+- every `validated` cell has a `nightly-e2e-<guide>-*-acc-*-<engine>-x.yaml` workflow, and every such workflow runs a `validated` cell;
+- `providers:` names are unique and in the `INFRA_PROVIDER` `values:`, any `engines:` are supported on that accelerator, and every (accelerator, engine, provider) the site can select has a kustomization under `modelserver/<accelerator>/<engine>/` whose path ends in `/<provider>` (extra levels such as `<connector>/<tier>/` are fine).
+
+`providers:` drives the llm-d.ai provider selector (next to accelerator and engine); its default is the `INFRA_PROVIDER` default when the accelerator lists it, else the first entry. A string entry is a name whose label is the name itself. Keep labels identical across guides (`Kubernetes (base)`, `GKE`, `CoreWeave`, `AMD CI`, ...). `INFRA_PROVIDER` is not a variant dimension of the README — keep its steps as plain `when:` filters (`# only when` comments).
+
+`<!-- guide:support start -->` / `<!-- guide:support end -->` renders the matrix as a table. [`guides/env.sh`](../env.sh) refuses an unsupported pair at `source` time.
+
+### Variant groups
+
+With a matrix declared, sibling steps whose `when:` keys only off `ACCELERATOR_TYPE` / `MODEL_SERVER` render as a **variant group** instead of `# only when` comments — one collapsible `<details>` per alternative, each with a real, runnable command (no more "comment out the above and uncomment the below"):
+
+````markdown
+<!-- variants:start -->
+<details open data-when="ACCELERATOR_TYPE=gpu">
+<summary><b>NVIDIA GPU</b></summary>
+
+```bash
+kubectl apply -n ${NAMESPACE} -k …/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+
+</details>
+<details data-when="ACCELERATOR_TYPE=amd,xpu,…">
+<summary><b>AMD GPU / Intel XPU / …</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} -k …/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
+````
+
+The block matching the declared defaults is `open`; the others are wrapped in cicd:skip markers so a README-scraping runner executes only the default path. On llm-d.ai only the block matching the reader's selection is shown. The group is generated — edit `guide.yaml`, not the README.
+
+### Engine tabs in conceptual content
+
+For hand-written content that differs per model server (metric names, flags), wrap one `<details>` per engine, summary = the engine label from `support.engines`:
+
+````markdown
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
+…vLLM content…
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+…SGLang content…
+
+</details>
+<!-- tabs:end -->
+````
+
+GitHub shows collapsible sections; llm-d.ai shows tabs kept in sync with the engine selector.
+
+The same markup with `group=mode` and summaries `Standalone Mode` / `Gateway Mode` renders the deployment-mode choice as tabs (values `standalone` / `gateway`, selectable with `?mode=gateway`); every mode group on a page switches together. Only the Optimized Baseline documents Gateway Mode.
+
+### Publishing
+
+Add the guide to [`docs/well-lit-paths/guides.yaml`](../../docs/well-lit-paths/guides.yaml) (section, slug, title, sidebar position, optional child pages) and run `scripts/guide.py check-manifest`. Link to a published guide from `docs/` with its repo-relative README path (`../../../guides/<guide>/README.md`); the website rewrites it to the guide's page. At a release cut, `scripts/guide.py set-branch <release-branch> guides --recursive` (or `guides/*/`) pins every guide's clone step to the release.
+
+- - -
+
 ## The script
 
 [`scripts/guide.py`](../../scripts/guide.py) validates and renders. Targets are guide
 directories or `guide.yaml` paths, absolute or relative — the companion file is
 discovered alongside.
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `render` | Validate and fill the README from the YAML | `scripts/guide.py render guides/optimized-baseline` |
+| `check` | Validate YAML schema and README marker structure | `scripts/guide.py check guides/*/` |
+| `emit` | Assemble executable bash from YAML sections | `scripts/guide.py emit guides/my-guide env deploy.standalone` |
+| `check-manifest` | Validate `docs/well-lit-paths/guides.yaml` | `scripts/guide.py check-manifest` |
+| `set-branch` | Pin `BRANCH` in `guide.yaml` and re-render | `scripts/guide.py set-branch release-0.8 guides --recursive` |
 
 ### `guide.py render` — fill the README from the YAML
 
@@ -328,7 +437,7 @@ paired markers is touched, and rendering is idempotent.
 scripts/guide.py check guides/optimized-baseline
 
 # every guide in the repo
-scripts/guide.py check guides/*/
+scripts/guide.py check guides --recursive
 
 # pass the files explicitly instead of a directory
 scripts/guide.py check --yaml guides/optimized-baseline/guide.yaml \
@@ -346,13 +455,14 @@ Marker-path resolution is the only check that spans both files. With `--md`
 alone it cannot run, so the tool reports what it actually covered rather than a
 bare "OK":
 
-```
+```text
 README.md: OK  (structure only — pass --yaml to resolve marker paths)
 ```
 
 On `guide.yaml`:
 
-- All top-level keys are known (`name`, `env`, `prerequisites`, `deploy`, `verify`, `benchmark`, `cleanup`)
+- All top-level keys are known (`name`, `env`, `prerequisites`, `deploy`, `verify`, `benchmark`, `cleanup`, `support`)
+- A `support:` matrix, when present, is consistent with the variables, `when:` filters, overlays and nightly workflows (see [Accelerators, model servers and llm-d.ai](#accelerators-model-servers-and-llm-dai))
 - No duplicate keys in any mapping — YAML silently keeps only the last value, which has already hidden one real bug
 - Every step is a map with a `run:` string
 - Every `when:` filter references a variable declared in `env.static:`
@@ -368,17 +478,93 @@ On `README.md`:
 Exits non-zero on any error. With multiple targets every guide is reported before
 exiting, so one run surfaces every problem in the repo.
 
-### Recommended CI
+### CI
 
 One command covers both files across every guide:
 
 ```bash
-scripts/guide.py render guides/*/ --check
+scripts/guide.py render guides --recursive --check
 ```
 
 `--check` catches out-of-date READMEs — someone edited `guide.yaml` without
 re-rendering — and because `render` validates first, a schema error fails the
 same job.
+
+[`ci-guides-check.yaml`](../../.github/workflows/ci-guides-check.yaml) runs
+the command on every PR that touches `guides/**` or `scripts/guide.py`,
+alongside the guide.py unit tests in `scripts/tests/`. To fix a failing
+check, re-run `scripts/guide.py render <guide-dir>` and commit the result.
+
+### Emitting bash for automation
+
+`emit` assembles guide.yaml sections into an executable script on stdout:
+
+```bash
+scripts/guide.py emit guides/my-guide env deploy.standalone
+scripts/guide.py emit guides/my-guide env prerequisites.crds \
+    --context ci --var NAMESPACE=my-ns
+```
+
+A section is `env` or any step-list dot-path. `--context ci` drops
+`skip_in: [ci]` steps. `--var` overrides an `env.static` variable; the value
+is shell-quoted (and checked against the variable's declared `values:` list),
+while declared defaults are emitted verbatim so `$(…)` substitutions still
+run. Overrides also drive `when:` resolution, so the script contains one
+branch of any `when:`-gated alternative. A sensitive variable without an
+override is omitted rather than emitted as its placeholder, and referencing
+one from `when:` without a `--var` is an error.
+
+Quoting makes an override a single shell word at the `export`. A hook
+variable that a command later expands unquoted — the `${EXTRA_HELM_ARGS}`
+pattern — word-splits there, so every space-separated token in the override
+must stand alone as a flag or argument; a value that itself contains spaces
+(`--set-string a=x y`) cannot pass through such a hook.
+
+Only `when:` encodes exclusivity. Named sibling sub-groups
+(`deploy.standalone` vs `deploy.gateway`) look like alternatives to a human,
+but emit has no way to know that: emitting the parent (`deploy`) concatenates
+*every* sub-group, deploying both modes back to back. Pass the specific
+sub-path for any section whose children are mutually exclusive.
+
+`guides/flow-control/scripts/nightly-deploy-gke.sh` is the reference
+consumer: it emits the flow-control guide's CRD and deploy steps and layers
+its CI-only overrides on top via `--var`.
+
+### `guide.py check-manifest` — validate publish manifest
+
+Validate `docs/well-lit-paths/guides.yaml`, the manifest listing which guides llm-d.ai publishes and where:
+
+```bash
+# default manifest: docs/well-lit-paths/guides.yaml
+scripts/guide.py check-manifest
+
+# explicit manifest path
+scripts/guide.py check-manifest path/to/guides.yaml
+```
+
+The check verifies that:
+
+- Every listed guide directory exists and has both a `guide.yaml` and a `README.md` (or README alone for sections like Operations).
+- Slugs are unique across sections.
+- Declared child pages exist within each guide's directory.
+- Required titles and sidebar positions are present.
+
+### `guide.py set-branch` — pin `BRANCH` on release cuts
+
+Rewrite `env.static.BRANCH` and every `export BRANCH=` across guides to a release tag or branch name, validate each guide, and re-render its README:
+
+```bash
+# pin a specific guide
+scripts/guide.py set-branch release-0.8 guides/optimized-baseline
+
+# pin every guide via glob
+scripts/guide.py set-branch release-0.8 guides/*/
+
+# recursively discover and pin all guides in the repository
+scripts/guide.py set-branch release-0.8 guides --recursive
+```
+
+`set-branch` preserves comments and formatting on `BRANCH:` lines (e.g. `BRANCH: main # pinned on release cut`).
 
 ### Using it as a library
 
@@ -425,6 +611,7 @@ env:                            # required
     VAR:                        # constant (scalar form)
     VAR: { default: <v> }       # overridable default
     VAR: { default: <v>, values: [<v1>, <v2>] }   # categorical (values gates when:)
+    VAR: { default: <v>, comment: <text> }        # `comment` renders as an inline `# <text>`
     VAR: { default: PLACEHOLDER, sensitive: true } # secret — see "Sensitive variables"
   source: ["<path>", …]         # optional — `source <path>` lines (verbatim)
 
@@ -462,6 +649,11 @@ benchmark:                      # optional
 
 cleanup:                        # optional — flat list or map of named sub-groups
   - run: <bash>
+
+support:                        # optional — accelerator x model-server matrix
+  engines: {<engine>: <label>}
+  accelerators:
+    <accelerator>: {label: <label>, model: <model>, notes: <one line>, providers: [<name> | {name, label, engines}], engines: {<engine>: validated|community|{status: unsupported, issue: <url>}}}
 ```
 
 **Step shape**, valid in any step list:
@@ -498,6 +690,7 @@ Everything above is exercised in [`guides/optimized-baseline/`](../optimized-bas
 - YAML anchors (`_lists.non_gpu`) → top of the same file
 - Sensitive vars (`HF_TOKEN` with `sensitive: true`) → in `env.static:`
 - `skip_in: [ci]` renders → `prerequisites.clone`, `prerequisites.secrets` in the [rendered README](../optimized-baseline/README.md)
-- `when:` filter annotations → the cleanup section of the same rendered README
+- `when:` filters on accelerator/model server → variant groups in the deploy and cleanup sections of the same rendered README (it declares a `support:` matrix; guides without one get `# only when` annotations)
+- `support:` matrix → the support table and the engine tab groups in the same README
 
 Copy patterns from there rather than reinventing them.

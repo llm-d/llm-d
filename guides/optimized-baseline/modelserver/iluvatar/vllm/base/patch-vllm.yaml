@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              if command -v ixsmi >/dev/null 2>&1; then
+                mapfile -t _uuids < <(ixsmi -L 2>/dev/null | sed -n 's/.*UUID: \(GPU-[0-9a-fA-F-]*\).*/\1/p')
+                if ((${#_uuids[@]} > 0)); then
+                  IFS=,
+                  export IX_VISIBLE_DEVICES="${_uuids[*]}"
+                  unset IFS
+                  export CUDA_VISIBLE_DEVICES="$(seq -s, 0 $((${#_uuids[@]} - 1)))"
+                fi
+              fi
+              exec vllm serve deepseek-ai/DeepSeek-V4-Flash \
+                --port=8000 \
+                --trust-remote-code \
+                --data-parallel-size=8 \
+                --enable-expert-parallel \
+                --block-size=256 \
+                --gpu-memory-utilization=0.9 \
+                --max-model-len=20480 \
+                --max-num-seqs=64 \
+                --max-num-batched-tokens=8192 \
+                --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","mode":0}' \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: VLLM_ENFORCE_CUDA_GRAPH
+              value: "1"
+          resources:
+            limits:
+              cpu: "32"
+              memory: 256Gi
+              iluvatar.com/gpu: "4"
+            requests:
+              cpu: "32"
+              memory: 128Gi
+              iluvatar.com/gpu: "4"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

@@ -1,0 +1,101 @@
+# Single-host prefill/decode as one DisaggregatedSet: a prefill and a decode role of one
+# single-pod group each, in hash mode. Overlays set the image, launch command, resources
+# and anything accelerator-specific by patching the roles by name.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+  labels:
+    llm-d.ai/inference-serving: "true"
+spec:
+  slices: 1
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1  # per slice
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            maxSurge: 0
+            maxUnavailable: 1
+        leaderWorkerTemplate:
+          size: 1  # single-host: each group is one pod
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/role: prefill
+            spec:
+              serviceAccountName: pd-disagg
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command: []
+                  args: []
+                  env: []
+                  ports:
+                    - name: modelserver
+                      containerPort: 8000
+                      protocol: TCP
+                    - name: nixl
+                      containerPort: 5600
+                      protocol: TCP
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                  readinessProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                  startupProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+
+    - name: decode
+      spec:
+        replicas: 1  # per slice
+        groupIdentity: Hash
+        rolloutStrategy:
+          rollingUpdateConfiguration:
+            # Surge so a slice never loses its only decode during a rollout. Needs one
+            # decode's worth of spare accelerators; set maxSurge: 0 / maxUnavailable: 1
+            # instead on fully allocated clusters.
+            maxSurge: 1
+            maxUnavailable: 0
+        leaderWorkerTemplate:
+          size: 1  # single-host: each group is one pod
+          workerTemplate:
+            metadata:
+              labels:
+                llm-d.ai/inference-serving: "true"
+                llm-d.ai/role: decode
+            spec:
+              serviceAccountName: pd-disagg
+              containers:
+                - name: modelserver
+                  image: REPLACE_MODEL_SERVER_IMAGE
+                  command: []
+                  args: []
+                  env: []
+                  ports:
+                    # The routing sidecar listens on 8000 and proxies to the model server on 8200.
+                    - name: modelserver
+                      containerPort: 8200
+                      protocol: TCP
+                    - name: nixl
+                      containerPort: 5600
+                      protocol: TCP
+                  livenessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                  readinessProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver
+                  startupProbe:
+                    httpGet:
+                      path: /v1/models
+                      port: modelserver

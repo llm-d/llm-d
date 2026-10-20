@@ -21,7 +21,7 @@ export PROMETHEUS_PORT=9090
 
 #### OpenShift
 
-OpenShift User Workload Monitoring operator instal Prometheus in the `openshift-monitoring` namespace.
+OpenShift User Workload Monitoring operator installs Prometheus in the `openshift-monitoring` namespace.
 
 ```bash
 export MONITORING_NAMESPACE=openshift-monitoring
@@ -51,7 +51,10 @@ By default Prometheus is installed in the `llm-d-monitoring` namespace and the a
 
     ```bash
     kubectl get --raw /apis/custom.metrics.k8s.io/v1beta1
+    ```
 
-    {"kind":"APIResourceList","apiVersion":"v1","groupVersion":"custom.metrics.k8s.io/v1beta1","resources":[{"name":"namespaces/node_filesystem_size_bytes","singularName":"","namespaced":false,"kind":"MetricValueList]}
-    ...
+    Expected output:
+
+    ```json
+    {"kind":"APIResourceList","apiVersion":"v1","groupVersion":"custom.metrics.k8s.io/v1beta1","resources":[{"name":"namespaces/node_filesystem_size_bytes","singularName":"","namespaced":false,"kind":"MetricValueList"}]}
     ```

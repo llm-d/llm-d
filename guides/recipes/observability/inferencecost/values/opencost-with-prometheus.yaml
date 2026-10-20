@@ -1,0 +1,7 @@
+# Applied when Prometheus is being co-installed alongside OpenCost.
+# Ensures the OpenCost ServiceMonitor is picked up by kube-prometheus-stack.
+opencost:
+  metrics:
+    serviceMonitor:
+      additionalLabels:
+        release: llmd   # matches the kube-prometheus-stack serviceMonitorSelector

@@ -1,0 +1,29 @@
+# base/ pins every image by digest, so Always only re-checks the registry on each start and makes
+# CI fail fast if the pinned digest is no longer pullable.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: wide-ep-amd-vllm-dsv3
+spec:
+  roles:
+    - name: prefill
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              containers:
+                - name: vllm
+                  imagePullPolicy: Always
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              initContainers:
+                - name: wait-peer-dns
+                  imagePullPolicy: Always
+                - name: routing-proxy
+                  imagePullPolicy: Always
+              containers:
+                - name: vllm
+                  imagePullPolicy: Always

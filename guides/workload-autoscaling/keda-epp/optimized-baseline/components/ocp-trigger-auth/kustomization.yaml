@@ -1,0 +1,12 @@
+# Shared OpenShift TriggerAuthentication for the KEDA + EPP guide.
+#
+# Pure-resource component (no patches): it only adds the keda-prometheus-auth
+# TriggerAuthentication, which every OCP overlay's ScaledObject references by name
+# (authenticationRef: keda-prometheus-auth). Kept here ONCE so the three OCP
+# overlays do not each carry a private copy that must be hand-synced. The
+# ScaledObjects carry the Thanos serverAddress and authModes:bearer inline, so
+# there is no trigger patching here.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - triggerauthentication.yaml

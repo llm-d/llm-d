@@ -1,0 +1,4 @@
+# NVIDIA GPU (ACCELERATOR=gpu). Layer after wide-ep.values.yaml, like amd.values.yaml and
+# xpu.values.yaml. wide-ep.values.yaml already targets the NVIDIA DisaggregatedSet and its
+# eight DP rank ports, so there is nothing to override; the file exists so the router install
+# can always pass -f router/${ACCELERATOR}.values.yaml.

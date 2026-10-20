@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -eo pipefail
+              source /opt/intel/oneapi/setvars.sh --force
+              exec python3 -m sglang.launch_server \
+                --model-path=Qwen/Qwen3-0.6B \
+                --host=0.0.0.0 \
+                --port=8000 \
+                --device=xpu \
+                --dtype=float16 \
+                --tensor-parallel-size=1 \
+                --enable-metrics \
+                --page-size=64 \
+                --kv-events-config '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
+          ports:
+            - containerPort: 5556
+              name: kv-events
+              protocol: TCP
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: SGLANG_USE_SGL_XPU
+              value: "1"
+            - name: ONEAPI_DEVICE_SELECTOR
+              value: level_zero:0
+            - name: ZE_AFFINITY_MASK
+              value: "0"
+            - name: SYCL_CACHE_PERSISTENT
+              value: "1"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_PORT
+              value: "8000"
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+          resources:
+            requests:
+              cpu: "4"
+              memory: 12Gi
+            limits:
+              cpu: "8"
+              memory: 24Gi
+            claims:
+              - name: intel-decode-claim
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: sglang-cache
+              mountPath: /.cache
+          # /v1/models responds before SGLang completes its generation warmup.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: sglang-cache
+          emptyDir: {}

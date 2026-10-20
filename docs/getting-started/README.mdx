@@ -34,5 +34,5 @@ Each path includes:
 - Monitoring and observability configuration
 
 <div class="intro-ctas">
-  <Link className="button button--primary" to="/guides">See all Well-Lit Paths</Link>
+  <Link className="button button--primary" to="/well-lit-paths">See all Well-Lit Paths</Link>
 </div>
