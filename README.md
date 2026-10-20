@@ -51,7 +51,6 @@ A growing roster of [adopters](https://github.com/llm-d/llm-d/blob/main/ADOPTERS
 * **DigitalOcean** builds its distributed inference stack on llm-d for native GPU-type heterogeneity, serving the trillion-parameter Kimi K3 model across AMD and NVIDIA hardware ([blog](https://www.digitalocean.com/blog/serving-kimi-k3-inference-engine)).
 * **IBM Research** self-hosts frontier open models on llm-d for coding ([blog](https://research.ibm.com/blog/running-open-models-on-h100-gpus-with-llmd)) and chip-design ([blog](https://research.ibm.com/blog/open-agent-factories-and-distributed-inference-for-chip-design)) agents.
 * **Mistral AI** serves open models in production on llm-d as part of its [regional inference offering](https://mistral.ai/news/regional-inference-open-models-new-compute/).
-* **Prime Intellect** integrates llm-d into its [large-scale reinforcement learning stack](https://github.com/PrimeIntellect-ai/prime-rl), pairing the router with prefill/decode disaggregation and KV cache offload for multi-node rollouts.
 * **Red Hat** ships llm-d as the distributed inference stack in [Red Hat AI](https://www.redhat.com/en/blog/red-hat-ai-3-delivers-speed-accelerated-delivery-and-scale), generally available on OpenShift and managed Kubernetes.
 
 ## Get Started Now
