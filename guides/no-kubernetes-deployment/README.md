@@ -24,11 +24,11 @@ and run.
 
 ## What's in this directory
 
-| Path                                       | Purpose                                                       |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| [`router/epp/config.yaml`](./router/epp/config.yaml)     | EPP plugin config (optimized-baseline plugin set + file-discovery) |
-| [`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml) | The endpoints file the EPP watches                          |
-| [`router/envoy/envoy.yaml`](./router/envoy/envoy.yaml)   | Envoy config: ext_proc to EPP, ORIGINAL_DST to vLLM           |
+| Path                                                       | Purpose                                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`router/epp/config.yaml`](./router/epp/config.yaml)       | EPP plugin config (optimized-baseline plugin set + file-discovery) |
+| [`router/epp/endpoints.yaml`](./router/epp/endpoints.yaml) | The endpoints file the EPP watches                                 |
+| [`router/envoy/envoy.yaml`](./router/envoy/envoy.yaml)     | Envoy config: ext_proc to EPP, ORIGINAL_DST to vLLM                |
 
 ## Default configuration
 
@@ -63,6 +63,7 @@ or pulled from `ghcr.io/llm-d/llm-d-router-endpoint-picker`.
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 source ${REPO_ROOT}/guides/env.sh
+cd "${REPO_ROOT}/guides/no-kubernetes-deployment"
 export ENVOY_IMAGE=docker.io/envoyproxy/envoy:distroless-v1.33.2
 export VLLM_IMAGE=vllm/vllm-openai:v0.19.1
 export MODEL=Qwen/Qwen3-32B
