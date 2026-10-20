@@ -4,7 +4,7 @@ resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 
 # The model server image is selected by the per-generation overlays
-# (v6/, v7/) via an images/* component so each can pick its own backend.
+# (v5p/, v6/, v7/) via an images/* component so each can pick its own backend.
 
 labels:
   - pairs:
