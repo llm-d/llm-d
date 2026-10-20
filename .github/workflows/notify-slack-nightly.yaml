@@ -48,6 +48,7 @@ on:
       - "Nightly - Optimized Baseline E2E (CKS GPU)"
       - "Nightly - Optimized Baseline E2E (GKE GPU SGLang)"
       - "Nightly - Optimized Baseline E2E (GKE GPU)"
+      - "Nightly - Optimized Baseline E2E (GKE TPU SGLang)"
       - "Nightly - Optimized Baseline E2E (GKE TPU)"
       - "Nightly - Optimized Baseline E2E (Intel XPU)"
       - "Nightly - Optimized Baseline E2E (OCP GPU)"
@@ -89,8 +90,8 @@ on:
       - "Nightly - Wide EP LWS E2E (GKE GPU)"
       - "Nightly - Wide EP LWS E2E (Intel XPU)"
       - "Nightly - Wide EP LWS E2E (OCP GPU)"
+      - "Nightly - Workload Autoscaling KEDA+EPP E2E (OCP GPU)"
       - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)"
-      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
       # SLACK-WORKFLOWS-END
 
   # Replays an existing nightly run through the notifier. Because workflow_run
