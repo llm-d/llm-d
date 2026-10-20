@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
+  replicas: 2
   template:
     spec:
       nodeSelector:
@@ -11,28 +12,45 @@ spec:
       containers:
         - name: modelserver
           args:
-            - "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+            - "Qwen/Qwen3.5-397B-A17B-FP8"
             - "--port=$(POD_PORT)"
-            - "--data-parallel-size=1"
-            - "--max-model-len=9216"
-            - "--max-num-batched-tokens=1028"
+            - "--data-parallel-size=2"
+            - "--tensor-parallel-size=4"
+            - "--enable-expert-parallel"
+            - "--enable-ep-weight-filter"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=16384"
+            - "--max-num-batched-tokens=2048"
             - "--max-num-seqs=128"
-            - "--kv-cache-dtype=fp8"
-            - "--async-scheduling"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
-            - "--tensor-parallel-size=8"
+            - "--enable-prefix-caching"
             - "--block-size=64"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=qwen3_coder"
+            - "--reasoning-parser=qwen3"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--kv-events-config"
-            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"}'
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3.5-397B-A17B-FP8"}'
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
+          env:
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "3600"
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
           resources:
             limits:
-              memory: 64Gi
-              cpu: "16"
+              memory: 256Gi
               google.com/tpu: 4
             requests:
-              memory: 64Gi
-              cpu: "16"
+              memory: 256Gi
+              cpu: "64"
               google.com/tpu: 4

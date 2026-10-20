@@ -43,15 +43,15 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29"
-      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM"
+      model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}

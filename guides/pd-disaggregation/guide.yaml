@@ -51,14 +51,14 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      notes: "`2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · `vllm_torchtpu` TPUConnector · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA"
+      notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · prefill PCP=8 → decode DP=8 · TPURaidenConnector + 64 GiB prefill host KV offload"
       model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
@@ -206,6 +206,11 @@ deploy:
     - when: {ACCELERATOR_TYPE: [npu]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+    # TPU7x prefill runs --block-size=4352 with a 262k context on Qwen3.5-397B; the
+    # shared values are sized for the gpt-oss-120b H200 fleet.
+    - when: {ACCELERATOR_TYPE: ["tpu/v7"]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
 
   standalone:
     - run: |

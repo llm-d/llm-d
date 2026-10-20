@@ -42,8 +42,8 @@ This guide includes configurations for the following accelerator and model serve
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | ✅ validated | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | — | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · nightly runs on Spot capacity |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) · Torch TPU vLLM (`torch-tpu-vllm` image) · no KV offload or MTP |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
 | Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
@@ -219,6 +219,16 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[0] end -->
 
+**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
+
+<!-- guide:deploy.accelerator_values[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[1] end -->
+
 **Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
 
 <!-- tabs:start group=mode -->
@@ -332,6 +342,13 @@ Notes:
 * Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/base/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
+
+**GKE TPU node requirements (v6e and TPU7x):**
+
+* **Boot disk**: weights are downloaded once per node into `/var/cache/huggingface` (a `hostPath`), so the boot disk must hold the checkpoint above the kubelet ephemeral-storage eviction threshold or the pod is evicted mid-download and the node recycled. The 100 GB node-auto-provisioning default is too small for either model: use ≥ 200 GB for Qwen3-32B on v6e (66 GB) and ≥ 1 TB for Qwen3.5-397B-A17B-FP8 on TPU7x (406 GB; a 600 GB disk works but leaves only ~20 GiB of allocatable headroom).
+* **Cluster autoscaler**: under `OPTIMIZE_UTILIZATION` a one-pod TPU node is scaled down beneath the model server; annotate pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`.
+* The Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
+* The TPU7x overlay runs the same engine layout as the [Qwen3.5-397B model guide](../models/qwen3-5-397b/README.md) (DP=8 × TP=1, EP, fp8 KV, 262k context) without KV offload or speculative decoding: it is the baseline the model guide and the tiered-prefix-cache guide add features to.
 
 </details>
 <!-- tabs:end -->

@@ -36,8 +36,8 @@ This guide includes configurations for the following accelerator and model serve
 | AMD GPU | `amd` | `openai/gpt-oss-120b` | ✅ validated | — | AMD Instinct · 1P (TP=1) + 1D (TP=4), 5 GPUs · NIXL |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | — | Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | `2x2x1` v5p nodes on GKE · 1P + 1D, 4 chips each (TP=4) · TPUConnector · nightly runs on Spot capacity |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | `2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · TPUConnector · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each (TP=8) · TPUConnectorHMA |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | `2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · `vllm_torchtpu` TPUConnector · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · prefill PCP=8 → decode DP=8 · TPURaidenConnector + 64 GiB prefill host KV offload |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
 | Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
@@ -273,6 +273,16 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[0] end -->
 
+**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the prefill engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
+
+<!-- guide:deploy.accelerator_values[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[1] end -->
+
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
@@ -319,26 +329,35 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.tpu[0] end -->
 
-The TPU overlays use the `TPUConnector` (v5p, v6e) or `TPUConnectorHMA` (TPU7x) KV connector from `tpu_inference` in place of `NixlConnector`, and run on GKE only (`INFRA_PROVIDER=gke`). The NVIDIA GPU `gke` platform requirements in [Prerequisites](#prerequisites) (GPU DRA / DRANet) do not apply.
+The TPU overlays replace `NixlConnector` with a TPU KV connector and run on GKE only (`INFRA_PROVIDER=gke`). The v5p overlay uses `TPUConnector` from `tpu_inference`. The v6e overlay uses the Torch TPU `TPUConnector` (`vllm_torchtpu.distributed.kv_transfer.tpu_connector`, ZMQ + host shared-memory staging). The TPU7x Qwen3.5-397B overlay (`tpu/v7`) uses the vLLM Torch TPU (`tpu-sync`) connectors described below. The NVIDIA GPU `gke` platform requirements in [Prerequisites](#prerequisites) (GPU DRA / DRANet) do not apply.
 
 Tool calling and reasoning parsing are enabled with the parsers for the model each overlay serves, not the GPU overlays' gpt-oss pair: `--tool-call-parser=hermes` with `--reasoning-parser=qwen3` for `Qwen/Qwen3-32B` on v5p and v6e (the parser [Qwen documents for vLLM](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm)),
-and `--tool-call-parser=qwen3_xml` with `--reasoning-parser=qwen3` for `Qwen/Qwen3.5-397B-A17B-FP8` on TPU7x, whose chat template emits [XML-style](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md) rather than Hermes-style tool calls.
+and `--tool-call-parser=qwen3_coder` with `--reasoning-parser=qwen3` for `Qwen/Qwen3.5-397B-A17B-FP8` on TPU7x, whose chat template emits [XML-style](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md) rather than Hermes-style tool calls.
 
 **Requirements:**
 
 - **TPU v5p**: nodes with `2x2x1` topology (`tpu-v5p-slice`, 4 chips per node). Each prefill and decode pod requests all 4 chips (`google.com/tpu: 4`) with `TP=4`.
 - **TPU v6e**: nodes with `2x4` topology (`tpu-v6e-slice`, 8 chips per node, 1 core per chip). Each prefill and decode pod requests all 8 chips (`google.com/tpu: 8`).
 - **TPU7x**: nodes with `2x2x1` topology (`tpu7x`, 4 chips per node, 2 cores per chip). Each prefill and decode pod requests 4 chips (`google.com/tpu: 4`).
-- **Boot disk**: the TPU7x model is 406 GB on disk; size the TPU node boot disk so that this much space remains free above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download.
+- **TPU7x memory**: the Qwen3.5-397B overlay requests `850Gi` per pod (request = limit) for the 64 GiB pinned host KV tier on prefill plus the runtime; `tpu7x-standard-4t` nodes have about 919Gi allocatable.
+- **Boot disk**: weights are cached on the node boot disk (`/var/cache/huggingface`). Size it so the model fits above the kubelet ephemeral-storage eviction threshold, or the pod is evicted during the first download and the node is recycled: the TPU7x model is 406 GB on disk; Qwen3-32B on v6e is ~65 GB and does **not** fit the 100 GB default that GKE node auto-provisioning uses (use ≥ 200 GB, e.g. `storage.bootDiskSize` in a ComputeClass).
+- **Cluster autoscaler**: with the `OPTIMIZE_UTILIZATION` profile a one-pod TPU node looks under-utilised by CPU/memory requests and is scaled down under the running model server. Annotate the model-server pods with `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` (or use a PodDisruptionBudget).
 
 **Configuration notes:**
 
 - Model weights are cached on the node under `/var/cache/huggingface` (a `hostPath` volume, as in the GKE GPU overlays), so restarts and re-creations of a pod do not download them again.
+- Prefill and decode run as the two roles of one `DisaggregatedSet` (`pd-disagg-tpu`). TPU node pools are fixed-size: a rollout that needs a spare node to surge onto leaves the new pod `Pending` until the old group is deleted.
+- **TPU v6e Qwen3-32B (`tpu/v6`)**:
+  - `TPU_KV_SHM_POOL_GB=8` caps the Torch TPU host staging pool; the default (128 GB) does not fit the 100Gi `/dev/shm` emptyDir. Prompts shorter than one KV block are recomputed on decode rather than transferred, so check decode's `vllm:external_prefix_cache_hits_total` with a prompt of several thousand tokens when verifying the transfer path.
+- **TPU7x Qwen3.5-397B (`tpu/v7`)**:
+  - **Parallelism**: prefill runs prefill context parallelism `PCP=8` (`TP=1`, expert parallel); decode runs `DP=8` (`TP=1`, expert parallel). TPU Sync (`tpu-sync`) Stage-3 reshards the KV from the 8 prefill shards onto the 8 decode engines over TPU interconnect.
+  - **KV connectors**: prefill runs a `TPUMultiConnector` that wraps `TPURaidenOffloadingConnector` (host-DRAM KV tier, 64 GiB pinned) followed by `TPURaidenConnector` (`kv_producer`). The first child has the higher priority. Decode runs `TPURaidenConnector` (`kv_consumer`).
+  - **Prefix caching**: on for both roles. The hybrid model needs `--mamba-cache-mode=align`, `TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL=1`, `--block-size=4352` on both roles and `--prefix-cache-retention-interval=0`. `PYTHONHASHSEED=0` keeps block hashes identical across engines.
+  - **Host KV tier**: blocks that leave prefill HBM are kept in host DRAM and restored on a later hit. On a prefill pod, `vllm:prefix_cache_hits_total` counts HBM hits and `vllm:external_prefix_cache_hits_total` counts host-tier hits.
+  - **Scaling**: each pod takes its `tpu-sync` engine ID from its own name, so raising `replicas` on the `DisaggregatedSet` roles gives xPyD (for example 2P2D) without other changes. `tpu-sync` over IPv6 pod networking has not been tested.
+  - **Tool calling** is enabled for this overlay (`--enable-auto-tool-choice --tool-call-parser=qwen3_coder --reasoning-parser=qwen3`).
 
 **Known issues:**
-
-> [!NOTE]
-> The TPU7x overlays pin `vllm/vllm-tpu:v0.26.0` through the `tpu-vllm/release-v0.26.0` image component. In `v0.27.0` through `v0.29.0` the vLLM scheduler reads `connector._kv_transfer_config`, which the bundled `TPUConnectorHMA` never initializes, and EngineCore fails at startup. The fix is [tpu-inference#3566](https://github.com/vllm-project/tpu-inference/pull/3566); the pin is removed once a `vllm-tpu` release includes it. The TPU v6e overlay uses the non-HMA `TPUConnector` and is unaffected.
 
 </details>
 <details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">

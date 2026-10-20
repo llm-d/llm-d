@@ -39,7 +39,7 @@ Benchmarked, fully tuned recipes for serving a specific state-of-the-art model o
 * [DeepSeek-V4](./models/deepseek-v4/README.md) - `deepseek-ai/DeepSeek-V4-Pro` on GB200 NVL72: wide expert-parallel P/D disaggregation over cross-node NVLink, with operating points from low latency to maximum throughput.
 * [GLM-5.2](./models/glm-5-2/README.md) - `zai-org/GLM-5.2-FP8` on H200, optimized for agentic workloads: wide expert-parallel P/D disaggregation with MTP, dual-tier prefix-cache routing, and CPU+NVMe KV offloading.
 * [NVIDIA Nemotron 3 Ultra](./models/nemotron-3-ultra/README.md) - `NVIDIA-Nemotron-3-Ultra-550B` on H200, optimized for agentic code generation: P/D disaggregation with CPU KV offloading and coding-agent client configs.
-* [Qwen3-Coder-480B](./models/qwen3-coder-480b/README.md) - `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` on TPU 7x, optimized for agentic code generation: prefix-aware routing and CPU KV offloading.
+* [Qwen3.5-397B](./models/qwen3-5-397b/README.md) - `Qwen/Qwen3.5-397B-A17B-FP8` on TPU 7x with Torch TPU, optimized for agentic code generation: prefix-aware routing, tiered prefix cache (host KV offloading), and TPU Sync P/D disaggregation.
 
 ## Operations
 

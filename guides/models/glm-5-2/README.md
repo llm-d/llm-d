@@ -1,4 +1,4 @@
-# GLM-5.2-FP8 on H200
+# GLM-5.2-FP8 on H200 and Google TPU v7x
 
 ## Overview
 
@@ -115,6 +115,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA H200 | `gpu` | `zai-org/GLM-5.2-FP8` | 🟡 community | 🟡 community | P/D disaggregated wide-EP on 8-GPU nodes; needs an all-to-all RDMA fabric · vLLM: CoreWeave InfiniBand, default 8 nodes / 64 GPUs (`p3w2d1w2` + tiered KV offloading), 2 to 10 nodes by `DEPLOYMENT` · SGLang: GKE A3 Ultra RoCE, default 2 nodes / 16 GPUs (`p1w1d1w1`), 2 to 8 nodes by `DEPLOYMENT` |
+| Google TPU v7x | `tpu` | `zai-org/GLM-5.2-FP8` | 🟡 community | — | GKE only · Torch TPU vLLM · `DEPLOYMENT=tpu7x-2x2x2-dp16`: one aggregated LeaderWorkerSet on a `2x2x2` tpu7x slice (2 hosts × 4 chips, DP=16 × TP=1, EP, fp8 KV cache) · no P/D disaggregation |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -169,10 +170,10 @@ export GUIDE_NAME=glm-5-2
 export NAMESPACE=llm-d-glm-5-2
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export ROUTING=approximate # options: approximate, precise
-export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w1-precise, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2
+export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w1-precise, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2, tpu7x-2x2x2-dp16
 export MODEL=zai-org/GLM-5.2-FP8 # the model every deployment serves
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -228,8 +229,8 @@ With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is
 
 <!-- guide:deploy.router_values.approximate start -->
 <!-- variants:start -->
-<details open data-when="MODEL_SERVER=vllm">
-<summary><b>vLLM</b></summary>
+<details open data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=vllm">
+<summary><b>NVIDIA H200 · vLLM</b></summary>
 
 ```bash
 # Paths to values files: the wide-EP router values, then the GLM-5.2
@@ -266,7 +267,7 @@ Layers [`precise-routing.values.yaml`](router/precise-routing.values.yaml) on to
 <!-- guide:deploy.router_values.precise start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when ROUTING=precise and MODEL_SERVER=vllm:
+# only when ROUTING=precise and MODEL_SERVER=vllm and ACCELERATOR_TYPE=gpu:
 # Paths to values files: the wide-EP router values, then the GLM-5.2
 # precise KV-event-backed prefix-cache routing overrides on top
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
@@ -277,6 +278,32 @@ export DEPLOYMENT=p2w1d1w1-precise
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.router_values.precise end -->
+
+</details>
+<details data-when="ACCELERATOR_TYPE=tpu">
+<summary><b>Google TPU v7x (aggregated)</b></summary>
+
+The TPU deployment is one aggregated DP=16 pool with no P/D disaggregation, so the wide-EP `DisaggregatedSet` plugins do not apply. [`glm-5-2-tpu.values.yaml`](router/glm-5-2-tpu.values.yaml) selects the TPU pods (`llm-d.ai/guide: glm-5-2-tpu`) and routes with `prefix-cache-affinity-filter` + `token-load-scorer`; it also sets `DEPLOYMENT=tpu7x-2x2x2-dp16`. `ROUTING` is ignored on TPU.
+
+<!-- guide:deploy.router_values.tpu start -->
+<!-- variants:start -->
+<details data-when="ACCELERATOR_TYPE=tpu">
+<summary><b>Google TPU v7x</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+# The TPU deployment is one aggregated DP=16 pool: prefix-cache affinity
+# and token-load scoring instead of the wide-EP P/D plugins
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-tpu.values.yaml"
+export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
+export DEPLOYMENT=tpu7x-2x2x2-dp16
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
+<!-- guide:deploy.router_values.tpu end -->
 
 </details>
 <!-- tabs:end -->
@@ -322,6 +349,15 @@ kubectl apply -n ${NAMESPACE} \
 Do not deploy the vLLM and SGLang recipes in the same namespace: the InferencePool selects pods by
 `llm-d.ai/guide` only and would mix both engines into one pool.
 
+<details data-when="ACCELERATOR_TYPE=tpu">
+<summary><b>Google TPU v7x notes</b></summary>
+
+- `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=32768`, one API server on the leader (port 8000). It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
+- GKE only (`INFRA_PROVIDER` does not apply): the slice needs a `2x2x2` tpu7x node pool, a boot disk of at least 1.5 TB on every host (each host downloads the full 756 GB FP8 checkpoint into `/var/cache/huggingface`, a `hostPath`, and must keep it above the kubelet eviction threshold).
+- `MONITORING=true` is GPU-only here; the PodMonitors scrape per-rank GPU ports.
+
+</details>
+
 For vLLM, two hardware notes: prefill workers request `1500Gi` DRAM for the CPU offload tier, and the
 NVMe tier uses a host-path volume at `/mnt/local/kv-cache`. On nodes without local NVMe, swap
 the overlay's `offloading-tiered` component for `offloading-cpu` (DRAM only).
@@ -340,7 +376,7 @@ node-exporter sidecars and the plain-Prometheus alternative.
 
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and ACCELERATOR_TYPE=gpu:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
