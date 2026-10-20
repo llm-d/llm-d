@@ -47,7 +47,7 @@ Explore detailed, reproducible benchmarks on [Prism](https://prism.llm-d.ai).
 
 A growing roster of [adopters](https://github.com/llm-d/llm-d/blob/main/ADOPTERS.md) runs llm-d in production across clouds, accelerator vendors, and enterprises:
 
-* **Google Cloud** integrates llm-d 1.0 into Google Kubernetes Engine across its TPU and NVIDIA GPU portfolio ([blog coming soon](#)). <!-- TODO: replace (#) with the upcoming Google GKE + llm-d 1.0 blog when published -->
+* **Google Cloud** integrates llm-d 1.0 into Google Kubernetes Engine across its TPU and NVIDIA GPU portfolio ([blog](https://cloud.google.com/blog/topics/ai-infrastructure/llm-d-1-0-an-open-source-stack-for-distributed-inference)).
 * **DigitalOcean** builds its distributed inference stack on llm-d for native GPU-type heterogeneity, serving the trillion-parameter Kimi K3 model across AMD and NVIDIA hardware ([blog](https://www.digitalocean.com/blog/serving-kimi-k3-inference-engine)).
 * **IBM Research** self-hosts frontier open models on llm-d for coding ([blog](https://research.ibm.com/blog/running-open-models-on-h100-gpus-with-llmd)) and chip-design ([blog](https://research.ibm.com/blog/open-agent-factories-and-distributed-inference-for-chip-design)) agents.
 * **Mistral AI** serves open models in production on llm-d as part of its [regional inference offering](https://mistral.ai/news/regional-inference-open-models-new-compute/).
