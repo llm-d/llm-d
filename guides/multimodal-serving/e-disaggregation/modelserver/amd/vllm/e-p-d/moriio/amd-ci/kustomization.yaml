@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Persistent model cache (RWX PVC `model-pvc`, created ahead of time in the
+# namespace) so pods do not each download the weights from HuggingFace.
+resources:
+  - ../base
+components:
+  - ../../../../../../../../recipes/modelserver/components/model-cache
+patches:
+  - path: patch-amd-ci.yaml
+  # Cap the KV cache (same value as the AMD P/D MoRI-IO guide). Registering the KV
+  # cache with the NICs over DMABUF briefly needs about twice its size in GPU
+  # memory; a KV cache sized from --gpu-memory-utilization (173-222 GiB here)
+  # leaves none free and the pod fails with HIP out-of-memory at startup.
+  - target:
+      kind: Deployment
+      labelSelector: llm-d.ai/role in (prefill,decode)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: "--kv-cache-memory-bytes=100000000000"
