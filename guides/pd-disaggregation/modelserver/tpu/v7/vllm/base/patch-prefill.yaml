@@ -8,7 +8,7 @@
 #      reshards the 8 PCP shards onto decode's 8 DP engines.
 # Prefix caching on this hybrid (Gated DeltaNet + attention) model needs
 # --mamba-cache-mode=align, the unified block pool and a block size that Stage-3 accepts
-# (768: divisible by --cp-kv-cache-interleave-size=256).
+# (4352 = 17 x 256, matching the hybrid mamba_state_fit block size and divisible by --cp-kv-cache-interleave-size=256).
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
@@ -53,7 +53,7 @@ spec:
                         --disable-custom-all-reduce \
                         --gpu-memory-utilization=0.90 \
                         --kv-cache-dtype=fp8 \
-                        --block-size=768 \
+                        --block-size=4352 \
                         --language-model-only \
                         --attention-backend=CUSTOM \
                         --no-disable-hybrid-kv-cache-manager \

@@ -206,7 +206,7 @@ deploy:
     - when: {ACCELERATOR_TYPE: [npu]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
-    # TPU7x prefill runs --block-size=768 with a 262k context on Qwen3.5-397B; the
+    # TPU7x prefill runs --block-size=4352 with a 262k context on Qwen3.5-397B; the
     # shared values are sized for the gpt-oss-120b H200 fleet.
     - when: {ACCELERATOR_TYPE: ["tpu/v7"]}
       skip_in: [ci]

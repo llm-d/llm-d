@@ -24,7 +24,7 @@ This guide deploys the optimal llm-d configuration for agentic code-generation w
 | Accelerator | Google TPU 7x (tpu7x) |
 | Topology | 2x2x1 |
 | Parallelism | `unified`: DP=8 × TP=1, EP · `disaggregated`: prefill PCP=8, decode DP=8, EP |
-| Context length | 262,144 tokens (fp8 KV cache), matching the benchmark workload |
+| Context length | 262,144 tokens (fp8 KV cache, 4352-token blocks), matching the benchmark workload |
 | KV cache offload | `TPURaidenOffloadingConnector`, `cpu_bytes_to_use` is **per engine**: `unified` runs 8 DP engines per pod with 32 GiB each (8 independent tiers, 256 GiB pinned per pod); the `disaggregated` prefill is one PCP=8 engine with one 64 GiB tier |
 | MTP speculative decoding | On — 3 draft tokens (`unified` and `decode`), 1 draft token (`prefill`) |
 | Model server | vLLM on Torch TPU (`torch-tpu-vllm` image) |

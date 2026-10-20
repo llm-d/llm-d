@@ -23,7 +23,7 @@ spec:
             - "--language-model-only"
             - "--max-model-len=262144"
             - "--kv-cache-dtype=fp8"
-            - "--block-size=768"
+            - "--block-size=4352"
             - "--gpu-memory-utilization=0.90"
             - "--max-num-batched-tokens=4384"
             - "--max-num-seqs=32"

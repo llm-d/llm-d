@@ -61,7 +61,7 @@ spec:
                   --attention-backend=CUSTOM \
                   --language-model-only \
                   --kv-cache-dtype=fp8 \
-                  --block-size=768 \
+                  --block-size=4352 \
                   --gpu-memory-utilization=0.90 \
                   --max-model-len=262144 \
                   --max-num-batched-tokens=4384 \

@@ -47,7 +47,7 @@ spec:
                         --disable-custom-all-reduce \
                         --gpu-memory-utilization=0.90 \
                         --kv-cache-dtype=fp8 \
-                        --block-size=768 \
+                        --block-size=4352 \
                         --language-model-only \
                         --attention-backend=CUSTOM \
                         --no-disable-hybrid-kv-cache-manager \
