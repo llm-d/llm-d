@@ -179,7 +179,7 @@ deploy:
     - when: {ACCELERATOR_TYPE: [npu]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
-    # TPU7x serves Qwen3.5-397B with --block-size=768 and a 262k context; the shared
+    # TPU7x serves Qwen3.5-397B with --block-size=4352 and a 262k context; the shared
     # values are sized for Qwen3-32B on H100.
     - when: {ACCELERATOR_TYPE: ["tpu/v7"]}
       skip_in: [ci]

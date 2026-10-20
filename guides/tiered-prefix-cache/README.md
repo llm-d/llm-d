@@ -154,7 +154,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 >
 > For TPU, `tpu/v6` and `tpu/v7` size the host DRAM tier via `cpu_bytes_to_use` in `TPURaidenOffloadingConnector` (`tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). MooncakeStore uses one pool for all pods, so a per-pod value does not apply. The `multi-host` values are for `Qwen/Qwen3.5-397B-A17B-FP8` on TPU v7 (`2x2x2`, TP=16, EP, 256 GiB host tier per group).
 >
-> **TPU v7 single-host:** layer [`router/single-host/tpu-v7.values.yaml`](router/single-host/tpu-v7.values.yaml) after `ROUTER_VALUES` (`-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/single-host/tpu-v7.values.yaml`). It sets 768-token router blocks (the engines' `--block-size`) and a 262k match window to match the DP=8 × TP=1 Qwen3.5-397B engines, and sizes the CPU producer for the 8 × 32 GiB host tier per pod, the same values as the [Qwen3.5-397B model guide](../models/qwen3-5-397b/router/qwen3-5-397b.values.yaml).
+> **TPU v7 single-host:** layer [`router/single-host/tpu-v7.values.yaml`](router/single-host/tpu-v7.values.yaml) after `ROUTER_VALUES` (`-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/single-host/tpu-v7.values.yaml`). It sets 4352-token router blocks (the engines' `--block-size`) and a 262k match window to match the DP=8 × TP=1 Qwen3.5-397B engines, and sizes the CPU producer for the 8 × 32 GiB host tier per pod, the same values as the [Qwen3.5-397B model guide](../models/qwen3-5-397b/router/qwen3-5-397b.values.yaml).
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 

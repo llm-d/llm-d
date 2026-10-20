@@ -273,7 +273,7 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[0] end -->
 
-**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the prefill engine's 768-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
+**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the prefill engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
 
 <!-- guide:deploy.accelerator_values[1] start -->
 <!-- llm-d-cicd:skip start -->
@@ -352,7 +352,7 @@ and `--tool-call-parser=qwen3_coder` with `--reasoning-parser=qwen3` for `Qwen/Q
 - **TPU7x Qwen3.5-397B (`tpu/v7`)**:
   - **Parallelism**: prefill runs prefill context parallelism `PCP=8` (`TP=1`, expert parallel); decode runs `DP=8` (`TP=1`, expert parallel). TPU Sync (`tpu-sync`) Stage-3 reshards the KV from the 8 prefill shards onto the 8 decode engines over TPU interconnect.
   - **KV connectors**: prefill runs a `TPUMultiConnector` that wraps `TPURaidenOffloadingConnector` (host-DRAM KV tier, 64 GiB pinned) followed by `TPURaidenConnector` (`kv_producer`). The first child has the higher priority. Decode runs `TPURaidenConnector` (`kv_consumer`).
-  - **Prefix caching**: on for both roles. The hybrid model needs `--mamba-cache-mode=align`, `TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL=1`, `--block-size=768` on prefill and `--prefix-cache-retention-interval=0`. `PYTHONHASHSEED=0` keeps block hashes identical across engines.
+  - **Prefix caching**: on for both roles. The hybrid model needs `--mamba-cache-mode=align`, `TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL=1`, `--block-size=4352` on both roles and `--prefix-cache-retention-interval=0`. `PYTHONHASHSEED=0` keeps block hashes identical across engines.
   - **Host KV tier**: blocks that leave prefill HBM are kept in host DRAM and restored on a later hit. On a prefill pod, `vllm:prefix_cache_hits_total` counts HBM hits and `vllm:external_prefix_cache_hits_total` counts host-tier hits.
   - **Scaling**: each pod takes its `tpu-sync` engine ID from its own name, so raising `replicas` on the `DisaggregatedSet` roles gives xPyD (for example 2P2D) without other changes. `tpu-sync` over IPv6 pod networking has not been tested.
   - **Tool calling** is enabled for this overlay (`--enable-auto-tool-choice --tool-call-parser=qwen3_coder --reasoning-parser=qwen3`).

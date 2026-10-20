@@ -25,9 +25,9 @@ router:
             # upstream — tracked by the llm-d-router offload-aware-LRU issue.
             # https://github.com/llm-d/llm-d-router/issues/1650
             autoTune: false
-            lruCapacityPerServer: 262000
-            # Engine --block-size on TPU7x (same as the P/D prefill).
-            blockSizeTokens: 768
+            lruCapacityPerServer: 46200
+            # Engine --block-size on TPU7x (4352 tokens, matching the hybrid mamba_state_fit block size).
+            blockSizeTokens: 4352
         - type: prefix-cache-affinity-filter
           parameters:
             peakPrefillThroughput: 16444

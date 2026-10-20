@@ -45,7 +45,7 @@ On TPU7x the two chiplets of a chip share a **die-to-die ICI link that is about 
 | --- | --- | --- | --- | --- | --- |
 | `ct6e-standard-4t` (v6e, one host) | `gke-tpu-accelerator: tpu-v6e-slice`, `gke-tpu-topology: 2x2` | `google.com/tpu: 4` | 4 | 4 | `--tensor-parallel-size=4` |
 | `ct6e-standard-8t` (v6e, one host) | `tpu-v6e-slice`, `2x4` | `google.com/tpu: 8` | 8 | 8 | `--tensor-parallel-size=8` (the Foundations guides' v6e configuration) |
-| `tpu7x-standard-4t` (TPU7x, one host) | `tpu7x`, `2x2x1` | `google.com/tpu: 4` | 4 | **8** | `--tensor-parallel-size=8`, or `--data-parallel-size=2 --tensor-parallel-size=4` for MoE models with expert parallelism |
+| `tpu7x-standard-4t` (TPU7x, one host) | `tpu7x`, `2x2x1` | `google.com/tpu: 4` | 4 | **8** | `--data-parallel-size=8 --tensor-parallel-size=1` for MoE models with expert parallelism, or `--tensor-parallel-size=8` |
 | `tpu7x-standard-4t` × 2 (TPU7x, two hosts) | `tpu7x`, `2x2x2` | `google.com/tpu: 4` per pod | 8 | 16 | `--tensor-parallel-size=16`, or `--data-parallel-size=16 --tensor-parallel-size=1`; one pod per host, started together via LeaderWorkerSet |
 
 In a multi-host slice, ICI carries traffic between hosts; the VPC network is used only for request traffic and, in P/D setups, KV transfer over DCN.

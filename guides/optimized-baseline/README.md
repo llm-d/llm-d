@@ -219,7 +219,7 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[0] end -->
 
-**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the engine's 768-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
+**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
 
 <!-- guide:deploy.accelerator_values[1] start -->
 <!-- llm-d-cicd:skip start -->
