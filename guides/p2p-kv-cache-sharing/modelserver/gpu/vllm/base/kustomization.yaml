@@ -21,8 +21,11 @@ components:
 # - engine: the P2P secondary tier (vllm#48021), its crash fixes
 #   (vllm#49671, vllm#49823), the symmetric-fetch stall fix (vllm#49877)
 #   and the wide-EP block-table alignment fix (vllm#50302) are all
-#   contained in v0.27.0, the first tagged release with the full set;
-#   v0.27.1 is its patch release.
+#   contained in v0.27.0, the first tagged release with the full set.
+#   v0.32.0 adds the per-tier cached prompt token metrics (vllm#56318),
+#   which count the prompt tokens served from a peer
+#   (prompt_tokens_cached_by_source_total{source="p2p"}). It needs
+#   --enable-scale-out (patch-vllm.yaml) for the render endpoint.
 # - sidecar: main because v0.9.0 predates the offloading P2P pull support
 #   (llm-d-router#1937) and forwarding the router's remote_kv_source block
 #   (llm-d-router#3441); pin the next release when cut, together with the
@@ -32,7 +35,7 @@ components:
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai
-    newTag: v0.27.1
+    newTag: v0.32.0
 
 labels:
   - pairs:
