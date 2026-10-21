@@ -44,7 +44,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "# KV-Cache Index\n\nOperational view of the precise prefix-cache pipeline embedded in the EPP: the KV-block index, the KV-events subscribers that feed it, and the tokenization step in front of it. The `llm_d_epp_kv_cache_index_*` panels stay at zero unless the `precise-prefix-cache-producer` sets `indexerConfig.kvBlockIndexConfig.enableMetrics: true`. Metric definitions: [pkg/kvcache/metrics](https://github.com/llm-d/llm-d-router/tree/main/pkg/kvcache/metrics)."
+        "content": "# KV-Cache Index\n\nOperational view of the precise prefix-cache pipeline embedded in the EPP: the KV-block index, the KV-events subscribers that feed it, and the tokenization step in front of it. The `llm_d_epp_kv_cache_index_*` panels stay at zero unless the `precise-prefix-cache-producer` sets `indexerConfig.kvBlockIndexConfig.enableMetrics: true`. Where EPP replicas keep separate state (KV-events subscribers, index, latency), panels split by replica (`pod`) so one broken replica stays visible. Metric definitions: [pkg/kvcache/metrics](https://github.com/llm-d/llm-d-router/tree/main/pkg/kvcache/metrics)."
       }
     },
     {
@@ -63,7 +63,7 @@
     {
       "type": "stat",
       "title": "Predicted Hit Rate",
-      "description": "Share of prompt tokens the precise producer predicted the chosen endpoint already holds, over the dashboard's time range.",
+      "description": "Share of prompt tokens the precise producer predicted the chosen endpoint already holds, over the dashboard's time range. Speculative entries keep repeated prefixes hitting even without KV events, so this is not a stream-health signal.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -196,8 +196,8 @@
     },
     {
       "type": "stat",
-      "title": "Admissions / s",
-      "description": "KV blocks written to the index per second.",
+      "title": "KV Events / s",
+      "description": "KV-event messages received per second by the EPP replica receiving the fewest. Every replica subscribes to every model server pod, so all replicas should see the same stream; 0 while requests are flowing means at least one replica's KV-events stream is dead. Unlike index admissions, this excludes speculative entries.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -250,8 +250,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_index_admissions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "Admissions / s",
+          "expr": "min(sum by (pod) (rate(llm_d_epp_kv_cache_events_messages_received_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) or 0 * max by (pod) (llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}))",
+          "legendFormat": "KV Events / s",
           "range": true,
           "refId": "A"
         }
@@ -259,8 +259,8 @@
     },
     {
       "type": "stat",
-      "title": "Evictions / s",
-      "description": "KV blocks removed from the index per second.",
+      "title": "Event Backlog",
+      "description": "Most KV-event messages queued across any EPP replica's event-pool worker shards. A sustained backlog means the index lags behind the model servers; raise kvEventsConfig.concurrency if it stays high.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -278,13 +278,21 @@
             "mode": "thresholds"
           },
           "mappings": [],
-          "unit": "short",
+          "unit": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
               }
             ]
           }
@@ -313,8 +321,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_index_evictions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "Evictions / s",
+          "expr": "max(llm_d_epp_kv_cache_events_pool_queue_depth{namespace=~\"$namespace\", pod=~\"$pod\"})",
+          "legendFormat": "Event Backlog",
           "range": true,
           "refId": "A"
         }
@@ -322,8 +330,8 @@
     },
     {
       "type": "stat",
-      "title": "Lookup P99",
-      "description": "P99 index lookup latency. Lookups run on the request path.",
+      "title": "Mean Lookup Latency",
+      "description": "Mean duration of index Lookup and WalkKeys calls across EPP replicas. Lookups run on the request path. A mean is shown because the histogram's lowest bucket is 5ms, so sub-5ms quantiles are interpolated rather than measured.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -384,8 +392,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
-          "legendFormat": "Lookup P99",
+          "expr": "sum(rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) / sum(rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "Mean Lookup Latency",
           "range": true,
           "refId": "A"
         }
@@ -394,7 +402,7 @@
     {
       "type": "stat",
       "title": "Active Subscribers",
-      "description": "ZMQ subscribers the EPP manages, one per model server pod. Includes subscribers retrying a failed connection.",
+      "description": "ZMQ subscribers managed by the EPP replica with the fewest. Every replica subscribes to every model server pod, so this should match the number of model server pods. Includes subscribers retrying a failed connection.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -447,7 +455,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(llm_d_epp_kv_cache_events_active_subscribers{namespace=~\"$namespace\", pod=~\"$pod\"})",
+          "expr": "min(llm_d_epp_kv_cache_events_active_subscribers{namespace=~\"$namespace\", pod=~\"$pod\"})",
           "legendFormat": "Active Subscribers",
           "range": true,
           "refId": "A"
@@ -470,7 +478,7 @@
     {
       "type": "timeseries",
       "title": "Admissions vs Evictions",
-      "description": "Block admissions and evictions per second. Net growth is admissions minus evictions; a sustained negative value means the index is shrinking (for example after model server restarts or cache resets).",
+      "description": "Blocks written to and removed from each EPP replica's index per second. Both include speculative entries: with speculativeIndexing on (the precise guide's default), each routing decision seeds entries that expire after speculativeTTL, so these rates follow request volume and stay non-zero even when no KV events arrive. Cache resets (AllBlocksCleared) remove a pod's blocks without counting as evictions. Use the KV-Events Subscribers row for stream health.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -499,7 +507,8 @@
               "group": "A"
             }
           },
-          "unit": "short"
+          "unit": "short",
+          "min": 0
         },
         "overrides": []
       },
@@ -521,8 +530,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_index_admissions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "admissions",
+          "expr": "sum by (pod) (rate(llm_d_epp_kv_cache_index_admissions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} admissions",
           "range": true,
           "refId": "A"
         },
@@ -532,21 +541,10 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_index_evictions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "evictions",
+          "expr": "sum by (pod) (rate(llm_d_epp_kv_cache_index_evictions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} evictions",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_index_admissions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) - sum(rate(llm_d_epp_kv_cache_index_evictions_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "net growth",
-          "range": true,
-          "refId": "C"
         }
       ]
     },
@@ -628,7 +626,7 @@
     {
       "type": "timeseries",
       "title": "Predicted Prefix Hit Rate",
-      "description": "Share of prompt tokens the precise producer predicted the chosen endpoint holds in its prefix cache. Workloads without shared prefixes legitimately sit near zero.",
+      "description": "Share of prompt tokens the precise producer predicted the chosen endpoint holds in its prefix cache. Workloads without shared prefixes legitimately sit near zero. Speculative entries keep repeated prefixes hitting even without KV events, so this is not a stream-health signal.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -838,7 +836,7 @@
     {
       "type": "timeseries",
       "title": "Index Lookup Latency",
-      "description": "Duration of index Lookup and WalkKeys calls, including WalkKeys callbacks. The histogram uses Prometheus default buckets, whose lowest bound is 5ms, so sub-5ms lookups are interpolated within that bucket.",
+      "description": "Duration of index Lookup and WalkKeys calls per EPP replica, including WalkKeys callbacks. The histogram uses Prometheus default buckets, whose lowest bound is 5ms, so quantiles below 5ms are interpolated within that bucket rather than measured. P99 catches tails above 5ms; below that, read the exact mean.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -890,8 +888,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
-          "legendFormat": "P50",
+          "expr": "histogram_quantile(0.99, sum by (le, pod) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
+          "legendFormat": "{{pod}} P99",
           "range": true,
           "refId": "A"
         },
@@ -901,28 +899,17 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
-          "legendFormat": "P95",
+          "expr": "sum by (pod) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} mean",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
-          "legendFormat": "P99",
-          "range": true,
-          "refId": "C"
         }
       ]
     },
     {
       "type": "timeseries",
       "title": "Tokenization Latency (token-producer)",
-      "description": "Time the token-producer plugin spends tokenizing each prompt through the render service. llm_d_epp_plugin_duration_seconds has a top bucket of 100ms, so quantiles cap there; see the next panel for the share of calls above it.",
+      "description": "Time the token-producer plugin spends tokenizing each prompt through vLLM's render endpoint (a model server or a standalone render service). llm_d_epp_plugin_duration_seconds has a top bucket of 100ms, so quantiles cap there; see the next panel for the share of calls above it. The mean is exact. Shown per EPP replica.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -974,8 +961,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
-          "legendFormat": "P50",
+          "expr": "histogram_quantile(0.5, sum by (le, pod) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
+          "legendFormat": "{{pod}} P50",
           "range": true,
           "refId": "A"
         },
@@ -985,8 +972,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
-          "legendFormat": "P95",
+          "expr": "histogram_quantile(0.99, sum by (le, pod) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
+          "legendFormat": "{{pod}} P99",
           "range": true,
           "refId": "B"
         },
@@ -996,8 +983,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
-          "legendFormat": "P99",
+          "expr": "sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} mean",
           "range": true,
           "refId": "C"
         }
@@ -1006,7 +993,7 @@
     {
       "type": "timeseries",
       "title": "Tokenizations Slower than 100ms",
-      "description": "Share of token-producer calls that took longer than the 100ms top histogram bucket.",
+      "description": "Share of token-producer calls that took longer than the 100ms top histogram bucket. Shown per EPP replica.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1058,8 +1045,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "1 - sum(rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\", le=\"0.1\"}[$__rate_interval])) / sum(rate(llm_d_epp_plugin_duration_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval]))",
-          "legendFormat": "> 100ms",
+          "expr": "1 - sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\", le=\"0.1\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1068,7 +1055,7 @@
     {
       "type": "timeseries",
       "title": "Precise Producer Time by Extension Point",
-      "description": "P99 time the precise-prefix-cache-producer spends in each extension point (scoring-path lookup, speculative indexing on PreRequest).",
+      "description": "P99 time, per EPP replica, the precise-prefix-cache-producer spends in each extension point (scoring-path lookup, speculative indexing on PreRequest).",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1120,8 +1107,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, extension_point) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"precise-prefix-cache-producer\"}[$__rate_interval])))",
-          "legendFormat": "{{extension_point}} P99",
+          "expr": "histogram_quantile(0.99, sum by (le, pod, extension_point) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"precise-prefix-cache-producer\"}[$__rate_interval])))",
+          "legendFormat": "{{pod}} {{extension_point}} P99",
           "range": true,
           "refId": "A"
         }
@@ -1143,7 +1130,7 @@
     {
       "type": "timeseries",
       "title": "Messages Received by Pod",
-      "description": "KV-event messages received per second from each model server pod.",
+      "description": "KV-event messages received per second, per model server pod (pod_identifier) and EPP replica (pod). Every replica keeps its own subscriber to every model server, so a dead stream shows as one line at 0 instead of a dip in a combined total.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1195,8 +1182,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod_identifier) (rate(llm_d_epp_kv_cache_events_messages_received_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "{{pod_identifier}}",
+          "expr": "sum by (pod, pod_identifier) (rate(llm_d_epp_kv_cache_events_messages_received_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod_identifier}} → {{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1205,7 +1192,7 @@
     {
       "type": "timeseries",
       "title": "Subscriber Reconnections",
-      "description": "Reconnection attempts per second. A sustained rate means the EPP keeps losing that pod's event stream.",
+      "description": "Reconnection attempts per second, per model server pod and EPP replica. A sustained rate means the EPP keeps losing that pod's event stream.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1258,8 +1245,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod_identifier) (rate(llm_d_epp_kv_cache_events_subscriber_reconnections_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "{{pod_identifier}}",
+          "expr": "sum by (pod, pod_identifier) (rate(llm_d_epp_kv_cache_events_subscriber_reconnections_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod_identifier}} → {{pod}}",
           "range": true,
           "refId": "A"
         }
@@ -1268,7 +1255,7 @@
     {
       "type": "timeseries",
       "title": "ZMQ Errors",
-      "description": "ZMQ subscriber errors per second by pod and failed operation (bind, connect, subscribe, recv, replay-*).",
+      "description": "ZMQ subscriber errors per second by model server pod, EPP replica and failed operation (bind, connect, subscribe, recv, snapshot, replay-*).",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1321,8 +1308,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod_identifier, operation) (rate(llm_d_epp_kv_cache_events_zmq_errors_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "{{pod_identifier}} {{operation}}",
+          "expr": "sum by (pod, pod_identifier, operation) (rate(llm_d_epp_kv_cache_events_zmq_errors_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod_identifier}} → {{pod}} {{operation}}",
           "range": true,
           "refId": "A"
         }
@@ -1404,7 +1391,7 @@
     {
       "type": "timeseries",
       "title": "Removal Dedup",
-      "description": "Block hashes whose removal the dedup filter suppressed (still referenced elsewhere) vs forwarded to the index as evictions.",
+      "description": "Block hashes whose removal the dedup filter suppressed (still referenced elsewhere) vs forwarded to the index as evictions. Shown per EPP replica.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1457,8 +1444,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_events_dedup_removed_hashes_suppressed_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "suppressed",
+          "expr": "sum by (pod) (rate(llm_d_epp_kv_cache_events_dedup_removed_hashes_suppressed_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} suppressed",
           "range": true,
           "refId": "A"
         },
@@ -1468,8 +1455,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_events_dedup_removed_hashes_forwarded_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "forwarded",
+          "expr": "sum by (pod) (rate(llm_d_epp_kv_cache_events_dedup_removed_hashes_forwarded_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} forwarded",
           "range": true,
           "refId": "B"
         }
@@ -1478,7 +1465,7 @@
     {
       "type": "timeseries",
       "title": "Skipped Events",
-      "description": "Store and removal events skipped before prefix indexing, by cache kind and reason.",
+      "description": "Store and removal events skipped before prefix indexing, by EPP replica, cache kind and reason.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1531,8 +1518,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (cache_kind, reason) (rate(llm_d_epp_kv_cache_events_stores_skipped_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "store {{cache_kind}} {{reason}}",
+          "expr": "sum by (pod, cache_kind, reason) (rate(llm_d_epp_kv_cache_events_stores_skipped_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} store {{cache_kind}} {{reason}}",
           "range": true,
           "refId": "A"
         },
@@ -1542,8 +1529,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (cache_kind, reason) (rate(llm_d_epp_kv_cache_events_removals_skipped_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
-          "legendFormat": "removal {{cache_kind}} {{reason}}",
+          "expr": "sum by (pod, cache_kind, reason) (rate(llm_d_epp_kv_cache_events_removals_skipped_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} removal {{cache_kind}} {{reason}}",
           "range": true,
           "refId": "B"
         }
@@ -1565,7 +1552,7 @@
     {
       "type": "timeseries",
       "title": "Scrape Up",
-      "description": "Whether Prometheus can scrape each EPP replica hosting the index. A replica stays listed for an hour after it stops exporting KV-cache metrics, so a failing scrape shows as 0 instead of disappearing.",
+      "description": "Whether Prometheus can scrape each EPP replica hosting the index. A replica stays listed for an hour after it stops exporting KV-cache metrics, so a failing scrape shows as 0 instead of disappearing. A replica that has not exported KV-cache metrics at all in the last hour, such as one crash-looping since creation, cannot be identified and is not shown.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1751,7 +1738,7 @@
     {
       "type": "timeseries",
       "title": "EPP Restarts",
-      "description": "Container restarts of EPP replicas over the last hour (requires kube-state-metrics). A restart empties the in-memory index. Crash-looping replicas stay listed for an hour after they stop exporting KV-cache metrics.",
+      "description": "Restarts over the last hour of the container serving the EPP metrics, per replica (requires kube-state-metrics). A restart empties the in-memory index; sidecar restarts, such as the proxy's, do not and are excluded. Crash-looping replicas stay listed for an hour after they stop exporting KV-cache metrics. A replica that has not exported KV-cache metrics at all in the last hour, such as one crash-looping since creation, cannot be identified and is not shown.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1803,7 +1790,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]) and on (namespace, pod) max_over_time(llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]))",
+          "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]) and on (namespace, pod, container) max_over_time(llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]))",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
