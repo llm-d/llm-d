@@ -89,38 +89,48 @@ kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/alerts/kv-cache-al
 kubectl get prometheusrules -n ${NAMESPACE}
 ```
 
-You should then see the `kv-cache.index` and `kv-cache.events` groups under **Status → Rule Health** in the Prometheus UI.
+You should then see the `kv-cache.index` and `kv-cache.events` groups under **Status → Rule Health** in the Prometheus UI. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: kv-cache-metrics`.
+
+Each EPP replica keeps its own index and KV-events subscribers, so every rule is evaluated per replica using the `namespace` and `pod` labels a `ServiceMonitor` or `PodMonitor` adds to scraped series. A broken stream on one replica alerts even while other replicas are healthy. Without those labels the rules still evaluate, aggregated across replicas.
 
 > [!IMPORTANT]
-> The `llm_d_epp_kv_cache_*` metrics are opt-in. Set `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on the `precise-prefix-cache-producer` parameters (the precise prefix-cache routing guide already does). Without it, `KVCacheIndexMetricsAbsent` fires and every other rule in this group stays silent. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: kv-cache-metrics`.
+> Set `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on the `precise-prefix-cache-producer` parameters.
+> The [precise prefix-cache routing](../../../guides/precise-prefix-cache-routing/README.md) guide already does; the [GLM-5.2](../../../guides/models/glm-5-2/README.md) and [P2P KV-cache sharing](../../../guides/p2p-kv-cache-sharing/README.md) router values do not, so add it there before applying these rules.
+> The `llm_d_epp_kv_cache_*` series are always registered, but without this option the index counters and lookup-latency histogram stay at zero:
+> `KVCacheIndexMetricsDisabled` fires and `KVCacheIndexHighLookupLatency` cannot.
+> The other alerts use the KV-events counters and the prefix producer's own metrics, which are recorded either way.
+
+"Routing traffic" below means the precise producer is recording prompts (`llm_d_epp_prefix_prompt_tokens_count{plugin_type="precise-prefix-cache-producer"}` increasing), so these alerts stay silent on idle pools.
 
 #### Index (`kv-cache.index`)
 
 | Alert | Severity | Fires when | Why it matters |
 | --- | --- | --- | --- |
-| `KVCacheIndexMetricsAbsent` | warning | `absent(llm_d_epp_kv_cache_index_lookup_requests_total)` for 10m | Index metrics are disabled or not scraped, so none of the other KV-cache alerts can fire |
-| `KVCacheIndexNotAdmitting` | warning | Lookups flowing but zero `llm_d_epp_kv_cache_index_admissions_total` over 15m, for 15m | Nothing is being written to the index — the KV-events stream is broken and every lookup misses |
-| `KVCachePrefixHitRateLow` | warning | Predicted prefix hit rate < 10% for 30m (with > 0.1 req/s) | The index is not finding cached prefixes — stale index, broken event stream, or a block-hash mismatch between EPP and model servers |
+| `KVCacheIndexMetricsDisabled` | warning | An EPP is routing traffic but `llm_d_epp_kv_cache_index_lookup_requests_total` is not increasing, for 15m | `enableMetrics` is off, so index lookups are not instrumented and `KVCacheIndexHighLookupLatency` cannot fire |
+| `KVCachePrefixHitRateLow` | warning | Predicted prefix hit rate < 10% for 30m (with > 0.1 req/s) | The index is not finding cached prefixes — stale index data, or a block size or hash seed that differs between the EPP and the model servers |
 | `KVCacheIndexHighLookupLatency` | warning | P99 `llm_d_epp_kv_cache_index_lookup_latency_seconds` > 50ms for 10m | Lookups run on the request path, so slow lookups add directly to scheduling latency |
-| `KVCacheIndexEvictionSpike` | warning | Eviction rate > 3x the previous hour's rate (and > 10 blocks/s) for 5m | Model servers are repeatedly restarting or resetting their cache; hit rate drops until the index refills |
 
-`KVCachePrefixHitRateLow` uses `llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens`, a true 0–1 ratio. The index counters are not: `llm_d_epp_kv_cache_index_lookup_hits_total` counts matched *blocks* and `llm_d_epp_kv_cache_index_lookup_requests_total` counts *calls*, so their quotient is blocks per lookup. Workloads with no shared prefixes legitimately sit near zero — raise the threshold or drop this alert for them.
+`KVCachePrefixHitRateLow` uses `llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens`, a true 0–1 ratio.
+The index counters are not: `llm_d_epp_kv_cache_index_lookup_hits_total` counts matched *blocks* and `llm_d_epp_kv_cache_index_lookup_requests_total` counts *calls*, so their quotient is blocks per lookup.
+Workloads with no shared prefixes legitimately sit near zero — raise the threshold or drop this alert for them.
+Do not rely on it to detect a broken KV-events stream: with `speculativeIndexing`, the EPP's own short-lived entries keep repeated prefixes hitting even when no events arrive. `KVCacheEventsNotReceived` covers that case.
 
-`KVCacheIndexEvictionSpike` compares against the hour ending 15m ago, so it needs 75m of history before it can fire. A single short burst (one pod resetting its cache) clears within the 5m window and does not alert.
+There is no alert on `llm_d_epp_kv_cache_index_admissions_total` or `llm_d_epp_kv_cache_index_evictions_total`. With `speculativeIndexing` enabled, the EPP writes each routed prompt into the index itself and evicts those entries when their TTL expires, so both counters track request rate even when the KV-events stream is dead. Pod cache resets (`AllBlocksCleared`) clear the index without counting as evictions.
 
 #### KV events and tokenization (`kv-cache.events`)
 
 | Alert | Severity | Fires when | Why it matters |
 | --- | --- | --- | --- |
+| `KVCacheEventsNotReceived` | warning | An EPP is routing traffic but has received no KV events (or never connected), for 15m | The KV-events stream is broken; the index only holds the EPP's own speculative entries |
+| `KVCacheEventsStalled` | warning | One model pod's events stop for 15m while the same EPP is routing and still receiving events from other pods | Index entries for that pod are going stale |
 | `KVCacheEventsSubscriberReconnecting` | warning | `llm_d_epp_kv_cache_events_subscriber_reconnections_total` increasing for a pod for 15m | The EPP keeps losing that pod's event stream; its cached blocks are missing from the index |
-| `KVCacheEventsZMQErrors` | warning | `llm_d_epp_kv_cache_events_zmq_errors_total` increasing for a pod/operation for 15m | A ZMQ step (`bind`, `connect`, `subscribe`, `recv`, `replay-*`) is failing, so that pod's stream is incomplete |
-| `KVCacheEventsStalled` | warning | A subscriber that received events before has received none for 15m while lookups continue, for 15m | Index entries for that pod are going stale |
+| `KVCacheEventsZMQErrors` | warning | `llm_d_epp_kv_cache_events_zmq_errors_total` increasing for a pod/operation for 15m | A ZMQ step (`bind`, `connect`, `subscribe`, `recv`, `snapshot`, `replay-*`) is failing, so that pod's stream is incomplete |
 | `KVCacheEventsPoolBacklog` | warning | `llm_d_epp_kv_cache_events_pool_queue_depth` > 1000 for 15m | Event-pool workers cannot keep up and the index lags behind the model servers; raise `kvEventsConfig.concurrency` |
 | `KVCacheTokenizationSlow` | warning | > 5% of `token-producer` calls take over 100ms for 10m | Tokenization (via the render service) runs on the request path; check the render service's latency and capacity |
 
 `KVCacheTokenizationSlow` is built on `llm_d_epp_plugin_duration_seconds{plugin_type="token-producer"}`, whose largest bucket is 100ms, so it alerts on the share of calls above that bucket rather than on a quantile (which would be capped at 100ms).
 
-`KVCacheEventsStalled` also fires if a pod simply stops receiving requests. Treat it as a prompt to check that pod's stream, not proof that the stream is broken.
+`KVCacheEventsStalled` also fires if a pod simply stops receiving requests. Treat it as a prompt to check that pod's stream, not proof that the stream is broken. When no pod is sending events, `KVCacheEventsNotReceived` fires instead.
 
 ### Batch Gateway (`batch-gateway.rules`)
 
@@ -179,5 +189,6 @@ kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/batch-gate
 - `EPPExtProcStreamErrors` needs the EPP `--enable-grpc-stream-metrics` flag (see the note above).
 - Error-ratio alerts only evaluate once there is traffic — see the `0/0`-safe note above.
 - Self-health counters only produce series after the first error occurs.
-- KV-cache alerts need `enableMetrics: true` on the `precise-prefix-cache-producer` (see the KV-cache section above); `KVCacheIndexMetricsAbsent` fires when it is missing.
+- `KVCacheIndexHighLookupLatency` needs `enableMetrics: true` on the `precise-prefix-cache-producer` (see the KV-cache section above); `KVCacheIndexMetricsDisabled` fires when it is missing.
+- KV-cache alerts only evaluate while the EPP is routing traffic through the precise producer, and group by the `namespace`/`pod` scrape labels — check that your scrape config adds them if alerts aggregate across EPP replicas.
 - The per-pod KV-events counters (`messages_received`, `subscriber_reconnections`, `zmq_errors`) only produce series after the first event, reconnection or error for that pod, and are removed when the subscriber is.

@@ -312,6 +312,8 @@ No manual `PodMonitor` deployment is required when [GKE automatic application mo
 </details>
 <!-- tabs:end -->
 
+**(Optional) Alert on KV-cache index health.** With the Prometheus Operator, apply the default KV-cache alerting rules to be notified when the KV-events stream breaks or the index degrades — see [Configure Alerts](../../docs/operations/observability/alerting.md#kv-cache-index-kv-cacheindex-kv-cacheevents).
+
 ## Verification
 
 ### 1. Get the IP of the Proxy
