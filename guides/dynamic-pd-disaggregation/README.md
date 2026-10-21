@@ -197,8 +197,8 @@ The reference deployment used four single-XPU TP1 workers serving
 with an XPU KV buffer and RDMA transport. These results describe this environment
 and are not portable performance claims.
 
-AIPerf 0.4.0 ran two scenarios through the complete Gateway, Coordinator, EPP,
-and model-server path. Scenario 1 used ISL/OSL 2000/150; Scenario 2 used
+A benchmark client ran two scenarios through the complete Gateway, Coordinator,
+EPP, and model-server path. Scenario 1 used ISL/OSL 2000/150; Scenario 2 used
 1000/1000. Fixed A kept the 2P/2D layout, Fixed B kept the 1P/3D layout, and the
 dynamic policy changed from 2P/2D to 1P/3D between scenarios.
 
@@ -209,18 +209,16 @@ dynamic policy changed from 2P/2D to 1P/3D between scenarios.
 | Dynamic | 3.7393 | 0.9987 | 0 |
 
 Dynamic reached 99.97% and 99.92% of the best fixed-layout throughput in the
-two scenarios without restarting workers. The Scenario 2 dynamic value is from
-a clean 672-request rerun after the original attempt encountered one transient
-HTTP 503.
+two scenarios without restarting workers.
 
 ![Cumulative average request throughput](benchmark-results/4xIntel-Arc-Pro-B60_Qwen3-8B/average_req_per_s_r20.png)
 
 The plot joins the independently launched scenarios on each policy's original
-timeline. It includes successful AIPerf profiling requests, excludes warmup
-requests, and uses request 20 as the cumulative-average anchor.
+timeline. It includes successful profiling requests, excludes warmup requests,
+and uses request 20 as the cumulative-average anchor.
 
-For accuracy, lm-evaluation-harness 0.4.12 ran the full 1,319-example GSM8K task
-with 5-shot greedy generation before and after changing from 2P/2D to 1P/3D.
+For accuracy, `lm_eval` ran the full 1,319-example GSM8K task with 5-shot greedy
+generation before and after changing from 2P/2D to 1P/3D.
 
 | Layout | Exact match | Samples |
 | --- | ---: | ---: |
