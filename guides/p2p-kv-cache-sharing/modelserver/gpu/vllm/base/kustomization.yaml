@@ -14,7 +14,9 @@ namePrefix: p2p-kv-cache-sharing-
 components:
   - ../../../../../recipes/modelserver/components/graceful-shutdown
   - ../../../components/routing-sidecar
-  # Must follow routing-sidecar, which adds the container it resolves.
+  # Must follow routing-sidecar, which adds the container it resolves;
+  # reversing these renders the literal REPLACE_ROUTING_SIDECAR_IMAGE and
+  # still exits 0 (the break surfaces only as ImagePullBackOff).
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 # Pins:
@@ -31,7 +33,8 @@ components:
 #   (llm-d-router#3441); pin the next release when cut, together with the
 #   router image in ../../../../router/p2p-kv-cache-sharing.values.yaml:
 #   a sidecar with llm-d-router#3441 behind an older router stops pulling.
-#   This tag floats; see the REPRODUCIBILITY note in that file.
+#   This tag floats (set by the routing-sidecar/nightly component); to pin
+#   it, see the REPRODUCIBILITY note in that file.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai

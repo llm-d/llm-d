@@ -4,7 +4,7 @@
 # The router computes the source's P2P port (the p2p-source-producer's
 # p2pConnectorPort plus the endpoint's data parallel rank), so the sidecar
 # takes no P2P port flag.
-# POD_IP lets the sidecar recognize itself as the source and skip self-pulls.
+# POD_IP is the sidecar's own routable address (data-parallel rank routing).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

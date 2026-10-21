@@ -23,8 +23,8 @@ spec:
             # endpoints) only with this flag, which replaced
             # VLLM_ENABLE_SCALE_OUT_ENDPOINTS (vllm#55176). The router's
             # token-producer needs that endpoint on the model servers.
-            # Builds from before 2026-09-14 (such as v0.27.x) do not know the
-            # flag and fail at startup.
+            # Builds that predate vllm#55176 (vLLM 0.29.x and earlier, such as
+            # v0.27.x) do not know the flag and fail at startup.
             - --enable-scale-out
             - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
             - --tensor-parallel-size=1
