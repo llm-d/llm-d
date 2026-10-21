@@ -1,0 +1,167 @@
+# llm-d SGLang XPU image.
+#
+# Derived from sgl-project/sglang docker/xpu.Dockerfile (Apache-2.0), with two llm-d changes:
+#   1. SGLang is checked out at an exact commit (SG_LANG_COMMIT, set from SGLANG_XPU_REF in
+#      docker/common-versions) and the sglang-kernel-xpu source can optionally be overridden.
+#   2. A UCX (Level Zero) + NIXL layer is added for P/D disaggregation (see below).
+# The workflow always passes the build arguments from docker/common-versions; the defaults
+# below are informational only. No build context is needed:
+#   docker build -f docker/Dockerfile.sglang-xpu \
+#     --build-arg SG_LANG_COMMIT=<sha> --build-arg http_proxy=... -t llm-d-xpu-sglang:dev docker
+
+# Use Intel deep learning essentials base image with Ubuntu 24.04
+FROM intel/deep-learning-essentials:2026.0.0-devel-ubuntu24.04
+
+# Avoid interactive prompts during package install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Define build arguments
+ARG PYTHON_VERSION=3.12
+
+ARG SG_LANG_REPO=https://github.com/sgl-project/sglang.git
+ARG SG_LANG_BRANCH=main
+ARG SG_LANG_COMMIT=
+
+ARG SG_LANG_KERNEL_REPO=
+ARG SG_LANG_KERNEL_BRANCH=
+
+USER root
+
+# Pin Level-Zero UMD + IGC (rolling PPA once faulted libze on B580; see sgl-kernel-xpu#296).
+# Keep in lockstep with the host xe KMD; override via --build-arg.
+ARG COMPUTE_RUNTIME_VERSION=26.18.38308.1
+ARG IGC_VERSION=2.34.4+21428
+ARG GMM_VERSION=22.10.0
+
+RUN apt-get update && apt-get install -y software-properties-common curl && \
+    add-apt-repository -y ppa:kobuk-team/intel-graphics && \
+    apt-get update && \
+    # Loader + media/metrics from the PPA; the GPU driver is pinned below.
+    apt-get install -y \
+        libze1 intel-metrics-discovery clinfo intel-gsc \
+        intel-media-va-driver-non-free libmfx-gen1 libvpl2 libvpl-tools libva-glx2 va-driver-all vainfo \
+        libze-dev && \
+    cd /tmp && \
+    igc_url="https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC_VERSION%%+*}" && \
+    cr_url="https://github.com/intel/compute-runtime/releases/download/${COMPUTE_RUNTIME_VERSION}" && \
+    # IGC first: libze-intel-gpu1 / intel-opencl-icd depend on its exact version.
+    curl -fsSL -O "${igc_url}/intel-igc-core-2_${IGC_VERSION}_amd64.deb" && \
+    curl -fsSL -O "${igc_url}/intel-igc-opencl-2_${IGC_VERSION}_amd64.deb" && \
+    curl -fsSL -O "${cr_url}/libze-intel-gpu1_${COMPUTE_RUNTIME_VERSION}-0_amd64.deb" && \
+    curl -fsSL -O "${cr_url}/intel-opencl-icd_${COMPUTE_RUNTIME_VERSION}-0_amd64.deb" && \
+    curl -fsSL -O "${cr_url}/intel-ocloc_${COMPUTE_RUNTIME_VERSION}-0_amd64.deb" && \
+    curl -fsSL -O "${cr_url}/libigdgmm12_${GMM_VERSION}_amd64.deb" && \
+    apt-get install -y --allow-downgrades \
+        ./intel-igc-core-2_${IGC_VERSION}_amd64.deb \
+        ./intel-igc-opencl-2_${IGC_VERSION}_amd64.deb \
+        ./libigdgmm12_${GMM_VERSION}_amd64.deb \
+        ./libze-intel-gpu1_${COMPUTE_RUNTIME_VERSION}-0_amd64.deb \
+        ./intel-opencl-icd_${COMPUTE_RUNTIME_VERSION}-0_amd64.deb \
+        ./intel-ocloc_${COMPUTE_RUNTIME_VERSION}-0_amd64.deb && \
+    rm -f /tmp/*.deb && \
+    # Hold so later apt upgrades can't pull the rolling PPA version back.
+    apt-mark hold libze-intel-gpu1 intel-opencl-icd intel-ocloc libigdgmm12 \
+        intel-igc-core-2 intel-igc-opencl-2 && \
+    rm -rf /var/lib/apt/lists/*
+
+
+RUN apt-get update && apt-get install -y \
+    python3-dev \
+    build-essential \
+    libssl-dev \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
+RUN curl --proto '=https' --retry 3 --retry-delay 2 --tlsv1.2 -sSf https://sh.rustup.rs \
+| sh -s -- -y --no-modify-path --profile minimal && rustc --version && cargo --version
+ENV VIRTUAL_ENV="/opt/venv"
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
+RUN uv venv --python ${PYTHON_VERSION} --seed ${VIRTUAL_ENV}
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+WORKDIR /sgl-workspace
+
+RUN pip install --no-cache-dir torch==2.13.0+xpu torchvision==0.28.0+xpu torchaudio==2.11.0+xpu --index-url https://download.pytorch.org/whl/xpu && \
+    pip install --no-cache-dir msgspec blake3 py-cpuinfo compressed_tensors gguf partial_json_parser einops tabulate --root-user-action=ignore
+
+RUN echo "Cloning ${SG_LANG_REPO} at ${SG_LANG_COMMIT:-${SG_LANG_BRANCH}}" && \
+    git clone ${SG_LANG_REPO} sglang && \
+    git -C sglang fetch --tags --force origin && \
+    cd sglang && \
+    if [ -n "${SG_LANG_COMMIT}" ]; then \
+        git checkout --detach "${SG_LANG_COMMIT}" && \
+        test "$(git rev-parse HEAD)" = "${SG_LANG_COMMIT}"; \
+    else \
+        git checkout "${SG_LANG_BRANCH}"; \
+    fi && \
+    cd python && \
+    if [ -n "${SG_LANG_KERNEL_REPO}" ] || [ -n "${SG_LANG_KERNEL_BRANCH}" ]; then \
+        if [ -z "${SG_LANG_KERNEL_REPO}" ] || [ -z "${SG_LANG_KERNEL_BRANCH}" ]; then \
+            echo "Kernel override requires both SG_LANG_KERNEL_REPO and SG_LANG_KERNEL_BRANCH" >&2; \
+            exit 1; \
+        fi; \
+        grep -Fq '"sglang-kernel-xpu @ ' pyproject_xpu.toml && \
+        sed -i "s|sglang-kernel-xpu @ [^\"]*|sglang-kernel-xpu @ git+${SG_LANG_KERNEL_REPO}@${SG_LANG_KERNEL_BRANCH}|" pyproject_xpu.toml && \
+        grep -Fq "sglang-kernel-xpu @ git+${SG_LANG_KERNEL_REPO}@${SG_LANG_KERNEL_BRANCH}" pyproject_xpu.toml; \
+    fi && \
+    cp pyproject_xpu.toml pyproject.toml && \
+    pip install --no-cache-dir ".[dev,diffusion]" --extra-index-url https://download.pytorch.org/whl/xpu && \
+    pip install --no-cache-dir --no-deps xgrammar==0.1.33
+
+# Install torch_memory_saver for release/resume_memory_occupation ("memory saver").
+# XPU ships no prebuilt wheel: it is built from source against the local oneAPI +
+# torch-XPU runtime (the .so links libsycl.so.<N>, which must match the installed
+# intel-sycl-rt). TMS_PLATFORM=xpu forces the XPU backend; --no-build-isolation
+# lets the build import the installed torch (above) so it can match the libsycl
+# major to it -- under build isolation torch is absent and the match is skipped.
+# Pinned (v0.0.10b2) so image builds are reproducible; bump via --build-arg.
+ARG TORCH_MEMORY_SAVER_REF=a5c99f11b18ebb8e9fda71a68812e476ae49e417
+# Base image already applies setvars.sh in its own layers (SETVARS_COMPLETED=1,
+# icpx on PATH, LIBRARY_PATH/CPATH populated), so re-sourcing here is redundant.
+RUN TMS_PLATFORM=xpu pip install --no-cache-dir --no-build-isolation \
+    git+https://github.com/fzyzcjy/torch_memory_saver.git@${TORCH_MEMORY_SAVER_REF}
+
+# llm-d: NIXL KV transfer for P/D disaggregation. The PyPI NIXL wheels bundle
+# a CUDA-only UCX, so build UCX with Level Zero (ze_copy) and NIXL against it.
+# At runtime set UCX_MEMTYPE_CACHE=n: Level Zero allocations are not tracked by
+# the UCX memtype cache, so UCX would otherwise detect XPU memory as host.
+# UCX tracks the v1.21.x branch and the configure flags of vllm/vllm-openai-xpu,
+# pinned to a commit for reproducible builds.
+ARG UCX_REF=6476cdf85615a06154676a0b79fb83a9e6ba9384
+ARG NIXL_VERSION=1.3.2
+ARG NIXL_REF=de8115ca97d3f8fb63a4988e9b4d4a038b2e0f72
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        autoconf automake libtool pkg-config \
+        libibverbs-dev librdmacm-dev rdma-core ibverbs-providers && \
+    rm -rf /var/lib/apt/lists/* && \
+    git init /tmp/ucx && \
+    git -C /tmp/ucx fetch --depth 1 https://github.com/openucx/ucx.git "${UCX_REF}" && \
+    git -C /tmp/ucx checkout --detach FETCH_HEAD && \
+    cd /tmp/ucx && ./autogen.sh && \
+    ./configure --prefix=/opt/ucx --with-ze=yes --enable-examples --enable-mt --disable-static && \
+    make CFLAGS="-Wno-error=incompatible-pointer-types" -j"$(nproc)" && make install && \
+    git init /tmp/nixl && \
+    git -C /tmp/nixl fetch --depth 1 https://github.com/ai-dynamo/nixl.git "${NIXL_REF}" && \
+    git -C /tmp/nixl checkout --detach FETCH_HEAD && \
+    cd /tmp/nixl && \
+    PKG_CONFIG_PATH=/opt/ucx/lib/pkgconfig LD_LIBRARY_PATH=/opt/ucx/lib \
+        pip wheel --no-cache-dir --no-deps -w /tmp/nixl-wheels . && \
+    # The locally built wheel installs as the "nixl-cu12" distribution, while
+    # "nixl==${NIXL_VERSION}" only pins the separate PyPI dispatcher package,
+    # so pip can install both without erroring even if NIXL_REF and
+    # NIXL_VERSION disagree. Verify the built backend's own version instead
+    # (keep NIXL_VERSION and NIXL_REF in lockstep).
+    pip install --no-cache-dir --no-deps /tmp/nixl-wheels/nixl*.whl "nixl==${NIXL_VERSION}" && \
+    python -c "import importlib.metadata as m, sys; v = m.version('nixl-cu12'); sys.exit(0 if v == '${NIXL_VERSION}' else f'nixl-cu12 {v} != NIXL_VERSION ${NIXL_VERSION}')" && \
+    cd / && rm -rf /tmp/ucx /tmp/nixl /tmp/nixl-wheels && \
+    # Headers/pkgconfig/docs were only needed to build NIXL above, in this same
+    # layer; only the runtime shared libs need to ship in the image.
+    rm -rf /opt/ucx/include /opt/ucx/share /opt/ucx/lib/pkgconfig && \
+    find /opt/ucx -name '*.la' -delete && \
+    apt-get purge -y autoconf automake libtool pkg-config libibverbs-dev librdmacm-dev
+ENV LD_LIBRARY_PATH=/opt/ucx/lib:${LD_LIBRARY_PATH}
+RUN python -c "from nixl._api import nixl_agent"
+
+CMD ["bash"]

@@ -266,9 +266,6 @@ jobs:
           allow-unsafe-pr-checkout: true
           persist-credentials: false
 
-      - name: Pin SGLang source revision
-        run: git -C .cache/sglang-src apply "$GITHUB_WORKSPACE/patches/sglang_xpu_source_pins.patch"
-
       - name: Resolve source revisions
         id: source
         env:
@@ -292,8 +289,8 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@v7
         with:
-          context: ./.cache/sglang-src
-          file: ./.cache/sglang-src/docker/xpu.Dockerfile
+          context: ./docker
+          file: ./docker/Dockerfile.sglang-xpu
           platforms: linux/amd64
           push: true
           provenance: true
