@@ -127,8 +127,7 @@ The final release work involves creating a tag in the llm-d repo, which triggers
   - `quay.io/llm-d/llm-d-cpu:pr-123`
   - `quay.io/llm-d/llm-d-cpu:latest` (from the default branch)
 
-  The full list of platforms includes: `cuda`, `aws`, `cpu`, and `xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for
-   the complete list.
+  Current llm-d image builds cover `cpu`, `xpu` (vLLM with LMCache), `sglang-xpu-nixl` (a NIXL/UCX extension over the official SGLang XPU image for P/D disaggregation), and `rdma-tools`. Other SGLang XPU guides use the official `lmsysorg/sglang:v0.5.22-xpu` image directly. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for the complete list.
 
 The process involves creating a Release Candidate (RC) tag for a dry run of the release workflow, which is a method to test the process and identify necessary updates (such as removing the deprecated images build from the CI). We typically delete RC tags after testing, while the final release is drafted from a new tag using the collected release notes.
 

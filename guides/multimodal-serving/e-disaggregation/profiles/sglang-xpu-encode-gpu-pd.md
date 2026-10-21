@@ -26,13 +26,13 @@ Text-only requests skip the Encode workers.
 | Encode attention backend | `xpu_attn` |
 | PD replicas | 1 |
 | PD accelerator | 1 NVIDIA GPU |
-| Validated hardware | 4 Intel B60 XPUs + 1 NVIDIA H200 GPU |
+| Reference hardware | 4 Intel B60 XPUs + 1 NVIDIA H200 GPU |
 | Encoder discovery | Static StatefulSet DNS names in `--encoder-urls` |
 | Embedding transfer | SGLang `zmq_to_scheduler` |
 | llm-d Router ownership | PD selection only |
 
 > [!NOTE]
-> The reference configuration was evaluated with SGLang's random multimodal dataset. Because this workload does not intentionally reuse prefixes, the PD worker uses `--disable-radix-cache` to avoid cache effects in the comparison. Remove this option for workloads that benefit from prefix reuse.
+> The earlier image pair was evaluated with SGLang's random multimodal dataset. Because this workload does not intentionally reuse prefixes, the PD worker uses `--disable-radix-cache` to avoid cache effects in the comparison. Remove this option for workloads that benefit from prefix reuse.
 
 The Encode StatefulSet and headless Service provide these stable endpoints:
 
@@ -140,17 +140,17 @@ These checks are informational. Namespace-scoped users can deploy the profile wi
 
 ## Image Provenance
 
-The profile pins both images by digest:
+The profile pins both official SGLang v0.5.22 images by digest:
 
 | Role | Image |
 | --- | --- |
-| GPU PD | `docker.io/lmsysorg/sglang:v0.5.15.post1-cu130@sha256:00c53fe4c31bf22d7b37537f28bbdfd924c02de13cdfb4bff7378c9c34d75ab2` |
-| Intel XPU Encode | `ghcr.io/llm-d/llm-d-xpu-sglang:sha-e119543@sha256:53254b75d39a87b00bb6e9309acbe125dc0453d00860aea539d10fe55621a276` |
+| GPU PD | `docker.io/lmsysorg/sglang:v0.5.22@sha256:e3a4f06001a29542fc4a8638536d9ffc5eb9c9942b08603c09b19a56eae4a1ae` |
+| Intel XPU Encode | `docker.io/lmsysorg/sglang:v0.5.22-xpu@sha256:a66de2a4b337f4a5ac55fdb5d5b7f7ff2a33ff76b970ae4773caabf2795695b4` |
 
-The GPU image identifies SGLang source revision `0b3bb0cbe31873994c9f989fddfe2f87ca839fdd`. The [llm-d XPU image](https://github.com/llm-d/llm-d/pkgs/container/llm-d-xpu-sglang/1126772494?tag=sha-e119543) is built from SGLang source revision `1af01674938f68266d5f8a0e5635ea1434af7801`, and `sgl-kernel-xpu` revision `8c328fee250fcef4169c912cb7bbd13c1f637d5c`.
+Upgrade the Encode and PD images together. SGLang v0.5.22 moves the pickled encoder metadata class to `sglang.srt.disaggregation.encoder.receiver.EmbeddingData`; the earlier GPU PD image cannot deserialize metadata from the new Encode workers. The XPU image includes PyTorch 2.14.0+xpu and the prebuilt `sglang-kernel-xpu` v0.4.0 wheel.
 
 > [!IMPORTANT]
-> The SGLang E/PD runtime path was validated end to end with four Intel B60 Encode workers and one NVIDIA H200 PD worker. The site-local overlay supplied placement, device-allocation, model-cache, and registry-access settings; the SGLang E/PD arguments and pinned images matched the portable profile.
+> The earlier image pair (GPU `v0.5.15.post1-cu130` and llm-d XPU `sha-e119543`) was validated end to end with four Intel B60 Encode workers and one NVIDIA H200 PD worker. The site-local overlay supplied placement, device-allocation, model-cache, and registry-access settings. The v0.5.22 image pair still requires hardware validation using the verification steps below.
 
 ## Profile Verification
 
@@ -270,7 +270,7 @@ Performance gains are model- and workload-dependent. Compare this deployment wit
 * This is a fixed 4E1PD example for `moonshotai/Kimi-VL-A3B-Instruct`; it does not establish support or a performance benefit for other models or workloads.
 * Encoder membership is static. Changing the StatefulSet replica count also requires updating the PD worker's `--encoder-urls`.
 * The PD worker waits for all Encode workers at startup, but the llm-d Router does not track Encode health or load.
-* Remote media URLs are fetched by Encode workers. In the validated SGLang revision, an Encode-side download failure caused the PD process to restart; use reachable URLs or data URLs and inspect `kubectl logs deployment/decode -n "${NAMESPACE}" -c modelserver --previous` after media-fetch failures.
+* Remote media URLs are fetched by Encode workers. In the earlier validated image pair, an Encode-side download failure caused the PD process to restart; use reachable URLs or data URLs and inspect `kubectl logs deployment/decode -n "${NAMESPACE}" -c modelserver --previous` after media-fetch failures.
 * The E-to-PD path uses TCP-based HTTP and ZMQ communication. It does not configure RDMA or NIXL.
 * The Encode workers expose metrics, but this profile does not include an Encode-specific PodMonitor.
 * Hardware sizing, network policy, persistent model caching, autoscaling, and production availability policy remain deployment-specific.
@@ -278,5 +278,5 @@ Performance gains are model- and workload-dependent. Compare this deployment wit
 ## References
 
 * [llm-d Router architecture](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md)
-* [SGLang EPD disaggregation](https://github.com/sgl-project/sglang/blob/main/docs/advanced_features/epd_disaggregation.md)
+* [SGLang EPD disaggregation](https://github.com/sgl-project/sglang/blob/v0.5.22/docs/docs/advanced_features/epd_disaggregation.mdx)
 * [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes)

@@ -329,7 +329,7 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.xpu[0] end -->
 
-The Intel XPU SGLang overlay (`xpu/sglang/base`) uses the nightly `llm-d-xpu-sglang` image, which bundles NIXL built against a Level Zero-enabled UCX, and registers the KV cache in XPU memory directly with NIXL; UCX then copies it through host buffers via `ze_copy` over TCP. It sets `UCX_MEMTYPE_CACHE=n` so UCX detects XPU memory instead of treating it as host memory, `--disaggregation-decode-retraction-backup=cpu_tensor` on decode, and `SGLANG_DISAGG_PREFILL_EARLY_SEND_CACHED_PREFIX=0` on prefill to avoid CUDA-only code paths.
+The Intel XPU SGLang overlay (`xpu/sglang/base`) uses `ghcr.io/llm-d/llm-d-xpu-sglang:main`, a NIXL/UCX extension over the official `lmsysorg/sglang:v0.5.22-xpu` image. llm-d builds only the transfer dependencies; SGLang and PyTorch come from the upstream image. NIXL registers the KV cache in XPU memory directly, and UCX copies it through host buffers via `ze_copy` over TCP. The overlay sets `UCX_MEMTYPE_CACHE=n` for XPU memory detection, `--disaggregation-decode-retraction-backup=cpu_tensor` on decode, and `SGLANG_DISAGG_PREFILL_EARLY_SEND_CACHED_PREFIX=0` on prefill.
 Its prefill liveness and readiness probes allow longer response times because `/health` waits for the scheduler; a long chunked prefill can temporarily make the endpoint return 503. Client disconnects through the Router do not currently cancel the corresponding SGLang P/D work, so plan capacity accordingly.
 
 </details>
