@@ -10,8 +10,9 @@
 ## The deployed EPP config is token-aware + P2P: the token-load-scorer places
 ## each request on the pod with the fewest prompt tokens still to prefill,
 ## counting (through the inflight-load-producer) what the precise index says
-## each pod already caches, and the p2p-source-producer emits the KV cache
-## source header when a peer out-caches the scheduled pod by at least
+## each pod already caches, and the p2p-source-producer writes
+## kv_transfer_params.remote_kv_source into the request body (and sets the KV
+## cache source header) when a peer out-caches the scheduled pod by at least
 ## minCachedTokenDelta tokens. A prefix owner is therefore preferred until it
 ## is loaded; after that the request spills to a lighter pod and pulls the
 ## prefix instead of recomputing it. On the guide's document Q&A profile
@@ -125,6 +126,11 @@ router:
               # pull-versus-recompute crossover; calibrate it with
               # ../../recipes/router/calibration/calibrate-min-cached-token-delta.sh.
               minCachedTokenDelta: 2048
+              # The router, not the sidecar, computes the source's P2P port:
+              # p2pConnectorPort plus the endpoint's data parallel rank. The
+              # default, 7777, is the P2P tier port of the model server
+              # overlays; set p2pConnectorPort here if you change that port
+              # (an EPP that predates llm-d-router#3441 rejects the field).
           - type: token-load-scorer
           - type: max-score-picker
           - type: single-profile-handler

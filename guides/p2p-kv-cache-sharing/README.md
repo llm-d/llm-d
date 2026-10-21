@@ -8,7 +8,7 @@ The deployment composes three llm-d capabilities:
 
 - the vLLM `OffloadingConnector` with a P2P secondary tier on port `7777`: each pod is both a puller and a source;
 - the llm-d Router's precise (KV-event-fed) prefix index from [Precise Prefix Cache Routing](../precise-prefix-cache-routing/README.md), which the source decision consumes;
-- the `p2p-source-producer`, which selects a CPU-tier source and sets the KV cache source header; the routing sidecar injects `kv_transfer_params.remote_kv_source` and the engine pulls instead of recomputing.
+- the `p2p-source-producer`, which selects a CPU-tier source, computes its P2P tier port, and writes `kv_transfer_params.remote_kv_source` into the request body together with the KV cache source header (`x-llm-d-kv-cache-source-p2p-host-port`); the routing sidecar validates the block and forwards it, and the engine pulls instead of recomputing.
 
 The default deployment is two aggregated `openai/gpt-oss-120b` replicas, one GPU each: the smallest fleet in which one pod can pull a prefix its peer computed. `INFRA_PROVIDER=base` carries the pull over TCP; `INFRA_PROVIDER=rdma` (GPU only) carries it over RDMA. A P/D variant (pull on the prefill leg) is described in [P/D variant](#pd-variant-p2p-over-nixl-disaggregation).
 
@@ -69,8 +69,8 @@ SGLang has no equivalent of the `OffloadingConnector` P2P secondary tier, so thi
 - The shipped images meet these requirements; check them if you swap images:
   - **Engine**: a vLLM image with the `OffloadingConnector` P2P secondary tier. Its robustness fixes ([vllm#48021](https://github.com/vllm-project/vllm/pull/48021), [vllm#49671](https://github.com/vllm-project/vllm/pull/49671), [vllm#49823](https://github.com/vllm-project/vllm/pull/49823), [vllm#49877](https://github.com/vllm-project/vllm/pull/49877)) and the wide-EP block-table alignment fix ([vllm#50302](https://github.com/vllm-project/vllm/pull/50302)) are all contained in vLLM `v0.27.0`, the first tagged release with the full set; the GPU overlay pins `v0.27.1`.
     The Intel XPU overlay uses `ghcr.io/llm-d/llm-d-xpu:v0.10.0` (vLLM 0.30.0); earlier `llm-d-xpu` images (v0.9.0 and before) lack `remote_kv_source` handling, and vLLM 0.30.0 needs `--enable-scale-out` (set by the overlay) to expose `/v1/*/render`.
-  - **Routing sidecar**: an llm-d routing sidecar that injects `kv_transfer_params.remote_kv_source`. A sidecar emitting the older `p2p`/`prefill`/`decode` keys is silently inert against current engines (see [Troubleshooting](#troubleshooting)).
-  - **Router (EPP)**: an image with the `p2p-source-producer` plugin; the router values pin `main` until a release ships it.
+  - **Routing sidecar**: an llm-d routing sidecar that forwards the router's `kv_transfer_params.remote_kv_source` ([llm-d-router#3441](https://github.com/llm-d/llm-d-router/pull/3441)). An older sidecar builds the block itself from the source header instead of forwarding the router's block (see [Troubleshooting](#troubleshooting)).
+  - **Router (EPP)**: an image with the `p2p-source-producer` plugin that writes `remote_kv_source` into the body and computes the P2P port from its `p2pConnectorPort` parameter (default `7777`) plus the endpoint's data parallel rank. The router values pin `main` until a release ships it. Upgrade the router before the sidecar (in the [P/D variant](#pd-variant-p2p-over-nixl-disaggregation), upgrade them together): a sidecar with llm-d-router#3441 behind an older router stops pulling.
 
 - (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
@@ -292,7 +292,7 @@ kubectl run curl-test --rm -i --restart=Never \
 
 A served request only proves the stack is up. An inert P2P misconfiguration looks identical to "no effect": requests serve fine, and nothing is pulled. To confirm the mechanism is engaged, compute a fresh prefix on one model server, then ask its peer, which has never seen that prefix, to pull it.
 
-**Seed a prefix on the source pod and pull it on the consumer pod.** Both requests go straight to the engines (port `8200`); the second one carries the same `kv_transfer_params.remote_kv_source` the routing sidecar injects when the router names a source:
+**Seed a prefix on the source pod and pull it on the consumer pod.** Both requests go straight to the engines (port `8200`); the second one carries the same `kv_transfer_params.remote_kv_source` the router writes when it names a source:
 
 <!-- guide:verify.tests.p2p_pull start -->
 ```bash
@@ -332,7 +332,7 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${PODS[1]}:8200/proxy/me
 What to expect: both requests return HTTP 200, and `vllm:external_prefix_cache_hits_total` on the consumer is well above zero (roughly the prefix length in tokens, rounded down to whole 64-token blocks). The consumer has no local copy of the fresh prefix, so these hits can only come from the peer's CPU tier; the count also proves that block hashes agree across pods.
 
 If the hits stay at zero, check that `PYTHONHASHSEED` and `--block-size` match on both pods, and look in the source's log for `rejecting peer` (`kubectl logs -n ${NAMESPACE} ${PODS[0]} -c modelserver`).
-Once the direct pull works, router-driven pulls show up as `running P2P source protocol` lines with a `source_host` in the routing sidecar's log (`kubectl logs -n ${NAMESPACE} ${PODS[1]} -c routing-proxy`) on requests whose prefix a peer holds, and the EPP logs show KV-event subscriptions for every pod and non-zero prefix scores. Under the shipped affinity placement those pulls are rare by design (see [When to use this path](#when-to-use-this-path)).
+Once the direct pull works, router-driven pulls show up as `running P2P source protocol` lines with a `p2p_source` in the routing sidecar's log (`kubectl logs -n ${NAMESPACE} ${PODS[1]} -c routing-proxy`) on requests whose prefix a peer holds, and the EPP logs show KV-event subscriptions for every pod and non-zero prefix scores. Under the shipped token-aware placement those pulls fire only once a prefix owner is loaded, so an idle fleet shows none (see [When to use this path](#when-to-use-this-path)).
 
 ## Best Practices
 
@@ -380,7 +380,7 @@ Start from the [P/D disaggregation guide](../pd-disaggregation/README.md) topolo
 
    Both side channels must bind the pod IP via the downward API: `VLLM_NIXL_SIDE_CHANNEL_HOST` and `VLLM_P2P_SIDE_CHANNEL_HOST`. All of the [Best Practices](#best-practices) apply unchanged. Size `cpu_bytes_to_use` **per role**: decode legs typically run higher TP, so their per-pod GPU KV (and the tier that must exceed it) is several times a prefill pod's; the value above is a prefill-leg (TP=1) size. Decode must run `offload_prompt_only: false`, with a chat template that re-renders generated answers verbatim.
 
-2. **The routing sidecar declares the tier** with `--kv-connector=nixlv2 --enable-p2p-pull` (plus `--p2p-connector-port=7777` if not the default). `--enable-p2p-pull` is accepted only with `--kv-connector=nixlv2`; with `--kv-connector=offloading` the tier is native and the flag is unnecessary.
+2. **The routing sidecar declares the tier** with `--kv-connector=nixlv2 --enable-p2p-pull`. `--enable-p2p-pull` is accepted only with `--kv-connector=nixlv2`; with `--kv-connector=offloading` the tier is native and the flag is unnecessary. The sidecar takes no P2P port: if the tier does not listen on `7777`, set the `p2p-source-producer`'s `p2pConnectorPort` instead. Upgrade the router and the sidecar together in this topology: a sidecar that predates llm-d-router#3441 replaces the prefill request's `kv_transfer_params`, which drops the router's `remote_kv_source` block, so prefill computes the prefix again.
 
 3. **The EPP scheduling config targets the prefill profile**: set the `p2p-source-producer`'s `prefillProfileName` to the disaggregation prefill profile name (default `prefill`), so the source comparison runs against the pod that will actually compute the prefix.
 
@@ -395,7 +395,9 @@ Size the decode pool for its NIXL intake: each request ships its full KV from pr
 | No pulls from a TP-mismatched source, index and hashes fine | peer session fingerprint is TP-locked | matched TP; hetero-TP only for non-hybrid models on the V1 runner ([Best Practices](#best-practices)) |
 | Pulls fire but hit rate ~0 | CPU tier too small vs GPU cache; prefixes evicted before peers ask | grow `cpu_bytes_to_use` (and `/dev/shm`) |
 | Sidecar exits with `unknown flag: --enable-p2p-pull` | sidecar image predates the NIXL P/D pull path | use a sidecar build that includes it |
-| Zero router-driven pulls, the direct P2P pull check passes | sidecar emits the old sub-dict keys (`p2p`/`prefill`/`decode`); the engine ignores them | use a sidecar built with the renamed keys (`remote_kv_source`/`remote_prefiller`/`remote_decoder`) |
+| Sidecar exits with `unknown flag: --p2p-connector-port` | the sidecar includes [llm-d-router#3441](https://github.com/llm-d/llm-d-router/pull/3441), which moved the P2P port to the router | drop the flag; set the `p2p-source-producer`'s `p2pConnectorPort` if the tier does not listen on `7777` |
+| Zero router-driven pulls after a sidecar upgrade, the direct P2P pull check passes, and the sidecar never logs `running P2P source protocol` | the router predates llm-d-router#3441: it sends only the retired `x-llm-d-kv-cache-source-host-port` header, which the new sidecar ignores (it reads `x-llm-d-kv-cache-source-p2p-host-port`) | upgrade the router to a build with llm-d-router#3441 (upgrade the router before the sidecar) |
+| Zero router-driven pulls, the direct P2P pull check passes, and the sidecar logs `running P2P source protocol` but the engine's `vllm:external_prefix_cache_hits_total` stays at zero | the sidecar predates the key rename ([llm-d-router#2140](https://github.com/llm-d/llm-d-router/pull/2140)) and injects the old sub-dict keys (`p2p`/`prefill`/`decode`); the engine ignores them | upgrade the router, then the sidecar, to builds with llm-d-router#3441 |
 | TTFT pins flat at ~the `token-producer` timeout (default 5 s) at every rate above some cliff; engines report near-zero queue/prefill time | render capacity saturated; every EPP render call times out and requests proceed late without token IDs | apply `render/standalone/` and scale it per [Best Practices](#best-practices); verify with a direct load test against `/v1/completions/render` |
 
 ## Cleanup
