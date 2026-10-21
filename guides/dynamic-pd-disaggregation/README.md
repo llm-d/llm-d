@@ -190,6 +190,45 @@ Send the same completion request again after the change. The change is valid
 when inference succeeds, worker pod UIDs and restart counts remain unchanged,
 and `/v1/layout/show` reports the requested layout.
 
+## Performance and Accuracy Validation
+
+The reference deployment used four single-XPU TP1 workers serving
+`Qwen/Qwen3-8B` on Intel Arc Pro B60 devices. Each worker used `NixlConnector`
+with an XPU KV buffer and RDMA transport. These results describe this environment
+and are not portable performance claims.
+
+AIPerf 0.4.0 ran two scenarios through the complete Gateway, Coordinator, EPP,
+and model-server path. Scenario 1 used ISL/OSL 2000/150; Scenario 2 used
+1000/1000. Fixed A kept the 2P/2D layout, Fixed B kept the 1P/3D layout, and the
+dynamic policy changed from 2P/2D to 1P/3D between scenarios.
+
+| Policy | Scenario 1 req/s | Scenario 2 req/s | Errors |
+| --- | ---: | ---: | ---: |
+| Fixed A | 3.7403 | 0.8017 | 0 |
+| Fixed B | 2.4233 | 0.9995 | 0 |
+| Dynamic | 3.7393 | 0.9987 | 0 |
+
+Dynamic reached 99.97% and 99.92% of the best fixed-layout throughput in the
+two scenarios without restarting workers. The Scenario 2 dynamic value is from
+a clean 672-request rerun after the original attempt encountered one transient
+HTTP 503.
+
+![Cumulative average request throughput](benchmark-results/4xIntel-Arc-Pro-B60_Qwen3-8B/average_req_per_s_r20.png)
+
+The plot joins the independently launched scenarios on each policy's original
+timeline. It includes successful AIPerf profiling requests, excludes warmup
+requests, and uses request 20 as the cumulative-average anchor.
+
+For accuracy, lm-evaluation-harness 0.4.12 ran the full 1,319-example GSM8K task
+with 5-shot greedy generation before and after changing from 2P/2D to 1P/3D.
+
+| Layout | Exact match | Samples |
+| --- | ---: | ---: |
+| 2P/2D, before switch | 0.8961 | 1,319 |
+| 1P/3D, after switch | 0.8969 | 1,319 |
+
+Worker pod UIDs and restart counts remained unchanged during the switch.
+
 ## Cleanup
 
 ```bash
