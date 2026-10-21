@@ -101,6 +101,9 @@ verify:
             sleep 1
           done
           jq -e '.current_layout == "p_1tp1_d_2tp1_m_none"' /tmp/${GUIDE_NAME}-layout.json
+          kill "${PF_PID}" 2>/dev/null || true
+          wait "${PF_PID}" 2>/dev/null || true
+          trap - EXIT
     change_layout:
       - run: |
           kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} \
@@ -121,6 +124,9 @@ verify:
           curl -fsS -H "Authorization: Bearer ${TOKEN}" \
             http://127.0.0.1:19090/v1/layout/show \
             | jq -e '.current_layout == "p_2tp1_d_1tp1_m_none"'
+          kill "${PF_PID}" 2>/dev/null || true
+          wait "${PF_PID}" 2>/dev/null || true
+          trap - EXIT
     request_after_change:
       - run: |
           if [ "${PROVIDER_NAME}" = agentgateway ]; then

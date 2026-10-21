@@ -101,6 +101,7 @@ export NAMESPACE=llm-d-dynamic-pd-disaggregation
 export PROVIDER_NAME=istio
 export ACCELERATOR_TYPE=xpu
 export MODEL_SERVER=vllm
+export MODEL=Qwen/Qwen3-0.6B
 export INFRA_PROVIDER=base
 
 kubectl create namespace "${NAMESPACE}" \
