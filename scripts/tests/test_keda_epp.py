@@ -37,7 +37,8 @@ envsubst() { cat; }
         assert "apply -f -" in calls.read_text()
 
 
-def test_ocp_nightly_renders_scaledobject(tmp_path):
+@pytest.mark.parametrize("platform", ["ocp", "amd"])
+def test_nightly_renders_scaledobject(tmp_path, platform):
     """Run the deploy script through real kustomize, without a cluster."""
     import shutil
 
@@ -67,7 +68,7 @@ esac
            "OUTPUT_DIR": str(output), "NAMESPACE": "nightly-test",
            "EPP_SERVICE": "test-epp", "MODEL_NAME": "test/model"}
     result = subprocess.run(
-        ["bash", str(root / "guides/workload-autoscaling/scripts/nightly-deploy-ocp-keda-epp.sh")],
+        ["bash", str(root / f"guides/workload-autoscaling/scripts/nightly-deploy-{platform}-keda-epp.sh")],
         env=env, capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 79, result.stdout + result.stderr
@@ -77,9 +78,16 @@ esac
     assert obj["metadata"]["name"] == "optimized-baseline-keda-epp"
     spec = obj["spec"]
     assert spec["advanced"]["horizontalPodAutoscalerConfig"]["name"] == "optimized-baseline-keda-epp-hpa"
-    assert spec["scaleTargetRef"]["name"] == "optimized-baseline-nvidia-gpu-vllm-decode"
+    assert spec["scaleTargetRef"]["name"] == ("optimized-baseline-nvidia-gpu-vllm-decode" if platform == "ocp" else "optimized-baseline-rocm-vllm-decode")
     assert spec["maxReplicaCount"] == 2
     assert spec["advanced"]["horizontalPodAutoscalerConfig"]["behavior"]["scaleDown"]["stabilizationWindowSeconds"] == 60
+    if platform == "amd":
+        assert len(spec["triggers"]) == 2
+        for trigger, metric in zip(spec["triggers"], ["llm_d_epp_flow_control_queue_size", "llm_d_epp_request_running"]):
+            assert trigger["metadata"]["query"] == f'sum({metric}{{namespace="nightly-test",service="test-epp",model_name="test/model"}})'
+            assert "${" not in trigger["metadata"]["serverAddress"]
+        assert spec["advanced"]["horizontalPodAutoscalerConfig"]["behavior"]["scaleUp"]["stabilizationWindowSeconds"] == 0
+        return
     assert len(spec["triggers"]) == 1
     assert spec["triggers"][0]["metadata"]["query"] == (
         'sum(llm_d_epp_inflight_requests{namespace="nightly-test",producer_name="inflight-load-producer"})'
