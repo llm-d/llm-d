@@ -77,7 +77,7 @@ declare all environment variables required by scripts they execute.
 
 ```bash
 # check specific dockerfile
-./scripts/lint-dockerfile-envvars.py docker/scripts docker/Dockerfile.cuda
+./scripts/lint-dockerfile-envvars.py docker/scripts docker/Dockerfile.xpu
 
 # check all dockerfiles
 for df in docker/Dockerfile.*; do
