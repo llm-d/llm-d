@@ -592,9 +592,15 @@ count is required.
 
 KEDA supports scale-to-zero without the Kubernetes `HPAScaleToZero` feature
 gate. Set `minReplicaCount: 0` only after validating scale-up from one replica.
-When the Deployment is at zero, the Flow Control queue-size metric is the
-activation signal: EPP holds incoming requests until a model server becomes
-Ready.
+
+Scale-to-zero requires a Flow Control signal (the `queue` or `saturation`
+path), not the default `inflight` signal. At zero replicas there are no
+endpoints, so `llm_d_epp_inflight_requests` stays absent and cannot reactivate
+the Deployment. Flow Control is what makes zero-to-one work: EPP buffers
+incoming requests while no model server is Ready, which raises the
+`llm_d_epp_flow_control_queue_size` metric, and KEDA activates the Deployment.
+If you are on the default `inflight` path and want scale-to-zero, switch to the
+`queue` signal.
 
 For how zero-to-one activation, `cooldownPeriod`, and cold-start latency behave, see [Scale to Zero](../../../docs/architecture/autoscaling/keda-epp.md#scale-to-zero).
 
