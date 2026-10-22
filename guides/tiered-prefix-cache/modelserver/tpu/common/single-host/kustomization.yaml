@@ -3,9 +3,8 @@ kind: Kustomization
 resources:
   - ../../../../../recipes/modelserver/base/single-host/default
 
-components:
-  - ../../../../../recipes/modelserver/components/images/tpu-vllm/nightly
-  - ../../../../../recipes/modelserver/components/graceful-shutdown
+# The model server image is selected by the per-generation overlays
+# (v5p/, v6/, v7/) via an images/* component so each can pick its own backend.
 
 labels:
   - pairs:
@@ -17,3 +16,5 @@ labels:
     includeTemplates: true
 patches:
   - path: patch-vllm.yaml
+components:
+  - ../../../../../recipes/modelserver/components/graceful-shutdown

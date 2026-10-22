@@ -43,15 +43,15 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8)"
-      model: Qwen/Qwen3-32B
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) · Torch TPU vLLM (`torch-tpu-vllm` image) · no KV offload or MTP"
+      model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
@@ -179,6 +179,11 @@ deploy:
     - when: {ACCELERATOR_TYPE: [npu]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+    # TPU7x serves Qwen3.5-397B with --block-size=4352 and a 262k context; the shared
+    # values are sized for Qwen3-32B on H100.
+    - when: {ACCELERATOR_TYPE: ["tpu/v7"]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
 
   standalone:
     - run: |

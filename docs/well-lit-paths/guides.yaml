@@ -71,9 +71,9 @@ sections:
         slug: nemotron-3-ultra
         title: NVIDIA Nemotron 3 Ultra
         position: 3
-      - dir: guides/models/qwen3-coder-480b
-        slug: qwen3-coder-480b
-        title: Qwen3-Coder-480B
+      - dir: guides/models/qwen3-5-397b
+        slug: qwen3-5-397b
+        title: Qwen3.5-397B
         position: 4
   # Operations: the sidebar is at most two levels deep (Operations > category
   # > page). Two guides are categories themselves (section `operations`,

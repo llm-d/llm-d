@@ -1,0 +1,141 @@
+# Qwen3.5-397B-A17B-FP8 decode on one TPU7x 2x2x1 node (4 chips, 8 TensorCores).
+#
+# Engine: DP=8 x TP=1 with expert parallelism. KV arrives from prefill through
+# TPURaidenConnector (kv_consumer, kv_port 14579), tpu-sync Stage-3. The routing sidecar on :8000
+# (from tpu/common) forwards to this engine on :8200.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              nodeSelector:
+                cloud.google.com/gke-tpu-topology: "2x2x1"
+                cloud.google.com/gke-tpu-accelerator: "tpu7x"
+              containers:
+                - name: modelserver
+                  command: ["/bin/bash", "-c"]
+                  args:
+                    - |
+                      set -euo pipefail
+                      if [[ "${POD_IP}" == *":"* ]]; then
+                        HOST_ADDR="::"
+                        export VLLM_HOST_IP="[${POD_IP}]"
+                      else
+                        HOST_ADDR="0.0.0.0"
+                        export VLLM_HOST_IP="${POD_IP}"
+                      fi
+                      exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+                        --host "${HOST_ADDR}" \
+                        --port=8200 \
+                        --trust-remote-code \
+                        --seed=42 \
+                        --max-model-len=262144 \
+                        --max-num-batched-tokens=4384 \
+                        --max-num-seqs=32 \
+                        --tensor-parallel-size=1 \
+                        --prefill-context-parallel-size=1 \
+                        --data-parallel-size=8 \
+                        --data-parallel-size-local=8 \
+                        --enable-expert-parallel \
+                        --enable-ep-weight-filter \
+                        --disable-custom-all-reduce \
+                        --gpu-memory-utilization=0.90 \
+                        --kv-cache-dtype=fp8 \
+                        --block-size=4352 \
+                        --language-model-only \
+                        --attention-backend=CUSTOM \
+                        --no-disable-hybrid-kv-cache-manager \
+                        --mamba-cache-mode=align \
+                        --enable-prefix-caching \
+                        --prefix-cache-retention-interval=0 \
+                        --enable-prompt-tokens-details \
+                        --no-async-scheduling \
+                        --enable-auto-tool-choice \
+                        --tool-call-parser=qwen3_coder \
+                        --reasoning-parser=qwen3 \
+                        --no-enable-log-requests \
+                        --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                        --shutdown-timeout=45 \
+                        --speculative-config='{"method":"mtp","num_speculative_tokens":3}' \
+                        --compilation-config='{
+                          "backend":"vllm_torchtpu.compilation.tpu_compiler.TpuCompilerAdaptor",
+                          "compile_sizes":[8,16,32,64,128,256,4352,4384],
+                          "inductor_compile_config":{"enable_auto_functionalized_v2":false,"size_asserts":false,"alignment_asserts":false,"scalar_asserts":false}
+                        }' \
+                        --kv-transfer-config='{"kv_connector":"TPURaidenConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_consumer","kv_port":14579}'
+                  ports:
+                    - containerPort: 9200
+                      name: tpu-kv-xfer-d
+                      protocol: TCP
+                    - containerPort: 14579
+                      name: kv-rendezvous
+                      protocol: TCP
+                  env:
+                    - name: TPU_RAIDEN_ADVERTISE_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: TPU_RAIDEN_ENGINE_ID
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.name
+                    # -- TPU / XLA runtime
+                    - {name: PYTHONNOUSERSITE, value: "1"}
+                    - {name: PJRT_DEVICE, value: TPU}
+                    - {name: TPU_ACCELERATOR_TYPE, value: tpu7x}
+                    - {name: VLLM_XLA_CHECK_RECOMPILATION, value: "0"}
+                    - {name: TPU_EVICT_WEIGHTS_PAGE_CACHE, value: "1"}   # drop weight-file page cache after load (local-path loads)
+                    - {name: VLLM_ALLOW_LONG_MAX_MODEL_LEN, value: "1"}
+                    - {name: XLA_PYTHON_CLIENT_PREALLOCATE, value: "false"}
+                    - {name: TPU_PREMAPPED_BUFFER_SIZE, value: "17179869184"}
+                    - {name: TPU_VLLM_SKIP_DYNAMIC_SMEM_NEGOTIATION_FLAG, value: "1"}
+                    - {name: TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL, value: "1"}
+                    # -- tpu-sync KV transfer
+                    - {name: TPU_USE_RAIDEN_KV_CACHE_MANAGER, value: "1"}
+                    - {name: TPU_RAIDEN_CLIENT_IMPL, value: cpp}
+                    - {name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS, value: "false"}
+                    - {name: TORCHINDUCTOR_AUTOGRAD_CACHE, value: "0"}
+                    - {name: TPU_RAIDEN_QWEN35_ADMISSION, value: "1"}
+                    - {name: TPU_KV_RESHARD_TRANSPORT, value: raiden}
+                    # Stays 8 even though decode runs PCP=1: it is the number of SENDING ranks this
+                    # receiver fans in from. Setting it to 1 strands 7/8 of the KV.
+                    - {name: TPU_RAIDEN_TRANSFER_PARALLELISM, value: "8"}
+                    - {name: TPU_GDN_CONV_QK_PAIR_LAYOUT, value: "1"}
+                    - {name: TPU_RAIDEN_JOB_NAME, value: decode}
+                    - {name: TPU_KV_TRANSFER_NAMESPACE, value: llm_d_pd_decode}
+                    - {name: TPU_RAIDEN_RESHARD_IMPL, value: store}
+                    - {name: TPU_RAIDEN_RESHARD_PORT_BASE, value: "28000"}
+                    - {name: TPU_RAIDEN_STORE_DISPATCH_PORT_BASE, value: "28100"}
+                    - {name: TPU_KV_TRANSFER_PORT, value: "9200"}
+                    - {name: TPU_KV_SHM_POOL_GB, value: "8"}
+                    - {name: TPU_P2P_WAIT_PULL_TIMEOUT, value: "600"}
+                    # Rendezvous port for the 8 data-parallel ranks.
+                    - {name: TORCH_TPU_DP_MASTER_PORT, value: "29520"}
+                    # -- compile cache (per-pod emptyDir mounted at /.cache by tpu/common)
+                    - {name: TORCH_TPU_TIER2_COMPILATION_CACHE, value: disabled}
+                    - {name: TORCH_TPU_INTERNAL_TIER2_COMPILATION_CACHE, value: disabled}
+                    - {name: VLLM_CACHE_ROOT, value: /.cache/vllm-cache}
+                    - {name: TORCHINDUCTOR_CACHE_DIR, value: /.cache/torchinductor}
+                    # -- vLLM plumbing
+                    - {name: VLLM_PLUGINS, value: torchtpu}
+                    - {name: VLLM_TARGET_DEVICE, value: tpu}
+                    - {name: VLLM_ENGINE_READY_TIMEOUT_S, value: "3600"}
+                    - {name: VLLM_NO_USAGE_STATS, value: "1"}
+                    - {name: PYTHONHASHSEED, value: "0"}
+                    - {name: TPU_STDERR_LOG_LEVEL, value: "3"}
+                    - {name: TPU_MIN_LOG_LEVEL, value: "3"}
+                    - {name: TF_CPP_MIN_LOG_LEVEL, value: "3"}
+                  resources:
+                    limits:
+                      memory: 850Gi
+                      google.com/tpu: 4
+                    requests:
+                      cpu: "64"
+                      memory: 850Gi
+                      google.com/tpu: 4

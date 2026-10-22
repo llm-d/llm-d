@@ -47,11 +47,13 @@ spec:
             requests:
               google.com/tpu: "4"
           volumeMounts:
-            - mountPath: /.cache
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /root/.cache
               name: torch-compile-cache
-            - mountPath: /.triton
+            - mountPath: /root/.triton
               name: triton-cache
-            - mountPath: /.config
+            - mountPath: /root/.config
               name: vllm-config
           startupProbe:
             initialDelaySeconds: 15
@@ -67,8 +69,20 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
       volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+        # TODO(https://github.com/llm-d/llm-d/issues/2884): Temporary workaround
+        # until the tpu-v5p-spot node pool boot disk on llm-d-e2e-us-east5 is
+        # resized from 100 GB to >= 250 GB. Back /root/.cache (including
+        # /root/.cache/huggingface) with tmpfs from host RAM (~448 GiB on
+        # ct5p-hightpu-4t) so ~65.5 GB Qwen/Qwen3-32B downloads do not trigger
+        # ephemeral-storage eviction.
         - name: torch-compile-cache
-          emptyDir: {}
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Gi
         - name: triton-cache
           emptyDir: {}
         - name: vllm-config

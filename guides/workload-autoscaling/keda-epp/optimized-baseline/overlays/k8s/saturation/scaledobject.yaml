@@ -22,7 +22,7 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: optimized-baseline-keda-epp
+  name: ${SCALEDOBJECT_NAME}
   namespace: ${NAMESPACE}
 spec:
   scaleTargetRef:
@@ -37,7 +37,7 @@ spec:
   maxReplicaCount: 10
   advanced:
     horizontalPodAutoscalerConfig:
-      name: keda-hpa-optimized-baseline
+      name: ${HPA_NAME}
       # Startup-time mitigation; see overlays/k8s/queue for the full rationale.
       behavior:
         scaleUp:

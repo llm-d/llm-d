@@ -43,15 +43,18 @@ support:
       engines: {vllm: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 3 replicas × 4 chips (`2x2x1`, TP=8) · `CONNECTOR=native`, `VARIANT=cpu` · multi-host variant (`HOST_TYPE=multi-host`) serves `Qwen/Qwen3-Coder-480B-A35B-Instruct`"
-      model: Qwen/Qwen3-32B
+      notes: >-
+        GKE only · 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) ·
+        Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) ·
+        `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only)
+      model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
@@ -74,17 +77,15 @@ env:
     # modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<CONNECTOR>/<VARIANT>/<INFRA_PROVIDER>/.
     # CONNECTOR and VARIANT are also the names the nightly E2E workflows override.
     CONNECTOR: {default: native, values: [native, lmcache-connector, mooncake-store], comment: "offloading implementation (table above)"}
-    VARIANT: {default: cpu, values: [cpu, fs], comment: "offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem"}
+    VARIANT: {default: cpu, values: [cpu, fs], comment: "offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem (fs: single-host only)"}
     # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
-    HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7 only"}
+    HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7 and VARIANT=cpu only"}
     STORAGE_CLASS: {default: "", comment: "VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default"}
 
-    # Two sub-variants serve a different model; set MODEL to match or the test
-    # requests fail with 404: ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector
-    # serves Qwen/Qwen3-8B, and ACCELERATOR_TYPE=tpu/v7 + HOST_TYPE=multi-host
-    # serves Qwen/Qwen3-Coder-480B-A35B-Instruct.
-    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7 multi-host: Qwen/Qwen3-Coder-480B-A35B-Instruct"}
+    # ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector serves Qwen/Qwen3-8B,
+    # and ACCELERATOR_TYPE=tpu/v7 serves Qwen/Qwen3.5-397B-A17B-FP8.
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7: Qwen/Qwen3.5-397B-A17B-FP8"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
@@ -174,7 +175,7 @@ deploy:
     - when: {HOST_TYPE: [multi-host]}
       skip_in: [ci]
       run: |
-        # TPU v7 multi-host (LeaderWorkerSet), serving Qwen/Qwen3-Coder-480B-A35B-Instruct
+        # TPU v7 multi-host (LeaderWorkerSet), serving Qwen/Qwen3.5-397B-A17B-FP8
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/native/cpu/multi-host/
 

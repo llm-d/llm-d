@@ -5,5 +5,14 @@ resources:
 
 namePrefix: tpu-v6-vllm-
 
+components:
+  - ../../../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/backend: torch-tpu
+    includeSelectors: true
+    includeTemplates: true
+
 patches:
   - path: patch-vllm.yaml
