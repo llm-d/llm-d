@@ -256,6 +256,80 @@ These steps run nightly on GKE with one model server replica:
 deploys this guide from its `guide.yaml` with
 [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) and then runs this section.
 
+## Observability & Troubleshooting
+
+This path adds conversation storage and tool-output continuation in front of
+the router and model servers. Use the failing stage of [`verify.py`](verify.py)
+to narrow the investigation: a successful inference request alone does not
+verify conversation persistence or the tool loop.
+
+### Signals to check
+
+| Signal | What it helps diagnose | Where to look |
+| --- | --- | --- |
+| Agentic API readiness and logs | Startup failures, request errors, and failures involving the configured inference backend or database | The `agentic-api` Deployment and its container logs |
+| PostgreSQL readiness, storage and logs | Database startup or connectivity problems, and storage that has not been provisioned | The `agentic-api-postgres` Deployment, PVC and container logs |
+| Model-server waiting/running requests and token latency | Whether inference demand or generation time contributes to slow responses | [Model-server metrics](../../docs/operations/observability/model-server-metrics.md#vllm) and [Basic Model Serving queries](../../docs/operations/observability/promql.md#basic-model-serving) |
+| EPP request and plugin-duration metrics | Activity and scheduling time in the routing layer | [Router metrics](../../docs/operations/observability/router-metrics.md) and [Routing & Load Balancing queries](../../docs/operations/observability/promql.md#routing--load-balancing) |
+
+The installation steps above do not configure Prometheus scraping for the
+Agentic API or PostgreSQL. Router and model-server queries also require
+monitoring to be configured; follow [Collect Metrics](../../docs/operations/observability/metrics.md)
+for those components. Missing time series alone do not establish that a
+component is idle or healthy.
+
+A complete agentic interaction can include multiple inference rounds, tool
+execution and conversation storage. Model-server latency measures only part
+of that interaction.
+
+### Inspect the deployed components
+
+Use the namespace selected in the setup steps. These commands apply to an
+already deployed guide:
+
+```bash
+kubectl get pods,svc,pvc -n "${NAMESPACE}"
+kubectl describe deployment agentic-api -n "${NAMESPACE}"
+kubectl describe deployment agentic-api-postgres -n "${NAMESPACE}"
+kubectl describe pvc agentic-api-postgres -n "${NAMESPACE}"
+kubectl logs deployment/agentic-api -c agentic-api -n "${NAMESPACE}" --tail=100
+kubectl logs deployment/agentic-api-postgres -c postgres -n "${NAMESPACE}" --tail=100
+```
+
+If the PostgreSQL PVC is `Pending`, inspect its events and the cluster's
+StorageClass before investigating conversation retrieval. The guide requires
+a default StorageClass for this claim.
+
+The Agentic API receives its database connection through the
+`agentic-api-postgres` Secret's `database-url` key and its inference backend
+through `--llm-api-base`. Check these configuration references when logs report
+connection failures; avoid copying database credentials into issue reports.
+
+### Common failure modes
+
+- **`[1/4]` cannot reach the endpoint or discover a model:** check whether the
+  port-forward is still running and inspect the Agentic API's readiness and
+  logs. If health checks succeed but `/v1/models` fails, investigate the
+  configured inference backend and router/model-server availability.
+- **`[2/4]` fails before completing the first turn:** inspect the reported HTTP
+  error or model output first. The test checks that the first answer contains
+  its ticket reference; a model that does not follow that instruction has not
+  demonstrated a database failure.
+- **`[2/4]` fails on the follow-up:** distinguish an HTTP error from a successful
+  response containing the wrong answer. Inspect Agentic API and PostgreSQL
+  logs around the request. An incorrect answer alone does not prove that
+  PostgreSQL lost the conversation.
+- **`[3/4]` returns no `function_call`:** check the model server's tool-calling
+  flags and model-specific parser against
+  [Add agentic-api to Another Guide](#add-agentic-api-to-another-guide).
+  The test itself delivers the webhook to a local listener; the cluster does
+  not need an inbound connection to the test machine.
+- **`[4/4]` fails while HTTP checks pass:** inspect the WebSocket upgrade error
+  and whether the access path supports WebSockets. `--skip-websocket`
+  explicitly omits this test; it does not establish that WebSocket mode works.
+
+For shared inference alerts, see [Configure Alerts](../../docs/operations/observability/alerting.md).
+
 ## Add agentic-api to Another Guide
 
 `agentic-api` needs only a router Service to send inference to, so it also layers onto a guide you already run, such as [P/D Disaggregation](../pd-disaggregation/README.md) or [Wide Expert Parallelism](../wide-ep/README.md), provided its model server is vLLM. The other guide stays as its own README leaves it.
