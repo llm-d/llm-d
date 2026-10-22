@@ -1,0 +1,146 @@
+name: dynamic-pd-disaggregation
+
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    xpu:
+      label: Intel XPU
+      notes: "Experimental dynamic 1P/2D to 2P/1D reassignment on three single-XPU workers"
+      model: Qwen/Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+    GUIDE_NAME: dynamic-pd-disaggregation
+    NAMESPACE: llm-d-dynamic-pd-disaggregation
+    PROVIDER_NAME: {default: istio, values: [istio, agentgateway]}
+    ACCELERATOR_TYPE: {default: xpu, values: [xpu]}
+    MODEL_SERVER: {default: vllm, values: [vllm]}
+    INFRA_PROVIDER: {default: base, values: [base]}
+    MODEL: {default: "Qwen/Qwen3-0.6B"}
+    EPP_IMAGE_REGISTRY: {default: registry.example.com}
+    EPP_IMAGE_REPOSITORY: {default: llm-d-router-endpoint-picker}
+    EPP_IMAGE_TAG: {default: dynamic-pd}
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+  gaie:
+    - run: kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace ${NAMESPACE} \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router:
+    - run: |
+        helm upgrade --install ${GUIDE_NAME} ${ROUTER_GATEWAY_CHART} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+          --set provider.name=${PROVIDER_NAME} \
+          --set router.epp.image.registry=${EPP_IMAGE_REGISTRY} \
+          --set router.epp.image.repository=${EPP_IMAGE_REPOSITORY} \
+          --set router.epp.image.tag=${EPP_IMAGE_TAG} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+  router_httproute:
+    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute/base
+  modelserver:
+    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/base
+  coordinator:
+    - run: |
+        if [ "${PROVIDER_NAME}" = agentgateway ]; then
+          export GATEWAY_ADDRESS="http://llm-d-inference-gateway.${NAMESPACE}.svc:80"
+        else
+          export GATEWAY_ADDRESS="http://llm-d-inference-gateway-${PROVIDER_NAME}.${NAMESPACE}.svc:80"
+        fi
+        kustomize build ${REPO_ROOT}/guides/coord-disaggregation/coordinator/base \
+          | envsubst | kubectl apply -n ${NAMESPACE} -f -
+        kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} \
+          --type=strategic \
+          --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/patch-pd-only.yaml)"
+        kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
+        kubectl rollout status deployment/llm-d-coordinator -n ${NAMESPACE} --timeout=5m
+
+verify:
+  tests:
+    request:
+      - run: |
+          if [ "${PROVIDER_NAME}" = agentgateway ]; then
+            export GATEWAY_SERVICE=llm-d-inference-gateway
+          else
+            export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
+          fi
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} --namespace=${NAMESPACE} \
+            --env="MODEL=${MODEL}" --env="GATEWAY_SERVICE=${GATEWAY_SERVICE}" \
+            -- /bin/sh -c 'curl -fsS -X POST "http://${GATEWAY_SERVICE}/v1/completions" -H "Content-Type: application/json" -d "{\"model\":\"${MODEL}\",\"prompt\":\"How are you today?\",\"max_tokens\":16}"'
+    initial_layout:
+      - run: |
+          kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} \
+            service/${GUIDE_NAME}-epp 19090:9090 >/tmp/${GUIDE_NAME}-port-forward.log 2>&1 &
+          PF_PID=$!
+          trap 'kill ${PF_PID} 2>/dev/null || true' EXIT
+          TOKEN=$(kubectl create token dynamic-pd-layout-admin -n ${NAMESPACE} --duration=15m)
+          for i in $(seq 1 30); do
+            curl -fsS -H "Authorization: Bearer ${TOKEN}" \
+              http://127.0.0.1:19090/v1/layout/show > /tmp/${GUIDE_NAME}-layout.json && break
+            sleep 1
+          done
+          jq -e '.current_layout == "p_1tp1_d_2tp1_m_none"' /tmp/${GUIDE_NAME}-layout.json
+          kill "${PF_PID}" 2>/dev/null || true
+          wait "${PF_PID}" 2>/dev/null || true
+          trap - EXIT
+    change_layout:
+      - run: |
+          kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} \
+            service/${GUIDE_NAME}-epp 19090:9090 >/tmp/${GUIDE_NAME}-port-forward.log 2>&1 &
+          PF_PID=$!
+          trap 'kill ${PF_PID} 2>/dev/null || true' EXIT
+          TOKEN=$(kubectl create token dynamic-pd-layout-admin -n ${NAMESPACE} --duration=15m)
+          for i in $(seq 1 30); do
+            curl -fsS -H "Authorization: Bearer ${TOKEN}" \
+              http://127.0.0.1:19090/v1/layout/show >/dev/null && break
+            sleep 1
+          done
+          curl -fsS -X POST http://127.0.0.1:19090/v1/layout/change \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d '{"layout":"p_2tp1_d_1tp1_m_none"}' \
+            | jq -e '.status == "ok" or .status == "skipped"'
+          curl -fsS -H "Authorization: Bearer ${TOKEN}" \
+            http://127.0.0.1:19090/v1/layout/show \
+            | jq -e '.current_layout == "p_2tp1_d_1tp1_m_none"'
+          kill "${PF_PID}" 2>/dev/null || true
+          wait "${PF_PID}" 2>/dev/null || true
+          trap - EXIT
+    request_after_change:
+      - run: |
+          if [ "${PROVIDER_NAME}" = agentgateway ]; then
+            export GATEWAY_SERVICE=llm-d-inference-gateway
+          else
+            export GATEWAY_SERVICE=llm-d-inference-gateway-${PROVIDER_NAME}
+          fi
+          kubectl run curl-test-after-change --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} --namespace=${NAMESPACE} \
+            --env="MODEL=${MODEL}" --env="GATEWAY_SERVICE=${GATEWAY_SERVICE}" \
+            -- /bin/sh -c 'curl -fsS -X POST "http://${GATEWAY_SERVICE}/v1/completions" -H "Content-Type: application/json" -d "{\"model\":\"${MODEL}\",\"prompt\":\"How are you today?\",\"max_tokens\":16}"'
+
+cleanup:
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/base --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/router/httproute/base --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/coord-disaggregation/coordinator/base --ignore-not-found=true
+  - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}

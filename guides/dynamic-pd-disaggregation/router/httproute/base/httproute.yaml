@@ -1,0 +1,27 @@
+# Only Coordinator-internal calls carry x-llm-d-epp-profile. Untagged client requests
+# continue to the Coordinator HTTPRoute.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dynamic-pd-disaggregation
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: llm-d-inference-gateway
+  rules:
+    - backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: dynamic-pd-disaggregation
+      matches:
+        - path: {type: Exact, value: /v1/completions}
+          headers: [{type: Exact, name: x-llm-d-epp-profile, value: prefill}]
+        - path: {type: Exact, value: /v1/completions}
+          headers: [{type: Exact, name: x-llm-d-epp-profile, value: decode}]
+        - path: {type: Exact, value: /v1/chat/completions}
+          headers: [{type: Exact, name: x-llm-d-epp-profile, value: prefill}]
+        - path: {type: Exact, value: /v1/chat/completions}
+          headers: [{type: Exact, name: x-llm-d-epp-profile, value: decode}]
+      timeouts:
+        request: 300s
