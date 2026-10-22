@@ -214,7 +214,7 @@ Open a debug container within the cluster namespace:
 ```bash
 kubectl run curl-debug --rm -it \
     --namespace="$NAMESPACE" \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --env="IP=$IP" \
     -- /bin/bash
 ```

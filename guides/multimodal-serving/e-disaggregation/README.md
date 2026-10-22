@@ -229,7 +229,7 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 ```bash
 kubectl run curl-debug --rm -it \
     --namespace="$NAMESPACE" \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --env="IP=$IP" \
     --env="MODEL_NAME=$MODEL_NAME" \
     -- /bin/bash
