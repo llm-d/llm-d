@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: xpu,sglang-xpu,cpu)"
+        description: "Platforms to build (comma-separated: xpu,sglang-xpu)"
         required: false
         default: "xpu"
         type: string
@@ -113,7 +113,6 @@ jobs:
     outputs:
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
       sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu }}
-      cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
     steps:
       - name: Force all platforms
@@ -122,7 +121,6 @@ jobs:
         run: |
           echo "xpu=true" >> $GITHUB_OUTPUT
           echo "sglang-xpu=true" >> $GITHUB_OUTPUT
-          echo "cpu=true" >> $GITHUB_OUTPUT
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
       # covers both the workflow_call override and workflow_dispatch
       - name: Parse platforms input
@@ -140,7 +138,6 @@ jobs:
           }
           echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
           echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
-          echo "cpu=$(has_platform cpu)" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
@@ -156,10 +153,6 @@ jobs:
             sglang-xpu:
               - 'docker/common-versions'
               - 'patches/sglang_xpu_source_pins.patch'
-            cpu:
-              - 'docker/Dockerfile.cpu'
-              - 'docker/common-versions'
-              - 'docker/scripts/cpu/**'
             rdma-tools:
               - 'docker/Dockerfile.rdma-tools'
               - 'docker/common-versions'
@@ -511,110 +504,4 @@ jobs:
       - name: Sign image with cosign
         if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
         run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
-  cpu-build-llm-d:
-    needs: [detect-changes, resolve-registry]
-    if: ${{ needs.detect-changes.outputs.cpu == 'true' }}
-    runs-on: vllm-runner
-    steps:
-      - name: Set target registry
-        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
 
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref || '' }}
-          allow-unsafe-pr-checkout: true
-
-      - name: Load vLLM version from file
-        id: common-versions
-        run: |
-          # Read vLLM version from docker/common-versions file and set as outputs
-          source docker/common-versions
-          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
-          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ needs.resolve-registry.outputs.registry }}
-          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
-          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
-
-      - name: Set image tag
-        id: set-tag
-        run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          PR_TAG="${{ github.event.pull_request.number }}"
-          if [ -n "${PR_TAG}" ]; then
-            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Calculate Cache Bust Timestamp
-        id: cache_buster_timestamp
-        run: |
-          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
-
-      - name: Build and push the image
-        id: build-and-push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/Dockerfile.cpu
-          platforms: linux/amd64
-          push: true
-          provenance: true
-          # disabling cache from cache to temporarily to prevent building issues
-          # cache-from: type=gha,scope=cpu-dev
-          # cache-to: type=gha,mode=max,scope=cpu-dev,oci-mediatypes=true,compression=zstd
-          build-args: |
-            CACHE_BUSTER=${{ steps.cache_buster_timestamp.outputs.cache_buster_timestamp }}
-            VLLM_REPO=${{ inputs.vllm_repo || steps.common-versions.outputs.repo }}
-            VLLM_COMMIT_SHA=${{ inputs.vllm_commit_sha || steps.common-versions.outputs.commit_sha }}
-          tags: |
-            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
-            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-cpu:{2}', env.REGISTRY, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
-            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-cpu:latest', env.REGISTRY, github.repository) || '' }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-        env:
-          DOCKER_BUILDKIT: "1"
-          BUILDKIT_PROGRESS: "plain"
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cpu:${{ steps.set-tag.outputs.tag }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
-          scanners: vuln # skip secrets/config/license analyzers
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4.37.6
-        with:
-          sarif_file: "trivy-results.sarif"
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
-      - name: Install cosign
-        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
-        uses: sigstore/cosign-installer@v3
-
-      - name: Sign image with cosign
-        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
-        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-cpu@${{ steps.build-and-push.outputs.digest }}

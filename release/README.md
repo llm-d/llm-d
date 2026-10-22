@@ -121,14 +121,13 @@ The final release work involves creating a tag in the llm-d repo, which triggers
 
 - **Release** images are created by the release workflow (`ci-release.yaml`) when a version tag is pushed. They follow the naming pattern
   `ghcr.io/llm-d/llm-d-{platform}:{version}` and are tagged with the release version. For example:
-  - `ghcr.io/llm-d/llm-d-cpu:v0.10.0`
+  - `ghcr.io/llm-d/llm-d-xpu:v0.10.0`
 
 - **Dev** images are created by the dev build workflow (`build-image.yaml`), triggered on PRs that modify Dockerfiles/build scripts and by the nightly build schedule. They follow the naming pattern `quay.io/llm-d/llm-d-{platform}:{version}` and are tagged with the git short SHA or PR number. Please note these images are intentionally not signed as they represent work on open PR from contributors and the project is not responsible for verifying that every image works and is not nefarious. Here be dragons - be warned. Example:
-  - `quay.io/llm-d/llm-d-cpu:pr-123`
-  - `quay.io/llm-d/llm-d-cpu:latest` (from the default branch)
+  - `quay.io/llm-d/llm-d-xpu:pr-123`
+  - `quay.io/llm-d/llm-d-xpu:latest` (from the default branch)
 
-  The full list of platforms includes: `cuda`, `aws`, `cpu`, and `xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for
-   the complete list.
+  The full list of platforms includes: `xpu` and `sglang-xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for the complete list (more that have been deprecated).
 
 The process involves creating a Release Candidate (RC) tag for a dry run of the release workflow, which is a method to test the process and identify necessary updates (such as removing the deprecated images build from the CI). We typically delete RC tags after testing, while the final release is drafted from a new tag using the collected release notes.
 
@@ -213,7 +212,7 @@ git fetch upstream --tags -f # this should show no updates
   | v0.5.0-rc          | Needs cleanup after testing                     |
   | v0.5.0-rc.1        | The actual RC tag (needs cleanup after testing) |
 
-  After verifying the dry-run, clean up the auto-generated package versions from the llm-d packages page. For each affected package (e.g., llm-d-cuda, llm-d-cpu, llm-d-aws, etc.), delete the RC-related versions (v0.5.0-rc.1, v0.5.0-rc) and verify that the production tags (v0, v0.5, v0.5.0, latest) still point to the correct release.
+  After verifying the dry-run, clean up the auto-generated package versions from the llm-d packages page. For each affected package (e.g., llm-d-xpu, etc.), delete the RC-related versions (v0.5.0-rc.1, v0.5.0-rc) and verify that the production tags (v0, v0.5, v0.5.0, latest) still point to the correct release.
 
   Delete the RC git tags from both local and upstream:
 
