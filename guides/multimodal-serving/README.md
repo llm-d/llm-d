@@ -98,6 +98,8 @@ The `aggregation/modelserver/tpu/v7/vllm/gemma4/` overlay serves `google/gemma-4
 
 - Ensure your cluster has enough accelerators for your configuration (see the Notes column above; NVIDIA GPUs with 141 GB of HBM, e.g. H200, for the reference sizing).
 
+- Ensure the nodes have enough disk for the model weights. The `base` overlays download the weights into each pod's writable layer, so a node running four TP=2 pods needs 4× the model size plus the image; the GPU `gke` overlays instead cache the weights once per node with the [`gke-hf-node-cache` component](../recipes/modelserver/components/gke-hf-node-cache/kustomization.yaml). Insufficient disk shows up as pods cycling through `Evicted` with `The node was low on resource: ephemeral-storage` and nodes reporting `DiskPressure`, not as a scheduling error. For PVC- or object-storage-backed caches (private weights, models larger than the node disk, several models per cluster), see [Model Loading and Startup Acceleration](../../docs/operations/startup/model-loading-and-startup.md): the node-local cache is sized for one model, is not evicted, and is not removed by the [Cleanup](#cleanup) steps.
+
 - For E/P/D, the same KV-transfer networking as [P/D disaggregation](../pd-disaggregation/README.md#prerequisites). The GKE overlays do not configure RDMA yet, so embedding and KV-cache transfers use TCP: for the DRA and DRANet (RoCE) setup, see [P/D platform prerequisites](../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../recipes/modelserver/components/gke-rdma/kustomization.yaml).
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
