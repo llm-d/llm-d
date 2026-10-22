@@ -13,27 +13,32 @@ namePrefix: p2p-kv-cache-sharing-
 
 components:
   - ../../../../../recipes/modelserver/components/graceful-shutdown
+  - ../../../components/routing-sidecar
+  # Must follow routing-sidecar, which adds the container it resolves;
+  # reversing these renders the literal REPLACE_ROUTING_SIDECAR_IMAGE and
+  # still exits 0 (the break surfaces only as ImagePullBackOff).
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
-# The sidecar container is added by patch-sidecar.yaml at this level, after
-# the recipes/ images components would run, so its image is resolved here
-# rather than by recipes/modelserver/components/images/routing-sidecar.
 # Pins:
 # - engine: the P2P secondary tier (vllm#48021), its crash fixes
 #   (vllm#49671, vllm#49823), the symmetric-fetch stall fix (vllm#49877)
 #   and the wide-EP block-table alignment fix (vllm#50302) are all
-#   contained in v0.27.0, the first tagged release with the full set;
-#   v0.27.1 is its patch release.
+#   contained in v0.27.0, the first tagged release with the full set.
+#   v0.32.0 adds the per-tier cached prompt token metrics (vllm#56318),
+#   which count the prompt tokens served from a peer
+#   (prompt_tokens_cached_by_source_total{source="p2p"}). It needs
+#   --enable-scale-out (patch-vllm.yaml) for the render endpoint.
 # - sidecar: main because v0.9.0 predates the offloading P2P pull support
-#   (llm-d-router#1937); pin the next release when cut. This tag floats;
-#   see the REPRODUCIBILITY note in
-#   ../../../../router/p2p-kv-cache-sharing.values.yaml.
+#   (llm-d-router#1937) and forwarding the router's remote_kv_source block
+#   (llm-d-router#3441); pin the next release when cut, together with the
+#   router image in ../../../../router/p2p-kv-cache-sharing.values.yaml:
+#   a sidecar with llm-d-router#3441 behind an older router stops pulling.
+#   This tag floats (set by the routing-sidecar/nightly component); to pin
+#   it, see the REPRODUCIBILITY note in that file.
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm/vllm-openai
-    newTag: v0.27.1
-  - name: REPLACE_ROUTING_SIDECAR_IMAGE
-    newName: ghcr.io/llm-d/llm-d-router-disagg-sidecar
-    newTag: main
+    newTag: v0.32.0
 
 labels:
   - pairs:
@@ -67,8 +72,4 @@ patches:
           name: kv-events
           containerPort: 5556
           protocol: TCP
-  - path: patch-sidecar.yaml
-    target:
-      kind: Deployment
-      name: decode
   - path: patch-vllm.yaml
