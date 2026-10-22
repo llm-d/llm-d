@@ -26,7 +26,7 @@ support:
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated, sglang: community}
+      engines: {vllm: validated, sglang: validated}
     xpu:
       label: Intel XPU
       notes: "2 replicas × 1 GPU via DRA · single-GPU pods have no room for the long-context `Qwen3-32B` config"

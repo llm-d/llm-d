@@ -60,12 +60,14 @@ channels:
     - nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml
+    - nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-sglang-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml
     - nightly-e2e-predicted-latency-routing-amd-ci-acc-rocm-vllm-x.yaml
+    - nightly-e2e-predicted-latency-routing-amd-ci-acc-rocm-sglang-x.yaml
     - nightly-e2e-predicted-latency-routing-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-predicted-latency-routing-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-predicted-latency-routing-ibm-acc-gpu-vllm-x.yaml
