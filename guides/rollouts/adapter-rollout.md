@@ -22,7 +22,9 @@ In this guide, we use vLLM's native `lora_filesystem_resolver` to load adapters 
 
 ### vLLM Configuration
 
-Add the following environment variables to your vLLM container:
+Pass `--enable-lora` to `vllm serve` to enable the engine's LoRA support, then
+add the following environment variables to your vLLM container. The runtime
+updating flag and filesystem resolver do not enable LoRA support on their own.
 
 ```yaml
 env:
