@@ -66,7 +66,7 @@ performance tuning.
 
 The MThreads **SGLang** overlay colocates prefill and decode for
 `DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
-[Deploying on Moore Threads S5000 (SGLang, colocated, no PD)](#deploying-on-moore-threads-s5000-sglang-colocated-no-pd).
+the [MThreads SGLang overlay](./modelserver/mthreads/sglang/).
 
 ## Prerequisites
 
