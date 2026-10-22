@@ -105,7 +105,7 @@ components:
 
 To change a default image for testing or a version bump, edit the component file — all guides using it pick up the change automatically.
 
-**Nightlies:** Nightly builds are a special case — several components already ship a `nightly` variant that tracks the engine's moving `nightly` tag. Where one exists, include the `nightly` component instead of an inline override:
+**Nightlies:** Several components ship a `nightly` variant for nightly llm-d runs. Most track the engine's moving nightly tag; `xpu-sglang/nightly` uses the pinned official `lmsysorg/sglang:v0.5.22-xpu` release. Include the `nightly` component instead of an inline override:
 
 ```yaml
 components:
@@ -136,6 +136,8 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 └── xpu-vllm
     ├── nightly
 ```
+
+XPU SGLang P/D disaggregation uses the dedicated `xpu-sglang/nixl` component, which adds NIXL and Level Zero-enabled UCX to the official image. See the [image components](./recipes/modelserver/components/images/README.md) for details.
 
 **Overriding:** For any other non-default image — a vendor fork, platform variant, or a *specific* nightly tag that the component's moving `nightly` tag does not yet include — add an inline `images:` section in the overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an override that names the placeholder is silently ignored. Every override **must** include a `TODO` comment with a tracking issue for cleanup:
 

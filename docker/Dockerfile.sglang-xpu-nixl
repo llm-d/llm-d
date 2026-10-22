@@ -1,0 +1,38 @@
+# SGLang and PyTorch come from the official prebuilt XPU image.
+# The workflow passes BASE_IMAGE explicitly from docker/common-versions.
+ARG BASE_IMAGE=lmsysorg/sglang:v0.5.22-xpu
+FROM ${BASE_IMAGE}
+
+# NIXL KV transfer for P/D disaggregation needs Level Zero-enabled UCX.
+# The PyPI NIXL wheels bundle a CUDA-only UCX, so build UCX with ze_copy
+# and NIXL against it. UCX uses the v1.21.x configure flags of vLLM XPU.
+ARG UCX_REF=6476cdf85615a06154676a0b79fb83a9e6ba9384
+ARG NIXL_VERSION=1.3.2
+ARG NIXL_REF=de8115ca97d3f8fb63a4988e9b4d4a038b2e0f72
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        autoconf automake libtool pkg-config \
+        libibverbs-dev librdmacm-dev rdma-core ibverbs-providers && \
+    rm -rf /var/lib/apt/lists/* && \
+    git init /tmp/ucx && \
+    git -C /tmp/ucx fetch --depth 1 https://github.com/openucx/ucx.git "${UCX_REF}" && \
+    git -C /tmp/ucx checkout --detach FETCH_HEAD && \
+    cd /tmp/ucx && ./autogen.sh && \
+    ./configure --prefix=/opt/ucx --with-ze=yes --enable-examples --enable-mt --disable-static && \
+    make CFLAGS="-Wno-error=incompatible-pointer-types" -j"$(nproc)" && make install && \
+    git init /tmp/nixl && \
+    git -C /tmp/nixl fetch --depth 1 https://github.com/ai-dynamo/nixl.git "${NIXL_REF}" && \
+    git -C /tmp/nixl checkout --detach FETCH_HEAD && \
+    cd /tmp/nixl && \
+    PKG_CONFIG_PATH=/opt/ucx/lib/pkgconfig LD_LIBRARY_PATH=/opt/ucx/lib \
+        pip wheel --no-cache-dir --no-deps -w /tmp/nixl-wheels . && \
+    # The built backend installs as nixl-cu12; nixl is a separate dispatcher.
+    # Verify the backend version so NIXL_REF and NIXL_VERSION stay in lockstep.
+    pip install --no-cache-dir --no-deps /tmp/nixl-wheels/nixl*.whl "nixl==${NIXL_VERSION}" && \
+    python -c "import importlib.metadata as m, sys; v = m.version('nixl-cu12'); sys.exit(0 if v == '${NIXL_VERSION}' else f'nixl-cu12 {v} != NIXL_VERSION ${NIXL_VERSION}')" && \
+    cd / && rm -rf /tmp/ucx /tmp/nixl /tmp/nixl-wheels && \
+    # Only runtime shared libraries need to ship in the extension image.
+    rm -rf /opt/ucx/include /opt/ucx/share /opt/ucx/lib/pkgconfig && \
+    find /opt/ucx -name '*.la' -delete && \
+    apt-get purge -y autoconf automake libtool pkg-config libibverbs-dev librdmacm-dev
+ENV LD_LIBRARY_PATH=/opt/ucx/lib:${LD_LIBRARY_PATH}
+RUN python -c "from nixl._api import nixl_agent"

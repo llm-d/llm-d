@@ -517,10 +517,9 @@ One pod reports most of the 10 requests in `vllm:request_success_total`, and its
 
 One pod reports most of the requests in `sglang:num_requests_total`. Check
 that `sglang:cached_tokens_total{cache_source="device"}` increases after
-requests with a shared prefix (`sglang:cache_hit_rate` is a rolling gauge that
-drops back to `0` once the `prefix-test` burst finishes on `docker.io/lmsysorg/sglang:v0.5.20`,
-and also reports `0` on the Intel XPU image `ghcr.io/llm-d/llm-d-xpu-sglang:v0.10.0`,
-even when prefix cache hits occur).
+requests with a shared prefix. Prefer this cumulative counter for the smoke
+check: on earlier GPU and XPU releases, the rolling `sglang:cache_hit_rate`
+gauge returned `0` after the burst or even while prefix cache hits occurred.
 
 </details>
 <!-- tabs:end -->

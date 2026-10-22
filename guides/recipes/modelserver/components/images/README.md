@@ -56,6 +56,7 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── xpu-sglang
 │   ├── nightly
+│   ├── nixl
 │   └── release
 └── xpu-vllm
     ├── llm-d
@@ -79,6 +80,10 @@ components:
 ```
 
 The component replaces the `REPLACE_MODEL_SERVER_IMAGE` placeholder (`REPLACE_ROUTING_SIDECAR_IMAGE` for the sidecar, `REPLACE_COORDINATOR_IMAGE` for the coordinator) with the default image.
+
+Both `xpu-sglang/release` and `xpu-sglang/nightly` use the official `docker.io/lmsysorg/sglang:v0.5.22-xpu` image. Nightly llm-d runs use this upstream release instead of rebuilding SGLang from source.
+
+The `xpu-sglang/nixl` component is reserved for XPU P/D disaggregation. It uses `ghcr.io/llm-d/llm-d-xpu-sglang:main`, built from the same official image with NIXL and Level Zero-enabled UCX added by `docker/Dockerfile.sglang-xpu-nixl`. SGLang and PyTorch are inherited from the upstream image.
 
 ## Overriding
 
