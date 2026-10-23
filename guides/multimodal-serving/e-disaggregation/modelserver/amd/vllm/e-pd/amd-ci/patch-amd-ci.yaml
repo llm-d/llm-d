@@ -1,0 +1,88 @@
+# AMD CI overlay for E/PD multimodal disaggregation.
+# Enables UCX GPU-direct RDMA (DMABUF) for NIXL EC and KV transfers across nodes.
+# GPU count is inherited from base. Every role is TP=2, so each pod takes one
+# vnic (and one network attachment) per GPU: 2.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e-pd-disaggregation-amd-gpu-vllm-encode
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      hostIPC: true
+      volumes:
+        - name: ucx-kernel-config
+          configMap:
+            name: ucx-kernel-config
+      containers:
+        - name: modelserver
+          securityContext:
+            # UCX pins memory for RDMA queue pairs; without it NIXL fails with
+            # "Please set max locked memory (ulimit -l) to 'unlimited'".
+            capabilities:
+              add: ["IPC_LOCK"]
+          volumeMounts:
+            - name: ucx-kernel-config
+              mountPath: /boot/config-6.8.0-124-generic
+              subPath: config-6.8.0-124-generic
+              readOnly: true
+          resources:
+            limits:
+              amd.com/vnic: "2"
+            requests:
+              amd.com/vnic: "2"
+          env:
+            - { name: UCX_ROCM_COPY_DMABUF,   value: "yes" }
+            - { name: UCX_IB_GPU_DIRECT_RDMA,  value: "try" }
+            - { name: UCX_TLS,                 value: "self,rocm,shm,rc" }
+            - { name: UCX_LOG_LEVEL,           value: "INFO" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e-pd-disaggregation-amd-gpu-vllm-decode
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      hostIPC: true
+      volumes:
+        - name: ucx-kernel-config
+          configMap:
+            name: ucx-kernel-config
+      containers:
+        - name: modelserver
+          securityContext:
+            # UCX pins memory for RDMA queue pairs; without it NIXL fails with
+            # "Please set max locked memory (ulimit -l) to 'unlimited'".
+            capabilities:
+              add: ["IPC_LOCK"]
+          volumeMounts:
+            - name: ucx-kernel-config
+              mountPath: /boot/config-6.8.0-124-generic
+              subPath: config-6.8.0-124-generic
+              readOnly: true
+          resources:
+            limits:
+              amd.com/vnic: "2"
+            requests:
+              amd.com/vnic: "2"
+          env:
+            - { name: UCX_ROCM_COPY_DMABUF,   value: "yes" }
+            - { name: UCX_IB_GPU_DIRECT_RDMA,  value: "try" }
+            - { name: UCX_TLS,                 value: "self,rocm,shm,rc" }
+            - { name: UCX_LOG_LEVEL,           value: "INFO" }

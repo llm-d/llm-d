@@ -40,6 +40,8 @@ E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provid
 * 4 TP=2 Prefill Workers
 * 4 TP=2 Decode Workers
 
+On AMD Instinct MI355X the E/P/D profile runs 2 Encode + 6 Prefill + 2 Decode instead: the 4 + 4 split is prefill-bound there, and moving two pods from Decode to Prefill raised the throughput ceiling from about 12.5 to 18.6 requests per second (decode inter-token latency rose from 11 to 18 ms at 35 requests per second).
+
 ### Best Practices
 
 Encode disaggregation is most beneficial for workloads with:
@@ -62,6 +64,7 @@ Choose between topologies:
 | --- | --- | --- | --- | --- | --- |
 | vLLM | E/PD | NVIDIA GPU | `modelserver/gpu/vllm/e-pd/` | `router/vllm/e-pd-disaggregation.values.yaml` | Default vLLM profile |
 | vLLM | E/P/D | NVIDIA GPU | `modelserver/gpu/vllm/e-p-d/` | `router/vllm/e-p-d-disaggregation.values.yaml` | Default vLLM profile |
+| vLLM | E/P/D | AMD GPU | `modelserver/amd/vllm/e-p-d/moriio/` | `router/vllm/e-p-d-disaggregation.values.yaml` + `amd.e-p-d-disaggregation.values.yaml` | MoRI-IO for the embeddings and the KV cache: [AMD E/P/D over MoRI-IO](#amd-epd-over-mori-io) |
 | SGLang | E/PD | Intel XPU Encode + GPU PD | `modelserver/hetero/sglang/e-pd/xpu-encode-gpu-pd/` | `router/sglang/e-pd-disaggregation.values.yaml` | [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md) |
 
 ## Prerequisites
@@ -392,6 +395,35 @@ Client -> Envoy -> EPP -> Decode Worker Sidecar
 5. Sidecar sends prefill request (with embedding metadata) to Prefill Worker
 6. Prefill Worker reads embeddings via EC_Connector, runs prefill, returns KV parameters
 7. Decode Worker reads KV cache from Prefill Worker and runs decode
+
+### AMD E/P/D over MoRI-IO
+
+On AMD Instinct MI355X (`ACCELERATOR_TYPE=amd`), E/P/D uses MoRI-IO RDMA for both transfers instead of NIXL: the `moriio/` overlays configure the embeddings hop (Encode to Prefill) with `"ec_transport": "moriio"` in the ECCPU Connector, and the KV hop (Prefill to Decode) with the `MoRIIOConnector` in WRITE mode, with the routing sidecar in serial dispatch (`--moriio-write-mode`, no `--moriio-parallel-dispatch`). Aggregation and E/PD on AMD still use NIXL, which carries only the embeddings there.
+
+| | `moriio/base` | `moriio/amd-ci` |
+| --- | --- | --- |
+| Layout | 2 Encode + 6 Prefill + 2 Decode (TP=2, 20 GPUs) | same |
+| Adds | | RDMA NIC attachments (`amd.com/vnic`, `IPC_LOCK`, host IPC), the model-cache PVC, and a KV cache cap of 100 GB |
+
+Why not NIXL for E/P/D on AMD: on MI355X, NIXL over RDMA returned wrong KV data for short prompts without any error, and with the direct GPU read turned off, the engines died under load from NIC memory-registration limits. MoRI-IO carried the same workload without these failures.
+
+Requirements and limits:
+
+* **vLLM image.** The embeddings transport (`ec_transport=moriio`) is not in a vLLM release yet. Until one ships it, the overlay needs an image that has it. The KV hop needs a MoRI-IO build that registers the single KV region, which the `v0.31.0` image cannot (prefill dies at the first transfer), and the `amd-vllm/beta` image can. An image without the embeddings transport is expected to ignore the key and use NIXL for the embeddings.
+* **Registration limit.** MoRI-IO registers the Encode pod's `ec_cpu_bytes` region with the NIC on the first read and aborts the engine if the NIC rejects it. Keep `ec_cpu_bytes` at or below 1 to 2 GiB.
+* **Serial dispatch.** Parallel dispatch collapses under load: the sidecar's 30 s KV-wait timer starts at dispatch, so time queued at Prefill counts against it.
+* **Connection loss.** Recovery from a lost MoRI-IO connection on the embeddings hop is not handled.
+* **Measured** (Qwen3-VL-32B-Instruct, MI355X, 2 Encode + 6 Prefill + 2 Decode): 17,000 requests with no failures and a throughput ceiling of about 18.6 requests per second; with 4 Prefill + 4 Decode the ceiling was about 12.5. This is one run on one cluster.
+
+The AMD overlays deploy plain Deployments, not a `DisaggregatedSet`, so [Confirm the EC Transfer](#3-confirm-the-ec-transfer-vllm-profiles) uses `kubectl set env` instead of patching a `disaggregatedset`. The `EC consumer: NIXL xfer complete` line it greps for comes from the connector's shared scheduler code, so it also appears when MoRI-IO moves the data:
+
+```bash
+kubectl set env deployment/e-p-d-disaggregation-amd-gpu-vllm-prefill VLLM_LOGGING_LEVEL=DEBUG -n ${NAMESPACE}
+kubectl rollout status deployment/e-p-d-disaggregation-amd-gpu-vllm-prefill -n ${NAMESPACE}
+# send the multimodal request from step 2 again, then:
+kubectl logs -l llm-d.ai/role=prefill -c modelserver -n ${NAMESPACE} --tail=-1 | grep "EC consumer: NIXL xfer complete"
+kubectl set env deployment/e-p-d-disaggregation-amd-gpu-vllm-prefill VLLM_LOGGING_LEVEL- -n ${NAMESPACE}
+```
 
 ## References
 

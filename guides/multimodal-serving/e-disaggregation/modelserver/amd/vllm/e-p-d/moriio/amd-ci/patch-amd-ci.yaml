@@ -1,0 +1,84 @@
+# AMD CI overlay for E/P/D multimodal disaggregation over MoRI-IO.
+# Gives every role the RDMA NICs MoRI-IO uses for the embeddings and the KV cache.
+# GPU count is inherited from base. Every role is TP=2, so each pod takes one
+# vnic (and one network attachment) per GPU: 2.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e-p-d-disaggregation-amd-gpu-vllm-encode
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      hostIPC: true
+      containers:
+        - name: modelserver
+          securityContext:
+            # RDMA pins memory for queue pairs; without it registration fails with
+            # "Please set max locked memory (ulimit -l) to 'unlimited'".
+            capabilities:
+              add: ["IPC_LOCK"]
+          resources:
+            limits:
+              amd.com/vnic: "2"
+            requests:
+              amd.com/vnic: "2"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e-p-d-disaggregation-amd-gpu-vllm-prefill
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      hostIPC: true
+      containers:
+        - name: modelserver
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          resources:
+            limits:
+              amd.com/vnic: "2"
+            requests:
+              amd.com/vnic: "2"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: e-p-d-disaggregation-amd-gpu-vllm-decode
+spec:
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+            {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+          ]
+    spec:
+      hostIPC: true
+      containers:
+        - name: modelserver
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          resources:
+            limits:
+              amd.com/vnic: "2"
+            requests:
+              amd.com/vnic: "2"
