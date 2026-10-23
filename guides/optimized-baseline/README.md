@@ -209,7 +209,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 </details>
 <!-- tabs:end -->
 
-**(Rebellions NPU only) Layer the NPU router values**, which drop the prefix-cache affinity filter because the NPU overlay serves with prefix caching off:
+**(Rebellions NPU only) Layer the NPU router values**, which match prefixes at the runtime's 512-token sub-block instead of its 4096-token KV block and set the NPU's measured `peakPrefillThroughput`:
 
 <!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
