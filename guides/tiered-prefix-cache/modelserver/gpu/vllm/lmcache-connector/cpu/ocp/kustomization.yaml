@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                # Run the base's `vllm serve` args with the model ($1, a Hub ID)
+                # swapped for its copy on the node-local hostPath.
+                # --served-model-name keeps the API model name unchanged.
+                command:
+                  - /bin/bash
+                  - -c
+                  - exec vllm serve "/model-cache/models/$1" --served-model-name "$1" "${@:2}"
+                  - vllm
+                volumeMounts:
+                  # Model weights must already be on every node under
+                  # /var/model-cache/models/<org>/<model> (provisioned outside this guide).
+                  - mountPath: /model-cache
+                    name: model-storage
+                    readOnly: true
+            volumes:
+              # Node-local model cache. The directory must already exist on the
+              # node and, on SELinux nodes, be labelled container_file_t so
+              # non-spc_t containers can read it.
+              - name: model-storage
+                hostPath:
+                  path: /var/model-cache
+                  type: Directory
