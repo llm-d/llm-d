@@ -1,8 +1,55 @@
 # Rebellions NPU overrides for the pd-disaggregation router. Layer this over
 # pd-disaggregation.values.yaml; everything not named here is inherited from it.
 # Named for the RBLN runtime rather than for NPUs in general, since the rank-to-port
-# layout below follows that runtime pinning a rank to a device.
+# layout and the prefix reuse unit below are that runtime's.
 router:
+  epp:
+    # The guide's plugin config with two NPU values; keep the rest in step with it.
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 131072
+            # The runtime reuses prefixes in 512-token sub-blocks of each 4096-token block,
+            # but does not publish prefix_match_unit, so autotune would hash at 4096 and see
+            # no prefix in a shorter prompt.
+            autoTune: false
+            blockSizeTokens: 512
+            # 529 KV blocks x 8 sub-blocks, the count the runtime sized for prefill PP=4.
+            lruCapacityPerServer: 4232
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Saturated throughput through the full P/D path on RBLN-CR13 with rbln-serve
+            # 0.12.0, 512-token prompts at 8 or more concurrent requests. calibrate.sh sends
+            # one request at a time, which leaves three of the four pipeline stages idle and
+            # reads about a fifth of this.
+            peakPrefillThroughput: 19400
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
   modelServers:
     # The decode role runs one API server per data-parallel rank behind the routing
     # sidecar, so all four rank ports must be listed. Without this the EPP sends every

@@ -263,7 +263,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 </details>
 <!-- tabs:end -->
 
-**(Rebellions NPU only) Layer the NPU router values**, which list every decode rank port:
+**(Rebellions NPU only) Layer the NPU router values**, which list every decode rank port, match prefixes at the runtime's 512-token sub-block, and set the NPU's measured `peakPrefillThroughput`:
 
 <!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
@@ -522,11 +522,9 @@ The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMa
 | Parallelism | Pipeline, 4 stages | Data, 4 ranks, expert parallel on |
 | NPUs | 4 | 4 |
 | API servers per pod | 1 (port 8000) | 4 (ports 8200-8203, fronted by the sidecar on 8000-8003) |
-| `--num-gpu-blocks-override` | 201 | 51 |
 | `--max-num-seqs` | 4 | 4 |
 
-- Both roles share `--block-size=4096`, automatic prefix caching, and the on-device sampler. Neither sets `--max-model-len`, since the model already declares its 204800-token context.
-- Neither sets `--kv-cache-dtype` either: the runtime accepts `fp8` here, but the `--num-gpu-blocks-override` counts above were measured at the backend default, and halving the bytes per block would leave them describing something else.
+- Both roles share `--block-size=4096` and `--kv-cache-dtype=fp8`, and serve the model's own 204800-token context. Prefix caching reuses 512-token sub-blocks of each block, and the runtime sizes the KV cache after warm-up, so neither role sets `--num-gpu-blocks-override`.
 - KV transfer uses `RblnNixlConnector` (NIXL) with `kv_buffer_device=rbln`. Expert parallelism is on for decode only: a pipeline-parallel prefill rank holds one stage, so there is no expert group to split.
 - Because the decode role runs one API server per data-parallel rank, the router must be given every rank port: with `ACCELERATOR_TYPE=npu`, the [router step](#1-deploy-the-llm-d-router) layers [`router/npu.rbln.values.yaml`](./router/npu.rbln.values.yaml) over the guide's own values file.
 - **NUMA alignment**: each role claims four NPUs and one RoCE VF, and NIXL moves KV blocks over that VF. The claim constrains all five devices to one NUMA node on `resource.kubernetes.io/numaNode`, which both the NPU driver and dranet advertise. Without that constraint the scheduler may pair a NUMA-1 NPU with a NUMA-0 VF: the pods reach ready and the transfer is what fails, with `no usable data-plane RoCE NIC on numa=1`.

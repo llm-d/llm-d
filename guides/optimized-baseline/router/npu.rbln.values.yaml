@@ -1,14 +1,6 @@
 # Rebellions NPU overrides for optimized-baseline.values.yaml. Apply after it;
 # everything not named here is inherited. Named for the RBLN runtime rather than
-# for NPUs in general, since the limitation below is that runtime's.
-#
-# The NPU path serves gpt-oss-120b with prefix caching off, so the scheduling
-# profile drops the prefix-cache-affinity-filter and keeps the load scorer.
-# Leaving the filter in place would make the router treat endpoints as
-# cache-warm and pin requests to them while the model servers reuse nothing,
-# trading load balance for an affinity that does not exist. Remove this file
-# once the RBLN runtime supports prefix caching for sliding-window models and
-# the overlay drops --no-enable-prefix-caching.
+# for NPUs in general, since the reuse unit below is that runtime's.
 router:
   epp:
     pluginsCustomConfig:
@@ -16,11 +8,25 @@ router:
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        - type: approx-prefix-cache-producer
+          parameters:
+            # The runtime reuses prefixes in 512-token sub-blocks of each 4096-token block,
+            # but does not publish prefix_match_unit, so autotune would hash at 4096 and see
+            # no prefix in a shorter prompt.
+            autoTune: false
+            blockSizeTokens: 512
+            # 428 KV blocks x 8 sub-blocks, the count the runtime sized on one RBLN-CR13.
+            lruCapacityPerServer: 3424
         - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured on one RBLN-CR13 with rbln-serve 0.12.0 at CHUNK_SIZE=512.
+            peakPrefillThroughput: 12171
         - type: token-load-scorer
         schedulingProfiles:
         - name: default
           plugins:
+          - pluginRef: prefix-cache-affinity-filter
           - pluginRef: token-load-scorer
 
   modelServers:
