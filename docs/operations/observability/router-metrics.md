@@ -114,7 +114,7 @@ When flow control is enabled (`flowControl` feature gate), these additional metr
 
 ## KV-Cache Index & Events (Precise Prefix Cache)
 
-These metrics belong to the precise-prefix-cache pipeline. The `precise-prefix-cache-producer` registers all of them, so the series are present whenever it is configured. The `llm_d_epp_kv_cache_events_*` metrics are always recorded; the `llm_d_epp_kv_cache_index_*` metrics stay at zero unless `indexerConfig.kvBlockIndexConfig.enableMetrics` is `true`:
+These metrics belong to the precise-prefix-cache pipeline. The `precise-prefix-cache-producer` registers all of them: the unlabeled series are present whenever it is configured, while the per-pod and per-reason counters appear on their first event, so an absent `zmq_errors_total` on a healthy stream is expected. The `llm_d_epp_kv_cache_events_*` metrics are always recorded; the `llm_d_epp_kv_cache_index_*` metrics stay at zero unless `indexerConfig.kvBlockIndexConfig.enableMetrics` is `true`:
 
 | Metric | What it measures | Why it matters |
 | -------- | ----------------- | ---------------- |
