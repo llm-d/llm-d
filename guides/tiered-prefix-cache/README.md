@@ -18,11 +18,11 @@ The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas 
 
 | `CONNECTOR` | Implementation | `VARIANT` | Model servers and accelerators |
 | --- | --- | --- | --- |
-| `native` (recommended) | vLLM [`OffloadingConnector`](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) (`fs` adds a filesystem tier through `TieringOffloadingSpec`); SGLang HiCache; the vLLM TPU offload connector | `cpu`, `fs` (TPU v7: `cpu`, `fs`; TPU v6/v5p: `cpu`) | vLLM on NVIDIA GPU, AMD GPU, Intel XPU, Google TPU; SGLang on NVIDIA GPU |
+| `native` (recommended) | vLLM [`OffloadingConnector`](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) (`fs` adds a filesystem tier through `TieringOffloadingSpec`); SGLang HiCache; the vLLM TPU offload connector | `cpu`, `fs` (TPU v7: `cpu`, `fs`; TPU v6/v5p: `cpu`) | vLLM on NVIDIA GPU, AMD GPU, Intel XPU, Google TPU; SGLang on NVIDIA GPU, Google TPU v7 |
 | `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
 | `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
 
-Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size=200` (GB per tensor-parallel rank) and LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank).
+Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size` (GB per tensor-parallel rank): 200 on NVIDIA GPU (TP=2), 32 on TPU v7 (TP=8). LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank).
 vLLM keeps its CPU tier in `/dev/shm`, so the tier counts toward the pod's memory limit. When you change the tier size, change the pod's memory request and limit, and the router's `lruCapacityPerServer` (see the note in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
 
 For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md).
@@ -39,7 +39,7 @@ This guide includes configurations for the following accelerator and model serve
 | Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 3 replicas × 4 chips (`2x2x1`, TP=4) · `CONNECTOR=native`, `VARIANT=cpu` · nightly runs on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only · 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) · Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) · `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) · Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) · `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) · SGLang: serves `Qwen/Qwen3-32B`, 2 replicas × 4 chips (`2x2x1`, TP=8) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 8 ranks) · `CONNECTOR=native`, `VARIANT=cpu` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -85,7 +85,7 @@ export MODEL_SERVER=vllm # options: vllm, sglang
 export CONNECTOR=native # options: native, lmcache-connector, mooncake-store; offloading implementation (table above)
 export VARIANT=cpu # options: cpu, fs; offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem (fs: single-host only)
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
-export HOST_TYPE=single-host # options: single-host, multi-host; multi-host: ACCELERATOR_TYPE=tpu/v7 and VARIANT=cpu only
+export HOST_TYPE=single-host # options: single-host, multi-host; multi-host: ACCELERATOR_TYPE=tpu/v7, MODEL_SERVER=vllm and VARIANT=cpu only
 export STORAGE_CLASS= # VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default
 export MODEL=Qwen/Qwen3-32B # set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7: Qwen/Qwen3.5-397B-A17B-FP8
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
@@ -150,11 +150,13 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 > | AMD or Intel XPU vLLM `native` | 100 GiB | 6400 |
 > | NVIDIA or AMD vLLM `lmcache-connector` | 100 GiB × 2 ranks | 12800 |
 > | NVIDIA SGLang `native` (HiCache) | 200 GB × 2 ranks | 23800 |
+> | TPU v7 SGLang `native` (HiCache; fp8 KV, 128 KiB per token) | 32 GB × 8 ranks | 30500 |
 > | Intel XPU vLLM `lmcache-connector` (Qwen3-8B, 144 KiB per token) | 20 GiB | 2275 |
 >
 > For TPU, `tpu/v6` and `tpu/v7` size the host DRAM tier via `cpu_bytes_to_use` in `TPURaidenOffloadingConnector` (`tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). MooncakeStore uses one pool for all pods, so a per-pod value does not apply. The `multi-host` values are for `Qwen/Qwen3.5-397B-A17B-FP8` on TPU v7 (`2x2x2`, TP=16, EP, 256 GiB host tier per group).
 >
-> **TPU v7 single-host:** layer [`router/single-host/tpu-v7.values.yaml`](router/single-host/tpu-v7.values.yaml) after `ROUTER_VALUES` (`-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/single-host/tpu-v7.values.yaml`). It sets 4352-token router blocks (the engines' `--block-size`) and a 262k match window to match the DP=8 × TP=1 Qwen3.5-397B engines, and sizes the CPU producer for the 8 × 32 GiB host tier per pod, the same values as the [Qwen3.5-397B model guide](../models/qwen3-5-397b/router/qwen3-5-397b.values.yaml).
+> **TPU v7 single-host with vLLM:** layer [`router/single-host/tpu-v7.values.yaml`](router/single-host/tpu-v7.values.yaml) after `ROUTER_VALUES` (`-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/single-host/tpu-v7.values.yaml`). It sets 4352-token router blocks (the engines' `--block-size`) and a 262k match window to match the DP=8 × TP=1 Qwen3.5-397B engines, and sizes the CPU producer for the 8 × 32 GiB host tier per pod, the same values as the [Qwen3.5-397B model guide](../models/qwen3-5-397b/router/qwen3-5-397b.values.yaml).
+> Do not layer it for SGLang on TPU v7: that overlay serves Qwen3-32B with 64-token pages, so it uses the default `ROUTER_VALUES` with `lruCapacityPerServer` set to 30500 (table above).
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
@@ -302,6 +304,12 @@ kubectl apply -n ${NAMESPACE} \
 - **Verifying the host tier.** With the auto-selected fp8 KV cache the v6e HBM pool holds on the order of 10^6 tokens, so the host tier is only read back after real HBM eviction. Watch `vllm:external_prefix_cache_hits_total` on the model server; `prefix_cache_hits_total` alone means the hit came from HBM.
 - **GKE TPU node requirements.** Weights are downloaded once per node into `/var/cache/huggingface` (a `hostPath`), so size the boot disk for the checkpoint: ≥ 200 GB for Qwen3-32B on v6e (66 GB), ≥ 1 TB for Qwen3.5-397B-A17B-FP8 on TPU7x (406 GB: a 600 GB disk leaves only ~20 GiB of allocatable headroom once the image and compile cache are counted; the 100 GB node-auto-provisioning default is evicted mid-download),
   `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` under the `OPTIMIZE_UTILIZATION` autoscaler profile. The Deployment uses `strategy: Recreate` (fixed-size TPU pools).
+- **SGLang on TPU v7 (`MODEL_SERVER=sglang`).** The `tpu/v7/sglang/native/cpu` overlay serves `Qwen/Qwen3-32B` with the Torch TPU SGLang image (`tpu-sglang`): one TP=8 engine per `2x2x1` slice (4 chips, 8 TensorCores), `--enable-torch-compile` with startup bucket precompilation, the fp8 KV cache that is the TPU default, and a 131,072-token device pool (`--max-total-tokens`).
+  Prefill runs in 2048-token chunks with a single 2048-token compiled bucket: on the `v0.1.0-tpu` image a prefill chunk that is padded into the 8192-token program returns a wrong first token ([sglang-torchtpu#1700](https://github.com/sgl-project/sglang-torchtpu/issues/1700)); the `optimized-baseline` SGLang overlay still uses 8192-token chunks. Restore them here once the fix ships.
+  The host tier is SGLang HiCache through the Torch TPU io backend: `--enable-hierarchical-cache --hicache-io-backend=torch_tpu --hicache-mem-layout=page_first_fused --hicache-write-policy=write_through --hicache-size=32` (GB per TP rank, 256 GB per pod).
+  The `torch_tpu` backend requires the `page_first_fused` layout and a Pallas RPA attention backend (the default), serves dense MHA models only (no MLA and no hybrid sliding-window models), and has no filesystem tier in this image, so `VARIANT=fs` is vLLM-only on TPU.
+  Verify the host tier as for SGLang on GPU: `sglang:cached_tokens_total{cache_source="host"}` and `sglang:load_back_tokens_total` grow once HBM evicts, and the scheduler log reports `#host-hit-token`.
+  The pod requests 512Gi for the host pool, the bf16 checkpoint, the eight TP processes and a 64Gi `/dev/shm`, which also holds the Torch TPU compile cache.
 
 </details>
 

@@ -1,0 +1,132 @@
+# TPU7x host-DRAM tier (VARIANT=cpu) for SGLang on Torch TPU: HBM -> host DRAM through
+# SGLang HiCache. The engine is the optimized-baseline tpu/v7/sglang layout (Qwen3-32B,
+# TP=8 over the 8 TensorCores of one 2x2x1 slice, torch.compile with startup bucket
+# precompilation; 2048-token prefill chunks here, see the note on the args) plus the
+# HiCache flags. --hicache-io-backend=torch_tpu copies pages between the device pool and
+# a host pool that mirrors its layout, which is why it requires
+# --hicache-mem-layout=page_first_fused and a Pallas RPA attention backend (the TPU
+# default). The host pool is ordinary (unpinned) process memory.
+#
+# Tier sizing: --max-total-tokens=131072 is the device pool (fp8 KV on TPU, 16 GiB per
+# pod); --hicache-size is GB per TP rank, so 32 GB x 8 ranks = 256 GB of host DRAM per
+# pod, the same host tier as the vLLM tpu/v7 overlay. The 512Gi request covers the host
+# pool, the bf16 checkpoint (~62 GB), the 8 TP processes and the 20Gi /dev/shm tmpfs;
+# tpu7x-standard-4t has ~919 GiB allocatable. Change the request and the router's
+# lruCapacityPerServer together with --hicache-size.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  # TPU node pools are fixed-size: a RollingUpdate needs a spare 4-chip node to
+  # surge onto, so the rollout deadlocks with the new pod Pending.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        llm-d.ai/inference-serving: "true"
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x2x1
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "sglang.launch_server"]
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--device=tpu"
+            - "--dtype=bfloat16"
+            - "--enable-metrics"
+            - "--tensor-parallel-size=8"
+            - "--enable-torch-compile"
+            - "--context-length=16384"
+            - "--max-running-requests=64"
+            - "--torch-compile-max-bs=64"
+            # Every prefill chunk stays in the 2048-token compiled program: on
+            # the v0.1.0-tpu image a chunk padded into the 8192-token program
+            # returns a wrong first token (sgl-project/sglang-torchtpu#1700).
+            # Restore 8192 chunks and the 8192 bucket once that is fixed.
+            - "--chunked-prefill-size=2048"
+            - "--max-prefill-tokens=2048"
+            # Precompile the prefill token and decode batch buckets at startup
+            # instead of on the first request of each shape.
+            - "--tpu-compile-tokens"
+            - "2048"
+            - "--tpu-compile-bs"
+            - "8"
+            - "64"
+            - "--max-total-tokens=131072"
+            - "--mem-fraction-static=0.35"
+            - "--watchdog-timeout=3600"
+            - "--tool-call-parser=qwen"
+            - "--reasoning-parser=qwen3"
+            # Matches the router scorer's tokenProcessorConfig.blockSizeTokens
+            # (default 64); SGLang uses --page-size (vLLM uses --block-size).
+            - "--page-size=64"
+            # Host-DRAM tier (HiCache). Keep flags in "--flag=value" form so
+            # llm-d-infra's CI model detection does not mistake bare option
+            # values for the model name.
+            - "--enable-hierarchical-cache"
+            - "--hicache-io-backend=torch_tpu"
+            - "--hicache-mem-layout=page_first_fused"
+            - "--hicache-write-policy=write_through"
+            - "--hicache-size=32"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+            - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+              value: "0"
+          resources:
+            requests:
+              cpu: "32"
+              memory: 512Gi
+              google.com/tpu: 4
+            limits:
+              memory: 512Gi
+              google.com/tpu: 4
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            # Checkpoint and torch.compile cache. The gke overlay mounts the
+            # node's HuggingFace cache inside it (gke-model-cache-hostpath).
+            - mountPath: /root/.cache
+              name: cache
+          # /v1/models responds before SGLang completes its generation warmup.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        # Torch TPU keeps its compiled-executable cache in /dev/shm/torch_tpu_cache;
+        # the baseline buckets alone fill 18 GiB and the HiCache reload/backup
+        # programs add to it, so the tmpfs is larger than the 20Gi of the baseline.
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: cache
+          emptyDir: {}
