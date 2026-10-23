@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                # Same script as ../base/patch-vllm.yaml (keep in sync), with the
+                # model loaded from its copy on the node-local hostPath.
+                # --served-model-name keeps the API model name unchanged.
+                args:
+                  - |
+                    exec vllm serve \
+                      /model-cache/models/Qwen/Qwen3-32B \
+                      --served-model-name=Qwen/Qwen3-32B \
+                      --tensor-parallel-size=2 \
+                      --kv-transfer-config \
+                      '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":322122547200}}' \
+                      --shutdown-timeout=45
+                volumeMounts:
+                  # Model weights must already be on every node under
+                  # /var/model-cache/models/<org>/<model> (provisioned outside this guide).
+                  - mountPath: /model-cache
+                    name: model-storage
+                    readOnly: true
+            volumes:
+              # Node-local model cache. The directory must already exist on the
+              # node and, on SELinux nodes, be labelled container_file_t so
+              # non-spc_t containers can read it.
+              - name: model-storage
+                hostPath:
+                  path: /var/model-cache
+                  type: Directory
