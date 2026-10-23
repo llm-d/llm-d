@@ -626,7 +626,7 @@
     {
       "type": "timeseries",
       "title": "Predicted Prefix Hit Rate",
-      "description": "Share of prompt tokens the precise producer predicted the chosen endpoint holds in its prefix cache. Workloads without shared prefixes legitimately sit near zero. Speculative entries keep repeated prefixes hitting even without KV events, so this is not a stream-health signal.",
+      "description": "Share of prompt tokens the precise producer predicted the chosen endpoint holds in its prefix cache, next to the model servers' measured prefix-cache hit rate (vllm:prefix_cache_hits_total / vllm:prefix_cache_queries_total, also a share of prompt tokens). With a complete index the two lines track each other. If the model servers' line is clearly higher, the index is missing blocks: check the KV-Events Subscribers row. If both are low, the workload shares little prefix. The router line alone is not a stream-health signal, because speculative entries keep repeated prefixes hitting without KV events. The model-server line is filtered by namespace only, so other vLLM pools in the namespace are included; it needs the model servers to be scraped, and SGLang servers do not export these metrics.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -679,9 +679,20 @@
           },
           "editorMode": "code",
           "expr": "sum by (plugin_name) (rate(llm_d_epp_prefix_predicted_cached_tokens_sum{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"precise-prefix-cache-producer\"}[$__rate_interval])) / sum by (plugin_name) (rate(llm_d_epp_prefix_prompt_tokens_sum{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"precise-prefix-cache-producer\"}[$__rate_interval]))",
-          "legendFormat": "{{plugin_name}}",
+          "legendFormat": "router predicted ({{plugin_name}})",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(vllm:prefix_cache_hits_total{namespace=~\"$namespace\"}[$__rate_interval])) / sum(rate(vllm:prefix_cache_queries_total{namespace=~\"$namespace\"}[$__rate_interval]))",
+          "legendFormat": "model servers (vLLM)",
+          "range": true,
+          "refId": "B"
         }
       ]
     },
@@ -908,8 +919,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Tokenization Latency (token-producer)",
-      "description": "Time the token-producer plugin spends tokenizing each prompt through vLLM's render endpoint (a model server or a standalone render service). llm_d_epp_plugin_duration_seconds has a top bucket of 100ms, so quantiles cap there; see the next panel for the share of calls above it. The mean is exact. Shown per EPP replica.",
+      "title": "Render Latency (token-producer)",
+      "description": "Duration of successful token-producer render calls per EPP replica: the call to vLLM's render endpoint (a model server or a standalone render service) that tokenizes each prompt before the index lookup. Buckets run from 5ms to 60s, so quantiles below 5ms are interpolated; the mean is exact. Only the vllm render backend records this: it stays empty with the estimate backend or when requests arrive already tokenized (for example from the vLLM gRPC parser). Warmup renders at startup are not counted.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -961,7 +972,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum by (le, pod) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le, pod) (rate(llm_d_epp_token_producer_render_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", result=\"success\"}[$__rate_interval])))",
           "legendFormat": "{{pod}} P50",
           "range": true,
           "refId": "A"
@@ -972,7 +983,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, pod) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le, pod) (rate(llm_d_epp_token_producer_render_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", result=\"success\"}[$__rate_interval])))",
           "legendFormat": "{{pod}} P99",
           "range": true,
           "refId": "B"
@@ -983,7 +994,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval]))",
+          "expr": "sum by (pod) (rate(llm_d_epp_token_producer_render_duration_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\", result=\"success\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_token_producer_render_duration_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\", result=\"success\"}[$__rate_interval]))",
           "legendFormat": "{{pod}} mean",
           "range": true,
           "refId": "C"
@@ -992,8 +1003,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Tokenizations Slower than 100ms",
-      "description": "Share of token-producer calls that took longer than the 100ms top histogram bucket. Shown per EPP replica.",
+      "title": "Render Failures",
+      "description": "Failed token-producer render calls per second, by EPP replica and reason (timeout, status, connection, decode, no_endpoints, other). A failed render leaves the request without tokens, so the precise producer cannot score it against the index. status counts non-2xx responses from the render endpoint, including requests vLLM rejects, such as prompts longer than the model's context. Calls canceled because the client went away are not counted.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1016,14 +1027,15 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": false,
-            "axisLabel": "",
+            "axisLabel": "failures/s",
             "stacking": {
               "mode": "none",
               "group": "A"
             }
           },
-          "unit": "percentunit",
-          "min": 0
+          "unit": "short",
+          "min": 0,
+          "noValue": "0"
         },
         "overrides": []
       },
@@ -1045,8 +1057,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "1 - sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\", le=\"0.1\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_plugin_duration_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"token-producer\"}[$__rate_interval]))",
-          "legendFormat": "{{pod}}",
+          "expr": "sum by (pod, reason) (rate(llm_d_epp_token_producer_render_failures_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} {{reason}}",
           "range": true,
           "refId": "A"
         }

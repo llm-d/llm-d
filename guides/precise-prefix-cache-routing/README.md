@@ -577,6 +577,8 @@ With `MONITORING=true`, Prometheus scrapes the router's metrics. `indexerConfig.
 
 To tell **low prefix reuse** apart from an **incomplete index**, compare the same token share on both sides. On the router, divide `llm_d_epp_prefix_predicted_cached_tokens_sum` by `llm_d_epp_prefix_prompt_tokens_sum` (the prompt tokens the router predicted the chosen endpoint had cached); on the model servers, divide `vllm:prefix_cache_hits_total` by `vllm:prefix_cache_queries_total`. With a complete index the two track each other closely. If the model servers' share is clearly higher, the index is missing blocks: check the subscriber, error and queue metrics above, and see [Index recovery](#index-recovery). If both are low, the workload simply shares little prefix.
 
+The `llm-d-kv-cache-index` Grafana dashboard charts these metrics per router replica, including this hit-rate comparison; see [Use Grafana Dashboards](../../docs/operations/observability/dashboards.md).
+
 ### Tracing
 
 To trace the router, deploy an OpenTelemetry collector and layer [`tracing.values.yaml`](../recipes/router/features/tracing.values.yaml) onto the router install, as described in [Trace Requests](../../docs/operations/observability/tracing.md). Router tracing covers the `tokenize` call to the render endpoint and the KV-index lookups (`index_lookup` and related spans). Spans for KV-event processing (`events_receive`, `events_process`, `events_decode`) are separate and off by default, because events arrive at many times the request rate and would crowd request traces out of a shared sampler: set `kvEventsConfig.tracing: true` to add them while debugging.
