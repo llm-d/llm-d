@@ -562,7 +562,7 @@ The settings below are commented out in [`router/precise-prefix-cache-routing.va
 
 ### Metrics
 
-With `MONITORING=true`, Prometheus scrapes the router's metrics. `indexerConfig.kvBlockIndexConfig.enableMetrics: true` (set in this guide) adds the KV-index metrics:
+With `MONITORING=true`, Prometheus scrapes the router's metrics. The `llm_d_epp_kv_cache_events_*` metrics are always recorded; `indexerConfig.kvBlockIndexConfig.enableMetrics: true` (set in this guide) adds the `llm_d_epp_kv_cache_index_*` metrics:
 
 | Metric | What it tells you |
 | --- | --- |
@@ -576,6 +576,8 @@ With `MONITORING=true`, Prometheus scrapes the router's metrics. `indexerConfig.
 | `llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens` | Per-request histograms; the ratio of their `_sum`s is the share of prompt tokens the router predicted the chosen endpoint had cached. Compare it with the model servers' prefix-cache hit rate (below). |
 
 To tell **low prefix reuse** apart from an **incomplete index**, compare the same token share on both sides. On the router, divide `llm_d_epp_prefix_predicted_cached_tokens_sum` by `llm_d_epp_prefix_prompt_tokens_sum` (the prompt tokens the router predicted the chosen endpoint had cached); on the model servers, divide `vllm:prefix_cache_hits_total` by `vllm:prefix_cache_queries_total`. With a complete index the two track each other closely. If the model servers' share is clearly higher, the index is missing blocks: check the subscriber, error and queue metrics above, and see [Index recovery](#index-recovery). If both are low, the workload simply shares little prefix.
+
+The `llm-d-kv-cache-index` Grafana dashboard charts these metrics per router replica, including this hit-rate comparison; see [Use Grafana Dashboards](../../docs/operations/observability/dashboards.md).
 
 ### Tracing
 
