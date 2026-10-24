@@ -562,7 +562,7 @@ The settings below are commented out in [`router/precise-prefix-cache-routing.va
 
 ### Metrics
 
-With `MONITORING=true`, Prometheus scrapes the router's metrics. `indexerConfig.kvBlockIndexConfig.enableMetrics: true` (set in this guide) adds the KV-index metrics:
+With `MONITORING=true`, Prometheus scrapes the router's metrics. The `llm_d_epp_kv_cache_events_*` metrics are always recorded; `indexerConfig.kvBlockIndexConfig.enableMetrics: true` (set in this guide) adds the `llm_d_epp_kv_cache_index_*` metrics:
 
 | Metric | What it tells you |
 | --- | --- |
