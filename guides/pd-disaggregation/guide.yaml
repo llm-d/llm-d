@@ -36,12 +36,12 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL"
+      notes: "Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL (SGLang: TP=1, NIXL over TCP)"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-        - {name: rdma, label: "RDMA"}
-      engines: {vllm: validated}
+        - {name: rdma, label: "RDMA", engines: [vllm]}
+      engines: {vllm: validated, sglang: community}
     "tpu/v5p":
       label: Google TPU v5p
       notes: "`2x2x1` v5p nodes on GKE · 1P + 1D, 4 chips each (TP=4) · TPUConnector · nightly runs on Spot capacity"
@@ -229,7 +229,12 @@ deploy:
     # `standard` lists the remaining accelerators so that `guide.py emit`
     # runs exactly one apply (and, for dynamic slicing, the LocalQueue first).
     standard:
-      - when: {ACCELERATOR_TYPE: [gpu, amd, xpu]}
+      - when: {ACCELERATOR_TYPE: [gpu, amd]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    xpu:
+      - when: {ACCELERATOR_TYPE: [xpu]}
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/

@@ -114,6 +114,12 @@ patches:
   # scale-down within the run. The guide defaults are 300s.
   - patch: |-
       - op: replace
+        path: /metadata/name
+        value: ${SCALEDOBJECT}
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/name
+        value: ${SCALEDOBJECT}-hpa
+      - op: replace
         path: /spec/scaleTargetRef/name
         value: ${DECODE_DEPLOYMENT}
       - op: replace
@@ -141,7 +147,6 @@ patches:
         value: 60
     target:
       kind: ScaledObject
-      name: ${SCALEDOBJECT}
   - path: patch-vllm.yaml
     target:
       kind: Deployment
@@ -149,7 +154,11 @@ patches:
 EOF
 
 echo "==> Validating kustomization"
-kubectl kustomize "${OUTPUT_DIR}" >/dev/null
+RENDERED="$(kubectl kustomize "${OUTPUT_DIR}")"
+if grep -nE '\$\{[A-Z_][A-Z0-9_]*\}' <<<"${RENDERED}" >&2; then
+  echo "ERROR: unresolved \${...} placeholders in the rendered manifests." >&2
+  exit 1
+fi
 
 echo "==> Applying kustomize overlay"
 kubectl apply -k "${OUTPUT_DIR}"
