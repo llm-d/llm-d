@@ -4,8 +4,9 @@
 # from the render.
 #
 # The keys sit under requirements.cluster, the block a guide.yaml
-# `requirements:` section would hold, so they can move there unchanged once
-# wide-ep has a guide.yaml (see #2636 for requirements.modelServer).
+# `requirements:` section would hold (see #2636 for requirements.modelServer).
+# They live here for now because scripts/guide.py rejects unknown top-level
+# keys in guide.yaml; moving them there is a copy once that key is allowed.
 
 requirements:
   cluster:
@@ -16,10 +17,10 @@ requirements:
       - leaderworkersets.leaderworkerset.x-k8s.io
 
     lws:
-      minVersion: v0.11.0  # README.md, Prerequisites
+      minVersion: v0.11.1  # README.md, Prerequisites
 
     gpuDriver:
-      # modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md, "GPU driver": R580
+      # modelserver/gpu/vllm/gke/README.md, "GPU driver": R580
       # crashed DeepEP high-throughput kernels. Written before prefill and decode
       # moved to deepep_v2 (#2339, #2602), so it is a warning, not a failure.
       maxMajorExclusive: 580
@@ -35,5 +36,5 @@ requirements:
     docs:
       rdma: docs/infrastructure/rdma/README.md
       gkeDra: docs/infrastructure/providers/gke/README.md
-      gpuDriver: guides/wide-ep/modelserver/gpu/vllm-deepseek-r1-0528/gke/README.md
+      gpuDriver: guides/wide-ep/modelserver/gpu/vllm/gke/README.md
       prerequisites: guides/wide-ep/README.md

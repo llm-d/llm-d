@@ -56,8 +56,15 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                # Tool calling needs vLLM's own R1 template: the one bundled with
+                # DeepSeek-R1-0528 never renders the `tools` list. It ships in the image
+                # under /vllm-workspace/examples. No reasoning parser is set, because vLLM
+                # lists deepseek_r1 reasoning as not supporting tool calling.
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --enable-auto-tool-choice \
+                  --tool-call-parser deepseek_v3 \
+                  --chat-template /vllm-workspace/examples/tool_chat_template_deepseekr1.jinja \
                   --port 8000 \
                   --enforce-eager \
                   --gpu-memory-utilization 0.80 \
@@ -76,7 +83,8 @@ spec:
                                           "kv_role":"kv_producer",
                                           "kv_load_failure_policy":"fail"}' \
                   --moe-backend deep_gemm \
-                  --all2all-backend deepep_v2
+                  --all2all-backend deepep_v2 \
+                  --shutdown-timeout 45
 
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
@@ -128,6 +136,12 @@ spec:
                 value: /var/cache/huggingface
               image: docker.io/vllm/vllm-openai:v0.30.0
               imagePullPolicy: Always
+              lifecycle:
+                preStop:
+                  exec:
+                    command:
+                    - /bin/sleep
+                    - "15"
               livenessProbe:
                 failureThreshold: 3
                 httpGet:
@@ -204,6 +218,7 @@ spec:
               - mountPath: /var/cache/vllm
                 name: jit-cache
             serviceAccountName: deepseek-r1
+            terminationGracePeriodSeconds: 75
             volumes:
             - emptyDir:
                 medium: Memory
@@ -255,8 +270,15 @@ spec:
                 #################
                 START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
+                # Tool calling needs vLLM's own R1 template: the one bundled with
+                # DeepSeek-R1-0528 never renders the `tools` list. It ships in the image
+                # under /vllm-workspace/examples. No reasoning parser is set, because vLLM
+                # lists deepseek_r1 reasoning as not supporting tool calling.
                 exec vllm serve \
                   deepseek-ai/DeepSeek-R1-0528 \
+                  --enable-auto-tool-choice \
+                  --tool-call-parser deepseek_v3 \
+                  --chat-template /vllm-workspace/examples/tool_chat_template_deepseekr1.jinja \
                   --port 8200 \
                   --disable-access-log-for-endpoints=/health,/metrics \
                   --data-parallel-multi-port-external-lb \
@@ -274,7 +296,8 @@ spec:
                                           "kv_role":"kv_consumer",
                                           "kv_load_failure_policy":"fail"}' \
                   --all2all-backend deepep_v2 \
-                  --moe-backend deep_gemm
+                  --moe-backend deep_gemm \
+                  --shutdown-timeout 45
                   # To enable tracing, add:
                   # --otlp-traces-endpoint http://otel-collector:4317 \
                   # --collect-detailed-traces all
@@ -327,6 +350,12 @@ spec:
                 value: /var/cache/huggingface
               image: docker.io/vllm/vllm-openai:v0.30.0
               imagePullPolicy: Always
+              lifecycle:
+                preStop:
+                  exec:
+                    command:
+                    - /bin/sleep
+                    - "15"
               livenessProbe:
                 failureThreshold: 3
                 httpGet:
@@ -408,7 +437,7 @@ spec:
               - --data-parallel-size=8
               - --kv-connector=nixlv2
               - --zap-log-level=1
-              - --secure-proxy=false
+              - --secure-serving=false
               - --enable-prefiller-sampling
               image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:main
               imagePullPolicy: Always
@@ -443,6 +472,7 @@ spec:
                 allowPrivilegeEscalation: false
                 runAsNonRoot: true
             serviceAccountName: deepseek-r1
+            terminationGracePeriodSeconds: 75
             volumes:
             - emptyDir:
                 medium: Memory

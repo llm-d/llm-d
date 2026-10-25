@@ -10,7 +10,7 @@ PASS / WARN / FAIL / INFO per prerequisite before anything is deployed. It
 never changes the cluster.
 
     python3 helpers/preflight/preflight.py guides/wide-ep \\
-        --overlay modelserver/gpu/vllm-deepseek-r1-0528/gke
+        --overlay modelserver/gpu/vllm/gke
 
 Exit codes: 0 no FAIL, 1 at least one FAIL, 2 usage or environment error.
 Guide-specific requirements that can't be read from the manifests live in
@@ -797,7 +797,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("guide", help="guide directory, e.g. guides/wide-ep")
     parser.add_argument("--overlay", required=True,
                         help="model-server overlay relative to the guide, "
-                             "e.g. modelserver/gpu/vllm-deepseek-r1-0528/gke")
+                             "e.g. modelserver/gpu/vllm/gke")
     parser.add_argument("--context", help="kubeconfig context to check (default: current)")
     parser.add_argument("--gateway-mode", action="store_true",
                         help="the router runs behind a Gateway (also checks Gateway API CRDs)")

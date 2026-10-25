@@ -23,7 +23,7 @@ def test_collects_healthy_gke():
     assert dev.attributes["driverVersion"] == "570.172.08"
     assert dev.attributes["resource.kubernetes.io/pcieRoot"].startswith("pci0000:")
     assert st.device_classes == {"gpu.nvidia.com": "gpu.nvidia.com", "mrdma.google.com": "mrdma.google.com"}
-    assert st.lws == (preflight.LwsController("lws-system", "registry.k8s.io/lws/lws:v0.11.0", ""),)
+    assert st.lws == (preflight.LwsController("lws-system", "registry.k8s.io/lws/lws:v0.11.1", ""),)
     assert st.webhooks == frozenset({"vdisaggregatedset.kb.io"})
     assert st.denied == ()
 

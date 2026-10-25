@@ -113,7 +113,7 @@ def test_coreweave_overlay_is_device_plugin():
     assert req.pods[0].devices == {}
 
 
-@pytest.mark.parametrize("name", ["base", "dgx-cloud-gb200"])
+@pytest.mark.parametrize("name", ["base"])
 def test_overlays_without_rdma(name):
     req = _render(name)
     assert req.rdma_mode == "none"
@@ -210,10 +210,10 @@ spec: {spec: {}}
         preflight.parse_render(_ds(spec, extra_docs=rct))
 
 
-OVERLAY_ROOT = REPO_ROOT / "guides" / "wide-ep" / "modelserver" / "gpu" / "vllm-deepseek-r1-0528"
+OVERLAY_ROOT = REPO_ROOT / "guides" / "wide-ep" / "modelserver" / "gpu" / "vllm"
 
 
-@pytest.mark.parametrize("name", ["gke", "coreweave", "base", "dgx-cloud-gb200"])
+@pytest.mark.parametrize("name", ["gke", "coreweave", "base"])
 def test_render_fixture_matches_manifests(name):
     if shutil.which("kubectl") is None:
         if os.environ.get("CI"):

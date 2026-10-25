@@ -88,7 +88,7 @@ def test_lws_new_enough_passes():
 
 def test_lws_too_old_fails():
     results = preflight.check_lws(CFG, _lws(builders.lws_deployment("registry.k8s.io/lws/lws:v0.10.2")))
-    assert results[0].status == "FAIL" and "v0.10.2" in results[0].detail and "v0.11.0" in results[0].detail
+    assert results[0].status == "FAIL" and "v0.10.2" in results[0].detail and "v0.11.1" in results[0].detail
 
 
 def test_lws_non_semver_tag_warns():
@@ -101,12 +101,12 @@ def test_lws_digest_image_warns():
 
 
 def test_lws_tag_with_digest_is_still_a_version():
-    image = "registry.k8s.io/lws/lws:v0.11.0@sha256:" + "a" * 64
+    image = "registry.k8s.io/lws/lws:v0.11.1@sha256:" + "a" * 64
     assert statuses(preflight.check_lws(CFG, _lws(builders.lws_deployment(image)))) == ["PASS"]
 
 
 def test_lws_version_label_is_a_fallback():
-    dep = builders.lws_deployment("registry.k8s.io/lws/lws:main", labels={"app.kubernetes.io/version": "v0.11.0"})
+    dep = builders.lws_deployment("registry.k8s.io/lws/lws:main", labels={"app.kubernetes.io/version": "v0.11.1"})
     assert statuses(preflight.check_lws(CFG, _lws(dep))) == ["PASS"]
 
 

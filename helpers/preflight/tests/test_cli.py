@@ -23,7 +23,7 @@ WIDE_EP = REPO_ROOT / "guides" / "wide-ep"
 
 def test_wide_ep_config_loads():
     cfg = preflight.load_guide_config(WIDE_EP / "preflight.yaml")
-    assert cfg.lws_min_version == (0, 11, 0)
+    assert cfg.lws_min_version == (0, 11, 1)
     assert cfg.driver_max_major_exclusive == 580
     assert cfg.driver_severity == "warn"
     assert cfg.router_standalone == preflight.RouterSize(Decimal(8), Decimal(16 * 2**30))
@@ -55,7 +55,7 @@ def test_parse_semver(raw, expected):
 
 
 SCRIPT = REPO_ROOT / "helpers" / "preflight" / "preflight.py"
-GKE = "modelserver/gpu/vllm-deepseek-r1-0528/gke"
+GKE = "modelserver/gpu/vllm/gke"
 RENDER_GKE = (Path(__file__).resolve().parent / "fixtures" / "render" / "gke.yaml").read_text()
 
 

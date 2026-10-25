@@ -71,7 +71,7 @@ def device_class(name, driver=None):
             "spec": {"selectors": [{"cel": {"expression": f"device.driver == '{driver}'"}}]}}
 
 
-def lws_deployment(image="registry.k8s.io/lws/lws:v0.11.0", namespace="lws-system", labels=None):
+def lws_deployment(image="registry.k8s.io/lws/lws:v0.11.1", namespace="lws-system", labels=None):
     return {"metadata": {"name": "lws-controller-manager", "namespace": namespace, "labels": labels or {}},
             "spec": {"template": {"spec": {"containers": [{"name": "manager", "image": image}]}}}}
 
@@ -98,7 +98,7 @@ GPU_NODES = [f"gpu-{i}" for i in range(4)]
 
 
 def healthy_gke(driver_version="570.172.08"):
-    """kubectl responses for a GKE DRA cluster that can run wide-ep r1-0528."""
+    """kubectl responses for a GKE DRA cluster that can run the wide-ep gpu overlay."""
     nodes = [node(n, cpu="190", memory="1800Gi", eph="2Ti", taints=[GPU_TAINT]) for n in GPU_NODES]
     nodes.append(node("cpu-0", cpu="15890m", memory="57Gi"))
     slices = [resource_slice(n, "gpu.nvidia.com", 8, gpu_attrs(driver_version)) for n in GPU_NODES]

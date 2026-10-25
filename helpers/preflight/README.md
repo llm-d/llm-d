@@ -5,8 +5,8 @@ needs. It is read-only: it renders the guide's model-server overlay with
 `kubectl kustomize` and reads the cluster with `kubectl get`. Nothing is
 created or changed.
 
-Supported today: `guides/wide-ep`, model `vllm-deepseek-r1-0528`, overlays
-`gke`, `coreweave`, `base`, `dgx-cloud-gb200`. Other overlays that render a
+Supported today: `guides/wide-ep` on NVIDIA GPU, overlays
+`modelserver/gpu/vllm/{gke,coreweave,base}`. Other overlays that render a
 `DisaggregatedSet` run best-effort: claims the render doesn't define are
 reported as not checked. Overlays without one, or with unrendered placeholders,
 exit with code 2.
@@ -18,7 +18,7 @@ kustomize renders) and Python 3 with PyYAML (`python3 -m pip install pyyaml`).
 
 ```bash
 python3 helpers/preflight/preflight.py guides/wide-ep \
-  --overlay modelserver/gpu/vllm-deepseek-r1-0528/gke
+  --overlay modelserver/gpu/vllm/gke
 ```
 
 Options: `--context NAME` to check another kubeconfig context,
@@ -53,7 +53,8 @@ CEL filter, so partitioned devices (for example MIG) may be over-counted.
 Add `<guide>/preflight.yaml` with what can't be read from the manifests,
 under `requirements.cluster` (see `guides/wide-ep/preflight.yaml`). That is the
 block a `guide.yaml` `requirements:` section would hold, so it can move there
-unchanged. The overlay must render a `DisaggregatedSet`.
+unchanged once `scripts/guide.py` accepts that key. The overlay must render a
+`DisaggregatedSet`.
 
 ## Tests
 
