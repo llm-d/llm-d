@@ -151,7 +151,7 @@ roles:
         maxUnavailable: 0
 ```
 
-Set both values explicitly for every role instead of relying on a version-specific default: LWS `v0.11.1` defaults to `maxSurge: 1`, `maxUnavailable: 0`, whereas LWS main defaults to `maxSurge: 0`, `maxUnavailable: 1`. The latter needs no spare accelerators but permits a singleton role to become unavailable. The P/D recipe keeps both the prefill and decode roles available by setting `maxSurge: 1`, `maxUnavailable: 0`, so a slice never loses its only prefill or decode.
+Set both values explicitly for every role instead of relying on a version-specific default: LWS `v0.11.1` defaults to `maxSurge: 1`, `maxUnavailable: 0`, whereas LWS `v1.0.0` defaults to `maxSurge: 0`, `maxUnavailable: 1`. The latter needs no spare accelerators but permits a singleton role to become unavailable. The P/D recipe keeps both the prefill and decode roles available by setting `maxSurge: 1`, `maxUnavailable: 0`, so a slice never loses its only prefill or decode.
 
 1. Change the template (for example the image) in your overlay and apply it:
 
