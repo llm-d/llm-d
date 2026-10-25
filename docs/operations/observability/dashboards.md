@@ -73,6 +73,8 @@ The KV-Cache Index dashboard is only populated when the router runs the `precise
 
 The dashboard's index panels also need `indexerConfig.kvBlockIndexConfig.enableMetrics: true` on that producer. The precise guide sets it; the [P2P KV-cache sharing](../../../guides/p2p-kv-cache-sharing/README.md) and [GLM-5.2](../../../guides/models/glm-5-2/README.md) router values do not, so add it there to use those panels. Without it the index counters stay at zero and the ratio panels show no data, while the KV-events and render panels still report.
 
+A few of its panels need more than the router's own metrics: EPP Restarts needs kube-state-metrics, and the model servers' hit-rate line needs the vLLM model servers to be scraped (see [Collect Metrics](./metrics.md)). The memory and goroutine panels use the EPP's standard Go process metrics.
+
 For the metrics behind these panels, see [Model Server Metrics](./model-server-metrics.md), [Router (EPP) Metrics](./router-metrics.md), [Batch Gateway Metrics](./batch-gateway-metrics.md), [Async Processor metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics), and [Track Inference Cost](./inference-cost.md).
 
 ## Troubleshooting

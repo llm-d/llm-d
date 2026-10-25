@@ -191,7 +191,7 @@
     {
       "type": "stat",
       "title": "Replicas w/o KV Events",
-      "description": "EPP replicas that are scoring requests (the precise producer is recording prompts) but received no KV events in the last interval. Idle replicas are not counted, so quiet deployments elsewhere do not trip it. A dead or never-connected stream shows here even though speculative entries keep that replica's admissions up. It can read 1 briefly while a new replica receives its first events.",
+      "description": "EPP replicas that scored requests (the precise producer recorded prompts) in the last 10 minutes but received no KV events at all in that time: the replica's whole stream is dead or never connected, even though speculative entries keep its admissions up. Idle replicas are not counted. It is per replica: one dead stream among several model servers does not trip it, but shows in Messages Received by Pod as a line dropping to 0. vLLM sends an event only when a block fills, so a workload that only reuses already-cached prefixes for 10 minutes can also trip it. It can read 1 briefly while a new replica receives its first events.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -249,7 +249,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count((sum by (namespace, pod) (rate(llm_d_epp_prefix_prompt_tokens_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"precise-prefix-cache-producer\"}[$__rate_interval])) > 0) unless on (namespace, pod) (sum by (namespace, pod) (rate(llm_d_epp_kv_cache_events_messages_received_total{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) > 0)) or vector(0)",
+          "expr": "count((sum by (namespace, pod) (rate(llm_d_epp_prefix_prompt_tokens_count{namespace=~\"$namespace\", pod=~\"$pod\", plugin_type=\"precise-prefix-cache-producer\"}[10m])) > 0) unless on (namespace, pod) (sum by (namespace, pod) (rate(llm_d_epp_kv_cache_events_messages_received_total{namespace=~\"$namespace\", pod=~\"$pod\"}[10m])) > 0)) or vector(0)",
           "legendFormat": "Replicas w/o KV Events",
           "range": true,
           "refId": "A"
@@ -330,7 +330,7 @@
     {
       "type": "stat",
       "title": "Mean Lookup Latency",
-      "description": "Mean duration of index Lookup and WalkKeys calls across EPP replicas. Lookups run on the request path. A mean is shown because the histogram's lowest bucket is 5ms, so sub-5ms quantiles are interpolated rather than measured.",
+      "description": "Mean duration of index Lookup and WalkKeys calls on the slowest EPP replica. Lookups run on the request path. A mean is shown because the histogram's lowest bucket is 5ms, so sub-5ms quantiles are interpolated rather than measured.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -391,7 +391,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) / sum(rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+          "expr": "max(sum by (pod) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_sum{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])) / sum by (pod) (rate(llm_d_epp_kv_cache_index_lookup_latency_seconds_count{namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
           "legendFormat": "Mean Lookup Latency",
           "range": true,
           "refId": "A"
@@ -1156,7 +1156,7 @@
     {
       "type": "timeseries",
       "title": "Messages Received by Pod",
-      "description": "KV-event messages received per second, per model server pod (pod_identifier) and EPP replica (pod). Every replica keeps its own subscriber to every model server, so a stream that stops shows as one line at 0 instead of a dip in a combined total. A stream that has not delivered any event since the EPP started has no line at all, because the counter is created on the first message: compare the lines per replica with Active Subscribers, and check Replicas w/o KV Events.",
+      "description": "KV-event messages received per second, per model server pod (pod_identifier) and EPP replica (pod). Every replica keeps its own subscriber to every model server, so a stream that stops shows as one line at 0 instead of a dip in a combined total. A stream that has not delivered any event since the EPP started has no line at all, because the counter is created on the first message: compare the lines per replica with Active Subscribers. A replica that receives no events at all is flagged by Replicas w/o KV Events.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1764,7 +1764,7 @@
     {
       "type": "timeseries",
       "title": "EPP Restarts",
-      "description": "Restarts over the last hour of the container serving the EPP metrics, per replica (requires kube-state-metrics). A restart empties the in-memory index; sidecar restarts, such as the proxy's, do not and are excluded. Crash-looping replicas stay listed for an hour after they stop exporting KV-cache metrics. A replica that has not exported KV-cache metrics at all in the last hour, such as one crash-looping since creation, cannot be identified and is not shown.",
+      "description": "Restarts over the last hour of the container serving the EPP metrics, per replica (requires kube-state-metrics). A restart empties the in-memory index; sidecar restarts, such as the proxy's, do not and are excluded. Counts are rounded, because increase() extrapolates. A pod replaced by a new one (rollout, eviction) shows as a new line rather than a restart, and also starts with an empty index. Crash-looping replicas stay listed for an hour after they stop exporting KV-cache metrics. A replica that has not exported KV-cache metrics at all in the last hour, such as one crash-looping since creation, cannot be identified and is not shown.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1816,7 +1816,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]) and on (namespace, pod, container) max_over_time(llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}[1h]))",
+          "expr": "round(sum by (pod) (max by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\", pod=~\"$pod\"}[1h])) and on (namespace, pod, container) max_over_time(llm_d_epp_kv_cache_events_pool_capacity{namespace=~\"$namespace\", pod=~\"$pod\"}[1h])))",
           "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
