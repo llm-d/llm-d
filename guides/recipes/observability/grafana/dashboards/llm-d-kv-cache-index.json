@@ -191,7 +191,7 @@
     {
       "type": "stat",
       "title": "Replicas w/o KV Events",
-      "description": "EPP replicas that scored requests (the precise producer recorded prompts) in the last 10 minutes but received no KV events at all in that time: the replica's whole stream is dead or never connected, even though speculative entries keep its admissions up. Idle replicas are not counted. It is per replica: one dead stream among several model servers does not trip it, but shows in Messages Received by Pod as a line dropping to 0. vLLM sends an event only when a block fills, so a workload that only reuses already-cached prefixes for 10 minutes can also trip it. It can read 1 briefly while a new replica receives its first events.",
+      "description": "EPP replicas that scored requests (the precise producer recorded prompts) in the last 10 minutes but received no KV events at all in that time: the replica's whole stream is dead or never connected, even though speculative entries keep its admissions up. Idle replicas are not counted. It is per replica: one dead stream among several endpoints does not trip it, but shows in Messages Received by Pod as a line dropping to 0. vLLM sends an event only when a block fills, so a workload that only reuses already-cached prefixes for 10 minutes can also trip it. It can read 1 briefly while a new replica receives its first events.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -401,7 +401,7 @@
     {
       "type": "stat",
       "title": "Active Subscribers",
-      "description": "ZMQ subscribers managed by the EPP replica with the fewest, including subscribers retrying a failed connection. With pod discovery each replica subscribes to every model server pod its podLabelSelector matches (all pods by default), so this should match that count; in single-socket mode (zmqEndpoint) it is 1. 0 means that replica cannot receive KV events.",
+      "description": "ZMQ subscribers managed by the EPP replica with the fewest, including subscribers retrying a failed connection. With pod discovery each replica subscribes to every InferencePool endpoint its podLabelSelector matches (all of the pool's endpoints by default): one per model server pod and target port, so pods x DP ranks when the pool exposes several targetPorts; in single-socket mode (zmqEndpoint) it is 1. 0 means that replica cannot receive KV events.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1156,7 +1156,7 @@
     {
       "type": "timeseries",
       "title": "Messages Received by Pod",
-      "description": "KV-event messages received per second, per model server pod (pod_identifier) and EPP replica (pod). Every replica keeps its own subscriber to every model server, so a stream that stops shows as one line at 0 instead of a dip in a combined total. A stream that has not delivered any event since the EPP started has no line at all, because the counter is created on the first message: compare the lines per replica with Active Subscribers. A replica that receives no events at all is flagged by Replicas w/o KV Events.",
+      "description": "KV-event messages received per second, per InferencePool endpoint (pod_identifier: one per model server pod and DP rank) and EPP replica (pod). With pod discovery every replica keeps its own subscriber to every endpoint, so a stream that stops shows as one line at 0 instead of a dip in a combined total. In single-socket mode (zmqEndpoint) each replica has one subscriber, local-subscriber, so there is one line per replica and a single model server that stops publishing cannot be told apart. A stream that has not delivered any event since the EPP started has no line at all, because the counter is created on the first message: compare the lines per replica with Active Subscribers. A replica that receives no events at all is flagged by Replicas w/o KV Events.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1218,7 +1218,7 @@
     {
       "type": "timeseries",
       "title": "Subscriber Reconnections",
-      "description": "Reconnection attempts per second, per model server pod and EPP replica. A sustained rate means the EPP keeps losing that pod's event stream.",
+      "description": "Reconnection attempts per second, per InferencePool endpoint (model server pod and DP rank) and EPP replica. A sustained rate means the EPP keeps losing that endpoint's event stream.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1281,7 +1281,7 @@
     {
       "type": "timeseries",
       "title": "ZMQ Errors",
-      "description": "ZMQ subscriber errors per second by model server pod, EPP replica and failed operation (bind, connect, subscribe, recv, snapshot, replay-*).",
+      "description": "ZMQ subscriber errors per second by InferencePool endpoint (model server pod and DP rank), EPP replica and failed operation (bind, connect, subscribe, recv, snapshot, replay-*).",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
