@@ -8,8 +8,10 @@ created or changed.
 Supported today: `guides/wide-ep` on NVIDIA GPU, overlays
 `modelserver/gpu/vllm/{gke,coreweave,base}`. Other overlays that render a
 `DisaggregatedSet` run best-effort: claims the render doesn't define are
-reported as not checked. Overlays without one, or with unrendered placeholders,
-exit with code 2.
+reported as not checked. The AMD overlays render one, but the RDMA, GPU driver
+and router node checks only know NVIDIA resources, so ignore those lines there.
+Overlays without a `DisaggregatedSet` (such as Intel XPU), or with unrendered
+placeholders, exit with code 2.
 
 ## Run
 
@@ -43,7 +45,8 @@ is a WARN, not a FAIL.
 
 Not checked: free capacity (pods already running are not subtracted), memory
 use at decode time, RDMA on overlays whose manifests don't request an RDMA
-resource, and actual RDMA connectivity between pods (see
+resource, pod affinity and anti-affinity rules, and actual RDMA connectivity
+between pods (see
 [RDMA and Networking Configuration](../../docs/infrastructure/rdma/README.md)).
 DRA devices are counted per driver, without evaluating each DeviceClass's
 CEL filter, so partitioned devices (for example MIG) may be over-counted.

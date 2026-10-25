@@ -28,8 +28,8 @@ requirements:
 
     router:
       # guides/recipes/router/base.values.yaml: EPP 4 CPU / 8Gi plus the proxy
-      # sidecar 4 CPU / 8Gi in standalone mode. The "up to 12 CPUs" in the GKE
-      # README is the chart default that base.values.yaml overrides.
+      # sidecar 4 CPU / 8Gi in standalone mode. The GKE README's "up to 12 CPUs"
+      # is higher than these requests.
       standalone: {cpu: "8", memory: 16Gi}
       gateway: {cpu: "4", memory: 8Gi}  # EPP only
 
