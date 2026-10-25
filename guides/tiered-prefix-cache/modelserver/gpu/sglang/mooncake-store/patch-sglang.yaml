@@ -49,7 +49,7 @@ spec:
             - "mooncake"
             - "--disable-custom-all-reduce"
             - "--hicache-storage-prefetch-policy"
-            - "wait_complete"
+            - "timeout"
           env:
             - name: SGLANG_HICACHE_MOONCAKE_CONFIG_PATH
               value: /etc/mooncake/mooncake_config.json
@@ -66,7 +66,9 @@ spec:
             - name: MOONCAKE_OFFLOAD_STORAGE_BACKEND_DESCRIPTOR
               value: bucket_storage_backend
             - name: MOONCAKE_OFFLOAD_BUCKET_MAX_TOTAL_SIZE
-              value: "204010946560" # 190Gi per TP rank; 2 ranks share the 400Gi sizeLimit
+              value: "182536110080" # 170Gi per TP rank; 2 ranks share the 400Gi sizeLimit
+            - name: MOONCAKE_OFFLOAD_BUCKET_MAX_PHYSICAL_BYTES
+              value: "193273528320"  # 180Gi per TP rank: 2 ranks x 180Gi = 360Gi, under the 400Gi sizeLimit
             # Anything other than "fifo"/"lru" falls through to no eviction at all.
             - name: MOONCAKE_OFFLOAD_BUCKET_EVICTION_POLICY
               value: "lru"
@@ -79,7 +81,7 @@ spec:
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
-              memory: 200Gi
+              memory: 320Gi
               ${RDMA_VF_RESOURCE}: "1"
           volumeMounts:
             - mountPath: /scripts
@@ -92,7 +94,6 @@ spec:
               name: mooncake-config
             - mountPath: /.cache
               name: cache-volume
-            # Must match ssd_offload_path in configmap.yaml and the master's root_fs_dir.
             - mountPath: /data/mooncake-offload
               name: mooncake-offload
       volumes:

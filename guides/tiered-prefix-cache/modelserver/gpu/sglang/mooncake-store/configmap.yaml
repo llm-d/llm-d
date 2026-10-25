@@ -8,12 +8,11 @@ data:
   # No comments inside the JSON (parsed with json.load()).
   #   global_segment_size - L3 DRAM landing zone, split across TP ranks.
   #   ssd_offload_path    - L3 capacity; each TP rank uses its own rank_* subdir.
-  #                         Must match the volume mount and the master's root_fs_dir.
   mooncake_config.json: |
     {
       "metadata_server": "P2PHANDSHAKE",
       "master_server_address": "mooncake-master-store:50051",
-      "global_segment_size": "4GB",
+      "global_segment_size": "120GB",
       "local_buffer_size": "4GB",
       "protocol": "rdma",
       "device_name": "",

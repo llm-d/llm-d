@@ -30,15 +30,6 @@ data:
     memory_allocator: "offset"
     allocation_strategy: "random"
 
-    # Disk tier. The Master hands root_fs_dir to Clients via GetStorageConfig(); each
-    # Client uses root_fs_dir/cluster_id as its base directory, so this path must match
-    # what the Clients actually have mounted -- see ssd_offload_path in the modelserver's
-    # mooncake_config.json and the volume mounted there. The Master also needs
-    # --enable_offload (see deployment.yaml) or it rejects MountLocalDiskSegment with
-    # UNABLE_OFFLOAD.
-    cluster_id: "mooncake_cluster"
-    root_fs_dir: "/data/mooncake-offload"
-
     enable_snapshot: true
     enable_snapshot_restore: true
     snapshot_interval_seconds: 60
