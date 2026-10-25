@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Coordinator (Deployment, Service, the client-facing HTTPRoute) with the
+# conditional-decode, prefill, decode pipeline on the kv-offloading connector
+# (configmap.yaml).
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - httproute.yaml
+
+# The kv-offloading connector is not in a released coordinator image. This
+# build comes from llm-d-router#3522 (branch kvoff-4-coordinator-kv-offloading,
+# revit13/llm-d-inference-scheduler) and is paired with the EPP image of the
+# same tag in ../../router/coord-pd-p2p-kv-cache-sharing.values.yaml. Replace
+# both with ghcr.io/llm-d tags (the recipes/ coordinator image component) once
+# a release ships the connector.
+images:
+  - name: REPLACE_COORDINATOR_IMAGE
+    newName: ghcr.io/revit13/llm-d-coordinator
+    newTag: dev-kvoff-43
+
+patches:
+  - target:
+      kind: Deployment
+      name: llm-d-coordinator
+    patch: |-
+      # A dev tag is rebuilt in place: pull it again rather than reuse a node cache.
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
