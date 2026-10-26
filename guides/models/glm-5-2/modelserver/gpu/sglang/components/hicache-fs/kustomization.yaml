@@ -1,0 +1,53 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Add a storage tier (L3) behind the HiCache host tier on the prefill role:
+# SGLang's file storage backend on a ReadWriteMany PersistentVolumeClaim named
+# llm-d-kv-cache-storage. Create the claim first; guides/tiered-prefix-cache/
+# manifests/pvc.yaml and manifests/backends/ provision one. Requires the
+# hicache component, which provides the host pool the storage tier sits behind.
+#
+# GLM-5.2 is an MLA model, so the page files carry no rank in their name:
+# every attention-DP rank, and every prefill replica that mounts the volume,
+# reads and writes the same cache.
+
+# The patch below matches the role, container, volume and env entries by name
+# via the DisaggregatedSet schema the base declares.
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-sglang-glm-5-2
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    volumes:
+                      - name: kv-cache-storage
+                        persistentVolumeClaim:
+                          claimName: llm-d-kv-cache-storage
+                    containers:
+                      - name: sglang
+                        env:
+                          - name: HICACHE_STORAGE_BACKEND
+                            value: file
+                          # Back each page up to storage as soon as it is
+                          # prefilled, so another rank or replica can restore it.
+                          - name: HICACHE_WRITE_POLICY
+                            value: write_through
+                          # Wait for a storage prefetch before prefilling, so a
+                          # matched prefix is used rather than recomputed.
+                          - name: HICACHE_STORAGE_PREFETCH_POLICY
+                            value: wait_complete
+                          - name: SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR
+                            value: /mnt/kv-cache-storage/glm-5-2-fp8
+                          # Remember which pages exist so a hit does not pay a
+                          # filesystem metadata round trip per page.
+                          - name: SGLANG_HICACHE_FILE_BACKEND_ENABLE_METADATA_CACHE
+                            value: "true"
+                        volumeMounts:
+                          - name: kv-cache-storage
+                            mountPath: /mnt/kv-cache-storage

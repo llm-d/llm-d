@@ -92,9 +92,16 @@ spec:
                         MTP_ARGS="--speculative-algorithm EAGLE --speculative-num-steps ${MTP_NUM_STEPS:-3} --speculative-eagle-topk 1 --speculative-num-draft-tokens ${MTP_NUM_DRAFT_TOKENS:-4} --speculative-moe-a2a-backend none"
                       fi
 
+                      # HiCache host tier (L2) on prefill, sized per rank. The
+                      # hicache-fs component adds a storage tier (L3) behind it
+                      # by setting HICACHE_STORAGE_BACKEND.
                       HICACHE_ARGS=""
-                      if [ -n "${HICACHE_SIZE_GB_PER_RANK:-}" ]; then
-                        HICACHE_ARGS="--enable-hierarchical-cache --hicache-size ${HICACHE_SIZE_GB_PER_RANK} --hicache-io-backend kernel --hicache-mem-layout layer_first --hicache-write-policy write_back"
+                      if [ "${HICACHE_SIZE_GB_PER_RANK:-0}" != "0" ]; then
+                        HICACHE_ARGS="--enable-hierarchical-cache --hicache-size ${HICACHE_SIZE_GB_PER_RANK} --hicache-io-backend kernel"
+                        HICACHE_ARGS="${HICACHE_ARGS} --hicache-mem-layout ${HICACHE_MEM_LAYOUT:-layer_first} --hicache-write-policy ${HICACHE_WRITE_POLICY:-write_back}"
+                        if [ -n "${HICACHE_STORAGE_BACKEND:-}" ]; then
+                          HICACHE_ARGS="${HICACHE_ARGS} --hicache-storage-backend ${HICACHE_STORAGE_BACKEND} --hicache-storage-prefetch-policy ${HICACHE_STORAGE_PREFETCH_POLICY:-best_effort}"
+                        fi
                       fi
 
                       # SGLang splits --chunked-prefill-size and
@@ -196,8 +203,20 @@ spec:
                       value: "8192"
                     - name: CONTEXT_LENGTH
                       value: ""
-                    # HiCache size in GB per rank; empty keeps HiCache off.
+                    # HiCache size in GB per rank; 0 or empty keeps HiCache off.
                     - name: HICACHE_SIZE_GB_PER_RANK
+                      value: "0"
+                    # Host pool layout and L1->L2 write policy; empty keeps
+                    # SGLang's layer_first and write_back.
+                    - name: HICACHE_MEM_LAYOUT
+                      value: ""
+                    - name: HICACHE_WRITE_POLICY
+                      value: ""
+                    # Storage tier (L3) behind the host pool and its prefetch
+                    # policy; empty keeps the tier off. Set by hicache-fs.
+                    - name: HICACHE_STORAGE_BACKEND
+                      value: ""
+                    - name: HICACHE_STORAGE_PREFETCH_POLICY
                       value: ""
                     # Mooncake, not NIXL: under long-context agentic load on GKE
                     # RoCE, NIXL KV transfers failed with
