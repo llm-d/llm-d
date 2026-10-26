@@ -46,6 +46,7 @@ jobs:
           filters: |
             images:
               - 'docker/**'
+              - 'patches/sglang_xpu_source_pins.patch'
       - name: Summarize
         id: check
         run: |
@@ -76,7 +77,12 @@ jobs:
   # Resolves build-image.yaml from main (pull_request_target), checks out PR code via ref.
   build-images:
     needs: [needs-build-check, pr-gate, auto-gate]
-    if: ${{ !cancelled() && !failure() }}
+    if: >-
+      ${{ !cancelled() &&
+      (
+        (github.event_name == 'pull_request_target' && needs.pr-gate.result == 'success') ||
+        (github.event_name != 'pull_request_target' && needs.auto-gate.result == 'success')
+      ) }}
     uses: ./.github/workflows/build-image.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha || '' }}
