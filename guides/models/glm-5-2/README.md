@@ -213,7 +213,11 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the llm-d Router
 
-All 8 DP rank ports (8000-8007) are exposed as `targetPorts` on the `InferencePool` (`glm-5-2.values.yaml`) for per-rank routing. Select the Helm values overrides for your routing mode (`ROUTING`):
+The GPU wide-EP deployment exposes all 8 local DP rank ports (8000-8007) as
+`targetPorts` on the `InferencePool`. The TPU deployment similarly exposes all
+16 DP rank ports (8000-8015) through `glm-5-2-tpu.values.yaml`, so prefix-cache
+affinity operates on individual vLLM engines rather than the aggregate pod.
+Select the Helm values overrides for your routing mode (`ROUTING`):
 
 <!-- tabs:start group=routing -->
 <details open>
@@ -283,7 +287,7 @@ export DEPLOYMENT=p2w1d1w1-precise
 <details data-when="ACCELERATOR_TYPE=tpu">
 <summary><b>Google TPU v7x (aggregated)</b></summary>
 
-The TPU deployment is one aggregated DP=16 pool with no P/D disaggregation, so the wide-EP `DisaggregatedSet` plugins do not apply. [`glm-5-2-tpu.values.yaml`](router/glm-5-2-tpu.values.yaml) selects the TPU pods (`llm-d.ai/guide: glm-5-2-tpu`) and routes with `prefix-cache-affinity-filter` + `token-load-scorer`; it also sets `DEPLOYMENT=tpu7x-2x2x2-dp16`. `ROUTING` is ignored on TPU.
+The TPU deployment is one aggregated DP=16 pool with no P/D disaggregation, so the wide-EP `DisaggregatedSet` plugins do not apply. [`glm-5-2-tpu.values.yaml`](router/glm-5-2-tpu.values.yaml) selects the TPU pods (`llm-d.ai/guide: glm-5-2-tpu`), exposes ports 8000-8015, and routes with `prefix-cache-affinity-filter` + `token-load-scorer`; it also sets `DEPLOYMENT=tpu7x-2x2x2-dp16`. `ROUTING` is ignored on TPU.
 
 <!-- guide:deploy.router_values.tpu start -->
 <!-- variants:start -->
@@ -292,8 +296,8 @@ The TPU deployment is one aggregated DP=16 pool with no P/D disaggregation, so t
 
 <!-- llm-d-cicd:skip start -->
 ```bash
-# The TPU deployment is one aggregated DP=16 pool: prefix-cache affinity
-# and token-load scoring instead of the wide-EP P/D plugins
+# The TPU deployment is one aggregated DP=16 pool. vLLM exposes one
+# HTTP endpoint per engine so prefix-cache affinity can select ranks.
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-tpu.values.yaml"
 export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
@@ -352,7 +356,7 @@ Do not deploy the vLLM and SGLang recipes in the same namespace: the InferencePo
 <details data-when="ACCELERATOR_TYPE=tpu">
 <summary><b>Google TPU v7x notes</b></summary>
 
-- `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=32768`, one API server on the leader (port 8000). It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
+- `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --data-parallel-size-local=16 --data-parallel-multi-port-external-lb --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=32768`, with one API endpoint per DP engine on ports 8000-8015. It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
 - GKE only (`INFRA_PROVIDER` does not apply): the slice needs a `2x2x2` tpu7x node pool, a boot disk of at least 1.5 TB on every host (each host downloads the full 756 GB FP8 checkpoint into `/var/cache/huggingface`, a `hostPath`, and must keep it above the kubelet eviction threshold).
 - `MONITORING=true` is GPU-only here; the PodMonitors scrape per-rank GPU ports.
 
