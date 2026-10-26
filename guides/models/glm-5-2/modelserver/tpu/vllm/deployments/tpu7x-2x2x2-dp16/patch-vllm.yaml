@@ -32,11 +32,15 @@
         echo "Waiting for ${LWS_GROUP_SIZE:-2} Ray nodes to join..."
         sleep 5
       done
+      # The Ray launch spans the complete two-host DP group, so expose all
+      # 16 engines as separate HTTP endpoints for cache-aware routing.
       exec vllm serve zai-org/GLM-5.2-FP8 \
         --tokenizer=zai-org/GLM-5.2-FP8 \
         --host=0.0.0.0 \
         --port=8000 \
         --data-parallel-size=16 \
+        --data-parallel-size-local=16 \
+        --data-parallel-multi-port-external-lb \
         --tensor-parallel-size=1 \
         --attention-backend=CUSTOM \
         --max-model-len=32768 \
