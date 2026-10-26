@@ -5,6 +5,8 @@ name: /test-nightly Slash Command
 # Usage: Comment on a PR with:
 #   /test-nightly <nightly-name> [key=value ...]   # exact match
 #   /test-nightly <glob-pattern> [key=value ...]   # glob pattern (* and ? supported)
+#   /test-nightly help                             # reply with usage and available nightlies
+#   /test-nightly list                             # reply with the available nightlies, one per line
 #
 # Optional parameters (passed to E2E benchmark nightlies, ignored for others):
 #   workload=<profile>    Workload profile (default: sanity_random.yaml)
@@ -12,6 +14,7 @@ name: /test-nightly Slash Command
 #   prefill_pods=<number> Number of prefill pods (default: 1)
 #   harness=<name>        Benchmark harness (default: inference-perf)
 #   dry_run=<bool>        Run in dry-run mode, no benchmark executed (default: false)
+#   verbose=<bool>        Run in verbose mode (default: the nightly's own default)
 #   update_badge=<bool>   Update gh-pages badge (default: false for slash command)
 #   cleanup=<bool>        Cleanup the llm-d stack after the run (default: true, set false for debugging)
 #
@@ -19,10 +22,10 @@ name: /test-nightly Slash Command
 #   platforms=<list>      Platforms to build (comma-separated: cuda,xpu,sglang-xpu,cpu,all; default: cuda)
 #
 # Examples:
-#   /test-nightly pd-disaggregation-ocp
-#   /test-nightly *-ocp
+#   /test-nightly pd-disaggregation-ibm-acc-gpu-vllm-x
+#   /test-nightly *-ibm-*
 #   /test-nightly optimized-baseline-*
-#   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
+#   /test-nightly optimized-baseline-cks-acc-gpu-vllm-x workload=sanity_random.yaml decode_pods=1
 #   /test-nightly build-image
 #   /test-nightly build-image platforms=cuda
 #
@@ -115,20 +118,22 @@ jobs:
               return null;
             }
 
-            if (!match) {
+            // Post the usage text. `/test-nightly help` asks for it explicitly;
+            // a bare `/test-nightly` gets it as an error.
+            async function postUsage(isError) {
               const all = await listAllNightlies();
               await github.rest.issues.createComment({
                 owner, repo,
                 issue_number: context.issue.number,
                 body: [
-                  '❌ **Usage**: `/test-nightly <name-or-pattern> [key=value ...]`',
+                  (isError ? '❌ ' : 'ℹ️ ') + '**Usage**: `/test-nightly <name-or-pattern> [key=value ...]`',
                   '',
                   'Supports exact names or glob patterns (`*` and `?`):',
                   '```',
-                  '/test-nightly pd-disaggregation-ocp',
-                  '/test-nightly *-ocp',
+                  '/test-nightly pd-disaggregation-ibm-acc-gpu-vllm-x',
+                  '/test-nightly *-ibm-*',
                   '/test-nightly optimized-baseline-*',
-                  '/test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1',
+                  '/test-nightly optimized-baseline-cks-acc-gpu-vllm-x workload=sanity_random.yaml decode_pods=1',
                   '```',
                   '',
                   'Optional parameters (applied to E2E benchmark nightlies only):',
@@ -137,23 +142,49 @@ jobs:
                   '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
                   '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
                   '- `dry_run=true` — validate setup without running the benchmark',
+                  '- `verbose=true` — run in verbose mode (default: the nightly\'s own default)',
                   '- `update_badge=true` — update gh-pages badge (default: skipped for slash commands)',
                   '- `cleanup=false` — keep the llm-d stack alive after the run (for debugging)',
                   '',
                   'Optional parameters (applied to `build-image` only):',
                   '- `platforms=<list>` — platforms to build, comma-separated: cuda,xpu,sglang-xpu,cpu,all (default: `cuda`)',
                   '',
+                  '`/test-nightly help` shows this message; `/test-nightly list` lists the nightlies one per line.',
+                  '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
                 ].join('\n')
               });
+            }
+
+            if (!match) {
+              await postUsage(true);
               return 'error';
             }
 
             const input = match[1];
 
+            if (input === 'help') {
+              await postUsage(false);
+              return 'help';
+            }
+
+            if (input === 'list') {
+              const all = await listAllNightlies();
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: context.issue.number,
+                body: [
+                  `ℹ️ **${all.length} nightlies available** at this PR's head:`,
+                  '',
+                  ...all.map(n => '- `' + n.name + '` (`' + n.workflowFile + '`)'),
+                ].join('\n')
+              });
+              return 'list';
+            }
+
             // Parse optional key=value parameters (with defaults for quick PR validation)
-            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run', 'update_badge', 'cleanup'];
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run', 'verbose', 'update_badge', 'cleanup'];
             const DEFAULT_PARAMS = {
               workload: 'sanity_random.yaml',
               decode_pods: '1',
