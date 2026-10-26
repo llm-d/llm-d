@@ -12,7 +12,7 @@ router:
     pluginsConfigFile: "hyperconverged-cephfs-plugins.yaml"
     pluginsCustomConfig:
       hyperconverged-cephfs-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         # Same prefix- and load-aware routing as the optimized baseline. The
         # CephFS tier is shared, so any replica can restore a prefix that

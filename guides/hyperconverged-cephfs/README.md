@@ -236,7 +236,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 #### Standalone Mode
 
-This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/core/router/proxy.md) with an Envoy sidecar (default):
+This deploys the llm-d Router in [Standalone Mode](../../docs/architecture/router/proxy.md) with an Envoy sidecar (default):
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -272,7 +272,7 @@ helm install ${GUIDE_NAME} \
 
 ### 4. Deploy the Model Server
 
-Each model server downloads the model to its node's local disk on first start. For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/model-loading-and-startup.md).
+Each model server downloads the model to its node's local disk on first start. For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
 <!-- guide:deploy.modelserver start -->
 ```bash
