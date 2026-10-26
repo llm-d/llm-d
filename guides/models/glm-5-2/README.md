@@ -98,9 +98,9 @@ This guide supports two prefix-cache routing modes (`ROUTING`), selected with ta
 [Deploy the llm-d Router](#1-deploy-the-llm-d-router):
 
 - **Approximate prefix routing (`ROUTING=approximate`, default)** — gates on prefix-cache
-  affinity across GPU- and CPU-resident KV and on token load, using an approximate prefix index
-  (`glm-5.2-overrides.values.yaml`), paired with the `default`
-  (`p3w2d1w2` + tiered offloading) or any raw topology overlay.
+  affinity and on token load. Raw vLLM topology overlays use a GPU-only approximate prefix
+  index (`glm-5-2.values.yaml`). The `default` deployment (`p3w2d1w2` + tiered offloading)
+  adds `glm-5.2-overrides.values.yaml` to cover CPU-offloaded KV as well.
 - **Precise prefix-cache routing (`ROUTING=precise`)** — replaces the approximate
   prefix index with exact KV-event-backed routing (`precise-routing.values.yaml`) on the 3-node
   `p2w1d1w1-precise` deployment (24 GPUs, 64-token KV blocks, `wide-ep-render` tokenizer Service,
@@ -219,11 +219,13 @@ All 8 DP rank ports (8000-8007) are exposed as `targetPorts` on the `InferencePo
 <details open>
 <summary><b>Approximate Prefix Routing (Default)</b></summary>
 
-Layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) on top of [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), sizing the prefix index to cover CPU-offloaded KV as well as GPU-resident KV:
+Raw vLLM topology overlays use [`glm-5-2.values.yaml`](router/glm-5-2.values.yaml), which auto-tunes the prefix index to GPU KV cache capacity. With `DEPLOYMENT=default`, the router also layers [`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml) to cover CPU-offloaded KV as well as GPU-resident KV:
 
-- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks that hold them in GPU or CPU memory, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585`, measured on an H200 DP8 cell). The approximate prefix index has a fixed capacity of 31,000 blocks per rank: ~3,700 GPU-resident plus ~27,300 for the 100 GiB per-rank CPU offload tier.
+- **Prefix-cache affinity filter** (prefill) — keeps prefix groups on ranks that hold them in GPU or CPU memory, falling back to all ranks when the warm ones are overloaded (`peakPrefillThroughput: 3585`, measured on an H200 DP8 cell). For `DEPLOYMENT=default`, the approximate prefix index has a fixed capacity of 31,000 blocks per rank: ~3,700 GPU-resident plus ~27,300 for the 100 GiB per-rank CPU offload tier.
 - **Token-load scorer** (prefill) — picks by queued prefill tokens.
 - **Active-request scorer** (decode) — load balancing.
+
+If you add an offloading component to a raw vLLM topology, set `ROUTER_OVERRIDES_VALUES` to `router/glm-5.2-overrides.values.yaml` under this guide after the router values step, and size its prefix index to match the actual GPU and CPU KV cache capacities.
 
 With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is layered instead: it parses OpenAI bodies with the `openai-parser` and `/generate` bodies with the `sglanghttp-parser`, and routes like the vLLM path: one approximate prefix index sized for GPU and CPU (HiCache) KV feeds the prefix-cache affinity filter, then the token-load scorer on prefill and the active-request scorer on decode. None of these need `/metrics`, which the SGLang Rust listeners do not expose. The index size in the router values is for a DEP8 prefill rank on H200.
 
@@ -233,11 +235,13 @@ With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is
 <summary><b>NVIDIA H200 · vLLM</b></summary>
 
 ```bash
-# Paths to values files: the wide-EP router values, then the GLM-5.2
-# GPU+CPU prefix-cache affinity overrides on top
+# Raw topologies use a GPU-only prefix index. Only default adds offloading.
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
-export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
+if [ "${DEPLOYMENT}" = "default" ]; then
+  export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+fi
 ```
 
 </details>
