@@ -35,7 +35,9 @@ spec:
       name: llm-d-coordinator
       port: 8080
       weight: 1
-    # Removed by the gke overlay (../gke/kustomization.yaml): GKE Gateway doesn't
-    # implement this field -- it uses a GCPBackendPolicy timeoutSec instead.
+    # 300s, matching the Coordinator's gateway.timeout (coordinator.yaml in
+    # configmap.yaml): a prefill call waits in the prefill pod's queue for the
+    # whole prompt. (A Gateway provider without this field, such as GKE, needs
+    # a provider-specific timeout policy instead.)
     timeouts:
       request: 300s
