@@ -38,7 +38,7 @@ When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for
 When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), it exports metrics for KV blocks moved between the GPU and the offload tiers. The names below are available in vLLM v0.26.0 and later.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| -------- | ------------------ | ---------------- |
 | `vllm:external_prefix_cache_queries_total` | Prompt tokens looked up through the KV connector | Denominator for the offload tier hit rate |
 | `vllm:external_prefix_cache_hits_total` | Prompt tokens the connector reported as cached at scheduling time | Offload tier hits. Counted before the load finishes, so read it together with load bytes |
 | `vllm:kv_offload_store_bytes_total` | Bytes stored from GPU to the offload tier | Eviction traffic into the tier |
@@ -82,7 +82,7 @@ When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5
 When HiCache is enabled (the SGLang path in the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), SGLang exports metrics for the host (CPU) tier.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| -------- | ------------------ | ---------------- |
 | `sglang:hicache_host_used_tokens` | Tokens currently held in the host KV cache | Divide by `sglang:hicache_host_total_tokens` for host tier occupancy |
 | `sglang:hicache_host_total_tokens` | Host KV cache capacity in tokens | Denominator for host tier occupancy |
 | `sglang:evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
