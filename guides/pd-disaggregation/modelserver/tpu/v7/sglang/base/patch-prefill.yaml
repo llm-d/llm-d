@@ -1,0 +1,158 @@
+# gpt-oss-120b prefill on one TPU7x 2x2x1 node (4 chips, 8 TensorCores): TP=8 with
+# expert parallelism, MXFP4 checkpoint weights with an fp8 KV cache. The engine settings
+# are the sglang-torchtpu P/D recipe (benchmark/tpu/recipe/configs/gpt_oss_120b/
+# pd_singlehost.py), which its CI runs as one prefill host and one decode host, at the
+# commit the image was built from: release tpu-v0.1.0 = 00ef120c (2026-10-19). Later
+# recipe revisions (the pd_singlehost_role_configs helper) are not in this image.
+#
+# KV leaves this pod through SGLang's raiden transfer backend (tpu-sync): the decode pod
+# pulls each chunk's pages over the pod network (TCP on the host NIC) as soon as the
+# prefill commits them. The rendezvous is SGLang's own: the bootstrap server on port 8998
+# plus the ZMQ rank sockets, driven by the bootstrap_* request fields the routing sidecar
+# injects, so the sidecar speaks the same protocol as for SGLang on GPU. raiden listens on
+# SGLANG_RAIDEN_KV_PORT and the following 6 ports per rank (31000-31047 for 8 ranks).
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              nodeSelector:
+                cloud.google.com/gke-tpu-accelerator: tpu7x
+                cloud.google.com/gke-tpu-topology: 2x2x1
+              containers:
+                - name: modelserver
+                  command: ["python3", "-m", "sglang.launch_server"]
+                  args:
+                    - --model-path=openai/gpt-oss-120b
+                    - --host=0.0.0.0
+                    - --port=8000
+                    - --device=tpu
+                    - --dtype=bfloat16
+                    - --attention-backend=pallas_tpu_rpa_v3
+                    - --sampling-backend=pytorch
+                    - --grammar-backend=none
+                    - --tp-size=8
+                    - --ep-size=8
+                    # Matches the router's prefix-cache scorer block size (64 tokens) and the
+                    # other SGLang overlays; the raiden page is this page.
+                    - --page-size=64
+                    - --kv-cache-dtype=fp8_e4m3
+                    - --mem-fraction-static=0.35
+                    - --max-total-tokens=393216
+                    - --max-running-requests=64
+                    - --chunked-prefill-size=4096
+                    - --max-prefill-tokens=4096
+                    - --context-length=9236
+                    - --enable-torch-compile
+                    - --torch-compile-max-bs=64
+                    # The gpt-oss (harmony) parsers, as upstream SGLang's gpt-oss-120b deployment.
+                    - --tool-call-parser=gpt-oss
+                    - --reasoning-parser=gpt-oss
+                    - --skip-server-warmup
+                    - --disaggregation-mode=prefill
+                    - --disaggregation-transfer-backend=raiden
+                    - --disaggregation-bootstrap-port=8998
+                    - --enable-metrics
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    # Node-local HuggingFace cache shared across pods and restarts, as in the
+                    # other TPU overlays of this guide.
+                    - name: HF_HOME
+                      value: /root/.cache/huggingface
+                    - name: SGLANG_PLATFORM
+                      value: tpu
+                    # /health answers without running a generation, so the probes stay cheap
+                    # while the TPU graphs compile.
+                    - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+                      value: "0"
+                    - name: SGLANG_TPU_PRELOAD_TELEMETRY_STUB
+                      value: "1"
+                    - name: SGLANG_TPU_OVERLAP_PROFILE
+                      value: "1"
+                    - name: SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN
+                      value: "1"
+                    # gpt-oss does not support the SparseCore MoE gather path.
+                    - name: SGLANG_TPU_FUSED_MOE_SC_GATHER
+                      value: "0"
+                    - name: SGLANG_RAIDEN_KV_PORT
+                      value: "31000"
+                    - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                      value: "false"
+                    - name: LIBTPU_INIT_ARGS
+                      value: >-
+                        --xla_tpu_enable_async_collective_fusion=true
+                        --xla_tpu_overlap_compute_collective_tc=true
+                        --xla_tpu_enable_async_collective_fusion_multiple_steps=true
+                        --xla_tpu_enable_latency_hiding_scheduler=true
+                        --xla_latency_hiding_scheduler_rerun=10
+                        --xla_tpu_all_gather_collective_matmul_mode=post_spmd_conservative
+                        --xla_tpu_reduce_scatter_collective_matmul_mode=post_spmd_conservative
+                        --xla_tpu_enable_sparse_core_collective_offload_all_reduce=false
+                        --xla_tpu_offload_gather_to_sparsecore=false
+                        --xla_tpu_enable_sparse_core_collective_offload_reduce_scatter=false
+                  ports:
+                    - containerPort: 8998
+                      name: bootstrap
+                      protocol: TCP
+                    # First of the 48 raiden ports (6 per TP rank).
+                    - containerPort: 31000
+                      name: raiden-kv
+                      protocol: TCP
+                  resources:
+                    requests:
+                      cpu: "32"
+                      memory: 400Gi
+                      google.com/tpu: 4
+                    limits:
+                      memory: 400Gi
+                      google.com/tpu: 4
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /root/.cache
+                      name: cache
+                    - mountPath: /root/.cache/huggingface
+                      name: huggingface-cache
+                  # The first start compiles the TPU graphs, which takes well over the GPU
+                  # overlays' startup window.
+                  startupProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 240
+                  livenessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    periodSeconds: 5
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 64Gi
+                - name: cache
+                  emptyDir: {}
+                - name: huggingface-cache
+                  hostPath:
+                    path: /var/cache/huggingface
+                    type: DirectoryOrCreate

@@ -58,11 +58,13 @@ support:
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "`2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · prefill PCP=8 → decode DP=8 · TPURaidenConnector + 64 GiB prefill host KV offload"
+      notes: >-
+        `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (prefill PCP=8 → decode DP=8, TPURaidenConnector + 64 GiB prefill host KV offload);
+        SGLang (`sglang:v0.1.0-tpu`): `openai/gpt-oss-120b` (TP=8 + EP on each role, raiden transfer backend)
       model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: community}
+      engines: {vllm: community, sglang: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
       notes: "TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA"
@@ -207,8 +209,9 @@ deploy:
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
     # TPU7x prefill runs --block-size=4352 with a 262k context on Qwen3.5-397B; the
-    # shared values are sized for the gpt-oss-120b H200 fleet.
-    - when: {ACCELERATOR_TYPE: ["tpu/v7"]}
+    # shared values are sized for the gpt-oss-120b H200 fleet. SGLang on TPU7x serves
+    # gpt-oss-120b with 64-token pages and keeps the shared values.
+    - when: {ACCELERATOR_TYPE: ["tpu/v7"], MODEL_SERVER: [vllm]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
 
