@@ -154,7 +154,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 ```
 <!-- guide:deploy.router_values end -->
 
-The [router values](router/coord-pd-p2p-kv-cache-sharing.values.yaml) deploy one EPP over one `InferencePool` that holds both roles, with two scheduling profiles selected by the Coordinator's `x-llm-d-epp-profile` header through the `header-profile-handler`:
+The [router values](router/coord-pd-p2p-kv-cache-sharing.values.yaml) deploy one EPP replica over one `InferencePool` that holds both roles, with two scheduling profiles selected by the Coordinator's `x-llm-d-epp-profile` header through the `header-profile-handler`. One replica, as in the Coordinator Disaggregation and P/D Disaggregation guides: the `inflight-load-producer`'s in-flight token accounting behind the prefill placement is local to the EPP process, so a second replica would place against half the load.
 
 | Profile | Filter | Placement | Plugins that act on the call |
 | --- | --- | --- | --- |

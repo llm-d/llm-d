@@ -27,8 +27,13 @@
 ##            remote_prefiller, so no source is written on it (outcome
 ##            decode-request).
 ##
-## Pod-discovery mode with active-active HA (replicas: 2). Each replica dials
-## every vLLM pod's per-pod ZMQ socket; both indexes converge identically.
+## One EPP replica: the inflight-load-producer's in-flight token accounting,
+## which the prefill profile's token-load-scorer and the decode profile's
+## active-request-scorer consume, is local to the EPP process; a second
+## replica would see only its own share of the per-endpoint load and
+## mis-place requests. The precise prefix index would converge across
+## replicas (each dials every vLLM pod's KV-events socket), the load
+## accounting does not.
 
 # The chart's HTTPRoute would be a catch-all on `/` that ties with the
 # Coordinator's HTTPRoute on the same Gateway. ./httproute/base carries the
@@ -44,7 +49,9 @@ router:
       targetPort: 8081
 
   epp:
-    replicas: 2
+    # Single EPP replica: see the header comment (in-flight load accounting is
+    # per process, as in the Coordinator Disaggregation and P/D guides).
+    replicas: 1
     # The p2p-source-producer of the chart's default EPP image sets the KV
     # cache source header for the routing sidecar and does not write the
     # source into the body, so behind the Coordinator no pull would fire.
