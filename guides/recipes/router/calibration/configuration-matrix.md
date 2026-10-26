@@ -29,6 +29,7 @@ rows because the serving engine changes prefill throughput.
 | `metax/vllm` | MetaX C500X 64 GB · vLLM-MetaX | 0.24.0 (MACA 3.8.2.1) | 8 | DeepSeek-R1-Distill-Llama-70B | **5468** |
 | `mthreads/sglang` | MTT S5000 80 GB · SGLang-dsv4 | 1.0 | 8 | DeepSeek-V4-Flash-0731-FP8-mt | **10259** |
 | `mthreads/vllm`  | MTT S5000 80 GB · vLLM-MUSA | 0.28.0 / MUSA 5.2.0 | 8 | Qwen3-32B | TBD |
+| `hygon/sglang` | Hygon BW1000 64 GiB · SGLang | 0.5.12 (DTK 26.04) | 4 | Qwen3-8B | TBD |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
 | `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
@@ -65,7 +66,14 @@ rows because the serving engine changes prefill throughput.
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
   `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
-**Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
+**Related (other guides):** Qwen3-8B on one Hygon BW1000 HCU (64 GiB, SGLang 0.5.12,
+DTK 26.04, TP=1, `CHUNK_SIZE=8192`) measured `peakPrefillThroughput=9140` through the
+[P/D Disaggregation](../../../pd-disaggregation) router (Mooncake KV transfer and the
+routing sidecar included; median TTFT 0.8962s). That guide keeps the shared router
+values, the same way the other single-prefill community overlays do. The
+optimized-baseline `hygon/sglang` row is the same model and card at TP=4
+(colocated, no Mooncake); it is not calibrated yet, and 9140 does not apply.
+The [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
 The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per

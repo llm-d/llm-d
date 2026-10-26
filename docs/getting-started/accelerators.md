@@ -14,6 +14,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
+| Hygon | BW1000 HCU | kinglong08 (@kinglong08, <ise_longlong@163.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | Moore Threads | MTT S5000 GPU | Jingzhi Xue (@gingerXue, <jingzhi.xue@mthreads.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
@@ -97,6 +98,10 @@ Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compa
 ```
 
 Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
+
+## Hygon BW1000 HCU
+
+Hygon BW1000 HCUs (64&nbsp;GiB, DTK) are supported for community-contributed paths. The device plugin must expose `hygon.com/hcunum` and pods must be scheduled by `hami-scheduler`. P/D disaggregation uses SGLang with Mooncake over RoCE; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) Hygon overlay (`modelserver/hygon/sglang/`). That overlay serves `Qwen3-8B` as two Deployments, one prefill and one decode, each TP=1. The [optimized baseline](../../guides/optimized-baseline/README.md) overlay (`modelserver/hygon/sglang/`) serves the same model colocated, one replica at TP=4 (4 HCUs), reading weights from `/data/models`. Set `MODEL=Qwen3-8B` when running either guide.
 
 ## MetaX C500X
 
