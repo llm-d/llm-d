@@ -105,6 +105,9 @@ The queries below report what is observed. Whether the metric is supported, and
 whether it applies (static K versus a dynamic schedule), is confirmed from the
 installed version and the resolved config, not from the queries.
 
+Apply the same deployment selectors to every metric below; otherwise model-level
+queries can combine separate deployments.
+
 | Observed | Query | Check next |
 | --- | --- | --- |
 | K series not observed, base SD counters present | `count by(model_name, namespace, pod, engine) (vllm:spec_decode_num_drafts_total) unless count by(model_name, namespace, pod, engine) (vllm:spec_decode_scheduled_steps_total)` | Whether the installed version has the metric; engine stats, scrape, and selectors (step 2) |

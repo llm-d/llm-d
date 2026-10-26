@@ -52,7 +52,9 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 
 ### vLLM Speculative Decoding Metrics
 
-When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5.2 guide](../../../guides/models/glm-5-2/README.md), it exports the counters below, labelled `model_name` and `engine`. In the vLLM source this page was checked against (October 2026), they are not registered without a speculative config, and the scheduler records them only when engine stats are enabled. Names, labels, and behavior can differ in other versions, so confirm them on the installed server's `/metrics`. To work out why the counters are flat or missing, see [Diagnose Speculative Decoding](./speculative-decoding.md).
+When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5.2 guide](../../../guides/models/glm-5-2/README.md), it exports the counters below, labelled `model_name` and `engine`. To work out why the counters are flat or missing, see [Diagnose Speculative Decoding](./speculative-decoding.md).
+
+The descriptions below were checked against vLLM at `85e199e` ([`spec_decode/metrics.py`](https://github.com/vllm-project/vllm/blob/85e199e60ca87a4b136aeaa0842541139b94c778/vllm/v1/spec_decode/metrics.py), [`core/sched/scheduler.py`](https://github.com/vllm-project/vllm/blob/85e199e60ca87a4b136aeaa0842541139b94c778/vllm/v1/core/sched/scheduler.py)). At that revision the counters are not registered without a speculative config, and the scheduler records them only when engine stats are enabled. Names, labels, and behavior can differ in other versions, so confirm them on the installed server's `/metrics`.
 
 | Metric | What it measures | Why it matters |
 | -------- | ------------------ | ---------------- |
@@ -62,7 +64,7 @@ When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5
 | `vllm:spec_decode_num_accepted_tokens_per_pos_total` | Accepted draft tokens by draft `position` | Shows where acceptance drops off along the draft |
 
 > [!NOTE]
-> Acceptance is a ratio of draft tokens, not a health check, an output-correctness check, or a measure of end-to-end speedup. A 0 acceptance while draft tokens increase is a real observation. An empty ratio is undefined: no draft tokens in the window, a missing series, too few samples, or mismatched labels can each produce it. If the counters stay flat, `--disable-log-stats` is one thing to check, based on the stats path in the source checked above.
+> Acceptance is a ratio of draft tokens, not a health check, an output-correctness check, or a measure of end-to-end speedup. A 0 acceptance while draft tokens increase is a real observation. An empty ratio is undefined: no draft tokens in the window, a missing series, too few samples, or mismatched labels can each produce it. If the counters stay flat, `--disable-log-stats` is one thing to check, based on the stats path at the revision above.
 
 ## SGLang
 
