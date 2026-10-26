@@ -4,7 +4,6 @@ resources:
   - ../base
 components:
   - ../../../../../../../recipes/modelserver/components/disaggregatedset-schema
-  - ../../../../../../../recipes/modelserver/components/gke-hf-node-cache
 patches:
   # Disable GKE's built-in NCCL tuner plugin (the disable-gke-nccl-tuner-patch component
   # only covers Deployment and LeaderWorkerSet).
