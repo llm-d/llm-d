@@ -52,17 +52,17 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 
 ### vLLM Speculative Decoding Metrics
 
-When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5.2 guide](../../../guides/models/glm-5-2/README.md), it exports draft and acceptance counters labelled `model_name` and `engine`. Without a speculative config these series are not registered, so they are absent rather than 0. To work out why they are flat or missing, see [Diagnose Speculative Decoding](./speculative-decoding.md).
+When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5.2 guide](../../../guides/models/glm-5-2/README.md), it exports the counters below, labelled `model_name` and `engine`. In the vLLM source this page was checked against (October 2026), they are not registered without a speculative config, and the scheduler records them only when engine stats are enabled. Names, labels, and behavior can differ in other versions, so confirm them on the installed server's `/metrics`. To work out why the counters are flat or missing, see [Diagnose Speculative Decoding](./speculative-decoding.md).
 
 | Metric | What it measures | Why it matters |
 | -------- | ------------------ | ---------------- |
-| `vllm:spec_decode_num_drafts_total` | Drafts: one per request per step that scheduled at least one draft token | Shows that drafting happened. Not a count of requests or scheduler steps |
-| `vllm:spec_decode_num_draft_tokens_total` | Draft tokens proposed | Denominator for acceptance. Divided by drafts, it gives the average proposal length to compare with the configured number of speculative tokens |
+| `vllm:spec_decode_num_drafts_total` | Drafts counted in the engine's stats: one per request per step that scheduled at least one draft token | Shows that drafting was recorded. Not a count of requests or scheduler steps |
+| `vllm:spec_decode_num_draft_tokens_total` | Draft tokens counted in the engine's stats. Draft tokens rejected by a structured-output grammar before verification are not counted | Denominator for acceptance. Divided by drafts, it gives the average proposal length to compare with the configured number of speculative tokens |
 | `vllm:spec_decode_num_accepted_tokens_total` | Draft tokens the target model accepted. The token the target model samples itself is not counted | Numerator for acceptance |
 | `vllm:spec_decode_num_accepted_tokens_per_pos_total` | Accepted draft tokens by draft `position` | Shows where acceptance drops off along the draft |
 
 > [!NOTE]
-> Acceptance is a ratio of draft tokens, not a health check, an output-correctness check, or a measure of end-to-end speedup. A 0 acceptance with drafts still increasing is a real observation; an empty ratio means there were no draft tokens in the window. The counters are updated only when engine stats are enabled; with `--disable-log-stats` they are not updated.
+> Acceptance is a ratio of draft tokens, not a health check, an output-correctness check, or a measure of end-to-end speedup. A 0 acceptance while draft tokens increase is a real observation. An empty ratio is undefined: no draft tokens in the window, a missing series, too few samples, or mismatched labels can each produce it. If the counters stay flat, `--disable-log-stats` is one thing to check, based on the stats path in the source checked above.
 
 ## SGLang
 
