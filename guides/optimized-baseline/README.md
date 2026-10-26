@@ -78,7 +78,7 @@ only by TokenSpeed's experimental CUDA 12.9 source install, and the latest
 release image (v0.1.1) predates the engine --metrics-port flag.
 ```
 
-[TokenSpeed](https://github.com/lightseekorg/tokenspeed) model servers are scheduled with the queue, KV-cache utilization, prefix-cache and no-hit-LRU scorers in [`router/optimized-baseline-tokenspeed.values.yaml`](./router/optimized-baseline-tokenspeed.values.yaml). Use that file as `ROUTER_VALUES` in [step 1](#1-deploy-the-llm-d-router) in place of `optimized-baseline.values.yaml`. Then deploy TokenSpeed pods yourself, until an overlay exists:
+[TokenSpeed](https://github.com/lightseekorg/tokenspeed) model servers are scheduled by [`router/optimized-baseline-tokenspeed.values.yaml`](./router/optimized-baseline-tokenspeed.values.yaml). It uses the same scheduling plugins as `optimized-baseline.values.yaml` (`prefix-cache-affinity-filter` and `token-load-scorer`) and adds the metrics data layer that TokenSpeed needs. Use that file as `ROUTER_VALUES` in [step 1](#1-deploy-the-llm-d-router) in place of `optimized-baseline.values.yaml`. Then deploy TokenSpeed pods yourself, until an overlay exists:
 
 * Label the pods `llm-d.ai/guide: optimized-baseline`, so the pool selects them, and `llm-d.ai/engine-type: tokenspeed`.
 * Serve the API on port 8000 (the InferencePool target port).
@@ -107,12 +107,13 @@ args:
 Reference environment for the router configuration:
 
 * One host with 4× H100 running four TP=1 `Qwen/Qwen3-0.6B` replicas outside Kubernetes. TokenSpeed was built from source at `95d6349` with its [Hopper / CUDA 12.9 recipe](https://github.com/lightseekorg/tokenspeed/blob/main/docs/guides/hopper-cu129.md).
-* The EPP from llm-d-router `main` (`26200ef`), loading this values file's plugins configuration with file-based endpoint discovery.
+* The EPP from llm-d-router `main` (`26200ef`) with file-based endpoint discovery. It loaded an earlier revision of this values file. That revision had the same metrics data layer but scheduled with the queue, KV-cache utilization, prefix-cache and no-hit-LRU scorers.
 * In that run:
   * all requests completed;
+  * the EPP scraped the TokenSpeed metrics from port 9100 on every replica;
   * each shared-prefix group stayed on one replica, and the engine reported 97–99% of the prompt as `cached_tokens` on follow-up requests;
   * unrelated requests spread over all four replicas.
-* Load was light, so the queue scorer did not separate replicas.
+* The current scheduling plugins do not read engine metrics. Their configuration loads with the EPP configuration loader of llm-d-router `main` (`b5cb5f88`), but they were not run against TokenSpeed.
 
 ## Prerequisites
 

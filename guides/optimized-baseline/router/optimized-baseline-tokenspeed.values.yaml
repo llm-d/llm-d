@@ -2,13 +2,13 @@
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## Use this file INSTEAD of optimized-baseline.values.yaml when the model servers
-## are `tokenspeed serve`. It schedules with the queue, KV-cache utilization,
-## prefix-cache and no-hit-LRU scorers, and declares the metrics data layer
-## itself: `tokenspeed serve` exports its engine metrics on a separate
-## --metrics-port rather than on the API port, and router.epp.metricsDataSource
-## has no port setting. With a custom plugins file the chart-level
-## metricsDataSource and modelServers.type values are not part of the EPP
-## configuration, so the metrics source and extractor are listed below.
+## are `tokenspeed serve`. It schedules with the same plugins as
+## optimized-baseline.values.yaml and also declares the metrics data layer:
+## `tokenspeed serve` exports its engine metrics on a separate --metrics-port
+## rather than on the API port, and router.epp.metricsDataSource has no port
+## setting. With a custom plugins file the chart-level metricsDataSource and
+## modelServers.type values are not part of the EPP configuration, so the
+## metrics source and extractor are listed below.
 
 router:
   extraServicePorts:
@@ -23,6 +23,10 @@ router:
       optimized-baseline-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
+        # Plugins run with their built-in defaults: the prefix-cache-affinity-filter's
+        # peakPrefillThroughput default (15928) is calibrated for this guide's reference
+        # setup (Qwen3-32B on H100 80 GB, TP=2). For other hardware/models, measure your
+        # own value with guides/recipes/router/calibration and set it on the filter.
         plugins:
         # Scrape /metrics on the port every TokenSpeed pod passes as
         # --metrics-port; the port is shared by all endpoints of the pool.
@@ -31,25 +35,19 @@ router:
             path: /metrics
             port: 9100
         # Map tokenspeed:num_requests_waiting, tokenspeed:num_requests_running
-        # and tokenspeed:kv_cache_usage_perc onto the scorers' inputs.
+        # and tokenspeed:kv_cache_usage_perc onto the EPP's core metrics.
         - type: core-metrics-extractor
           parameters:
             defaultEngine: tokenspeed
-        - type: queue-scorer
-        - type: kv-cache-utilization-scorer
-        - type: prefix-cache-scorer
-        - type: no-hit-lru-scorer
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
         schedulingProfiles:
         - name: default
           plugins:
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: kv-cache-utilization-scorer
-            weight: 2
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: no-hit-lru-scorer
-            weight: 2
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
         dataLayer:
           sources:
           - pluginRef: metrics-data-source
