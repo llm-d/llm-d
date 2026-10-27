@@ -33,7 +33,7 @@ spec:
             - "8"
             - "64"
             - "--max-total-tokens=131072"
-            - "--mem-fraction-static=0.35"
+            - "--mem-fraction-static=0.75"
             - "--watchdog-timeout=3600"
             - "--tool-call-parser=qwen"
             - "--reasoning-parser=qwen3"
