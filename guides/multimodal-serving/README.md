@@ -31,7 +31,7 @@ E/PD:        Client → Proxy → Router (EPP) → PD pod's routing sidecar
 
 E/P/D:       Client → Proxy → Router (EPP) → Decode pod's routing sidecar
                                                ├─ Encode pod     (media only; embeddings over the EC Connector)
-                                               ├─ Prefill pod    (reads the embeddings, prefills; KV cache over NIXL)
+                                               ├─ Prefill pod    (reads the embeddings, prefills; KV cache over NIXL, or MoRI-IO on AMD)
                                                └─ Decode pod     (decode only)
 ```
 
@@ -64,14 +64,14 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | H200 reference · aggregated 8 replicas × TP=2 (16 GPUs), E/PD 2 Encode + 8 PD, E/P/D 2 Encode + 4 Prefill + 4 Decode (TP=2) · `INFRA_PROVIDER` `base`, `gke` (+ `coreweave` for E/PD and E/P/D) · E/P/D is not run nightly |
-| AMD GPU | `amd` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Instinct MI355X (288 GB HBM) · aggregated (8 replicas × TP=2, 16 GPUs) and E/PD (2 Encode + 8 PD, TP=2) over NIXL · `INFRA_PROVIDER=base` |
+| AMD GPU | `amd` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Instinct MI355X (288 GB HBM) · aggregated (8 replicas × TP=2, 16 GPUs) and E/PD (2 Encode + 8 PD, TP=2) over NIXL with `INFRA_PROVIDER=base`; E/PD and E/P/D (2 Encode + 6 Prefill + 2 Decode, TP=2) over MoRI-IO with `INFRA_PROVIDER=moriio/base`, which needs a vLLM image with `ec_transport=moriio` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | GKE only (`INFRA_PROVIDER=gke`) · aggregated only · 8 replicas × 4 chips (`2x2x1`, TP=4) · needs the `medium` PriorityClass |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-The aggregated topology runs on every accelerator above; E/PD runs on NVIDIA and AMD GPUs, and E/P/D on NVIDIA GPUs only. The overlay each combination deploys:
+The aggregated topology runs on every accelerator above; E/PD and E/P/D run on NVIDIA and AMD GPUs. The overlay each combination deploys:
 
 | `TOPOLOGY` | `ACCELERATOR_TYPE` | `INFRA_PROVIDER` | Overlay |
 | --- | --- | --- | --- |
@@ -81,9 +81,13 @@ The aggregated topology runs on every accelerator above; E/PD runs on NVIDIA and
 | `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml`](./aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml) |
 | `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml) |
 | `e-pd` | `amd` | `base` | [`e-disaggregation/modelserver/amd/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-pd/base/kustomization.yaml) |
+| `e-pd` | `amd` | `moriio/base`, `moriio/amd-ci` | [`e-disaggregation/modelserver/amd/vllm/e-pd/moriio/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-pd/moriio/base/kustomization.yaml) |
 | `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml) |
+| `e-p-d` | `amd` | `moriio/base`, `moriio/amd-ci` | [`e-disaggregation/modelserver/amd/vllm/e-p-d/moriio/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-p-d/moriio/base/kustomization.yaml) |
 
 On AMD, aggregation and E/PD (embeddings over NIXL) are available. Both overlays use the `docker.io/vllm/vllm-openai-rocm:v0.31.0` image.
+
+On AMD, the `moriio/*` overlays move the embeddings over MoRI-IO instead of NIXL for E/PD, and both the embeddings and the KV cache over MoRI-IO for E/P/D. `moriio/base` holds the manifests; `moriio/amd-ci` layers on the RDMA NIC attachments and the model cache that the CI cluster needs. They set `ec_transport=moriio`, which needs a vLLM image that has it, and E/P/D also needs a MoRI build that registers the single KV region. Keep `ec_cpu_bytes` at 1 GiB with MoRI-IO. Details: [AMD over MoRI-IO](./e-disaggregation/README.md#amd-epd-and-epd-over-mori-io).
 
 The replica counts are sized for the reference hardware in the Notes column (16 GPUs for aggregated serving on NVIDIA GPUs, 20 for E/PD and E/P/D). To try the guide on a smaller cluster, lower `replicas` in the overlay's Deployments, keeping at least one pod per role.
 
@@ -137,7 +141,7 @@ export ACCELERATOR_VALUES=
 export TOPOLOGY=aggregation # options: aggregation, e-pd, e-p-d
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v7
 export MODEL_SERVER=vllm # options: vllm
-export INFRA_PROVIDER=base # options: base, gke, coreweave
+export INFRA_PROVIDER=base # options: base, gke, coreweave, moriio/base, moriio/amd-ci
 export MODEL=Qwen/Qwen3-VL-32B-Instruct # the model the overlays serve (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
