@@ -44,6 +44,7 @@ spec:
           # change makes new prefill and decode pods incompatible with old
           # ones (image, KV connector, engine flags). Changing it changes
           # both pod templates, so Grove rolls both roles.
+          # TODO(ai-dynamo/grove#947): use a Grove-managed revision label.
           llm-d.ai/revision: '1'
           llm-d.ai/inference-serving: 'true'
           llm-d.ai/guide: wide-ep
