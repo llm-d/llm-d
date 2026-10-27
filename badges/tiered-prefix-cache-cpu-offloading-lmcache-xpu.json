@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM XPU",
-  "message": "cancelled",
-  "color": "lightgrey"
+  "message": "passing",
+  "color": "brightgreen"
 }
