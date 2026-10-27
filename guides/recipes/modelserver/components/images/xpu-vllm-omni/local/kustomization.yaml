@@ -3,4 +3,4 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: vllm-omni-xpu
-    newTag: v0.32.0
+    newTag: sha-fb7ab707
