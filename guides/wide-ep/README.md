@@ -10,6 +10,8 @@
 
 This guide deploys a large Mixture-of-Experts (MoE) model in a wide expert-parallel (DP/EP) pattern across nodes, with vLLM prefill/decode (P/D) disaggregation and DP-aware routing by the llm-d Router. The NVIDIA GPU and AMD configurations deploy a single [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) that manages the prefill and decode `LeaderWorkerSet`s as one versioned unit; the Intel XPU configuration uses two plain `LeaderWorkerSet`s.
 
+On NVIDIA GPU, a [Grove](https://github.com/ai-dynamo/grove) `PodCliqueSet` can orchestrate the same pods instead of the `DisaggregatedSet` (see [Grove orchestration](#grove-orchestration)).
+
 The default deployment serves `deepseek-ai/DeepSeek-R1-0528` on 32 NVIDIA H200 GPUs: a prefill and a decode role, each one DP16/EP group across two nodes, with DeepEP for the expert all-to-all and NIXL for the KV transfer over RDMA. Every DP rank runs its own API server port, and the router's `InferencePool` targets all of them, so the router picks a DP rank, not just a pod.
 
 Each accelerator serves one model, chosen to teach the mechanics: multi-node `LeaderWorkerSet`/`DisaggregatedSet` deployment, DP/EP configuration in vLLM, and routing to individual DP ranks. For state-of-the-art, benchmarked MoE recipes, see the Models guides, such as [DeepSeek-V4](../models/deepseek-v4/README.md) and [GLM-5.2](../models/glm-5-2/README.md).
@@ -23,7 +25,7 @@ This guide includes configurations for the following accelerator and model serve
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
+| NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave`; `grove/*` for a Grove `PodCliqueSet` (community) |
 | AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci` |
 | Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
 
@@ -41,6 +43,17 @@ The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerS
 
 **Intel XPU** (DeepSeek-V2-Lite-Chat): prefill and decode each run TP2 with expert parallelism on 4 XPUs in total, with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
 
+### Grove orchestration
+
+On NVIDIA GPU, set `INFRA_PROVIDER` to `grove/base`, `grove/gke` or `grove/coreweave` to deploy the model servers as one [Grove](https://github.com/ai-dynamo/grove) `PodCliqueSet` instead of the `DisaggregatedSet`. The pods are the same as in `base`, `gke` and `coreweave`: same image, vLLM arguments, resources and provider patches. Only the rank variables come from Grove instead of LWS.
+
+Each role is a two-pod `PodClique` inside its own `PodCliqueScalingGroup`, so one scaling group replica is one DP16/EP group, the way a `LeaderWorkerSet` group is. Each group is a gang (`minAvailable: 2`): a gang-scheduling backend such as KAI places it all-or-nothing, and Grove recreates the `PodCliqueSet` replica when a rank keeps failing for longer than `terminationDelay` (5m).
+
+Two things differ from the `DisaggregatedSet`:
+
+- **Rollouts are not version-pinned.** Grove's default `RollingRecreate` strategy updates prefill and decode independently, and the router layers [`router/grove.values.yaml`](router/grove.values.yaml) without the `disaggregatedset-rollout-screener`, which only understands `DisaggregatedSet` revisions. During an update, a request can be prefilled on the new version and decoded on the old one.
+- **No nightly E2E.** The Grove overlays are community-maintained; CI only dry-runs them.
+
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
@@ -51,6 +64,8 @@ The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerS
 > The NVIDIA GPU and AMD configurations use an RDMA all-to-all backend (DeepEP, MoRI) for inter-node EP and require all-to-all RDMA connectivity: every NIC on a host must be able to communicate with every NIC on all other hosts. Networks restricted to communicating only between matching NIC IDs (rail-only connectivity) will fail. The Intel XPU configuration uses XCCL and `allgather_reducescatter`; it does not use DeepEP, but still requires full-mesh pod network connectivity between decode and prefill workers.
 
 - Deploy the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer. When installing with Helm, pass `--set enableDisaggregatedSet=true` to enable the `DisaggregatedSet` validating webhook and RBAC used by the NVIDIA GPU and AMD configurations.
+
+- For the Grove overlays (`INFRA_PROVIDER=grove/*`), install the [Grove operator](https://github.com/ai-dynamo/grove/blob/main/docs/installation.md) instead of LWS. With Grove's built-in `default-scheduler` backend the pods go to the default Kubernetes scheduler, which does not place a group all-or-nothing. For gang scheduling and topology-aware placement, install the [KAI Scheduler](https://github.com/NVIDIA/KAI-Scheduler) and make it Grove's default scheduler profile.
 
 - For Intel XPU, install the [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes) and verify that the `gpu.intel.com` DRA DeviceClass is available.
 
@@ -85,7 +100,7 @@ export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu
 export MODEL_SERVER=vllm # options: vllm
 export ACCELERATOR=${ACCELERATOR_TYPE} # keep equal to ACCELERATOR_TYPE
-export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci; valid values per accelerator: table above
+export INFRA_PROVIDER=base # options: base, gke, coreweave, grove/base, grove/gke, grove/coreweave, amd-ci; valid values per accelerator: table above
 export MODEL=deepseek-ai/DeepSeek-R1-0528 # set to the model your accelerator serves (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -136,6 +151,14 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 # at their model servers; the NVIDIA GPU one is empty
 export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${ACCELERATOR}.values.yaml"
 ```
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when INFRA_PROVIDER=grove/base or grove/gke or grove/coreweave:
+# Grove: replaces the NVIDIA GPU overrides with ones that drop the
+# DisaggregatedSet rollout screener
+export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/grove.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.router_values end -->
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):

@@ -1,0 +1,37 @@
+# Grove orchestrator (INFRA_PROVIDER=grove/*). Layer after wide-ep.values.yaml in place of
+# gpu.values.yaml. The Grove pods expose the same eight DP rank ports as the DisaggregatedSet,
+# so targetPorts carry over; only the plugin config changes.
+router:
+  epp:
+    # The plugin config is one string, so it is restated in full. It drops the
+    # disaggregatedset-rollout-screener: Grove pods carry no DisaggregatedSet revision label,
+    # and the screener fails closed on endpoints without one, so it would reject every pod.
+    pluginsCustomConfig:
+      wide-ep-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer

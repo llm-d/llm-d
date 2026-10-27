@@ -14,12 +14,15 @@ support:
   accelerators:
     gpu:
       label: NVIDIA GPU
-      notes: "Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave`"
+      notes: "Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave`; `grove/*` for a Grove `PodCliqueSet` (community)"
       model: deepseek-ai/DeepSeek-R1-0528
       providers:
         - {name: base, label: "Kubernetes (base)"}
         - {name: gke, label: "GKE"}
         - {name: coreweave, label: "CoreWeave"}
+        - {name: grove/base, label: "Grove (Kubernetes base)"}
+        - {name: grove/gke, label: "Grove (GKE)"}
+        - {name: grove/coreweave, label: "Grove (CoreWeave)"}
       engines: {vllm: validated}
     amd:
       label: AMD GPU
@@ -58,8 +61,10 @@ env:
     # which is why the router install reads it rather than ACCELERATOR_TYPE.
     ACCELERATOR: {default: "${ACCELERATOR_TYPE}", comment: "keep equal to ACCELERATOR_TYPE"}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    # gpu: base, gke, coreweave; amd: base, amd-ci; xpu: base.
-    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, amd-ci], comment: "valid values per accelerator: table above"}
+    # gpu: base, gke, coreweave, and grove/base, grove/gke, grove/coreweave for
+    # the Grove PodCliqueSet instead of the DisaggregatedSet; amd: base, amd-ci;
+    # xpu: base.
+    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, grove/base, grove/gke, grove/coreweave, amd-ci], comment: "valid values per accelerator: table above"}
 
     # Each accelerator serves one model: NVIDIA GPU serves
     # deepseek-ai/DeepSeek-R1-0528, AMD serves deepseek-ai/DeepSeek-V3, and
@@ -98,6 +103,14 @@ deploy:
         # Per-accelerator overrides: the AMD and Intel XPU ones re-target the router
         # at their model servers; the NVIDIA GPU one is empty
         export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${ACCELERATOR}.values.yaml"
+    # skip_in ci: no nightly runs Grove, and the README-parsing nightlies
+    # harvest every `export`.
+    - when: {INFRA_PROVIDER: [grove/base, grove/gke, grove/coreweave]}
+      skip_in: [ci]
+      run: |
+        # Grove: replaces the NVIDIA GPU overrides with ones that drop the
+        # DisaggregatedSet rollout screener
+        export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/grove.values.yaml"
 
   monitoring_values:
     # skip_in ci: the README-parsing nightlies harvest every `export`, and they
