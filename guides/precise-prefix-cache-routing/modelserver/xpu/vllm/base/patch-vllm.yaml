@@ -13,14 +13,14 @@ spec:
       containers:
         - name: modelserver
           command: ["vllm", "serve"]
-          # Intel XPU default: Qwen3-32B from Hugging Face.
+          # Intel XPU default: Qwen3-0.6B from Hugging Face.
           # To use a local model directory, replace the first arg with the
-          # mounted path, for example /data/hf_models/Qwen3-32B/, and uncomment
+          # mounted path, for example /data/hf_models/Qwen3-0.6B/, and uncomment
           # the model-store volumeMount and volume below.
           # Keep --served-model-name aligned with the router/render modelName.
           args:
-            - "Qwen/Qwen3-32B"
-            - "--served-model-name=Qwen/Qwen3-32B"
+            - "Qwen/Qwen3-0.6B"
+            - "--served-model-name=Qwen/Qwen3-0.6B"
             - "--port=$(POD_PORT)"
             # vLLM 0.30 requires this to serve /v1/*/render for token-producer.
             - "--enable-scale-out"

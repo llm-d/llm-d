@@ -6,14 +6,17 @@ router:
     pluginsConfigFile: "precise-prefix-cache-routing-lmetric-plugins.yaml"
     pluginsCustomConfig:
       precise-prefix-cache-routing-lmetric-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
           - type: token-producer
             parameters:
-              modelName: Qwen/Qwen3-32B
+              modelName: Qwen/Qwen3-0.6B
               vllm:
-                url: "http://precise-prefix-cache-routing-render:8000"
+                endpointDiscovery:
+                  attemptTimeout: 2s
+                messagesRenderMode: auto
+                responsesRenderMode: auto
           - type: endpoint-notification-source
           - type: inflight-load-producer
             parameters:
@@ -27,11 +30,13 @@ router:
                 kvBlockIndexConfig:
                   enableMetrics: true
               kvEventsConfig:
+                engineType: "vllm"
                 topicFilter: "kv@"
                 concurrency: 8
                 discoverPods: true
                 podDiscoveryConfig:
                   socketPort: 5556
+                  replaySocketPort: 5559
           - type: lmetric-scorer
             parameters:
               prefixMatchInfoProducerName: precise-prefix-cache-producer
