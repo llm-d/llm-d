@@ -20,7 +20,7 @@ data:
     log_level: 2
     server:
       listen_addr: ":8080"
-      secure_coordinator: false
+      secure_serving: false
       read_timeout: 30s
       write_timeout: 300s
 
