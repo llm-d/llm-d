@@ -2,6 +2,8 @@
 
 This guide shows how to replace one version of a prefill/decode (P/D) deployment with another under live traffic, without failing requests and without pairing a prefill pod of one version with a decode pod of another. It applies to deployments that run prefill and decode as a [`DisaggregatedSet`](./disaggregatedset.md), such as the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) and [wide-ep](../../../guides/wide-ep/README.md) guides.
 
+It does not apply to the wide-ep guide's [Grove overlays](../../../guides/wide-ep/README.md#grove-orchestration) (`INFRA_PROVIDER=grove/*`): Grove pods carry no `DisaggregatedSet` revision, so the router runs without the rollout screener.
+
 A version change is anything that changes a role's pod template: the model server image, engine flags, the KV connector, resources, or node placement.
 
 ## Why P/D Rollouts Need Care

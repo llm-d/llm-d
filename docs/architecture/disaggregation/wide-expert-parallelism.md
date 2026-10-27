@@ -46,6 +46,8 @@ One DP/EP group spans several nodes, so it is deployed as a [`LeaderWorkerSet`](
 
 A [`DisaggregatedSet`](../model-server-orchestration/disaggregatedset.md) manages the prefill and decode `LeaderWorkerSet`s as one versioned unit: changing either role rolls both, one revision covers all roles, and `slices` replicates the whole prefill + decode topology into independent copies. During a rollout, the llm-d Router's `disaggregatedset-rollout-screener` pins each request to a single revision, so prefill and decode never pair across revisions. Two plain `LeaderWorkerSet`s work as well, without the coordinated rollout. See [Operating the DisaggregatedSet](../../operations/disaggregation/disaggregatedset.md).
 
+[Grove](../model-server-orchestration/grove.md) is an alternative on NVIDIA GPU: one `PodCliqueSet` runs each role's DP/EP group as a two-pod `PodClique` inside a `PodCliqueScalingGroup`, which Grove gang-schedules and recreates as a unit. Grove's default rollout updates the roles independently, and the rollout screener does not apply, so prefill and decode can pair across versions during an update. See [Grove orchestration](../../../guides/wide-ep/README.md#grove-orchestration) in the guide.
+
 ## DP-Aware Routing
 
 With data-parallel attention, every DP rank holds its own KV cache and request queue, so the router gets the most out of prefix-cache affinity and load balancing when it picks a rank, not just a pod. vLLM can run one API server per DP rank, each on its own port (for example `8000`-`8007` for eight ranks per pod); the `InferencePool` then lists every rank port in its target ports, and the llm-d Router treats each `podIP:port` as an endpoint to filter and score. On decode pods, the routing sidecar listens on the rank ports and forwards to the engine's per-rank ports.
@@ -71,6 +73,7 @@ When the model server exposes a single API port per pod instead (for example sev
 
 - [LeaderWorkerSet (LWS)](../model-server-orchestration/leaderworkerset.md) — pod group controller for multi-node accelerator workloads.
 - [DisaggregatedSet](../model-server-orchestration/disaggregatedset.md) — multi-role topology controller managing synchronized slices.
+- [Grove](../model-server-orchestration/grove.md) — alternative multi-role, multi-node orchestrator for wide-EP on NVIDIA GPU.
 - [Wide Expert Parallelism well-lit path](../../../guides/wide-ep/README.md) — deploy wide-EP on NVIDIA GPU, AMD GPU or Intel XPU.
 - [Disaggregated Serving](pd-disaggregation.md) — the P/D mechanism wide-EP builds on.
 - vLLM docs: [DP deployment](https://docs.vllm.ai/en/latest/serving/data_parallel_deployment/), [EP deployment](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment/), and [DeepEP and DeepGEMM](https://docs.vllm.ai/en/latest/design/fused_moe_modular_kernel/).
