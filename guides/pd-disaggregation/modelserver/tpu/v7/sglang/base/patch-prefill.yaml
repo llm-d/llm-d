@@ -11,6 +11,11 @@
 # plus the ZMQ rank sockets, driven by the bootstrap_* request fields the routing sidecar
 # injects, so the sidecar speaks the same protocol as for SGLang on GPU. raiden listens on
 # SGLANG_RAIDEN_KV_PORT and the following 6 ports per rank (31000-31047 for 8 ranks).
+#
+# Both roles keep a host-DRAM KV tier behind HBM (SGLang HiCache over the same raiden
+# DMA engine), the shape the sglang-torchtpu CI runs as pd_singlehost_kv_offload: the
+# prefill reuses evicted prefixes from host memory instead of recomputing them, and the
+# decode keeps the KV it received and generated (see patch-decode.yaml).
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
@@ -59,6 +64,18 @@ spec:
                     - --disaggregation-mode=prefill
                     - --disaggregation-transfer-backend=raiden
                     - --disaggregation-bootstrap-port=8998
+                    # Host-DRAM KV tier (L2) through raiden: pages leave HBM into pinned host
+                    # memory (write_through) and come back on a later prefix hit instead of
+                    # being recomputed. --hicache-size is GB per TP rank: 32 GB x 8 = 256 GB per
+                    # pod, inside the 512Gi request. The TPU fused KV pool mirrors into host
+                    # memory with the page_first_fused layout, which raiden requires.
+                    - --enable-hierarchical-cache
+                    - --hicache-io-backend=raiden
+                    - --hicache-mem-layout=page_first_fused
+                    - --hicache-write-policy=write_through
+                    - --hicache-size=32
+                    # Reports device and host prefix hits per request (usage.prompt_tokens_details).
+                    - --enable-cache-report
                     - --enable-metrics
                   env:
                     - name: HF_TOKEN
@@ -109,13 +126,15 @@ spec:
                     - containerPort: 31000
                       name: raiden-kv
                       protocol: TCP
+                  # ~160 GiB of runtime and weights plus the 256 GB pinned host tier; request =
+                  # limit so the tier is reserved and the pod is not evicted under node pressure.
                   resources:
                     requests:
                       cpu: "32"
-                      memory: 400Gi
+                      memory: 512Gi
                       google.com/tpu: 4
                     limits:
-                      memory: 400Gi
+                      memory: 512Gi
                       google.com/tpu: 4
                   volumeMounts:
                     - mountPath: /dev/shm

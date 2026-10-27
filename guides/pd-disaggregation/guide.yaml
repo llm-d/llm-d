@@ -60,7 +60,7 @@ support:
       label: Google TPU v7
       notes: >-
         `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (prefill PCP=8 → decode DP=8, TPURaidenConnector + 64 GiB prefill host KV offload);
-        SGLang (`sglang:v0.1.0-tpu`): `openai/gpt-oss-120b` (TP=8 + EP on each role, raiden transfer backend)
+        SGLang (`sglang:v0.1.0-tpu`): `openai/gpt-oss-120b` (TP=8 + EP on each role, raiden transfer backend, 32 GB/rank HiCache host tier on both roles)
       model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}

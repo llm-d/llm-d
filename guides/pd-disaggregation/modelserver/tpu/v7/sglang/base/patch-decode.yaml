@@ -2,8 +2,8 @@
 # role (see patch-prefill.yaml). The routing sidecar listens on 8000 and forwards to the
 # engine on 8200; it also hands the engine the prefill's bootstrap address and the
 # per-request bootstrap room, after which the decode pulls the KV pages from the prefill
-# over raiden. SGLang disables the radix cache on P/D decode servers by default; add
-# --disaggregation-decode-enable-radix-cache to keep one.
+# over raiden. The decode keeps a radix cache with a host-DRAM tier behind it (HiCache over
+# raiden), so a follow-up turn finds the KV it already holds instead of pulling it again.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
@@ -55,11 +55,26 @@ spec:
                     - --skip-server-warmup
                     - --disaggregation-mode=decode
                     - --disaggregation-transfer-backend=raiden
-                    # The TPU fused KV pool mirrors into host memory through raiden with the
-                    # page_first_fused layout; these select that path for any host-side copy
-                    # (retraction backups, and HiCache if it is enabled later).
-                    - --hicache-mem-layout=page_first_fused
+                    # P/D decode servers drop the radix cache by default; keep it so a follow-up
+                    # turn reuses the KV this decode already holds (transferred prefix plus its
+                    # own response) instead of pulling it from the prefill again.
+                    - --disaggregation-decode-enable-radix-cache
+                    # The decode host tier stores full-attention layers only (the sliding-window
+                    # KV of gpt-oss comes with every transfer), which cannot back a retracted
+                    # request; keep retraction backups as per-request CPU tensors.
+                    - --disaggregation-decode-retraction-backup=cpu_tensor
+                    # Host-DRAM KV tier (L2) through raiden: pages leave HBM into pinned host
+                    # memory (write_through) and come back on a later prefix hit instead of
+                    # being recomputed. --hicache-size is GB per TP rank: 32 GB x 8 = 256 GB per
+                    # pod, inside the 512Gi request. The TPU fused KV pool mirrors into host
+                    # memory with the page_first_fused layout, which raiden requires.
+                    - --enable-hierarchical-cache
                     - --hicache-io-backend=raiden
+                    - --hicache-mem-layout=page_first_fused
+                    - --hicache-write-policy=write_through
+                    - --hicache-size=32
+                    # Reports device and host prefix hits per request (usage.prompt_tokens_details).
+                    - --enable-cache-report
                     - --enable-metrics
                   env:
                     - name: HF_TOKEN
@@ -104,10 +119,10 @@ spec:
                   resources:
                     requests:
                       cpu: "32"
-                      memory: 400Gi
+                      memory: 512Gi
                       google.com/tpu: 4
                     limits:
-                      memory: 400Gi
+                      memory: 512Gi
                       google.com/tpu: 4
                   volumeMounts:
                     - mountPath: /dev/shm
