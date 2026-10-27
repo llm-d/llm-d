@@ -11,4 +11,4 @@ spec:
       - name: intel
         exactly:
           deviceClassName: gpu.intel.com
-          count: 2
+          count: 1

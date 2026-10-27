@@ -163,7 +163,7 @@ export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 ```
 
-For Gateway Mode, add the same optional LMetric values file after the guide values file.
+To experiment with LMetric scoring, add `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/lmetric.values.yaml` after `${ROUTER_VALUES}` when installing the router.
 
 </details>
 <details data-when="MODEL_SERVER=sglang">
