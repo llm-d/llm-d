@@ -108,8 +108,8 @@ deploy:
     - when: {INFRA_PROVIDER: [grove/base, grove/gke, grove/coreweave]}
       skip_in: [ci]
       run: |
-        # Grove: replaces the NVIDIA GPU overrides with ones that drop the
-        # DisaggregatedSet rollout screener
+        # Grove: replaces the NVIDIA GPU overrides with ones that point the
+        # rollout screener at the llm-d.ai/revision label
         export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/grove.values.yaml"
 
   monitoring_values:

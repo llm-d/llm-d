@@ -3,14 +3,28 @@
 # so targetPorts carry over; only the plugin config changes.
 router:
   epp:
-    # The plugin config is one string, so it is restated in full. It drops the
-    # disaggregatedset-rollout-screener: Grove pods carry no DisaggregatedSet revision label,
-    # and the screener fails closed on endpoints without one, so it would reject every pod.
+    # The plugin config is one string, so it is restated in full; only the rollout screener's
+    # scope and label keys differ. Grove pods carry no DisaggregatedSet revision or role labels
+    # (and the screener drops pods without a revision), so it reads the guide's own labels:
+    # llm-d.ai/role, and llm-d.ai/revision, which the PodCliqueSet sets on both cliques (bump it
+    # there on incompatible changes). The scope is the app.kubernetes.io/part-of label Grove sets
+    # on every pod of the PodCliqueSet.
     pluginsCustomConfig:
       wide-ep-config.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Pin each request to a single llm-d.ai/revision during rollouts
+        # so prefill and decode never pair across revisions.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "app.kubernetes.io/part-of=wide-ep-grove"
+            revisionGating:
+              revisionLabelKey: llm-d.ai/revision
+              roleLabelKey: llm-d.ai/role
+              mode: max-role
+              requiredRoles: [prefill, decode]
         - type: always-disagg-pd-decider
         - type: disagg-profile-handler
           parameters:

@@ -51,7 +51,8 @@ Each role is a two-pod `PodClique` inside its own `PodCliqueScalingGroup`, so on
 
 Two things differ from the `DisaggregatedSet`:
 
-- **Rollouts are not version-pinned.** Grove's default `RollingRecreate` strategy updates prefill and decode independently, and the router layers [`router/grove.values.yaml`](router/grove.values.yaml) without the `disaggregatedset-rollout-screener`, which only understands `DisaggregatedSet` revisions. During an update, a request can be prefilled on the new version and decoded on the old one.
+- **You set the revision.** A `DisaggregatedSet` labels every pod of a version with one revision, which the router's `disaggregatedset-rollout-screener` uses to keep each request's prefill and decode on the same version. Grove has no revision shared across roles, so both cliques carry an `llm-d.ai/revision` label, and [`router/grove.values.yaml`](router/grove.values.yaml) points the screener at it (and at `llm-d.ai/role`).
+  Bump the label on both cliques whenever a change makes the new prefill and decode pods incompatible with the old ones, such as a new image, KV connector or engine flags. The bump changes both pod templates, so Grove rolls both roles, and the router does not send traffic to the new revision until it has a Ready prefill and a Ready decode pod. A change that keeps the label is treated as compatible, so its old and new pods can pair.
 - **No nightly E2E.** The Grove overlays are community-maintained; CI only dry-runs them.
 
 ## Prerequisites
@@ -154,8 +155,8 @@ export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${ACC
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when INFRA_PROVIDER=grove/base or grove/gke or grove/coreweave:
-# Grove: replaces the NVIDIA GPU overrides with ones that drop the
-# DisaggregatedSet rollout screener
+# Grove: replaces the NVIDIA GPU overrides with ones that point the
+# rollout screener at the llm-d.ai/revision label
 export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/grove.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->

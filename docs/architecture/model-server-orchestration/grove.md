@@ -33,7 +33,11 @@ A `topologyConstraint` on a `PodCliqueSet`, `PodCliqueScalingGroup` or `PodCliqu
 
 ## Update Strategy
 
-`RollingRecreate`, the default, deletes and recreates one clique pod or scaling group replica at a time, so an update needs no spare capacity. Roles update independently: unlike a `DisaggregatedSet` revision, nothing ties a prefill pod to the decode pods of the same version, and the llm-d Router's `disaggregatedset-rollout-screener` does not apply. The `Coherent` strategy instead brings up updated replicas in units that contain every role, scheduled together as a new `PodGang`. See the upstream [coherent rolling updates proposal](https://github.com/ai-dynamo/grove/tree/main/docs/proposals/393-coherent-rolling-updates).
+`RollingRecreate`, the default, deletes and recreates one clique pod or scaling group replica at a time, so an update needs no spare capacity. Roles update independently.
+
+Grove has no revision label shared by every role of a version, the way a `DisaggregatedSet` does, so the wide-ep overlays add their own: both cliques carry `llm-d.ai/revision`, bumped by hand for incompatible changes, and the llm-d Router's `disaggregatedset-rollout-screener` is configured to read it (`revisionLabelKey`, `roleLabelKey`) and keep each request's prefill and decode on one revision. See [Grove orchestration](../../../guides/wide-ep/README.md#grove-orchestration).
+
+The `Coherent` strategy instead brings up updated replicas in units that contain every role, scheduled together as a new `PodGang`. See the upstream [coherent rolling updates proposal](https://github.com/ai-dynamo/grove/tree/main/docs/proposals/393-coherent-rolling-updates).
 
 ## Installation
 

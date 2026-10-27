@@ -24,7 +24,8 @@ spec:
   # The default RollingRecreate strategy deletes and recreates one scaling
   # group replica at a time, so an update needs no spare copy of a role's
   # GPUs (like the DisaggregatedSet base's maxSurge=0). Prefill and decode
-  # update independently; the router does not pin a request to one version.
+  # update independently; the router keeps a request on one llm-d.ai/revision
+  # (see the clique labels below).
   template:
     # A rank that keeps crashing breaches its PodClique's minAvailable, and
     # once the breach outlasts terminationDelay Grove recreates the whole
@@ -36,6 +37,14 @@ spec:
     cliques:
       - name: prefill
         labels:
+          # Compatibility revision for the router's rollout screener
+          # (router/grove.values.yaml), which only pairs prefill and decode
+          # pods with the same llm-d.ai/revision. Grove has no cross-role
+          # revision of its own, so bump this on both cliques whenever a
+          # change makes new prefill and decode pods incompatible with old
+          # ones (image, KV connector, engine flags). Changing it changes
+          # both pod templates, so Grove rolls both roles.
+          llm-d.ai/revision: '1'
           llm-d.ai/inference-serving: 'true'
           llm-d.ai/guide: wide-ep
           llm-d.ai/accelerator-variant: gpu
@@ -234,6 +243,8 @@ spec:
                     mountPath: /var/cache/vllm
       - name: decode
         labels:
+          # Keep equal to the prefill clique's llm-d.ai/revision.
+          llm-d.ai/revision: '1'
           llm-d.ai/inference-serving: 'true'
           llm-d.ai/guide: wide-ep
           llm-d.ai/accelerator-variant: gpu

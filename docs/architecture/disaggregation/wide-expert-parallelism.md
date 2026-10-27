@@ -46,7 +46,7 @@ One DP/EP group spans several nodes, so it is deployed as a [`LeaderWorkerSet`](
 
 A [`DisaggregatedSet`](../model-server-orchestration/disaggregatedset.md) manages the prefill and decode `LeaderWorkerSet`s as one versioned unit: changing either role rolls both, one revision covers all roles, and `slices` replicates the whole prefill + decode topology into independent copies. During a rollout, the llm-d Router's `disaggregatedset-rollout-screener` pins each request to a single revision, so prefill and decode never pair across revisions. Two plain `LeaderWorkerSet`s work as well, without the coordinated rollout. See [Operating the DisaggregatedSet](../../operations/disaggregation/disaggregatedset.md).
 
-[Grove](../model-server-orchestration/grove.md) is an alternative on NVIDIA GPU: one `PodCliqueSet` runs each role's DP/EP group as a two-pod `PodClique` inside a `PodCliqueScalingGroup`, which Grove gang-schedules and recreates as a unit. Grove's default rollout updates the roles independently, and the rollout screener does not apply, so prefill and decode can pair across versions during an update. See [Grove orchestration](../../../guides/wide-ep/README.md#grove-orchestration) in the guide.
+[Grove](../model-server-orchestration/grove.md) is an alternative on NVIDIA GPU: one `PodCliqueSet` runs each role's DP/EP group as a two-pod `PodClique` inside a `PodCliqueScalingGroup`, which Grove gang-schedules and recreates as a unit. Grove has no cross-role revision, so the pods carry an `llm-d.ai/revision` label that you bump on incompatible changes, and the rollout screener reads that label instead of the `DisaggregatedSet` revision. See [Grove orchestration](../../../guides/wide-ep/README.md#grove-orchestration) in the guide.
 
 ## DP-Aware Routing
 
