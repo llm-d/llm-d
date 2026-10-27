@@ -25,7 +25,7 @@ on:
       dry_run:
         description: 'Execute workflow in "dry-run" mode ("true", "false")'
         required: false
-        default: 'false'
+        default: 'true'
       verbose:
         description: 'Execute workflow in "verbose" mode ("true", "false")'
         required: false
@@ -100,7 +100,7 @@ jobs:
       bucket_path: ${{ inputs.bucket_path || 'llm-d-benchmarks/regressions/wide-ep' }}
       gateway_class: ${{ inputs.gateway_class || 'epponly' }}
       monitoring_enabled: ${{ inputs.monitoring_enabled || 'false' }}
-      dry_run: ${{ inputs.dry_run || 'false' }}
+      dry_run: ${{ inputs.dry_run || 'true' }}
       verbose: ${{ inputs.verbose || 'false' }}
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
