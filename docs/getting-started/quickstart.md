@@ -64,14 +64,14 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-Deploy the default model server (vLLM running on NVIDIA GPUs). This will deploy 8 replicas of `Qwen/Qwen3-32B` by default.
+Deploy the default model server (vLLM running on NVIDIA GPUs). This will deploy 2 replicas of `Qwen/Qwen3-32B` by default.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k guides/optimized-baseline/modelserver/gpu/vllm/base/
 ```
 
 > [!TIP]
-> If you are using different hardware (AMD, Intel, TPU, or CPU), you can find alternative configurations in the `guides/optimized-baseline/modelserver/` directory.
+> If you are using different hardware (AMD, Intel, TPU, or CPU), you can find alternative configurations in the `guides/optimized-baseline/modelserver/` directory. Some of these serve a different model (for example, `meta-llama/Llama-3.2-3B-Instruct` on CPU); use the model listed under [Supported Accelerators and Model Servers](../../guides/optimized-baseline/README.md#supported-accelerators-and-model-servers) in the test request below.
 
 Wait for all model server pods to be running and ready before proceeding:
 

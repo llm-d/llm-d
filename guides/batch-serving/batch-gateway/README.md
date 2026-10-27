@@ -4,6 +4,15 @@
 
 ## Overview
 
+### When to Pick This Path
+
+- You have **offline inference workloads** (such as evaluations, embeddings, dataset processing) that don't need real-time responses.
+- You want to **utilize idle accelerator capacity** for batch work while protecting interactive traffic from interference.
+- Your clients expect an **OpenAI-compatible Batch API** (`/v1/batches`, `/v1/files`) for job submission, tracking and management.
+- You need **multi-tenant isolation** — each tenant's jobs, files, and results are separated.
+
+For queue-based asynchronous inference of individual requests, see the complementary [Asynchronous Processing](../asynchronous-processing/README.md) path. For components, data flow, and the processing pipeline, see the [Batch Gateway Architecture](../../../docs/architecture/batch/batch-gateway.md).
+
 ### Key Features
 
 - **Process large-scale batch jobs**: Process batch jobs with up to 50,000 (configurable) inference requests per job, with progress tracking and job management capabilities.
@@ -40,6 +49,16 @@ Before installing Batch Gateway, ensure you have:
 5. **Redis/Valkey**: Redis 6+ or Valkey 8+ for priority queue, events, and status updates.
 6. **S3 or Filesystem**: For batch input and output file storage.
 
+### Get the guide
+
+The observability steps below apply alert rules and dashboards from a local clone of the [llm-d repository](https://github.com/llm-d/llm-d). Set the branch and clone the repo (if you already have a checkout, skip this and run the remaining commands from inside it):
+
+```bash
+export BRANCH=main
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+```
+
 ## Installation
 
 ### Step 1: Create the Namespace
@@ -65,10 +84,10 @@ kubectl create secret generic batch-gateway-secrets -n ${NAMESPACE} \
 
 The Batch Processor needs to know where to send inference requests. This is configured via the `processor.config.globalInferenceGateway.url` Helm value, or per-model via `processor.config.modelGateways`.
 
-**Single gateway** (all models route to one endpoint):
+**Single gateway** (all models route to one endpoint). With the [optimized baseline](../../optimized-baseline/README.md) in Standalone mode, that is its llm-d Router Service; in Gateway mode, use the Gateway address instead:
 
 ```bash
-export INFERENCE_GW_URL="http://infra-inference-scheduling-inference-gateway-istio.llm-d-inference-scheduler.svc.cluster.local:80"
+export INFERENCE_GW_URL="http://optimized-baseline-epp.llm-d-optimized-baseline.svc.cluster.local:80"
 ```
 
 **Per-model gateways** (different endpoints per model): see the [Helm chart README](https://github.com/llm-d/llm-d-batch-gateway/blob/main/charts/batch-gateway/README.md) for `modelGateways` configuration.
@@ -106,10 +125,11 @@ helm install batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
   --set global.fileClient.fs.pvcName="batch-gateway-pvc"
 ```
 
-**From Source:**
+**From Source** (a checkout of [llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway)):
 
 ```bash
-helm install batch-gateway ./charts/batch-gateway \
+git clone https://github.com/llm-d/llm-d-batch-gateway.git
+helm install batch-gateway llm-d-batch-gateway/charts/batch-gateway \
   -n ${NAMESPACE} \
   --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
   --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
@@ -194,6 +214,47 @@ OUTPUT_FILE_ID=$(curl -s \
 # Download the results
 curl http://localhost:8000/v1/files/${OUTPUT_FILE_ID}/content > results.jsonl
 ```
+
+## Enable Monitoring
+
+Optional. Requires Prometheus and Grafana — see [Observability Setup](../../../docs/operations/observability/setup.md).
+
+1. Enable metrics scraping in the chart, so Prometheus discovers the three components:
+
+   ```bash
+   helm upgrade batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
+     -n ${NAMESPACE} --reuse-values \
+     --set processor.podMonitor.enabled=true \
+     --set gc.podMonitor.enabled=true \
+     --set apiserver.serviceMonitor.enabled=true
+   ```
+
+   > [!NOTE]
+   > This step still uses the component chart's own `PodMonitor`/`ServiceMonitor` templates. Per [llm-d#1983](https://github.com/llm-d/llm-d/issues/1983) these scrape manifests should eventually live in this repo as standalone recipes; the target path is still being settled, so this guide uses the chart flags in the meantime. The alerts and dashboards below are already served from this repo.
+
+2. Apply the alerting rules:
+
+   ```bash
+   kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/recipes/observability/alerts/batch-gateway-alerting-rules.yaml
+   ```
+
+   These are scoped to `namespace="batch-gateway"`. If you changed `${NAMESPACE}`, edit the matchers first — see [Alerting](../../../docs/operations/observability/alerting.md#batch-gateway-batch-gatewayrules).
+
+3. Load the dashboards:
+
+   ```bash
+   ${REPO_ROOT}/guides/recipes/observability/load-llm-d-dashboards.sh
+   ```
+
+   This loads every llm-d dashboard, including `llm-d-batch-gateway-apiserver`, `-processor`, and `-gc`. Select your namespace with each dashboard's `namespace` variable.
+
+4. Verify:
+
+   ```bash
+   kubectl get podmonitors,servicemonitors,prometheusrules -n ${NAMESPACE}
+   ```
+
+For what the metrics mean and how to query them, see the [Batch Gateway metric reference](../../../docs/operations/observability/batch-gateway-metrics.md).
 
 ## Cleanup
 

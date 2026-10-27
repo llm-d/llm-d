@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 8
+  replicas: 2
   template:
     spec:
       containers:
@@ -16,6 +16,8 @@ spec:
             - "--enable-metrics"
             - "--tensor-parallel-size=2"
             - "--mem-fraction-static=0.9"
+            - "--tool-call-parser=qwen"
+            - "--reasoning-parser=qwen3"
             # Uncomment for distributed tracing
             # - "--enable-trace"
             # - "--otlp-traces-endpoint=http://otel-collector:4317"

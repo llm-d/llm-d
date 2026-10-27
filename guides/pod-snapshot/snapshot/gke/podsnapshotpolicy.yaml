@@ -1,0 +1,14 @@
+apiVersion: podsnapshot.gke.io/v1
+kind: PodSnapshotPolicy
+metadata:
+  name: policy
+spec:
+  # Kustomize does not apply namePrefix to podsnapshot.gke.io fields, so this
+  # must match the namePrefix + metadata.name of PodSnapshotStorageConfig.
+  storageConfigName: pod-snapshot-storage-config
+  selector:
+    matchLabels:
+      llm-d.ai/guide: pod-snapshot
+  triggerConfig:
+    type: workload
+    postCheckpoint: resume

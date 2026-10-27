@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/component: vllm-render
 spec:
   # This Service owns no pods: it fronts the guide's model server pods, which
-  # already expose vLLM's /v1/*/render endpoints, so the EPP token-producer
-  # tokenizes on the serving fleet and render capacity scales with it
+  # expose vLLM's /v1/*/render endpoints (with --enable-scale-out on XPU).
+  # The EPP token-producer tokenizes on the serving fleet, and capacity scales
   # (llm-d/llm-d#2188). targetPort is the vLLM serving port: the pods' port
   # 8000 belongs to the routing-proxy sidecar, which does not serve /render.
   # Only Ready endpoints receive traffic, so render calls never reach a pod

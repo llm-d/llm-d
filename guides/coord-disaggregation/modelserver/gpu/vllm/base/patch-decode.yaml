@@ -18,6 +18,7 @@ spec:
             - "--kv-transfer-config"
             - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
             - "--no-disable-hybrid-kv-cache-manager"
+            - "--shutdown-timeout=45"
           env:
             - name: MODEL_NAME
               value: "Qwen/Qwen3-VL-32B-Instruct"

@@ -89,6 +89,6 @@ spec:
         }
       threshold: "1"
       activationThreshold: "0"
-      # AverageValue, not Value: for External metrics the HPA multiplies a `Value` target by the
-      # current replica count, which turns a desired-replica metric into runaway growth.
-      metricType: AverageValue
+    # AverageValue, not Value: for External metrics the HPA multiplies a `Value` target by the
+    # current replica count, which turns a desired-replica metric into runaway growth.
+    metricType: AverageValue

@@ -4,19 +4,31 @@
 
 ## Overview
 
+In Kubernetes, once a Pod has been allocated some GPUs it keeps that exclusive allocation for the rest of the Pod's lifetime. Scaling a model server up or down therefore means creating or destroying whole pods, and each new pod pays a full **cold start** — pull the image, initialize the runtime, load gigabytes of weights, and compile CUDA graphs — before it can serve a single request. On a shared GPU pool, swapping between model variants repeats that cold start on every swap.
+
 Fast Model Actuation (FMA) addresses vLLM startup time using two technologies. One is vLLM sleep and wake, which can entirely avoid model loading and CUDA graph compilation in applicable scenarios. The other is running multiple vLLM processes as children of a launcher process that has already done the Python module loading. FMA can manage multiple vLLM instances bound to one GPU, with one instance awake at a time, to accomplish fast switching of which model that GPU is used for; this generalizes to multiple GPUs of one node.
+Together they turn model swap-in and replica scale-up from a minutes-scale cold start into a near-instant operation — without changing steady-state serving performance.
 
-In Kubernetes, once a Pod has been allocated some GPUs it keeps that exclusive allocation for the rest of the Pod's lifetime. FMA uses the following **dual pod** technique to circumvent that constraint.
+> [!NOTE]
+> FMA's value is *actuation speed*, not inference throughput. Resident servers add only a small (~2.5%) CPU-memory overhead, and served performance matches a standard deployment. [Workload Autoscaling](../workload-autoscaling/README.md) decides *when* to scale; FMA addresses *how fast* the new capacity becomes ready. For **autoscaled** FMA, see the [Fast Model Actuation + KEDA guide](./fast-model-actuation-keda/README.md), where KEDA scales the requester pool on EPP flow-control metrics and each scale-up drives an FMA hot or warm start.
 
-- **Server-requesting Pods** reserve GPU resources via the Kubernetes Pod scheduler and the kubelet but do not run inference themselves.
+FMA uses the following **dual pod** technique to circumvent the exclusive, lifetime-long GPU allocation.
+
+- **Server-requesting Pods** reserve GPU resources via the Kubernetes Pod scheduler and the kubelet — keeping cluster capacity accounting accurate — but do not run inference themselves.
 - **Launcher Pods** (server-providing) run vLLM without requesting GPUs. They (a) gain access to all GPUs of their Node via special provisions that do not count this access as usage and (b) using `CUDA_VISIBLE_DEVICES`, as directed by the FMA controllers, get vLLM to use the specific GPU(s) reserved for the requesting pod.
 - **FMA Controllers** manage the lifecycle: creating/deleting launchers, binding/unbinding requesting pods to launchers and vLLM instances in them, creating/deleting those vLLM instances, and orchestrating sleep/wake.
 
 Server-requesting pods are managed through standard Kubernetes set objects and controllers such as Deployments and autoscalers. An FMA controller watches the server-requesting pods and translates scheduler decisions into actions on launcher pods and GPUs.
 
-When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model tensors move from GPU to main memory). Although the Kubernetes GPU allocation is released when the requesting pod is deleted, the vLLM instance retains the CUDA context in a small amount of GPU memory---until an FMA controller directs that launcher to delete that vLLM instance (which may happen, to limit memory usage). If and when a new requesting pod arrives, serving the same model with the same command-line parameters and assigned to the same GPU, the controller wakes the sleeping instance---which resumes in seconds. This is "hot start".
+### Actuation paths
 
-When a new server-requesting Pod arrives and there is no sleeping vLLM instance to wake for it, but a launcher is available, an FMA controller will direct the launcher to create a corresponding new vLLM instance. This takes advantage of the Python module loading already done by the launcher. This is "warm start".
+When a requesting pod is deleted, the controller puts the corresponding vLLM instance to sleep (model tensors move from GPU to main memory). Although the Kubernetes GPU allocation is released when the requesting pod is deleted, the vLLM instance retains the CUDA context in a small amount of GPU memory---until an FMA controller directs that launcher to delete that vLLM instance (which may happen, to limit memory usage). When capacity is needed again, the controller selects a launcher and takes the fastest available path:
+
+- **Hot start** — if a new requesting pod arrives, serving the same model with the same command-line parameters and assigned to the same GPU, the controller wakes the sleeping instance by moving weights from CPU memory back to the GPU over PCIe; it resumes in seconds.
+- **Warm start** — when there is no sleeping vLLM instance to wake but a launcher is available, the controller directs the launcher to create a new vLLM instance, taking advantage of the Python module loading the launcher has already done (tens of seconds).
+- **Cold start (with launcher)** — create a new launcher pod, then initialize the instance; still faster than a no-FMA cold start, which additionally pays pod scheduling and image pull.
+
+To bound memory, the controller keeps at most a configurable number of instances sleeping per accelerator, evicting the least-recently-used instances when that budget is exceeded.
 
 > [!NOTE]
 > Hot start (vLLM `/wake_up`) only occurs if the Kubernetes Pod scheduler assigns the new requesting pod to the same node (and GPU) where the sleeping vLLM instance resides. In a cluster with a single GPU per node, if the scheduler picks the same node, the GPU is necessarily the same one. In a multi-node pool the scheduler may assign the pod to a different node.
@@ -44,6 +56,7 @@ This guide assumes you have a Kubernetes cluster with GPU nodes and the [llm-d r
 <!-- guide:prerequisites.clone start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
+export BRANCH=main
 git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
 ```
 <!-- llm-d-cicd:skip end -->
@@ -53,11 +66,10 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 <!-- guide:env.static start -->
 ```bash
-export BRANCH=main
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
-export FMA_VERSION=0.6.4
+export FMA_VERSION=0.6.5
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -104,11 +116,8 @@ At minimum, the user running these commands needs rights to create and manage CR
 
 <!-- guide:deploy.fma_crds start -->
 ```bash
-export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
 kubectl apply --server-side \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
-  -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+  -f "https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crds.yaml"
 kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
 kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
 kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s
@@ -204,6 +213,11 @@ You should see:
 - FMA controller pods
 - Router/EPP pods
 
+### 6. (Optional) Enable monitoring
+
+- Install the [Monitoring stack](../../docs/operations/observability/setup.md).
+- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#4-deploy-the-llm-d-router).
+
 ## Verification
 
 ### 1. Get the IP of the Router
@@ -269,7 +283,7 @@ Re-run the inference request from step 2 to confirm the model is serving again.
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking. It defaults to the `nop` harness (which stands the stack up and validates it end-to-end without driving a synthetic load); the richer, FMA-specific experimentation workflow lives in [`llm-d-benchmark`](https://github.com/llm-d/llm-d-benchmark) itself.
 
 > [!IMPORTANT]
-> The Benchmarking section below contains only the **fast-model-actuation-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **fast-model-actuation-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).
 
 ### 1. Install the CLI
 
@@ -344,3 +358,8 @@ kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
+
+## Related
+
+- [Fast Model Actuation + KEDA](./fast-model-actuation-keda/README.md): scale-from-zero autoscaling of FMA requesters on EPP flow-control metrics.
+- [FMA repository](https://github.com/llm-d-incubation/llm-d-fast-model-actuation): controllers, CRDs and design docs.

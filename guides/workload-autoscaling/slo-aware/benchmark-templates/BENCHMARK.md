@@ -53,7 +53,7 @@ The load is driven by [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark
 inference-perf configs; they live here (not in the upstream profile catalog)
 because they are specific to this episode protocol, and are passed to the CLI
 via `--workload-file-path`. For CLI installation details, flag reference, and
-troubleshooting, see [`helpers/benchmark.md`](../../../../helpers/benchmark.md).
+troubleshooting, see [`docs/operations/validation/benchmark.md`](../../../../docs/operations/validation/benchmark.md).
 
 Install the CLI (clones the repo into `./llm-d-benchmark/` with a venv):
 
@@ -69,7 +69,7 @@ this folder:
 ```bash
 export NAMESPACE=llm-d-optimized-baseline
 export ENDPOINT_URL="http://$(kubectl get service optimized-baseline-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
-export GATEWAY_CLASS=epponly   # standalone mode; see helpers/benchmark.md for gateway mode
+export GATEWAY_CLASS=epponly   # standalone mode; see docs/operations/validation/benchmark.md for gateway mode
 export TEMPLATES_DIR=<path-to-llm-d-repo>/guides/workload-autoscaling/slo-aware/benchmark-templates
 ```
 

@@ -2,7 +2,6 @@ name: fast-model-actuation
 
 env:
   static:
-    BRANCH: main
     REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
 
     GUIDE_NAME: fast-model-actuation
@@ -10,7 +9,7 @@ env:
 
     # FMA controller/CRD/image version. Bump alongside the pinned image tags in
     # modelserver/launcherconfig.yaml and requester/deployment.yaml on upgrade.
-    FMA_VERSION:             { default: "0.6.4" }
+    FMA_VERSION:             { default: "0.6.5" }
     FMA_CHART_INSTANCE_NAME: fma
 
     MODEL:           { default: "Qwen/Qwen3-0.6B" }
@@ -29,7 +28,9 @@ env:
 prerequisites:
   clone:
     - skip_in: [ci]
-      run: git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
   gaie:
     - run: |
         # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
@@ -40,11 +41,8 @@ prerequisites:
 deploy:
   fma_crds:
     - run: |
-        export FMA_CRD_BASE="https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crd"
         kubectl apply --server-side \
-          -f ${FMA_CRD_BASE}/fma.llm-d.ai_inferenceserverconfigs.yaml \
-          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherconfigs.yaml \
-          -f ${FMA_CRD_BASE}/fma.llm-d.ai_launcherpopulationpolicies.yaml
+          -f "https://raw.githubusercontent.com/llm-d-incubation/llm-d-fast-model-actuation/v${FMA_VERSION}/config/crds.yaml"
         kubectl wait --for=condition=Established crd/inferenceserverconfigs.fma.llm-d.ai --timeout=120s
         kubectl wait --for=condition=Established crd/launcherconfigs.fma.llm-d.ai --timeout=120s
         kubectl wait --for=condition=Established crd/launcherpopulationpolicies.fma.llm-d.ai --timeout=120s

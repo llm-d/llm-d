@@ -2,24 +2,30 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../base
+
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+
 patches:
-  - target:
-      kind: Deployment
-      name: decode
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
-  - target:
-      kind: Deployment
-      name: prefill
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits/rdma~1ib
-        value: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests/rdma~1ib
-        value: "1"
+  # Both roles get the same settings: written once under prefill and aliased into decode.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-sglang
+      spec:
+        roles:
+          - name: prefill
+            spec: &coreweave
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            rdma/ib: "1"
+                          requests:
+                            rdma/ib: "1"
+          - name: decode
+            spec: *coreweave

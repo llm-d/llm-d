@@ -23,12 +23,15 @@ rows because the serving engine changes prefill throughput.
 |---|---|---|---|---|---|
 | `gpu/vllm`         | NVIDIA H100 80 GB · vLLM   | v0.23.0              | 2 | Qwen3-32B               | **15928** |
 | `gpu/vllm` (multimodal-serving) | NVIDIA H200 141 GB · vLLM | v0.23.0    | 2 | Qwen3-VL-32B-Instruct   | **15751** |
-| `gpu/vllm/gpt-oss` | NVIDIA H100 80 GB · vLLM   | v0.22.0              | 1 | gpt-oss-120B            | **39065** |
 | `gpu/sglang`       | NVIDIA H100 80 GB · SGLang | v0.5.13.post1        | 2 | Qwen3-32B               | **30720** |
 | `amd/vllm`    | AMD GPU · vLLM             | rocm v0.7.0          | 2 | Qwen3-32B               | 15928 ‡ |
 | `amd/sglang`  | AMD GPU · SGLang          | v0.5.13.post1 (rocm) | 2 | Qwen3-32B               | 30720 ‡ |
+| `metax/vllm` | MetaX C500X 64 GB · vLLM-MetaX | 0.24.0 (MACA 3.8.2.1) | 8 | DeepSeek-R1-Distill-Llama-70B | **5468** |
+| `mthreads/sglang` | MTT S5000 80 GB · SGLang-dsv4 | 1.0 | 8 | DeepSeek-V4-Flash-0731-FP8-mt | **10259** |
+| `mthreads/vllm`  | MTT S5000 80 GB · vLLM-MUSA | 0.28.0 / MUSA 5.2.0 | 8 | Qwen3-32B | TBD |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
+| `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
 | `xpu/vllm`    | Intel XPU · vLLM          | xpu v0.7.0           | 1 | Qwen3-0.6B              | 1970 ‡ |
 | `cpu/vllm`    | CPU · vLLM (AMX)          | cpu v0.6.0           | 1 | Llama-3.2-3B-Instruct   | **1970** |
 
@@ -37,25 +40,43 @@ rows because the serving engine changes prefill throughput.
 - **30720** — measured for `gpu/sglang` (Qwen3-32B, same H100 80 GB / TP=2): SGLang reaches
   ~1.9× the vLLM prefill throughput on identical hardware, which is exactly why the serving
   engine is its own row.
-- **39065** — measured for `gpu/vllm/gpt-oss` (gpt-oss-120B, H100 TP=1): the highest in the table
-  despite the largest model, because gpt-oss is a sparse MoE (~5B active params) in MXFP4, so a
-  prefill step touches few weights.
 - **1970** — measured for `cpu/vllm` (Llama-3.2-3B) on **GCP C3 (Intel Sapphire Rapids, AMX)**,
   bf16. The `llm-d-cpu` image runs the model in bf16, which **requires AMX or AVX512-BF16**.
   Calibrated at `CHUNK_SIZE=2048` (the CPU vLLM chunked-prefill default), not 8192.
 - **26290 / 27336** — measured for `tpu/v6/vllm` (TPU v6e, 2x4 = **8 chips**) and `tpu/v7/vllm`
   (TPU v7x, 2x2x1 = **4 chips**), both Qwen3-32B at TP=8.
-- The GPU/TPU paths run at the vLLM default `--max-num-batched-tokens=8192`, so calibrate those
-  with `CHUNK_SIZE=8192`. **Re-measure** if you change TP, chunk size, quantization, or
-  `--max-model-len` — those move the number more than the model identity does.
+- **5773 / 5468** — measured on MetaX C500X for `metax/vllm` (Qwen3-14B, TP=1,
+  `CHUNK_SIZE=8192`) and `metax/vllm` (DeepSeek-R1-Distill-Llama-70B,
+  TP=8, `CHUNK_SIZE=4095`). The single-GPU value is the higher of two valid runs
+  (5361 and 5773 tokens/sec). The eight-GPU chunk size stays below that profile's
+  `--max-model-len=4096` so the calibration prompt plus one output token fits.
+- **10259 / 7812** — measured on Moore Threads MTT S5000 (8 GPUs, SGLang
+  `sglang-dsv4:1.0`, colocated TP=8 EP=8) for optimized-baseline
+  `mthreads/sglang` (DeepSeek-V4-Flash-0731-FP8-mt). **10259** is
+  `CHUNK_SIZE=8192` (llm-d default). The [pd-disaggregation](../../../pd-disaggregation)
+  overlay `mthreads/sglang/base` is the same model and card with Mooncake P/D; re-measure
+  before using 10259 as an operational ceiling there.
+- **`npu/vllm`** — gpt-oss-120B on one Rebellions NPU at dp1 and `--max-num-seqs=1`,
+  `--max-num-batched-tokens=512`, so calibrate this path with `CHUNK_SIZE=512`. This path
+  does not borrow a proxy: the closest measured value (gpt-oss-120B on H100 at TP=1, 39065, from
+  the since-retired `gpu/vllm/gpt-oss` overlay) is an H100 MXFP4 number and applying it here would open the saturation gate when it should stay shut.
 - **‡ proxy, not measured** — these paths are not yet calibrated, so they borrow the closest
   measured value as a starting point: the **AMD** paths use the same-engine H100 values
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
   `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
-**Related (other guides):** the [agentic-serving](../../../agentic-serving) guide ships
+**Related (other guides):** the former Qwen3-Coder-480B guide (replaced by
+[Qwen3.5-397B](../../../models/qwen3-5-397b/README.md); see its
+[git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b)) shipped
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
+The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per
+rank for GLM-5.2-FP8 on H200, measured on a DP8 wide-EP prefill cell (2048-token chunk). The
+[DeepSeek-V4](../../../models/deepseek-v4/README.md) guide (DeepSeek-V4-Pro on GB200) ships an
+**estimate**, `20000` per prefill pod (one endpoint fronting 4 DP ranks, ~5000 per rank), scaled
+from measured MoE prefill rates. Replace it with a `calibrate.sh` run on that hardware at
+`CHUNK_SIZE=8192` (requests must fit `--max-model-len 9280`), multiplied by 4 because a single
+request measures one rank.
 
 ## Filling a cell
 

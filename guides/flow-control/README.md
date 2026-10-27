@@ -1,21 +1,34 @@
 # Flow Control
 
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-gke-acc-gpu-vllm-x.yaml)
+[![E2E (AMD ROCm)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-amd-ci-acc-rocm-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-flow-control-amd-ci-acc-rocm-vllm-x.yaml)
 
 ## Overview
 
 Flow Control enables intelligent request queuing at the llm-d Router level. Traditional load balancing falls short for LLMs because resource consumption varies wildly per request. Shifting queuing to the Router enables:
 
-* **Multi-Tenancy**: Prevent noisy neighbors from starving others and enforce fairness between tenants.
-* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck.
+* **Multi-Tenancy**: Prevent noisy neighbors from starving others and enforce fairness between tenants. Compared to a single-workload deployment, operators of multi-tenant workloads have additional considerations:
+  * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid).
+  * Certain requests have **different SLOs** than others (e.g. batch vs online).
+  * Certain tenants are more active than others, so **fairness** between them matters.
+* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource.
 
 ### How it Works
 
-Incoming requests are classified by a `FlowKey` (Fairness ID + Priority). EPP maintains separate in-memory queues for each flow and dispatches them based on:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/flow-control.svg" alt="Flow Control">
+  </picture>
+</p>
+
+Requests arrive at the proxy with headers expressing their tenant ID and traffic priority. The EPP classifies each request by a `FlowKey` (Fairness ID + Priority), maintains separate in-memory queues for each flow, and assigns each flow to a `PriorityBand` (several tenants can share the same priority). In each scheduling cycle it dispatches based on:
 
 1. **Priority**: Servicing highest priority bands first.
-2. **Fairness**: Cycling through tenants within a band.
-3. **Ordering**: Ordering requests within a flow.
+2. **Fairness**: Cycling through tenants within a band, as decided by the **Fairness Policy**.
+3. **Ordering**: Ordering requests within a flow, as decided by the **Ordering Policy** (e.g. FCFS or SLO-aware).
+
+In the background, the EPP monitors the model servers for saturation; while it detects saturation, requests stay queued until it subsides.
 
 *While Backpressure protects the physical hardware from overload, the Multi-Tenancy policies dictate exactly how that delayed traffic is ordered and distributed among your users.*
 
@@ -41,10 +54,10 @@ The following default hardware configuration is inherited from the [Optimized Ba
 | Parameter          | Value                                                   |
 | ------------------ | ------------------------------------------------------- |
 | Model              | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) |
-| Replicas           | 8                                                       |
+| Replicas           | 2                                                       |
 | Tensor Parallelism | 2                                                       |
 | GPUs per replica   | 2                                                       |
-| Total GPUs         | 16                                                      |
+| Total GPUs         | 4                                                       |
 
 When the `flowControl` feature gate is enabled, the EPP uses the following policies by default. These defaults are explicitly designed to mimic legacy, non-flow-control behavior (Strict FCFS) to ensure a seamless transition for existing workloads.
 
@@ -56,77 +69,114 @@ When the `flowControl` feature gate is enabled, the EPP uses the following polic
 
 > [!NOTE]
 >
-> * Beneath the flow control layer, this guide uses the exact same `prefix-cache-scorer` and `load-aware` routing policies established in the [Optimized Baseline](../optimized-baseline/README.md). Flow control acts as an intelligent ingress layer that holds saturated traffic *before* it passes to the scheduler.
-> * While `utilization-detector` is the out-of-the-box system default listed here, production deployments should switch to `concurrency-detector` to avoid telemetry lag risks, as detailed in the [Tuning Guide](tuning.md).
+> * Beneath the flow control layer, [router/flow-control.values.yaml](./router/flow-control.values.yaml) configures the EPP's standard prefix-cache and load-aware scorers (`prefix-cache-scorer`, `queue-scorer`, and `kv-cache-utilization-scorer`). Flow control acts as an intelligent ingress layer that holds saturated traffic *before* it passes to the scheduler.
+> * While `utilization-detector` is the out-of-the-box system default listed here, production deployments should switch to `concurrency-detector` to avoid telemetry lag risks, as detailed in the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 
 By default, the EPP uses a `global-strict` policy. Because the system is **work-conserving**, it will never artificially throttle traffic if GPUs have spare capacity. However, enforcing strict fairness (like Round-Robin) during periods of saturation constrains the scheduler's ability to pick the globally optimal request for batching or cache reuse, thereby bounding the maximum explorable latency-throughput frontier. The default prioritizes absolute global throughput, while this guide overrides it to prioritize tenant equity.
 
 ### Supported Hardware Backends
 
-Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-hardware-backends). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
+Flow Control is a software-level scheduling feature at the EPP layer and is entirely hardware-agnostic. It supports all accelerators detailed in the [Optimized Baseline guide](../optimized-baseline/README.md#supported-accelerators-and-model-servers). Since this guide builds exactly on top of that baseline, we will dynamically deploy the baseline's model servers in the steps below rather than maintaining duplicate configurations.
+
+The steps below default to NVIDIA GPU. See the "AMD ROCm" and "Intel XPU" details under [Deploy the Model Server](#2-deploy-the-model-server) for other documented, dynamically-rendered paths. Other accelerators listed in the Optimized Baseline guide can be substituted the same way: swap the kustomize path in that step, then, if the target overlay's model or replica count differs from the [Default Configuration](#default-configuration) table above, adjust the benchmarking/verification steps accordingly.
 
 ## Prerequisites
 
 * Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 * Checkout llm-d repo:
 
-  ```bash
-  export branch="main" # branch, tag, or commit hash
-  git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${branch}
-  ```
+<!-- guide:prerequisites.clone start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export BRANCH=main # branch, tag, or commit hash
+git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.clone end -->
 
-* Set the following environment variables:
+* Set the guide environment variables:
 
-  ```bash
-  export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-  source ${REPO_ROOT}/guides/env.sh
-  export GUIDE_NAME="flow-control"
-  export NAMESPACE="llm-d-flow-control"
-  export MODEL_NAME="Qwen/Qwen3-32B"
-  ```
+<!-- guide:env.static start -->
+```bash
+export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
+export GUIDE_NAME=flow-control
+export NAMESPACE=llm-d-flow-control
+export MODEL_NAME=Qwen/Qwen3-32B
+export INFRA_PROVIDER=base # options: base, gke
+export ROUTER_VALUES=${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml
+export EXTRA_HELM_ARGS=
+export MONITORING=false # options: false, true
+```
+<!-- guide:env.static end -->
+
+* Source the common guide environment variables:
+
+<!-- guide:env.source start -->
+```bash
+source ${REPO_ROOT}/guides/env.sh
+```
+<!-- guide:env.source end -->
 
 * Install the required CRDs (GAIE InferencePool + llm-d.ai InferenceObjective):
 
-  ```bash
-  # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
-  kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+<!-- guide:prerequisites.crds start -->
+```bash
+# GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
 
-  # ROUTER_RELEASE_URL is automatically calculated from ROUTER_RELEASE_VERSION at ${REPO_ROOT}/guides/env.sh
-  kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
-  ```
+# ROUTER_RELEASE_URL is automatically calculated from ROUTER_RELEASE_VERSION at ${REPO_ROOT}/guides/env.sh
+kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
+```
+<!-- guide:prerequisites.crds end -->
 
 * Create a target namespace for the installation:
 
-  ```bash
-  kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-  ```
+<!-- guide:prerequisites.namespace start -->
+```bash
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+```
+<!-- guide:prerequisites.namespace end -->
 
 * [Create the `llm-d-hf-token` secret in your target namespace with the key `HF_TOKEN` matching a valid HuggingFace token](../../helpers/hf-token.md) to pull models.
+
+<!-- guide:prerequisites.secrets start -->
 <!-- llm-d-cicd:skip start -->
-  ```bash
-  export HF_TOKEN=<your HuggingFace token>
-  kubectl create secret generic llm-d-hf-token \
-    --from-literal="HF_TOKEN=${HF_TOKEN}" \
-    --namespace "${NAMESPACE}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  ```
+```bash
+export HF_TOKEN=<your HuggingFace token>
+kubectl create secret generic llm-d-hf-token \
+  --from-literal="HF_TOKEN=${HF_TOKEN}" \
+  --namespace "${NAMESPACE}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
 <!-- llm-d-cicd:skip end -->
+<!-- guide:prerequisites.secrets end -->
 
 ## Installation Instructions
 
 ### 1. Deploy the Router
 
+**(Optional) Enable Prometheus monitoring on the router** (requires installing the [Monitoring stack](../../docs/operations/observability/setup.md) first; see [Enable monitoring](#3-enable-monitoring-optional)):
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export EXTRA_HELM_ARGS="--values=${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+
 #### Standalone Mode
 
 This deploys the router with an Envoy sidecar, it doesn't set up a Kubernetes Gateway.
 
+<!-- guide:deploy.standalone start -->
 ```bash
 helm upgrade --install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${ROUTER_VALUES} \
+    ${EXTRA_HELM_ARGS} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
 The router pod's resource requests are set in
 [base.values.yaml](../recipes/router/base.values.yaml): 4 vCPU and 8 GiB of memory for
@@ -138,19 +188,22 @@ with `Insufficient cpu` needs a node with the pod's full CPU request allocatable
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
-1. *Deploy a Kubernetes Gateway* named by following one of [the gateway guides](../../docs/infrastructure/gateway).
+1. *Deploy a Kubernetes Gateway* named `llm-d-inference-gateway` by following one of [the gateway guides](../../docs/infrastructure/gateway).
 2. *Deploy the router and an HTTPRoute* that connects it to the Gateway as follows:
 
+<!-- guide:deploy.gateway start -->
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm upgrade --install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART}  \
+    ${ROUTER_GATEWAY_CHART} \
     -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
     -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${ROUTER_VALUES} \
+    ${EXTRA_HELM_ARGS} \
     --set provider.name=${PROVIDER_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.gateway end -->
 
 </details>
 
@@ -160,25 +213,70 @@ Instead of maintaining duplicate hardware configurations, we dynamically render 
 
 Deploy the model server (defaulting to NVIDIA GPU / vLLM) by running:
 
+<!-- guide:deploy.modelserver start -->
 ```bash
-export INFRA_PROVIDER=base # base | gke
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
   | kubectl apply -n ${NAMESPACE} -f -
 ```
+<!-- guide:deploy.modelserver end -->
+
+<details>
+<summary><h4>AMD ROCm</h4></summary>
+
+Flow Control also runs on the Optimized Baseline guide's AMD vLLM model server
+(2 replicas, TP=2, `Qwen/Qwen3-32B` on AMD Instinct MI355X). Render the AMD
+overlay and relabel it for this guide:
+
+```bash
+export INFRA_PROVIDER=base
+
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+
+</details>
+
+<details>
+<summary><h4>Intel XPU</h4></summary>
+
+Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Data Center GPU Max 1550+ per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-XPU-per-pod, so it does not carry the GPU path's TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead. Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
+
+```bash
+export MODEL_NAME="Qwen/Qwen3-0.6B"
+
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+
+</details>
+
+Wait for the router deployment (`${GUIDE_NAME}-epp`) and the model server deployments (`-l llm-d.ai/guide=${GUIDE_NAME}`, e.g., `flow-control-nvidia-gpu-vllm-decode`) to become `Available` before continuing (`Qwen/Qwen3-32B` takes several minutes to download weights and compile graphs):
+
+<!-- guide:deploy.wait start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl wait --for=condition=Available deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=300s
+kubectl wait --for=condition=Available deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.wait end -->
 
 ### 3. Enable monitoring (optional)
 
-If you want monitoring, decide before step 1: the monitoring values create a
-ServiceMonitor, whose CRD only exists after the monitoring stack is installed.
+If you want Prometheus scraping via `ServiceMonitor` and `PodMonitor`, the [Monitoring stack](../../docs/operations/observability/setup.md) must be installed in the cluster so those CRDs exist:
 
-* Install the [Monitoring stack](../../docs/operations/observability/setup.md) **before deploying the router**.
-* Add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` to the [router installation command](#1-deploy-the-router). If you already installed without it, re-run the same `helm upgrade --install` command with the extra `-f` appended.
-* Deploy the monitoring resources for model servers:
+* Set `export EXTRA_HELM_ARGS="--values=${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"` before running the [router installation command](#1-deploy-the-router) (or re-run `helm upgrade --install` with `EXTRA_HELM_ARGS` set if you already deployed the router without it).
+* Set `export MONITORING=true` to deploy the monitoring resources (`PodMonitor`) for the model servers:
 
+<!-- guide:deploy.monitoring start -->
 ```bash
+# only when MONITORING=true:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
+<!-- guide:deploy.monitoring end -->
 
 ## Verification
 
@@ -186,16 +284,20 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 **Standalone Mode**
 
+<!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
+<!-- guide:verify.endpoint.standalone end -->
 
 <details>
 <summary> <b>Gateway Mode</b> </summary>
 
+<!-- guide:verify.endpoint.gateway start -->
 ```bash
 export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 ```
+<!-- guide:verify.endpoint.gateway end -->
 
 </details>
 
@@ -203,10 +305,12 @@ export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonp
 
 Check EPP logs for feature gate activation:
 
+<!-- guide:verify.tests.feature_gate start -->
 ```bash
 # -c epp: in standalone mode kubectl defaults to the Envoy sidecar, whose log never matches
 kubectl logs deploy/${GUIDE_NAME}-epp -c epp -n ${NAMESPACE} | grep "Initializing Flow Control layer"
 ```
+<!-- guide:verify.tests.feature_gate end -->
 
 Expected: one line, `Initializing Flow Control layer`. No output means the gate is off for
 this deployment (the EPP then logs `Flow Control layer is disabled` instead) or the log
@@ -221,23 +325,19 @@ To fully verify that queuing and backpressure are working, you must apply concur
 The Use Case 2 load test sizes its burst from `MAX_CONCURRENCY`; a retuned values file
 changes the burst with it:
 
+<!-- guide:verify.tests.max_concurrency start -->
 ```bash
 MAX_CONCURRENCY=$(awk '$1 == "maxConcurrency:" {print $2; n++} END {exit n!=1}' \
-    ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml) \
+    ${ROUTER_VALUES}) \
   || echo "expected exactly one maxConcurrency: in the values file" >&2
 export MAX_CONCURRENCY
 echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the values file
 ```
+<!-- guide:verify.tests.max_concurrency end -->
 
-**Grant read access to the EPP metrics endpoint.** The EPP authenticates every metrics
-scrape against the Kubernetes API: a TokenReview on the caller's bearer token, then a
-SubjectAccessReview on the `/metrics` URL. Give the debug pod's service account
-permission to read `/metrics`, and give the EPP's service account the
-`system:auth-delegator` role it needs to run the reviews. The chart ships an equivalent
-grant only when `router.monitoring.prometheus.enabled` is set, which also creates a
-ServiceMonitor and requires the Prometheus Operator CRDs; this guide leaves that flag
-off and creates the binding directly:
+**Grant read access to the EPP metrics endpoint.** By default (`router.monitoring.prometheus.auth.enabled: true`), the EPP authenticates every metrics scrape against the Kubernetes API: a `TokenReview` on the caller's bearer token, then a `SubjectAccessReview` on the `/metrics` URL (note: if you enabled `monitoring.values.yaml` in [Step 1](#1-deploy-the-router), it sets `--metrics-endpoint-auth=false`, making the RBAC grants below a harmless no-op). While the Helm chart grants the EPP's service account (`${GUIDE_NAME}-epp`) permission to run those reviews, it only adds the `/metrics` reader rule when `router.monitoring.prometheus.enabled` is set (which also creates a `ServiceMonitor`), and binds it to `${GUIDE_NAME}-epp` rather than `default`. Grant the debug pod's `default` service account permission to read `/metrics` (and bind `system:auth-delegator` to `${GUIDE_NAME}-epp` as a fallback if chart RBAC was disabled):
 
+<!-- guide:verify.tests.metrics_rbac start -->
 ```bash
 kubectl create clusterrole ${GUIDE_NAME}-metrics-reader \
     --verb=get --non-resource-url=/metrics \
@@ -251,9 +351,9 @@ kubectl create clusterrolebinding ${GUIDE_NAME}-epp-auth-delegator \
     --serviceaccount=${NAMESPACE}:${GUIDE_NAME}-epp \
     --dry-run=client -o yaml | kubectl apply -f -
 ```
+<!-- guide:verify.tests.metrics_rbac end -->
 
-Without these grants the metrics endpoint returns `401 Unauthorized`, and every
-metrics check in this guide reads as empty grep output.
+Without the `${GUIDE_NAME}-metrics-reader` grant (when metrics auth is enabled), the metrics endpoint returns `403 Forbidden`, and every metrics check in this guide reads as empty `grep` output.
 
 **Open a temporary interactive shell inside the cluster:**
 
@@ -276,14 +376,16 @@ token authenticates the scrape:
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 curl -s -o metrics.txt -w "%{http_code}\n" -H "Authorization: Bearer ${TOKEN}" \
   http://${GUIDE_NAME}-epp:9090/metrics   # expect: 200
-grep llm_d_epp_flow_control_queue_size metrics.txt
+grep llm_d_epp_flow_control_pool_saturation metrics.txt
 ```
 
-Expected: one series per active flow (tenant × priority), all `0` on an idle pool. A
-flow's series appears after its first request queues, so a quiet pool may show none.
-A `401` means the metrics-access grants above were skipped; a `500` means the EPP's
-service account lacks the auth-delegator binding (the EPP log shows a failed
-TokenReview).
+Expected: `stage="decode"` and `stage="effective"` series for the pool, both `0` on an
+idle pool (confirming the Flow Control layer is active and exporting metrics; a
+disaggregated pool also exports `stage="prefill"`; per-flow
+series such as `llm_d_epp_flow_control_queue_size` are registered lazily after a flow
+receives its first request). A `401` means the request carried no valid token; a `403`
+means the `${GUIDE_NAME}-metrics-reader` grant above was skipped; a `500` means the EPP's
+service account lacks the auth-delegator binding (the EPP log shows a failed TokenReview).
 
 ## Use Cases
 
@@ -295,11 +397,13 @@ In this use case, we configure 3 priority tiers (Premium, Standard, Best-Effort)
 
 The `helm upgrade --install` command you ran earlier configured the EPP's underlying `EndpointPickerConfig` to map queues to priority bands. However, you must explicitly define these bands in the cluster using `InferenceObjective` resources.
 
-Apply the full definitions (Premium, Standard, Best-Effort) provided in [objectives.yaml](./objectives.yaml) by running:
+From your **host terminal** (keep the `curl-debug` shell open in another tab), apply the full definitions (Premium, Standard, Best-Effort) provided in [objectives.yaml](./objectives.yaml) by running:
 
+<!-- guide:deploy.objectives start -->
 ```bash
 kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
 ```
+<!-- guide:deploy.objectives end -->
 
 The file defines three priority tiers:
 
@@ -343,7 +447,7 @@ curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metric
 
 Expected: a series labeled `fairness_id="tenant-a", priority="100"` with a count of at
 least 1. If it is absent while a `priority="0"` series grows, the objective headers are
-not being honored. Check that `objectives.yaml` is applied and that its `poolRef`
+not being honored. Check that `objectives.yaml` is applied and that its `poolRef` (or `poolRefs` in `v1`)
 matches the InferencePool in the namespace (`kubectl get inferencepools -n ${NAMESPACE}`).
 
 ### Use Case 2: Backpressure Management
@@ -457,19 +561,21 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     exit
     ```
 
-5. **Restore the model server replica count** recorded in step 2 (model server pods take
-   several minutes to become ready again):
+5. **Restore the model server replica count** recorded in step 2 and wait for the rollout
+   to complete (model server pods take several minutes to download weights and compile
+   graphs):
 
     ```bash
     kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=${ORIG_REPLICAS}
+    kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
     ```
 
 ## Production Tuning: Deriving `maxConcurrency`
 
 > [!IMPORTANT]
-> The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) is empirically tuned **only** for the default reference workload (Qwen3-32B on 16 H100s). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
+> The `maxConcurrency` value shipped in [router/flow-control.values.yaml](./router/flow-control.values.yaml) is a **per-replica** threshold empirically tuned **only** for the default reference workload (`Qwen/Qwen3-32B` on H100 80 GB, TP=2 — 2 GPUs per replica). If you use a different model, hardware, or have different prompt lengths, you **must** calculate your own `maxConcurrency` to prevent GPU starvation or OOMs.
 
-For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tuning Guide](tuning.md).
+For detailed instructions on how to derive the optimal `maxConcurrency` for your specific workload, see the [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
 
 ## Benchmarking
 
@@ -478,9 +584,9 @@ This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — 
 In this example we will demonstrate how to run [`inference-perf`](https://github.com/kubernetes-sigs/inference-perf) with a generic load workload against the stack you just deployed above (standalone or gateway mode). When orchestrating benchmarks via `llmdbenchmark`, the CLI automatically and transparently deploys a harness pod (`llmdbench-harness-launcher`) into your namespace. This pod is central to driving the workload, collecting the results, and tearing itself down when it's finished.
 
 > [!IMPORTANT]
-> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../helpers/benchmark.md).**
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).**
 >
-> The Benchmarking section below contains only the **flow-control-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../helpers/benchmark.md).
+> The Benchmarking section below contains only the **flow-control-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
@@ -488,23 +594,27 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 > Benchmarking flow-control's QoS differentiation and fairness behaviors requires a specialized multi-tenant load harness that does NOT yet ship in `llm-d-benchmark` or `inference-perf`. The command below exercises the stack under load and validates the end-to-end path, but it does NOT measure QoS slicing across priority classes or tenant isolation. A dedicated `guide_flow-control_1.yaml` will be added upstream once multi-tenant load shaping is supported.
 
 > [!TIP]
-> To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a generic sample profile such as `shared_prefix_synthetic.yaml` from the catalog in [`helpers/benchmark.md` → Available workload profiles](../../helpers/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
+> To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a `sanity_*.yaml` profile (e.g. `sanity_random.yaml`) as described in [`docs/operations/validation/benchmark.md` → Available workload profiles](../../docs/operations/validation/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
 
 ### 1. Install the `llmdbenchmark` CLI
 
 Automatically clone the benchmark repository into `./llm-d-benchmark/` and create a virtualenv at `./llm-d-benchmark/.venv/` containing dependencies and its installation:
 
+<!-- guide:benchmark.setup.install start -->
 ```bash
 curl -sSL https://raw.githubusercontent.com/llm-d/llm-d-benchmark/main/install.sh | bash
 ```
+<!-- guide:benchmark.setup.install end -->
 
 Activate the `venv` and enter the repository directory - both are required: the `venv` puts `llmdbenchmark` on your PATH, and the repository directory contains the `workload/profiles/` and `config/specification/` files that orchestrate the benchmark:
 
+<!-- guide:benchmark.setup.activate start -->
 ```bash
 cd llm-d-benchmark
 source .venv/bin/activate
 llmdbenchmark --version
 ```
+<!-- guide:benchmark.setup.activate end -->
 
 > [!NOTE]
 > Subsequent `llmdbenchmark` commands in this section assume you are inside the `llm-d-benchmark` repo directory with the `venv` activated. If you open a new shell, re-run the two commands above.
@@ -515,20 +625,24 @@ Set two variables so the rest of the section is topology-agnostic: the endpoint 
 
 **Standalone Mode** (the default in this guide — no Kubernetes Gateway, EPP pod with an Envoy sidecar):
 
+<!-- guide:benchmark.endpoint.standalone start -->
 ```bash
 export ENDPOINT_URL="http://$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')"
 export GATEWAY_CLASS=epponly # standalone mode
 ```
+<!-- guide:benchmark.endpoint.standalone end -->
 
 <details>
 <summary> <b>Gateway Mode</b> </summary>
 
+<!-- guide:benchmark.endpoint.gateway start -->
 ```bash
 export ENDPOINT_URL="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')"
 
 # Match whichever provider you used when deploying the gateway (e.g. istio, agentgateway, gke).
 export GATEWAY_CLASS=istio
 ```
+<!-- guide:benchmark.endpoint.gateway end -->
 
 </details>
 
@@ -536,6 +650,7 @@ export GATEWAY_CLASS=istio
 
 Benchmark results are copied to the `workspace` directory that is specified by *you* (or that is automatically generated when omitted from the cli) on the machine running the CLI. The workspace location is optional — by default the CLI auto-generates a timestamped workspace and prints its full path in the logs during the run. If you'd rather choose where results land, pass `--workspace <YOUR_DIR_HERE>` as a top-level argument of `llmdbenchmark` (before the `run` subcommand):
 
+<!-- guide:benchmark.execute start -->
 ```bash
 llmdbenchmark \
     --spec           guides/flow-control \
@@ -548,42 +663,74 @@ llmdbenchmark \
     --workload       random_concurrent.yaml \
     --analyze
 ```
+<!-- guide:benchmark.execute end -->
 
 > [!NOTE]
 > The harness pod requests 16 vCPU by default
 > ([resource requirements](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/resource_requirements.md)),
 > and its `workload-pvc` requires a `ReadWriteMany`-capable StorageClass. If the run stalls on a `Pending` pod or a PVC
-> timeout, see [Troubleshooting in `helpers/benchmark.md`](../../helpers/benchmark.md#troubleshooting)
+> timeout, see [Troubleshooting in `docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md#troubleshooting)
 > for the StorageClass override (including a GKE Filestore walkthrough) and the
-> [timeout knobs](../../helpers/benchmark.md#timeouts).
+> [timeout knobs](../../docs/operations/validation/benchmark.md#timeouts).
 
 ## Observability
 
-The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/core/router/epp/flow-control.md) for more details.
+The Flow Control layer exposes detailed metrics to track queuing dynamics. Please refer to [flow control architecture](../../docs/architecture/router/flow-control.md) for more details.
 
 ## Cleanup
 
 To remove the deployed components:
 
+<!-- guide:cleanup start -->
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE}
-export INFRA_PROVIDER=base # match the value used at deploy time
+
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE} --ignore-not-found=true
+
+# INFRA_PROVIDER must match the value used at deploy time. This command
+# cleans up the default NVIDIA GPU deployment; the AMD ROCm and Intel XPU
+# alternatives are documented immediately below this generated block.
 kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${INFRA_PROVIDER}/ \
   | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
-  | kubectl delete -n ${NAMESPACE} -f -
-kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator
-kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+
+# only when MONITORING=true:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+
+kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader ${GUIDE_NAME}-epp-auth-delegator --ignore-not-found=true
+kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
+```
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl delete namespace ${NAMESPACE}
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:cleanup end -->
+
+If you deployed on AMD ROCm, use this model-server cleanup command instead of
+the NVIDIA GPU command above (`INFRA_PROVIDER` must match the value used at
+deploy time):
+
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/${INFRA_PROVIDER}/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
 ```
 
-If you ran the Benchmarking section, also delete the harness leftovers. The workload PVC
-is backed by shared storage that bills until removed. Follow
-[Cleaning up harness resources in `helpers/benchmark.md`](../../helpers/benchmark.md#cleaning-up-harness-resources)
-with `<namespace>` set to `${NAMESPACE}`.
+If you deployed on Intel XPU, use this model-server cleanup command instead
+(the XPU overlay has no `INFRA_PROVIDER` split):
 
-Afterward `kubectl get all,inferenceobjectives,pvc -n ${NAMESPACE}` returns
-`No resources found` (the `llm-d-hf-token` secret remains).
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/xpu/vllm/ \
+  | sed "s/optimized-baseline/${GUIDE_NAME}/g" \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+```
+
+If you ran the Benchmarking section before deleting the namespace, also delete the harness leftovers. The workload PVC
+is backed by shared storage that bills until removed. Follow
+[Cleaning up benchmark resources in `docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md#cleaning-up-benchmark-resources)
+with `<namespace>` set to `${NAMESPACE}`.
 
 ## Further Reading
 
-See [Flow Control architecture](../../docs/architecture/core/router/epp/flow-control.md) for full details of the design.
+See [Flow Control architecture](../../docs/architecture/router/flow-control.md) for full details of the design.

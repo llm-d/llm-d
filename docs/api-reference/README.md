@@ -2,12 +2,12 @@
 
 ## Core Kubernetes APIs
 
-The following Kubernetes APIs are defined in the `inference.networking.k8s.io` (v1) and `llm-d.ai` (v1alpha2) groups.
+The following Kubernetes APIs are defined in the `inference.networking.k8s.io` (v1) and `llm-d.ai` (v1, v1alpha2) groups.
 
 | Resource | API Group | Version | Description |
 | --- | --- | --- | --- |
 | [InferencePool](inferencepool.md) | `inference.networking.k8s.io` | `v1` | Defines a pool of inference endpoints (model servers) to configure the **Endpoint Picker (EPP)** and Gateways for inference-optimized routing. |
-| [InferenceObjective](inferenceobjective.md) | `llm-d.ai` | `v1alpha2` | Defines performance goals (priority, latency) for specific model workloads within a pool. |
+| [InferenceObjective](inferenceobjective.md) | `llm-d.ai` | `v1` | Defines performance goals (priority, latency) for specific model workloads across pools. (`v1alpha2` is deprecated). |
 | [InferenceModelRewrite](inferencemodelrewrite.md) | `llm-d.ai` | `v1alpha2` | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. |
 
 ## Component Configuration
@@ -16,7 +16,7 @@ These schemas define the internal configuration for project components and are t
 
 | Schema | API Group | Version | Description |
 | --- | --- | --- | --- |
-| [EndpointPickerConfig](endpointpickerconfig.md) | `llm-d.ai` | `v1alpha1` | Defines the internal configuration for the **Endpoint Picker (EPP)**, including plugins and request scheduling profiles. |
+| [EndpointPickerConfig](endpointpickerconfig.md) | `llm-d.ai` | `v1` | Defines the internal configuration for the **Endpoint Picker (EPP)**, including plugins and request scheduling profiles. |
 
 ## Recognized HTTP Headers
 
@@ -29,4 +29,5 @@ These schemas define the internal configuration for project components and are t
 
 ## See Also
 
+* [Artifacts](artifacts.md): Published container images, Helm charts, and CRDs for each llm-d component.
 * [Glossary](glossary.md): Definitions of key terms and concepts used across this project.

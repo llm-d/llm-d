@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# baseline: 1p×1w + 1d×1w -> 2 nodes / 16 GPUs.
+resources:
+  - ../../../../providers/coreweave
+components:
+  - ../../../../components/no-mtp
+patches:
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+    patch: |-
+      # Roles are ordered [prefill, decode] in the base DisaggregatedSet.
+      - op: replace
+        path: /spec/roles/0/spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/roles/0/spec/leaderWorkerTemplate/size
+        value: 1
+      - op: replace
+        path: /spec/roles/1/spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/size
+        value: 1

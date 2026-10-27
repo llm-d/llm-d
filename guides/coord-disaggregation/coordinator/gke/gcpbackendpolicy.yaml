@@ -1,0 +1,21 @@
+# GKE Gateway ignores the Gateway API HTTPRoute `timeouts` field (dropped by
+# kustomization.yaml's patch for this overlay) -- on GKE the backend timeout is a
+# load balancer setting, configured here instead. The default is 30s, which would
+# cut off any generation longer than that; 300s matches the request timeout the
+# non-GKE overlay sets on the HTTPRoute and the coordinator's own
+# server.write_timeout (../base/configmap.yaml).
+#
+# Only one GCPBackendPolicy can attach to a given target at a time, so if you add
+# other backend settings (logging, Cloud Armor) for this Service, fold them into
+# this policy rather than creating a second one.
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: llm-d-coordinator-backend-policy
+spec:
+  default:
+    timeoutSec: 300
+  targetRef:
+    group: ""
+    kind: Service
+    name: llm-d-coordinator

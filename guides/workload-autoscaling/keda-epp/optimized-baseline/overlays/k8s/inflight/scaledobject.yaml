@@ -1,0 +1,56 @@
+# KEDA ScaledObject - Generic Kubernetes, in-flight-load signal, NO Flow Control.
+#
+# The simplest autoscaling path: scales ${TARGET_DEPLOYMENT} on EPP in-flight
+# requests, a signal the stock optimized-baseline EPP already emits via its
+# inflight-load-producer plugin. Flow Control is NOT required for this path, so no
+# flow-control router values are applied (see the guide's Prerequisites).
+#
+#   epp-inflight-requests  concurrent requests in flight across the pool,
+#                          per-replica AverageValue target 16
+#
+# Startup overshoot is damped by the 300s stabilization windows (a still-loading
+# replica keeps demand elevated until it is Ready).
+#
+# Trigger scrapes the bundled kube-prometheus-stack over plain in-cluster HTTP (no
+# client auth). On OpenShift use overlays/ocp/inflight (Thanos + authModes:bearer).
+#
+# ${...} placeholders are rendered by envsubst at apply time (see the guide).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: optimized-baseline-keda-epp
+  namespace: ${NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${TARGET_DEPLOYMENT}
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  advanced:
+    horizontalPodAutoscalerConfig:
+      name: keda-hpa-optimized-baseline
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+  triggers:
+    - type: prometheus
+      name: epp-inflight-requests
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
+        query: >-
+          sum(llm_d_epp_inflight_requests{namespace="${NAMESPACE}",producer_name="inflight-load-producer"})
+        threshold: "16"

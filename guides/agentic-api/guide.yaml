@@ -1,0 +1,156 @@
+name: agentic-api
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly;
+# `unsupported` must link a tracking issue. A missing cell means unsupported.
+# Keys must match env.static ACCELERATOR_TYPE / MODEL_SERVER values; `model`
+# is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
+# `notes` (optional, one line) fills the Notes column of the support table.
+# `providers` lists the INFRA_PROVIDER values the accelerator takes (each
+# needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
+# narrows one to a subset); llm-d.ai turns it into the provider selector.
+# agentic-api needs vLLM started with the tool-calling flags for its model;
+# the Optimized Baseline NVIDIA GPU vLLM overlays are the ones that set them.
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "H100 80 GB reference · the Optimized Baseline model servers, 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke`"
+      model: Qwen/Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+      engines: {vllm: validated}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: agentic-api
+    NAMESPACE: llm-d-agentic-api
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    MODEL_SERVER: {default: vllm, values: [vllm]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    INFRA_PROVIDER: {default: base, values: [base, gke]}
+
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "the model the overlays serve (table above)"}
+
+    # The llm-d Router agentic-api sends each inference round to: the Service
+    # of this guide's router, whose helm release is ${GUIDE_NAME}.
+    LLM_API_BASE: {default: "${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+  postgres_secret:
+    - skip_in: [ci]
+      run: |
+        # The password is generated here and never stored outside the Secret. The
+        # database-url uses the Service's short name, so the Secret is not tied to
+        # any particular namespace. Reuse the existing Secret on reruns so its
+        # password stays in sync with an already-initialized PostgreSQL PVC.
+        if ! kubectl get secret agentic-api-postgres -n ${NAMESPACE} >/dev/null 2>&1; then
+          PGPASS=$(openssl rand -hex 16)
+          kubectl create secret generic agentic-api-postgres -n ${NAMESPACE} \
+            --from-literal=password="${PGPASS}" \
+            --from-literal=database-url="postgres://postgres:${PGPASS}@agentic-api-postgres:5432/agentic_api"
+        fi
+
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files: the Optimized Baseline router configuration,
+        # which selects the model servers deployed below
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+  postgres:
+    - run: |
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/postgres.yaml
+        kubectl rollout status -n ${NAMESPACE} deployment/agentic-api-postgres --timeout=120s
+
+  agentic_api:
+    - run: |
+        kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/base \
+          | envsubst '${LLM_API_BASE}' \
+          | kubectl apply -n ${NAMESPACE} -f -
+        kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
+
+  ready:
+    - run: |
+        # The model servers become Available once vLLM has loaded the model
+        kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
+          -l llm-d.ai/guide=optimized-baseline --timeout=30m
+
+verify:
+  endpoint:
+    standalone:
+      - run: |
+          kubectl port-forward --address 127.0.0.1 -n ${NAMESPACE} svc/agentic-api 9000:9000 &
+          PF_PID=$!
+          sleep 3
+          kill -0 ${PF_PID}
+          export AGENTIC_API_BASE_URL=http://127.0.0.1:9000
+  tests:
+    request:
+      - run: |
+          curl -sS -X POST ${AGENTIC_API_BASE_URL}/v1/responses \
+            -H "Content-Type: application/json" \
+            -d "{\"model\": \"${MODEL}\", \"input\": \"How are you today?\"}"
+    mechanism:
+      - run: |
+          python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url ${AGENTIC_API_BASE_URL}
+          kill ${PF_PID:-} 2>/dev/null || true
+
+cleanup:
+  agentic_api:
+    - run: |
+        kubectl kustomize ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/base \
+          | envsubst '${LLM_API_BASE}' \
+          | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+  postgres:
+    - run: |
+        kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/postgres.yaml --ignore-not-found=true
+        kubectl delete secret agentic-api-postgres -n ${NAMESPACE} --ignore-not-found=true
+        # The PVC is deleted by the manifest above; the PV's fate follows its
+        # StorageClass reclaim policy.
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

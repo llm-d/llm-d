@@ -38,7 +38,7 @@ Key components:
 
 ## Deploy
 
-For prerequisites, cluster setup, scheduler configuration, and step-by-step job submission instructions, see the full [verl Integration Guide][verl-guide] in the `py-rl-scheduler` repository.
+For prerequisites, cluster setup, scheduler configuration, and step-by-step job submission instructions, see the full [verl Integration Guide][verl-guide] in the `py-inference-scheduler` repository.
 
 At a high level:
 
@@ -69,4 +69,4 @@ At a high level:
 [verl-multinode]: https://verl.readthedocs.io/en/latest/start/multinode.html
 [kuberay-guide]: https://docs.ray.io/en/latest/cluster/kubernetes/examples/verl-post-training.html
 [verl-docs]: https://verl.readthedocs.io/en/latest/
-[scheduler-customization]:  https://github.com/llm-d-incubation/py-inference-scheduler/blob/main/docs/scheduler_customization.md
+[scheduler-customization]:  https://github.com/llm-d-incubation/py-inference-scheduler/blob/main/docs/guides/scheduler_customization.md

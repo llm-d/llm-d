@@ -12,6 +12,9 @@ KUBERNETES_CONTEXT=""
 DEBUG=""
 CENTRAL_MODE=true
 ENABLE_TLS=false
+# Namespace holding the tracing stack (installed separately by
+# install-otel-collector-jaeger.sh). Auto-detected when unset.
+TRACING_NAMESPACE="${TRACING_NAMESPACE:-}"
 
 ### HELP & LOGGING ###
 print_help() {
@@ -32,6 +35,10 @@ Options:
 
 Environment Variables:
   MONITORING_NAMESPACE        Override default monitoring namespace
+  TRACING_NAMESPACE           Namespace of the Jaeger install to link exemplars to
+                              (auto-detected when unset)
+  JAEGER_UI_URL               Jaeger UI address the exemplar link opens in the browser
+                              (default: http://localhost:16686, the documented port-forward)
 
 Examples:
   $(basename "$0")                              # Install central monitoring in llm-d-monitoring (watches all namespaces)
@@ -108,12 +115,11 @@ setup_env() {
       log_error "Error, the context file \"$KUBERNETES_CONTEXT\", passed via command-line option, does not exist!"
       exit 1
     fi
-    KCMD="kubectl --kubeconfig $KUBERNETES_CONTEXT"
-    HCMD="helm --kubeconfig $KUBERNETES_CONTEXT"
-  else
-    KCMD="kubectl"
-    HCMD="helm"
+    export KUBECONFIG="$KUBERNETES_CONTEXT"
   fi
+
+  KCMD="kubectl"
+  HCMD="helm"
 
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     if [[ -z "$MONITORING_NAMESPACE" ]]; then
@@ -132,6 +138,16 @@ setup_env() {
 
 is_openshift() {
   if $KCMD get clusterversion &>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+is_autopilot() {
+  if $KCMD get ns gke-managed-system &>/dev/null; then
+    return 0
+  fi
+  if $KCMD get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null | grep -q '^gk3-'; then
     return 0
   fi
   return 1
@@ -162,6 +178,10 @@ check_servicemonitor_crd() {
 
 check_existing_node_exporter() {
   log_info "🔍 Checking for existing node-exporter installations..."
+  if is_autopilot; then
+    log_info "ℹ️ GKE Autopilot detected - node-exporter will be disabled (host namespaces restricted in Autopilot)"
+    return 0
+  fi
   # Shared clusters with existing monitoring commonly have pre-existing node-exporters,
   # and it's not necessary to have multiple of these running (they would conflict on port 9100)
   local existing_exporters=$($KCMD get pods --all-namespaces -l app=node-exporter -o name 2>/dev/null | wc -l)
@@ -221,6 +241,143 @@ check_prometheus_operator() {
   fi
 }
 
+detect_jaeger() {
+  # The tracing stack is installed separately by install-otel-collector-jaeger.sh
+  # into a namespace the operator picks, so locate it rather than assume one.
+  # Echoes the namespace when found, nothing otherwise.
+  if [[ -n "$TRACING_NAMESPACE" ]]; then
+    if $KCMD get svc jaeger-collector -n "$TRACING_NAMESPACE" &>/dev/null; then
+      echo "$TRACING_NAMESPACE"
+    else
+      log_info "⚠️ No jaeger-collector service in TRACING_NAMESPACE=${TRACING_NAMESPACE}" >&2
+    fi
+    return 0
+  fi
+
+  # The tracing script installs Jaeger per workload namespace, so a cluster with
+  # several guides deployed can have more than one. Pick the first in sorted
+  # order so the choice is stable, and say how to pick another.
+  local found
+  found="$($KCMD get svc --all-namespaces --field-selector metadata.name=jaeger-collector \
+    -o jsonpath='{.items[*].metadata.namespace}' 2>/dev/null | tr ' ' '\n' | sed '/^$/d' | sort -u || true)"
+  [[ -n "$found" ]] || return 0
+  if [[ "$(grep -c . <<<"$found")" -gt 1 ]]; then
+    log_info "⚠️ jaeger-collector found in several namespaces ($(paste -sd, - <<<"$found" | sed 's/,/, /g')), linking $(head -n1 <<<"$found"). Set TRACING_NAMESPACE to pick another." >&2
+  fi
+  head -n1 <<<"$found"
+}
+
+# Grafana datasource wiring for metric-to-trace navigation.
+#
+# The EPP attaches the OpenTelemetry trace ID to its latency histograms as a
+# Prometheus exemplar (llm-d/llm-d-router#2637). Three things have to line up
+# for that to be clickable in Grafana, and none of them error when missing:
+#   1. Prometheus must be started with the exemplar-storage feature, or it
+#      parses the exemplar off the scrape and discards it (see enableFeatures
+#      in prometheusSpec below).
+#   2. Grafana needs a traces datasource to send the operator to.
+#   3. The Prometheus datasource needs exemplarTraceIdDestinations to turn the
+#      trace_id label into a link into that traces datasource.
+# Tracing is an optional add-on, so 2 and 3 are wired only when Jaeger is found.
+#
+# Grafana's datasource link sends a TraceQL (Tempo) query that Jaeger answers
+# with "No data", so a URL link to the Jaeger UI goes first. "$$" stops
+# Grafana's provisioning from expanding ${__value.raw} to an empty string.
+#
+# Sets JAEGER_NAMESPACE, PROMETHEUS_JSONDATA and JAEGER_DATASOURCE for both a
+# fresh install and link_tracing_to_existing_release.
+build_datasource_snippets() {
+  JAEGER_NAMESPACE="$(detect_jaeger)"
+  PROMETHEUS_JSONDATA=""
+  JAEGER_DATASOURCE=""
+
+  if [[ "$ENABLE_TLS" == "true" ]]; then
+    PROMETHEUS_JSONDATA="          tlsSkipVerify: true"
+  fi
+
+  if [[ -n "$JAEGER_NAMESPACE" ]]; then
+    log_info "🔗 Found Jaeger in ${JAEGER_NAMESPACE}, linking exemplars to traces"
+    PROMETHEUS_JSONDATA="${PROMETHEUS_JSONDATA:+${PROMETHEUS_JSONDATA}\n}          exemplarTraceIdDestinations:
+            - name: trace_id
+              url: \"${JAEGER_UI_URL:-http://localhost:16686}/trace/\$\${__value.raw}\"
+              urlDisplayLabel: Open in Jaeger UI
+            - name: trace_id
+              datasourceUid: jaeger"
+    JAEGER_DATASOURCE="      - name: Jaeger
+        type: jaeger
+        uid: jaeger
+        url: http://jaeger-collector.${JAEGER_NAMESPACE}.svc.cluster.local:16686
+        access: proxy"
+  else
+    log_info "ℹ️ No Jaeger install found, skipping exemplar-to-trace links. Install tracing with install-otel-collector-jaeger.sh, then re-run this script to add them."
+  fi
+
+  if [[ -n "$PROMETHEUS_JSONDATA" ]]; then
+    PROMETHEUS_JSONDATA="        jsonData:\n${PROMETHEUS_JSONDATA}"
+  fi
+}
+
+# link_tracing_to_existing_release adds the exemplar-to-trace wiring to a release
+# installed before tracing was. The setup docs install monitoring first and
+# tracing later, so without this a re-run could never add the link. The chart is
+# pinned to the installed version, so the upgrade only changes the Grafana
+# datasources and turns on exemplar storage.
+link_tracing_to_existing_release() {
+  local existing_values
+  existing_values="$($HCMD get values "${RELEASE_NAME}" -n "${MONITORING_NAMESPACE}" 2>/dev/null || true)"
+  if grep -q "datasourceUid: jaeger" <<<"$existing_values"; then
+    log_info "🔗 Exemplar-to-trace links are already set up"
+    return 0
+  fi
+
+  # Keep the TLS setting the release was installed with.
+  if grep -q "tlsSkipVerify: true" <<<"$existing_values"; then
+    ENABLE_TLS="true"
+  fi
+  build_datasource_snippets
+  [[ -n "$JAEGER_NAMESPACE" ]] || return 0
+
+  local chart_version
+  chart_version="$($HCMD list -n "${MONITORING_NAMESPACE}" -f "^${RELEASE_NAME}\$" -o json 2>/dev/null \
+    | sed -n 's/.*"chart":"kube-prometheus-stack-\([^"]*\)".*/\1/p' || true)"
+  if [[ -z "$chart_version" ]]; then
+    log_info "⚠️ Could not read the installed chart version, not adding exemplar-to-trace links"
+    return 0
+  fi
+
+  local protocol="http"
+  if [[ "$ENABLE_TLS" == "true" ]]; then
+    protocol="https"
+  fi
+
+  cat <<EOF > /tmp/prometheus-tracing-values.yaml
+grafana:
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: ${protocol}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
+        access: proxy
+        isDefault: true
+$(echo -e "$PROMETHEUS_JSONDATA")
+$(echo -e "$JAEGER_DATASOURCE")
+prometheus:
+  prometheusSpec:
+    enableFeatures:
+      - exemplar-storage
+EOF
+
+  log_info "🔗 Adding exemplar-to-trace links to the existing '${RELEASE_NAME}' release (chart ${chart_version})"
+  $HCMD upgrade "${RELEASE_NAME}" prometheus-community/kube-prometheus-stack \
+    --namespace "${MONITORING_NAMESPACE}" \
+    --version "${chart_version}" \
+    --reuse-values \
+    -f /tmp/prometheus-tracing-values.yaml
+  rm -f /tmp/prometheus-tracing-values.yaml
+}
+
 setup_tls_certificates() {
   if [[ "$ENABLE_TLS" != "true" ]]; then
     return 0
@@ -234,7 +391,7 @@ setup_tls_certificates() {
 
   if [[ ! -f "$CERT_SCRIPT" ]]; then
     log_error "TLS certificate generation script not found at: $CERT_SCRIPT"
-    fail "Please ensure generate-prometheus-tls-certs.sh exists in the scripts directory"
+    fail "Please ensure generate-prometheus-tls-certs.sh exists in ${SCRIPT_DIR}"
   fi
 
   # Check if certificates already exist
@@ -339,6 +496,7 @@ install_prometheus_grafana() {
     else
       log_info "ℹ️ To update configuration, first uninstall with: $0 -u -n ${MONITORING_NAMESPACE}"
     fi
+    link_tracing_to_existing_release
     return 0
   fi
 
@@ -407,8 +565,22 @@ install_prometheus_grafana() {
     WEB_TLS_CONFIG=""
   fi
 
+  build_datasource_snippets
+
   if [[ "$CENTRAL_MODE" == "true" ]]; then
     cat <<EOF > /tmp/prometheus-values.yaml
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
 grafana:
   adminPassword: admin
   service:
@@ -429,13 +601,15 @@ grafana:
         url: ${PROMETHEUS_PROTOCOL}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:${PROMETHEUS_PORT}
         access: proxy
         isDefault: true
-$(if [[ "$ENABLE_TLS" == "true" ]]; then echo "        jsonData:
-          tlsSkipVerify: true"; fi)
+$(if [[ -n "$PROMETHEUS_JSONDATA" ]]; then echo -e "$PROMETHEUS_JSONDATA"; fi)
+$(if [[ -n "$JAEGER_DATASOURCE" ]]; then echo -e "$JAEGER_DATASOURCE"; fi)
 prometheus:
   service:
     type: ClusterIP
     sessionAffinity: ""
   prometheusSpec:
+    enableFeatures:
+      - exemplar-storage
 $(if [[ -n "$PROMETHEUS_IMAGE_CONFIG" ]]; then echo -e "$PROMETHEUS_IMAGE_CONFIG"; fi)
 $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     serviceMonitorSelectorNilUsesHelmValues: false
@@ -460,6 +634,18 @@ $(if [[ -n "$DISABLE_NODE_EXPORTER" ]]; then echo -e "$DISABLE_NODE_EXPORTER"; f
 EOF
   else
     cat <<EOF > /tmp/prometheus-values.yaml
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: false
 grafana:
   adminPassword: admin
   service:
@@ -482,13 +668,15 @@ grafana:
         url: ${PROMETHEUS_PROTOCOL}://${RELEASE_NAME}-kube-prometheus-stack-prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:${PROMETHEUS_PORT}
         access: proxy
         isDefault: true
-$(if [[ "$ENABLE_TLS" == "true" ]]; then echo "        jsonData:
-          tlsSkipVerify: true"; fi)
+$(if [[ -n "$PROMETHEUS_JSONDATA" ]]; then echo -e "$PROMETHEUS_JSONDATA"; fi)
+$(if [[ -n "$JAEGER_DATASOURCE" ]]; then echo -e "$JAEGER_DATASOURCE"; fi)
 prometheus:
   service:
     type: ClusterIP
     sessionAffinity: ""
   prometheusSpec:
+    enableFeatures:
+      - exemplar-storage
 $(if [[ -n "$PROMETHEUS_IMAGE_CONFIG" ]]; then echo -e "$PROMETHEUS_IMAGE_CONFIG"; fi)
 $(if [[ -n "$WEB_TLS_CONFIG" ]]; then echo -e "$WEB_TLS_CONFIG"; fi)
     serviceMonitorSelectorNilUsesHelmValues: false

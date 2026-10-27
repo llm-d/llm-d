@@ -21,27 +21,65 @@ We currently offer the following:
 ## Serving Large Models
 
 * [Prefill/Decode Disaggregation](./pd-disaggregation/README.md) - Split inference into specialized prefill and decode instances, improving throughput and quality of service stability for medium and large models like `openai/gpt-oss-120b`.
-* [Wide Expert-Parallelism](./wide-ep-lws/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
+* [Wide Expert-Parallelism](./wide-ep/README.md) - Deploy large Mixture-of-Experts (MoE) models like `deepseek-ai/DeepSeek-R1` over multiple nodes via DP/EP configuration, increasing available KV cache space and throughput.
 
-## Operational Excellence
+## Multimodal and Omni Models
+
+* [Serve Multimodal Models](./multimodal-serving/README.md) - Serve image, video, and audio input (e.g. `Qwen/Qwen3-VL-32B-Instruct`) with prefix-cache aware routing that matches media as well as text, in an aggregated topology or with dedicated Encode workers (E/PD, E/P/D).
+* [Serve Omni Models](./omni-serving/README.md) - Serve a model that answers in text and audio (e.g. `Qwen/Qwen3-Omni-30B-A3B-Instruct`) from one vLLM-Omni pool behind the llm-d Router, or a single-endpoint text-to-image, image-to-image, or text-to-speech model on vLLM-Omni or SGLang.
+
+## Stateful APIs
+
+* [Serve the Stateful OpenAI Responses API](./agentic-api/README.md) (Experimental) - Serve `/v1/responses` with stateful multi-turn conversations, webhook tool loops and WebSocket streaming via `vllm/agentic-api` and a PostgreSQL state store in front of the llm-d Router, standalone or on top of another guide's vLLM deployment.
+
+## Models
+
+Benchmarked, fully tuned recipes for serving a specific state-of-the-art model on a specific accelerator, each composing several of the guides above.
+
+* [DeepSeek-V4](./models/deepseek-v4/README.md) - `deepseek-ai/DeepSeek-V4-Pro` on GB200 NVL72: wide expert-parallel P/D disaggregation over cross-node NVLink, with operating points from low latency to maximum throughput.
+* [GLM-5.2](./models/glm-5-2/README.md) - `zai-org/GLM-5.2-FP8` on H200, optimized for agentic workloads: wide expert-parallel P/D disaggregation with MTP, dual-tier prefix-cache routing, and CPU+NVMe KV offloading.
+* [NVIDIA Nemotron 3 Ultra](./models/nemotron-3-ultra/README.md) - `NVIDIA-Nemotron-3-Ultra-550B` on H200, optimized for agentic code generation: P/D disaggregation with CPU KV offloading and coding-agent client configs.
+* [Qwen3.5-397B](./models/qwen3-5-397b/README.md) - `Qwen/Qwen3.5-397B-A17B-FP8` on TPU 7x with Torch TPU, optimized for agentic code generation: prefix-aware routing, tiered prefix cache (host KV offloading), and TPU Sync P/D disaggregation.
+
+## Operations
+
+Fleet operations that layer onto any deployment above. See [Operations](../docs/operations/README.md) for the full section, including the hand-written operations pages.
+
+### Autoscale Inference Pools
+
+* [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
+
+### Speed Up Model Startup
+
+* [Fast Model Actuation](./fast-model-actuation/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
+* [Fast Model Actuation + KEDA Autoscaling](./fast-model-actuation/fast-model-actuation-keda/README.md) - saturation-based KEDA autoscaling on top of Fast Model Actuation: scale the GPU-reserving requester Deployment on EPP flow-control metrics, bringing vLLM instances online via hot start (wake a sleeping instance) or warm start (new instance on an existing launcher).
+* [Pod Snapshots](./pod-snapshot/README.md) - checkpoint and restore single-GPU vLLM and SGLang model servers to eliminate cold-start model download and initialization latencies, currently implemented on GKE with GKE Sandbox (gVisor) and GCS snapshots.
+* [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) - load one model replica from storage and transfer weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.
+
+### Roll Out Updates Safely
+
+* [Rollouts](./rollouts/README.md) - Blue-Green updates with HTTPRoute traffic splitting and LoRA adapter rollouts with `InferenceModelRewrite`.
+
+### Manage Traffic and Tenants
 
 * [Flow Control](./flow-control/README.md) - Intelligent request queuing for multi-tenant deployments and managing traffic spikes.
-* [Workload Autoscaling](./workload-autoscaling/README.md) - autoscale the LLM service via proactive, SLO-aware signals that reflect the true state of the inference system — queue depth, in-flight request counts, and KV cache pressure — so that capacity can be added before end-user latency is impacted.
-* [Fast Model Actuation](./fast-model-actuation/README.md) - rapidly load, switch, and wake models on shared GPUs using vLLM sleep/wake and a "dual pod" technique that decouples GPU reservation from the vLLM process, avoiding cold starts.
+* [Multiple Inference Pools](./workload-autoscaling/multi-inference-pool/README.md) - Deploy multiple `InferencePool`s behind one Gateway and route between them by path or header.
+* [Multi-Model Routing](./multi-model-routing/README.md) - serve multiple base models and LoRA adapters behind a single endpoint using the Inference Payload Processor (IPP).
 
-## Workloads
+### Process Batch and Async Requests
 
-Workload-centric guides — each provides the recommended, cohesive deployment for serving a workload, composing the capability guides above. See the [workload narratives](../docs/well-lit-paths/workloads/README.md) for overviews.
-
-* [Agentic Serving](./agentic-serving/README.md) - serve long, multi-turn, tool-using agentic workloads (e.g. coding agents) by composing prefix-aware routing, KV-cache offloading, and P/D disaggregation.
-* [Multimodal Serving](./multimodal-serving/README.md) - Deploy multimodal model serving (e.g., image/audio/video) using either aggregated routing or dedicated encode disaggregation topologies.
-* [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
 * [Batch Serving](./batch-serving/README.md) - Deploy batch and asynchronous inference processing using an OpenAI-compatible Batch API or lightweight queue-based dispatchers with dynamic metric gating.
+
+### Integrations
+
+* [Reinforcement Learning](./rl/README.md) - Accelerate RL rollout by delegating rollout routing to llm-d's EPP and scheduler, bringing prefix-cache-aware routing and P/D disaggregation to RLHF/GRPO/PPO training on Ray or Slurm.
+* [Runtime AI Inventory](./runtime-inventory/README.md) - Generate an auditable CycloneDX ML-BOM of the models and runtimes actually serving in any well-lit path deployment, via the unprivileged k8s-aibom controller.
 
 ## Experimental Guides
 
 * [Encode Disaggregation](./multimodal-serving/e-disaggregation/README.md) - Offload multimodal encoding (images, video, audio) to dedicated workers via E/PD or E/P/D topologies, freeing prefill/decode resources for text computation.
 * [Coordinator Disaggregation](./coord-disaggregation/README.md) - Drive an Encode/Prefill/Decode pipeline through a standalone Coordinator service instead of a per-pod routing sidecar, so the pipeline (which phases run, and in what order) is a configurable list of steps rather than fixed logic, and each phase's pod is picked only when that phase is about to run.
+* [Turn-Priority Fairness](./turn-priority-fairness/README.md) - Order flow-control queues by conversation depth so the deepest multi-turn sessions dispatch first and keep their prefixes resident in the KV cache, holding latency and throughput flat as concurrency rises.
 
 ## Centralized Configuration
 
@@ -57,7 +95,7 @@ See [`env.sh`](./env.sh) for the full list of variables it provides (Helm chart 
 
 ### Default Container Images
 
-Default model server and sidecar images are defined as [Kustomize Components](./recipes/modelserver/components/images/README.md) under `recipes/modelserver/components/images/`. Guides include the relevant component instead of hardcoding image versions:
+Default model server, sidecar, and coordinator images are defined as [Kustomize Components](./recipes/modelserver/components/images/README.md) under `recipes/modelserver/components/images/`. Guides include the relevant component instead of hardcoding image versions:
 
 ```yaml
 components:
@@ -81,11 +119,19 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 .
 ├── amd-vllm
 │   ├── nightly
+├── coordinator
+│   ├── nightly
+├── cpu-vllm
+│   ├── nightly
 ├── gpu-sglang
+│   ├── nightly
+├── gpu-vllm
 │   ├── nightly
 ├── routing-sidecar
 │   ├── nightly
 ├── tpu-vllm
+│   ├── nightly
+├── xpu-sglang
 │   ├── nightly
 └── xpu-vllm
     ├── nightly
@@ -94,7 +140,7 @@ $ tree -d -L 2 --noreport | awk 'NR==1{print} /^[├└]── /{p=$0} /nightly$
 **Overriding:** For any other non-default image — a vendor fork, platform variant, or a *specific* nightly tag that the component's moving `nightly` tag does not yet include — add an inline `images:` section in the overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an override that names the placeholder is silently ignored. Every override **must** include a `TODO` comment with a tracking issue for cleanup:
 
 ```yaml
-# TODO(#123): Remove override once upstream vLLM includes NIXL support.
+# TODO(#123): Remove override once this fix lands in an upstream vLLM release.
 images:
   - name: docker.io/vllm/vllm-openai
     newName: ghcr.io/example/custom-vllm
@@ -109,9 +155,14 @@ See **[`guides/templates/README.md`](./templates/README.md)** for the templates,
 quickstart, and the full authoring reference. It is the single source for those
 instructions — deliberately not repeated here, so the two cannot drift apart.
 
+See **[`GUIDES-POLICY.md`](./GUIDES-POLICY.md)** for what counts as a guide, the
+production-readiness tiers, and how a guide is placed, promoted or retired.
+
+CI dry-runs every deployable overlay in this directory. See
+**[`CI-DRY-RUN.md`](./CI-DRY-RUN.md)** for what it checks and how to exclude a guide.
+
 ## Supporting Guides
 
 Our supporting guides address common operational challenges with model serving at scale:
 
-* [Benchmark](../helpers/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
-* [ModelExpress P2P Weight Transfer](./modelexpress-p2p/README.md) loads one model replica from storage and transfers weights to peer replicas over GPU-to-GPU RDMA for faster cold scale-outs.
+* [Benchmark](../docs/operations/validation/benchmark.md) demonstrates how to use automation for running benchmarks against the llm-d stack.
