@@ -1,8 +1,8 @@
-# Rook CephFS Storage Recipe
+# Rook CephFS Storage
 
-This recipe installs a [Rook](https://rook.io)-managed Ceph cluster on the GPU nodes' own NVMe drives and exposes a CephFS filesystem, tuned for KV-cache offloading, as the `rook-cephfs-fast` ReadWriteMany StorageClass.
+This setup installs a [Rook](https://rook.io)-managed Ceph cluster on the GPU nodes' own NVMe drives and exposes a CephFS filesystem, tuned for KV-cache offloading, as the `rook-cephfs-fast` ReadWriteMany StorageClass.
 
-It is a building block, not a guide. The [Hyperconverged CephFS KV-Cache Offloading guide](../../../hyperconverged-cephfs/README.md) uses it for its shared cache tier.
+It is a building block, not a guide. The [Hyperconverged CephFS KV-Cache Offloading guide](../../../../guides/hyperconverged-cephfs/README.md) uses it for its shared cache tier.
 
 > [!IMPORTANT]
 > The filesystem keeps a **single copy** of its data and of its metadata. Losing one OSD can lose cached objects or the whole filesystem. Use this StorageClass only for data that can be recomputed, such as KV cache. Do not store model weights, checkpoints or user data on it.
@@ -29,7 +29,7 @@ Run the install script **once**, with every option you need combined in a single
 
 ### 1. Write your site-specific settings
 
-Settings that depend on your cluster go in your own values file, which the script layers on top of the recipe's values. At minimum, set the subnets of your high-speed links:
+Settings that depend on your cluster go in your own values file, which the script layers on top of the default values. At minimum, set the subnets of your high-speed links:
 
 ```yaml
 # my-ceph.values.yaml
@@ -46,15 +46,15 @@ cephClusterSpec:
 
 Set `addressRanges` **before installing**. Without it the OSDs advertise each node's management address, and switching a running cluster to other addresses breaks monitor quorum.
 
-Your file complements the recipe's values; it does not replace them. The two files are merged with Helm's rules, and yours wins where they overlap:
+Your file complements the default values; it does not replace them. The two files are merged with Helm's rules, and yours wins where they overlap:
 
 | What you set | Result |
 | ------------ | ------ |
-| A single value (for example `deviceFilter`, or one key under `cephConfig`) | Replaces that value. Everything else in the recipe's values stays. |
-| A map (for example `cephClusterSpec.resources.osd`) | Merged key by key with the recipe's map. |
-| A list (for example `addressRanges.public`, or `cephFileSystems`) | Replaces the recipe's whole list. |
+| A single value (for example `deviceFilter`, or one key under `cephConfig`) | Replaces that value. Everything else in the default values stays. |
+| A map (for example `cephClusterSpec.resources.osd`) | Merged key by key with the default map. |
+| A list (for example `addressRanges.public`, or `cephFileSystems`) | Replaces the whole default list. |
 
-The list rule matters for `cephFileSystems`: to change anything about the filesystem, its pools or its StorageClass, copy the complete `cephFileSystems` entry from [`rook-cluster.values.yaml`](./rook-cluster.values.yaml) into your file and edit the copy. A partial entry drops the rest of the recipe's filesystem definition and the install fails.
+The list rule matters for `cephFileSystems`: to change anything about the filesystem, its pools or its StorageClass, copy the complete `cephFileSystems` entry from [`rook-cluster.values.yaml`](./rook-cluster.values.yaml) into your file and edit the copy. A partial entry drops the rest of the default filesystem definition and the install fails.
 
 ### 2. Choose the options
 
@@ -78,7 +78,7 @@ A typical install labels the nodes and applies the site-specific settings in one
 
 ```bash
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
-${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh \
+${REPO_ROOT}/docs/infrastructure/storage/rook-cephfs/install-rook-cephfs.sh \
   --nodes "node-a node-b node-c" \
   --values my-ceph.values.yaml
 ```
@@ -154,7 +154,7 @@ Three further steps depend on your hardware inventory and are manual:
 ## Uninstall
 
 ```bash
-${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh --uninstall
+${REPO_ROOT}/docs/infrastructure/storage/rook-cephfs/install-rook-cephfs.sh --uninstall
 ```
 
 This destroys the Ceph cluster and everything stored in it, after asking for confirmation. Delete the volumes that use the StorageClass first. The NVMe devices keep their Ceph labels afterwards; see the first entry below before reusing them.

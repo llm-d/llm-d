@@ -61,7 +61,7 @@ deploy:
   storage:
     - run: |
         # Reads the ROOK_* and STORAGE_NODE_LABEL variables set above
-        ${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh
+        ${REPO_ROOT}/docs/infrastructure/storage/rook-cephfs/install-rook-cephfs.sh
 
   pvc:
     - run: |
@@ -156,6 +156,7 @@ verify:
             echo "${POD}: $(kubectl exec -n ${NAMESPACE} ${POD} -c modelserver -- du -sh /mnt/files-storage | cut -f1)"
           done
           # The effective mount options are authoritative: check that noatime and nodiratime are listed
+          POD=$(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[0].metadata.name}')
           kubectl exec -n ${NAMESPACE} ${POD} -c modelserver -- grep ' /mnt/files-storage ' /proc/mounts
 
 cleanup:
@@ -170,4 +171,4 @@ cleanup:
     - skip_in: [ci]
       run: |
         # DESTRUCTIVE: destroys the Ceph cluster and everything stored in it (asks for confirmation)
-        ${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh --uninstall
+        ${REPO_ROOT}/docs/infrastructure/storage/rook-cephfs/install-rook-cephfs.sh --uninstall

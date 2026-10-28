@@ -118,7 +118,7 @@ Synthetic CephFS throughput on this cluster after tuning, by I/O depth:
 | 4 | 21.0 GB/s | 20.4 GB/s |
 | 8 | 23.5 GB/s | 22.6 GB/s |
 
-The untuned deployment delivered about 2 GB/s. The settings that closed the gap are the ones in the [Rook CephFS storage recipe](../../../recipes/storage/rook-cephfs/README.md#tuning): more than one placement group, a single-copy pool, the data path on the high-speed network, OSDs spread over all six links, OSD and client concurrency, and the mount options. Depth 8 doubled p99 latency compared with depth 1, so pick the depth from the serving latency target, not from bandwidth alone.
+The untuned deployment delivered about 2 GB/s. The settings that closed the gap are the ones in the [Rook CephFS storage setup](../../../../docs/infrastructure/storage/rook-cephfs/README.md#tuning): more than one placement group, a single-copy pool, the data path on the high-speed network, OSDs spread over all six links, OSD and client concurrency, and the mount options. Depth 8 doubled p99 latency compared with depth 1, so pick the depth from the serving latency target, not from bandwidth alone.
 
 ## Limitations
 

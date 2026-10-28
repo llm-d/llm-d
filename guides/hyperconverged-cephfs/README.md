@@ -35,7 +35,7 @@ If your replicas all fit on one node, or the working set fits in CPU RAM, use th
 
 | Component | What this guide deploys |
 | --------- | ----------------------- |
-| Storage | The [Rook CephFS storage recipe](../recipes/storage/rook-cephfs/README.md): Rook operator, a Ceph cluster on the labelled GPU nodes, a `kvcache-fs` CephFS filesystem, and the `rook-cephfs-fast` StorageClass |
+| Storage | The [Rook CephFS storage setup](../../docs/infrastructure/storage/rook-cephfs/README.md): Rook operator, a Ceph cluster on the labelled GPU nodes, a `kvcache-fs` CephFS filesystem, and the `rook-cephfs-fast` StorageClass |
 | Shared volume | One ReadWriteMany PVC, `llm-d-kv-cache-storage`, mounted by every replica at `/mnt/files-storage` |
 | Model servers | vLLM with the native `OffloadingConnector` and `TieringOffloadingSpec`: GPU HBM → CPU RAM → CephFS |
 | Router | llm-d Router with the same prefix- and load-aware plugins as the [optimized baseline](../optimized-baseline/README.md) |
@@ -54,9 +54,9 @@ If your replicas all fit on one node, or the working set fits in CPU RAM, use th
 | Ceph data pool | 1 copy (`size=1`), `pg_num=128`, NVMe device class |
 | CephFS metadata | 1 copy, 2 active MDS daemons with standby-replay |
 | CephFS mount | `noatime`, `nodiratime`, `rsize` and `wsize` of 64 MiB |
-| Ceph tuning | OSD, MDS, client and messenger settings in [`rook-cluster.values.yaml`](../recipes/storage/rook-cephfs/rook-cluster.values.yaml) |
+| Ceph tuning | OSD, MDS, client and messenger settings in [`rook-cluster.values.yaml`](../../docs/infrastructure/storage/rook-cephfs/rook-cluster.values.yaml) |
 
-The data and metadata pools keep a **single copy**. KV cache is derived data: losing an object costs one prefill, and losing the filesystem costs a refill of the cache, not user data, so the full raw NVMe capacity goes to the cache. To keep warm cache across a node failure or a rolling upgrade, raise `replicated.size` to 2 or 3 in [`rook-cluster.values.yaml`](../recipes/storage/rook-cephfs/rook-cluster.values.yaml).
+The data and metadata pools keep a **single copy**. KV cache is derived data: losing an object costs one prefill, and losing the filesystem costs a refill of the cache, not user data, so the full raw NVMe capacity goes to the cache. To keep warm cache across a node failure or a rolling upgrade, raise `replicated.size` to 2 or 3 in [`rook-cluster.values.yaml`](../../docs/infrastructure/storage/rook-cephfs/rook-cluster.values.yaml).
 
 ## Prerequisites
 
@@ -66,7 +66,7 @@ The data and metadata pools keep a **single copy**. KV cache is derived data: lo
 
 - A fast network between the nodes. The reference environment carries Ceph traffic over six 200 Gb/s Ethernet links per node with an MTU of 9000, separate from the management subnet.
 
-- A values file with the settings that depend on your cluster: the subnets of the high-speed links and, if the default does not fit, the device filter. Write it as described in the recipe's [install instructions](../recipes/storage/rook-cephfs/README.md#1-write-your-site-specific-settings) and set `ROOK_CLUSTER_EXTRA_VALUES` to its path below. Set the subnets **before installing**: without them the OSDs advertise each node's management address, and switching a running cluster later breaks monitor quorum.
+- A values file with the settings that depend on your cluster: the subnets of the high-speed links and, if the default does not fit, the device filter. Write it as described in the Rook CephFS setup's [install instructions](../../docs/infrastructure/storage/rook-cephfs/README.md#1-write-your-site-specific-settings) and set `ROOK_CLUSTER_EXTRA_VALUES` to its path below. Set the subnets **before installing**: without them the OSDs advertise each node's management address, and switching a running cluster later breaks monitor quorum.
 
 - Enough accelerators, memory and node disk for the [Configuration](#default-configuration) above (default: 16 GPUs, 400 GiB of RAM per replica, and about 70 GiB of free ephemeral storage per replica on the node for the model download). With less, adjust `replicas`, `--tensor-parallel-size` and `cpu_bytes_to_use` in the [model server patch](./modelserver/gpu/vllm/base/patch-vllm.yaml).
 
@@ -183,17 +183,17 @@ Use `deploy.gateway` in place of `deploy.standalone` for gateway mode, and `--va
 
 ### 1. Deploy the Storage Layer
 
-Install Rook, the Ceph cluster and the `kvcache-fs` filesystem with the [Rook CephFS storage recipe](../recipes/storage/rook-cephfs/README.md). The command returns once the cluster and the filesystem are ready, which takes several minutes while the OSDs are prepared:
+Install Rook, the Ceph cluster and the `kvcache-fs` filesystem with the [Rook CephFS storage setup](../../docs/infrastructure/storage/rook-cephfs/README.md). The command returns once the cluster and the filesystem are ready, which takes several minutes while the OSDs are prepared:
 
 <!-- guide:deploy.storage start -->
 ```bash
 # Reads the ROOK_* and STORAGE_NODE_LABEL variables set above
-${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh
+${REPO_ROOT}/docs/infrastructure/storage/rook-cephfs/install-rook-cephfs.sh
 ```
 <!-- guide:deploy.storage end -->
 
 > [!NOTE]
-> The recipe layers the file named by `ROOK_CLUSTER_EXTRA_VALUES` on top of its own values. If your cluster already offers a CephFS StorageClass, skip this step and set `STORAGE_CLASS` to its name.
+> The install script layers the file named by `ROOK_CLUSTER_EXTRA_VALUES` on top of its own values. If your cluster already offers a CephFS StorageClass, skip this step and set `STORAGE_CLASS` to its name.
 
 ### 2. Provision the Shared KV-Cache Volume
 
@@ -383,27 +383,27 @@ kubectl delete namespace ${NAMESPACE}
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup.stack end -->
 
-Remove the storage layer. This destroys the Ceph cluster and everything stored in it, after asking for confirmation. The NVMe devices keep their Ceph labels afterwards; see the recipe's [Troubleshooting](../recipes/storage/rook-cephfs/README.md#troubleshooting) before reusing them:
+Remove the storage layer. This destroys the Ceph cluster and everything stored in it, after asking for confirmation. The NVMe devices keep their Ceph labels afterwards; see the Rook CephFS setup's [Troubleshooting](../../docs/infrastructure/storage/rook-cephfs/README.md#troubleshooting) before reusing them:
 
 <!-- guide:cleanup.storage start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 # DESTRUCTIVE: destroys the Ceph cluster and everything stored in it (asks for confirmation)
-${REPO_ROOT}/guides/recipes/storage/rook-cephfs/install-rook-cephfs.sh --uninstall
+${REPO_ROOT}/docs/infrastructure/storage/rook-cephfs/install-rook-cephfs.sh --uninstall
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup.storage end -->
 
 ## Troubleshooting
 
-For the storage layer (no OSDs created, the cluster or a volume never becoming ready, reusing drives from an earlier Ceph cluster), see the recipe's [Troubleshooting](../recipes/storage/rook-cephfs/README.md#troubleshooting).
+For the storage layer (no OSDs created, the cluster or a volume never becoming ready, reusing drives from an earlier Ceph cluster), see the Rook CephFS setup's [Troubleshooting](../../docs/infrastructure/storage/rook-cephfs/README.md#troubleshooting).
 
 - **Model servers cannot write to `/mnt/files-storage`.** OpenShift assigns the pod an `fsGroup` that owns the volume. On other distributions, set `securityContext.fsGroup` on the pod.
 - **Replicas do not reuse each other's blocks.** Every replica must run the same model, vLLM version and `PYTHONHASHSEED`; otherwise block hashes differ and lookups miss.
 
 ## Tuning
 
-- **Storage.** The Ceph pool, daemon, client and mount settings, and the manual steps that depend on your hardware (spreading OSDs over several NICs, calibrating the OSD scheduler per drive, choosing the replication), are in the recipe's [Tuning](../recipes/storage/rook-cephfs/README.md#tuning) section.
+- **Storage.** The Ceph pool, daemon, client and mount settings, and the manual steps that depend on your hardware (spreading OSDs over several NICs, calibrating the OSD scheduler per drive, choosing the replication), are in the Rook CephFS setup's [Tuning](../../docs/infrastructure/storage/rook-cephfs/README.md#tuning) section.
 - **Filesystem workers.** `n_read_threads` and `n_write_threads` are vLLM settings. With too few, requests wait while the shared tier sits idle; when writes fall behind, the CPU tier fills, vLLM refuses to store more blocks, and prompts are recomputed.
 - **Tier sizes.** `cpu_bytes_to_use` sets the CPU RAM tier. Keep the pod memory request and the `/dev/shm` size limit above it.
 - **Routing.** The prefix-affinity filter's `peakPrefillThroughput` is model- and hardware-specific. Measure it with the [calibration recipe](../recipes/router/calibration/README.md).

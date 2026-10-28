@@ -126,7 +126,8 @@ install() {
   kubectl rollout status deployment/rook-ceph-tools -n "${ROOK_NAMESPACE}" --timeout=5m
 
   # The single-copy KV-cache pool is intentional; silence only that warning.
-  ceph health mute POOL_NO_REDUNDANCY --sticky
+  # Tolerate a non-zero exit on reruns or while the health check is still settling.
+  ceph health mute POOL_NO_REDUNDANCY --sticky || true
 
   log_info "Ceph is ready"
   ceph status
@@ -134,7 +135,23 @@ install() {
 }
 
 ### UNINSTALL ###
+STORAGE_CLASS="rook-cephfs-fast"
+
+# Destroying Ceph under live CephFS mounts can hang CSI unmounts on the nodes.
+check_no_bound_pvcs() {
+  local pvcs
+  pvcs=$(kubectl get pvc -A -o jsonpath="{range .items[?(@.spec.storageClassName==\"${STORAGE_CLASS}\")]}{.metadata.namespace}/{.metadata.name}{'\\n'}{end}")
+  [[ -z "${pvcs}" ]] && return
+  echo "WARNING: these PVCs still use the ${STORAGE_CLASS} StorageClass:" >&2
+  echo "${pvcs}" >&2
+  if [[ "${ASSUME_YES}" != true ]]; then
+    fail "Delete them (and the pods mounting them) first, or rerun with --yes to proceed anyway"
+  fi
+}
+
 uninstall() {
+  check_no_bound_pvcs
+
   if [[ "${ASSUME_YES}" != true ]]; then
     local answer
     read -r -p "This destroys the Ceph cluster in '${ROOK_NAMESPACE}' and everything stored in it. Type 'destroy' to continue: " answer
