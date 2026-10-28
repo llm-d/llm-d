@@ -70,13 +70,7 @@ rows because the serving engine changes prefill throughput.
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
   `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
-**Related (other guides):** Qwen3-32B on Hygon BW1000 HCUs (64 GiB, SGLang 0.5.12,
-DTK 26.04, 1 prefill + 1 decode, each TP=4, `CHUNK_SIZE=8192`) measured
-`peakPrefillThroughput=8690` through the
-[P/D Disaggregation](../../../pd-disaggregation) router (Mooncake KV transfer and the
-routing sidecar included; median TTFT 0.9427s). That guide keeps the shared router
-values. 8690 does not apply to the optimized-baseline `hygon/sglang` row above (colocated, no Mooncake).
-The former Qwen3-Coder-480B guide (replaced by
+**Related (other guides):** the former Qwen3-Coder-480B guide (replaced by
 [Qwen3.5-397B](../../../models/qwen3-5-397b/README.md); see its
 [git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b)) shipped
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
