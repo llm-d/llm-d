@@ -61,7 +61,7 @@ With CPU RAM alone the share peaks at 36.4% and collapses to 2.0% at 1,024 sessi
 
 Requests/sec — higher is better; TTFT in seconds — lower is better.
 
-**8 model servers**
+#### 8 model servers
 
 | Sessions | No offload req/s | CPU RAM req/s | CephFS req/s | No offload TTFT p50 | CPU RAM TTFT p50 | CephFS TTFT p50 | No offload TTFT p95 | CPU RAM TTFT p95 | CephFS TTFT p95 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -75,7 +75,7 @@ Requests/sec — higher is better; TTFT in seconds — lower is better.
 | 512 | 4.122 | 5.215 | 7.480 | 46.3 | 29.9 | 11.2 | 67.3 | 47.6 | 23.8 |
 | 1024 | 3.807 | 4.021 | 6.370 | 142 | 130 | 75.4 | 192 | 204 | 124 |
 
-**4 model servers**
+#### 4 model servers
 
 | Sessions | No offload req/s | CPU RAM req/s | CephFS req/s | No offload TTFT p50 | CPU RAM TTFT p50 | CephFS TTFT p50 | No offload TTFT p95 | CPU RAM TTFT p95 | CephFS TTFT p95 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

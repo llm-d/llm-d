@@ -295,7 +295,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
@@ -348,6 +348,7 @@ for POD in $(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o 
   echo "${POD}: $(kubectl exec -n ${NAMESPACE} ${POD} -c modelserver -- du -sh /mnt/files-storage | cut -f1)"
 done
 # The effective mount options are authoritative: check that noatime and nodiratime are listed
+POD=$(kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n ${NAMESPACE} ${POD} -c modelserver -- grep ' /mnt/files-storage ' /proc/mounts
 ```
 <!-- guide:verify.tests end -->
