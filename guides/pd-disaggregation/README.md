@@ -20,7 +20,6 @@ The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 pref
 
 How the two pools are deployed depends on the accelerator:
 
-- **Hygon HCU**: two Deployments, `pd-disagg-hygon-sglang-prefill` and `pd-disagg-hygon-sglang-decode`. Scale each pool with `spec.replicas`. This overlay does not install the LeaderWorkerSet controller.
 - **Every other accelerator**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
   The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
 
@@ -562,7 +561,7 @@ A node that names the same HCA differently needs a new `master`. A different sub
 **Configuration notes:**
 
 - Both roles use `--disaggregation-transfer-backend mooncake` and bootstrap port `8998`. `NCCL_IB_HCA` is `mlx5_0` through `mlx5_7`; change it if the HCAs are named differently. `NCCL_IB_DISABLE=1` keeps intra-node tensor-parallel collectives on the socket path. Mooncake still uses those HCAs through `--disaggregation-ib-device`.
-- Prefill sets `--chunked-prefill-size 8192`. The overlay uses the shared [`pd-disaggregation.values.yaml`](./router/pd-disaggregation.values.yaml). Its `peakPrefillThroughput: 33821` is the H200 reference; a calibration run on this topology (Qwen3-32B, 1 prefill + 1 decode, each TP=4) measured 8690 (`CHUNK_SIZE=8192`, median TTFT 0.9427s). With one prefill replica that gate does not change which pod is picked.
+- Prefill sets `--chunked-prefill-size 8192`. The overlay uses the shared [`pd-disaggregation.values.yaml`](./router/pd-disaggregation.values.yaml). A calibration run on this topology (Qwen3-32B, 1 prefill + 1 decode, each TP=4) measured 8690 (`CHUNK_SIZE=8192`, median TTFT 0.9427s). With one prefill replica that gate does not change which pod is picked.
 - Decode listens on port `8200` behind the routing sidecar (`--kv-connector=sglang`) on port `8000`. The sidecar is a second container after `modelserver`. HAMi allocates `hygon.com/hcunum` to container index 0, so the sidecar cannot be an init container.
 - `USE_DCU_CUSTOM_ALLREDUCE=1` and `SGLANG_USE_LIGHTOP=1` are the DTK SGLang defaults used on this image. CUDA graphs stay off (`--disable-cuda-graph`).
 
