@@ -20,7 +20,7 @@ The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 pref
 
 How the two pools are deployed depends on the accelerator:
 
-- **Every other accelerator**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
+- **All accelerator**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
   The set rolls both roles out as one version and can replicate the whole topology into independent copies (`slices`); it requires the LeaderWorkerSet controller (see [Prerequisites](#prerequisites)) and is covered in [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/disaggregation/pd-disaggregation.md).
@@ -710,7 +710,7 @@ No manual `PodMonitor` deployment is required when [GKE automatic application mo
 
 ## Operating the DisaggregatedSet
 
-The Hygon overlay runs prefill and decode as two Deployments. Every other overlay runs them as one [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-<accelerator>` elsewhere) with `groupIdentity: Hash`.
+The overlays run prefill and decode as one [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-<accelerator>` elsewhere) with `groupIdentity: Hash`.
 This guide ships `slices: 1` with one prefill and one decode replica; each role of each slice runs as its own LeaderWorkerSet (of size 1 here, so every pod is a leader).
 Raise the per-role `replicas` to change the xPyD ratio, or `slices` to add complete, independently rolled copies of the topology.
 Scaling, rollouts, placement policy, router slice affinity, and per-role autoscaling are covered in [Disaggregated Serving: Operations (DisaggregatedSet)](../../docs/operations/disaggregation/disaggregatedset.md).
