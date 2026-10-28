@@ -1,0 +1,56 @@
+# Strategic merge patch — adds Squid CA trust and proxy env vars to a client Deployment.
+#
+# Usage (kustomization.yaml of the client workload):
+#   patches:
+#     - path: patch-client-deployment.yaml
+#       target:
+#         kind: Deployment
+#         name: <your-client-deployment-name>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <your-client-deployment-name>   # replace with the actual deployment name
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: install-ca-cert
+        image: alpine:3.21
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache ca-certificates
+          cp -L /etc/ssl/certs/ca-certificates.crt /shared-certs/ca-certificates.crt
+          cat /squid-ca/squid-ca-cert.pem >> /shared-certs/ca-certificates.crt
+        volumeMounts:
+        - name: squid-ca-cert
+          mountPath: /squid-ca
+          readOnly: true
+        - name: shared-certs
+          mountPath: /shared-certs
+      containers:
+      - name: app                        # replace with your container name if different
+        env:
+        - name: HTTP_PROXY
+          value: "http://multimedia-downloader:80"
+        - name: HTTPS_PROXY
+          value: "http://multimedia-downloader:80"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,.svc,.cluster.local"
+        - name: SSL_CERT_DIR
+          value: "/etc/ssl/certs"
+        - name: REQUESTS_CA_BUNDLE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: CURL_CA_BUNDLE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: shared-certs
+          mountPath: /etc/ssl/certs
+          readOnly: true
+      volumes:
+      - name: squid-ca-cert
+        secret:
+          secretName: squid-ca-public-cert
+      - name: shared-certs
+        emptyDir: {}

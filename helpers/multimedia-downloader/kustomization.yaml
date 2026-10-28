@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+# Base service — implementations expose a port named http-proxy, which the service
+# resolves automatically via targetPort: http-proxy (no service patch needed).
+- service.yaml
+# Cache implementation
+- implementations/squid/http
+
+
+commonLabels:
+  component: multimedia-downloader
+

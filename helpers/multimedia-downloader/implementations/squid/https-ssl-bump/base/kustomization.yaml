@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../http/base
+
+patches:
+# Replace squid.conf with the SSL Bump version
+- path: squid-config-ssl-bump.yaml
+
+# Common Deployment modifications required for SSL Bump (platform-agnostic)
+- target:
+    kind: Deployment
+    name: multimedia-downloader
+  patch: |
+    - op: replace
+      path: /spec/template/spec/containers/0/ports/0/containerPort
+      value: 3128
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: squid-ssl-certs
+        mountPath: /etc/squid/certs
+        readOnly: true
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: squid-ssl-certs
+        secret:
+          secretName: squid-ssl-certs
+    - op: replace
+      path: /spec/template/spec/containers/0/command
+      value: ["/usr/local/bin/docker-entrypoint.sh"]
+    - op: replace
+      path: /spec/template/spec/containers/0/args
+      value: ["squid", "-NYd", "1"]
+
+labels:
+- pairs:
+    cache-implementation: squid-ssl-bump

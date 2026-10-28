@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: squid-multimedia-downloader-config
+  labels:
+    cache-implementation: squid
+    component: multimedia-downloader
+data:
+  squid.conf: |-
+    access_log stdio:/dev/stdout squid
+    cache_log /dev/stderr
+
+    # --- Listen Port ---
+    http_port 8080
+
+    # --- PID/Files for Non-Root Compliance ---
+    pid_filename /var/cache/squid/squid.pid
+    netdb_filename none
+
+    # --- Storage & Caching ---
+    cache_mem 256 MB
+
+    # --- Aggressive Caching for Images ---
+    refresh_pattern -i \.(jpg|jpeg|png|gif|webp|bmp|tiff)$ 10080 100% 43200
+
+    # --- Access Control ---
+    http_access allow all
+
+    # --- Performance & DNS ---
+    # Disable ICMP pinger: containers run without NET_RAW capability, so the
+    # pinger helper would fail to open raw sockets and produce FATAL log noise.
+    pinger_enable off
+    collapsed_forwarding on
+    # External DNS resolvers are used so that Squid can reach internet hosts.
+    # Squid does not resolve in-cluster service names, so keep NO_PROXY set
+    # for .svc and .cluster.local addresses in any client configuration.
+    dns_nameservers 8.8.8.8 8.8.4.4

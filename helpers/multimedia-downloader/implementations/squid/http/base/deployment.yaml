@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multimedia-downloader
+  labels:
+    app: multimedia-downloader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multimedia-downloader
+  template:
+    metadata:
+      labels:
+        app: multimedia-downloader
+    spec:
+      containers:
+      - name: squid
+        image: ubuntu/squid:6.1-23.10_beta
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c"]
+        args:
+        - exec squid -NYCd1
+        ports:
+        - name: http-proxy
+          containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - name: squid-config
+          mountPath: /etc/squid/squid.conf
+          subPath: squid.conf
+        - name: cache-volume
+          mountPath: /var/cache/squid
+        livenessProbe:
+          exec:
+            command: ["/bin/sh", "-c", "test -f /var/cache/squid/squid.pid && kill -0 $(cat /var/cache/squid/squid.pid)"]
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["/bin/sh", "-c", "test -f /var/cache/squid/squid.pid && kill -0 $(cat /var/cache/squid/squid.pid)"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: squid-config
+        configMap:
+          name: squid-multimedia-downloader-config
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 3Gi

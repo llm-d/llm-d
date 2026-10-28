@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: curl-ssl-test-pod
+spec:
+  initContainers:
+  - name: install-ca-cert
+    image: alpine:3.21
+    command:
+    - /bin/sh
+    - -c
+    - |
+      apk add --no-cache ca-certificates
+      cp -L /etc/ssl/certs/ca-certificates.crt /shared-certs/ca-certificates.crt
+      cat /squid-ca/squid-ca-cert.pem >> /shared-certs/ca-certificates.crt
+    volumeMounts:
+    - name: squid-ca-cert
+      mountPath: /squid-ca
+      readOnly: true
+    - name: shared-certs
+      mountPath: /shared-certs
+  containers:
+  - name: app
+    image: curlimages/curl:8.11.1
+    command: ["sleep", "3600"]
+    env:
+    - name: HTTP_PROXY
+      value: "http://multimedia-downloader:80"
+    - name: HTTPS_PROXY
+      value: "http://multimedia-downloader:80"
+    - name: NO_PROXY
+      value: "localhost,127.0.0.1,.svc,.cluster.local"
+    - name: SSL_CERT_DIR
+      value: "/etc/ssl/certs"
+    - name: REQUESTS_CA_BUNDLE
+      value: "/etc/ssl/certs/ca-certificates.crt"
+    - name: CURL_CA_BUNDLE
+      value: "/etc/ssl/certs/ca-certificates.crt"
+    volumeMounts:
+    - name: shared-certs
+      mountPath: /etc/ssl/certs
+      readOnly: true
+  volumes:
+  - name: squid-ca-cert
+    secret:
+      secretName: squid-ca-public-cert
+  - name: shared-certs
+    emptyDir: {}
