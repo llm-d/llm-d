@@ -22,11 +22,11 @@ support:
       engines: {vllm: validated, sglang: community}
     amd:
       label: AMD GPU
-      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · RoPE-scaled 131,072-token context"
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · vLLM runs a RoPE-scaled 131,072-token context"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: community}
     xpu:
       label: Intel XPU
       notes: "2 replicas × 1 GPU via DRA · single-GPU pods have no room for the long-context `Qwen3-32B` config"
