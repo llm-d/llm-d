@@ -60,6 +60,8 @@ on:
       - "Nightly - PD Disaggregation E2E (GKE TPU)"
       - "Nightly - PD Disaggregation E2E (Intel XPU)"
       - "Nightly - PD Disaggregation E2E (OCP GPU)"
+      - "Nightly - Pod Snapshot E2E (GKE GPU SGLang)"
+      - "Nightly - Pod Snapshot E2E (GKE GPU vLLM)"
       - "Nightly - Precise Prefix Cache E2E (GKE TPU)"
       - "Nightly - Precise Prefix Cache Routing E2E (AMD ROCM)"
       - "Nightly - Precise Prefix Cache Routing E2E (CKS GPU)"
