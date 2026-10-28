@@ -485,7 +485,7 @@ The `hygon` overlay runs SGLang on Hygon BW1000 HCU (64&nbsp;GiB) with Mooncake 
 
 **Requirements:**
 
-- The HCU device plugin (HAMi register strategy) exposing `hygon.com/hcunum`, and pods scheduled by `hami-scheduler`. This overlay requests four HCUs per role.
+- The HCU device plugin and HAMi scheduler
 - An RDMA device plugin exposing `rdma/hca_shared_devices_a` (edit the resource name in the patches if yours differs).
 - Multus `NetworkAttachmentDefinition`s `roce-rail-1` through `roce-rail-8` in namespace `default`, so each pod has a RoCE GID. Mooncake fails with `Failed to modify QP to RTR` when the GID is not on the pod IP. Create them as described in [RoCE networks](#roce-networks).
 - Image `harbor.sourcefind.cn:5443/hcu/admin/base/sglang:0.5.12-ubuntu22.04-dtk2604-py3.10` (DTK 26.04). Air-gapped sites can retag it.
