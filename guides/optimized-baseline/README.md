@@ -51,7 +51,7 @@ This guide includes configurations for the following accelerator and model serve
 | MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | — | 2 replicas × TP=8 (16 GPUs) |
 | Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
 | Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
-| Hygon HCU | `hygon` | `Qwen3-8B` | — | 🟡 community | — | — | BW1000 64 GiB · SGLang colocated Qwen3-8B · 1 replica × TP=4 (4 HCUs) |
+| Hygon HCU | `hygon` | `Qwen3-32B` | — | 🟡 community | — | — | BW1000 64 GiB · SGLang colocated Qwen3-32B · 2 replicas × TP=4 (8 HCUs) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -69,12 +69,11 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 `DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
 [Deploying on Moore Threads S5000 (SGLang, colocated, no PD)](#deploying-on-moore-threads-s5000-sglang-colocated-no-pd).
 
-The Hygon overlay is one colocated SGLang server for `Qwen3-8B` (`--tp-size 4`)
-on four BW1000 HCUs. Set `ACCELERATOR_TYPE=hygon`, `MODEL_SERVER=sglang`,
-`INFRA_PROVIDER=base`, and `MODEL=Qwen3-8B`. Pods request `hygon.com/hcunum: 4`
-and must be scheduled by `hami-scheduler`. Weights are read from the node
-hostPath `/data/models`. This profile is not covered by the default H100
-calibration value.
+The Hygon overlay is two colocated SGLang servers for `Qwen3-32B` (`--tp-size 4`)
+on four BW1000 HCUs each. Set `ACCELERATOR_TYPE=hygon`, `MODEL_SERVER=sglang`,
+`INFRA_PROVIDER=base`, and `MODEL=Qwen3-32B`. Each pod requests `hygon.com/hcunum: 4`
+and must be scheduled by `hami-scheduler`. `--model-path` is `Qwen/Qwen3-32B`.
+This profile is not covered by the default H100 calibration value.
 
 ## Prerequisites
 

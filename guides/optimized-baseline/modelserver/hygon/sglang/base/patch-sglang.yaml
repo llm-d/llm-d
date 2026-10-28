@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
     type: Recreate
   progressDeadlineSeconds: 7200
@@ -19,8 +19,8 @@ spec:
             - |
               set -euo pipefail
               exec python3 -m sglang.launch_server \
-                --model-path /data/models/Qwen3-8B \
-                --served-model-name Qwen3-8B \
+                --model-path Qwen/Qwen3-32B \
+                --served-model-name Qwen3-32B \
                 --host 0.0.0.0 \
                 --port 8000 \
                 --page-size 64 \
@@ -79,9 +79,6 @@ spec:
           volumeMounts:
             - name: shm
               mountPath: /dev/shm
-            - name: models
-              mountPath: /data/models
-              readOnly: true
           startupProbe:
             httpGet:
               path: /health
@@ -109,7 +106,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 32Gi
-        - name: models
-          hostPath:
-            path: /data/models
-            type: Directory

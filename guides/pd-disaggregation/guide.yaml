@@ -86,8 +86,8 @@ support:
       engines: {vllm: community}
     hygon:
       label: Hygon HCU
-      notes: "BW1000 64 GiB · SGLang 1P (TP=1) + 1D (TP=1) Deployments · Mooncake over RoCE"
-      model: Qwen3-8B
+      notes: "BW1000 64 GiB · SGLang 1P (TP=4) + 1D (TP=4) Deployments · Mooncake over RoCE"
+      model: Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {sglang: community}

@@ -103,8 +103,8 @@ support:
       engines: {vllm: community, sglang: community}
     hygon:
       label: Hygon HCU
-      notes: "BW1000 64 GiB · SGLang colocated Qwen3-8B · 1 replica × TP=4 (4 HCUs)"
-      model: Qwen3-8B
+      notes: "BW1000 64 GiB · SGLang colocated Qwen3-32B · 2 replicas × TP=4 (8 HCUs)"
+      model: Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {sglang: community}

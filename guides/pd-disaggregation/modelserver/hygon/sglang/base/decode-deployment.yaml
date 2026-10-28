@@ -49,11 +49,12 @@ spec:
             - |
               set -euo pipefail
               exec python3 -m sglang.launch_server \
-                --model-path /data/models/Qwen3-8B \
-                --served-model-name Qwen3-8B \
+                --model-path Qwen/Qwen3-32B \
+                --served-model-name Qwen3-32B \
                 --host 0.0.0.0 \
                 --port 8200 \
                 --page-size 64 \
+                --tp-size 4 \
                 --context-length 32768 \
                 --reasoning-parser qwen3 \
                 --tool-call-parser qwen3_coder \
@@ -71,6 +72,8 @@ spec:
                 --disaggregation-bootstrap-port 8998 \
                 --disaggregation-ib-device "${NCCL_IB_HCA}"
           env:
+            - name: NCCL_IB_DISABLE
+              value: "1"
             - name: NCCL_IB_HCA
               value: mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
             - name: NCCL_SOCKET_IFNAME
@@ -113,21 +116,18 @@ spec:
               type: Unconfined
           resources:
             requests:
-              cpu: "4"
-              memory: 32Gi
-              hygon.com/hcunum: "1"
-              rdma/hca_shared_devices_a: "1"
-            limits:
               cpu: "16"
               memory: 64Gi
-              hygon.com/hcunum: "1"
+              hygon.com/hcunum: "4"
+              rdma/hca_shared_devices_a: "1"
+            limits:
+              cpu: "64"
+              memory: 128Gi
+              hygon.com/hcunum: "4"
               rdma/hca_shared_devices_a: "1"
           volumeMounts:
             - name: shm
               mountPath: /dev/shm
-            - name: models
-              mountPath: /data/models
-              readOnly: true
           startupProbe:
             httpGet:
               path: /health
@@ -174,7 +174,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 32Gi
-        - name: models
-          hostPath:
-            path: /data/models
-            type: Directory

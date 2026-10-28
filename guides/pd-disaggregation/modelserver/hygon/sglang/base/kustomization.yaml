@@ -18,7 +18,7 @@ labels:
       llm-d.ai/accelerator-variant: hcu
       llm-d.ai/accelerator-vendor: hygon
       llm-d.ai/engine-type: sglang
-      llm-d.ai/model: Qwen3-8B
+      llm-d.ai/model: Qwen3-32B
       llm-d.ai/inference-serving: "true"
     includeSelectors: true
     includeTemplates: true

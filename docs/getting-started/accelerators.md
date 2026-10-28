@@ -101,7 +101,7 @@ Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefi
 
 ## Hygon BW1000 HCU
 
-Hygon BW1000 HCUs (64&nbsp;GiB, DTK) are supported for community-contributed paths. The device plugin must expose `hygon.com/hcunum` and pods must be scheduled by `hami-scheduler`. P/D disaggregation uses SGLang with Mooncake over RoCE; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) Hygon overlay (`modelserver/hygon/sglang/`). That overlay serves `Qwen3-8B` as two Deployments, one prefill and one decode, each TP=1. The [optimized baseline](../../guides/optimized-baseline/README.md) overlay (`modelserver/hygon/sglang/`) serves the same model colocated, one replica at TP=4 (4 HCUs), reading weights from `/data/models`. Set `MODEL=Qwen3-8B` when running either guide.
+Hygon BW1000 HCUs (64&nbsp;GiB, DTK) are supported for community-contributed paths. The device plugin must expose `hygon.com/hcunum` and pods must be scheduled by `hami-scheduler`. P/D disaggregation uses SGLang with Mooncake over RoCE; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) Hygon overlay (`modelserver/hygon/sglang/`). That overlay serves `Qwen3-32B` as two Deployments, one prefill and one decode, each TP=4, with `--model-path Qwen/Qwen3-32B`. The [optimized baseline](../../guides/optimized-baseline/README.md) overlay (`modelserver/hygon/sglang/`) serves `Qwen3-32B` colocated, two replicas at TP=4 (8 HCUs), with the same `--model-path`. Set `MODEL=Qwen3-32B` for both the P/D guide and the optimized baseline.
 
 ## MetaX C500X
 
