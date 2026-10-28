@@ -235,24 +235,40 @@ jobs:
               }
               const nightlyName = r => (r.path || '').split('/').pop()
                 .replace(/@.*$/, '').replace(/^nightly-(e2e-)?/, '').replace(/\.yaml$/, '');
-
-              const sorted = [...runs.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
-              const counts = {};
-              for (const r of sorted) {
-                const o = outcome(r);
-                counts[o] = (counts[o] || 0) + 1;
+              const prHead = r => prHeadByRun.get(r.id) || r.head_sha.substring(0, 7);
+              const started = r => (r.run_started_at || r.created_at).replace('T', ' ').replace(/:\d\dZ$/, '');
+              function summary(list) {
+                const counts = {};
+                for (const r of list) {
+                  const o = outcome(r);
+                  counts[o] = (counts[o] || 0) + 1;
+                }
+                return Object.entries(counts).map(([o, n]) => `${o} ${n}`).join(' · ');
               }
 
+              const sorted = [...runs.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+              // `sorted` is newest first, so the first run seen per nightly is its latest.
+              const latest = new Map();
+              for (const r of sorted) {
+                if (!latest.has(nightlyName(r))) latest.set(nightlyName(r), r);
+              }
+              const latestRuns = [...latest.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, r]) => r);
+
               const lines = [
-                `ℹ️ **${sorted.length} nightly run${sorted.length === 1 ? '' : 's'} triggered on this PR**: ` +
-                  Object.entries(counts).map(([o, n]) => `${o} ${n}`).join(' · '),
+                `ℹ️ **Latest run of each nightly triggered on this PR** ` +
+                  `(${latestRuns.length} nightl${latestRuns.length === 1 ? 'y' : 'ies'}: ${summary(latestRuns)})`,
+                '',
+                ...latestRuns.map(r =>
+                  `- ${outcome(r)} · \`${nightlyName(r)}\` · PR HEAD \`${prHead(r)}\` · ` +
+                  `${started(r)} UTC · [#${r.run_number}](${r.html_url})`),
+                '',
+                `**All runs** (${sorted.length}: ${summary(sorted)})`,
                 '',
                 '| Nightly | Result | PR HEAD | Started (UTC) | Duration | Run |',
                 '|---------|--------|---------|---------------|----------|-----|',
                 ...sorted.slice(0, MAX_ROWS).map(r =>
-                  `| \`${nightlyName(r)}\` | ${outcome(r)} | \`${prHeadByRun.get(r.id) || r.head_sha.substring(0, 7)}\` | ` +
-                  `${(r.run_started_at || r.created_at).replace('T', ' ').replace(/:\d\dZ$/, '')} | ` +
-                  `${duration(r)} | [#${r.run_number}](${r.html_url}) |`),
+                  `| \`${nightlyName(r)}\` | ${outcome(r)} | \`${prHead(r)}\` | ` +
+                  `${started(r)} | ${duration(r)} | [#${r.run_number}](${r.html_url}) |`),
               ];
               if (sorted.length > MAX_ROWS) {
                 lines.push('', `Showing the ${MAX_ROWS} most recent of ${sorted.length} runs.`);
