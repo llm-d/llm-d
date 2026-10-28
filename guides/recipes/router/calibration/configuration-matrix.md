@@ -29,7 +29,7 @@ rows because the serving engine changes prefill throughput.
 | `metax/vllm` | MetaX C500X 64 GB · vLLM-MetaX | 0.24.0 (MACA 3.8.2.1) | 8 | DeepSeek-R1-Distill-Llama-70B | **5468** |
 | `mthreads/sglang` | MTT S5000 80 GB · SGLang-dsv4 | 1.0 | 8 | DeepSeek-V4-Flash-0731-FP8-mt | **10259** |
 | `mthreads/vllm`  | MTT S5000 80 GB · vLLM-MUSA | 0.28.0 / MUSA 5.2.0 | 8 | Qwen3-32B | TBD |
-| `hygon/sglang` | Hygon BW1000 64 GiB · SGLang | 0.5.12 (DTK 26.04) | 4 | Qwen3-32B | TBD |
+| `hygon/sglang` | Hygon BW1000 64 GiB · SGLang | 0.5.12 (DTK 26.04) | 4 | Qwen3-32B | **10891** |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
 | `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
@@ -57,6 +57,10 @@ rows because the serving engine changes prefill throughput.
   `CHUNK_SIZE=8192` (llm-d default). The [pd-disaggregation](../../../pd-disaggregation)
   overlay `mthreads/sglang/base` is the same model and card with Mooncake P/D; re-measure
   before using 10259 as an operational ceiling there.
+- **10891** — measured for optimized-baseline `hygon/sglang` (Qwen3-32B on Hygon
+  BW1000 64 GiB, SGLang 0.5.12 / DTK 26.04, two colocated replicas at TP=4,
+  `CHUNK_SIZE=8192`, median TTFT 0.7521s) through the optimized-baseline router.
+  The shared router values stay at the H100 reference 15928.
 - **`npu/vllm`** — gpt-oss-120B on one Rebellions NPU at dp1 and `--max-num-seqs=1`,
   `--max-num-batched-tokens=512`, so calibrate this path with `CHUNK_SIZE=512`. This path
   does not borrow a proxy: the closest measured value (gpt-oss-120B on H100 at TP=1, 39065, from
@@ -71,7 +75,7 @@ DTK 26.04, 1 prefill + 1 decode, each TP=4, `CHUNK_SIZE=8192`) measured
 `peakPrefillThroughput=8690` through the
 [P/D Disaggregation](../../../pd-disaggregation) router (Mooncake KV transfer and the
 routing sidecar included; median TTFT 0.9427s). That guide keeps the shared router
-values. The optimized-baseline `hygon/sglang` row is the same model and card, two colocated replicas at TP=4 (no Mooncake); it is not calibrated yet.
+values. 8690 does not apply to the optimized-baseline `hygon/sglang` row above (colocated, no Mooncake).
 The former Qwen3-Coder-480B guide (replaced by
 [Qwen3.5-397B](../../../models/qwen3-5-397b/README.md); see its
 [git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b)) shipped
