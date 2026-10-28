@@ -36,8 +36,8 @@ Three teams contend for it by **tier** and **quota** through **3 queues** and **
 > `llm-d-async` deployment can feed many `InferencePool`s independently. Give each pool its own worker pool
 > (`workerPools[].id`) and its own queues, with `igw_base_url` pointing at that pool's llm-d Router. Worker
 > concurrency, quota counters (use a distinct quota `prefix` per pool) and saturation gates are all per worker
-> pool, so saturating one `InferencePool` parks only the workers that feed it. Each pool also needs its own set
-> of `InferenceObjective`s (see [step 2](#2-configure-llm-d-router-and-apply-inferenceobjectives)).
+> pool, so saturating one `InferencePool` parks only the workers that feed it. The `InferenceObjective`s can
+> cover every pool at once (see [step 2](#2-configure-llm-d-router-and-apply-inferenceobjectives)).
 
 How requests are classified:
 
@@ -151,7 +151,8 @@ the GAIE CRDs and the HF-token secret), source [`guides/env.sh`](../../../env.sh
 
 - **InferenceObjective CRD and Resources.** Requests dispatched by `llm-d-async` carry the
   `x-llm-d-inference-objective` header matching the request's priority lane. You must install the
-  `InferenceObjective` CRD and define the objective resources in your cluster matching your `InferencePool`.
+  `InferenceObjective` CRD (`llm-d.ai/v1`, served by llm-d Router v1.0.0 and later) and define the objective
+  resources in your cluster matching your `InferencePool`.
 
 - **Hardware.** The default model server is one replica of `Qwen/Qwen3-32B` with tensor parallelism 2: two
   NVIDIA GPUs with 80 GB of memory each (for example H100 or A100 80GB), and a node with 8 CPUs and 96 GiB of
@@ -366,7 +367,9 @@ export FLOW_CONTROL=holdback   # router values: values/router/flow-control-holdb
 
 > [!NOTE]
 > **One InferencePool per router:** Deploying llm-d Router creates a single `InferencePool` named `llm-d-router`
-> (`POOL_NAME`), and the objectives overlay binds all 6 `InferenceObjective`s to it. With [`InferenceObjective` `llm-d.ai/v1`](../../../../docs/api-reference/inferenceobjective.md), one set of objectives can target multiple `InferencePool`s in the same namespace via `poolRefs` or `poolSelector`; with `v1alpha2` (`poolRef`), an objective targets a single pool, so either put each pool and its router in its own namespace or migrate the objectives to `llm-d.ai/v1` `poolRefs` / `poolSelector` once your cluster serves the `v1` CRD.
+> (`POOL_NAME`), and the objectives overlay targets it from all 6 [`InferenceObjective`s](../../../../docs/api-reference/inferenceobjective.md)
+> (`llm-d.ai/v1`) through `poolRefs`. When one `llm-d-async` feeds several `InferencePool`s in the same namespace,
+> list them all in each objective's `poolRefs`, or select them by label with `poolSelector`.
 
 ### 3. Deploy Redis and llm-d-async
 

@@ -40,21 +40,21 @@ support:
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: validated}
     "tpu/v6":
       label: Google TPU v6e
-      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
+      notes: "GKE only · 2 replicas × 8 chips (`2x4`, TP=8, 16k context) · Torch TPU (`torch-tpu-vllm` / `sglang:v0.1.0-tpu`) · nightly moved to `tpu/v5p` while v6e capacity is unavailable"
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: community}
+      engines: {vllm: community, sglang: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) · Torch TPU vLLM (`torch-tpu-vllm` image) · no KV offload or MTP"
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`) · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (DP=8 × TP=1, EP, fp8 KV, 262k context, no KV offload or MTP); SGLang (`sglang:v0.1.0-tpu`): `Qwen/Qwen3-32B` (TP=8, 16k context)"
       model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: community}
+      engines: {vllm: community, sglang: community}
     "tpu/v7-dynamic-slice":
       label: Google TPU v7 (dynamic slicing)
       notes: "GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server)"
@@ -186,9 +186,9 @@ deploy:
     - when: {ACCELERATOR_TYPE: [npu]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
-    # TPU7x serves Qwen3.5-397B with --block-size=4352 and a 262k context; the shared
+    # TPU7x vLLM serves Qwen3.5-397B with --block-size=4352 and a 262k context; the shared
     # values are sized for Qwen3-32B on H100.
-    - when: {ACCELERATOR_TYPE: ["tpu/v7"]}
+    - when: {ACCELERATOR_TYPE: ["tpu/v7"], MODEL_SERVER: [vllm]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
 

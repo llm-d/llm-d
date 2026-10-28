@@ -109,7 +109,9 @@ def test_objectives_and_pod_monitor_bind_the_router_pool() -> None:
         (MT / "manifests/objectives/inferenceobjectives.yaml").read_text()) if d]
     assert len(objectives) == 6
     for o in objectives:
-        assert o["spec"]["poolRef"]["name"] == "llm-d-router", o["metadata"]["name"]
+        assert o["apiVersion"] == "llm-d.ai/v1", o["metadata"]["name"]   # served by llm-d-router v1.0.0+
+        assert o["spec"]["poolRefs"] == [{"name": "llm-d-router"}], o["metadata"]["name"]
+        assert "poolRef" not in o["spec"], o["metadata"]["name"]          # removed in v1
         assert "namespace" not in o["metadata"], o["metadata"]["name"]  # applied with -n
     monitor = yaml.safe_load((MT / "manifests/monitoring/prometheus-vllm-podmonitor.yaml").read_text())
     relabel = monitor["spec"]["podMetricsEndpoints"][0]["relabelings"][0]

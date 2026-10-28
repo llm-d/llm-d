@@ -27,7 +27,7 @@ spec:
                 --tp-size 4 \
                 --context-length 32768 \
                 --reasoning-parser qwen3 \
-                --tool-call-parser qwen3_coder \
+                --tool-call-parser qwen \
                 --mem-fraction-static 0.85 \
                 --disable-cuda-graph \
                 --skip-server-warmup \

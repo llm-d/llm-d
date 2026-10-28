@@ -74,7 +74,9 @@ routing sidecar included; median TTFT 0.9427s). That guide keeps the shared rout
 values (`33821` stays the H200 reference). The optimized-baseline `hygon/sglang`
 row is the same model and card, two colocated replicas at TP=4 (no Mooncake); it
 is not calibrated yet, and 8690 does not apply.
-The [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
+The former Qwen3-Coder-480B guide (replaced by
+[Qwen3.5-397B](../../../models/qwen3-5-397b/README.md); see its
+[git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b)) shipped
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
 The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per
