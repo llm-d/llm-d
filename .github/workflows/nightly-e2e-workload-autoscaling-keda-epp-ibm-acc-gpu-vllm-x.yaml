@@ -15,9 +15,9 @@ on:
     - cron: '30 3 * * *'  # 03:30 UTC daily
   workflow_dispatch:
     inputs:
-      # decode_pods/prefill_pods/harness/workload are accepted only for
+      # decode_pods/prefill_pods/harness/workload/verbose are accepted only for
       # /test-nightly compatibility: that command classifies any nightly-e2e-*
-      # not containing "-wva-" as a benchmark nightly and always passes these.
+      # not containing "-wva-" as a benchmark nightly and passes these.
       # This path runs no benchmark (metric-pipeline validation only), so they are
       # accepted-and-ignored; only cleanup/dry_run/update_badge take effect.
       decode_pods:
@@ -40,6 +40,11 @@ on:
         required: false
         type: 'string'
         default: 'sanity_random.yaml'
+      verbose:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'false'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
         required: false

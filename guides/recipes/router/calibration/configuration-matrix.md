@@ -65,7 +65,9 @@ rows because the serving engine changes prefill throughput.
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
   `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
-**Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
+**Related (other guides):** the former Qwen3-Coder-480B guide (replaced by
+[Qwen3.5-397B](../../../models/qwen3-5-397b/README.md); see its
+[git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b)) shipped
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
 The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per
