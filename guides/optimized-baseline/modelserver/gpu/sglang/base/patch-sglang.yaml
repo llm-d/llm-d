@@ -27,7 +27,8 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # Rust HTTP server (replaces the deprecated Python/uvicorn one); requires SGLang >= v0.5.22
+            # Rust HTTP server (the Python/uvicorn one is slated for deprecation upstream);
+            # requires SGLang >= v0.5.22
             - name: SGLANG_RUST_SERVER
               value: "1"
             # # Uncomment for distributed tracing env vars
