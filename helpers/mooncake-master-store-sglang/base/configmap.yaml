@@ -24,8 +24,8 @@ data:
     # At the defaults (0.95 / 0.05) a sustained writer exhausts DRAM faster than the offload
     # path can drain it: puts succeeded up to the pool size and then failed outright rather
     # than spilling. 0.7 leaves 30% of the pool as burst headroom instead of 5%.
-    eviction_ratio: 0.2
-    eviction_high_watermark_ratio: 0.7
+    eviction_ratio: 0.05
+    eviction_high_watermark_ratio: 0.95
 
     memory_allocator: "offset"
     allocation_strategy: "random"

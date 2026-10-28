@@ -39,12 +39,14 @@ spec:
             - "--mem-fraction-static=0.9"
             - "--enable-metrics"
             - "--enable-hierarchical-cache"
+            - "--hicache-host-memory-mode"
+            - "buffer_only"
             - "--hicache-write-policy"
             - "write_through"
             - "--hicache-io-backend"
             - "kernel"
             - "--hicache-size"
-            - "100"
+            - "20"
             - "--hicache-storage-backend"
             - "mooncake"
             - "--disable-custom-all-reduce"
@@ -76,12 +78,12 @@ spec:
             limits:
               nvidia.com/gpu: "2"
               cpu: "16"
-              memory: 400Gi
+              memory: 512Gi
               ${RDMA_VF_RESOURCE}: "1"
             requests:
               nvidia.com/gpu: "2"
               cpu: "8"
-              memory: 320Gi
+              memory: 400Gi
               ${RDMA_VF_RESOURCE}: "1"
           volumeMounts:
             - mountPath: /scripts

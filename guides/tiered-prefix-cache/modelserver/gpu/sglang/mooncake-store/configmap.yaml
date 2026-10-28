@@ -12,11 +12,11 @@ data:
     {
       "metadata_server": "P2PHANDSHAKE",
       "master_server_address": "mooncake-master-store:50051",
-      "global_segment_size": "120GB",
+      "global_segment_size": "360GB",
       "local_buffer_size": "4GB",
       "protocol": "rdma",
       "device_name": "",
       "local_hostname": "POD_IP_PLACEHOLDER",
-      "enable_ssd_offload": true,
+      "enable_ssd_offload": false,
       "ssd_offload_path": "/data/mooncake-offload"
     }
