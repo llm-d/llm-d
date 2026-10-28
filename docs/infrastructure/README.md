@@ -22,6 +22,10 @@ Running the llm-d routing stack on bare metal, HPC Slurm schedulers, or Ray via 
 
 Orchestrating multi-host replica topologies and RDMA networking fabrics.
 
+### [Rook CephFS Storage](storage/rook-cephfs/README.md)
+
+A hyperconverged Ceph cluster on the GPU nodes' NVMe drives, exposing a CephFS StorageClass tuned as a shared KV-cache offload tier.
+
 ---
 
 ## llm-d infrastructure
