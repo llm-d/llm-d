@@ -7,10 +7,8 @@ metadata:
     cache-implementation: squid-ssl-bump
     component: multimedia-downloader
 data:
+  # Replaces only the listener; common.conf is inherited from ../../http/base.
   squid.conf: |
-    access_log stdio:/dev/stdout squid
-    cache_log /dev/stderr
-
     http_port 3128 ssl-bump \
       cert=/etc/squid/certs/squid-ca-cert.pem \
       key=/etc/squid/certs/squid-ca-key.pem \
@@ -18,11 +16,12 @@ data:
       dynamic_cert_mem_cache_size=16MB
 
     # --- SSL Certificate Generation ---
+    # -M must match the size the image's entrypoint initializes the DB with.
     sslcrtd_program /usr/lib64/squid/security_file_certgen -s /var/lib/squid/ssl_db -M 16MB
     sslcrtd_children 10 startup=5 idle=1
 
     # --- SSL Bump Rules ---
-    # "bump all" decrypts every HTTPS connection — intentional for test/lab use.
+    # "bump all" decrypts every HTTPS connection. This is intentional for test/lab use.
     # For production, replace with a peek-then-splice strategy to limit interception
     # to specific domains and pass ECH/TLS-1.3 connections through blindly:
     #
@@ -32,17 +31,4 @@ data:
     #   ssl_bump splice all     # pass everything else through untouched
     ssl_bump bump all
 
-    # --- PID/Files for Non-Root ---
-    pid_filename /var/cache/squid/squid.pid
-    netdb_filename none
-
-    # --- Caching ---
-    cache_mem 256 MB
-    refresh_pattern -i \.(jpg|jpeg|png|gif|webp|bmp|tiff)$ 10080 100% 43200
-
-    # --- Performance ---
-    # Disable ICMP pinger: containers run without NET_RAW capability.
-    pinger_enable off
-
-    # --- Access Control ---
-    http_access allow all
+    include /etc/squid/common.conf

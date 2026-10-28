@@ -10,7 +10,7 @@ This is particularly impactful in llm-d's
 [disaggregated serving](https://github.com/llm-d/llm-d-inference-scheduler/blob/main/docs/disaggregation.md)
 configurations (E/P/D). In an encode-prefill-decode split, dedicated encode
 workers, prefill pods, and decode pods are scheduled independently and may each
-fetch the same multimedia asset from the origin on the same request — amplifying
+fetch the same multimedia asset from the origin on the same request, which amplifies
 egress costs and download latency proportionally to the number of disaggregated
 components. A shared cluster-local cache eliminates this redundancy: the first
 component to request an asset pays the origin fetch cost; every subsequent
@@ -21,12 +21,12 @@ request across all components in the llm-d ecosystem is served from cache.
 The proxy is designed to support different caching backends, which are maintained in the [`implementations/`](implementations/) directory. Each backend manages its own specific configuration and resource footprints.
 
 * **[Squid](https://github.com/squid-cache/squid) (Default):** A robust, high-performance HTTP/HTTPS caching proxy with two variants:
-  * **[http](implementations/squid/http/)** — HTTP caching proxy. HTTPS requests are not cached; they are tunneled through an opaque `CONNECT` tunnel with no content inspection.
-  * **[https-ssl-bump](implementations/squid/https-ssl-bump/)** — HTTPS caching proxy. Requires a custom CA certificate and a custum docker image.
+  * **[http](implementations/squid/http/):** HTTP caching proxy. HTTPS requests are not cached; they are tunneled through an opaque `CONNECT` tunnel with no content inspection.
+  * **[https-ssl-bump](implementations/squid/https-ssl-bump/):** HTTPS caching proxy. Requires a custom CA certificate and a custom docker image.
 
   For setup instructions see the [Squid Implementation Guide](implementations/squid/README.md).
 
-## Quick Start
+## Quick Start in kind
 
 ### Prerequisites
 
@@ -40,7 +40,9 @@ kind create cluster --name multimedia-test --wait 90s
 ```
 
 ### 2. Deploy the Proxy
-Deploy the default implementation to the newly created cluster using Kustomize:
+Deploy the default implementation to the newly created cluster using Kustomize.
+The default applies the plain-Kubernetes overlay; OpenShift and the SSL Bump variant
+are described in the [Squid Implementation Guide](implementations/squid/README.md).
 
 ```bash
 kubectl apply -k helpers/multimedia-downloader
@@ -85,9 +87,9 @@ export HTTPS_PROXY=http://multimedia-downloader:80
 export NO_PROXY=localhost,127.0.0.1,.svc,.cluster.local
 ```
 
-- `HTTP_PROXY` — Routes unencrypted web traffic
-- `HTTPS_PROXY` — Routes secure, encrypted web traffic
-- `NO_PROXY` — Bypasses the proxy for specific internal hosts or domains
+- `HTTP_PROXY`: routes unencrypted web traffic
+- `HTTPS_PROXY`: routes secure, encrypted web traffic
+- `NO_PROXY`: bypasses the proxy for specific internal hosts or domains
 
 For Python applications:
 ```python
@@ -113,7 +115,7 @@ Each implementation lives under `implementations/<name>/` and may contain one or
 - `deployment.yaml` - Kubernetes deployment; must expose a container port named `http-proxy`
 - `kustomization.yaml` - Kustomize configuration
 
-The base service uses the named port `http-proxy` as its `targetPort`. Variants resolve this automatically by naming their container port `http-proxy` — no service patch is required.
+The base service uses the named port `http-proxy` as its `targetPort`. Variants resolve this automatically by naming their container port `http-proxy`, so no service patch is required.
 
 ## Adding New Implementations
 

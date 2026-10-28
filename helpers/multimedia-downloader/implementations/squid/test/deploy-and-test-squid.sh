@@ -1,31 +1,44 @@
 #!/usr/bin/env bash
-# deploy-and-test-squid.sh — deploys and tests the Squid HTTP or SSL Bump implementation.
-# Usage details available via --help
+# deploy-and-test-squid.sh: deploys and tests the Squid HTTP or SSL Bump implementation.
+#
+# Usage: ./deploy-and-test-squid.sh [options]
+#
+# Options:
+#   --mode <http|ssl-bump>  Implementation to test (default: http)
+#   --platform <k8s|openshift>
+#                           Overlay to apply to the current kubectl context (default: k8s)
+#   --openshift             Alias for --platform openshift
+#   --context <ctx>         kubectl context to switch to before deploying
+#   --registry <url>        Registry for the SSL Bump image (or export SQUID_IMAGE_REGISTRY)
+#   --build-push            Build and push the SSL Bump image, then exit (implies --mode ssl-bump)
+#   --skip-cleanup          Leave resources in place after the test
+#   --help, -h              Show this help
+#
+# The script deploys into the current kubectl context and namespace, and on exit
+# deletes only the resources it created. SSL Bump mode needs the image in a
+# registry the cluster can pull from (see --build-push).
+#
+# Requirements: kubectl, docker (--build-push)
 
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly HTTP_DIR="${SCRIPT_DIR}/../http"
-readonly SSL_BUMP_DIR="${SCRIPT_DIR}/../https-ssl-bump"
 readonly DOCKER_DIR="${SCRIPT_DIR}/../docker"
 readonly SERVICE_YAML="${SCRIPT_DIR}/../../../service.yaml"
-readonly LOCAL_IMAGE="squid-ssl-bump:local"
-readonly REMOTE_TAG="dev"
 readonly CURL_IMAGE="curlimages/curl:8.11.1"
 readonly HTTP_TEST_URL="http://images.cocodataset.org/val2017/000000039769.jpg"
-readonly HTTP_PROXY="http://multimedia-downloader:80"
+readonly PROXY_URL="http://multimedia-downloader:80"
 readonly SSL_TEST_URL="https://images.dog.ceo/breeds/poodle-standard/n02113799_2280.jpg"
 readonly SSL_CA_ORG="Squid Test CA"
+readonly SSL_SECRETS=(squid-ssl-certs squid-ca-public-cert)
 
 # Default configurations
 MODE="http"
 SKIP_CLEANUP=false
-USE_OPENSHIFT=false
+PLATFORM="k8s"
 KUBE_CONTEXT=""
-NAMESPACE="default"
 REGISTRY="${SQUID_IMAGE_REGISTRY:-}" # Reads from ENV var if set
 BUILD_PUSH=false
-KUSTOMIZE_TMP=""
 
 # --- Logging Helpers -----------------------------------------------------------
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -38,10 +51,11 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --mode)             MODE="$2"; shift 2 ;;
         --skip-cleanup)     SKIP_CLEANUP=true; shift ;;
-        --openshift)        USE_OPENSHIFT=true; shift ;;
+        --platform)         PLATFORM="$2"; shift 2 ;;
+        --openshift)        PLATFORM="openshift"; shift ;;
         --registry)         REGISTRY="$2"; shift 2 ;;
         --build-push)       BUILD_PUSH=true; MODE="ssl-bump"; shift ;;
-        --context)          KUBE_CONTEXT="$2"; USE_OPENSHIFT=true; shift 2 ;;
+        --context)          KUBE_CONTEXT="$2"; shift 2 ;;
         --help|-h)
             sed -n '2,/^# Requirements:/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'
             exit 0
@@ -51,23 +65,26 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Validation & Dynamic Variables --------------------------------------------
+# TEST_TARGET is a kubectl resource reference usable with exec, wait and delete.
 case "${MODE}" in
-    http)     
-        readonly CLUSTER_NAME="squid-smoke"
-        readonly TEST_POD="curl-test-pod"
-        readonly IMPL_DIR="${HTTP_DIR}" 
+    http)
+        readonly TEST_TARGET="pod/curl-test-pod"
+        readonly IMPL_DIR="${SCRIPT_DIR}/../http"
         ;;
-    ssl-bump) 
-        readonly CLUSTER_NAME="squid-ssl-bump-smoke"
-        readonly TEST_POD="curl-ssl-test-pod"
-        readonly IMPL_DIR="${SSL_BUMP_DIR}" 
+    ssl-bump)
+        readonly TEST_TARGET="deployment/curl-ssl-test"
+        readonly IMPL_DIR="${SCRIPT_DIR}/../https-ssl-bump"
         ;;
     *) error "Invalid --mode '${MODE}'. Must be 'http' or 'ssl-bump'."; exit 1 ;;
 esac
+case "${PLATFORM}" in
+    k8s|openshift) ;;
+    *) error "Invalid --platform '${PLATFORM}'. Must be 'k8s' or 'openshift'."; exit 1 ;;
+esac
+readonly KUSTOMIZE_DIR="${IMPL_DIR}/overlays/${PLATFORM}"
 
-# Validate dependencies (using short-circuit evaluation for clean code)
-[[ "${MODE}" == "ssl-bump" && ${USE_OPENSHIFT} == true && -z "${REGISTRY}" ]] && { error "--mode ssl-bump --openshift requires a registry. Use --registry or export SQUID_IMAGE_REGISTRY"; exit 1; }
-[[ ${BUILD_PUSH} == true && -z "${REGISTRY}" ]] && { error "--build-push requires a registry. Use --registry or export SQUID_IMAGE_REGISTRY"; exit 1; }
+[[ "${MODE}" == "ssl-bump" && -z "${REGISTRY}" ]] && { error "--mode ssl-bump requires a registry. Use --registry or export SQUID_IMAGE_REGISTRY"; exit 1; }
+readonly SSL_BUMP_IMAGE="${REGISTRY}/squid-ssl-bump:dev"
 
 # --- Core Functions ------------------------------------------------------------
 
@@ -76,98 +93,61 @@ cleanup() {
 
     if [[ ${SKIP_CLEANUP} == true ]]; then
         echo "  Resources left in place for inspection (--skip-cleanup)."
-    else
-        kubectl delete pod "${TEST_POD}" --ignore-not-found --wait=false 2>/dev/null || true
-
-        if [[ ${USE_OPENSHIFT} == true ]]; then
-            kubectl delete -f "${SERVICE_YAML}" --ignore-not-found 2>/dev/null || true
-            kubectl delete -k "${IMPL_DIR}/overlays/openshift" --ignore-not-found 2>/dev/null || true
-            echo "  OpenShift multimedia-downloader resources deleted."
-        else
-            kind delete cluster --name "${CLUSTER_NAME}" 2>/dev/null || true
-            echo "  Cluster '${CLUSTER_NAME}' deleted."
-        fi
+        return
     fi
-
-    if [[ -d "${SCRIPT_DIR}/squid-ssl-certs" ]]; then
+    kubectl delete "${TEST_TARGET}" --ignore-not-found --wait=false 2>/dev/null || true
+    kubectl delete -f "${SERVICE_YAML}" --ignore-not-found 2>/dev/null || true
+    kubectl delete -k "${KUSTOMIZE_DIR}" --ignore-not-found 2>/dev/null || true
+    if [[ "${MODE}" == "ssl-bump" ]]; then
+        kubectl delete secret "${SSL_SECRETS[@]}" --ignore-not-found 2>/dev/null || true
         rm -rf "${SCRIPT_DIR}/squid-ssl-certs"
-        echo "  Generated certificates cleaned up."
     fi
-    [[ -n "${KUSTOMIZE_TMP}" && -d "${KUSTOMIZE_TMP}" ]] && rm -rf "${KUSTOMIZE_TMP}"
+    echo "  multimedia-downloader resources deleted."
 }
-trap cleanup EXIT
 
 build_and_push_image() {
-    section "Building Squid SSL Bump image"
-    docker build -t "${LOCAL_IMAGE}" -f "${DOCKER_DIR}/Dockerfile.squid-ssl-bump" "${DOCKER_DIR}"
-    success "Image built: ${LOCAL_IMAGE}"
-
-    if [[ ${BUILD_PUSH} == true && -n "${REGISTRY}" ]]; then
-        local remote_image="${REGISTRY}/squid-ssl-bump:${REMOTE_TAG}"
-        section "Pushing image to registry"
-        docker tag "${LOCAL_IMAGE}" "${remote_image}"
-        docker push "${remote_image}"
-        success "Image pushed: ${remote_image}"
-    fi
+    section "Building and pushing Squid SSL Bump image"
+    docker build -t "${SSL_BUMP_IMAGE}" -f "${DOCKER_DIR}/Dockerfile.squid-ssl-bump" "${DOCKER_DIR}"
+    docker push "${SSL_BUMP_IMAGE}"
+    success "Image pushed: ${SSL_BUMP_IMAGE}"
 }
 
-setup_cluster() {
+setup_context() {
     if [[ -n "${KUBE_CONTEXT}" ]]; then
         kubectl config use-context "${KUBE_CONTEXT}"
-        echo "  Switched to kubectl context: ${KUBE_CONTEXT}"
     fi
-
-    if [[ ${USE_OPENSHIFT} == true ]]; then
-        # Use the current context's namespace. The command succeeds with empty
-        # output (not a non-zero exit) when no namespace is set, so the `||`
-        # fallback never fires; default explicitly on an empty result instead.
-        NAMESPACE="$(kubectl config view --minify --output 'jsonpath={..namespace}' 2>/dev/null)"
-        NAMESPACE="${NAMESPACE:-default}"
-        echo "  Using current namespace: ${NAMESPACE}"
-        kubectl config set-context --current --namespace="${NAMESPACE}"
-    else
-        section "Setting up kind cluster '${CLUSTER_NAME}'"
-        if ! kind get clusters 2>/dev/null | grep -qx "${CLUSTER_NAME}"; then
-            kind create cluster --name "${CLUSTER_NAME}" --wait 90s
-            echo "  Cluster created."
-        fi
-
-        if [[ "${MODE}" == "ssl-bump" ]]; then
-            section "Loading image into kind cluster"
-            kind load docker-image "${LOCAL_IMAGE}" --name "${CLUSTER_NAME}"
-            success "Image loaded into cluster"
-        fi
-    fi
+    local namespace
+    namespace="$(kubectl config view --minify --output 'jsonpath={..namespace}' 2>/dev/null)"
+    echo "  Using context '$(kubectl config current-context)', namespace '${namespace:-default}', platform '${PLATFORM}'"
 }
 
 deploy_squid() {
-    local kustomize_dir="${IMPL_DIR}/overlays/kind"
-
-    if [[ ${USE_OPENSHIFT} == true ]]; then
-        kustomize_dir="${IMPL_DIR}/overlays/openshift"
-        
-        if [[ "${MODE}" == "ssl-bump" && -n "${REGISTRY}" ]]; then
-            KUSTOMIZE_TMP="$(mktemp -d "${IMPL_DIR}/overlays/.tmp-kustomize-XXXXXX")"
-            cat > "${KUSTOMIZE_TMP}/kustomization.yaml" <<EOF
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-- ../openshift
-images:
-- name: ubuntu/squid
-  newName: ${REGISTRY}/squid-ssl-bump
-  newTag: ${REMOTE_TAG}
-EOF
-            kustomize_dir="${KUSTOMIZE_TMP}"
-        fi
+    section "Deploying squid (mode: ${MODE}, overlay: ${PLATFORM})"
+    kubectl apply -k "${KUSTOMIZE_DIR}"
+    if [[ "${MODE}" == "ssl-bump" ]]; then
+        kubectl set image deployment/multimedia-downloader squid="${SSL_BUMP_IMAGE}"
+        # Squid loads the CA at startup; restart so a pre-existing deployment picks up
+        # the certificates generated by this run.
+        kubectl rollout restart deployment/multimedia-downloader
     fi
-
-    section "Deploying squid (mode: ${MODE})"
-    kubectl apply -k "${kustomize_dir}"
-    
     kubectl apply -f "${SERVICE_YAML}"
     kubectl rollout status deployment/multimedia-downloader --timeout=120s
     success "multimedia-downloader is ready."
+}
+
+# squid_log_line <url>: prints the latest access log entry for url, polling briefly
+# because the entry is written when the request completes. Only pods that are not
+# terminating are read, so a previous rollout's log cannot satisfy the check.
+squid_log_line() {
+    local url="$1" line="" pods
+    pods=$(kubectl get pod -l app=multimedia-downloader -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}} {{end}}{{end}}')
+    for _ in $(seq 10); do
+        # shellcheck disable=SC2086 # pods is a space-separated list
+        line=$(for p in ${pods}; do kubectl logs "${p}" -c squid --tail=20; done | grep -F "${url}" | tail -1 || true)
+        [[ -n "${line}" ]] && break
+        sleep 0.5
+    done
+    echo "${line}"
 }
 
 # assert_squid_status <expected_pattern> <url> [curl_args...]
@@ -176,15 +156,13 @@ assert_squid_status() {
     local expected="$1" url="$2"; shift 2
 
     echo "  Requesting ${url} (expect ${expected})..."
-    if ! kubectl exec "${TEST_POD}" -- curl -sf -o /dev/null "$@" "${url}"; then
+    if ! kubectl exec "${TEST_TARGET}" -- curl -sf -o /dev/null "$@" "${url}"; then
         error "curl request failed: ${url}"
         return 1
     fi
-    sleep 3
 
     local log_line
-    log_line=$(kubectl logs -l app=multimedia-downloader -c squid --tail=20 \
-               | grep -F "${url}" | tail -1 || true)
+    log_line=$(squid_log_line "${url}")
     if ! echo "${log_line}" | grep -qE "${expected}"; then
         error "Expected '${expected}' in squid log but got: ${log_line:-<no matching entry>}"
         return 1
@@ -202,49 +180,46 @@ run_cache_test() {
 
 run_http_test() {
     section "Testing HTTP Cache"
-    kubectl run "${TEST_POD}" --image="${CURL_IMAGE}" --restart=Never -- sleep 30
-    kubectl wait --for=condition=Ready pod/"${TEST_POD}" --timeout=60s
+    # A pod cannot be re-run in place; remove one left by a --skip-cleanup run.
+    kubectl delete "${TEST_TARGET}" --ignore-not-found --wait=true 2>/dev/null
+    kubectl run "${TEST_TARGET#pod/}" --image="${CURL_IMAGE}" --restart=Never -- sleep 30
+    kubectl wait --for=condition=Ready "${TEST_TARGET}" --timeout=60s
 
-    run_cache_test "${HTTP_TEST_URL}" -x "${HTTP_PROXY}"
+    run_cache_test "${HTTP_TEST_URL}" -x "${PROXY_URL}"
 }
 
 run_ssl_bump_test() {
     section "Generating SSL certificates"
-    rm -rf "${SCRIPT_DIR}/squid-ssl-certs" 2>/dev/null || true
-    "${SCRIPT_DIR}/generate-ssl-certs.sh" --namespace "${NAMESPACE}" --out-dir "${SCRIPT_DIR}/squid-ssl-certs" --org "${SSL_CA_ORG}"
+    rm -rf "${SCRIPT_DIR}/squid-ssl-certs"
+    "${SCRIPT_DIR}/generate-ssl-certs.sh" --out-dir "${SCRIPT_DIR}/squid-ssl-certs" --org "${SSL_CA_ORG}"
     success "SSL certificates generated"
 
     # Must generate certs BEFORE deploying squid so the secret exists
     deploy_squid
 
-    section "Deploying test client pod with CA trust"
-    kubectl delete pod "${TEST_POD}" --ignore-not-found --wait=true 2>/dev/null
-    kubectl apply -f "${SCRIPT_DIR}/curl-test-pod.yaml"
-    kubectl wait --for=condition=Ready pod/"${TEST_POD}" --timeout=120s
+    section "Deploying test client with CA trust (client-trust Component)"
+    # Delete first so the init container re-reads the freshly generated CA on reruns.
+    kubectl delete "${TEST_TARGET}" --ignore-not-found --wait=true 2>/dev/null
+    kubectl apply -k "${SCRIPT_DIR}"
+    kubectl rollout status "${TEST_TARGET}" --timeout=120s
 
     section "Testing SSL Bump Cache"
     run_cache_test "${SSL_TEST_URL}"
 
     section "Verifying SSL Bump interception"
-    kubectl exec "${TEST_POD}" -- curl -sfv "${SSL_TEST_URL}" -o /dev/null 2>&1 | grep -i "issuer" || echo "Could not verify issuer"
+    kubectl exec "${TEST_TARGET}" -- curl -sfv "${SSL_TEST_URL}" -o /dev/null 2>&1 | grep -i "issuer" || echo "Could not verify issuer"
 }
 
 # --- Main Execution Flow -------------------------------------------------------
 
 if [[ ${BUILD_PUSH} == true ]]; then
     build_and_push_image
-    echo -e "\nNOTE: Run the test with: $0 --mode ssl-bump --openshift --registry ${REGISTRY}"
-    
-    # Unregister the trap so we don't accidentally delete an active cluster
-    trap - EXIT
+    echo -e "\nNOTE: Run the test with: $0 --mode ssl-bump --platform ${PLATFORM} --registry ${REGISTRY}"
     exit 0
 fi
 
-if [[ "${MODE}" == "ssl-bump" && ${USE_OPENSHIFT} == false ]]; then
-    build_and_push_image
-fi
-
-setup_cluster
+trap cleanup EXIT
+setup_context
 
 if [[ "${MODE}" == "http" ]]; then
     deploy_squid

@@ -38,3 +38,10 @@ patches:
 labels:
 - pairs:
     cache-implementation: squid-ssl-bump
+
+# The SSL Bump image is built from ../../docker and pushed to a registry; set it
+# at deploy time (kubectl set image deployment/multimedia-downloader squid=<image>).
+images:
+- name: ubuntu/squid
+  newName: REPLACE_SQUID_SSL_BUMP_IMAGE
+  newTag: dev

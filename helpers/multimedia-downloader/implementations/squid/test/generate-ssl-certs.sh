@@ -5,19 +5,19 @@
 # Usage: ./generate-ssl-certs.sh [--namespace <ns>] [--out-dir <dir>] [--org <org>]
 #
 # Defaults:
-#   --namespace  default
+#   --namespace  the current kubectl context's namespace
 #   --out-dir    squid-ssl-certs
 #   --org        YourOrganization
 
 set -euo pipefail
 
-NAMESPACE="dpikus-epd8"
+NS_ARGS=()
 OUT_DIR="squid-ssl-certs"
 ORG="YourOrganization"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --namespace) NAMESPACE="$2"; shift 2 ;;
+    --namespace) NS_ARGS=(-n "$2"); shift 2 ;;
     --out-dir)   OUT_DIR="$2";   shift 2 ;;
     --org)       ORG="$2";       shift 2 ;;
     *) echo "Unknown argument: $1"; exit 1 ;;
@@ -61,17 +61,17 @@ echo "Certificate/key pair verified."
 # ---------------------------------------------------------------------------
 # Step 3: Create Kubernetes secrets
 # ---------------------------------------------------------------------------
-echo "Applying Kubernetes secret 'squid-ssl-certs' (cert + key) in namespace '$NAMESPACE'..."
+echo "Applying Kubernetes secret 'squid-ssl-certs' (cert + key)..."
 kubectl create secret generic squid-ssl-certs \
   --from-file=squid-ca-cert.pem="$CERT" \
   --from-file=squid-ca-key.pem="$KEY" \
-  -n "$NAMESPACE" \
+  ${NS_ARGS[@]+"${NS_ARGS[@]}"} \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "Applying Kubernetes secret 'squid-ca-public-cert' (cert only) in namespace '$NAMESPACE'..."
+echo "Applying Kubernetes secret 'squid-ca-public-cert' (cert only)..."
 kubectl create secret generic squid-ca-public-cert \
   --from-file=squid-ca-cert.pem="$CERT" \
-  -n "$NAMESPACE" \
+  ${NS_ARGS[@]+"${NS_ARGS[@]}"} \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo ""

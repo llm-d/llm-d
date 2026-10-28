@@ -17,41 +17,27 @@ Deployment: Primarily operates as a forward proxy.
 
 ## 🚀 Automated Deployment and Testing
 
-Execute the [deploy-and-test-squid.sh](test/deploy-and-test-squid.sh) script to run cache validations and inspect the resulting logs.
+Execute the [deploy-and-test-squid.sh](test/deploy-and-test-squid.sh) script to run cache validations and inspect the resulting logs. Run it with `--help` for the full option list.
 
-### kind
-
-Run HTTP test (spins up a temporary kind cluster, tests, and tears it down):
+The script deploys into the current `kubectl` context and namespace. On exit it deletes everything it created unless `--skip-cleanup` is given, so pass that flag whenever the proxy should stay in use after the test. It does not create a namespace. Set the target namespace on the context before running; when the context has no namespace, `default` is used:
 
 ```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh
+kubectl config set-context --current --namespace=<namespace>
 ```
 
-To retain resources after testing for manual review and debugging add `--skip-cleanup` flag:
+`--platform` (default `k8s`) selects the overlay under `overlays/`. `--openshift` is an alias for `--platform openshift`, and `--context <ctx>` switches the kubectl context first. The commands below read the platform from a variable; set it once:
 
 ```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --skip-cleanup
+export PLATFORM=k8s   # or: openshift
 ```
 
-### OpenShift
-
-Target an OpenShift cluster (uses the openshift overlay):
+Run the HTTP test and keep the proxy deployed:
 
 ```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --openshift
+./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --platform ${PLATFORM} --skip-cleanup
 ```
 
-To target a specific OpenShift context (implies `--openshift`):
-
-```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --context <ctx>
-```
-
-To leave OpenShift resources in place after testing for manual inspection add `--skip-cleanup` flag:
-
-```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --openshift --skip-cleanup
-```
+Drop `--skip-cleanup` to tear everything down at the end of the run.
 
 ### Understanding Log Results
 
@@ -79,31 +65,15 @@ By default, proxies cannot see inside encrypted HTTPS traffic. Here is how Squid
 
 ### 🚀 Automated Deployment and Testing
 
-#### kind
+The SSL Bump test needs the custom Squid image in a registry that your cluster can access.
 
-Run SSL Bump test (builds image, generates CA, deploys, and verifies cache):
-
-```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --mode ssl-bump
-```
-
-To retain resources after testing for manual inspection add `--skip-cleanup` flag:
-
-```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --mode ssl-bump --skip-cleanup
-```
-
-#### OpenShift
-
-To use the SSL Bump configuration, the custom Squid image must be hosted in a registry that your cluster can access.
-
-**Step 1 - Set your target registry**
+**Step 1: set your target registry**
 
 ```bash
 export SQUID_IMAGE_REGISTRY="image-registry"
 ```
 
-**Step 2 — Build and push the image**
+**Step 2: build and push the image**
 
 Run this step to build the image and push it to your registry. You only need to do this once, or whenever the image configuration changes. (Note: The --build-push flag automatically sets --mode ssl-bump).
 
@@ -111,67 +81,53 @@ Run this step to build the image and push it to your registry. You only need to 
 ./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --build-push
 ```
 
-Make the pushed image accessible from your cluster, then proceed to step 2.
+Make the pushed image accessible from your cluster, then proceed to step 3.
 
-**Step 3 — deploy and test**
+**Step 3: deploy and test**
 
-```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --mode ssl-bump --openshift
-```
-
-To leave OpenShift resources in place after testing for manual inspection add `--skip-cleanup` flag:
+This keeps the proxy, its CA secrets and the test client deployed so clients can be pointed at it; drop `--skip-cleanup` to tear everything down at the end of the run.
 
 ```bash
-./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --mode ssl-bump --openshift --skip-cleanup
+./helpers/multimedia-downloader/implementations/squid/test/deploy-and-test-squid.sh --mode ssl-bump --platform ${PLATFORM} --skip-cleanup
 ```
 
 (Note: You can always pass --registry <url> manually if you prefer not to use the environment variable).
 
 ## 🛠️ Manual Deployment
 
-> **Note:** The following steps assume your target cluster is already running and your active `kubectl` context is set correctly.
+> **Note:** The following steps assume your target cluster is already running and your active `kubectl` context is set correctly. They read the platform from a variable; set it once:
+
+```bash
+export PLATFORM=k8s   # or: openshift
+```
 
 ### Standard HTTP Proxy
 
-**Step 1 — deploy**
-
-#### kind
+**Step 1: deploy**
 
 ```bash
-kubectl apply -k helpers/multimedia-downloader/implementations/squid/http/overlays/kind
+kubectl apply -k helpers/multimedia-downloader/implementations/squid/http/overlays/${PLATFORM}
 kubectl apply -f helpers/multimedia-downloader/service.yaml
 kubectl rollout status deployment/multimedia-downloader --timeout=120s
 ```
 
-#### OpenShift
+**Step 2: verify**
+
+Run the same request twice through the proxy, then read the cache status from the Squid log. Both requests return `200`; the log shows `TCP_MISS` for the first and `TCP_MEM_HIT` (or `TCP_HIT`) for the second:
 
 ```bash
-kubectl apply -k helpers/multimedia-downloader/implementations/squid/http/overlays/openshift
-kubectl apply -f helpers/multimedia-downloader/service.yaml
-kubectl rollout status deployment/multimedia-downloader --timeout=120s
-```
-
-**Step 2 — verify**
-
-Run two requests through the proxy. The first should be a cache miss, the second a cache hit:
-
-```bash
-kubectl run curl-test --image=curlimages/curl:8.11.1 --restart=Never -- sleep 30
+kubectl run curl-test --image=curlimages/curl:8.11.1 --restart=Never -- sleep 60
 kubectl wait --for=condition=Ready pod/curl-test --timeout=60s
-kubectl exec curl-test -- curl -sf -x http://multimedia-downloader:80 -o /dev/null -w "miss: %{http_code}\n" http://images.cocodataset.org/val2017/000000039769.jpg
-kubectl exec curl-test -- curl -sf -x http://multimedia-downloader:80 -o /dev/null -w "hit:  %{http_code}\n" http://images.cocodataset.org/val2017/000000039769.jpg
+kubectl exec curl-test -- curl -sf -x http://multimedia-downloader:80 -o /dev/null -w "%{http_code}\n" http://images.cocodataset.org/val2017/000000039769.jpg
+kubectl exec curl-test -- curl -sf -x http://multimedia-downloader:80 -o /dev/null -w "%{http_code}\n" http://images.cocodataset.org/val2017/000000039769.jpg
+kubectl logs -l app=multimedia-downloader -c squid --tail=5 | grep 000000039769.jpg
 ```
 
 ### SSL Bump Proxy (Advanced)
 
-Because SSL Bump intercepts encrypted traffic, it requires a custom CA certificate, a specialized container image, and platform-specific overlays.
+Because SSL Bump intercepts encrypted traffic, it requires a custom CA certificate and a custom container image. The overlays reference the image as the placeholder `REPLACE_SQUID_SSL_BUMP_IMAGE`, which you replace at deploy time.
 
-| Overlay | Path | Image |
-|---------|------|-------|
-| `kind` | `https-ssl-bump/overlays/kind` | `squid-ssl-bump:local` (locally built) |
-| `openshift` | `https-ssl-bump/overlays/openshift` | your registry — set `$SQUID_IMAGE_REGISTRY` or `--registry` |
-
-**Step 1 — generate the CA certificate**
+**Step 1: generate the CA certificate**
 
 Because the Squid deployment mounts the certificate secrets, they must exist in the cluster before the deployment process begins.
 
@@ -180,67 +136,58 @@ Because the Squid deployment mounts the certificate secrets, they must exist in 
 | `squid-ssl-certs` | CA cert + private key | Squid proxy (signs intercepted TLS) |
 | `squid-ca-public-cert` | CA cert only | Client pods (trust the proxy CA) |
 
-
-To automatically generate the secrets run:
+To generate the secrets in the current context's namespace run:
 ```bash
 ./helpers/multimedia-downloader/implementations/squid/test/generate-ssl-certs.sh
 ```
 
-**Step 2 — deploy**
+**Step 2: deploy**
 
-First build the [Dockerfile](docker/Dockerfile.squid-ssl-bump) (required for both platforms):
-
-```bash
-docker build -t squid-ssl-bump:local \
-  -f helpers/multimedia-downloader/implementations/squid/docker/Dockerfile.squid-ssl-bump \
-  helpers/multimedia-downloader/implementations/squid/docker/
-```
-
-Next run the following commands depending on the platform:
-
-#### kind
-
-```bash
-kind load docker-image squid-ssl-bump:local
-kubectl apply -k helpers/multimedia-downloader/implementations/squid/https-ssl-bump/overlays/kind
-kubectl apply -f helpers/multimedia-downloader/service.yaml
-kubectl rollout status deployment/multimedia-downloader --timeout=120s
-```
-
-#### OpenShift
+First build the [Dockerfile](docker/Dockerfile.squid-ssl-bump) and push it to a registry that your cluster can access:
 
 ```bash
 export SQUID_IMAGE_REGISTRY=<your-registry>
+docker build -t ${SQUID_IMAGE_REGISTRY}/squid-ssl-bump:dev \
+  -f helpers/multimedia-downloader/implementations/squid/docker/Dockerfile.squid-ssl-bump \
+  helpers/multimedia-downloader/implementations/squid/docker/
+docker push ${SQUID_IMAGE_REGISTRY}/squid-ssl-bump:dev
 ```
 
+Next apply the overlay for your platform and point the deployment at the pushed image:
+
 ```bash
-docker tag squid-ssl-bump:local ${SQUID_IMAGE_REGISTRY}/squid-ssl-bump:dev
-docker push ${SQUID_IMAGE_REGISTRY}/squid-ssl-bump:dev
-kubectl apply -k helpers/multimedia-downloader/implementations/squid/https-ssl-bump/overlays/openshift
+kubectl apply -k helpers/multimedia-downloader/implementations/squid/https-ssl-bump/overlays/${PLATFORM}
 kubectl set image deployment/multimedia-downloader squid=${SQUID_IMAGE_REGISTRY}/squid-ssl-bump:dev
 kubectl apply -f helpers/multimedia-downloader/service.yaml
 kubectl rollout status deployment/multimedia-downloader --timeout=120s
 ```
 
-**Step 3 — verify**
+**Step 3: verify**
 
-Deploy the CA-trusting test pod and run two requests. The first should be a cache miss, the second a cache hit:
+Deploy the CA-trusting test client, run the same HTTPS request twice, then read the cache status from the Squid log. Both requests return `200`; the log shows `TCP_MISS` for the first and `TCP_MEM_HIT` (or `TCP_HIT`) for the second.
+The test client is a curl Deployment built with the same `client-trust` Component that production clients use (see below):
 
 ```bash
-kubectl apply -f helpers/multimedia-downloader/implementations/squid/test/curl-test-pod.yaml
-kubectl wait --for=condition=Ready pod/curl-ssl-test-pod --timeout=120s
-kubectl exec curl-ssl-test-pod -- curl -sf -o /dev/null -w "miss: %{http_code}\n" https://images.dog.ceo/breeds/poodle-standard/n02113799_2280.jpg
-kubectl exec curl-ssl-test-pod -- curl -sf -o /dev/null -w "hit:  %{http_code}\n" https://images.dog.ceo/breeds/poodle-standard/n02113799_2280.jpg
+kubectl apply -k helpers/multimedia-downloader/implementations/squid/test
+kubectl rollout status deployment/curl-ssl-test --timeout=120s
+kubectl exec deployment/curl-ssl-test -- curl -sf -o /dev/null -w "%{http_code}\n" https://images.dog.ceo/breeds/poodle-standard/n02113799_2280.jpg
+kubectl exec deployment/curl-ssl-test -- curl -sf -o /dev/null -w "%{http_code}\n" https://images.dog.ceo/breeds/poodle-standard/n02113799_2280.jpg
+kubectl logs -l app=multimedia-downloader -c squid --tail=5 | grep n02113799_2280.jpg
 ```
 
 #### Configuring Client Pods (Production)
 
-To route a real workload's traffic through the SSL Bump proxy, you must inject the Squid CA and proxy environment variables. Patch your client's Kustomize deployment:
+To route a real workload's traffic through the SSL Bump proxy, you must inject the Squid CA and proxy environment variables. Add the [client-trust](https-ssl-bump/client-trust/) Component to your client's Kustomization. It patches every Deployment in that Kustomization:
 
 ```yaml
-patches:
-  - path: path/to/https-ssl-bump/patch-client-deployment.yaml
-    target:
-      kind: Deployment
-      name: <your-client-deployment-name>
+components:
+  - path/to/helpers/multimedia-downloader/implementations/squid/https-ssl-bump/client-trust
 ```
+
+The Component sets `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE` so OpenSSL-based clients (Python `ssl`/`aiohttp`, Go), Python `requests` and curl all trust the Squid CA. See the Component's [kustomization.yaml](https-ssl-bump/client-trust/kustomization.yaml) for the container-name requirement.
+
+The proxy is reached through its Service's private ClusterIP. A client that guards against
+server-side request forgery by blocking private address ranges must be told to allow them,
+or its proxy connection fails with an error such as `address resolves to a blocked range`.
+For the llm-d Coordinator this is the `allow_private_networks: true` parameter of the
+`replace-media-urls` step in its pipeline configuration.

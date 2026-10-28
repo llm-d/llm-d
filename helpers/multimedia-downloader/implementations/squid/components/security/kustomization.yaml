@@ -1,6 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
+# Non-root hardening shared by all platforms. OpenShift assigns the uid itself;
+# plain Kubernetes overlays add runAsUser where the image needs one.
 patches:
 - target:
     kind: Deployment
@@ -10,11 +12,11 @@ patches:
       path: /spec/template/spec/securityContext
       value:
         runAsNonRoot: true
-        fsGroup: 13
+        seccompProfile:
+          type: RuntimeDefault
     - op: add
       path: /spec/template/spec/containers/0/securityContext
       value:
         allowPrivilegeEscalation: false
         capabilities:
           drop: ["ALL"]
-        runAsUser: 13

@@ -24,18 +24,17 @@ LABEL description="Squid Proxy with SSL-Bump support"
 
 COPY --from=builder /mnt/rootfs /
 
-# Consolidate directory creation, cert generation, and permissions into a single layer
+# Create the writable directories; the entrypoint initializes the SSL DB on first start.
 RUN mkdir -p /var/lib/squid /var/log/squid /var/run/squid /etc/squid/certs /var/cache/squid \
-    && /usr/lib64/squid/security_file_certgen -c -s /var/lib/squid/ssl_db -M 4MB \
     && chown -R squid:root /var/lib/squid /var/log/squid /var/run/squid /etc/squid/certs /var/cache/squid \
     && chmod -R g+rwX /var/lib/squid /var/log/squid /var/run/squid /etc/squid/certs /var/cache/squid
 
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/
 
 EXPOSE 3128
 
-USER squid
+# Numeric uid of the squid user, so Kubernetes can verify runAsNonRoot.
+USER 23
 WORKDIR /var/cache/squid
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

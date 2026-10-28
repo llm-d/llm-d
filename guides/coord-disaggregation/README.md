@@ -477,8 +477,9 @@ redundant fetches across requests. Caching HTTPS origins requires the proxy to
 terminate TLS and re-sign responses with its own CA (SSL-Bump), which means the
 Coordinator needs to trust that CA.
 
-This repo doesn't ship a caching proxy of its own — deploy one for your cluster (e.g.
-an SSL-Bump-configured Squid), then trust its CA in the Coordinator with
+Deploy a caching proxy for your cluster (e.g. an SSL-Bump-configured Squid; the
+[multimedia downloader helper](../../helpers/multimedia-downloader/README.md) is one option
+that also creates the CA secrets), then trust its CA in the Coordinator with
 [`multimedia-downloader/patch-coordinator-ca.yaml`](multimedia-downloader/patch-coordinator-ca.yaml).
 This requires the Coordinator from step 3 to already be deployed:
 

@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: squid
-        image: ubuntu/squid:6.1-23.10_beta
+        image: ubuntu/squid:6.6-24.04_beta
         imagePullPolicy: IfNotPresent
         command: ["/bin/sh", "-c"]
         args:
@@ -36,6 +36,9 @@ spec:
         - name: squid-config
           mountPath: /etc/squid/squid.conf
           subPath: squid.conf
+        - name: squid-config
+          mountPath: /etc/squid/common.conf
+          subPath: common.conf
         - name: cache-volume
           mountPath: /var/cache/squid
         livenessProbe:

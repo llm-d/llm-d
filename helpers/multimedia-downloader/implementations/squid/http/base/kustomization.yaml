@@ -11,4 +11,4 @@ labels:
 
 images:
 - name: ubuntu/squid
-  newTag: 6.1-23.10_beta
+  newTag: 6.6-24.04_beta

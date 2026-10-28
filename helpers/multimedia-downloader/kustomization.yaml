@@ -2,13 +2,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-# Base service — implementations expose a port named http-proxy, which the service
+# Base service. Implementations expose a port named http-proxy, which the service
 # resolves automatically via targetPort: http-proxy (no service patch needed).
 - service.yaml
-# Cache implementation
+# Cache implementation, plain-Kubernetes overlay. For OpenShift apply
+# implementations/squid/http/overlays/openshift plus service.yaml instead
+# (see implementations/squid/README.md).
 - implementations/squid/http
 
-
-commonLabels:
-  component: multimedia-downloader
-
+labels:
+- pairs:
+    component: multimedia-downloader

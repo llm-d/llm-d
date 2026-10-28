@@ -6,16 +6,25 @@ metadata:
     cache-implementation: squid
     component: multimedia-downloader
 data:
+  # Listener. Variants replace only this key and include common.conf.
   squid.conf: |-
+    http_port 8080
+
+    # The Ubuntu build has ICMP support. Disable the pinger: containers run
+    # without NET_RAW, so the helper would fail to open raw sockets and produce
+    # FATAL log noise. The UBI SSL Bump build lacks ICMP and rejects these.
+    pinger_enable off
+    netdb_filename none
+
+    include /etc/squid/common.conf
+
+  # Directives shared by all variants.
+  common.conf: |-
     access_log stdio:/dev/stdout squid
     cache_log /dev/stderr
 
-    # --- Listen Port ---
-    http_port 8080
-
-    # --- PID/Files for Non-Root Compliance ---
+    # --- PID File for Non-Root Compliance ---
     pid_filename /var/cache/squid/squid.pid
-    netdb_filename none
 
     # --- Storage & Caching ---
     cache_mem 256 MB
@@ -27,11 +36,7 @@ data:
     http_access allow all
 
     # --- Performance & DNS ---
-    # Disable ICMP pinger: containers run without NET_RAW capability, so the
-    # pinger helper would fail to open raw sockets and produce FATAL log noise.
-    pinger_enable off
     collapsed_forwarding on
-    # External DNS resolvers are used so that Squid can reach internet hosts.
-    # Squid does not resolve in-cluster service names, so keep NO_PROXY set
-    # for .svc and .cluster.local addresses in any client configuration.
-    dns_nameservers 8.8.8.8 8.8.4.4
+    # Stop quickly on SIGTERM (default 30s) so rollouts do not overlap.
+    shutdown_lifetime 1 seconds
+    # Name resolution uses the cluster DNS from /etc/resolv.conf.
