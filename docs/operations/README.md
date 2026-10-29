@@ -42,6 +42,12 @@ Scale-from-zero autoscaling of Fast Model Actuation on EPP flow-control metrics.
 
 Measure cold and warm starts, and fix Hugging Face rate limits and timeouts, startup-probe restarts, and cache storage errors.
 
+## Deploy in Disconnected & Air-Gapped Clusters
+
+### [Air-Gapped & Disconnected Cluster Installation](air-gapped-installation.md)
+
+Deploy llm-d in strictly offline environments: local CRD registration, container image mirroring, internal OCI Helm charts, and pre-staged model weights with `HF_HUB_OFFLINE=1`.
+
 ## Manage Inference Pool Lifecycle
 
 ### [Graceful Shutdown & Draining](lifecycle/graceful-shutdown.md)
