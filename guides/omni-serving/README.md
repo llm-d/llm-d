@@ -266,7 +266,7 @@ Serves an image-generation checkpoint, one model server per accelerator:
 
 Both XPU engines use 2 replicas × 1 Arc Pro B60 and are community support, **not** nightly E2E coverage:
 
-- **vLLM-Omni:** Set `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllmomni`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=stabilityai/stable-diffusion-xl-base-1.0`. The overlay serves SDXL through [`patch-vllm-omni.yaml`](modelserver/xpu/vllmomni/common/patch-vllm-omni.yaml). vLLM-Omni does not currently publish an XPU image, so check out commit `fb7ab707`, build the image, and make `vllm-omni-xpu:sha-fb7ab707` available on every target node (or publish it and update the `xpu-vllm-omni` image component):
+- **vLLM-Omni:** Set `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllmomni`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=stabilityai/stable-diffusion-xl-base-1.0`. The overlay serves SDXL through [`patch-vllm-omni.yaml`](modelserver/xpu/vllmomni/text-to-image/base/patch-vllm-omni.yaml). vLLM-Omni does not currently publish an XPU image, so check out commit `fb7ab707`, build the image, and make `vllm-omni-xpu:sha-fb7ab707` available on every target node (or publish it and update the `xpu-vllm-omni` image component):
 
   ```bash
   docker build --target vllm-omni-openai \
