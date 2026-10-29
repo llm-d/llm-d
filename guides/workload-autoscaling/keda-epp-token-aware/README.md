@@ -1,9 +1,6 @@
-# [Experimental] Token-Aware Autoscaling
+# Token-Aware Autoscaling
 
 KEDA queries Prometheus directly for two signals — one EPP-emitted, one vLLM-emitted — and scales your model servers on **tokens of outstanding work** rather than a count of requests. No WVA controller, no Prometheus Adapter — just KEDA, Prometheus, and your model servers.
-
-> [!WARNING]
-> This guide is experimental and subject to change. The metrics, configurations, and APIs may evolve as the feature matures. Use in development and test environments only.
 
 **Why tokens.** An 8192-token prompt is 16× the prefill work of a 512-token one, and a request counter rates them the same. Queue depth and running-request signals (the [keda-epp](../keda-epp/README.md) guide's queue and saturation overlays) therefore hold well when prompt sizes are homogeneous and drift when they are not: the same request rate can be a third of a replica or three replicas of prefill work. This path closes that gap by counting the tokens themselves.
 
