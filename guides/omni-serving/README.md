@@ -575,6 +575,7 @@ Then remove the router, the monitoring resources, and the namespace:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING=true and MODEL_SERVER=vllmomni:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->

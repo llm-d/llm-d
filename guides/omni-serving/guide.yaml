@@ -238,6 +238,7 @@ cleanup:
         run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - when: {MONITORING: ["true"], MODEL_SERVER: [vllmomni]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
     - skip_in: [ci]
       run: kubectl delete namespace ${NAMESPACE}
