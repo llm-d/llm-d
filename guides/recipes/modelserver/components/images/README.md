@@ -51,6 +51,8 @@ This directory contains Kustomize Components that define the **default container
 ├── torch-tpu-vllm
 │   ├── nightly
 │   └── release
+├── tpu-sglang
+│   └── release
 ├── tpu-vllm
 │   ├── nightly
 │   └── release

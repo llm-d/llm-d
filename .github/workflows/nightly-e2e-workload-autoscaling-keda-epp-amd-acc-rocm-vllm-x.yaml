@@ -9,8 +9,8 @@ on:
     - cron: '0 13 * * *'  # 13:00 UTC daily
   workflow_dispatch:
     inputs:
-      # decode_pods, prefill_pods, harness and workload are accepted only because
-      # /test-nightly passes them to every non-WVA nightly. This lane ignores them.
+      # decode_pods, prefill_pods, harness, workload and verbose are accepted only
+      # because /test-nightly passes them to every non-WVA nightly. This lane ignores them.
       decode_pods:
         description: 'Unused on this path (accepted for /test-nightly compatibility)'
         required: false
@@ -31,6 +31,11 @@ on:
         required: false
         type: 'string'
         default: 'sanity_random.yaml'
+      verbose:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'false'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
         required: false
