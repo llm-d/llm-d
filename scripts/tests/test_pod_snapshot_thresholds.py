@@ -175,7 +175,7 @@ def metrics_pod(*, created=0, scheduled=5, sandbox=30, pulled=50, started=55, re
     }
 
 
-COLD_MARKER_OFFSETS = {  # seconds after Pod 1's creation; keys = st.COLD_MARKERS
+COLD_MARKER_OFFSETS = {  # seconds after Pod 1's creation; keys = st.COLD_BREAKDOWN_MARKERS + st.COLD_MARKERS
     "weights_begin_ts": 90,
     "weights_end_ts": 160,
     "kv_ts": 167,
@@ -253,6 +253,7 @@ def test_restore_metrics_are_contiguous_and_add_up():
     assert (m["1a"], m["1b"], m["1c"], m["1d"]) == (1, 3, 1, 1)
     assert (m["4e"], m["4f"], m["3"]) == (4, 6.5, 3.5)
     assert m["1"] + m["4e"] + m["4f"] + m["3"] == 20
+    assert m["wsr"] == 19
 
 
 def test_missing_log_markers_collapse_to_zero_length_steps_not_negative_ones():
@@ -282,6 +283,7 @@ def good_pods():
 
 
 SNAP_READY = at(290)  # good_pods()' PodSnapshot reached Ready 290s after Pod 1 was created
+WSR_CHECK = "Warm Start on Pod 2 (WSR = 1b+1c+1d+4e+4f+3)"
 
 
 def evaluate(p1, p2, engine="vllm", snap_ready=SNAP_READY):
@@ -293,9 +295,9 @@ def test_thresholds_table_is_the_agreed_one():
     # Deliberate changes to the alerting thresholds should show up as a test change.
     assert ct.THRESHOLDS == {
         "vllm": {"max_e2e_cold_start_s": 1800.0, "max_cold_start_s": 350.0,
-                 "max_snapshot_overhead_s": 65.0, "min_restore_speedup": 11.0},
+                 "max_snapshot_overhead_s": 65.0, "max_warm_start_s": 30.0},
         "sglang": {"max_e2e_cold_start_s": 1800.0, "max_cold_start_s": 350.0,
-                   "max_snapshot_overhead_s": 90.0, "min_restore_speedup": 11.0},
+                   "max_snapshot_overhead_s": 90.0, "max_warm_start_s": 30.0},
     }
 
 
@@ -309,18 +311,12 @@ def test_a_healthy_run_passes_every_check(engine):
         "E2E Cold Start (Rows 1+2+3)", "Cold Start, no node provisioning (1b+1c+1d+2)",
         "Total Snapshot Overhead Time (Row 4)",
         "Pod 2 phase markers",
-        "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)",
+        "Warm Start on Pod 2 (WSR = 1b+1c+1d+4e+4f+3)",
         "Application Cold Start on Pod 2 (Row 2)",
     ]
     detail = {c.name: c.detail for c in checks}
-    # ECS = 55 + 152 + 39; CS = 25 + 20 + 5 + 152; TSOT = 54; WSR = 3 + 1 + 4 + 6.5 + 3.5 = 18.
-    assert detail["PodSnapshot Ready"] == "Ready 290s after Pod 1 was created"
-    assert detail["Pod 1 phase markers"] == "all 8 present"
-    assert detail["Pod 2 phase markers"] == "all 2 present"
-    assert detail["E2E Cold Start (Rows 1+2+3)"].startswith("246.00s <= 1800s")
-    assert detail["Cold Start, no node provisioning (1b+1c+1d+2)"].startswith("202.00s <= 350s")
-    assert detail["Total Snapshot Overhead Time (Row 4)"].startswith("0 < 54.00s <= ")
-    assert detail["Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)"].startswith("13.67x >= 11x (WSR 18.00s)")
+    assert "290s" in detail["PodSnapshot Ready"]
+    assert "12.9x" in detail[WSR_CHECK]
 
 
 @pytest.mark.parametrize("marker", st.COLD_MARKERS)
@@ -330,12 +326,26 @@ def test_missing_pod_1_phase_marker_fails_check(marker):
     checks = evaluate(p1, p2, "vllm")
     assert names_of(checks, False) == ["Pod 1 phase markers"]
     detail = next(c.detail for c in checks if c.name == "Pod 1 phase markers")
-    assert detail == f"missing: {marker}"
+    assert marker in detail
     check_names = [c.name for c in checks]
     assert "E2E Cold Start (Rows 1+2+3)" not in check_names
     assert "Cold Start, no node provisioning (1b+1c+1d+2)" not in check_names
     assert "Total Snapshot Overhead Time (Row 4)" not in check_names
-    assert "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)" not in check_names
+    # The Warm Start ceiling does not depend on Pod 1, so it is still evaluated.
+    assert WSR_CHECK in check_names
+
+
+@pytest.mark.parametrize("marker", st.COLD_BREAKDOWN_MARKERS)
+def test_missing_pod_1_breakdown_marker_warns_without_failing(marker):
+    p1, p2 = good_pods()
+    p1["log"] = cold_log(**{marker: None})
+    checks = evaluate(p1, p2, "vllm")
+    assert names_of(checks, False) == []
+    detail = next(c.detail for c in checks if c.name == "Pod 1 phase markers")
+    assert "warning" in detail and marker in detail
+    # Row 2's total (t_2g - t_1d = 152s) and all composite metrics are unaffected.
+    c = st.compute_cold_metrics(p1)
+    assert (c["2"], c["ecs"], c["cs"], c["4"]) == (152, 246, 202, 54)
 
 
 @pytest.mark.parametrize("marker", st.RESTORE_MARKERS)
@@ -345,8 +355,8 @@ def test_missing_pod_2_phase_marker_fails_check(marker):
     checks = evaluate(p1, p2, "vllm")
     assert names_of(checks, False) == ["Pod 2 phase markers"]
     detail = next(c.detail for c in checks if c.name == "Pod 2 phase markers")
-    assert detail == f"missing: {marker}"
-    assert "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)" not in [c.name for c in checks]
+    assert marker in detail
+    assert WSR_CHECK not in [c.name for c in checks]
 
 
 def test_slow_e2e_cold_start_fails_only_that_check():
@@ -357,9 +367,9 @@ def test_slow_e2e_cold_start_fails_only_that_check():
     p1["log"] = cold_log(shift=1595)
     p1["ready"] = at(1895)
     checks = evaluate(p1, p2, "vllm")
-    # ECS = 1650 + 152 + 39 = 1841 > 1800; CS is unchanged and the speedup only grows.
+    # ECS = 1650 + 152 + 39 = 1841 > 1800; CS and WSR are unchanged.
     assert names_of(checks, False) == ["E2E Cold Start (Rows 1+2+3)"]
-    assert "1841.00s <= 1800s" in next(c.detail for c in checks if not c.passed)
+    assert "1841.00s" in next(c.detail for c in checks if not c.passed)
 
 
 def test_slow_application_cold_start_fails_cold_start_but_not_the_node_wait():
@@ -392,13 +402,25 @@ def test_zero_snapshot_overhead_fails_because_no_snapshot_was_taken():
     assert failed == ["Total Snapshot Overhead Time (Row 4)"]
 
 
-def test_slow_restore_fails_the_speedup_check():
+@pytest.mark.parametrize("engine,up,ok", [("vllm", 27, True), ("vllm", 28, False), ("sglang", 27, True), ("sglang", 28, False)])
+def test_warm_start_is_checked_against_an_absolute_ceiling(engine, up, ok):
     p1, p2 = good_pods()
-    p2["log"] = restore_log(restore=10, up=30)  # 4f = 20s, 3 = 4s -> WSR = 3+1+4+20+4 = 32s -> 7.7x
+    # 4f stretches with `up`; 3 stays 4s: WSR = 3 + 1 + 1 + 4 + (up - 10) + 4 = up + 3 -> 30s passes, 31s fails.
+    p2["log"] = restore_log(restore=10, up=up)
+    p2["ready"] = at(1000 + up + 4)
+    checks = evaluate(p1, p2, engine)
+    assert (names_of(checks, False) == [WSR_CHECK]) is (not ok)
+    assert f"{up + 3:.2f}s" in next(c.detail for c in checks if c.name == WSR_CHECK)
+
+
+def test_a_slow_cold_start_does_not_mask_a_slow_restore():
+    # The old ECS / WSR ratio passed a 32s restore when the HF download was slow; the ceiling does not.
+    p1, p2 = good_pods()
+    p1["log"] = cold_log(after=("weights_end_ts", 230))  # weights took 300s instead of 70s
+    p1["ready"] = at(530)
+    p2["log"] = restore_log(restore=10, up=30)
     p2["ready"] = at(1034)
-    checks = evaluate(p1, p2, "vllm")
-    assert names_of(checks, False) == ["Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)"]
-    assert "7.69x >= 11x (WSR 32.00s)" in next(c.detail for c in checks if not c.passed)
+    assert WSR_CHECK in names_of(evaluate(p1, p2, "vllm"), False)
 
 
 def test_pod_2_that_cold_started_instead_of_restoring_fails():
@@ -409,8 +431,8 @@ def test_pod_2_that_cold_started_instead_of_restoring_fails():
     failed = names_of(checks, False)
     assert failed == ["Application Cold Start on Pod 2 (Row 2)"]
     assert "152.00s (Pod 2 did not restore)" in next(c.detail for c in checks if not c.passed)
-    # No restore metrics, so no speedup check at all rather than a misleading pass.
-    assert "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)" not in [c.name for c in checks]
+    # No restore metrics, so no warm-start check at all rather than a misleading pass.
+    assert WSR_CHECK not in [c.name for c in checks]
 
 
 def test_pod_2_unrestored_with_empty_logs_fails_instead_of_false_passing():
@@ -421,7 +443,7 @@ def test_pod_2_unrestored_with_empty_logs_fails_instead_of_false_passing():
     failed = names_of(checks, False)
     assert failed == ["Application Cold Start on Pod 2 (Row 2)"]
     assert "Pod 2 did not restore" in next(c.detail for c in checks if not c.passed)
-    assert "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)" not in [c.name for c in checks]
+    assert WSR_CHECK not in [c.name for c in checks]
 
 
 def test_pod_1_restored_from_a_stale_snapshot_fails_and_skips_the_cold_start_metrics():
@@ -436,7 +458,7 @@ def test_missing_pod_2_fails_presence_and_skips_restore_checks():
     p1, _ = good_pods()
     checks = evaluate(p1, None, "vllm")
     assert names_of(checks, False) == ["Pod 2 present"]
-    assert "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)" not in [c.name for c in checks]
+    assert WSR_CHECK not in [c.name for c in checks]
 
 
 @pytest.mark.parametrize("pod", ["p1", "p2"])
@@ -450,7 +472,8 @@ def test_a_pod_that_is_not_ready_fails_its_presence_check(pod):
     assert failed == ["Pod 1 cold started" if pod == "p1" else "Pod 2 present"]
     if pod == "p1":
         assert "E2E Cold Start (Rows 1+2+3)" not in [c.name for c in checks]
-    assert "Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)" not in [c.name for c in checks]
+    # Pod 2's warm start is checked whenever Pod 2 is Ready; it does not depend on Pod 1.
+    assert (WSR_CHECK in [c.name for c in checks]) is (pod == "p1")
 
 
 def test_no_podsnapshot_ready_during_pod_1_fails_only_that_check():
@@ -459,14 +482,14 @@ def test_no_podsnapshot_ready_during_pod_1_fails_only_that_check():
     assert "no PodSnapshot reached Ready since Pod 1 was created" in next(c.detail for c in checks if not c.passed)
 
 
-def test_zero_warm_start_fails_the_speedup_check_instead_of_passing_as_infinite():
+def test_zero_warm_start_fails_instead_of_passing_as_a_0s_restore():
     p1, _ = good_pods()
     # Every restore boundary on the container start: WSR = 0 means missing data, not a 0s restore.
     p2 = metrics_pod(created=1000, scheduled=1000, sandbox=1000, pulled=1000, started=1000, ready=1000,
                      restored=1000, log={"restored": True, "restore_ts": at(1000), "up_ts": at(1000)})
     checks = evaluate(p1, p2, "vllm")
-    assert names_of(checks, False) == ["Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)"]
-    assert "0.00x >= 11x (WSR 0.00s)" in next(c.detail for c in checks if not c.passed)
+    assert names_of(checks, False) == [WSR_CHECK]
+    assert "0.00s" in next(c.detail for c in checks if not c.passed)
 
 
 # --- Pod selection and the end-to-end path through load_pods -----------------------------------
@@ -483,6 +506,22 @@ def test_load_pods_picks_oldest_as_pod_1_and_reads_the_cluster_in_one_pass(engin
     assert sorted(gets) == ["events", "pods", "podsnapshots"]
     assert [c[1] for c in kube.calls if c[0] == "logs"] == ["ms-1", "ms-2"]
     assert kube.calls[0] == ("get", "pods", "-l", SELECTOR)
+
+
+def test_load_pods_uses_pre_smoke_pods_json_when_present(tmp_path):
+    import json
+    kube = two_pods("sglang")
+    pods_file = tmp_path / "pods.json"
+    pods_file.write_text(json.dumps(kube._get["pods"]))
+    # Simulate a readiness probe blip during the smoke loop: live `kubectl get pods` now reports
+    # Ready at 1090s (WSR = 89s, which would fail), while pods.json still has Ready at 1020s (WSR = 19s).
+    kube._get["pods"]["items"][0] = k8s_pod(
+        "ms-2", created=1000, scheduled=1001, sandbox=1004, started=1006, ready=1090, restored=1010
+    )
+    p1, p2, _ = st.load_pods(kube, SELECTOR, str(pods_file))
+    assert p2["ready"] == at(1020)
+    assert [c[1] for c in kube.calls if c[0] == "get"] == ["events", "podsnapshots"]
+    assert names_of(evaluate(p1, p2, "sglang"), False) == []
 
 
 def test_load_pods_ignores_terminating_and_terminal_pods():
@@ -537,7 +576,7 @@ def test_csv_has_five_columns_and_the_composite_metrics(tmp_path):
     assert by_name[("ColdStart", "E2E Cold Start (including node provisioning)")] == pytest.approx(246)
     assert by_name[("ColdStart", "Cold Start (excluding node provisioning)")] == pytest.approx(202)
     assert by_name[("ColdStart", "Total Snapshot Overhead Time")] == pytest.approx(54)
-    assert by_name[("Restore", "Warm Start (from restoration)")] == pytest.approx(18)
+    assert by_name[("Restore", "Warm Start (from restoration)")] == pytest.approx(19)
     assert by_name[("ColdStart", "Total: pod created -> Ready")] == 300
     assert by_name[("ColdStart", "PodSnapshot Ready")] == 290
     assert set(mode for mode, _ in by_name) == {"ColdStart", "Restore"}
@@ -552,7 +591,7 @@ def test_report_prints_both_pods_and_the_composites(capsys):
     out = capsys.readouterr().out
     assert out.startswith("Seq,ModelServer,Mode,MetricName,MetricValue\n")
     assert "1,SGLang,ColdStart,E2E Cold Start (including node provisioning),246.00" in out
-    assert "1,SGLang,Restore,Warm Start (from restoration),18.00" in out
+    assert "1,SGLang,Restore,Warm Start (from restoration),19.00" in out
     assert "1,SGLang,ColdStart,Total Snapshot Overhead Time,54.00" in out
 
 
@@ -560,7 +599,7 @@ def test_report_prints_both_pods_and_the_composites(capsys):
 
 
 def test_main_runs_the_checks_even_if_the_report_crashes(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr(st, "load_pods", lambda kube, selector: (*good_pods(), SNAP_READY))
+    monkeypatch.setattr(st, "load_pods", lambda kube, selector, pods_json="": (*good_pods(), SNAP_READY))
     monkeypatch.setattr(st, "print_report", lambda *_a, **_k: 1 / 0)
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
@@ -575,16 +614,18 @@ def test_main_runs_the_checks_even_if_the_report_crashes(monkeypatch, capsys, tm
 
 def test_main_passes_the_csv_path_and_engine_to_the_report(monkeypatch, tmp_path):
     seen = {}
-    monkeypatch.setattr(st, "load_pods", lambda kube, selector: (*good_pods(), SNAP_READY))
+    monkeypatch.setattr(st, "load_pods",
+                        lambda kube, selector, pods_json="": (seen.update(pods_json=pods_json), *good_pods(), SNAP_READY)[1:])
     monkeypatch.setattr(st, "print_report", lambda p1, p2, snap, engine, csv_path: seen.update(engine=engine, csv=csv_path))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
-    assert ct.main(["--namespace", "ns", "--engine", "sglang", "--csv", str(tmp_path / "r.csv")]) == 0
-    assert seen == {"engine": "sglang", "csv": str(tmp_path / "r.csv")}
+    assert ct.main(["--namespace", "ns", "--engine", "sglang",
+                    "--pods-json", str(tmp_path / "pods.json"), "--csv", str(tmp_path / "r.csv")]) == 0
+    assert seen == {"pods_json": str(tmp_path / "pods.json"), "engine": "sglang", "csv": str(tmp_path / "r.csv")}
 
 
 def test_main_exits_1_on_a_failed_check(monkeypatch, capsys):
     p1, _ = good_pods()
-    monkeypatch.setattr(st, "load_pods", lambda kube, selector: (p1, None, SNAP_READY))
+    monkeypatch.setattr(st, "load_pods", lambda kube, selector, pods_json="": (p1, None, SNAP_READY))
     monkeypatch.setattr(st, "print_report", lambda *_a, **_k: None)
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     assert ct.main(["--namespace", "ns", "--engine", "vllm"]) == 1

@@ -35,8 +35,15 @@ KUBECTL_REQUEST_TIMEOUT = "30s"  # per API request, passed as --request-timeout
 # One regex per phase per engine, matching only the fixed part of each line: the numbers in the
 # lines are not used, and the image tags come from
 # guides/recipes/modelserver/components/images/gpu-{sglang,vllm}/release (bumped by other PRs).
-# A line that stops matching fails the nightly's phase-marker check rather than silently
-# collapsing a phase.
+#
+# The markers split into two groups:
+# - COLD_MARKERS and RESTORE_MARKERS are the phase boundary markers (Row 2 -> Row 4 -> Row 3, plus
+#   Row 4's 4c/4e/4f sub-steps). They come from docker/scripts/snapshot/{vllm,sglang}/wrapper.py
+#   (and vLLM's engine.wake_up() log line) and are required by check_thresholds.py so a missing
+#   boundary never silently collapses Row 2 or Row 4.
+# - COLD_BREAKDOWN_MARKERS are the Row 2 interior breakdown markers (2c..2g). They come from
+#   upstream vLLM/SGLang log text and only populate the informational CSV; a missing breakdown
+#   marker is reported as a warning without failing the nightly run.
 #
 # SGLang (docker.io/lmsysorg/sglang + docker/scripts/snapshot/sglang/)
 WEIGHTS_BEGIN_RE = re.compile(r"Load weight begin\.")
@@ -64,14 +71,16 @@ TRIGGER_RE = re.compile(r"Triggering snapshot checkpoint")
 CHECKPOINT_OK_RE = re.compile(r"Snapshot checkpoint created successfully")
 
 COLD_MARKERS = (
-    "weights_begin_ts",
-    "weights_end_ts",
-    "kv_ts",
-    "graph_end_ts",
     "warmup_done_ts",
     "released_ts",
     "checkpoint_ts",
     "up_ts",
+)
+COLD_BREAKDOWN_MARKERS = (
+    "weights_begin_ts",
+    "weights_end_ts",
+    "kv_ts",
+    "graph_end_ts",
 )
 RESTORE_MARKERS = ("restore_ts", "up_ts")
 
@@ -318,7 +327,7 @@ def compute_restore_metrics(pod):
         "4f": (t_4f - t_4e).total_seconds(),
         "3": (t_ready - t_4f).total_seconds(),
     }
-    m["wsr"] = m["1b"] + m["1c"] + m["4e"] + m["4f"] + m["3"]
+    m["wsr"] = m["1b"] + m["1c"] + m["1d"] + m["4e"] + m["4f"] + m["3"]
     return m
 
 
@@ -405,15 +414,25 @@ def print_report(p1, p2, snap_ready, engine, csv_path=""):
     print(write_csv(rows, csv_path=csv_path).rstrip("\n"))
 
 
-def load_pods(kubectl, selector):
+def load_pods(kubectl, selector, pods_json=""):
     """Reads the cluster in one pass: returns (pod1, pod2, podsnapshot_ready_ts).
 
     Pod 1 is the oldest live pod matching `selector` (cold start + snapshot) and Pod 2 the newest
     (restore from the snapshot); each is a pod_times dict, or None when there are fewer than one /
-    two pods. Pods being deleted or in a terminal phase (Failed, e.g. evicted, or Succeeded) are
-    ignored so a replaced pod is not mistaken for Pod 1. Raises RuntimeError when kubectl fails.
+    two pods. When `pods_json` points to a non-empty JSON file captured at the end of deploy
+    (before the readiness delay and smoke loop), pod conditions—including Ready's
+    lastTransitionTime—are read from it instead of a live `kubectl get pods`. Pods being deleted
+    or in a terminal phase (Failed, e.g. evicted, or Succeeded) are ignored so a replaced pod is
+    not mistaken for Pod 1. Raises RuntimeError when kubectl fails.
     """
-    pods = kubectl.json("get", "pods", "-l", selector)
+    path = pathlib.Path(pods_json) if pods_json else None
+    if path and path.is_file() and path.stat().st_size > 0:
+        try:
+            pods = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise RuntimeError(f"{pods_json} contained invalid JSON: {exc}") from exc
+    else:
+        pods = kubectl.json("get", "pods", "-l", selector)
     items = sorted(
         (p for p in pods.get("items", [])
          if not p.get("metadata", {}).get("deletionTimestamp")

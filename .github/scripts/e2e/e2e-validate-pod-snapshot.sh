@@ -48,6 +48,8 @@ done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPTS_DIR="${REPO_ROOT}/guides/pod-snapshot/scripts"
+# Pre-smoke-loop pod snapshot written by guides/pod-snapshot/scripts/nightly-deploy-gke.sh.
+PODS_JSON="${PODS_JSON:-/tmp/pod-snapshot.ci/pods.json}"
 # The reusable workflow uploads this directory as a run artifact.
 RESULTS_DIR="${RESULTS_DIR:-/tmp/pod-logs-pod-snapshot}"
 mkdir -p "${RESULTS_DIR}"
@@ -64,4 +66,5 @@ echo "=== Checking pod-snapshot alerting thresholds ==="
 exec python3 "${SCRIPTS_DIR}/check_thresholds.py" \
   --namespace "${NAMESPACE}" \
   --engine "${ENGINE}" \
+  --pods-json "${PODS_JSON}" \
   --csv "${RESULTS_DIR}/results.csv"

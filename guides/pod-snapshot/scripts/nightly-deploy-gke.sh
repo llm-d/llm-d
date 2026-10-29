@@ -13,11 +13,12 @@
 # needs and waits for it, then exits. Every deploy and wait step is emitted
 # from guides/pod-snapshot/guide.yaml via `scripts/guide.py emit`, the same
 # source the README is rendered from, so a guide change reaches the nightly
-# without a second edit; the script only adds Deployment-level waits around
-# the guide's pod waits (see below) and the CRD retry. Before deploying, it
-# empties the GCS snapshot bucket (the snapshots outlive the reusable's fresh
-# namespace) so Pod 1 always performs a true cold start. It finishes with Pod 1
-# (cold start + snapshot) and Pod 2 (restored from the snapshot) both Ready.
+# without a second edit; the script only adds a Deployment-level wait before
+# Pod 1's `kubectl wait pod -l` (see below), the CRD retry, and a pre-smoke-loop
+# `pods.json` snapshot. Before deploying, it empties the GCS snapshot bucket
+# (the snapshots outlive the reusable's fresh namespace) so Pod 1 always
+# performs a true cold start. It finishes with Pod 1 (cold start + snapshot)
+# and Pod 2 (restored from the snapshot) both Ready.
 #
 # The threshold checks run afterwards, in the reusable's validate step:
 # e2e_validate_args: '--extra-validate pod-snapshot -- --engine <vllm|sglang>'
@@ -27,7 +28,8 @@
 # Environment knobs (all optional except NAMESPACE and MODEL_SERVER):
 #   GCS_BUCKET       - Hierarchical-namespace GCS bucket for snapshots
 #                      (default: llm-d-scale-pod-snapshots-us-central1)
-#   OUTPUT_DIR       - Directory for emitted scripts (default: /tmp/pod-snapshot.ci)
+#   OUTPUT_DIR       - Directory for emitted scripts and pods.json
+#                      (default: /tmp/pod-snapshot.ci)
 #   CRD_RETRY_DELAY  - Seconds between CRD apply retries (default: 10)
 
 set -euo pipefail
@@ -160,22 +162,14 @@ kubectl wait --for=condition=Available "deployment/${DEPLOYMENT}" -n "${NAMESPAC
 bash "${SNAPSHOT_WAIT_SCRIPT}"
 
 echo "=== Scaling to 2 replicas and waiting for Pod 2 to restore from the snapshot ==="
-# Scale and wait for the rollout before running the guide's own restore step.
-# That step (emitted below, run under set -e) is `kubectl scale`, `kubectl wait
-# pod -l`, `kubectl get events`, `kubectl logs -l`. `kubectl wait` resolves its
-# targets once: right after the scale it can list only the already-Ready Pod 1
-# and return at once, and the `kubectl logs -l` that follows then fails on a
-# Pod 2 that exists but is still ContainerCreating, which aborts the deploy on a
-# healthy cluster. With both replicas available first, the step's own scale is
-# an idempotent no-op and its wait and logs run against two Running pods. (A
-# scale-up of an already-complete Deployment is not subject to
-# progressDeadlineSeconds, so rollout status only ends on its own timeout.)
-kubectl scale "deployment/${DEPLOYMENT}" -n "${NAMESPACE}" --replicas=2
-kubectl rollout status "deployment/${DEPLOYMENT}" -n "${NAMESPACE}" --timeout=600s
 RESTORE_WAIT_SCRIPT="${OUTPUT_DIR}/wait-restore.sh"
 emit env verify.tests.restore > "${RESTORE_WAIT_SCRIPT}"
 bash "${RESTORE_WAIT_SCRIPT}"
 
 echo "=== Deploy complete (emitted scripts in ${OUTPUT_DIR}) ==="
+# Snapshot the pod conditions before the reusable's 60s readiness delay and
+# smoke loop: Ready.lastTransitionTime is the most recent transition, so a probe
+# blip under smoke-test load would otherwise move t_ready to the re-Ready time.
+kubectl get pods -l "llm-d.ai/guide=${GUIDE_NAME}" -n "${NAMESPACE}" -o json > "${OUTPUT_DIR}/pods.json" || true
 kubectl get pods -n "${NAMESPACE}" || true
 kubectl get podsnapshots -n "${NAMESPACE}" || true
