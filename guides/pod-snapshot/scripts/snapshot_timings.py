@@ -7,14 +7,6 @@ kubectl logs per pod; no watching or polling), prints and writes the per-phase m
 CSV (Seq, ModelServer, Mode, MetricName, MetricValue; Seq is always 1 in the nightly) with
 print_report, and then evaluates the alerting thresholds with the compute_*_metrics helpers.
 
-Provenance: this file started as a trimmed copy of the demo's demo_phases.py (the
-pod-snapshot-sglang-demo branch, docker/scripts/snapshot/sglang/demo/demo_phases.py), which also
-has a live `watch` mode, terminal colors, per-milestone narration, a cold-start cache and a
-multi-iteration results.csv/.R writer. THIS FILE IS CANONICAL FOR THE NIGHTLY: the two are not
-kept in sync, and when the snapshot hooks change their log lines the regexes below are updated
-here against the images the nightly runs. The CSV header and metric names match the demo's
-results.csv so the two can still be compared.
-
 The helper only reads from the cluster: it runs kubectl get and kubectl logs.
 """
 
@@ -83,6 +75,29 @@ COLD_BREAKDOWN_MARKERS = (
     "graph_end_ts",
 )
 RESTORE_MARKERS = ("restore_ts", "up_ts")
+
+# Human-readable log substrings matched by each marker key, used in check failure/warning messages.
+MARKER_LOG_LINES = {
+    "weights_begin_ts": {"vllm": "Loading model from scratch...", "sglang": "Load weight begin."},
+    "weights_end_ts": {"vllm": "Model loading took", "sglang": "Load weight end."},
+    "kv_ts": {"vllm": "Available KV cache memory:", "sglang": "KV Cache is allocated."},
+    "graph_end_ts": {"vllm": "Graph capturing finished in", "sglang": "Capture ... cuda graph end."},
+    "warmup_done_ts": {
+        "vllm": "Executing engine.sleep(level=1) to release physical VRAM",
+        "sglang": "Holding server_status at Starting",
+    },
+    "released_ts": "Triggering snapshot checkpoint",
+    "checkpoint_ts": "Snapshot checkpoint created successfully",
+    "restore_ts": "Snapshot checkpoint created successfully",
+    "up_ts": {"vllm": "seconds to wake up", "sglang": "Restored server_status to"},
+}
+
+
+def marker_log_line(marker: str, engine: str = "vllm") -> str:
+    """Returns the expected log substring for `marker` under `engine`."""
+    entry = MARKER_LOG_LINES[marker]
+    return entry[engine] if isinstance(entry, dict) else entry
+
 
 TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$")
 
@@ -255,10 +270,10 @@ def is_restored(pod):
 
 # --- Metrics: the unified 1..4f hierarchy ---------------------------------------------------------
 #
-# 1  Kubernetes: schedule the pod and start the container   1a..1d
-# 2  LLM engine cold start                                   2c..2g     (Pod 1 only)
-# 3  Wait for the readiness probe
-# 4  Take the snapshot                                       4c, 4e, 4f (Pod 1; Pod 2 has 4e, 4f)
+# 1  Kubernetes: schedule the pod and start the container   1a..1d  (1a node wait, 1b sandbox, 1c pull, 1d start)
+# 2  LLM engine cold start                                  2c..2g  (Pod 1 only; 2a/2b uninstrumented)
+# 3  Wait for the readiness probe                           up_ts -> Pod Ready
+# 4  Take / restore the snapshot                            4c release, 4e checkpoint/restore, 4f resume
 #
 # The numbered steps add up to pod created -> Ready and the lettered sub-steps add up to their
 # step, so each boundary is clamped to be no earlier than the previous one.
@@ -267,10 +282,10 @@ def is_restored(pod):
 def compute_k8s_metrics(pod):
     """Computes contiguous Kubernetes sub-step durations (1, 1a..1d)."""
     t0 = pod["created"]
-    t_1a = max(t0, pod.get("scheduled") or t0)
-    t_1b = max(t_1a, pod.get("sandbox") or pod.get("pulling_ts") or t_1a)
-    t_1c = max(t_1b, pod.get("pulled_ts") or t_1b)
-    t_1d = max(t_1c, pod.get("started") or t_1c)
+    t_1a = max(t0, pod.get("scheduled") or t0)                             # PodScheduled
+    t_1b = max(t_1a, pod.get("sandbox") or pod.get("pulling_ts") or t_1a)  # sandbox / image pull start
+    t_1c = max(t_1b, pod.get("pulled_ts") or t_1b)                         # image pull finished
+    t_1d = max(t_1c, pod.get("started") or t_1c)                           # container startedAt
     return t_1d, {
         "1": (t_1d - t0).total_seconds(),
         "1a": (t_1a - t0).total_seconds(),
@@ -284,24 +299,25 @@ def compute_cold_metrics(pod):
     """Computes contiguous ColdStart metrics (1, 1a..1d, 2, 2c..2g, 3, 4, 4c, 4e, 4f) for Pod 1."""
     t_1d, k8s = compute_k8s_metrics(pod)
     log = pod["log"]
-    t_2c = max(t_1d, log.get("weights_begin_ts") or t_1d)
-    t_2d = max(t_2c, log.get("weights_end_ts") or t_2c)
-    t_2e = max(t_2d, log.get("kv_ts") or t_2d)
-    t_2f = max(t_2e, log.get("graph_end_ts") or t_2e)
-    t_2g = max(t_2f, log.get("warmup_done_ts") or t_2f)
+    t_2c = max(t_1d, log.get("weights_begin_ts") or t_1d)  # Python/engine init done, weight load begins
+    t_2d = max(t_2c, log.get("weights_end_ts") or t_2c)    # model weights loaded
+    t_2e = max(t_2d, log.get("kv_ts") or t_2d)             # KV cache allocated
+    t_2f = max(t_2e, log.get("graph_end_ts") or t_2e)      # CUDA graphs captured
+    t_2g = max(t_2f, log.get("warmup_done_ts") or t_2f)    # warmup finished; snapshot hook begins
 
-    t_4c = max(t_2g, log.get("released_ts") or t_2g)
-    t_4e = max(t_4c, log.get("checkpoint_ts") or t_4c)
-    t_4f = max(t_4e, log.get("up_ts") or t_4e)
-    t_ready = max(t_4f, pod.get("ready") or t_4f)
+    t_4c = max(t_2g, log.get("released_ts") or t_2g)       # GPU memory released to CPU RAM
+    t_4e = max(t_4c, log.get("checkpoint_ts") or t_4c)     # gVisor checkpoint written
+    t_4f = max(t_4e, log.get("up_ts") or t_4e)             # GPU memory resumed, server Up
+    t_ready = max(t_4f, pod.get("ready") or t_4f)          # Kubernetes Ready condition True
 
     m = {
         **k8s,
         "2": (t_2g - t_1d).total_seconds(),
-        "2c": (t_2c - t_1d).total_seconds(),
-        "2d": (t_2d - t_2c).total_seconds(),
-        "2e": (t_2e - t_2d).total_seconds(),
-        "2f": (t_2f - t_2e).total_seconds(),
+        # Missing breakdown markers yield None so the CSV prints "n/a" instead of "0.00".
+        "2c": (t_2c - t_1d).total_seconds() if "weights_begin_ts" in log else None,
+        "2d": (t_2d - t_2c).total_seconds() if "weights_end_ts" in log else None,
+        "2e": (t_2e - t_2d).total_seconds() if "kv_ts" in log else None,
+        "2f": (t_2f - t_2e).total_seconds() if "graph_end_ts" in log else None,
         "2g": (t_2g - t_2f).total_seconds(),
         "3": (t_ready - t_4f).total_seconds(),
         "4": (t_4f - t_2g).total_seconds(),
@@ -309,8 +325,8 @@ def compute_cold_metrics(pod):
         "4e": (t_4e - t_4c).total_seconds(),
         "4f": (t_4f - t_4e).total_seconds(),
     }
-    m["ecs"] = m["1"] + m["2"] + m["3"]
-    m["cs"] = m["1b"] + m["1c"] + m["1d"] + m["2"]
+    m["ecs"] = m["1"] + m["2"] + m["3"]               # E2E cold start (with node provisioning)
+    m["cs"] = m["1b"] + m["1c"] + m["1d"] + m["2"]    # Cold start (excluding 1a node wait and 3 probe)
     return m
 
 
@@ -318,16 +334,16 @@ def compute_restore_metrics(pod):
     """Computes contiguous Restore metrics (1, 1a..1d, 4e, 4f, 3) for Pod 2."""
     t_1d, k8s = compute_k8s_metrics(pod)
     log = pod["log"]
-    t_4e = max(t_1d, log.get("restore_ts") or pod.get("restored") or t_1d)
-    t_4f = max(t_4e, log.get("up_ts") or t_4e)
-    t_ready = max(t_4f, pod.get("ready") or t_4f)
+    t_4e = max(t_1d, log.get("restore_ts") or pod.get("restored") or t_1d)  # gVisor restore from GCS done
+    t_4f = max(t_4e, log.get("up_ts") or t_4e)                              # GPU memory resumed, server Up
+    t_ready = max(t_4f, pod.get("ready") or t_4f)                           # Kubernetes Ready condition True
     m = {
         **k8s,
         "4e": (t_4e - t_1d).total_seconds(),
         "4f": (t_4f - t_4e).total_seconds(),
         "3": (t_ready - t_4f).total_seconds(),
     }
-    m["wsr"] = m["1b"] + m["1c"] + m["1d"] + m["4e"] + m["4f"] + m["3"]
+    m["wsr"] = m["1b"] + m["1c"] + m["1d"] + m["4e"] + m["4f"] + m["3"]     # Pod 2 restore time (excludes 1a)
     return m
 
 
@@ -347,11 +363,12 @@ STEP_LABELS = {
     "2f": "Capture CUDA graphs / compile execution graph",
     "2g": "Start API server / frontend and run warm-up requests",
     "3": "Wait for the readiness probe",
-    "4": "Take the snapshot (phase 5)",  # the demo's results.csv name, kept for comparability
+    "4": "Take the snapshot",
     "4c": "Release GPU memory (weights + KV cache) to CPU RAM",
     "4e": "gVisor checkpoint + upload to GCS",
     "4f": "Resume GPU memory (weights + KV cache)",
 }
+RESTORE_STEP_LABELS = {**STEP_LABELS, "4e": "gVisor download + restore from GCS"}
 
 
 def csv_rows(cold_m, rest_m, p1, snap_ready, engine):
@@ -364,11 +381,12 @@ def csv_rows(cold_m, rest_m, p1, snap_ready, engine):
         if val is not None:
             out.append((model_server, mode, name, float(val)))
 
-    for mode, m in (("ColdStart", cold_m), ("Restore", rest_m)):
+    for mode, m, labels in (("ColdStart", cold_m, STEP_LABELS), ("Restore", rest_m, RESTORE_STEP_LABELS)):
         if m is not None:
-            for key, label in STEP_LABELS.items():
+            for key, label in labels.items():
                 if key in m:
-                    add(mode, f"{key}. {label}", m[key])
+                    out.append((model_server, mode, f"{key}. {label}",
+                                None if m[key] is None else float(m[key])))
     if cold_m is not None:
         add("ColdStart", "E2E Cold Start (including node provisioning)", cold_m["ecs"])
     if rest_m is not None:
@@ -392,7 +410,7 @@ def write_csv(rows, csv_path=""):
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(["Seq", "ModelServer", "Mode", "MetricName", "MetricValue"])
     for model_server, mode, name, val in rows:
-        writer.writerow([1, model_server, mode, name, f"{val:.2f}"])
+        writer.writerow([1, model_server, mode, name, "n/a" if val is None else f"{val:.2f}"])
     text = buf.getvalue()
     if csv_path:
         try:

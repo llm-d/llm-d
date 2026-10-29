@@ -71,6 +71,18 @@ def pod_state(pod) -> str:
     return "Ready" if pod.get("ready") else "not Ready"
 
 
+def pod_label(slot: str, pod) -> str:
+    """Formats 'Pod 1 (<pod-name>)' when `pod` has a name so on-callers can match uploaded log files."""
+    name = (pod or {}).get("name")
+    return f"{slot} ({name})" if name else slot
+
+
+def missing_lines_detail(markers: list[str], engine: str, label: str) -> str:
+    """Formats missing marker keys as the human-readable log lines expected in `label`'s log."""
+    quoted = ", ".join(f'"{st.marker_log_line(k, engine)}"' for k in markers)
+    return f"no {quoted} {'line' if len(markers) == 1 else 'lines'} in {label}'s log"
+
+
 def evaluate(p1, p2, engine: str, snap_ready=None) -> list[v.Check]:
     """Returns one verify_helpers.Check per alerting metric, plus the pod state, PodSnapshot and
     phase-marker checks, using the thresholds of `engine` (vllm or sglang). `snap_ready` is the
@@ -78,6 +90,7 @@ def evaluate(p1, p2, engine: str, snap_ready=None) -> list[v.Check]:
     None if none did."""
     t = THRESHOLDS[engine]
     checks: list[v.Check] = []
+    p1_label, p2_label = pod_label("Pod 1", p1), pod_label("Pod 2", p2)
 
     # A pod is only counted once it is Ready: with the Ready transition missing, row 3 collapses
     # to 0 and every composite metric gets easier, so a NotReady pod must not pass.
@@ -85,37 +98,41 @@ def evaluate(p1, p2, engine: str, snap_ready=None) -> list[v.Check]:
     p1_cold = p1_state == "Ready" and not st.is_restored(p1)
     p2_ok = p2_state == "Ready"
     checks.append(v.Check("Pod 1 cold started", p1_cold,
-                          "Ready, cold start" if p1_cold else
-                          "restored from an old snapshot" if p1_state == "Ready" else p1_state))
-    checks.append(v.Check("Pod 2 present", p2_ok, p2_state))
+                          f"{p1_label}: Ready, cold start" if p1_cold else
+                          f"{p1_label}: restored from an old snapshot" if p1_state == "Ready" else
+                          f"{p1_label}: {p1_state}"))
+    checks.append(v.Check("Pod 2 present", p2_ok, f"{p2_label}: {p2_state}"))
     # snap_ready is None both when no PodSnapshot reached Ready and when there is no Pod 1 to
     # attribute one to; the Pod 1 check above says which.
     checks.append(v.Check("PodSnapshot Ready", snap_ready is not None,
-                          f"Ready {(snap_ready - p1['created']).total_seconds():.0f}s after Pod 1 was created"
-                          if snap_ready is not None else "no PodSnapshot reached Ready since Pod 1 was created"))
+                          f"Ready {(snap_ready - p1['created']).total_seconds():.0f}s after {p1_label} was created"
+                          if snap_ready is not None else f"no PodSnapshot reached Ready since {p1_label} was created"))
 
     ecs = None
     if p1_cold:
         missing1 = [k for k in st.COLD_MARKERS if k not in p1["log"]]
         missing_breakdown = [k for k in st.COLD_BREAKDOWN_MARKERS if k not in p1["log"]]
         if missing1:
-            p1_detail = f"missing: {', '.join(missing1)}"
+            p1_detail = missing_lines_detail(missing1, engine, p1_label)
         elif missing_breakdown:
             p1_detail = (
-                f"all {len(st.COLD_MARKERS)} present "
-                f"(warning: missing 2c..2g breakdown: {', '.join(missing_breakdown)})"
+                f"all {len(st.COLD_MARKERS)} present in {p1_label}'s log "
+                f"(warning: {missing_lines_detail(missing_breakdown, engine, p1_label)})"
             )
         else:
-            p1_detail = f"all {len(st.COLD_MARKERS)} present"
+            p1_detail = f"all {len(st.COLD_MARKERS)} present in {p1_label}'s log"
         checks.append(v.Check("Pod 1 phase markers", not missing1, p1_detail))
         if not missing1:
             c = st.compute_cold_metrics(p1)
             ecs, cs, tsot = c["ecs"], c["cs"], c["4"]
-            checks.append(v.Check("E2E Cold Start (Rows 1+2+3)", ecs <= t["max_e2e_cold_start_s"],
+            # E2E cold start (ECS = Rows 1 + 2 + 3): pod created -> Ready, excluding snapshot overhead (Row 4).
+            checks.append(v.Check("E2E cold start", ecs <= t["max_e2e_cold_start_s"],
                                   f"{ecs:.2f}s <= {t['max_e2e_cold_start_s']:.0f}s"))
-            checks.append(v.Check("Cold Start, no node provisioning (1b+1c+1d+2)", cs <= t["max_cold_start_s"],
+            # Cold start without node provisioning (CS = 1b + 1c + 1d + 2): sandbox + image pull + start + engine startup.
+            checks.append(v.Check("Cold start", cs <= t["max_cold_start_s"],
                                   f"{cs:.2f}s <= {t['max_cold_start_s']:.0f}s"))
-            checks.append(v.Check("Total Snapshot Overhead Time (Row 4)", 0.0 < tsot <= t["max_snapshot_overhead_s"],
+            # Total snapshot overhead (TSOT = Row 4 = 4c + 4e + 4f): GPU release + gVisor checkpoint/upload + GPU resume.
+            checks.append(v.Check("Snapshot overhead", 0.0 < tsot <= t["max_snapshot_overhead_s"],
                                   f"0 < {tsot:.2f}s <= {t['max_snapshot_overhead_s']:.0f}s"))
 
     if p2_ok:
@@ -123,32 +140,37 @@ def evaluate(p1, p2, engine: str, snap_ready=None) -> list[v.Check]:
         if restored:
             missing2 = [k for k in st.RESTORE_MARKERS if k not in p2["log"]]
             checks.append(v.Check("Pod 2 phase markers", not missing2,
-                                  f"all {len(st.RESTORE_MARKERS)} present" if not missing2 else f"missing: {', '.join(missing2)}"))
+                                  f"all {len(st.RESTORE_MARKERS)} present in {p2_label}'s log"
+                                  if not missing2 else missing_lines_detail(missing2, engine, p2_label)))
             if not missing2:
                 wsr = st.compute_restore_metrics(p2)["wsr"]
+                # Pod 2 restore time / warm start (WSR = 1b + 1c + 1d + 4e + 4f + 3; excludes 1a node wait).
                 # WSR == 0 means the restore timings are missing (every boundary clamped onto the
                 # container start), not a 0s restore, so it fails like TSOT == 0. The ECS / WSR
                 # ratio is informational: it depends mostly on how fast the weights downloaded.
-                ratio = f", {ecs / wsr:.1f}x faster than Pod 1's cold start" if ecs and wsr > 0 else ""
-                checks.append(v.Check("Warm Start on Pod 2 (WSR = 1b+1c+1d+4e+4f+3)",
+                ratio = f", {ecs / wsr:.1f}x faster than {p1_label}'s cold start" if ecs and wsr > 0 else ""
+                checks.append(v.Check("Pod 2 restore time",
                                       0.0 < wsr <= t["max_warm_start_s"],
                                       f"0 < {wsr:.2f}s <= {t['max_warm_start_s']:.0f}s{ratio}"))
         # A restored pod has no application cold start by construction, so the design doc's
-        # "ACS on Pod 2 == 0" is exactly "Pod 2 restored"; Row 2 is only measured to report how
-        # long a Pod 2 that did not restore took instead.
-        checks.append(v.Check("Application Cold Start on Pod 2 (Row 2)", restored,
-                              "0.00s (restored)" if restored else
-                              f"{st.compute_cold_metrics(p2)['2']:.2f}s (Pod 2 did not restore)"))
+        # "ACS on Pod 2 (Row 2) == 0" is exactly "Pod 2 restored"; Row 2 is only measured to report
+        # how long a Pod 2 that did not restore took instead.
+        checks.append(v.Check("Pod 2 restored", restored,
+                              f"0.00s ({p2_label} restored)" if restored else
+                              f"{st.compute_cold_metrics(p2)['2']:.2f}s ({p2_label} did not restore)"))
     return checks
 
 
-def write_step_summary(engine: str, checks: list[v.Check]) -> None:
+def write_step_summary(engine: str, checks: list[v.Check], p1=None, p2=None) -> None:
     """Appends a markdown table to $GITHUB_STEP_SUMMARY when running in GitHub Actions."""
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
-    lines = [f"### Pod Snapshot alerting thresholds ({engine})", "",
-             "| Status | Check | Detail |", "| --- | --- | --- |"]
+    lines = [f"### Pod Snapshot alerting thresholds ({engine})", ""]
+    if p1 or p2:
+        lines += [f"- **Pod 1 (cold start):** `{(p1 or {}).get('name') or 'missing'}`",
+                  f"- **Pod 2 (restore):** `{(p2 or {}).get('name') or 'missing'}`", ""]
+    lines += ["| Status | Check | Detail |", "| --- | --- | --- |"]
     lines += [f"| {'PASS' if c.passed else 'FAIL'} | {c.name} | {c.detail} |" for c in checks]
     with open(summary_path, "a") as fh:
         fh.write("\n".join(lines) + "\n\n")
@@ -173,6 +195,8 @@ def main(argv=None) -> int:
     # skip the threshold checks below, which decide pass/fail.
     print()
     print("=== Pod snapshot per-phase timing report ===")
+    print(f"Pod 1 (cold start): {(p1 or {}).get('name') or 'missing'}   "
+          f"Pod 2 (restore): {(p2 or {}).get('name') or 'missing'}")
     try:
         st.print_report(p1, p2, snap_ready, engine=args.engine, csv_path=args.csv)
     except Exception as e:  # noqa: BLE001 - any report bug is logged, not fatal
@@ -184,7 +208,7 @@ def main(argv=None) -> int:
     print()
     v.print_checks_table(checks)
     print()
-    write_step_summary(args.engine, checks)
+    write_step_summary(args.engine, checks, p1=p1, p2=p2)
 
     failed = [c for c in checks if not c.passed]
     if failed:
