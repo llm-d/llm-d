@@ -4,6 +4,10 @@ metadata:
   name: decode
 spec:
   replicas: 2
+  # TPU node pools are fixed-size: a RollingUpdate needs a spare 8-chip node to
+  # surge onto, so the rollout deadlocks with the new pod Pending.
+  strategy:
+    type: Recreate
   template:
     spec:
       nodeSelector:
