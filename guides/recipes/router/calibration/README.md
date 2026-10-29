@@ -72,8 +72,54 @@ kubectl rollout restart -n ${NAMESPACE} deployment/${GUIDE_NAME}-epp
 
 | file | purpose |
 | --- | --- |
-| `calibrate.sh` | orchestration: runs the Job, extracts and prints the value |
-| `calibration-peak-throughput.yaml` | the measurement Job + its Python script (ConfigMap) |
+| `calibrate.sh` | prefill calibration: runs the Job, extracts and prints `peakPrefillThroughput` |
+| `calibration-peak-throughput.yaml` | prefill measurement Job + embedded Python script |
+| `calibrate-decode.sh` | decode calibration: runs the Job, extracts `peakDecodeThroughput` and computes P:D ratios |
+| `calibration-peak-decode.yaml` | decode measurement Job + embedded Python script |
+| `calibrate-min-cached-token-delta.sh` | P2P pull crossover calibration |
+| `calibration-min-cached-token-delta.yaml` | P2P crossover measurement Job + embedded Python script |
+
+## Calibrating `peakDecodeThroughput` and Sizing P:D Ratios
+
+When tuning [Prefill/Decode (P/D) Disaggregation](../../../docs/architecture/disaggregation/pd-disaggregation.md), the balance of Prefill ($P$) to Decode ($D$) replicas is governed by rate matching:
+
+```text
+P:D = (ISL / V_P) : (OSL / V_D)
+```
+
+Where:
+- **`ISL`**: Input sequence length in tokens (prompt length).
+- **`OSL`**: Output sequence length in tokens (generation length).
+- **`V_P`**: `peakPrefillThroughput` per prefill pod (measured via `calibrate.sh`).
+- **`V_D`**: `peakDecodeThroughput` per decode pod (output tokens/sec sustained while meeting the p90 TPOT latency SLO).
+
+[`calibrate-decode.sh`](calibrate-decode.sh) runs a measurement Job ([`calibration-peak-decode.yaml`](calibration-peak-decode.yaml)) that sends open-loop, decode-bound load (short ISL, long OSL) across a concurrency ladder, measures inter-token latency (TPOT) for each streamed chunk, selects the highest concurrency meeting the target latency SLO (`TARGET_TPOT_MS`), and calculates $V_D$ and the recommended $P:D$ ratio.
+
+### Usage
+
+```bash
+GUIDE_NAME=optimized-baseline \
+NAMESPACE=default \
+MODEL_NAME=Qwen/Qwen3-32B \
+ISL=64 \
+OSL=512 \
+TARGET_TPOT_MS=50 \
+PEAK_PREFILL_THROUGHPUT=15928 \
+./calibrate-decode.sh
+```
+
+| env var | meaning | default |
+| --- | --- | --- |
+| `GUIDE_NAME` | release/guide name (used for auto-discovering `<name>-epp`) | `optimized-baseline` |
+| `NAMESPACE` | namespace the stack runs in | `default` |
+| `MODEL_NAME` | model being served | `Qwen/Qwen3-32B` |
+| `DECODE_REPLICAS` | number of decode replicas in the pool | `1` |
+| `ISL` | input sequence length in tokens | `64` |
+| `OSL` | output sequence length in tokens | `512` |
+| `TARGET_TPOT_MS` | p90 TPOT latency SLO target in ms | `50.0` |
+| `CONCURRENCY_LADDER` | concurrency levels to evaluate | `1,2,4,8,16,32` |
+| `REQUESTS_PER_WORKER` | requests sent per worker thread | `2` |
+| `PEAK_PREFILL_THROUGHPUT` | `V_P` (from `calibrate.sh`) to compute P:D ratio | — |
 
 ## Calibrating `minCachedTokenDelta`
 
