@@ -79,6 +79,7 @@ channels:
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml

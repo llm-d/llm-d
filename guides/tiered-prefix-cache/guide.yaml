@@ -36,11 +36,14 @@ support:
       engines: {vllm: validated}
     "tpu/v5p":
       label: Google TPU v5p
-      notes: "GKE only · 3 replicas × 4 chips (`2x2x1`, TP=4) · `CONNECTOR=native`, `VARIANT=cpu` · nightly runs on Spot capacity"
+      notes: >-
+        GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, TP=4) ·
+        SGLang: 2 replicas × 4 chips (`2x2x1`, TP=4) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 4 ranks) ·
+        `CONNECTOR=native`, `VARIANT=cpu` · nightlies run on Spot capacity
       model: Qwen/Qwen3-32B
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: validated}
     "tpu/v6":
       label: Google TPU v6e
       notes: "GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable"
@@ -51,13 +54,14 @@ support:
     "tpu/v7":
       label: Google TPU v7
       notes: >-
-        GKE only · 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) ·
+        GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) ·
         Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) ·
-        `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only)
+        `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) ·
+        SGLang: serves `Qwen/Qwen3-32B`, 2 replicas × 4 chips (`2x2x1`, TP=8) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 8 ranks) · `CONNECTOR=native`, `VARIANT=cpu`
       model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: community}
+      engines: {vllm: community, sglang: community}
 
 env:
   static:
@@ -80,7 +84,7 @@ env:
     VARIANT: {default: cpu, values: [cpu, fs], comment: "offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem (fs: single-host only)"}
     # gke: GKE overlays (ACCELERATOR_TYPE=gpu, tpu/*); amd-ci: AMD CI overlay (ACCELERATOR_TYPE=amd)
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
-    HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7 and VARIANT=cpu only"}
+    HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7, MODEL_SERVER=vllm and VARIANT=cpu only"}
     STORAGE_CLASS: {default: "", comment: "VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default"}
 
     # ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector serves Qwen/Qwen3-8B,
