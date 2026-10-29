@@ -60,7 +60,7 @@ See [Disaggregated Serving](../disaggregation/pd-disaggregation.md) and [SGLang 
 
 With `--dp-size > 1`, SGLang runs multiple data-parallel ranks per pod. How those ranks are exposed over HTTP depends on the frontend:
 
-- **Python/uvicorn frontend (default):** the DP ranks share a single serving port. The EPP observes one endpoint per pod, and per-rank queue depth and KV-cache utilization are not individually visible.
+- **Python frontend (default):** the DP ranks share a single serving port. **The EPP observes one endpoint per pod**, and per-rank KV-cache aware routing has limited support.
 - **Rust frontend:** each DP rank runs its own standalone HTTP listener, with its own request queue. The EPP can schedule and account requests at rank granularity instead of pod granularity, which improves prefix-cache affinity and load balancing.
 
 The Rust frontend is enabled with the `SGLANG_RUST_SERVER=1` environment variable and requires SGLang `v0.5.22` or newer. The Python/uvicorn server is expected to be deprecated upstream once the migration completes ([sgl-project/sglang#23206](https://github.com/sgl-project/sglang/issues/23206)).
