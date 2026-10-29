@@ -14,7 +14,7 @@ fails and 0 if all pass.
 
 Usage:
   check_thresholds.py --namespace NS --engine vllm|sglang [--selector llm-d.ai/guide=pod-snapshot]
-                      [--csv results.csv]
+                      [--pods-json pods.json] [--csv results.csv]
 """
 
 from __future__ import annotations
@@ -35,16 +35,21 @@ import snapshot_timings as st  # noqa: E402
 import verify_helpers as v  # noqa: E402
 
 # Thresholds for the composite metrics of the GKE Pod Snapshots CI/CD Plan ("Composite Metrics
-# Used for Alerting"). E2E Cold Start, Cold Start and the restore speedup use the design doc's
-# initial thresholds (from the 94-run baseline). Total Snapshot Overhead comes from 20 runs per
-# engine on the nightly cluster (llm-d-scale / llm-d-e2e-pod-snapshot-us-central1, 2026-10-24);
-# the per-engine derivation is next to each value.
+# Used for Alerting"). E2E Cold Start and Cold Start use the design doc's initial thresholds
+# (from the 94-run baseline). Total Snapshot Overhead comes from 20 runs per engine on the nightly
+# cluster (llm-d-scale / llm-d-e2e-pod-snapshot-us-central1, 2026-10-24); the per-engine
+# derivation is next to each value. Warm Start is an absolute ceiling rather than the design
+# doc's ECS / WSR ratio: ECS is mostly the HF download and model load, so the ratio fails fast
+# cold starts and hides slow restores; the ratio is still printed for information.
 THRESHOLDS = {
     "vllm": {
         "max_e2e_cold_start_s": 1800.0,    # ECS > 1800 -> fail
         "max_cold_start_s": 350.0,         # CS > 350 -> fail
         "max_snapshot_overhead_s": 65.0,   # TSOT == 0 or > 65 -> fail (p99 60.7s rounded up to a multiple of 5)
-        "min_restore_speedup": 11.0,       # ECS / WSR < 11 -> fail
+        # 30 = the WSR sample's bootstrap p99 upper bound (~27s) rounded up to a multiple of 5,
+        # the same rule as TSOT. A restore onto a freshly provisioned node (~2x, e.g. the first
+        # run after a node-pool upgrade) exceeds it by design.
+        "max_warm_start_s": 30.0,          # WSR == 0 or > 30 -> fail
     },
     "sglang": {
         "max_e2e_cold_start_s": 1800.0,    # ECS > 1800 -> fail
@@ -54,7 +59,7 @@ THRESHOLDS = {
         # that the calibration ended at the checkpoint line, and the GCS upload (4e) is the one
         # phase with run-to-run variance. Revisit after the first weeks of scheduled runs.
         "max_snapshot_overhead_s": 90.0,   # TSOT == 0 or > 90 -> fail
-        "min_restore_speedup": 11.0,       # ECS / WSR < 11 -> fail
+        "max_warm_start_s": 30.0,          # WSR == 0 or > 30 -> fail (same basis as vLLM)
     },
 }
 
@@ -92,8 +97,17 @@ def evaluate(p1, p2, engine: str, snap_ready=None) -> list[v.Check]:
     ecs = None
     if p1_cold:
         missing1 = [k for k in st.COLD_MARKERS if k not in p1["log"]]
-        checks.append(v.Check("Pod 1 phase markers", not missing1,
-                              f"all {len(st.COLD_MARKERS)} present" if not missing1 else f"missing: {', '.join(missing1)}"))
+        missing_breakdown = [k for k in st.COLD_BREAKDOWN_MARKERS if k not in p1["log"]]
+        if missing1:
+            p1_detail = f"missing: {', '.join(missing1)}"
+        elif missing_breakdown:
+            p1_detail = (
+                f"all {len(st.COLD_MARKERS)} present "
+                f"(warning: missing 2c..2g breakdown: {', '.join(missing_breakdown)})"
+            )
+        else:
+            p1_detail = f"all {len(st.COLD_MARKERS)} present"
+        checks.append(v.Check("Pod 1 phase markers", not missing1, p1_detail))
         if not missing1:
             c = st.compute_cold_metrics(p1)
             ecs, cs, tsot = c["ecs"], c["cs"], c["4"]
@@ -110,14 +124,15 @@ def evaluate(p1, p2, engine: str, snap_ready=None) -> list[v.Check]:
             missing2 = [k for k in st.RESTORE_MARKERS if k not in p2["log"]]
             checks.append(v.Check("Pod 2 phase markers", not missing2,
                                   f"all {len(st.RESTORE_MARKERS)} present" if not missing2 else f"missing: {', '.join(missing2)}"))
-            if not missing2 and ecs is not None:
+            if not missing2:
                 wsr = st.compute_restore_metrics(p2)["wsr"]
                 # WSR == 0 means the restore timings are missing (every boundary clamped onto the
-                # container start), not an infinitely fast restore, so it fails.
-                speedup = ecs / wsr if wsr > 0 else 0.0
-                checks.append(v.Check("Restore speedup ECS / WSR (WSR = 1b+1c+4e+4f+3)",
-                                      wsr > 0 and speedup >= t["min_restore_speedup"],
-                                      f"{speedup:.2f}x >= {t['min_restore_speedup']:.0f}x (WSR {wsr:.2f}s)"))
+                # container start), not a 0s restore, so it fails like TSOT == 0. The ECS / WSR
+                # ratio is informational: it depends mostly on how fast the weights downloaded.
+                ratio = f", {ecs / wsr:.1f}x faster than Pod 1's cold start" if ecs and wsr > 0 else ""
+                checks.append(v.Check("Warm Start on Pod 2 (WSR = 1b+1c+1d+4e+4f+3)",
+                                      0.0 < wsr <= t["max_warm_start_s"],
+                                      f"0 < {wsr:.2f}s <= {t['max_warm_start_s']:.0f}s{ratio}"))
         # A restored pod has no application cold start by construction, so the design doc's
         # "ACS on Pod 2 == 0" is exactly "Pod 2 restored"; Row 2 is only measured to report how
         # long a Pod 2 that did not restore took instead.
@@ -144,11 +159,12 @@ def main(argv=None) -> int:
     parser.add_argument("--namespace", required=True)
     parser.add_argument("--selector", default="llm-d.ai/guide=pod-snapshot")
     parser.add_argument("--engine", required=True, choices=tuple(THRESHOLDS), help="vllm or sglang")
+    parser.add_argument("--pods-json", default="", help="optional pre-smoke-loop `kubectl get pods -o json` file")
     parser.add_argument("--csv", default="", help="optional path to write the per-phase metrics CSV")
     args = parser.parse_args(argv)
 
     try:
-        p1, p2, snap_ready = st.load_pods(st.Kubectl(args.namespace), args.selector)
+        p1, p2, snap_ready = st.load_pods(st.Kubectl(args.namespace), args.selector, args.pods_json)
     except RuntimeError as e:
         v.error(f"ERROR: {e}")
         return 1

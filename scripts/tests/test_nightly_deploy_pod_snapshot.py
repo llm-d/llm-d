@@ -150,17 +150,15 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path, model_serv
     pod1_guard = _index(calls, f"kubectl wait --for=condition=Available {dep} -n {NS} --timeout=2400s")
     pod1_wait = _index(calls, f"kubectl wait --for=condition=ready pod -l {selector} -n {NS} --timeout=2400s")
     snap_wait = _index(calls, f"kubectl wait --for=condition=Ready podsnapshots --all -n {NS}")
-    # The script scales and waits for the rollout itself, before the guide's own
-    # restore step: that step's `kubectl wait pod -l` resolves its targets once
-    # and can return before Pod 2 exists, after which its `kubectl logs -l` fails
-    # on the ContainerCreating Pod 2. Both must run with two Running pods.
-    scale = _index(calls, f"kubectl scale {dep} -n {NS} --replicas=2")
-    rollout = _index(calls, f"kubectl rollout status {dep} -n {NS} --timeout=600s")
+    # verify.tests.restore scales to 2 replicas and waits with `rollout status`
+    # (2400s timeout so a fallback cold start still reaches the validator) before
+    # reading events and logs.
     guide_scale = _index(calls, f"kubectl scale deployment -l {selector} -n {NS} --replicas=2")
-    guide_wait = _index(calls, f"kubectl wait --for=condition=ready pod -l {selector} -n {NS} --timeout=600s")
+    guide_rollout = _index(calls, f"kubectl rollout status deployment -l {selector} -n {NS} --timeout=2400s")
     guide_logs = _index(calls, f"kubectl logs -l {selector} -n {NS} --tail=20")
+    pods_snap = _index(calls, f"kubectl get pods -l {selector} -n {NS} -o json")
     assert (crd < router < snapshot_apply < ms_apply < pod1_guard < pod1_wait < snap_wait
-            < scale < rollout < guide_scale < guide_wait < guide_logs)
+            < guide_scale < guide_rollout < guide_logs < pods_snap)
 
     # Every step is emitted with the ci context (prerequisites.clone / .secrets are
     # skip_in: [ci]); the sections this script emits never contain them, so the
