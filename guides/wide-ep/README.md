@@ -25,7 +25,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
 | AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci` |
-| Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
+| Intel XPU | `xpu` | `Qwen/Qwen3-235B-A22B` | ✅ validated | 16 XPUs via DRA · aggregated `LeaderWorkerSet`: 2 pods × TP8, DP2/EP across pods · XCCL over RDMA · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -39,7 +39,7 @@ This guide includes configurations for the following accelerator and model serve
 
 The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerSet` pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
-**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill and decode each run TP2 with expert parallelism on 4 XPUs in total, with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
+**Intel XPU** (Qwen3-235B-A22B): one aggregated `LeaderWorkerSet` runs two TP8 pods across two nodes, with data and expert parallelism across all 16 XPUs.
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu
 export MODEL_SERVER=vllm # options: vllm
 export ACCELERATOR=${ACCELERATOR_TYPE} # keep equal to ACCELERATOR_TYPE
-export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci; valid values per accelerator: table above
+export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci, xpu-ci; valid values per accelerator: table above
 export MODEL=deepseek-ai/DeepSeek-R1-0528 # set to the model your accelerator serves (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -239,9 +239,9 @@ These checks confirm that requests are spread across DP ranks and that every req
 <!-- guide:verify.tests.dp_requests start -->
 ```bash
 # 32 requests, 8 at a time, each with a distinct ~1k-token prompt (no shared
-# prefix, so prefix-cache affinity does not pin them to one DP rank): each is
-# prefilled on a prefill DP rank, and its KV cache is transferred to a decode
-# DP rank
+# prefix, so prefix-cache affinity does not pin them to one DP rank). NVIDIA
+# and AMD transfer KV from a prefill rank to a decode rank; Intel XPU serves
+# each request on one of the aggregated DP/EP ranks.
 kubectl run dp-test --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
@@ -264,8 +264,9 @@ kubectl run dp-test --rm -i --restart=Never \
 # Requests and connector (KV transfer) prefix-cache hits per DP rank, read from
 # every running model server pod through the Kubernetes API server proxy (no
 # port-forward needed). NVIDIA GPU runs one API server per DP rank (prefill on
-# ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD and
-# Intel XPU serve all of a pod's ranks on one port (prefill 8000, decode 8200)
+# ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD serves
+# all ranks of each role on one port, while aggregated Intel XPU uses decode
+# role labels and port 8200 only.
 for role in prefill decode; do
   first=8000; [ "${role}" = decode ] && first=8200
   ports=${first}; [ "${ACCELERATOR_TYPE}" = gpu ] && ports=$(seq ${first} $((first + 7)))
