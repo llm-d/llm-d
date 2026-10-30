@@ -1,0 +1,186 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-logs-agent-config
+data:
+  config.yaml: |
+    extensions:
+      # Keeps each log file's read offset and the export queue on the node, so a
+      # restart or rollout picks up where it stopped instead of skipping lines.
+      file_storage:
+        directory: /var/lib/otelcol/file_storage
+        create_directory: true
+    receivers:
+      filelog:
+        # LOG_NAMESPACES is a comma-separated list. This agent's own namespace
+        # is always skipped so it never reads its own or Loki's logs.
+        include:
+          - /var/log/pods/{${env:LOG_NAMESPACES}}_*/*/*.log
+        exclude:
+          - /var/log/pods/${env:POD_NAMESPACE}_*/*/*.log
+        include_file_path: true
+        start_at: beginning
+        storage: file_storage
+        # While Loki is unreachable, stop reading and keep retrying. The unread
+        # lines wait in the files on the node instead of being dropped.
+        retry_on_failure:
+          enabled: true
+          max_elapsed_time: 0
+        operators:
+          # Unwraps the CRI line and adds namespace, pod, pod uid, container
+          # and restart count from the file path to the resource.
+          - type: container
+          # llm-d Go components log OTel-style JSON (body, severity_text,
+          # service.name, trace_id, span_id). Anything else, like the model
+          # server's text logs, passes through unparsed.
+          - type: json_parser
+            if: 'body matches "^\\s*\\{"'
+            on_error: send_quiet
+          - type: move
+            if: 'attributes.body != nil'
+            from: attributes.body
+            to: body
+          - type: move
+            if: 'attributes["service.name"] != nil'
+            from: attributes["service.name"]
+            to: resource["service.name"]
+          - type: copy
+            if: 'resource["service.name"] == nil'
+            from: resource["k8s.container.name"]
+            to: resource["service.name"]
+          # Sets the log record's trace context, which Loki stores as the
+          # trace_id and span_id structured metadata. Lines without them are
+          # left as they are.
+          - type: trace_parser
+            trace_id:
+              parse_from: attributes.trace_id
+            span_id:
+              parse_from: attributes.span_id
+            trace_flags:
+              parse_from: attributes.trace_flags
+          - type: severity_parser
+            if: 'attributes.severity_text != nil'
+            parse_from: attributes.severity_text
+            mapping:
+              error2: dpanic
+              error3: panic
+          # Now on the log record itself, so drop the copies.
+          - type: remove
+            if: 'attributes.trace_id != nil'
+            field: attributes.trace_id
+          - type: remove
+            if: 'attributes.span_id != nil'
+            field: attributes.span_id
+          - type: remove
+            if: 'attributes.severity_text != nil'
+            field: attributes.severity_text
+          - type: remove
+            if: 'attributes.severity_number != nil'
+            field: attributes.severity_number
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 20
+    exporters:
+      # The only setting that names the backend. Point LOKI_OTLP_ENDPOINT at
+      # another Loki, or at a gateway Collector, without touching the rest.
+      otlphttp/loki:
+        endpoint: ${env:LOKI_OTLP_ENDPOINT}
+        sending_queue:
+          storage: file_storage
+        retry_on_failure:
+          max_elapsed_time: 0
+    service:
+      extensions: [file_storage]
+      pipelines:
+        # No batch processor: filelog already sends lines in batches, and
+        # without it a full export queue pushes back on filelog instead of
+        # being dropped.
+        logs:
+          receivers: [filelog]
+          processors: [memory_limiter]
+          exporters: [otlphttp/loki]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-logs-agent
+spec:
+  selector:
+    matchLabels:
+      app: otel-logs-agent
+  template:
+    metadata:
+      labels:
+        app: otel-logs-agent
+    spec:
+      # The agent only reads files on the node and never calls the API server.
+      automountServiceAccountToken: false
+      # The guides taint GPU and TPU nodes. Without this the agent skips the
+      # nodes that run the model servers.
+      tolerations:
+      - operator: Exists
+      # Exception to runAsNonRoot used everywhere else in these recipes. The
+      # container runtime writes /var/log/pods as root, with no read access
+      # for other users (0640 on containerd, 0600 on CRI-O), and Kubernetes
+      # does not make added capabilities such as DAC_READ_SEARCH effective for
+      # a non-root user. Running as UID 0 is the only way to read them, see
+      # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/38002.
+      # Nothing else is elevated: no privilege escalation, no capabilities, a
+      # read-only root filesystem and /var/log/pods mounted read-only.
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: otel-collector
+        image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.120.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        args:
+        - "--config=/etc/otel/config.yaml"
+        env:
+        # Workload namespaces to collect, comma-separated, for example
+        # "llm-d-a,llm-d-b". install-otel-collector-loki.sh sets this from -n.
+        - name: LOG_NAMESPACES
+          value: ""
+        - name: LOKI_OTLP_ENDPOINT
+          value: "http://loki:3100/otlp"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel
+          readOnly: true
+        - name: varlogpods
+          mountPath: /var/log/pods
+          readOnly: true
+        - name: storage
+          mountPath: /var/lib/otelcol/file_storage
+          # One directory per install, so two agents never share a database.
+          subPathExpr: $(POD_NAMESPACE)
+      volumes:
+      - name: config
+        configMap:
+          name: otel-logs-agent-config
+      - name: varlogpods
+        hostPath:
+          path: /var/log/pods
+          type: Directory
+      - name: storage
+        hostPath:
+          path: /var/lib/otelcol-llm-d-logs
+          type: DirectoryOrCreate
