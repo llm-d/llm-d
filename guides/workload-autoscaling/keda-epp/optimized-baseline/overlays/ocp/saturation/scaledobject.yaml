@@ -1,7 +1,7 @@
 # KEDA ScaledObject - OpenShift, saturation signal, stabilization-window overshoot
 # solution.
 #
-# Same as overlays/k8s/saturation (pool-saturation per-replica target 0.7 raced
+# Same as overlays/k8s/saturation (pool-saturation target 0.7 raced
 # with epp-running-requests per-replica target 16; maxReplicaCount 10; overshoot by
 # the 300s stabilization windows), but the triggers query the OpenShift Thanos
 # Querier over HTTPS with authModes:bearer and authenticationRef:keda-prometheus-auth.
@@ -45,7 +45,7 @@ spec:
   triggers:
     - type: prometheus
       name: pool-saturation
-      metricType: AverageValue
+      metricType: Value
       metadata:
         serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
         query: >-
