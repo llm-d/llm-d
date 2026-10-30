@@ -144,7 +144,7 @@ The mainline vLLM model server overlays across the guides (including NVIDIA GPU,
 AMD, CPU, Intel XPU, and Google TPU, along with their `gke`, `aws`, and `amd-ci`
 `INFRA_PROVIDER` variants) ship with this pattern, using a shorter drain window
 than the example above. Third-party vendor images with unverified vLLM versions
-(Biren, Iluvatar, MetaX, Moore Threads, and Rebellions NPU) do not set
+(Biren, Iluvatar, MetaX, Moore Threads, Hygon, and Rebellions NPU) do not set
 `--shutdown-timeout` yet (tracked in
 [llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)).
 
