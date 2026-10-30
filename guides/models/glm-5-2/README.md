@@ -34,9 +34,10 @@ CoreWeave (CKS) with InfiniBand networking.
 
 An SGLang variant (`MODEL_SERVER=sglang`) runs the same wide-EP P/D layout on GKE A3 Ultra (RoCE)
 with the SGLang Rust frontend, which gives every DP rank its own HTTP listener. It serves the
-OpenAI routes and SGLang's native `/generate` API, and has no benchmark numbers yet. It
-uses the same deploy, verify and cleanup steps below. Where a section differs per engine, pick the
-SGLang tab. The rest of this page describes the vLLM recipe unless it says otherwise.
+OpenAI routes and SGLang's native `/generate` API, keeps evicted KV in a host-memory tier on
+prefill and can add a shared-storage tier behind it (`hicache-fs`), and has no benchmark numbers
+yet. It uses the same deploy, verify and cleanup steps below. Where a section differs per engine,
+pick the SGLang tab. The rest of this page describes the vLLM recipe unless it says otherwise.
 
 ## Default Configuration
 
@@ -83,7 +84,7 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 | All-to-all               | DeepEP v2 over NCCL GIN, hybrid mode, on both roles (`deepep_v2`)            |
 | MoE backend              | SGLang default (`--moe-runner-backend auto`)                                 |
 | KV transfer              | Mooncake (NIXL failed under long-context load on GKE RoCE)                   |
-| KV cache offloading      | HiCache on prefill, 64 GB per rank (`hicache`, in every SGLang topology)     |
+| KV cache offloading      | HiCache host tier on prefill, 64 GB per rank (`hicache`, in every SGLang topology); optional shared-storage tier (`hicache-fs`) |
 | MTP speculative decoding | On (EAGLE, 3 steps)                                                          |
 | `mem-fraction-static`    | 0.85 (prefill and decode)                                                    |
 | Routing                  | GPU+CPU (HiCache) prefix-cache affinity + token load ([`sglang.values.yaml`](router/sglang.values.yaml)) |
@@ -141,6 +142,11 @@ This guide includes configurations for the following accelerator and model serve
 - For `MODEL_SERVER=sglang` on GKE A3 Ultra, prepare the cluster as described in the
   [GKE provider docs](../../../docs/infrastructure/providers/gke/README.md) (GPUDirect RDMA, DRA
   and DRANET drivers) so the `gke-rdma-template` resource claims resolve.
+
+- For the SGLang `hicache-fs` component, create a ReadWriteMany PersistentVolumeClaim named
+  `llm-d-kv-cache-storage` in `${NAMESPACE}` before deploying the model server. The
+  [tiered prefix cache guide](../../tiered-prefix-cache/README.md#filesystem-tier) has the claim
+  (`manifests/pvc.yaml`) and storage-class manifests for shared filesystems.
 
 - Create a [HuggingFace token](../../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -491,9 +497,19 @@ vLLM ships every topology; SGLang ships the ones marked in the SGLang column.
 
 The SGLang overlays all build on the GKE provider overlay (`modelserver/gpu/sglang/providers/gke`),
 the only one so far; other providers need their own `providers/<name>` overlay (RDMA device
-requests, HCA selection, cache volumes). The SGLang components are `no-mtp` and `hicache`.
-Every SGLang topology includes `hicache`, which enables HiCache (host-memory KV cache) on
-prefill with `HICACHE_SIZE_GB_PER_RANK=64`.
+requests, HCA selection, cache volumes). Every SGLang topology includes `hicache`, which enables
+the HiCache host-memory tier on prefill with `HICACHE_SIZE_GB_PER_RANK=64`. The SGLang components
+are:
+
+| Component | Targets | Effect |
+| --------- | ------- | ------ |
+| `hicache` | prefill only | HiCache host-memory tier, 64 GB per rank (`HICACHE_SIZE_GB_PER_RANK=64`), with the pod memory to hold it |
+| `hicache-fs` | prefill only | Shared-storage tier behind the host tier: SGLang's file storage backend on the `llm-d-kv-cache-storage` claim (`HICACHE_STORAGE_BACKEND=file`); requires `hicache` |
+| `no-mtp` | prefill + decode | Disables MTP speculative decoding (`ENABLE_MTP=0`) |
+
+`modelserver/gpu/sglang/deployments/benchmark/` holds overlays for comparing KV cache tiers on
+`p1w1d1w1`: `baseline/p1w1d1w1` (no HiCache) and `hicache-fs/p1w1d1w1` (host and shared-storage
+tiers); `p1w1d1w1` itself is the host-tier-only configuration.
 
 Raw topology overlays ship with MTP on and offloading off; opt in or out per deployment by
 adding [Kustomize components](https://kubectl.docs.kubernetes.io/guides/config_management/components/)
@@ -532,6 +548,10 @@ On by default for both roles as EAGLE with 3 steps and 4 draft tokens. Disable w
 
 ### KV Cache Offloading (Prefill)
 
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
 Off in the raw topology overlays; enabled via the `offloading-cpu` or `offloading-tiered`
 component.
 
@@ -543,6 +563,51 @@ component.
   `/mnt/local/kv-cache` mounted as `/mnt/nvme-cache`.
 
 Decode pods do not use offloading (256Gi dshm, 512Gi memory).
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+SGLang's hierarchical cache (HiCache) keeps KV that leaves the GPU in a host-memory tier and,
+optionally, in a storage tier behind it. Both run on the prefill role only; decode pods keep
+no HiCache (512Gi memory), since in P/D a decode miss is served by a transfer from prefill.
+
+- **`hicache`** — host-memory tier, `HICACHE_SIZE_GB_PER_RANK=64`. The size is per
+  attention-DP rank, so a DEP8 prefill node pins 512 GB; the component raises the pod memory
+  to 1Ti request / 1400Gi limit to hold it and the DSA indexer cache.
+- **`hicache-fs`** — storage tier behind the host tier: SGLang's file storage backend on the
+  `llm-d-kv-cache-storage` ReadWriteMany claim, mounted at `/mnt/kv-cache-storage`, one file
+  per 64-token page under `glm-5-2-fp8/`. The component switches the write policy to
+  `write_through`, so a page reaches storage as soon as it is prefilled, and waits for storage
+  prefetches (`wait_complete`), so a matched prefix is restored rather than recomputed. GLM-5.2
+  is an MLA model, so the page files carry no rank in their name: every attention-DP rank, and
+  every prefill replica that mounts the volume, reads and writes the same cache. The component
+  enables SGLang's LRU file evictor with a `500Gi` free-space floor
+  (`SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE=500Gi`) so `write_through` does not fill fixed-size
+  volumes; on elastic or multi-tenant filesystems, set `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` (for
+  example `8000Gi`) to cap directory size directly.
+
+The prefill launch script reads these environment variables (`0` or empty disables
+`HICACHE_SIZE_GB_PER_RANK`; empty keeps SGLang's default for the others):
+
+| Variable | Set by | Flag |
+| --- | --- | --- |
+| `HICACHE_SIZE_GB_PER_RANK` | `hicache` (`64`; default `0`) | `--enable-hierarchical-cache --hicache-size` |
+| `HICACHE_MEM_LAYOUT` | — (`layer_first`) | `--hicache-mem-layout` |
+| `HICACHE_WRITE_POLICY` | `hicache-fs` (`write_through`; default `write_back`) | `--hicache-write-policy` |
+| `HICACHE_STORAGE_BACKEND` | `hicache-fs` (`file`) | `--hicache-storage-backend` |
+| `HICACHE_STORAGE_PREFETCH_POLICY` | `hicache-fs` (`wait_complete`; default `best_effort`) | `--hicache-storage-prefetch-policy` |
+| `SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR` | `hicache-fs` | storage directory of the file backend |
+| `SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE` | `hicache-fs` (`500Gi`) | free-space floor for LRU file eviction (IEC `Gi`/`Ti` or SI `G`/`T`) |
+| `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` | `hicache-fs` (`""`, optional) | optional directory size cap for LRU file eviction (`""` or `0` leaves uncapped) |
+
+If you disable `hicache` (for example with `benchmark/baseline/p1w1d1w1` or
+`HICACHE_SIZE_GB_PER_RANK=0`), set `lruCapacityPerServer` to `1964` in
+[`router/sglang.values.yaml`](router/sglang.values.yaml) so the router only tracks the `1,964`
+GPU-resident blocks per DEP8 H200 prefill rank instead of the `21,261` GPU + CPU blocks.
+
+</details>
+<!-- tabs:end -->
 
 ### InfiniBand Networking
 
