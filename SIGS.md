@@ -67,7 +67,7 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 
 **Key Areas**:
 
-- vLLM-optimized optimized baseline algorithms
+- vLLM-optimized baseline algorithms
 - KV-cache aware routing and load balancing
 - Integration with Kubernetes Gateway API and Inference Gateway Extension
 - Flow control and traffic shaping
