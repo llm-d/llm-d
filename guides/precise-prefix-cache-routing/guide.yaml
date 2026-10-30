@@ -50,11 +50,11 @@ support:
       engines: {vllm: community}
     "tpu/v7":
       label: Google TPU v7
-      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM"
+      notes: "GKE only · 2 replicas × 4 chips (`2x2x1`) · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (DP=2 × TP=4, EP); SGLang (`sglang:v0.1.0-tpu`): `Qwen/Qwen3-32B` (TP=8, 16k context, uses the dedicated render pool)"
       model: Qwen/Qwen3.5-397B-A17B-FP8
       providers:
         - {name: gke, label: "GKE"}
-      engines: {vllm: community}
+      engines: {vllm: community, sglang: community}
     cpu:
       label: CPU
       notes: "2 replicas"
@@ -149,7 +149,7 @@ deploy:
     # vLLM renders on the model servers through the router's endpoint
     # discovery, so only SGLang deploys a render pool: a dedicated, GPU-less
     # vLLM render Deployment, because SGLang has no render endpoints.
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu, "tpu/v7"]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
@@ -284,7 +284,7 @@ cleanup:
   modelserver:
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   render:
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu, "tpu/v7"]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
