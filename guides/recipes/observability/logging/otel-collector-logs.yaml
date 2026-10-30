@@ -64,6 +64,19 @@ data:
             mapping:
               error2: dpanic
               error3: panic
+          # The rest of the stdout contract (llm-d-router#2840): the time the
+          # component logged the line, instead of when the runtime wrote it,
+          # and logger as the instrumentation scope.
+          - type: time_parser
+            if: 'attributes.timestamp != nil'
+            parse_from: attributes.timestamp
+            layout_type: gotime
+            layout: '2006-01-02T15:04:05.999999999Z07:00'
+            on_error: send_quiet
+          - type: scope_name_parser
+            if: 'attributes.logger != nil'
+            parse_from: attributes.logger
+            on_error: send_quiet
           # Now on the log record itself, so drop the copies.
           - type: remove
             if: 'attributes.trace_id != nil'
@@ -77,6 +90,12 @@ data:
           - type: remove
             if: 'attributes.severity_number != nil'
             field: attributes.severity_number
+          - type: remove
+            if: 'attributes.timestamp != nil'
+            field: attributes.timestamp
+          - type: remove
+            if: 'attributes.logger != nil'
+            field: attributes.logger
     processors:
       memory_limiter:
         check_interval: 1s

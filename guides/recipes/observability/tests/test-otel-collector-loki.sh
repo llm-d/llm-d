@@ -193,6 +193,18 @@ check "span_id comes from the parsed JSON" "attributes.span_id" \
   "$(yq e "${OPS}[] | select(.type == \"trace_parser\") | .span_id.parse_from" "$CONFIG")"
 check "service.name from the JSON becomes a resource attribute" 'resource["service.name"]' \
   "$(yq e "${OPS}[] | select(.type == \"move\" and .from == \"attributes[\\\"service.name\\\"]\") | .to" "$CONFIG")"
+# llm-d-router#2840 maps timestamp to the record time and logger to the scope.
+check "record time comes from the JSON timestamp" "attributes.timestamp" \
+  "$(yq e "${OPS}[] | select(.type == \"time_parser\") | .parse_from" "$CONFIG")"
+check "the timestamp layout is RFC 3339 with nanoseconds" "gotime 2006-01-02T15:04:05.999999999Z07:00" \
+  "$(yq e "${OPS}[] | select(.type == \"time_parser\") | .layout_type + \" \" + .layout" "$CONFIG")"
+check "scope name comes from the JSON logger" "attributes.logger" \
+  "$(yq e "${OPS}[] | select(.type == \"scope_name_parser\") | .parse_from" "$CONFIG")"
+check "both run after parsing JSON" "true" \
+  "$([[ "$(index_of time_parser)" -gt "$(index_of json_parser)" && "$(index_of scope_name_parser)" -gt "$(index_of json_parser)" ]] && echo true || echo false)"
+# Both parsers error on a line without the field, like the model server's.
+check "both skip lines without the field" "2" \
+  "$(yq e "[${OPS}[] | select(.type == \"time_parser\" or .type == \"scope_name_parser\") | select(.if != null)] | length" "$CONFIG")"
 check "filelog keeps its offsets on disk" "file_storage" "$(yq e '.receivers.filelog.storage' "$CONFIG")"
 check "the export queue survives restarts" "file_storage" \
   "$(yq e '.exporters."otlphttp/loki".sending_queue.storage' "$CONFIG")"
