@@ -422,6 +422,33 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 
 Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
+## Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate multimodal model serving under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state pool utilization or saturation signals). This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference), [router metrics](../../docs/operations/observability/router-metrics.md#prefix--multimodal-cache), [model server metrics](../../docs/operations/observability/model-server-metrics.md#vllm-multimodal-metrics), and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md#multimodal--encode-disaggregation).
+
+In multimodal serving, media tokens (vision, audio, or video) inflate prompt context by orders of magnitude compared to text-only requests. In the **Aggregated** topology, the entire pipeline (embedding extraction, prefill, and decode) runs within each model server pod, requiring prefix affinity to avoid redundant vision encoder passes. In the **E/PD** and **E/P/D** disaggregated topologies, dedicated **Encode** workers execute the Vision Transformer (ViT) and stream visual embeddings over the Embedding Connector (EC) to downstream Prefill/Decode workers. Issues typically manifest as **encoder tier bottlenecks**, **low embedding cache hit rates**, or **severe TTFT inflation**.
+
+### Key metrics for this path
+
+| Signal | Why it matters for multimodal | Where to look |
+|--------|-------------------------------|---------------|
+| Multimodal cache hit rate (`vllm:mm_cache_hits_total` / `vllm:mm_cache_queries_total`) | Measures how often the model server reuses pre-computed vision/audio embeddings without re-running the heavy encoder. A low hit rate indicates that repeated media requests are missing cache affinity. | [PromQL → Multimodal](../../docs/operations/observability/promql.md#multimodal--encode-disaggregation) |
+| Encoder pod utilization (`vllm:num_requests_running{pod=~".*encode.*"}`) | In E/PD and E/P/D, Encode pods handle media tokenization. Sustained saturation here means incoming media prompts queue before prefill can start, severely inflating TTFT. | [PromQL → Multimodal](../../docs/operations/observability/promql.md#multimodal--encode-disaggregation) |
+| Sidecar encode duration (`llm_d_disagg_sidecar_encode_duration_seconds`) | In disaggregated topologies, measures the latency spent in the Encode stage before downstream execution. Rising encode duration points to encoder hardware bottlenecks or large image payloads. | [Router Metrics → Prefix & Multimodal Cache](../../docs/operations/observability/router-metrics.md#prefix--multimodal-cache) |
+| Multimodal prefix cache prediction ratio (`llm_d_epp_prefix_mm_predicted_cached_tokens` / `llm_d_epp_prefix_mm_prompt_tokens`) | Evaluates the router's multimodal cache prediction accuracy. Confirms the EPP is correctly hashing both text and image components to route follow-ups to warm pods. | [Router Metrics → Prefix & Multimodal Cache](../../docs/operations/observability/router-metrics.md#prefix--multimodal-cache) |
+| Cross-tier request distribution (`vllm:request_success_total`) | Validates that media requests are hitting Encode pods while text-only requests bypass them and land directly on Prefill/Decode or Aggregated pods. | [PromQL → Multimodal](../../docs/operations/observability/promql.md#multimodal--encode-disaggregation) |
+| TTFT vs. ITL split (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | High TTFT with normal ITL localizes latency to media encoding, EC transfer, or heavy multimodal prefill. High ITL localizes to decode phase or KV-cache pressure. | [Metrics → vLLM](../../docs/operations/observability/model-server-metrics.md#vllm) |
+
+### Common failure modes
+
+- **High TTFT, Prefill and Decode pools idle (E/PD, E/P/D)** — The Encode tier is saturated or bottlenecked by large media inputs. Verify encoder utilization (`vllm:num_requests_running{pod=~".*encode.*"}`); if saturated, scale up Encode pod replicas or allocate additional accelerator resources. If Encode pods are idle, check the sidecar proxy connection and Embedding Connector transfer logs.
+- **Multimodal cache hits flat (`vllm:mm_cache_hits_total` not growing)** — The router is not routing repeated media requests to the same worker holding the cached embeddings. Verify that prefix-cache affinity is enabled in the EPP configuration and that image URLs or base64 inputs are deterministically formatted.
+- **Encode pods receive zero requests (E/PD, E/P/D)** — The router is not detecting media inputs or is bypassing the Encode tier, causing consumer pods to encode media locally. Check that pods have the correct `llm-d.ai/role: encode` label, inspect `llm_d_epp_disagg_decision_total` in router metrics, and review EPP pod logs (`kubectl logs deploy/${GUIDE_NAME}-epp`).
+- **OOM / Pod eviction on high-resolution media** — Processing high-resolution images or multi-frame video spikes activation memory and creates thousands of visual tokens. Ensure adequate GPU VRAM headroom, configure `--limit-mm-per-prompt` on vLLM to cap media items per request, and verify persistent host storage caching for Hugging Face model weights.
+- **Decode KV cache saturation (`vllm:kv_cache_usage_perc` near 1.0)** — Multimodal tokens dramatically expand prompt length, consuming KV cache blocks faster than text workloads. Scale the Decode pool or consider deploying [Tiered Prefix Cache](../tiered-prefix-cache/README.md) to offload inactive KV blocks to CPU memory.
+
+For alert rules covering shared router and model-server signals, see [Alerting](../../docs/operations/observability/alerting.md).
+
 ## Cleanup
 
 To remove the deployed components:
