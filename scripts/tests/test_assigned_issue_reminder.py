@@ -234,7 +234,7 @@ def run_main(monkeypatch, argv, issues, fake=None, code=0):
     )
     monkeypatch.setenv("GITHUB_TOKEN", "t")
     monkeypatch.setattr(sys, "argv", ["assigned-issue-reminder.py", *argv])
-    assert air.main() == code
+    assert air.main(now=NOW) == code
     return fake
 
 
