@@ -38,6 +38,9 @@ kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/${GATEWAY_API_U
 kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml"
 ```
 
+> [!TIP]
+> For air-gapped or disconnected clusters with no outbound internet access, download these manifests in advance and apply them from local files. See [Air-Gapped and Disconnected Clusters](../../operations/air-gapped-installation.md).
+
 ## Verification
 
 Verify the APIs are available:
