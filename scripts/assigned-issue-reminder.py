@@ -198,7 +198,7 @@ def unassign(repo: str, token: str, number: int, assignees: list[str]) -> None:
 ACTIONS = {"remind": remind, "unassign": unassign}
 
 
-def main() -> int:
+def main(now: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", DEFAULT_REPO))
     parser.add_argument("--dry-run", action="store_true", help="log actions without taking them")
@@ -211,7 +211,7 @@ def main() -> int:
 
     issues = graphql_nodes(token, args.repo, ISSUES_QUERY, "issues")
     pulls = graphql_nodes(token, args.repo, PULLS_QUERY, "pullRequests")
-    now = datetime.now(timezone.utc)
+    now = now or datetime.now(timezone.utc)
 
     failures = 0
     for issue in issues:
