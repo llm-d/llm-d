@@ -335,7 +335,7 @@ The model name passed to `--model` doesn't match what the EPP is actually servin
 
 ```bash
 kubectl run curl-probe -n "${NAMESPACE}" --rm -it --restart=Never \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE:-cfmanteiga/alpine-bash-curl-jq:latest} \
     -- sh -c "curl -s ${ENDPOINT_URL}/v1/models | grep -o '\"id\":\"[^\"]*\"'"
 ```
 
