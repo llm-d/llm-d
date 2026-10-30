@@ -24,7 +24,7 @@ By default, the [EPP](../router/epp.md) scrapes metrics from vLLM (`GET /metrics
 | `TotalQueuedRequests` | Gauge | Current number of requests waiting in the engine queue | `vllm:num_requests_waiting` |
 | `TotalRunningRequests` | Gauge | Current number of requests actively executing on the engine | `vllm:num_requests_running` |
 | `KVCacheUtilization` | Gauge | Current GPU KV-cache utilization (`0.0` to `1.0`) | `vllm:kv_cache_usage_perc` |
-| `BlockSize` *(optional)* | Gauge (labeled) | Token block size used to allocate KV memory; falls back to the [prefix plugin config](https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/prefix-aware/#customize-the-prefix-cache-plugin) if absent | `vllm:cache_config_info` (`block_size` label) |
+| `BlockSize` *(optional)* | Gauge (labeled) | Token block size used to allocate KV memory; falls back to the [prefix plugin config](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix/README.md) if absent | `vllm:cache_config_info` (`block_size` label) |
 | `NumGPUBlocks` *(optional)* | Gauge (labeled) | Total number of blocks in the HBM KV cache; falls back to the prefix plugin config if absent | `vllm:cache_config_info` (`num_gpu_blocks` label) |
 
 For the full list of vLLM latency, token, NIXL transfer, and KV offloading metrics, see [Model Server Metrics](../../operations/observability/model-server-metrics.md#vllm).

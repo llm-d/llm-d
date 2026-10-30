@@ -24,7 +24,7 @@ When started with `--enable-metrics`, SGLang exposes Prometheus metrics (`GET /m
 | `TotalQueuedRequests` | Gauge | Current number of requests waiting in the queue | `sglang:num_queue_reqs` |
 | `TotalRunningRequests` | Gauge | Current number of requests actively executing on the engine | `sglang:num_running_reqs` |
 | `KVCacheUtilization` | Gauge | Current KV-cache token occupancy (`0.0` to `1.0`) | `sglang:token_usage` |
-| `BlockSize` *(optional)* | Gauge | Page size in tokens used by the radix cache; falls back to the [prefix plugin config](https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/prefix-aware/#customize-the-prefix-cache-plugin) if absent | `sglang:page_size` |
+| `BlockSize` *(optional)* | Gauge | Page size in tokens used by the radix cache; falls back to the [prefix plugin config](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix/README.md) if absent | `sglang:page_size` |
 | `NumGPUBlocks` *(optional)* | Gauge | Total number of pages in the GPU KV cache; falls back to the prefix plugin config if absent | `sglang:num_pages` |
 
 For the full list of SGLang latency, token, and HiCache metrics, see [Model Server Metrics](../../operations/observability/model-server-metrics.md#sglang).
