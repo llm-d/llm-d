@@ -32,3 +32,26 @@ def test_child_stage_inherits_base_arg_and_env(tmp_path):
     ok, errors = lint.lint_dockerfile(dockerfile, scripts_dir)
 
     assert ok, errors
+
+
+def test_multiline_run_detects_script_on_continuation_line(tmp_path):
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "check.sh").write_text(
+        "#!/bin/sh\n"
+        "# Required environment variables:\n"
+        "# - REQUIRED_VAR: must be declared in the Dockerfile\n"
+    )
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(
+        "FROM ubuntu:22.04 AS build\n"
+        "RUN echo preparing && \\\n"
+        "    /tmp/check.sh\n"
+    )
+
+    ok, errors = lint.lint_dockerfile(dockerfile, scripts_dir)
+
+    assert not ok
+    assert len(errors) == 1
+    assert f"{dockerfile}:2:" in errors[0]
+    assert "REQUIRED_VAR (not declared as ARG or ENV)" in errors[0]
