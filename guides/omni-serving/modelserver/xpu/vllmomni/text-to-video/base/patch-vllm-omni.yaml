@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 3660
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      containers:
+        - name: modelserver
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -eo pipefail
+              exec vllm serve Wan-AI/Wan2.1-T2V-1.3B-Diffusers \
+                --omni \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --deploy-config vllm_omni/deploy/wan2_2_eg.yaml
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+            - name: ZE_AFFINITY_MASK
+              value: "0,1"
+            - name: SYCL_CACHE_PERSISTENT
+              value: "1"
+          resources:
+            requests:
+              cpu: "8"
+              memory: 64Gi
+            limits:
+              cpu: "16"
+              memory: 128Gi
+            claims:
+              - name: intel-decode-claim
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: model-cache
+              mountPath: /root/.cache
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 10Gi
+        - name: model-cache
+          emptyDir: {}
