@@ -632,6 +632,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-s
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 
 kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader --ignore-not-found=true

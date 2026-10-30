@@ -414,3 +414,36 @@ def test_nightly_modelserver_mirror_matches_guide(flow_control):
     )
     assert '| sed "s/optimized-baseline/${GUIDE_NAME}/g"' in out
     assert "| kubectl apply -n ${NAMESPACE} -f -" in out
+
+
+# --------------------------------------------------------------------------
+# guide monitoring cleanup
+# --------------------------------------------------------------------------
+
+MONITORING_CLEANUP_GUIDES = [
+    "multimodal-serving",
+    "omni-serving",
+    "optimized-baseline",
+    "p2p-kv-cache-sharing",
+    "pd-disaggregation",
+    "precise-prefix-cache-routing",
+    "predicted-latency-routing",
+    "tiered-prefix-cache",
+]
+MONITORING_COMPONENT_RE = re.compile(
+    r"/guides/recipes/modelserver/components/"
+    r"(monitoring|monitoring-pd|\$\{MONITORING_COMPONENT\})(?=[ /\n]|$)"
+)
+
+
+@pytest.mark.parametrize("name", MONITORING_CLEANUP_GUIDES)
+@pytest.mark.parametrize("monitoring", [None, "false", "true"])
+def test_monitoring_cleanup_matches_deployment(name, monitoring):
+    g = guide.Guide.load(GUIDES_DIR / name)
+    variables = {} if monitoring is None else {"MONITORING": monitoring}
+    deploy = g.emit(["deploy.monitoring"], variables=variables)
+    cleanup = g.emit(["cleanup"], variables=variables)
+
+    assert bool(MONITORING_COMPONENT_RE.search(deploy)) == (monitoring == "true")
+    assert bool(MONITORING_COMPONENT_RE.search(cleanup)) == (monitoring == "true")
+    assert "helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}" in cleanup
