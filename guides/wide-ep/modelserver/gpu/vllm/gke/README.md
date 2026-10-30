@@ -35,11 +35,10 @@ driver DaemonSet and the NVIDIA GPU DRA driver. See
 
 ### GPU driver
 
-R580 drivers (both `default` and `latest` on GKE 1.36) crash DeepEP high-throughput
-kernels with `cudaErrorIllegalAddress`. Use an explicit pre-R580 version with the
+The overlays run on GKE's R580 drivers (`default` and `latest`): both roles use
+`--all2all-backend deepep_v2`. R580 crashes the `deepep_high_throughput` backend with
+`cudaErrorIllegalAddress`, so if you switch prefill to it, install a pre-R580 driver with the
 [NVIDIA driver installer DaemonSet](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus#installing_drivers).
-Fallback: set the prefill `--all2all-backend` to `deepep_low_latency` (reduces prefill
-throughput).
 
 ### Router CPU node
 
