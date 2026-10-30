@@ -48,6 +48,14 @@ patches:
                           # filesystem metadata round trip per page.
                           - name: SGLANG_HICACHE_FILE_BACKEND_ENABLE_METADATA_CACHE
                             value: "true"
+                          # SGLang's file backend never evicts unless bounded.
+                          # Keep 500 GiB free on the shared volume; optionally
+                          # set MAX_SIZE (e.g. 8000Gi) to cap directory growth
+                          # on elastic or shared multi-tenant filesystems.
+                          - name: SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE
+                            value: "500Gi"
+                          - name: SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE
+                            value: ""
                         volumeMounts:
                           - name: kv-cache-storage
                             mountPath: /mnt/kv-cache-storage

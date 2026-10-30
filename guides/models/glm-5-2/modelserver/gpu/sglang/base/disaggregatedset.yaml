@@ -96,6 +96,10 @@ spec:
                       # hicache-fs component adds a storage tier (L3) behind it
                       # by setting HICACHE_STORAGE_BACKEND.
                       HICACHE_ARGS=""
+                      if [ -n "${HICACHE_STORAGE_BACKEND:-}" ] && [ "${HICACHE_SIZE_GB_PER_RANK:-0}" = "0" ]; then
+                        echo "HICACHE_STORAGE_BACKEND=${HICACHE_STORAGE_BACKEND} requires HICACHE_SIZE_GB_PER_RANK > 0 (add components/hicache)" >&2
+                        exit 1
+                      fi
                       if [ "${HICACHE_SIZE_GB_PER_RANK:-0}" != "0" ]; then
                         HICACHE_ARGS="--enable-hierarchical-cache --hicache-size ${HICACHE_SIZE_GB_PER_RANK} --hicache-io-backend kernel"
                         HICACHE_ARGS="${HICACHE_ARGS} --hicache-mem-layout ${HICACHE_MEM_LAYOUT:-layer_first} --hicache-write-policy ${HICACHE_WRITE_POLICY:-write_back}"

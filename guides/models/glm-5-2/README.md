@@ -581,9 +581,11 @@ no HiCache (512Gi memory), since in P/D a decode miss is served by a transfer fr
   `write_through`, so a page reaches storage as soon as it is prefilled, and waits for storage
   prefetches (`wait_complete`), so a matched prefix is restored rather than recomputed. GLM-5.2
   is an MLA model, so the page files carry no rank in their name: every attention-DP rank, and
-  every prefill replica that mounts the volume, reads and writes the same cache. The backend
-  does not evict on its own unless configured to; size the volume for the retention you want or
-  prune the directory with a job.
+  every prefill replica that mounts the volume, reads and writes the same cache. The component
+  enables SGLang's LRU file evictor with a `500Gi` free-space floor
+  (`SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE=500Gi`) so `write_through` does not fill fixed-size
+  volumes; on elastic or multi-tenant filesystems, set `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` (for
+  example `8000Gi`) to cap directory size directly.
 
 The prefill launch script reads these environment variables (`0` or empty disables
 `HICACHE_SIZE_GB_PER_RANK`; empty keeps SGLang's default for the others):
@@ -596,6 +598,8 @@ The prefill launch script reads these environment variables (`0` or empty disabl
 | `HICACHE_STORAGE_BACKEND` | `hicache-fs` (`file`) | `--hicache-storage-backend` |
 | `HICACHE_STORAGE_PREFETCH_POLICY` | `hicache-fs` (`wait_complete`; default `best_effort`) | `--hicache-storage-prefetch-policy` |
 | `SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR` | `hicache-fs` | storage directory of the file backend |
+| `SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE` | `hicache-fs` (`500Gi`) | free-space floor for LRU file eviction (IEC `Gi`/`Ti` or SI `G`/`T`) |
+| `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` | `hicache-fs` (`""`, optional) | optional directory size cap for LRU file eviction (`""` or `0` leaves uncapped) |
 
 If you disable `hicache` (for example with `benchmark/baseline/p1w1d1w1` or
 `HICACHE_SIZE_GB_PER_RANK=0`), set `lruCapacityPerServer` to `1964` in
