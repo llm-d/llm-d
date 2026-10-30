@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: coord-pd-p2p-kv-cache-sharing-
+
+resources:
+  - service.yaml
+
+labels:
+  - pairs:
+      llm-d.ai/guide: coord-pd-p2p-kv-cache-sharing
