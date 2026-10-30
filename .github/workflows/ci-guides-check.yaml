@@ -6,7 +6,7 @@ name: CI Guides Check
 # when a guide's `support:` matrix disagrees with its overlays or nightly E2E
 # workflows, or when the llm-d.ai publish manifest is invalid, and runs the
 # Python tests under scripts/tests/ and docker/scripts/cpu/, plus
-# nightly E2E verification, smoke-test, and async-multitenant tests.
+# nightly E2E verification, smoke-test, async-multitenant, and preflight tests.
 
 on:
   pull_request:
@@ -26,6 +26,7 @@ on:
       - docker/scripts/cpu/**
       - .github/scripts/nightly-e2e-verification/**
       - docs/operations/validation/smoke-test/**
+      - helpers/preflight/**
   workflow_dispatch:
 
 permissions:
@@ -63,4 +64,4 @@ jobs:
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
 
       - name: Run Python tests
-        run: python -m pytest scripts/tests/ docker/scripts/cpu/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ .github/scripts/e2e/async-multitenant/ -v
+        run: python -m pytest scripts/tests/ docker/scripts/cpu/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ .github/scripts/e2e/async-multitenant/ helpers/preflight/tests/ -v
