@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-render-config
+data:
+  # Renders mooncake_config.json from the template and writes mooncake.env. Two
+  # values are only known at runtime, per pod:
+  #
+  #   local_hostname - the JSON loader ignores the env var and needs this key set to
+  #     the pod IP, or it silently falls back to "localhost".
+  #
+  #   MC_MS_FILTERS - whitelists the HCA(s) actually reachable from this pod, so
+  #     Mooncake's auto-discovery can't pick one with no route to it. The attached
+  #     interface (net1) is a real SR-IOV VF, backed by its own PCI function, so the
+  #     matching HCA is just a sysfs symlink away -- no IP/GID guessing needed.
+  render_config.py: |
+    import glob
+    import json
+    import os
+
+    TEMPLATE = "/etc/mooncake-template/mooncake_config.json"
+    OUTPUT = "/etc/mooncake/mooncake_config.json"
+    ENV_OUTPUT = "/etc/mooncake/mooncake.env"
+
+    config = json.load(open(TEMPLATE))
+
+    config["local_hostname"] = os.environ["POD_IP"]
+
+    with open(OUTPUT, "w") as handle:
+        json.dump(config, handle, indent=2)
+
+    print(json.dumps(config, indent=2))
+
+    def pci_address(device_symlink):
+        try:
+            return os.path.basename(os.readlink(device_symlink))
+        except OSError:
+            return None
+
+    # Every HCA on the node, keyed by the PCI function it sits on.
+    ibdev_by_pci = {}
+    for dev_path in sorted(glob.glob("/sys/class/infiniband/*")):
+        pci = pci_address(f"{dev_path}/device")
+        if pci:
+            ibdev_by_pci[pci] = os.path.basename(dev_path)
+    print(f"ibdev PCI addresses: {ibdev_by_pci}")
+
+    # This pod's attached interfaces (net1, ...), matched to their HCA via the PCI
+    # function both sit on -- an SR-IOV VF's netdev and its RDMA device are the
+    # same PCI function seen through two different sysfs classes.
+    devices = set()
+    for net in sorted(os.listdir("/sys/class/net")):
+        if net in ("lo", "eth0"):
+            continue
+        pci = pci_address(f"/sys/class/net/{net}/device")
+        print(f"iface {net}: pci={pci}")
+        if pci in ibdev_by_pci:
+            devices.add(ibdev_by_pci[pci])
+
+    if not devices:
+        raise SystemExit(
+            "no attached netdev maps to an RDMA device via PCI address\n"
+            f"  ibdev PCI addresses: {ibdev_by_pci}"
+        )
+
+    devices = sorted(devices)
+    print(f"netdev <-> rdma device matches: {devices}")
+
+    with open(ENV_OUTPUT, "w") as handle:
+        handle.write(f"export MC_MS_FILTERS={','.join(devices)}\n")
+
+    print(f"MC_MS_FILTERS={','.join(devices)}")
+
