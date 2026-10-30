@@ -10,9 +10,8 @@ configurations:
   - namereference.yaml
 
 components:
-  # NIXL/UCX with Level Zero support ships in images built after it was added;
-  # the v0.10.0 release image does not include NIXL.
-  - ../../../../../recipes/modelserver/components/images/xpu-sglang/nightly
+  # The official XPU image needs the NIXL/UCX extension for KV transfer.
+  - ../../../../../recipes/modelserver/components/images/xpu-sglang/nixl
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
 labels:
