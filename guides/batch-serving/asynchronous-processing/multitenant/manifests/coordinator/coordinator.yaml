@@ -37,6 +37,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            - name: metrics
+              containerPort: 9090
           resources:
             requests:
               cpu: "1"

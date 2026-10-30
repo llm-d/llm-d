@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
