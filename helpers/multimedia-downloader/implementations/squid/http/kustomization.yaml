@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Entry point used by the top-level kustomization: the plain-Kubernetes overlay.
+# ubuntu/squid must start as its own uid: started as root it drops privileges
+# and can no longer open the container's stdout/stderr for logging.
+# For OpenShift: kubectl apply -k overlays/openshift
+resources:
+- ./overlays/k8s
