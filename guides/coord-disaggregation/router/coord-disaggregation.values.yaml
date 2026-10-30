@@ -3,7 +3,7 @@
 ## Layer on top of: recipes/router/base.values.yaml
 ##
 ## One EPP instance runs one scheduling profile per call, selected by the
-## coordinator's `EPP-Profile` header via the `header-profile-handler`
+## coordinator's `x-llm-d-epp-profile` header via the `header-profile-handler`
 ## plugin (merged in llm-d-router#2134). Each profile filters the shared pool
 ## down to its own role with a role-specific `*-filter` plugin, so the InferencePool
 ## selector below matches on the guide label only, not `llm-d.ai/role`.
@@ -13,8 +13,8 @@
 # with the Coordinator's own catch-all `/` HTTPRoute on the same Gateway — and
 # (by creation-order tiebreak) winning, sending every client request straight
 # to this router/EPP instead of through the Coordinator. The single combined
-# router needs to match EPP-Profile being encode OR prefill OR decode, which the
-# chart's headerMatches (a single exact-match map) can't express, so we
+# router needs to match x-llm-d-epp-profile being encode OR prefill OR decode,
+# which the chart's headerMatches (a single exact-match map) can't express, so we
 # disable it here and hand-author router/httproute/base/httproute.yaml instead (see there
 # for the OR'd header matches).
 httpRoute:

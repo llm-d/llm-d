@@ -11,9 +11,12 @@ data:
       # (llm-d-router#2805); keep it plaintext -- every caller in this guide
       # (kubelet probes, the Gateway's backendRef, the GKE HealthCheckPolicy)
       # speaks plain HTTP to it.
-      # TODO: Rename to secure_serving with the first release after v0.11.0.
-      # llm-d-router#2908 renamed the key, and v0.11.0 does not contain it.
-      secure_coordinator: false
+      # The key is secure_serving as of llm-d-router#2908, which the pinned
+      # release image (v1.0.0, see ../base/kustomization.yaml) contains. An
+      # unknown key here is ignored, so the listener would keep TLS on and
+      # every plain-HTTP caller would fail: the kubelet probes return 400 and
+      # the pod never goes Ready.
+      secure_serving: false
       read_timeout: 30s
       # Matches the Gateway/HTTPRoute request timeout (coordinator/base/httproute.yaml,
       # router/httproute/base/httproute.yaml: both 300s) -- otherwise the coordinator could
@@ -22,11 +25,12 @@ data:
       write_timeout: 300s
 
     gateway:
-      # GATEWAY_ADDRESS is the full URL the Coordinator's own outbound (EPP-Profile
-      # tagged) calls land on: the Gateway's own Service. Set in the README's
-      # Installation Instructions, step 1, whichever provider you used. Not built
-      # from GATEWAY_SERVICE here -- agentgateway's generated Service name doesn't
-      # follow the same <name>-<provider> suffix convention as istio/gke.
+      # GATEWAY_ADDRESS is the full URL the Coordinator's own outbound
+      # (x-llm-d-epp-profile tagged) calls land on: the Gateway's own Service. Set
+      # in the README's Installation Instructions, step 1, whichever provider you
+      # used. Not built from GATEWAY_SERVICE here -- agentgateway's generated
+      # Service name doesn't follow the same <name>-<provider> suffix convention
+      # as istio/gke.
       address: "${GATEWAY_ADDRESS}"
       max_idle_conns_per_host: 100
       idle_conn_timeout: 90s
