@@ -118,8 +118,8 @@ deploy:
     tpu:
       - when: {ACCELERATOR_TYPE: [tpu]}
         run: |
-          # The TPU deployment is one aggregated DP=16 pool: prefix-cache affinity
-          # and token-load scoring instead of the wide-EP P/D plugins
+          # The TPU deployment is one aggregated DP=16 pool. vLLM exposes one
+          # HTTP endpoint per engine so prefix-cache affinity can select ranks.
           export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
           export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-tpu.values.yaml"
           export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
