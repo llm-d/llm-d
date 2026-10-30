@@ -24,8 +24,13 @@ router:
         - type: inflight-load-producer
         - type: approx-prefix-cache-producer
           parameters:
+            # Keep in sync with --max-model-len in
+            # modelserver/tpu/vllm/deployments/tpu7x-2x2x2-dp16/patch-vllm.yaml.
             maxPrefixTokensToMatch: 32768
-            blockSizeTokens: 256
+            # Must match the engine's KV block size. Torch TPU vLLM auto-selects
+            # block_size=1024 for this deployment (see vllm:cache_config_info);
+            # prefix-cache hits are only granted in whole 1024-token blocks.
+            blockSizeTokens: 1024
         - type: prefix-cache-affinity-filter
         schedulingProfiles:
         - name: default
@@ -35,8 +40,11 @@ router:
 
   modelServers:
     # vLLM's multi-port external-LB mode exposes one API endpoint per DP
-    # engine. Keeping every rank as a router endpoint lets prefix affinity
-    # select the engine that owns the cached context.
+    # engine (ports 8000-8015 on the leader pod), so prefix affinity can
+    # select the engine that owns the cached context. Both the InferencePool
+    # CRD (spec.targetPorts maxItems: 8) and the standalone EPP
+    # (--endpoint-target-ports accepts 1-8 ports) cap a pod at 8 target
+    # ports, so the router addresses DP ranks 0-7 (ports 8000-8007).
     targetPorts:
       - number: 8000
       - number: 8001
@@ -46,14 +54,6 @@ router:
       - number: 8005
       - number: 8006
       - number: 8007
-      - number: 8008
-      - number: 8009
-      - number: 8010
-      - number: 8011
-      - number: 8012
-      - number: 8013
-      - number: 8014
-      - number: 8015
     matchLabels:
       llm-d.ai/guide: "glm-5-2-tpu"
       llm-d.ai/inference-serving: "true"
