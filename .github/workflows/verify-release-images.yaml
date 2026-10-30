@@ -34,7 +34,6 @@ jobs:
         run: |
           TAG="${{ inputs.tag }}"
           IMAGES=(
-            "${{ env.PRODUCTION_REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
             "${{ env.PRODUCTION_REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
             "${{ env.PRODUCTION_REGISTRY }}/llm-d/llm-d-sglang-xpu:${TAG}"
           )
