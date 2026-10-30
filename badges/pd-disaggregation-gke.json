@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM GPU",
-  "message": "passing",
-  "color": "brightgreen"
+  "message": "infra-error",
+  "color": "orange"
 }
