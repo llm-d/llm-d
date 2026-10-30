@@ -15,7 +15,6 @@ rules:
       - endpoints
       - serviceaccounts
       - events
-      - namespaces
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
   - apiGroups: ["discovery.k8s.io"]
@@ -43,8 +42,6 @@ rules:
     resources:
       - roles
       - rolebindings
-      - clusterroles
-      - clusterrolebindings
     verbs: ["get", "list", "watch", "create", "update", "patch"]
 
   # LeaderWorkerSet (group varies by installation; allow any group match for this resource name)
@@ -79,6 +76,21 @@ rules:
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: interactive-pod-cluster-reader
+rules:
+  # Cluster-scoped resources cannot be granted through a namespaced Role.
+  # Keep this access read-only for namespace discovery and RBAC debugging.
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, watch]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: interactive-pod-editor-binding
@@ -89,3 +101,17 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: interactive-pod-editor
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: interactive-pod-cluster-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: interactive-pod
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: interactive-pod-cluster-reader
