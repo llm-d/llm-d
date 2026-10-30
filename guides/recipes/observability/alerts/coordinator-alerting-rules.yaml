@@ -1,0 +1,75 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: coordinator-alerting-rules
+  labels:
+    app: coordinator-metrics
+spec:
+  groups:
+  # ---------------------------------------------------------------------------
+  # Availability and errors
+  # ---------------------------------------------------------------------------
+  - name: coordinator.availability
+    rules:
+    - alert: CoordinatorHighErrorRatio
+      # Fraction of coordinator client requests returning a server-side error.
+      # Only internal, upstream_5xx, and upstream_transport count in the numerator;
+      # bad_request and upstream_4xx are excluded so one misbehaving client cannot
+      # trip the alert. Both sides are summed because request_error_total carries
+      # an error_code label that request_total does not. 0/0 yields no value so
+      # this stays silent when there is no traffic.
+      expr: |
+        sum(rate(llm_d_coordinator_request_error_total{error_code!~"bad_request|upstream_4xx"}[5m]))
+          / sum(rate(llm_d_coordinator_request_total[5m]))
+          > 0.05
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Coordinator error ratio above 5%"
+        description: "Coordinator request error ratio has been above 5% for 10m (current {{ $value | humanizePercentage }})."
+    - alert: CoordinatorCriticalErrorRatio
+      expr: |
+        sum(rate(llm_d_coordinator_request_error_total{error_code!~"bad_request|upstream_4xx"}[5m]))
+          / sum(rate(llm_d_coordinator_request_total[5m]))
+          > 0.20
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Coordinator error ratio above 20%"
+        description: "Coordinator request error ratio has been above 20% for 5m (current {{ $value | humanizePercentage }}). The disaggregated inference path is likely degraded."
+    - alert: CoordinatorMetricsAbsent
+      # absent() only fires when NO llm_d_coordinator_request_total series exist at
+      # all, so this is a coarse, cluster-wide signal: every coordinator is down or
+      # the scrape stopped entirely. The counter has no series until a coordinator
+      # serves its first request, so this also fires for a coordinator that is up
+      # but has seen no traffic since it last restarted. With the llm-d-coordinator
+      # PodMonitor in place, `up{job=~"(.*/)?llm-d-coordinator"} == 0` avoids the
+      # idle false positive and catches a single dead coordinator; adjust the job
+      # matcher if your PodMonitor/PodMonitoring has a different name.
+      expr: absent(llm_d_coordinator_request_total)
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "No coordinator metrics are being scraped (cluster-wide)"
+        description: "No llm_d_coordinator_request_total samples from any coordinator for 5m. Every coordinator is down, the scrape is broken, or no coordinator has served a request since it last restarted."
+
+  # ---------------------------------------------------------------------------
+  # Pipeline steps
+  # ---------------------------------------------------------------------------
+  - name: coordinator.steps
+    rules:
+    - alert: CoordinatorStepErrors
+      # A pipeline step is failing. Covers every step, including async-broker.
+      # error_code="upstream_transport" means no response was received (connection
+      # refused, timeout, reset); on step="async-broker" that is a Redis/network
+      # failure on the enqueue path.
+      expr: sum by (step, error_code) (rate(llm_d_coordinator_step_errors_total{error_code!~"bad_request|upstream_4xx"}[5m])) > 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Coordinator step {{ $labels.step }} failing with {{ $labels.error_code }}"
+        description: "llm_d_coordinator_step_errors_total is increasing for step {{ $labels.step }} with error_code {{ $labels.error_code }}. Requests through this pipeline stage are failing."

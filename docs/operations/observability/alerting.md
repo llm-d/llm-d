@@ -1,6 +1,6 @@
 # Configure Alerts
 
-This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker) and for the Batch Gateway. For Prometheus and Grafana installation, see [Set Up the Monitoring Stack](./setup.md) first, and for the metrics these alerts are built on, see [Router (EPP) Metrics](./router-metrics.md) and [Batch Gateway Metrics](./batch-gateway-metrics.md).
+This page covers default sets of Prometheus alerting rules for the EPP (Endpoint Picker), the Coordinator, and the Batch Gateway. For Prometheus and Grafana installation, see [Set Up the Monitoring Stack](./setup.md) first, and for the metrics these alerts are built on, see [Router (EPP) Metrics](./router-metrics.md) (including [Coordinator Metrics](./router-metrics.md#coordinator-metrics)) and [Batch Gateway Metrics](./batch-gateway-metrics.md).
 
 The rules ship as a [`PrometheusRule`](https://prometheus-operator.dev/docs/getting-started/design/#prometheusrule) custom resource, so they require the Prometheus Operator (bundled with the kube-prometheus-stack installed by the [setup guide](./setup.md)).
 
@@ -80,6 +80,42 @@ The error-ratio alerts are `0/0`-safe: with no traffic the expression yields no 
 > [!NOTE]
 > `EPPExtProcStreamErrors` relies on opt-in metrics enabled by the EPP `--enable-grpc-stream-metrics` flag. When the flag is unset, the series are absent and the alert never fires. The matcher excludes `OK` and `Canceled` (a normal client disconnect) — adjust it for your environment.
 
+### Coordinator (`coordinator.availability`, `coordinator.steps`)
+
+These alerts cover the llm-d Coordinator, which runs the disaggregation pipeline (and the async-broker step) in front of the model servers. They are shipped as a separate `PrometheusRule` and are only relevant if your deployment runs the Coordinator.
+
+> [!IMPORTANT]
+> These rules only receive data once the Coordinator's own `/metrics` endpoint (named container port `metrics`, default `9090`) is scraped. Without it, `CoordinatorMetricsAbsent` fires permanently and the other alerts never evaluate. Create the Coordinator `PodMonitor` (or `PodMonitoring` on GKE) as described in [Collect Metrics](./metrics.md#step-3-scrape-coordinator-metrics). If you deployed the [coordinator disaggregation guide](../../../guides/coord-disaggregation/README.md), apply its `coordinator/monitoring` kustomization instead. Verify with `kubectl get podmonitors -n ${NAMESPACE}` and check that the `llm-d-coordinator` target shows `UP` at `http://localhost:9090/targets`.
+
+```bash
+kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/alerts/coordinator-alerting-rules.yaml
+kubectl get prometheusrules -n ${NAMESPACE}
+```
+
+You should then see the `coordinator.availability` and `coordinator.steps` groups under **Status → Rule Health** in the Prometheus UI. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: coordinator-metrics`.
+
+| Alert | Severity | Fires when | Why it matters |
+|-------|----------|-----------|----------------|
+| `CoordinatorHighErrorRatio` | warning | Error ratio > 5% for 10m | Pipeline or upstream failures are degrading a meaningful share of client requests |
+| `CoordinatorCriticalErrorRatio` | critical | Error ratio > 20% for 5m | The disaggregated inference path is likely broken, not just degraded |
+| `CoordinatorMetricsAbsent` | warning | `absent(llm_d_coordinator_request_total)` for 5m | Coarse cluster-wide signal: no Coordinator metrics at all — every Coordinator is down or scraping stopped |
+| `CoordinatorStepErrors` | warning | `llm_d_coordinator_step_errors_total{error_code!~"bad_request\|upstream_4xx"}` increasing for 10m, per `step` and `error_code` | A specific pipeline stage is failing |
+
+The error-ratio alerts sum both sides before dividing (`request_error_total` has an `error_code` label that `request_total` lacks) and are `0/0`-safe, like the EPP ones.
+
+The numerators count only server-side failures (`error_code` not `bad_request` or `upstream_4xx`); this differs from the EPP rules, which count every error code.
+
+`CoordinatorStepErrors` covers every step, including `async-broker`. An `error_code` of `upstream_transport` means no response was received (connection refused, timeout, reset); on `step="async-broker"` it points at a Redis or network failure on the enqueue path.
+
+> [!NOTE]
+> `llm_d_coordinator_request_total` has no series until a Coordinator serves its first request, so `CoordinatorMetricsAbsent` also fires for a Coordinator that is running but has had no traffic since it last restarted. Like `EPPMetricsAbsent`, it will not catch one Coordinator dying while others keep reporting.
+
+```promql
+up{job=~"(.*/)?llm-d-coordinator"} == 0
+```
+
+This per-pod query avoids the idle false positive and catches a single dead coordinator once the PodMonitor is in place; adjust the job matcher if your resource has a different name.
+
 ### Batch Gateway (`batch-gateway.rules`)
 
 These alerts cover the Batch Gateway processor and GC reconciler rather than the request path, so they are shipped as a separate `PrometheusRule` and are only relevant if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md).
@@ -120,6 +156,7 @@ See the [PromQL Reference](./promql.md) for more queries you can promote into al
 
 ```bash
 kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/epp-alerting-rules.yaml
+kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/coordinator-alerting-rules.yaml
 kubectl delete -n ${NAMESPACE} -f guides/recipes/observability/alerts/batch-gateway-alerting-rules.yaml
 ```
 
