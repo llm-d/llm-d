@@ -358,7 +358,7 @@ Do not deploy the vLLM and SGLang recipes in the same namespace: the InferencePo
 <details data-when="ACCELERATOR_TYPE=tpu">
 <summary><b>Google TPU v7x notes</b></summary>
 
-- `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --data-parallel-size-local=16 --data-parallel-multi-port-external-lb --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=32768`, with one API endpoint per DP engine on ports 8000-8015 (the router targets 8000-8007; see [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
+- `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --data-parallel-size-local=16 --data-parallel-multi-port-external-lb --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=262144`, with one API endpoint per DP engine on ports 8000-8015 (the router targets 8000-8007; see [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
 - GKE only (`INFRA_PROVIDER` does not apply): the slice needs a `2x2x2` tpu7x node pool, a boot disk of at least 1.5 TB on every host (each host downloads the full 756 GB FP8 checkpoint into `/var/cache/huggingface`, a `hostPath`, and must keep it above the kubelet eviction threshold).
 - `MONITORING=true` is GPU-only here; the PodMonitors scrape per-rank GPU ports.
 

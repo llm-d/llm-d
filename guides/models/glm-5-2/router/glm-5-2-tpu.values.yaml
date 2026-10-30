@@ -26,7 +26,7 @@ router:
           parameters:
             # Keep in sync with --max-model-len in
             # modelserver/tpu/vllm/deployments/tpu7x-2x2x2-dp16/patch-vllm.yaml.
-            maxPrefixTokensToMatch: 32768
+            maxPrefixTokensToMatch: 262144
             # Must match the engine's KV block size. Torch TPU vLLM auto-selects
             # block_size=1024 for this deployment (see vllm:cache_config_info);
             # prefix-cache hits are only granted in whole 1024-token blocks.

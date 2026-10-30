@@ -43,7 +43,7 @@
         --data-parallel-multi-port-external-lb \
         --tensor-parallel-size=1 \
         --attention-backend=CUSTOM \
-        --max-model-len=32768 \
+        --max-model-len=262144 \
         --max-num-seqs=64 \
         --max-num-batched-tokens=1024 \
         --kv-cache-dtype=fp8 \
