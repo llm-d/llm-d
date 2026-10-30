@@ -18,27 +18,57 @@ SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 TEAMS=(premium standard batch)   # one topic/subscription per team
 RESULT_TOPIC="results"
 
+ensure_topic() {
+  local topic="$1"
+  if gcloud pubsub topics describe "$topic" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    echo "  topic $topic already exists"
+  elif gcloud pubsub topics create "$topic" --project "$PROJECT_ID"; then
+    echo "  created topic $topic"
+  else
+    echo "Error: failed to create or access topic $topic" >&2
+    return 1
+  fi
+}
+
+ensure_subscription() {
+  local sub="$1" topic="$2"
+  if gcloud pubsub subscriptions describe "$sub" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    echo "  subscription $sub already exists"
+  elif gcloud pubsub subscriptions create "$sub" --topic "$topic" --project "$PROJECT_ID" \
+    --ack-deadline=60; then
+    echo "  created subscription $sub"
+  else
+    echo "Error: failed to create or access subscription $sub" >&2
+    return 1
+  fi
+}
+
+ensure_service_account() {
+  if gcloud iam service-accounts describe "$SA_EMAIL" --project "$PROJECT_ID" >/dev/null 2>&1; then
+    echo "  SA $SA_EMAIL already exists"
+  elif gcloud iam service-accounts create "$SA_NAME" --project "$PROJECT_ID" \
+    --display-name="llm-d async processor (demo)"; then
+    echo "  created SA $SA_EMAIL"
+  else
+    echo "Error: failed to create or access SA $SA_EMAIL" >&2
+    return 1
+  fi
+}
+
 echo ">> Request topics + subscriptions (one per team)"
 for t in "${TEAMS[@]}"; do
   topic="team-${t}-requests"
   sub="team-${t}-requests-sub"
-  gcloud pubsub topics create "$topic" --project "$PROJECT_ID" 2>/dev/null \
-    && echo "  created topic $topic" || echo "  topic $topic already exists"
-  gcloud pubsub subscriptions create "$sub" --topic "$topic" --project "$PROJECT_ID" \
-    --ack-deadline=60 2>/dev/null \
-    && echo "  created subscription $sub" || echo "  subscription $sub already exists"
+  ensure_topic "$topic"
+  ensure_subscription "$sub" "$topic"
 done
 
 echo ">> Result topic (+ inspection subscription)"
-gcloud pubsub topics create "$RESULT_TOPIC" --project "$PROJECT_ID" 2>/dev/null \
-  && echo "  created topic $RESULT_TOPIC" || echo "  topic $RESULT_TOPIC already exists"
-gcloud pubsub subscriptions create "results-sub" --topic "$RESULT_TOPIC" --project "$PROJECT_ID" 2>/dev/null \
-  && echo "  created subscription results-sub" || echo "  subscription results-sub already exists"
+ensure_topic "$RESULT_TOPIC"
+ensure_subscription "results-sub" "$RESULT_TOPIC"
 
 echo ">> Service account + IAM roles"
-gcloud iam service-accounts create "$SA_NAME" --project "$PROJECT_ID" \
-  --display-name="llm-d async processor (demo)" 2>/dev/null \
-  && echo "  created SA $SA_EMAIL" || echo "  SA $SA_EMAIL already exists"
+ensure_service_account
 
 # pubsub.subscriber : consume from request subscriptions
 # pubsub.publisher  : publish results to the result topic
