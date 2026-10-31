@@ -21,13 +21,13 @@
 # KV size from /metrics, so the index is sized by hand per DP rank (one rank =
 # one endpoint) in 64-token blocks (the SGLang page size), for a DEP8 prefill
 # rank on H200:
-# - GPU: 125,696 KV tokens per DEP8 prefill rank -> 1,964 blocks;
-# - CPU: hicache component, 64 GB per rank = 1,235,008 tokens -> 19,297 blocks;
-# - total: 21,261 blocks.
+# - GPU: 261,376 KV tokens per DEP8 prefill rank -> 4,084 blocks;
+# - CPU: hicache component, 100 GB per rank = 1,929,664 tokens -> 30,151 blocks;
+# - total: 34,235 blocks.
 #
 # Every standard SGLang deployment overlay includes hicache. If you disable
 # hicache (for example in the benchmark/baseline overlay or with
-# HICACHE_SIZE_GB_PER_RANK=0), set lruCapacityPerServer to 1964 so the router
+# HICACHE_SIZE_GB_PER_RANK=0), set lruCapacityPerServer to 4084 so the router
 # does not count CPU cache blocks that do not exist. When hicache-fs adds a
 # shared storage tier (L3), keep lruCapacityPerServer sized to GPU + CPU: the
 # approximate index tracks per-rank locality, while the shared L3 volume is
@@ -54,13 +54,14 @@ router:
           parameters:
             autoTune: false
             blockSizeTokens: 64
-            lruCapacityPerServer: 21261
+            lruCapacityPerServer: 34235
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
-            # TODO: measured for vLLM on an H200 GLM-5.2-FP8 DP8 cell, not yet
-            # for SGLang (guides/recipes/router/calibration).
-            peakPrefillThroughput: 3585
+            # Peak single-rank 2048-token prefill rate measured on an H200 SGLang
+            # GLM-5.2-FP8 DEP8 prefill pod (scheduler chunk logs; calibrate.sh
+            # single-request TTFT is skewed by RustServerIdleSleeper 1s ticks).
+            peakPrefillThroughput: 3975
         - type: token-load-scorer
         - type: active-request-scorer
         - type: max-score-picker
