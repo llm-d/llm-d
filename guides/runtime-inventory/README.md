@@ -18,7 +18,7 @@ and never modifies scheduling or serving behavior.
 
 ```bash
 helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
-  --version 1.5.1 \
+  --version 1.6.0 \
   --namespace k8s-aibom-system --create-namespace
 ```
 
@@ -42,6 +42,13 @@ Deploy any well-lit path as usual. Each vLLM / llm-d workload gets an
 ```bash
 kubectl get aiboms -n ${NAMESPACE}
 ```
+
+Disaggregated paths are covered as one unit: a `DisaggregatedSet` gets a
+single `AIBOM` keyed to the set, with each role's leader and worker
+templates extracted under `spec.roles[i]` locators and the
+`LeaderWorkerSet`, StatefulSets and pods it materializes rolled up into
+that document rather than inventoried separately. Plain
+`LeaderWorkerSet` deployments get the same treatment.
 
 The BOM records the served model identity (from vLLM `--model` args or
 `HF_MODEL_ID`, confidence `declared`), the serving runtime and version
