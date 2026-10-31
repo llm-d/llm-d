@@ -341,6 +341,7 @@ spec:
                     - --zap-log-level=1
                     - --secure-proxy=false
                     - --enable-prefiller-sampling
+                    - --metrics-port=9095
                   env:
                     # Injected as bootstrap_port on both P/D legs. Must be the
                     # prefill pods' rank-0 Rust listener port, which hosts the
@@ -373,6 +374,9 @@ spec:
                       protocol: TCP
                     - containerPort: 8007
                       name: rank7
+                      protocol: TCP
+                    - containerPort: 9095
+                      name: sc-metrics
                       protocol: TCP
                   restartPolicy: Always
                   securityContext:

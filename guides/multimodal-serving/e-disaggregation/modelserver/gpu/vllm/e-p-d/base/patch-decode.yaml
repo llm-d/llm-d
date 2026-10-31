@@ -18,6 +18,7 @@ spec:
                     - --ec-connector=ec-nixl
                     - --zap-log-level=1
                     - --secure-serving=false
+                    - --metrics-port=9095
               containers:
                 - name: modelserver
                   command: ["vllm", "serve"]

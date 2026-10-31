@@ -285,10 +285,14 @@ spec:
                   - --zap-log-level=1
                   - --secure-serving=false
                   - --enable-prefiller-sampling
+                  - --metrics-port=9095
                 imagePullPolicy: Always
                 ports:
                   - containerPort: 8000
                     name: sidecar
+                    protocol: TCP
+                  - containerPort: 9095
+                    name: sc-metrics
                     protocol: TCP
                 image: REPLACE_ROUTING_SIDECAR_IMAGE
                 resources: {}
