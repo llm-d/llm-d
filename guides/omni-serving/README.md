@@ -19,7 +19,9 @@ The tasks fall into two shapes:
 Either way the router **routes on load**.
 Diffusion models generate by iterative denoising rather than autoregressive token generation, and the Qwen3-Omni pipeline runs with prefix caching off, so prefix-cache and token-load scorers have no signal.
 The `omni` router picks the pod with the shortest queue (`queue-scorer`).
-The single-endpoint routers track how many requests they have dispatched to each pod and not yet seen complete, and prefer the least busy one (`active-request-scorer`); they need no model-server metrics, which SGLang's diffusion backend does not publish. Image requests log a token-estimation error (`unsupported request body type`) because the token producer cannot parse image bodies; this does not disable `active-request-scorer`, which tracks in-flight request counts independently of token estimation. The Qwen3-TTS talker is autoregressive, so prefix-aware TTS routing is possible in principle and is tracked in [llm-d-router#2483](https://github.com/llm-d/llm-d-router/issues/2483).
+The single-endpoint routers track how many requests they have dispatched to each pod and not yet seen complete, and prefer the least busy one (`active-request-scorer`); they need no model-server metrics, which SGLang's diffusion backend does not publish.
+Image requests log a token-estimation error (`unsupported request body type`) because the token producer cannot parse image bodies; this does not disable `active-request-scorer`, which tracks in-flight request counts independently of token estimation.
+The Qwen3-TTS talker is autoregressive, so prefix-aware TTS routing is possible in principle and is tracked in [llm-d-router#2483](https://github.com/llm-d/llm-d-router/issues/2483).
 
 ### Why vLLM-Omni
 
@@ -293,7 +295,9 @@ Serves an edit-capable checkpoint, one model server per accelerator. An edit-cap
 <details>
 <summary><b>Intel XPU</b></summary>
 
-Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=image-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)), the same overlay component `text-to-image` uses; this is community support, **not** nightly E2E coverage. FLUX.2-klein-4B supports both generation and reference-image editing, so the same checkpoint serves `text-to-image` and `image-to-image`. `Qwen/Qwen-Image-Edit-2511` does not fit a single B60 (~57 GB bf16), even with `--performance-mode=memory`.
+Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=image-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`.
+SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)), the same overlay component `text-to-image` uses; this is community support, **not** nightly E2E coverage.
+FLUX.2-klein-4B supports both generation and reference-image editing, so the same checkpoint serves `text-to-image` and `image-to-image`. `Qwen/Qwen-Image-Edit-2511` does not fit a single B60 (~57 GB bf16), even with `--performance-mode=memory`.
 
 </details>
 <!-- tabs:end -->
@@ -336,6 +340,36 @@ kubectl apply -n ${NAMESPACE} \
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
+
+### 4. Observability & Troubleshooting
+
+Observe the task's response format and model server logs alongside the router's metrics. A text-only response exercises only Qwen3-Omni's thinker stage; image and speech endpoints have different completion signals from text generation. Compare latency under the same task, engine, input size, and concurrency, using the shared [metric reference](../../docs/operations/observability/router-metrics.md) and [PromQL reference](../../docs/operations/observability/promql.md).
+
+#### Key signals for this path
+
+| Signal | Why it matters for omni serving | Where to look |
+| --- | --- | --- |
+| `llm_d_epp_request_total`, `llm_d_epp_request_error_total` | Compare request volume with routing errors, and check client HTTP status and interrupted streams as well. A successful chat request does not validate image or speech serving. | [Request metrics](../../docs/operations/observability/router-metrics.md#request-and-latency) |
+| `llm_d_epp_request_duration_seconds`, `llm_d_epp_scheduler_e2e_duration_seconds` | Compare full response latency with scheduling overhead. Long audio/image generation can be slow even when endpoint selection is fast; text-token throughput is not a comparable measure of image generation. | [Request metrics](../../docs/operations/observability/router-metrics.md#request-and-latency), [scheduler metrics](../../docs/operations/observability/router-metrics.md#scheduler-plugins--processing-overhead) |
+| `llm_d_epp_ready_endpoints` | Confirm that the selected task has serving capacity. The default omni overlay has one replica, other GPU tasks have three, and XPU image tasks have two; one default omni pod cannot demonstrate distribution across replicas. | [Pool metrics](../../docs/operations/observability/router-metrics.md#inference-pool), [supported configurations](#supported-accelerators-and-model-servers) |
+| Per-pod access logs and task-specific responses | Confirm where requests landed and whether every required stage produced its output: text plus audio for omni, an image for diffusion, and non-empty audio for speech. | [Send Test Requests](#2-send-test-requests), [Check where the requests landed](#3-check-where-the-requests-landed) |
+
+The `omni` task uses `queue-scorer`, while image and TTS tasks use `active-request-scorer`, which counts dispatched requests until they complete. Those single-endpoint task values disable the router's model-server metrics scraping. SGLang's diffusion backend does not publish model-server metrics, so missing `sglang:*` series there do not indicate a failed scrape or idle workers. Use the router metrics and per-pod request logs instead. For vLLM-Omni, inspect the series actually exported by the selected checkpoint and stage before applying text-model dashboard queries.
+
+Prefix-cache hit rates and token-load scores do not validate this guide's routing: Qwen3-Omni runs with prefix caching disabled, and diffusion generation has no reusable autoregressive KV prefix. The guide's router values intentionally schedule on load.
+
+#### Common failure modes
+
+| Symptom | What to check first |
+| --- | --- |
+| Text chat succeeds but the omni response has no audio | Request both `text` and `audio` modalities, then inspect talker and code2wav logs. The text-only test proves only that the thinker answered. Check that the pod has the two GPUs required by the default deploy config. |
+| Image generation or editing returns an error | Match `TASK`, `MODEL`, and the endpoint to the deployed checkpoint. Qwen-Image serves generation, while Qwen-Image-Edit serves editing. Edits require `multipart/form-data`; inspect the returned error body before treating it as a scheduling problem. |
+| Speech returns a small JSON body instead of audio | Check the HTTP status and content type before reading the result as a WAV. Use the [speech test](#2-send-test-requests) to check the non-empty body and `RIFF` header, then inspect model server logs if it fails. |
+| Requests succeed but load-aware routing is not visible | Send concurrent requests and inspect per-pod access logs; a small sequential sample need not be evenly distributed. In Gateway Mode, the image/TTS values use `FailOpen`, so an unavailable EPP can be bypassed while backends still answer. Check EPP health as well as model server health. |
+| All tasks appear in the same pool or requests reach the wrong model | Deploy only one task and one engine per namespace. Every overlay uses `llm-d.ai/guide=omni-serving`, so multiple overlays in one namespace join the same InferencePool. In Gateway Mode, check exact-path rules and give models sharing an endpoint their own listener as described below. |
+| Pods remain `Pending` or `NotReady` | Check scheduling events, accelerator and host-memory capacity, model-loading logs, and startup/readiness probe failures. See [Model Loading and Startup](../../docs/operations/startup/model-loading-and-startup.md) and [Readiness Probe Troubleshooting](../../docs/operations/lifecycle/readiness-probes.md#troubleshooting). |
+
+For missing router scrape targets or empty dashboards, follow [Collect Metrics](../../docs/operations/observability/metrics.md) and [Dashboard Troubleshooting](../../docs/operations/observability/dashboards.md#troubleshooting). Shared alert rules are in [Alerting](../../docs/operations/observability/alerting.md).
 
 ### Split endpoints across pools (Gateway Mode)
 
