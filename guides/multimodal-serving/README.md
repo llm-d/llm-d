@@ -31,7 +31,7 @@ E/PD:        Client → Proxy → Router (EPP) → PD pod's routing sidecar
 
 E/P/D:       Client → Proxy → Router (EPP) → Decode pod's routing sidecar
                                                ├─ Encode pod     (media only; embeddings over the EC Connector)
-                                               ├─ Prefill pod    (reads the embeddings, prefills; KV cache over NIXL)
+                                               ├─ Prefill pod    (reads the embeddings, prefills; KV cache over NIXL, or MoRI-IO on AMD)
                                                └─ Decode pod     (decode only)
 ```
 
@@ -64,21 +64,30 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | H200 reference · aggregated 8 replicas × TP=2 (16 GPUs), E/PD 2 Encode + 8 PD, E/P/D 2 Encode + 4 Prefill + 4 Decode (TP=2) · `INFRA_PROVIDER` `base`, `gke` (+ `coreweave` for E/PD and E/P/D) · E/P/D is not run nightly |
+| AMD GPU | `amd` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Instinct MI355X (288 GB HBM) · aggregated (8 replicas × TP=2, 16 GPUs) and E/PD (2 Encode + 8 PD, TP=2) over NIXL with `INFRA_PROVIDER=base`; E/PD and E/P/D (2 Encode + 6 Prefill + 2 Decode, TP=2) over MoRI-IO with `INFRA_PROVIDER=moriio/base`, which needs a vLLM image with `ec_transport=moriio` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | GKE only (`INFRA_PROVIDER=gke`) · aggregated only · 8 replicas × 4 chips (`2x2x1`, TP=4) · needs the `medium` PriorityClass |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-The aggregated topology runs on every accelerator above; E/PD and E/P/D run on NVIDIA GPUs only. The overlay each combination deploys:
+The aggregated topology runs on every accelerator above; E/PD and E/P/D run on NVIDIA and AMD GPUs. The overlay each combination deploys:
 
 | `TOPOLOGY` | `ACCELERATOR_TYPE` | `INFRA_PROVIDER` | Overlay |
 | --- | --- | --- | --- |
 | `aggregation` | `gpu` | `base`, `gke` | [`aggregation/modelserver/gpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/gpu/vllm/base/kustomization.yaml) |
+| `aggregation` | `amd` | `base` | [`aggregation/modelserver/amd/vllm/base/kustomization.yaml`](./aggregation/modelserver/amd/vllm/base/kustomization.yaml) |
 | `aggregation` | `xpu` | `base` | [`aggregation/modelserver/xpu/vllm/base/kustomization.yaml`](./aggregation/modelserver/xpu/vllm/base/kustomization.yaml) |
 | `aggregation` | `tpu/v7` | `gke` | [`aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml`](./aggregation/modelserver/tpu/v7/vllm/gke/kustomization.yaml) |
 | `e-pd` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-pd/base/kustomization.yaml) |
+| `e-pd` | `amd` | `base` | [`e-disaggregation/modelserver/amd/vllm/e-pd/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-pd/base/kustomization.yaml) |
+| `e-pd` | `amd` | `moriio/base`, `moriio/amd-ci` | [`e-disaggregation/modelserver/amd/vllm/e-pd/moriio/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-pd/moriio/base/kustomization.yaml) |
 | `e-p-d` | `gpu` | `base`, `gke`, `coreweave` | [`e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml`](./e-disaggregation/modelserver/gpu/vllm/e-p-d/base/kustomization.yaml) |
+| `e-p-d` | `amd` | `moriio/base`, `moriio/amd-ci` | [`e-disaggregation/modelserver/amd/vllm/e-p-d/moriio/base/kustomization.yaml`](./e-disaggregation/modelserver/amd/vllm/e-p-d/moriio/base/kustomization.yaml) |
+
+On AMD, aggregation and E/PD (embeddings over NIXL) are available. Both overlays use the `docker.io/vllm/vllm-openai-rocm:v0.31.0` image.
+
+On AMD, the `moriio/*` overlays move the embeddings over MoRI-IO instead of NIXL for E/PD, and both the embeddings and the KV cache over MoRI-IO for E/P/D. `moriio/base` holds the manifests; `moriio/amd-ci` layers on the RDMA NIC attachments and the model cache that the CI cluster needs. They set `ec_transport=moriio`, which needs a vLLM image that has it, and E/P/D also needs a MoRI build that registers the single KV region. Keep `ec_cpu_bytes` at 1 GiB with MoRI-IO. Details: [AMD over MoRI-IO](./e-disaggregation/README.md#amd-epd-and-epd-over-mori-io).
 
 The replica counts are sized for the reference hardware in the Notes column (16 GPUs for aggregated serving on NVIDIA GPUs, 20 for E/PD and E/P/D). To try the guide on a smaller cluster, lower `replicas` in the overlay's Deployments, keeping at least one pod per role.
 
@@ -128,10 +137,11 @@ export GUIDE_NAME=multimodal-serving
 export NAMESPACE=llm-d-multimodal-serving
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
+export ACCELERATOR_VALUES=
 export TOPOLOGY=aggregation # options: aggregation, e-pd, e-p-d
-export ACCELERATOR_TYPE=gpu # options: gpu, xpu, tpu/v7
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v7
 export MODEL_SERVER=vllm # options: vllm
-export INFRA_PROVIDER=base # options: base, gke, coreweave
+export INFRA_PROVIDER=base # options: base, gke, coreweave, moriio/base, moriio/amd-ci
 export MODEL=Qwen/Qwen3-VL-32B-Instruct # the model the overlays serve (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -245,7 +255,7 @@ export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 The router values configure scheduling for each topology:
 
 - [`aggregation.values.yaml`](./aggregation/router/aggregation.values.yaml): the `token-producer` estimates the tokens of each image and video, the `prefix-cache-affinity-filter` keeps requests on the pods that hold their prefix, and the `token-load-scorer` picks among them.
-The filter is tuned for Qwen3-VL-32B-Instruct on H200 (TP=2): `peakPrefillThroughput: 15751` was measured with the [router calibration recipe](../recipes/router/calibration), `affinityThreshold: 0.6` sits below the cacheable fraction of typical multimodal prompts (the 0.8 default would never engage), and `maxTTFTPenaltyMs: 36000` (twice the default) compensates for vision-encoder time that token counts do not capture. Recalibrate them for other models and hardware.
+The filter is tuned for Qwen3-VL-32B-Instruct on H200 (TP=2): `peakPrefillThroughput: 15751` was measured with the [router calibration recipe](../recipes/router/calibration), `affinityThreshold: 0.6` sits below the cacheable fraction of typical multimodal prompts (the 0.8 default would never engage), and `maxTTFTPenaltyMs: 36000` (twice the default) compensates for vision-encoder time that token counts do not capture. Recalibrate them for other models and hardware. On AMD, an `amd.` file next to each router values file sets `peakPrefillThroughput: 12767`, measured on MI355X (TP=2); the other two values are the H200 ones.
 - [`e-pd-disaggregation.values.yaml`](./e-disaggregation/router/vllm/e-pd-disaggregation.values.yaml) and [`e-p-d-disaggregation.values.yaml`](./e-disaggregation/router/vllm/e-p-d-disaggregation.values.yaml): the `disagg-profile-handler` with the `always-disagg-multimodal-decider` sends every request with media through an Encode pod, chosen by the `encode-filter`, and picks the PD (or Prefill and Decode) pods on prefix-cache affinity, token load, and queue depth.
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
@@ -257,6 +267,23 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 ```
 <!-- guide:deploy.monitoring_values end -->
 
+**On AMD, layer the AMD router values** over the topology's router values:
+
+<!-- guide:deploy.accelerator_values start -->
+<!-- variants:start -->
+<details data-when="ACCELERATOR_TYPE=amd">
+<summary><b>AMD GPU</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${ROUTER_VALUES%/*}/amd.${ROUTER_VALUES##*/}"
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
+<!-- guide:deploy.accelerator_values end -->
+
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is used by the verification steps to find the router service. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
@@ -266,6 +293,7 @@ helm install ${GUIDE_NAME} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
+  ${ACCELERATOR_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
