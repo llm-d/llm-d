@@ -18,3 +18,4 @@ spec:
                     - --mooncake-bootstrap-port=8998
                     - --zap-log-level=1
                     - --secure-proxy=false
+                    - --metrics-port=9095
