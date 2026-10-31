@@ -248,14 +248,34 @@ The router values configure scheduling for each topology:
 The filter is tuned for Qwen3-VL-32B-Instruct on H200 (TP=2): `peakPrefillThroughput: 15751` was measured with the [router calibration recipe](../recipes/router/calibration), `affinityThreshold: 0.6` sits below the cacheable fraction of typical multimodal prompts (the 0.8 default would never engage), and `maxTTFTPenaltyMs: 36000` (twice the default) compensates for vision-encoder time that token counts do not capture. Recalibrate them for other models and hardware.
 - [`e-pd-disaggregation.values.yaml`](./e-disaggregation/router/vllm/e-pd-disaggregation.values.yaml) and [`e-p-d-disaggregation.values.yaml`](./e-disaggregation/router/vllm/e-p-d-disaggregation.values.yaml): the `disagg-profile-handler` with the `always-disagg-multimodal-decider` sends every request with media through an Encode pod, chosen by the `encode-filter`, and picks the PD (or Prefill and Decode) pods on prefix-cache affinity, token load, and queue depth.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining `MONITORING_VALUES` (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
 # only when MONITORING=true:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true and INFRA_PROVIDER=gke:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is used by the verification steps to find the router service. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -284,7 +304,11 @@ kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
 
 ### 4. Enable Monitoring (optional)
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites) and `MONITORING=true` when deploying the router):
+**(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- guide:deploy.monitoring start -->
 ```bash
@@ -292,6 +316,15 @@ kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/${MONITORING_COMPONENT}
 ```
 <!-- guide:deploy.monitoring end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+No manual `PodMonitor` deployment is required when [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) is enabled; GKE automatically provisions `PodMonitoring` resources for the model servers.
+
+</details>
+<!-- tabs:end -->
 
 ## Token estimation
 

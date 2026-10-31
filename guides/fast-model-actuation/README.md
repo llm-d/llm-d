@@ -216,7 +216,7 @@ You should see:
 ### 6. (Optional) Enable monitoring
 
 - Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#4-deploy-the-llm-d-router).
+- To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#4-deploy-the-llm-d-router). On GKE with Managed Prometheus, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml` instead, which scrapes the router through a GMP `PodMonitoring` (see [Collect Metrics](../../docs/operations/observability/metrics.md)).
 
 ## Verification
 

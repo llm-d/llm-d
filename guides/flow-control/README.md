@@ -155,13 +155,30 @@ kubectl create secret generic llm-d-hf-token \
 
 ### 1. Deploy the Router
 
-**(Optional) Enable Prometheus monitoring on the router** (requires installing the [Monitoring stack](../../docs/operations/observability/setup.md) first; see [Enable monitoring](#3-enable-monitoring-optional)):
+**(Optional) Enable Prometheus monitoring on the router** (see [Collect Metrics](../../docs/operations/observability/metrics.md) and [Enable monitoring](#3-enable-monitoring-optional)):
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
 
 <!-- llm-d-cicd:skip start -->
 ```bash
 export EXTRA_HELM_ARGS="--values=${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export EXTRA_HELM_ARGS="--values=${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- tabs:end -->
 
 #### Standalone Mode
 
@@ -267,6 +284,9 @@ kubectl wait --for=condition=Available deployment -l llm-d.ai/guide=${GUIDE_NAME
 ### 3. Enable monitoring (optional)
 
 If you want Prometheus scraping via `ServiceMonitor` and `PodMonitor`, the [Monitoring stack](../../docs/operations/observability/setup.md) must be installed in the cluster so those CRDs exist:
+
+> [!NOTE]
+> On GKE with Managed Prometheus, set `EXTRA_HELM_ARGS` to `--values=${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml` instead, and skip the `PodMonitor`: [GKE automatic application monitoring](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics) creates `PodMonitoring` resources for the model servers.
 
 * Set `export EXTRA_HELM_ARGS="--values=${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"` before running the [router installation command](#1-deploy-the-router) (or re-run `helm upgrade --install` with `EXTRA_HELM_ARGS` set if you already deployed the router without it).
 * Set `export MONITORING=true` to deploy the monitoring resources (`PodMonitor`) for the model servers:

@@ -231,6 +231,10 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 # -f flag: it is empty by default, so the helm commands expand it as-is.
 #
 # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+#
+# On GKE with Managed Prometheus, use the GMP PodMonitoring values instead:
+#
+# export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 ```
 <!-- guide:deploy.monitoring_values end -->
 
