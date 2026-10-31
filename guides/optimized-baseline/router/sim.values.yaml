@@ -1,0 +1,32 @@
+## Small resource requests for functional control-plane tests with the simulator.
+## Layer on top of optimized-baseline.values.yaml. Not a performance profile.
+router:
+  epp:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+  proxy:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 256Mi
+    args:
+      - --service-node
+      - envoy-sidecar
+      - --log-level
+      - warn
+      - --concurrency
+      - "2"
+      - --drain-strategy
+      - immediate
+      - --drain-time-s
+      - "60"
+      - -c
+      - /etc/envoy/envoy.yaml
