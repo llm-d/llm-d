@@ -19,6 +19,7 @@ spec:
             - --kv-connector=offloading
             - --p2p-connector-port=7777
             - --secure-serving=false
+            - --metrics-port=9095
           env:
             - name: POD_IP
               valueFrom:
@@ -29,6 +30,9 @@ spec:
           ports:
             - containerPort: 8000
               name: sidecar
+              protocol: TCP
+            - containerPort: 9095
+              name: sc-metrics
               protocol: TCP
           resources: {}
           restartPolicy: Always
