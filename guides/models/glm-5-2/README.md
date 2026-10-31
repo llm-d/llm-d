@@ -150,7 +150,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - Create a [HuggingFace token](../../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Install the [monitoring stack](../../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) [Set up monitoring](../../../docs/operations/observability/setup.md) with OSS Prometheus, OpenShift monitoring, or GKE Managed Prometheus (GMP).
 
 ### Get the guide
 
@@ -175,6 +175,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=glm-5-2
 export NAMESPACE=llm-d-glm-5-2
 export MONITORING=false # options: false, true
+export MONITORING_BACKEND=prometheus # options: prometheus, gmp; prometheus: OSS/OpenShift; gmp: GKE Managed Prometheus
 export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, tpu
 export MODEL_SERVER=vllm # options: vllm, sglang
@@ -314,14 +315,38 @@ export DEPLOYMENT=tpu7x-2x2x2-dp16
 </details>
 <!-- tabs:end -->
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable monitoring on the `llm-d` router.** Set `MONITORING=true` and choose `MONITORING_BACKEND` in the environment above: `prometheus` for OSS Prometheus or OpenShift, or `gmp` for GKE Managed Prometheus. Choose the same backend for deployment and cleanup.
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+Use `MONITORING_BACKEND=gmp` with an existing GMP-enabled GKE cluster; a second Prometheus installation is not required. The router chart creates an authenticated `PodMonitoring` on port 9090 and the collector's credentials and RBAC. For Autopilot, also add `--set router.monitoring.provider.gmp.autopilot=true` to the router Helm command below.
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true and MONITORING_BACKEND=gmp:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+Verify the EPP resource with `kubectl get podmonitoring -n ${NAMESPACE}` and confirm collected data in Cloud Monitoring. See [Collect Metrics](../../../docs/operations/observability/metrics.md#step-2-scrape-epp-metrics) for collector checks and authentication troubleshooting.
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -360,7 +385,7 @@ Do not deploy the vLLM and SGLang recipes in the same namespace: the InferencePo
 
 - `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=32768`, one API server on the leader (port 8000). It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
 - GKE only (`INFRA_PROVIDER` does not apply): the slice needs a `2x2x2` tpu7x node pool, a boot disk of at least 1.5 TB on every host (each host downloads the full 756 GB FP8 checkpoint into `/var/cache/huggingface`, a `hostPath`, and must keep it above the kubelet eviction threshold).
-- `MONITORING=true` is GPU-only here; the PodMonitors scrape per-rank GPU ports.
+- `MONITORING_BACKEND=prometheus` installs GPU-only PodMonitors for per-rank ports; `MONITORING_BACKEND=gmp` enables the EPP scrape on GKE without those PodMonitors.
 
 </details>
 
@@ -380,9 +405,11 @@ Operator from the monitoring stack mentioned in [Prerequisites](#prerequisites))
 that scrape each DP rank's port (`dp0`-`dp7` on prefill, `rank0`-`rank7` on decode). See [Monitoring](#monitoring-optional) for
 node-exporter sidecars and the plain-Prometheus alternative.
 
+For `MONITORING_BACKEND=gmp`, skip these Prometheus Operator resources. On GKE TPU, verify automatic application monitoring covers the vLLM pods. GPU wide-EP deployments need explicit GMP `PodMonitoring` endpoints for every DP rank: mirror the `dp0`-`dp7` prefill and `rank0`-`rank7` decode endpoints in the [existing monitoring component](monitoring/kustomization.yaml); scraping only port 8000 misses rank metrics. See [Collect Metrics](../../../docs/operations/observability/metrics.md). SGLang Rust listeners currently expose no `/metrics`, so monitor only the router for that engine.
+
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true and ACCELERATOR_TYPE=gpu:
+# only when MONITORING=true and MONITORING_BACKEND=prometheus and ACCELERATOR_TYPE=gpu:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -637,7 +664,8 @@ retransmission metrics. Merge the per-DP-rank Prometheus scrape configs into an 
 NAMESPACE=${NAMESPACE} bash ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring/apply-scrape-configs.sh
 ```
 
-If you run the Prometheus Operator instead, apply the PodMonitors with `MONITORING=true` in the
+If you run the Prometheus Operator instead, apply the PodMonitors with `MONITORING=true` and
+`MONITORING_BACKEND=prometheus` in the
 [model server step](#2-deploy-the-model-server).
 
 DCGM custom metrics: `modelserver/gpu/vllm/base/dcgm-custom-metrics.yaml`.
@@ -795,6 +823,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/model
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING_BACKEND=prometheus:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
