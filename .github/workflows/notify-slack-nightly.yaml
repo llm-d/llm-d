@@ -66,6 +66,7 @@ on:
       - "Nightly - Precise Prefix Cache Routing E2E (GKE GPU)"
       - "Nightly - Precise Prefix Cache Routing E2E (Intel XPU)"
       - "Nightly - Precise Prefix Cache Routing E2E (OCP GPU)"
+      - "Nightly - Precise Prefix Cache Routing SGLang E2E (GKE GPU)"
       - "Nightly - Predicted Latency Routing E2E (AMD ROCM)"
       - "Nightly - Predicted Latency Routing E2E (CKS GPU)"
       - "Nightly - Predicted Latency Routing E2E (GKE GPU)"
