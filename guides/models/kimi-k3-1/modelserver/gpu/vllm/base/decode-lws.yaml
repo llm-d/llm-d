@@ -65,6 +65,7 @@ spec:
               - --zap-log-level=1
               - --secure-serving=false
               - --max-idle-conns-per-host=1024
+              - --metrics-port=9095
             env:
               - name: OTEL_SDK_DISABLED
                 value: "true"
@@ -84,6 +85,9 @@ spec:
                 protocol: TCP
               - name: rank3
                 containerPort: 8003
+                protocol: TCP
+              - name: sc-metrics
+                containerPort: 9095
                 protocol: TCP
             resources:
               requests:
