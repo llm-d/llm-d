@@ -38,9 +38,10 @@ env:
     GUIDE_NAME: omni-serving
     NAMESPACE: llm-d-omni-serving
 
-    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
-    # monitoring stack) to run the deploy.monitoring* steps.
+    # Monitoring is opt-in. Choose the Prometheus Operator or GKE Managed
+    # Prometheus backend before emitting deploy/cleanup commands.
     MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_BACKEND: {default: prometheus, values: [prometheus, gmp], comment: "prometheus: OSS/OpenShift; gmp: GKE Managed Prometheus"}
     MONITORING_VALUES: {default: ""}
 
     # What the pool serves: `omni` = one omni checkpoint answering several
@@ -104,8 +105,13 @@ deploy:
           export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
 
   monitoring_values:
-    - when: {MONITORING: ["true"]}
-      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"], MONITORING_BACKEND: [prometheus]}
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"], MONITORING_BACKEND: [gmp]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   standalone:
     - run: |
@@ -139,7 +145,7 @@ deploy:
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}/
 
   monitoring:
-    - when: {MONITORING: ["true"], MODEL_SERVER: [vllmomni]}
+    - when: {MONITORING: ["true"], MONITORING_BACKEND: [prometheus], MODEL_SERVER: [vllmomni]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
@@ -238,6 +244,7 @@ cleanup:
         run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - when: {MONITORING_BACKEND: [prometheus]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
     - skip_in: [ci]
       run: kubectl delete namespace ${NAMESPACE}
