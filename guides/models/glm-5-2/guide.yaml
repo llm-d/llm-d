@@ -126,8 +126,13 @@ deploy:
           export DEPLOYMENT=tpu7x-2x2x2-dp16
 
   monitoring_values:
-    - when: {MONITORING: ["true"]}
-      run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"]}
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   standalone:
     - run: |

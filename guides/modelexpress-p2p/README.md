@@ -295,7 +295,7 @@ kubectl get modelmetadata -n ${NAMESPACE} \
 ### 4. (Optional) Enable monitoring
 
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
-* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router).
+* To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#2-deploy-the-llm-d-router). On GKE with Managed Prometheus, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml` instead, which scrapes the router through a GMP `PodMonitoring` (see [Collect Metrics](../../docs/operations/observability/metrics.md)).
 
 The monitoring kustomize is a `kind: Component`, so you cannot apply it standalone with `kubectl apply -k`. Layer it into your overlay's `kustomization.yaml` instead (same pattern as the [shared-compile-cache component](./compile-cache.md#option-b-shared-rwx-pvc)):
 
