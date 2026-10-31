@@ -3,7 +3,7 @@
 This guide shows how to enable [OpenTelemetry](https://opentelemetry.io/) distributed tracing across llm-d components and view traces in **Jaeger** or **Google Cloud Trace** (on GKE).
 
 > [!NOTE]
-> This guide assumes a running llm-d deployment with an InferencePool and model servers. For metrics and dashboards, see [Collect Metrics](./metrics.md) and [Use Grafana Dashboards](./dashboards.md).
+> This guide assumes a running llm-d deployment with an InferencePool and model servers. For metrics and dashboards, see [Collect Metrics](./metrics.md) and [Use Grafana Dashboards](./dashboards.md). To find the log lines of a trace, see [Query Logs by Trace ID](./logging.md).
 
 Commands in this guide use `${NAMESPACE}` for the namespace where your llm-d workload runs:
 

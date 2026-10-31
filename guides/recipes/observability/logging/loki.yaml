@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+data:
+  config.yaml: |
+    # Single-binary Loki on local disk, for getting started like the in-memory
+    # Jaeger in the tracing recipe. Logs are lost when the pod is replaced.
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9095
+      log_level: warn
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /loki
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+    schema_config:
+      configs:
+        - from: "2024-04-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    limits_config:
+      # OTLP ingestion keeps trace_id, span_id and the other log fields as
+      # structured metadata, so they can be filtered on without being labels.
+      allow_structured_metadata: true
+      retention_period: 24h
+      # Pin the stream labels instead of relying on Loki's default list, which
+      # has changed between releases. Everything else on the resource, such as
+      # k8s.pod.uid, is kept as structured metadata.
+      otlp_config:
+        resource_attributes:
+          ignore_defaults: true
+          attributes_config:
+            - action: index_label
+              attributes:
+                - k8s.namespace.name
+                - k8s.pod.name
+                - k8s.container.name
+                - service.name
+    compactor:
+      working_directory: /loki/compactor
+      retention_enabled: true
+      delete_request_store: filesystem
+    analytics:
+      reporting_enabled: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: loki
+        image: docker.io/grafana/loki:3.7.9
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        args:
+        - "-config.file=/etc/loki/config.yaml"
+        ports:
+        - containerPort: 3100
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/loki
+          readOnly: true
+        - name: data
+          mountPath: /loki
+      volumes:
+      - name: config
+        configMap:
+          name: loki-config
+      - name: data
+        emptyDir:
+          sizeLimit: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  labels:
+    app: loki
+spec:
+  selector:
+    app: loki
+  ports:
+  - port: 3100
+    targetPort: 3100
+    name: http
