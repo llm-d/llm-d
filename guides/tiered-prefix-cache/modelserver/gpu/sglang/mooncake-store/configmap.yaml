@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-store-config
+data:
+  # Template: render_config.py fills in local_hostname (pod IP) at startup and
+  # selects the RDMA device via MC_MS_FILTERS, so device_name stays empty.
+  # No comments inside the JSON (parsed with json.load()).
+  #   global_segment_size - L3 DRAM landing zone, split across TP ranks.
+  #   ssd_offload_path    - L3 capacity; each TP rank uses its own rank_* subdir.
+  mooncake_config.json: |
+    {
+      "metadata_server": "P2PHANDSHAKE",
+      "master_server_address": "mooncake-master-store:50051",
+      "global_segment_size": "360GB",
+      "local_buffer_size": "4GB",
+      "protocol": "rdma",
+      "device_name": "",
+      "local_hostname": "POD_IP_PLACEHOLDER",
+      "enable_ssd_offload": false,
+      "ssd_offload_path": "/data/mooncake-offload"
+    }
