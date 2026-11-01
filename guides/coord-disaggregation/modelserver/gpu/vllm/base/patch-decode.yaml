@@ -1,79 +1,90 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
 metadata:
-  name: decode
+  name: pd-disagg
 spec:
-  replicas: 4
-  template:
-    spec:
-      containers:
-        - name: modelserver
-          command: ["vllm", "serve"]
-          args:
-            - "$(MODEL_NAME)"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=2"
-            - "--block-size=128"
-            - "--max-model-len=32000"
-            - "--kv-transfer-config"
-            - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
-            - "--no-disable-hybrid-kv-cache-manager"
-            - "--shutdown-timeout=45"
-          env:
-            - name: MODEL_NAME
-              value: "Qwen/Qwen3-VL-32B-Instruct"
-            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: llm-d-hf-token
-                  key: HF_TOKEN
-                  optional: true
-            # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
-            - name: USER
-              value: llm-d
-          ports:
-            - name: nixl
-              containerPort: 5600
-              protocol: TCP
-          resources:
-            limits:
-              cpu: "4"
-              memory: 32Gi
-              nvidia.com/gpu: "2"
-            requests:
-              cpu: "4"
-              memory: 32Gi
-              nvidia.com/gpu: "2"
-          volumeMounts:
-            - mountPath: /dev/shm
-              name: shm
-            - mountPath: /.cache
-              name: torch-compile-cache
-            - mountPath: /.config
-              name: config-cache
-          startupProbe:
-            initialDelaySeconds: 15
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 120
-          livenessProbe:
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
-      volumes:
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 8Gi
-        - name: torch-compile-cache
-          emptyDir: {}
-        - name: config-cache
-          emptyDir: {}
+  roles:
+    - name: decode
+      spec:
+        replicas: 4  # per slice
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              containers:
+                - name: modelserver
+                  command: ["vllm", "serve"]
+                  args:
+                    - "$(MODEL_NAME)"
+                    - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+                    - "--tensor-parallel-size=2"
+                    - "--block-size=128"
+                    - "--max-model-len=32000"
+                    - "--enable-scale-out"
+                    - "--kv-transfer-config"
+                    - '{"kv_connector":"NixlConnector", "kv_role":"kv_both"}'
+                    - "--no-disable-hybrid-kv-cache-manager"
+                    - "--shutdown-timeout=45"
+                  env:
+                    - name: MODEL_NAME
+                      value: "Qwen/Qwen3-VL-32B-Instruct"
+                    - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                          optional: true
+                    # Workaround for https://github.com/vllm-project/vllm/issues/44548, required with vLLM v0.20.0+ due to torch 2.11
+                    - name: USER
+                      value: llm-d
+                  # The recipe base puts decode's model server on 8200 to leave 8000 to the
+                  # routing sidecar. This guide runs no sidecar -- the Coordinator dispatches
+                  # the phases -- so decode serves 8000 like the other roles, which is also
+                  # the port the InferencePool targets.
+                  ports:
+                    - containerPort: 8200
+                      $patch: delete
+                    - name: modelserver
+                      containerPort: 8000
+                      protocol: TCP
+                  resources:
+                    limits:
+                      cpu: "4"
+                      memory: 32Gi
+                      nvidia.com/gpu: "2"
+                    requests:
+                      cpu: "4"
+                      memory: 32Gi
+                      nvidia.com/gpu: "2"
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                    - mountPath: /.config
+                      name: config-cache
+                  startupProbe:
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 120
+                  livenessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                    failureThreshold: 3
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 8Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
+                - name: config-cache
+                  emptyDir: {}

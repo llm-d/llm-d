@@ -50,6 +50,14 @@ orchestrated:
   after encode/prefill have already completed — on the pool's current state, not a
   snapshot taken one or more phases earlier.
 
+The three roles run as one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/)
+(`pd-disagg-coord`) with an `encode`, a `prefill` and a `decode` role in a single slice,
+the same orchestration the [P/D Disaggregation](../pd-disaggregation/README.md) guide
+uses: the set rolls all three roles out as one version and can replicate the whole
+pipeline into independent copies (`slices`). It requires the LeaderWorkerSet controller
+(see [Prerequisites](#prerequisites)) and is covered in
+[Operating the DisaggregatedSet](#operating-the-disaggregatedset).
+
 The result of this guide is a combination of two independent choices you make in
 [Installation Instructions](#installation-instructions): which of two **EPP
 topologies** to run, and whether to run the full **EPD** pipeline or drop the
@@ -59,7 +67,7 @@ topology choice:
 
 * **Either: 1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
   spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
-  or `decode` — selected by the Coordinator's `EPP-Profile` header via the
+  or `decode` — selected by the Coordinator's `x-llm-d-epp-profile` header via the
   [header-profile-handler](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/scheduling/profilehandler/headerprofile/README.md)
   plugin. Each profile filters the shared pool down to its own role with a role filter.
 * **Or: 3 EPPs**, one per role, each with its own **InferencePool** scoped to that
@@ -69,7 +77,7 @@ topology choice:
   choose between profiles) — no custom image either. Each role's file does
   configure its own scorer plugins (see below); that's just picking which
   endpoint within the role, not which profile to run. The Gateway's `HTTPRoute`
-  (not the EPP) is what dispatches each `EPP-Profile` value to the right EPP's
+  (not the EPP) is what dispatches each `x-llm-d-epp-profile` value to the right EPP's
   InferencePool.
 
 ### When to use the Coordinator
@@ -134,8 +142,8 @@ architectures tie.
 | Parameter          | Value                                                              |
 | ------------------ | ------------------------------------------------------------------ |
 | Model              | [Qwen/Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) |
-| Roles              | encode, prefill, decode                                            |
-| Replicas per role  | encode: 2, prefill: 4, decode: 4 (encode: 0 in the PD-only deployment) |
+| Roles              | encode, prefill, decode (one `DisaggregatedSet`, `slices: 1`)      |
+| Replicas per role  | encode: 2, prefill: 4, decode: 4, per slice (encode: 0 in the PD-only deployment) |
 | Tensor Parallelism | 2                                                                   |
 | GPUs per replica   | 2                                                                   |
 | Total GPUs         | 20                                                                  |
@@ -193,6 +201,23 @@ architectures tie.
   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
   ```
 
+* Install the [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/)
+  `v0.11.1` or newer with the `DisaggregatedSet` API enabled, which the model servers in
+  step 2 run as. Skip if your cluster already runs it with `enableDisaggregatedSet=true`:
+<!-- llm-d-cicd:skip start -->
+  ```bash
+  # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
+  # "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
+  helm pull oci://registry.k8s.io/lws/charts/lws --version=${LWS_VERSION} --untar
+  kubectl apply --server-side --force-conflicts -f lws/crds
+  helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+    --version=${LWS_VERSION} \
+    --namespace lws-system --create-namespace \
+    --set enableDisaggregatedSet=true \
+    --wait --timeout 300s
+  ```
+<!-- llm-d-cicd:skip end -->
+
 * Create a target namespace for the installation:
 
   ```bash
@@ -221,10 +246,13 @@ architectures tie.
 >   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
 >   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
 >   decides whether an `encode` phase call happens at all.
-> * Step 2: after applying the overlay, scale the encode Deployment to 0 replicas:
+> * Step 2: set the `encode` role's `replicas` to 0 in
+>   [`modelserver/gpu/vllm/base/patch-encode.yaml`](modelserver/gpu/vllm/base/patch-encode.yaml)
+>   before applying the overlay, or afterwards on the live set:
 >
 >   ```bash
->   kubectl scale deployment/coord-disaggregation-nvidia-gpu-vllm-encode -n ${NAMESPACE} --replicas=0
+>   kubectl patch disaggregatedset pd-disagg-coord -n ${NAMESPACE} --type=json \
+>       -p '[{"op":"replace","path":"/spec/roles/0/spec/replicas","value":0}]' # roles/0 is encode
 >   ```
 >
 > * Step 3: after deploying the Coordinator (either overlay — this patch is
@@ -287,19 +315,23 @@ helm install ${GUIDE_NAME} \
    HTTPRoutes on this Gateway (`coordinator/base/httproute.yaml` and
    [`router/httproute/base/httproute.yaml`](router/httproute/base/httproute.yaml))
    split traffic three ways:
-   * `/v1/completions`, `/v1/chat/completions`, `/inference/v1/generate` **without**
-     `EPP-Profile` → the Coordinator (client-facing inference calls).
-   * The same three paths **with** `EPP-Profile` → this router's EPP (the Coordinator's
-     own internal per-phase calls reuse those same paths, so both HTTPRoutes match
+   * `/v1/completions`, `/v1/chat/completions`, `/v1/responses`, `/v1/messages`,
+     `/inference/v1/generate` **without** `x-llm-d-epp-profile` → the Coordinator
+     (client-facing inference calls). These are the five inference paths the
+     Coordinator itself serves, so `/v1/responses` and `/v1/messages` run the same
+     pipeline instead of passing straight through to a decode pod.
+   * The same five paths **with** `x-llm-d-epp-profile` → this router's EPP (the
+     Coordinator's own internal per-phase calls reuse those same paths — the `decode`
+     step proxies to the client's original path — so both HTTPRoutes match
      them at the same exact-path specificity; the header match then breaks the tie in
      the router's favor — see the comments in both files for why path specificity
      must match for this to work).
-   * Everything else without `EPP-Profile` (e.g. `/v1/models`, `/health`) → this
+   * Everything else without `x-llm-d-epp-profile` (e.g. `/v1/models`, `/health`) → this
      router's EPP too, which already falls back to its `decode` scheduling profile
      when the header is absent.
 
 > [!WARNING]
-> `EPP-Profile` is a plain client-controllable HTTP header, not a trust boundary. A
+> `x-llm-d-epp-profile` is a plain client-controllable HTTP header, not a trust boundary. A
 > client that forges it on its own request bypasses the Coordinator's pipeline
 > entirely, matching the router's HTTPRoute directly instead. There is no portable
 > Gateway API mechanism to strip or verify it before routing decisions are made —
@@ -364,10 +396,10 @@ done
    `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
    the same specificity-tie reason — see the comment in
    [`router/httproute-3-epp/base/httproute.yaml`](router/httproute-3-epp/base/httproute.yaml)),
-   but instead of one shared backend, that HTTPRoute routes each `EPP-Profile` value
+   but instead of one shared backend, that HTTPRoute routes each `x-llm-d-epp-profile` value
    to its own role's InferencePool (`${GUIDE_NAME}-encode`, `${GUIDE_NAME}-prefill`,
    `${GUIDE_NAME}-decode` — the InferencePool name matches the Helm release name). The
-   same [!WARNING] about `EPP-Profile` not being a trust boundary applies here too.
+   same [!WARNING] about `x-llm-d-epp-profile` not being a trust boundary applies here too.
 
 ```bash
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
@@ -384,8 +416,10 @@ kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ |
 ### 2. Deploy the Model Servers
 
 Apply the Kustomize overlay for your infrastructure provider. One overlay deploys all
-three role-specific model servers (encode: 2 replicas, prefill: 4 replicas, decode: 4
-replicas):
+three roles of a single `DisaggregatedSet` named `pd-disagg-coord` (encode: 2 replicas,
+prefill: 4 replicas, decode: 4 replicas, per slice), each role's pods labeled with its
+`llm-d.ai/role`. See [Operating the DisaggregatedSet](#operating-the-disaggregatedset)
+for scaling and rollouts:
 
 ```bash
 export INFRA_PROVIDER=base # base | coreweave | gke
@@ -575,6 +609,52 @@ curl -X POST http://${IP}:${PORT}/v1/chat/completions \
         "max_tokens": 128
     }' | jq
 ```
+
+## Operating the DisaggregatedSet
+
+The overlays run encode, prefill and decode as the three roles of one [DisaggregatedSet](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-coord`) with `groupIdentity: Hash`.
+This guide ships `slices: 1` with the replicas from [Default Configuration](#default-configuration); each role of each slice runs as its own LeaderWorkerSet (of size 1 here, so every pod is a leader), named `pd-disagg-coord-<slice>-<revision>-<role>`.
+Raise a role's `replicas` to rebalance the pipeline (for example more encode for image-heavy traffic), or `slices` to add complete, independently rolled copies of all three roles.
+Scaling, rollouts, placement policy, router slice affinity, and per-role autoscaling are covered in [Disaggregated Serving: Operations (DisaggregatedSet)](../../docs/operations/disaggregation/disaggregatedset.md).
+
+Two things to know that are specific to this guide:
+
+* **The render Service follows the set.** [`render/service.yaml`](render/service.yaml) selects on `llm-d.ai/role: prefill`, which the set copies onto every prefill pod of every slice, so render capacity tracks the prefill role across rollouts and slice changes without any change to the Service.
+* **A template change rolls all three roles**, since one revision covers the whole set. The Coordinator's pipeline calls each phase through the EPP, which only ever picks Ready pods, so a rollout degrades capacity rather than correctness. See [Rolling out a change](#rolling-out-a-change) below, and [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md) for canaries and keeping a request's phases on one revision.
+
+### Rolling out a change
+
+A rollout is an ordinary `kubectl apply` of the overlay: edit a role's patch (engine flags, image, resources) and re-apply. The controller creates a new revision, generates a fresh LeaderWorkerSet per role, and retires the old groups within each role's `rolloutStrategy`.
+
+```bash
+# 1. Edit the role you want to change, e.g. modelserver/gpu/vllm/base/patch-prefill.yaml
+# 2. Re-apply the same overlay you deployed in step 2
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+
+# Watch the revisions swap: one LeaderWorkerSet per role per revision
+kubectl get leaderworkerset -n ${NAMESPACE} -l disaggregatedset.x-k8s.io/name=pd-disagg-coord
+
+# Follow pods by revision; the rollout is done when only one revision remains
+kubectl get pods -n ${NAMESPACE} \
+    -L disaggregatedset.x-k8s.io/revision,disaggregatedset.x-k8s.io/role
+```
+
+What to expect, measured on the `coreweave` overlay (1 slice, encode 2 / prefill 4 / decode 4, `TP=2`):
+
+| Role | `maxSurge` / `maxUnavailable` | Ready replicas during the roll |
+| --- | --- | --- |
+| encode | `0` / `1` | 1 of 2 |
+| prefill | `0` / `1` | 3 of 4 |
+| decode | `1` / `0` | 4 of 4 (surges to 5) |
+
+* **Every role restarts, but each keeps its own template.** Changing only `patch-prefill.yaml` still creates new encode and decode pods at the new revision; their pod specs are unchanged. One revision covers the whole set.
+* **Budget about 6 spare accelerators** (3 pods at `TP=2`) above the steady-state 20. The controller rolls one new group per role concurrently, so the transient peak is higher than decode's `maxSurge` alone suggests. On a cluster with no headroom the new pods stay `Pending` and the rollout stalls -- see the [known issue](../../docs/operations/disaggregation/disaggregatedset.md#known-issue-rolling-updates-can-stall-on-fully-allocated-clusters). Scale `slices` down by one first, or set decode to `maxSurge: 0` / `maxUnavailable: 1`.
+* **Each new pod reloads the model.** With no shared model cache (see the note in [step 2](#2-deploy-the-model-servers)) a full 10-pod roll of `Qwen3-VL-32B-Instruct` takes roughly 20 minutes, dominated by weight loading rather than by the controller.
+* **Graceful drain is already configured** on all three roles (`terminationGracePeriodSeconds: 75`, `preStop sleep 15`, `--shutdown-timeout=45`), so a retiring pod finishes its in-flight requests and the encoder-cache and KV pulls that depend on it. Raising `--shutdown-timeout` means raising `terminationGracePeriodSeconds` to match.
+* **The render Service keeps serving**: it selects prefill pods by label, so it tracks whichever revision is Ready and never empties while at least one prefill pod is up.
+
+> [!NOTE]
+> Across a rollout the Coordinator can pair an `encode` or `prefill` pod of one revision with a `decode` pod of another, which is a risk for encoder-cache and KV transfer between mismatched engine versions. The Coordinator already tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, but nothing acts on those headers until you add the `disaggregatedset-rollout-screener` plugin to the EPP. To pin every phase of a request to one revision, follow [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision); this guide does not configure it by default.
 
 ## Benchmark
 
@@ -791,6 +871,11 @@ kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE
 kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 ```
+
+Deleting the `DisaggregatedSet` cascades to its LeaderWorkerSets, their pods, and
+per-slice Services. The LeaderWorkerSet controller installed in the
+[Prerequisites](#prerequisites) is cluster-scoped and shared with other guides, so it is
+left in place.
 
 This deletes every resource the guide created, but leaves the namespace itself (and
 anything else in it, like the `llm-d-hf-token` secret) alone — `kubectl delete
