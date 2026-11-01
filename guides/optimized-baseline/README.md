@@ -69,6 +69,53 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 `DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
 the [MThreads SGLang overlay](./modelserver/mthreads/sglang/).
 
+### TokenSpeed (experimental, router configuration only)
+
+```markdown
+Tier: 1 (Experimental)
+Gaps to Tier 2: no TokenSpeed model server overlay. No published TokenSpeed
+image runs the configuration below on the H100 reference: Hopper is supported
+only by TokenSpeed's experimental CUDA 12.9 source install, and the latest
+release image (v0.1.1) predates the engine --metrics-port flag.
+```
+
+[TokenSpeed](https://github.com/lightseekorg/tokenspeed) model servers are scheduled by [`router/optimized-baseline-tokenspeed.values.yaml`](./router/optimized-baseline-tokenspeed.values.yaml). It uses the same scheduling plugins as `optimized-baseline.values.yaml` (`prefix-cache-affinity-filter` and `token-load-scorer`) and adds the metrics data layer that TokenSpeed needs. Use that file as `ROUTER_VALUES` in [step 1](#1-deploy-the-llm-d-router) in place of `optimized-baseline.values.yaml`. Then deploy TokenSpeed pods yourself, until an overlay exists:
+
+* Label the pods `llm-d.ai/guide: optimized-baseline`, so the pool selects them, and `llm-d.ai/engine-type: tokenspeed`.
+* Serve the API on port 8000 (the InferencePool target port).
+* Start the server with `--enable-metrics --metrics-host 0.0.0.0 --metrics-port 9100`.
+  * `tokenspeed serve` exports its engine metrics on that separate port, not on the API port.
+  * The values file scrapes port 9100 for every endpoint, so all pods must use that port.
+  * The flag needs a TokenSpeed build that includes [lightseekorg/tokenspeed#2208](https://github.com/lightseekorg/tokenspeed/pull/2208).
+* Set `--kvstore-size` explicitly, and size the container memory limit to match.
+  * The Host KV store (L2) is on by default and sized at twice the device KV pool (`--kvstore-ratio 2.0`).
+  * Recent builds cap that size from the host's available memory ([lightseekorg/tokenspeed#2217](https://github.com/lightseekorg/tokenspeed/pull/2217)), not from the container's memory limit, and every server assumes it is alone on the host.
+  * The buffer is pinned and rounds up to a power of two.
+
+```yaml
+command: ["tokenspeed", "serve"]
+args:
+  - "Qwen/Qwen3-32B"
+  - "--tensor-parallel-size=2"
+  - "--host=0.0.0.0"
+  - "--port=8000"
+  - "--enable-metrics"
+  - "--metrics-host=0.0.0.0"
+  - "--metrics-port=9100"
+  - "--kvstore-size=34"   # decimal GB of pinned Host L2 per server; 34 fits a 32 GiB buffer
+```
+
+Reference environment for the router configuration:
+
+* One host with 4× H100 running four TP=1 `Qwen/Qwen3-0.6B` replicas outside Kubernetes. TokenSpeed was built from source at `95d6349` with its [Hopper / CUDA 12.9 recipe](https://github.com/lightseekorg/tokenspeed/blob/main/docs/guides/hopper-cu129.md).
+* The EPP from llm-d-router `main` (`26200ef`) with file-based endpoint discovery. It loaded an earlier revision of this values file. That revision had the same metrics data layer but scheduled with the queue, KV-cache utilization, prefix-cache and no-hit-LRU scorers.
+* In that run:
+  * all requests completed;
+  * the EPP scraped the TokenSpeed metrics from port 9100 on every replica;
+  * each shared-prefix group stayed on one replica, and the engine reported 97–99% of the prompt as `cached_tokens` on follow-up requests;
+  * unrelated requests spread over all four replicas.
+* The current scheduling plugins do not read engine metrics. Their configuration loads with the EPP configuration loader of llm-d-router `main` (`b5cb5f88`), but they were not run against TokenSpeed.
+
 ## Prerequisites
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
