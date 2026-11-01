@@ -22,13 +22,13 @@ components:
   # handler so far.
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
-# Pin the SGLang nightly this recipe was tested with
-# (nightly-dev-20261014-684fea8a): DeepEP v2 with MTP needs SGLang main from
-# October 2026, and later nightlies can change defaults without notice.
+# Pin SGLang v0.5.23-cu130 by digest: includes native Rust chat-template
+# rendering and tokenization (sglang-processor), /flush_cache on Rust
+# listeners, busy-scheduler /health fixes, and reduced DeepEP v2 graph memory.
 images:
   - name: docker.io/lmsysorg/sglang
     newName: docker.io/lmsysorg/sglang
-    digest: sha256:ddae0e399d3d94f7827f16183301cf8dac4cf0eae0ef25590b7dac5881d713d8
+    digest: sha256:f832b5c39559c9caa900b22ad37c76fcce66470676855c42052102c537812f1f
 
 labels:
   - pairs:

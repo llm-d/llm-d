@@ -1,9 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
-# Enable SGLang HiCache (host-memory KV cache) on the prefill role, 64 GB per
-# rank, and raise pod memory to fit it and the DSA indexer cache. Every SGLang
-# deployment overlay includes this component, because router/sglang.values.yaml
-# scores the CPU prefix cache that HiCache provides.
+# Enable SGLang HiCache (host-memory KV cache) on the prefill role, 100 GB per
+# rank with zero-copy direct PCIe DMA transfers, and raise pod memory to fit it
+# and the DSA indexer cache. Every SGLang deployment overlay includes this
+# component, because router/sglang.values.yaml scores the CPU prefix cache that
+# HiCache provides.
 
 # The patch below matches the role, container, and env entry by name via the
 # DisaggregatedSet schema the base declares.
@@ -24,9 +25,13 @@ patches:
                       - name: sglang
                         env:
                           - name: HICACHE_SIZE_GB_PER_RANK
-                            value: "64"
+                            value: "100"
+                          - name: HICACHE_IO_BACKEND
+                            value: direct
+                          - name: HICACHE_MEM_LAYOUT
+                            value: page_first_direct
                         resources:
                           limits:
-                            memory: 1400Gi
+                            memory: 1600Gi
                           requests:
-                            memory: 1Ti
+                            memory: 1200Gi
