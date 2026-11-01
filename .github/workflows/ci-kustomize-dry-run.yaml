@@ -77,6 +77,9 @@ jobs:
       - name: Install NVIDIA DRA CRDs
         run: .github/scripts/install-nvidia-dra-crds.sh
 
+      - name: Install Grove CRDs
+        run: .github/scripts/install-grove-crds.sh
+
       - name: Dry-run router charts (optimized-baseline)
         run: |
           CHART_VERSION=v0

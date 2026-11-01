@@ -5,7 +5,9 @@ llm-d deploys model servers that span several hosts or several roles with two Ku
 * **`LeaderWorkerSet`** runs each replica as a group of pods across hosts, for multi-host inference.
 * **`DisaggregatedSet`** runs several roles, such as prefill and decode, as one versioned unit. The prefill/decode disaggregation and wide expert parallelism guides deploy their model servers this way.
 
-See [Model Server Orchestration](../architecture/model-server-orchestration/README.md) for how the two APIs work and when to use each. This page covers installing the LWS controller, and Kueue for topology-aware scheduling.
+The [wide expert parallelism guide](../../guides/wide-ep/README.md#grove-orchestration) can also run its NVIDIA GPU model servers on [Grove](https://github.com/ai-dynamo/grove), as an alternative to the `DisaggregatedSet`.
+
+See [Model Server Orchestration](../architecture/model-server-orchestration/README.md) for how the two APIs work and when to use each. This page covers installing the LWS controller, Kueue for topology-aware scheduling, and Grove.
 
 ## Install the LeaderWorkerSet Controller
 
@@ -58,3 +60,24 @@ helm uninstall lws --namespace "${LWS_NAMESPACE}"
 [Kueue](https://github.com/kubernetes-sigs/kueue/tree/main) is a Kubernetes controller for job queueing. When combined with [Kueue-Populator](https://github.com/kubernetes-sigs/kueue/tree/main/cmd/experimental/kueue-populator), it can schedule a multi-host inference workload for optimal accelerator network performance.
 
 Use the [TAS + LWS user guide](https://lws.sigs.k8s.io/docs/examples/tas/) to setup topology aware scheduling when deploying an llm-d guide using LWS.
+
+## (Alternative) Install Grove
+
+[Grove](https://github.com/ai-dynamo/grove) runs multi-role, multi-node inference workloads as a single `PodCliqueSet`, with gang scheduling and topology-aware placement through a scheduler backend such as the [KAI Scheduler](https://github.com/NVIDIA/KAI-Scheduler). The wide expert parallelism guide's `grove/*` overlays deploy it in place of the `DisaggregatedSet`; they do not need LWS.
+
+To install the Grove operator with Helm (see the [Grove installation guide](https://github.com/ai-dynamo/grove/blob/main/docs/installation.md) for the scheduler profiles, topology-aware scheduling and other options):
+
+```bash
+export GROVE_VERSION="v0.1.0-alpha.17"
+
+helm upgrade -i grove oci://ghcr.io/ai-dynamo/grove/grove-charts \
+  --version "${GROVE_VERSION}" \
+  --namespace grove-system \
+  --create-namespace
+```
+
+To uninstall Grove:
+
+```bash
+helm uninstall grove --namespace grove-system
+```

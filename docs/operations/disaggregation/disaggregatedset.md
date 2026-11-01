@@ -21,6 +21,9 @@ kubectl get leaderworkerset -n ${NAMESPACE} -l disaggregatedset.x-k8s.io/name=pd
 
 See the [DisaggregatedSet architecture overview](../../architecture/model-server-orchestration/disaggregatedset.md) and upstream [LWS DisaggregatedSet docs](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) for scaling, rollouts, and placement.
 
+> [!NOTE]
+> The wide-ep guide's [Grove overlays](../../../guides/wide-ep/README.md#grove-orchestration) (`INFRA_PROVIDER=grove/*`) run a Grove `PodCliqueSet` instead, and this page does not apply to them; see [Grove](../../architecture/model-server-orchestration/grove.md).
+
 ## Pinning Slices to Accelerator Domains (Placement Policy)
 
 Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml)). The P/D guide ships `slices: 1` (one prefill and one decode); placement policy pays off once you raise `slices` to run several copies:
