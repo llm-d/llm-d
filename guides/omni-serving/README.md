@@ -66,7 +66,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) [Set up monitoring](../../docs/operations/observability/setup.md) with OSS Prometheus, OpenShift monitoring, or GKE Managed Prometheus (GMP).
 
 ### Get the guide
 
@@ -91,6 +91,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=omni-serving
 export NAMESPACE=llm-d-omni-serving
 export MONITORING=false # options: false, true
+export MONITORING_BACKEND=prometheus # options: prometheus, gmp; prometheus: OSS/OpenShift; gmp: GKE Managed Prometheus
 export MONITORING_VALUES=
 export TASK=omni # options: omni, text-to-image, image-to-image, text-to-speech
 export ACCELERATOR_TYPE=gpu # options: gpu, xpu
@@ -203,14 +204,38 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.va
 > [!NOTE]
 > The router parses `/v1/audio/speech` requests since [llm-d-router#2484](https://github.com/llm-d/llm-d-router/pull/2484), which landed after the v0.10.0 release. The default chart version (`${ROUTER_CHART_VERSION}` = `v0`) deploys the `main`-tagged router image, which includes it.
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable monitoring on the `llm-d` router.** Set `MONITORING=true` and choose `MONITORING_BACKEND` in the environment above: `prometheus` for OSS Prometheus or OpenShift, or `gmp` for GKE Managed Prometheus. Choose the same backend for deployment and cleanup.
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+Use `MONITORING_BACKEND=gmp` with an existing GMP-enabled GKE cluster; a second Prometheus installation is not required. The router chart creates an authenticated `PodMonitoring` on port 9090 and the collector's credentials and RBAC. For Autopilot, also add `--set router.monitoring.provider.gmp.autopilot=true` to the router Helm command below.
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true and MONITORING_BACKEND=gmp:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+Verify the EPP resource with `kubectl get podmonitoring -n ${NAMESPACE}` and confirm collected data in Cloud Monitoring. See [Collect Metrics](../../docs/operations/observability/metrics.md#step-2-scrape-epp-metrics) for collector checks and authentication troubleshooting.
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router.
 Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name (and [`httproutes.yaml`](httproutes.yaml) references the `${GUIDE_NAME}` `InferencePool`). A single pool needs no `HTTPRoute`: the standalone proxy sends every path to the router. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router) and, for `omni`, [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode) below.
@@ -328,11 +353,13 @@ kubectl apply -n ${NAMESPACE} \
 
 ### 3. Enable Monitoring (optional)
 
-**(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites) and `MONITORING=true` when deploying the router). SGLang's diffusion backend publishes no metrics, so with `MODEL_SERVER=sglang` only the router's metrics are scraped:
+**(Optional) Deploy Prometheus Operator monitoring resources for vLLM-Omni model servers** with `MONITORING_BACKEND=prometheus` and `MONITORING=true`. SGLang's diffusion backend publishes no metrics, so only the router is monitored for `MODEL_SERVER=sglang`.
+
+For `MONITORING_BACKEND=gmp`, skip this `PodMonitor` command. Check the cluster's `PodMonitoring` resources before assuming vLLM-Omni is covered by automatic application monitoring; if it is not recognized, configure an explicit GMP `PodMonitoring` for the model server's `modelserver` port and `/metrics` path as described in [Collect Metrics](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics).
 
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true and MODEL_SERVER=vllmomni:
+# only when MONITORING=true and MONITORING_BACKEND=prometheus and MODEL_SERVER=vllmomni:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -575,6 +602,7 @@ Then remove the router, the monitoring resources, and the namespace:
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING_BACKEND=prometheus:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
