@@ -133,10 +133,20 @@ def find_script_runs(dockerfile_content: str) -> List[Tuple[str, str, int]]:
     """find all RUN commands that execute scripts, return (stage, script_path, line_num)"""
     runs = []
     current_stage = None
-    line_num = 0
+    lines = dockerfile_content.split('\n')
+    logical_lines = []
+    i = 0
 
-    for line in dockerfile_content.split('\n'):
-        line_num += 1
+    while i < len(lines):
+        line_num = i + 1
+        line = lines[i].strip()
+        while line.endswith('\\') and i + 1 < len(lines):
+            i += 1
+            line = line[:-1] + ' ' + lines[i].strip()
+        logical_lines.append((line, line_num))
+        i += 1
+
+    for line, line_num in logical_lines:
         stripped = line.strip()
 
         # track stage
