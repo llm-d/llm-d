@@ -144,8 +144,9 @@ router:
           # the prefill request; Envoy does not copy request headers onto the
           # response, so this copies it for the Coordinator's kv-offloading
           # connector, which builds the decode request's remote_prefiller from
-          # it. Needs response_header_mode SEND on the EPP ext_proc filter,
-          # which the Gateway recipe sets.
+          # it. Needs response_header_mode SEND on the EPP ext_proc filter;
+          # Istio sets that per route for InferencePool backends, the Gateway
+          # recipe does not configure it.
           - type: request-header-copy-handler
             parameters:
               headers:
