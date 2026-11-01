@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calibrate-decode-script
+data:
+  calibrate_decode.py: |
+    #!/usr/bin/env python3
+    """Measure peak decode throughput against a live vLLM/SGLang endpoint.
+
+    Sends open-loop, decode-bound load (short ISL, long OSL) across a concurrency
+    ladder and records the Time Per Output Token (TPOT / inter-token latency) of
+    every streamed token. It determines the highest sustainable output token rate
+    where p90 TPOT remains within the target latency SLO:
+
+        V_D = peakDecodeThroughput = max(output_tokens/sec) [p90 TPOT <= TARGET]
+              divided by DECODE_REPLICAS
+
+    When PEAK_PREFILL_THROUGHPUT (V_P) is provided, it also calculates the ideal
+    Prefill-to-Decode replica ratio:
+
+        P:D = (ISL / V_P) : (OSL / V_D)
+
+    Uses Python stdlib only — runs on stock python:3.11-slim without dependencies.
+    """
+    import concurrent.futures
+    import json
+    import os
+    import random
+    import statistics
+    import time
+    import urllib.error
+    import urllib.request
+
+    VLLM_ENDPOINT = os.environ["VLLM_ENDPOINT"].rstrip("/")
+    MODEL_NAME = os.environ["MODEL_NAME"]
+    DECODE_REPLICAS = int(os.environ.get("DECODE_REPLICAS", "1"))
+    ISL = int(os.environ.get("ISL", "64"))
+    OSL = int(os.environ.get("OSL", "512"))
+    TARGET_TPOT_MS = float(os.environ.get("TARGET_TPOT_MS", "50.0"))
+    LADDER_RAW = os.environ.get("CONCURRENCY_LADDER", "1,2,4,8,16,32")
+    CONCURRENCY_LADDER = [int(x.strip()) for x in LADDER_RAW.split(",") if x.strip()]
+    REQUESTS_PER_WORKER = int(os.environ.get("REQUESTS_PER_WORKER", "2"))
+    NUM_WARMUP = int(os.environ.get("NUM_WARMUP", "2"))
+    PREFILL_THROUGHPUT_RAW = os.environ.get("PEAK_PREFILL_THROUGHPUT", "")
+    TOKEN_MIN = int(os.environ.get("TOKEN_MIN", "100"))
+    TOKEN_MAX = int(os.environ.get("TOKEN_MAX", "10000"))
+
+    SEED = time.time_ns()
+    rng = random.Random(SEED)
+    print(f"using seed={SEED}", flush=True)
+
+    def fresh_prompt():
+        """Generate a random prompt of exactly ISL token IDs so prefix caches miss."""
+        return [rng.randint(TOKEN_MIN, TOKEN_MAX) for _ in range(ISL)]
+
+    def percentile(data, p):
+        if not data:
+            return 0.0
+        sorted_data = sorted(data)
+        k = (len(sorted_data) - 1) * (p / 100.0)
+        f = int(k)
+        c = min(f + 1, len(sorted_data) - 1)
+        d = k - f
+        return sorted_data[f] * (1.0 - d) + sorted_data[c] * d
+
+    def send_stream(prompt_ids):
+        """Send a single streaming completion request and return (token_count, duration, itl_samples)."""
+        body = json.dumps({
+            "model": MODEL_NAME,
+            "prompt": prompt_ids,
+            "max_tokens": OSL,
+            "stream": True,
+            "temperature": 0,
+        }).encode()
+        req = urllib.request.Request(
+            f"{VLLM_ENDPOINT}/v1/completions",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
+        t_start = time.monotonic()
+        prev_chunk_t = None
+        itls = []
+        token_count = 0
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                for line in resp:
+                    if not line.strip().startswith(b"data:"):
+                        continue
+                    payload = line.strip()[5:].strip()
+                    if payload == b"[DONE]":
+                        break
+                    event = json.loads(payload)
+                    if isinstance(event, dict) and "error" in event:
+                        raise RuntimeError(f"completions stream failed: {str(event['error'])[:500]}")
+                    now = time.monotonic()
+                    if prev_chunk_t is not None:
+                        itls.append(now - prev_chunk_t)
+                    prev_chunk_t = now
+                    token_count += 1
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:500]
+            raise RuntimeError(f"request failed (HTTP {e.code}): {detail}") from e
+
+        duration = time.monotonic() - t_start
+        if token_count == 0:
+            raise RuntimeError("no streamed tokens received")
+        return token_count, duration, itls
+
+    print(f"endpoint={VLLM_ENDPOINT} model={MODEL_NAME} ISL={ISL} OSL={OSL}", flush=True)
+    print(f"decode_replicas={DECODE_REPLICAS} target_tpot={TARGET_TPOT_MS}ms", flush=True)
+    print(f"concurrency_ladder={CONCURRENCY_LADDER}", flush=True)
+
+    # 1. Warmup
+    for i in range(NUM_WARMUP):
+        toks, dur, _ = send_stream(fresh_prompt())
+        print(f"  warmup {i+1}: generated {toks} tokens in {dur:.3f}s", flush=True)
+
+    # 2. Concurrency Ladder Sweep
+    step_results = []
+    for c in CONCURRENCY_LADDER:
+        total_requests = c * REQUESTS_PER_WORKER
+        all_itls = []
+        total_tokens = 0
+        step_start = time.monotonic()
+
+        def worker_task(_):
+            toks, _, itls = send_stream(fresh_prompt())
+            return toks, itls
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=c) as executor:
+            futures = [executor.submit(worker_task, idx) for idx in range(total_requests)]
+            for fut in concurrent.futures.as_completed(futures):
+                toks, itls = fut.result()
+                total_tokens += toks
+                all_itls.extend(itls)
+
+        step_duration = max(time.monotonic() - step_start, 0.001)
+        output_token_rate = total_tokens / step_duration
+
+        p50_ms = percentile(all_itls, 50) * 1000.0 if all_itls else 0.0
+        p90_ms = percentile(all_itls, 90) * 1000.0 if all_itls else 0.0
+        p99_ms = percentile(all_itls, 99) * 1000.0 if all_itls else 0.0
+        passed_slo = (p90_ms <= TARGET_TPOT_MS)
+
+        status_str = "PASS" if passed_slo else "FAIL (exceeds SLO)"
+        print(
+            f"concurrency={c:2d}: output={output_token_rate:8.1f} tok/s | "
+            f"p50_tpot={p50_ms:6.2f}ms | p90_tpot={p90_ms:6.2f}ms | "
+            f"p99_tpot={p99_ms:6.2f}ms | {status_str}",
+            flush=True,
+        )
+        step_results.append({
+            "concurrency": c,
+            "output_rate": output_token_rate,
+            "p50_ms": p50_ms,
+            "p90_ms": p90_ms,
+            "p99_ms": p99_ms,
+            "passed": passed_slo,
+        })
+
+    # 3. Select peak throughput satisfying SLO
+    passing = [s for s in step_results if s["passed"]]
+    if passing:
+        best_step = max(passing, key=lambda s: s["output_rate"])
+    else:
+        print("\nWARNING: No concurrency level satisfied target p90 TPOT. Using lowest concurrency as baseline.")
+        best_step = step_results[0]
+
+    v_d = int(best_step["output_rate"] / DECODE_REPLICAS)
+    print("\n================ Calibration Summary ================", flush=True)
+    print(f"Optimal Concurrency        = {best_step['concurrency']}", flush=True)
+    print(f"Total Decode Pool Output   = {int(best_step['output_rate'])} tok/s", flush=True)
+    print(f"Per-Replica Decode (V_D)   = {v_d} tok/s", flush=True)
+    print(f"Measured p90 TPOT          = {best_step['p90_ms']:.2f} ms (target <= {TARGET_TPOT_MS} ms)", flush=True)
+    print(f"PEAK_DECODE_THROUGHPUT={v_d}", flush=True)
+    print(f"MEASURED_P90_TPOT_MS={best_step['p90_ms']:.2f}", flush=True)
+    print(f"SATISFIED_CONCURRENCY={best_step['concurrency']}", flush=True)
+
+    # 4. Optional P:D Ratio Calculation
+    if PREFILL_THROUGHPUT_RAW:
+        try:
+            v_p = float(PREFILL_THROUGHPUT_RAW)
+            if v_p > 0 and v_d > 0:
+                # Sizing formula: P:D = (ISL / V_P) : (OSL / V_D)
+                # Prefill pods per Decode pod = (ISL * V_D) / (OSL * V_P)
+                prefill_per_decode = (ISL / v_p) / (OSL / v_d)
+                print(f"\n--- Sizing P:D Ratio for ISL={ISL} / OSL={OSL} ---", flush=True)
+                print(f"Prefill Throughput (V_P)   = {int(v_p)} tok/s", flush=True)
+                print(f"Decode Throughput (V_D)    = {v_d} tok/s", flush=True)
+                print(f"Prefill Pods / Decode Pod  = {prefill_per_decode:.4f}", flush=True)
+                print(f"P_D_RATIO={prefill_per_decode:.4f}", flush=True)
+
+                # Simplify to small integer ratio
+                # Test multipliers up to 16
+                best_p, best_d = 1, 1
+                min_err = float("inf")
+                for d in range(1, 17):
+                    p = max(1, round(prefill_per_decode * d))
+                    err = abs((p / d) - prefill_per_decode)
+                    if err < min_err:
+                        min_err = err
+                        best_p, best_d = p, d
+                print(f"RECOMMENDED_P_D_RATIO={best_p}:{best_d}", flush=True)
+        except ValueError:
+            pass
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calibrate-peak-decode
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: calibrate
+        image: python:3.11-slim
+        command: ["python3", "/scripts/calibrate_decode.py"]
+        env:
+        - name: VLLM_ENDPOINT
+          value: "${VLLM_ENDPOINT}"
+        - name: MODEL_NAME
+          value: "${MODEL_NAME}"
+        - name: DECODE_REPLICAS
+          value: "${DECODE_REPLICAS}"
+        - name: ISL
+          value: "${ISL}"
+        - name: OSL
+          value: "${OSL}"
+        - name: TARGET_TPOT_MS
+          value: "${TARGET_TPOT_MS}"
+        - name: CONCURRENCY_LADDER
+          value: "${CONCURRENCY_LADDER}"
+        - name: REQUESTS_PER_WORKER
+          value: "${REQUESTS_PER_WORKER}"
+        - name: NUM_WARMUP
+          value: "${NUM_WARMUP}"
+        - name: PEAK_PREFILL_THROUGHPUT
+          value: "${PEAK_PREFILL_THROUGHPUT}"
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+      volumes:
+      - name: script
+        configMap:
+          name: calibrate-decode-script
+          defaultMode: 0555
