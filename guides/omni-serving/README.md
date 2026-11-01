@@ -10,11 +10,12 @@ This guide serves models whose output is not only text (speech, images, or both)
 | `text-to-image` | [`Qwen/Qwen-Image`](https://huggingface.co/Qwen/Qwen-Image) (GPU); [`black-forest-labs/FLUX.2-klein-4B`](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) (XPU) | `/v1/images/generations` | vLLM-Omni, SGLang | `active-request-scorer` |
 | `image-to-image` | [`Qwen/Qwen-Image-Edit-2511`](https://huggingface.co/Qwen/Qwen-Image-Edit-2511) (GPU); [`black-forest-labs/FLUX.2-klein-4B`](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) (XPU) | `/v1/images/edits` (`multipart/form-data`) | vLLM-Omni, SGLang | `active-request-scorer` |
 | `text-to-speech` | [`Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) | `/v1/audio/speech` | vLLM-Omni | `active-request-scorer` |
+| `text-to-video` | [`Wan-AI/Wan2.1-T2V-1.3B-Diffusers`](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B-Diffusers) (XPU) | `/v1/videos/sync` (`multipart/form-data`) | vLLM-Omni | `active-request-scorer` |
 
 The tasks fall into two shapes:
 
 - **An omni model: one checkpoint, many endpoints.** Qwen3-Omni takes text, images, audio, or video in and answers with text *and* speech from a multi-stage pipeline (thinker → talker → code2wav). One `InferencePool` fronts every OpenAI endpoint the checkpoint serves. The router's request parser understands the chat, speech, and image-generation request bodies, so a single router and pool serve all of them; when the pool shares a Kubernetes Gateway with other pools, exact-path `HTTPRoute` rules send the modality endpoints to it (see [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode)).
-- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, or, on Intel XPU, FLUX.2-klein-4B) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas, or, for Intel XPU's `text-to-image` and `image-to-image`, 2 single-XPU replicas.
+- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, FLUX.2-klein-4B, or Wan2.1) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas; 2 single-XPU replicas for XPU image tasks; or 1 two-XPU encode/generation pipeline for `text-to-video`.
 
 Either way the router **routes on load**.
 Diffusion models generate by iterative denoising rather than autoregressive token generation, and the Qwen3-Omni pipeline runs with prefix caching off, so prefix-cache and token-load scorers have no signal.
@@ -23,12 +24,12 @@ The single-endpoint routers track how many requests they have dispatched to each
 
 ### Why vLLM-Omni
 
-Standard vLLM generates **text output only**: even when a model accepts images or audio (for example Qwen3-VL, see [Multimodal Model Serving](../multimodal-serving/README.md)), the response is text. Models whose output is audio or images need [vLLM-Omni](https://github.com/vllm-project/vllm-omni), which extends vLLM with multi-stage pipelines and the endpoints that return audio or images. Which endpoints a vLLM-Omni pod answers depends on the checkpoint: the `TASK` table above lists them for the models this guide deploys.
+Standard vLLM generates **text output only**: even when a model accepts images or audio (for example Qwen3-VL, see [Multimodal Model Serving](../multimodal-serving/README.md)), the response is text. Models whose output is audio, images, or video need [vLLM-Omni](https://github.com/vllm-project/vllm-omni), which extends vLLM with multi-stage pipelines and the endpoints that return those media. Which endpoints a vLLM-Omni pod answers depends on the checkpoint: the `TASK` table above lists them for the models this guide deploys.
 
 | Engine | Input | Output | Example models |
 | --- | --- | --- | --- |
 | **vLLM** | Text, images, audio, video | **Text only** | Qwen3-VL, Llama |
-| **vLLM-Omni** | Text, images, audio, video | **Text, audio, images** | Qwen3-Omni, Qwen3-TTS, Qwen-Image, FLUX |
+| **vLLM-Omni** | Text, images, audio, video | **Text, audio, images, video** | Qwen3-Omni, Qwen3-TTS, Qwen-Image, Wan2.1 |
 | **SGLang** (`sglang serve` → `sglang.multimodal_gen`) | Text, images | **Images** | Qwen-Image, Qwen-Image-Edit |
 
 ### Architecture
@@ -39,6 +40,7 @@ Client → Proxy (Envoy sidecar) → Router (EPP) → pod of the TASK's pool
   TASK=text-to-image   /v1/images/generations                                       active-request-scorer
   TASK=image-to-image  /v1/images/edits                                             active-request-scorer
   TASK=text-to-speech  /v1/audio/speech                                             active-request-scorer
+  TASK=text-to-video   /v1/videos/sync                                              active-request-scorer
 ```
 
 The model server overlay creates one `Deployment` whose pods carry the `llm-d.ai/guide=omni-serving` label that the `InferencePool` selects. Every pod serves the same model and endpoints, so the router needs no filter: each request goes to the least loaded pod. That spreads long-running audio and image generations across the pool instead of round-robining them.
@@ -51,7 +53,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM-Omni | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-Omni-30B-A3B-Instruct` | 🟡 community | 🟡 community | Served model is `TASK=omni`'s (others in the Overview table) · H100 80 GB reference · `omni`: 1 replica × 2 GPUs · `text-to-image`, `image-to-image`, `text-to-speech`: 3 replicas × 1 GPU · SGLang: `text-to-image` and `image-to-image` only |
-| Intel XPU | `xpu` | `black-forest-labs/FLUX.2-klein-4B` | — | 🟡 community | `text-to-image`, `image-to-image` · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`) |
+| Intel XPU | `xpu` | `Wan-AI/Wan2.1-T2V-1.3B-Diffusers` | 🟡 community | 🟡 community | SGLang: `text-to-image`, `image-to-image`, 2 replicas × 1 Arc Pro B60 · vLLM-Omni: `text-to-video`, Wan2.1 EG, 1 replica × 2 XPUs · DRA |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -60,9 +62,11 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), or 2 Intel XPUs (Arc Pro B60) for Intel XPU's `text-to-image` or `image-to-image` (2 replicas × 1 XPU, 64 GiB host memory requested per replica). Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
+- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), 2 Intel XPUs for the XPU image tasks (2 replicas × 1 XPU), or 2 Intel XPUs for `text-to-video` (1 replica: encode on the first XPU and generation on the second). Each XPU pod requests 64 GiB of host memory. Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
 
 - For the Intel XPU overlay, install the Intel GPU DRA driver and verify the `gpu.intel.com` `DeviceClass` is available; it requires the `resource.k8s.io/v1` API (Kubernetes 1.34+).
+
+- For `TASK=text-to-video`, make the `vllm-omni-xpu:latest` image available on every eligible node, either through a registry or by preloading it into the cluster runtime. The overlay uses `IfNotPresent` because no official published vLLM-Omni XPU image is currently referenced by this guide.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -83,7 +87,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 ### Configure the environment
 
-**Set the guide-specific environment variables.** Set `TASK` to what the pool serves and `MODEL` to that task's model (listed in the comment). `MODEL_SERVER=sglang` applies to `text-to-image` and `image-to-image` only:
+**Set the guide-specific environment variables.** Set `TASK` to what the pool serves and `MODEL` to that task's model (listed in the comment). `MODEL_SERVER=sglang` applies to `text-to-image` and `image-to-image` only. For Wan2.1, set `TASK=text-to-video`, `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllmomni`, `INFRA_PROVIDER=base`, and `MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers`:
 
 <!-- guide:env.static start -->
 ```bash
@@ -92,11 +96,11 @@ export GUIDE_NAME=omni-serving
 export NAMESPACE=llm-d-omni-serving
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export TASK=omni # options: omni, text-to-image, image-to-image, text-to-speech
+export TASK=omni # options: omni, text-to-image, image-to-image, text-to-speech, text-to-video
 export ACCELERATOR_TYPE=gpu # options: gpu, xpu
 export MODEL_SERVER=vllmomni # options: vllmomni, sglang
 export INFRA_PROVIDER=base # options: base, gke
-export MODEL=Qwen/Qwen3-Omni-30B-A3B-Instruct # the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511 (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+export MODEL=Qwen/Qwen3-Omni-30B-A3B-Instruct # the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511 (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice, text-to-video Wan-AI/Wan2.1-T2V-1.3B-Diffusers (XPU vLLM-Omni)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
@@ -196,6 +200,21 @@ export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
 ```
 <!-- guide:deploy.router_values.text-to-speech end -->
+
+</details>
+<details>
+<summary><b>Text-to-Video</b></summary>
+
+The [`text-to-video` router values](router/text-to-video.values.yaml) use `active-request-scorer` and `max-score-picker`, with default model-server metrics injection disabled for the diffusion pipeline.
+
+<!-- guide:deploy.router_values.text-to-video start -->
+```bash
+# only when TASK=text-to-video:
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-video.values.yaml"
+```
+<!-- guide:deploy.router_values.text-to-video end -->
 
 </details>
 <!-- tabs:end -->
@@ -319,6 +338,20 @@ kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}/
 ```
 <!-- guide:deploy.modelserver.text-to-speech end -->
+
+</details>
+<details>
+<summary><b>Text-to-Video</b></summary>
+
+Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllmomni`, `TASK=text-to-video`, `INFRA_PROVIDER=base`, and `MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers`. The overlay runs Wan2.1 as one vLLM-Omni encode/generation deployment on exactly 2 XPUs, using the [`wan2_2_eg.yaml`](https://github.com/vllm-project/vllm-omni/blob/main/vllm_omni/deploy/wan2_2_eg.yaml) topology. It uses a `Recreate` strategy so an update does not require four simultaneously available XPUs.
+
+<!-- guide:deploy.modelserver.text-to-video start -->
+```bash
+# only when TASK=text-to-video:
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-video/${INFRA_PROVIDER}/
+```
+<!-- guide:deploy.modelserver.text-to-video end -->
 
 </details>
 <!-- tabs:end -->
@@ -495,6 +528,35 @@ The endpoint also streams through the router: `"stream_format": "sse"` returns `
 vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-vllm-omni-input-tokens`, `x-vllm-omni-output-tokens`, and `x-vllm-omni-total-tokens` headers (see the [speech API response format](https://docs.vllm.ai/projects/vllm-omni/en/latest/serving/speech_api/#response-format)); the overlays pin v0.30.0, which reports them.
 
 </details>
+<details>
+<summary><b>Text-to-Video</b></summary>
+
+**Generate an MP4 video.** The synchronous endpoint accepts `multipart/form-data` and returns the video as the response body:
+
+<!-- guide:verify.tests.text-to-video start -->
+```bash
+# only when TASK=text-to-video:
+# Text in, MP4 out: report HTTP status, size, and file signature.
+kubectl run t2v-test --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'curl -sS --fail-with-body -o /tmp/wan.mp4 \
+      -w "HTTP %{http_code}, %{size_download} bytes, %{content_type}\n" \
+      -X POST "http://${IP}/v1/videos/sync" \
+      -F "model=${MODEL}" \
+      -F "prompt=A fluffy orange tabby cat sitting on a wooden windowsill in warm morning sunlight, blinking slowly and gently turning its head toward the camera." \
+      -F "width=384" -F "height=384" -F "num_frames=33" \
+      -F "num_inference_steps=16" -F "guidance_scale=5.0" \
+      -F "fps=16" -F "seed=123"
+    echo "signature: $(od -An -j4 -N8 -c /tmp/wan.mp4 | tr -d " \\n")"'
+```
+<!-- guide:verify.tests.text-to-video end -->
+
+Expect `HTTP 200` with a non-zero `video/mp4` response and `signature: ftypisom`, the MP4 file signature.
+
+</details>
 <!-- tabs:end -->
 
 ### 3. Check where the requests landed
@@ -506,7 +568,7 @@ vLLM-Omni v0.28.0 and later also report usage for non-streamed responses in `x-v
 # The model servers' logs: every request above, by endpoint path,
 # on the pods of the pool (each line prefixed with its pod name)
 kubectl logs -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -c modelserver --tail=-1 --prefix \
-  | grep -E 'POST /v1/(chat/completions|images/generations|images/edits|audio/speech)' || true
+  | grep -E 'POST /v1/(chat/completions|images/generations|images/edits|audio/speech|videos/sync)' || true
 ```
 <!-- guide:verify.tests.pod_logs end -->
 
@@ -565,6 +627,17 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}
 ```
 <!-- guide:cleanup.modelserver.text-to-speech end -->
+
+</details>
+<details>
+<summary><b>Text-to-Video</b></summary>
+
+<!-- guide:cleanup.modelserver.text-to-video start -->
+```bash
+# only when TASK=text-to-video:
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-video/${INFRA_PROVIDER}
+```
+<!-- guide:cleanup.modelserver.text-to-video end -->
 
 </details>
 <!-- tabs:end -->
