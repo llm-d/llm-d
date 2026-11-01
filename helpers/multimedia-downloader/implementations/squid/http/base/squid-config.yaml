@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: squid-multimedia-downloader-config
+  labels:
+    cache-implementation: squid
+    component: multimedia-downloader
+data:
+  # Listener. Variants replace only this key and include common.conf.
+  squid.conf: |-
+    http_port 8080
+
+    # The Ubuntu build has ICMP support. Disable the pinger: containers run
+    # without NET_RAW, so the helper would fail to open raw sockets and produce
+    # FATAL log noise. The UBI SSL Bump build lacks ICMP and rejects these.
+    pinger_enable off
+    netdb_filename none
+
+    include /etc/squid/common.conf
+
+  # Directives shared by all variants.
+  common.conf: |-
+    access_log stdio:/dev/stdout squid
+    cache_log /dev/stderr
+
+    # --- PID File for Non-Root Compliance ---
+    pid_filename /var/cache/squid/squid.pid
+
+    # --- Storage & Caching ---
+    cache_mem 256 MB
+
+    # --- Aggressive Caching for Images ---
+    refresh_pattern -i \.(jpg|jpeg|png|gif|webp|bmp|tiff)$ 10080 100% 43200
+
+    # --- Access Control ---
+    http_access allow all
+
+    # --- Performance & DNS ---
+    collapsed_forwarding on
+    # Stop quickly on SIGTERM (default 30s) so rollouts do not overlap.
+    shutdown_lifetime 1 seconds
+    # Name resolution uses the cluster DNS from /etc/resolv.conf.

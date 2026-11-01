@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: multimedia-downloader
+  labels:
+    app: multimedia-downloader
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http-proxy
+    protocol: TCP
+    name: http-proxy
+  selector:
+    app: multimedia-downloader
+
