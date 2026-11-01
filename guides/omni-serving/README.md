@@ -264,7 +264,7 @@ Serves an image-generation checkpoint, one model server per accelerator:
 <details>
 <summary><b>Intel XPU</b></summary>
 
-Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. SGLang serves it on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16), and a two-B60 `--tp-size=2` run fails on the published `v0.10.0` image's pinned SGLang, which predates an upstream XPU layer-norm fix (`sgl-project/sglang#36825`).
+Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=sglang`, `TASK=text-to-image`, `INFRA_PROVIDER=base`, and `MODEL=black-forest-labs/FLUX.2-klein-4B`. The overlay uses the official `lmsysorg/sglang:v0.5.22-xpu` image on 2 replicas × 1 Arc Pro B60 with `--performance-mode=memory` ([`patch-sglang.yaml`](modelserver/xpu/sglang/common/patch-sglang.yaml)); this is community support, **not** nightly E2E coverage. `Qwen/Qwen-Image` does not fit a single B60 (~57 GB bf16); this overlay serves FLUX.2-klein-4B.
 
 </details>
 <!-- tabs:end -->

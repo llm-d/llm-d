@@ -46,8 +46,7 @@ spec:
                       value: "0"
                     - name: SYCL_CACHE_PERSISTENT
                       value: "1"
-                    # Early send of cached-prefix KV uses torch.cuda.Event and crashes on XPU;
-                    # the fix (sgl-project/sglang#43299) is not merged yet.
+                    # Keep early cached-prefix transfers disabled for this XPU profile.
                     - name: SGLANG_DISAGG_PREFILL_EARLY_SEND_CACHED_PREFIX
                       value: "0"
                     - name: UCX_TLS
