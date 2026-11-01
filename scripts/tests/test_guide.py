@@ -302,6 +302,26 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
 
 
 # --------------------------------------------------------------------------
+# model guide monitoring cleanup
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("model", ["nemotron-3-ultra", "qwen3-5-397b"])
+@pytest.mark.parametrize("monitoring", [None, "false", "true"])
+def test_model_monitoring_cleanup_matches_deployment(model, monitoring):
+    model_guide = guide.Guide.load(GUIDES_DIR / "models" / model)
+    variables = {} if monitoring is None else {"MONITORING": monitoring}
+    deploy = model_guide.emit(["deploy.monitoring"], variables=variables)
+    cleanup = model_guide.emit(["cleanup"], variables=variables)
+    monitoring_path = "${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd"
+
+    assert (monitoring_path in deploy) == (monitoring == "true")
+    assert (monitoring_path in cleanup) == (monitoring == "true")
+    assert "helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}" in cleanup
+    assert "kubectl delete namespace ${NAMESPACE}" in cleanup
+
+
+# --------------------------------------------------------------------------
 # flow-control nightly contract — what nightly-deploy-gke.sh relies on
 # --------------------------------------------------------------------------
 
