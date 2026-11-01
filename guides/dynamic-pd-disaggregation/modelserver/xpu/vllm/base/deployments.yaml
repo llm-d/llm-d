@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamic-pd-prefill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dynamic-pd-prefill
+  template:
+    metadata:
+      labels:
+        app: dynamic-pd-prefill
+        llm-d.ai/role: prefill
+        llm-d.ai/role-transfer-group: qwen3-0-6b-intel-xpu
+        llm-d.ai/tensor-parallel-size: "1"
+        llm-d.ai/model-identity: qwen-qwen3-0-6b
+        llm-d.ai/accelerator-class: intel-xpu
+        llm-d.ai/engine-profile: qwen3-0-6b-xpu-tp1-v1
+        llm-d.ai/max-model-len: "32000"
+    spec:
+      serviceAccountName: sa
+      securityContext:
+        fsGroup: 107
+        supplementalGroups: [107]
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-0.6B
+            - --disable-uvicorn-access-log
+            - --tensor-parallel-size=1
+            - --block-size=64
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"xpu"}'
+            - --max-model-len=32000
+            - --enforce-eager
+          env:
+            - {name: UCX_TLS, value: "tcp,ze_copy"}
+            - {name: UCX_MEMTYPE_CACHE, value: "0"}
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
+            - {name: VLLM_NIXL_SIDE_CHANNEL_PORT, value: "5600"}
+            - {name: VLLM_USE_V1, value: "1"}
+            - {name: TORCH_LLM_ALLREDUCE, value: "1"}
+            - {name: VLLM_WORKER_MULTIPROC_METHOD, value: spawn}
+            - {name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE, value: "120"}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef: {name: llm-d-hf-token, key: HF_TOKEN}
+          ports:
+            - {name: modelserver, containerPort: 8000}
+            - {name: nixl, containerPort: 5600}
+          resources:
+            limits: {cpu: "8", memory: 64Gi}
+            requests: {cpu: "8", memory: 64Gi}
+            claims:
+              - name: xpu
+          volumeMounts:
+            - {mountPath: /dev/shm, name: shm}
+            - {mountPath: /.cache, name: torch-compile-cache}
+          startupProbe:
+            httpGet: {path: /v1/models, port: modelserver}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /health, port: modelserver}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /v1/models, port: modelserver}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      resourceClaims:
+        - name: xpu
+          resourceClaimTemplateName: dynamic-pd-prefill-xpu
+      volumes:
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 16Gi}
+        - name: torch-compile-cache
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynamic-pd-decode
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dynamic-pd-decode
+  template:
+    metadata:
+      labels:
+        app: dynamic-pd-decode
+        llm-d.ai/role: decode
+        llm-d.ai/role-transfer-group: qwen3-0-6b-intel-xpu
+        llm-d.ai/tensor-parallel-size: "1"
+        llm-d.ai/model-identity: qwen-qwen3-0-6b
+        llm-d.ai/accelerator-class: intel-xpu
+        llm-d.ai/engine-profile: qwen3-0-6b-xpu-tp1-v1
+        llm-d.ai/max-model-len: "32000"
+    spec:
+      serviceAccountName: sa
+      securityContext:
+        fsGroup: 107
+        supplementalGroups: [107]
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-0.6B
+            - --disable-uvicorn-access-log
+            - --tensor-parallel-size=1
+            - --block-size=64
+            - --kv-transfer-config
+            - '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_buffer_device":"xpu"}'
+            - --max-model-len=32000
+            - --enforce-eager
+          env:
+            - {name: UCX_TLS, value: "tcp,ze_copy"}
+            - {name: UCX_MEMTYPE_CACHE, value: "0"}
+            - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
+            - {name: VLLM_NIXL_SIDE_CHANNEL_PORT, value: "5600"}
+            - {name: VLLM_USE_V1, value: "1"}
+            - {name: TORCH_LLM_ALLREDUCE, value: "1"}
+            - {name: VLLM_WORKER_MULTIPROC_METHOD, value: spawn}
+            - {name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE, value: "120"}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef: {name: llm-d-hf-token, key: HF_TOKEN}
+          ports:
+            - {name: modelserver, containerPort: 8000}
+            - {name: nixl, containerPort: 5600}
+          resources:
+            limits: {cpu: "8", memory: 64Gi}
+            requests: {cpu: "8", memory: 64Gi}
+            claims:
+              - name: xpu
+          volumeMounts:
+            - {mountPath: /dev/shm, name: shm}
+            - {mountPath: /.cache, name: torch-compile-cache}
+          startupProbe:
+            httpGet: {path: /v1/models, port: modelserver}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /health, port: modelserver}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /v1/models, port: modelserver}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      resourceClaims:
+        - name: xpu
+          resourceClaimTemplateName: dynamic-pd-decode-xpu
+      volumes:
+        - name: shm
+          emptyDir: {medium: Memory, sizeLimit: 16Gi}
+        - name: torch-compile-cache
+          emptyDir: {}
