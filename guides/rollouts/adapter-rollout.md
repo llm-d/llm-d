@@ -142,6 +142,8 @@ Response:
 
 ## Step 2: Gradual Rollout
 
+At each weight change, use the [rollout observability and troubleshooting checklist](./README.md#observability--troubleshooting) to compare adapter rewrite decisions, response model names, errors, and latency before promoting the new version.
+
 Now that `small-segment-lora-v2` is loaded (from the Prerequisites step), we can begin splitting traffic. Traffic splitting allows you to divide incoming traffic for a single model name across different adapters. This is critical for A/B testing or gradual updates.
 You want to direct 90% of `small-segment-lora` traffic to the stable `small-segment-lora-v1` and 10% to the new `small-segment-lora-v2`.
 
