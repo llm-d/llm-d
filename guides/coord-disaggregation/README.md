@@ -495,6 +495,20 @@ instead of through a cache.
 
 * Install the [Monitoring stack](../../docs/operations/observability/setup.md).
 * To enable Prometheus monitoring on the llm-d router, add `-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml` during the [router installation step](#1-deploy-the-llm-d-router).
+* To scrape the Coordinator's own metrics (`llm_d_coordinator_*`, listed under
+  [Coordinator Metrics](../../docs/operations/observability/router-metrics.md#coordinator-metrics)),
+  apply the scrape resource for your monitoring stack once the Coordinator from step 3 is running.
+  With the OSS stack or OpenShift, which read Prometheus Operator resources, apply the `PodMonitor`:
+
+  ```bash
+  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring
+  ```
+
+  On GKE, Managed Prometheus reads its own `PodMonitoring` kind instead:
+
+  ```bash
+  kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring/gmp-podmonitoring.yaml
+  ```
 
 ## Verification
 
@@ -771,6 +785,8 @@ done
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring
+kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring/gmp-podmonitoring.yaml # GKE Managed Prometheus only
 
 kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}
