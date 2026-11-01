@@ -45,8 +45,11 @@ shapes (cpu/memory/GPU) come from your launcher; the optimized-baseline
 references are 16 cpu / 128 GiB / 2 GPUs per replica.
 
 The EPP scheduling profile is the optimized-baseline mix:
-`prefix-cache-scorer` (weight 3), `queue-scorer`, `kv-cache-utilization-scorer`,
-and `no-hit-lru-scorer` (each weight 2), composed by `max-score-picker`.
+`prefix-cache-affinity-filter` followed by `token-load-scorer`, fed by the
+`approx-prefix-cache-producer` and `inflight-load-producer` data producers.
+The filter's `peakPrefillThroughput` default is tuned for the reference setup
+above; on other hardware or models, measure your own value with the
+[calibration guide](../recipes/router/calibration/README.md).
 
 ## Prerequisites
 
