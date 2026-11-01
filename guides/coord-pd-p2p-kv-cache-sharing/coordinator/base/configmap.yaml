@@ -1,0 +1,51 @@
+# The Coordinator's pipeline. Compared with the Coordinator Disaggregation
+# guide's ConfigMap: server.secure_serving is the key name of the coordinator
+# image this guide pins (llm-d-router#2908 renamed secure_coordinator);
+# pipeline.kv_connector is kv-offloading, with no ec_connector; the steps are
+# conditional-decode, prefill, decode (no media, render or encode steps: text
+# only, and the EPP tokenizes through the render Service); gateway.timeout is
+# 300s, the HTTPRoute request timeout, because a prefill call waits in the
+# prefill pod's queue for the whole prompt and at 60s a queued long prompt
+# would fail in the Coordinator before the Gateway or the client gives up.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-d-coordinator-config
+data:
+  coordinator.yaml: |
+    log_level: 2
+    server:
+      listen_addr: ":8080"
+      # Plaintext: the kubelet probes and the Gateway's backendRef speak HTTP.
+      secure_serving: false
+      read_timeout: 30s
+      # Matches the Gateway/HTTPRoute request timeout (300s).
+      write_timeout: 300s
+
+    gateway:
+      # GATEWAY_ADDRESS is the Gateway's own Service URL (README, Installation
+      # Instructions). Every call carries x-llm-d-epp-profile (decode for
+      # conditional-decode and decode, prefill for prefill) and lands on the
+      # router HTTPRoute (../../router/httproute/base).
+      address: "${GATEWAY_ADDRESS}"
+      max_idle_conns_per_host: 100
+      idle_conn_timeout: 90s
+      timeout: 300s
+
+    pipeline:
+      # kv-offloading: both transfers run over the OffloadingConnector P2P tier.
+      # conditional-decode sends the request to a decode pod with
+      # Prefer: if-available and an empty kv_transfer_params; the EPP's
+      # prefix-based-pd-decider answers 412 when the chosen decode pod misses
+      # nonCachedTokens or more of the prompt, and the p2p-source-producer may
+      # fill remote_kv_source so a decode pod that serves directly pulls the
+      # prefix from a peer. On 412, prefill runs: the EPP may name a source
+      # (remote_kv_source, a decode pod holding the session history or a
+      # prefill pod holding the prefix) and stamps the prefill pod's P2P
+      # address on the response; the Coordinator builds remote_prefiller from
+      # it, and the decode pod pulls the prompt KV from the prefill pod.
+      kv_connector: kv-offloading
+      steps:
+        - type: conditional-decode
+        - type: prefill
+        - type: decode

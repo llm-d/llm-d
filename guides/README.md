@@ -80,6 +80,7 @@ Fleet operations that layer onto any deployment above. See [Operations](../docs/
 
 * [Encode Disaggregation](./multimodal-serving/e-disaggregation/README.md) - Offload multimodal encoding (images, video, audio) to dedicated workers via E/PD or E/P/D topologies, freeing prefill/decode resources for text computation.
 * [Coordinator Disaggregation](./coord-disaggregation/README.md) - Drive an Encode/Prefill/Decode pipeline through a standalone Coordinator service instead of a per-pod routing sidecar, so the pipeline (which phases run, and in what order) is a configurable list of steps rather than fixed logic, and each phase's pod is picked only when that phase is about to run.
+* [P/D Disaggregation with P2P KV Cache Sharing behind the Coordinator](./coord-pd-p2p-kv-cache-sharing/README.md) (Experimental) - Run prefill/decode disaggregation through the Coordinator with the vLLM OffloadingConnector P2P tier carrying both the prefill-to-decode transfer and peer pulls of cached prefixes (a decode pod's session history, a prefill pod's document), and a `conditional-decode` step that lets a decode pod answer a short follow-up turn alone.
 * [Turn-Priority Fairness](./turn-priority-fairness/README.md) - Order flow-control queues by conversation depth so the deepest multi-turn sessions dispatch first and keep their prefixes resident in the KV cache, holding latency and throughput flat as concurrency rises.
 
 ## Centralized Configuration
