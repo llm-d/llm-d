@@ -525,7 +525,7 @@ export PORT=80
 
 ```bash
 kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="PORT=$PORT" \
