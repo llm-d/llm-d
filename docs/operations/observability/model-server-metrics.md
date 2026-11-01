@@ -50,6 +50,15 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 > [!NOTE]
 > Older dashboards may use `vllm:kv_offload_total_bytes_total`, `vllm:kv_offload_total_time_total`, and `vllm:kv_offload_size` with a `transfer_type` label (`GPU_to_CPU`, `CPU_to_GPU`). vLLM still emits them for `CPUOffloadingSpec` and its subclasses, which covers both the CPU RAM and filesystem paths, but they are deprecated in favor of the series above.
 
+### vLLM Multimodal Metrics
+
+When serving multimodal models (the [multimodal serving guide](../../../guides/multimodal-serving/README.md)), vLLM exports metrics for the multimodal embedding cache (vision and audio encoder outputs).
+
+| Metric | What it measures | Why it matters |
+|--------|------------------|----------------|
+| `vllm:mm_cache_queries_total` | Total multimodal embedding cache lookups | Evaluates total media items checked against pre-computed encoder cache |
+| `vllm:mm_cache_hits_total` | Multimodal embedding cache hits | Indicates successful reuse of pre-computed image or audio embeddings without re-running the heavy vision encoder |
+
 ## SGLang
 
 | Metric | What it measures | Why it matters |
