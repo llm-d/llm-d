@@ -11,9 +11,9 @@ data:
       # (llm-d-router#2805); keep it plaintext -- every caller in this guide
       # (kubelet probes, the Gateway's backendRef, the GKE HealthCheckPolicy)
       # speaks plain HTTP to it.
-      # TODO: Rename to secure_serving with the first release after v0.11.0.
-      # llm-d-router#2908 renamed the key, and v0.11.0 does not contain it.
-      secure_coordinator: false
+      # llm-d-router#2908 renamed the key to secure_serving; the release
+      # component runs v1.0.0, which expects the new name.
+      secure_serving: false
       read_timeout: 30s
       # Matches the Gateway/HTTPRoute request timeout (coordinator/base/httproute.yaml,
       # router/httproute/base/httproute.yaml: both 300s) -- otherwise the coordinator could
