@@ -66,3 +66,7 @@ patches:
           - port: rank7
             path: /metrics
             interval: 5s
+          # The routing sidecar's own /metrics (--metrics-port).
+          - port: sc-metrics
+            path: /metrics
+            interval: 5s

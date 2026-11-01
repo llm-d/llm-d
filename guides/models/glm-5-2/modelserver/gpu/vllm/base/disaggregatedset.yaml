@@ -416,6 +416,7 @@ spec:
                   - --zap-log-level=1
                   - --secure-serving=false
                   - --enable-prefiller-sampling
+                  - --metrics-port=9095
                 image: REPLACE_ROUTING_SIDECAR_IMAGE
                 imagePullPolicy: Always
                 ports:
@@ -442,6 +443,9 @@ spec:
                     protocol: TCP
                   - containerPort: 8007
                     name: rank7
+                    protocol: TCP
+                  - containerPort: 9095
+                    name: sc-metrics
                     protocol: TCP
                 restartPolicy: Always
                 securityContext:

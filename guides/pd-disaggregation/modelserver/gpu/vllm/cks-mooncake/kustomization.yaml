@@ -87,6 +87,7 @@ patches:
                           - --kv-connector=mooncake
                           - --zap-log-level=1
                           - --secure-serving=false
+                          - --metrics-port=9095
                     containers:
                       - name: modelserver
                         args:
