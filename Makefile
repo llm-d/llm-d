@@ -60,11 +60,14 @@ help: ## Print help
 	@printf "  \033[36mmake image-push DEVICE=xpu\033[0m                     # Push Intel XPU Docker image\n"
 	@printf "  \033[36mmake image-retag DEVICE=xpu NEW_TAG=test\033[0m       # Re-Tag Intel XPU Docker image\n"
 	@printf "  \033[36mmake env DEVICE=xpu\033[0m                            # Show XPU environment variables\n"
+	@printf "\nFor Kubernetes and OpenShift deployment, follow a guide in guides/README.md.\n"
 
 ##@ Development
 
 .PHONY: test
 test: ## Run tests
+	python -m pytest scripts/tests/ docker/scripts/cpu/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ .github/scripts/e2e/async-multitenant/
+	python -m unittest discover -t . -s docker/scripts/snapshot
 
 .PHONY: post-deploy-test
 post-deploy-test: ## Run post deployment tests
@@ -73,6 +76,7 @@ post-deploy-test: ## Run post deployment tests
 
 .PHONY: lint
 lint: ## Run lint
+	uvx prek run --all-files
 
 .PHONY: verify
 verify: verify-guide-readmes ## Verify generated artifacts are current
@@ -164,77 +168,6 @@ uninstall-docker: check-container-tool ## Uninstall app from $(CONTAINER_TOOL)
 	@echo "Stopping and removing container in $(CONTAINER_TOOL)..."
 	-$(CONTAINER_TOOL) stop $(IMAGE_REGISTRY_REPO)-container && $(CONTAINER_TOOL) rm $(IMAGE_REGISTRY_REPO)-container
 	@echo "$(CONTAINER_TOOL) uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
-
-### Kubernetes Targets (kubectl)
-
-.PHONY: install-k8s
-install-k8s: check-kubectl check-kustomize check-envsubst ## Install on Kubernetes
-	export IMAGE_REGISTRY_REPO=${IMAGE_REGISTRY_REPO}
-	export NAMESPACE=${NAMESPACE}
-	@echo "Creating namespace (if needed) and setting context to $(NAMESPACE)..."
-	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
-	kubectl config set-context --current --namespace=$(NAMESPACE)
-	@echo "Deploying resources from deploy/ ..."
-	# Build the kustomization from deploy, substitute variables, and apply the YAML
-	kustomize build deploy | envsubst | kubectl apply -f -
-	@echo "Waiting for pod to become ready..."
-	sleep 5
-	@POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -o jsonpath='{.items[0].metadata.name}'); \
-	echo "Kubernetes installation complete."; \
-	echo "To use the app, run:"; \
-	echo "alias $(IMAGE_REGISTRY_REPO)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(IMAGE_REGISTRY_REPO)'"
-
-.PHONY: uninstall-k8s
-uninstall-k8s: check-kubectl check-kustomize check-envsubst ## Uninstall from Kubernetes
-	export IMAGE_REGISTRY_REPO=${IMAGE_REGISTRY_REPO}
-	export NAMESPACE=${NAMESPACE}
-	@echo "Removing resources from Kubernetes..."
-	kustomize build deploy | envsubst | kubectl delete --force -f - || true
-	POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -o jsonpath='{.items[0].metadata.name}'); \
-	echo "Deleting pod: $$POD"; \
-	kubectl delete pod "$$POD" --force --grace-period=0 || true; \
-	echo "Kubernetes uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
-
-### OpenShift Targets (oc)
-
-.PHONY: install-openshift
-install-openshift: check-kubectl check-kustomize check-envsubst ## Install on OpenShift
-	@echo $$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION
-	@echo "Creating namespace $(NAMESPACE)..."
-	kubectl create namespace $(NAMESPACE) 2>/dev/null || true
-	@echo "Deploying common resources from deploy/ ..."
-	# Build and substitute the base manifests from deploy, then apply them
-	kustomize build deploy | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -n $(NAMESPACE) -f -
-	@echo "Waiting for pod to become ready..."
-	sleep 5
-	@POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
-	echo "OpenShift installation complete."; \
-	echo "To use the app, run:"; \
-	echo "alias $(IMAGE_REGISTRY_REPO)='kubectl exec -n $(NAMESPACE) -it $$POD -- /app/$(IMAGE_REGISTRY_REPO)'"
-
-.PHONY: uninstall-openshift
-uninstall-openshift: check-kubectl check-kustomize check-envsubst ## Uninstall from OpenShift
-	@echo "Removing resources from OpenShift..."
-	kustomize build deploy | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete --force -f - || true
-	# @if kubectl api-resources --api-group=route.openshift.io | grep -q Route; then \
-	#   envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' < deploy/openshift/route.yaml | kubectl delete --force -f - || true; \
-	# fi
-	@POD=$$(kubectl get pod -l app=$(IMAGE_REGISTRY_REPO)-statefulset -n $(NAMESPACE) -o jsonpath='{.items[0].metadata.name}'); \
-	echo "Deleting pod: $$POD"; \
-	kubectl delete pod "$$POD" --force --grace-period=0 || true; \
-	echo "OpenShift uninstallation complete. Remove alias if set: unalias $(IMAGE_REGISTRY_REPO)"
-
-### RBAC Targets (using kustomize and envsubst)
-
-.PHONY: install-rbac
-install-rbac: check-kubectl check-kustomize check-envsubst ## Install RBAC
-	@echo "Applying RBAC configuration from deploy/rbac..."
-	kustomize build deploy/rbac | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl apply -f -
-
-.PHONY: uninstall-rbac
-uninstall-rbac: check-kubectl check-kustomize check-envsubst ## Uninstall RBAC
-	@echo "Removing RBAC configuration from deploy/rbac..."
-	kustomize build deploy/rbac | envsubst '$$IMAGE_REGISTRY_REPO $$NAMESPACE $$IMAGE_BASE $$VERSION' | kubectl delete -f - || true
 
 .PHONY: env
 env:
