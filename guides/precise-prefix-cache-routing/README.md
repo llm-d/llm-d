@@ -31,7 +31,7 @@ This guide includes configurations for the following accelerator and model serve
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | GKE only · 2 replicas × 4 chips (`2x2x1`) · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (DP=2 × TP=4, EP); SGLang (`sglang:v0.1.0-tpu`): `Qwen/Qwen3-32B` (TP=8, 16k context, uses the dedicated render pool) |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -605,8 +605,8 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 
 <!-- guide:cleanup.render start -->
 <!-- variants:start -->
-<details data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=sglang">
-<summary><b>NVIDIA GPU · SGLang</b></summary>
+<details data-when="ACCELERATOR_TYPE=gpu,tpu/v7;MODEL_SERVER=sglang">
+<summary><b>NVIDIA GPU / Google TPU v7 · SGLang</b></summary>
 
 <!-- llm-d-cicd:skip start -->
 ```bash
