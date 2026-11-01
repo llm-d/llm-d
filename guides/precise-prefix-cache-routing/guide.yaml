@@ -290,7 +290,8 @@ cleanup:
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - when: {MONITORING: ["true"]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
     - run: |
         kubectl delete clusterrolebinding ${GUIDE_NAME}-metrics-reader --ignore-not-found=true
         kubectl delete clusterrole ${GUIDE_NAME}-metrics-reader --ignore-not-found=true

@@ -436,6 +436,7 @@ kubectl delete -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/${MONITORING_COMPONENT} --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
