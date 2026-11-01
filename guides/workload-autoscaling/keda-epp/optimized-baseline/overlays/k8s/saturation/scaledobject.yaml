@@ -3,7 +3,7 @@
 #
 # Scales ${TARGET_DEPLOYMENT} on two EPP demand signals, raced by the HPA (it
 # uses the larger desired count):
-#   - pool-saturation      EPP pool-saturation ratio (0.0-1.0+), per-replica target 0.7
+#   - pool-saturation      EPP pool-saturation ratio (0.0-1.0+), target 0.7
 #   - epp-running-requests active concurrency, per-replica target 16
 # Saturation is a normalized ratio, more portable across hardware than a raw
 # queue-depth count. Overshoot is handled by the 300s stabilization windows.
@@ -55,7 +55,7 @@ spec:
   triggers:
     - type: prometheus
       name: pool-saturation
-      metricType: AverageValue
+      metricType: Value
       metadata:
         serverAddress: http://llmd-kube-prometheus-stack-prometheus.llm-d-monitoring.svc.cluster.local:9090
         query: >-
