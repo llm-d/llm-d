@@ -1,0 +1,101 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: decode
+      spec:
+        replicas: 2
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              initContainers:
+                - name: routing-proxy
+                  args:
+                    - --port=8000
+                    # The sidecar's MoRI-IO mode rides on the nixlv2 connector flag, as in the
+                    # P/D MoRI-IO guide; --ec-connector=ec-nixl only forwards the embeddings
+                    # parameters, whichever data plane (NIXL or MoRI-IO) moves them.
+                    - --kv-connector=nixlv2
+                    - --ec-connector=ec-nixl
+                    - --zap-log-level=1
+                    - --secure-serving=false
+                    # MoRI-IO WRITE mode. Prefill and decode are dispatched one after the other
+                    # (no --moriio-parallel-dispatch): the sidecar's KV-wait timer starts at
+                    # dispatch, so with parallel dispatch time queued at prefill counts against
+                    # it.
+                    - --moriio-write-mode
+                    # MUST match --tensor-parallel-size
+                    - --moriio-tp-size=2
+                    - --moriio-local-pod-ip=$(POD_IP)
+                  env:
+                    - name: POD_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+              containers:
+                - name: modelserver
+                  command: ["vllm", "serve"]
+                  args:
+                    - "Qwen/Qwen3-VL-32B-Instruct"
+                    - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+                    - "--tensor-parallel-size=2"
+                    - "--mm-processor-cache-gb"
+                    - "20"
+                    # Registering the KV cache over DMABUF briefly needs about twice its size in
+                    # GPU memory, so a KV cache sized from --gpu-memory-utilization can leave too
+                    # little free at startup. Cap it.
+                    - "--kv-cache-memory-bytes=100000000000"
+                    - "--kv-transfer-config"
+                    - '{"kv_connector":"MoRIIOConnector", "kv_role":"kv_consumer", "kv_connector_extra_config": {"http_port":"8200", "handshake_port":"6301", "notify_port":"61005"}}'
+                    - "--no-disable-hybrid-kv-cache-manager"
+                    - "--port=8200"
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                  resources:
+                    limits:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "2"
+                    requests:
+                      cpu: "16"
+                      memory: 256Gi
+                      amd.com/gpu: "2"
+                  volumeMounts:
+                    - mountPath: /dev/shm
+                      name: shm
+                    - mountPath: /.cache
+                      name: torch-compile-cache
+                    - mountPath: /.triton
+                      name: triton-cache
+                    - mountPath: /.config
+                      name: config-cache
+                  startupProbe:
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 120
+                  livenessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+                  readinessProbe:
+                    periodSeconds: 5
+                    timeoutSeconds: 2
+                    failureThreshold: 3
+              volumes:
+                - name: shm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 20Gi
+                - name: torch-compile-cache
+                  emptyDir: {}
+                - name: triton-cache
+                  emptyDir: {}
+                - name: config-cache
+                  emptyDir: {}

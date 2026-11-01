@@ -24,6 +24,14 @@ support:
         - {name: gke, label: "GKE"}
         - {name: coreweave, label: "CoreWeave"}
       engines: {vllm: validated}
+    amd:
+      label: AMD GPU
+      notes: "Instinct MI355X (288 GB HBM) · aggregated (8 replicas × TP=2, 16 GPUs) and E/PD (2 Encode + 8 PD, TP=2) over NIXL with `INFRA_PROVIDER=base`; E/PD and E/P/D (2 Encode + 6 Prefill + 2 Decode, TP=2) over MoRI-IO with `INFRA_PROVIDER=moriio/base`, which needs a vLLM image with `ec_transport=moriio`"
+      model: Qwen/Qwen3-VL-32B-Instruct
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: moriio/base, label: "MoRI-IO (E/PD and E/P/D)"}
+      engines: {vllm: community}
     xpu:
       label: Intel XPU
       notes: "Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base`"
@@ -50,16 +58,18 @@ env:
     # monitoring stack) to run the deploy.monitoring* steps.
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
+    ACCELERATOR_VALUES: {default: ""}
 
     # aggregation: every pod encodes, prefills, and decodes. e-pd / e-p-d:
     # dedicated Encode pods in front of PD (or separate P and D) pods,
     # NVIDIA GPU only.
     TOPOLOGY: {default: aggregation, values: [aggregation, e-pd, e-p-d]}
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu, tpu/v7]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, tpu/v7]}
     MODEL_SERVER: {default: vllm, values: [vllm]}
     # The overlay is <topology dir>/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/[<TOPOLOGY>/]<INFRA_PROVIDER>/
     # (see the Notes column for the providers each accelerator supports).
-    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave]}
+    # moriio/*: AMD E/PD and E/P/D only (TOPOLOGY=e-pd or e-p-d); moriio/amd-ci adds the CI model cache and NIC attachments.
+    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, moriio/base, moriio/amd-ci]}
 
     MODEL: {default: "Qwen/Qwen3-VL-32B-Instruct", comment: "the model the overlays serve (table above)"}
 
@@ -136,6 +146,12 @@ deploy:
     - when: {MONITORING: ["true"]}
       run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 
+  # AMD routes with its own measured peakPrefillThroughput: amd.<router values file>,
+  # next to the topology's router values, layers the AMD value over them.
+  accelerator_values:
+    - when: {ACCELERATOR_TYPE: [amd]}
+      run: export ACCELERATOR_VALUES="-f ${ROUTER_VALUES%/*}/amd.${ROUTER_VALUES##*/}"
+
   standalone:
     - run: |
         helm install ${GUIDE_NAME} \
@@ -143,6 +159,7 @@ deploy:
           -f ${ROUTER_BASE_VALUES} \
           ${MONITORING_VALUES} \
           -f ${ROUTER_VALUES} \
+          ${ACCELERATOR_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:

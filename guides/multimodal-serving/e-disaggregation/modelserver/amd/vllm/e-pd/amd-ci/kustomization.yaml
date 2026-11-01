@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Persistent model cache (RWX PVC `model-pvc`, created ahead of time in the
+# namespace) so pods do not each download the weights from HuggingFace. It is
+# patched into both roles in patch-amd-ci.yaml: the shared model-cache component
+# patches a prefill role, which E/PD does not have, and skips Encode.
+resources:
+  - ../base
+patches:
+  - path: patch-amd-ci.yaml
+configMapGenerator:
+  - name: ucx-kernel-config
+    # Synthetic kernel config so the bundled NIXL UCX dmabuf probe
+    # (nixl/_internal/nixl_bindings/ucx/ucx_dmabuf_probe.c) passes on these
+    # stripped nodes where no /boot/config exists. The generated filename,
+    # the mountPath in patch-amd-ci.yaml, and the subPath must all match
+    # the nodes' running kernel version (uname -r).
+    files:
+      - config-6.8.0-124-generic
+generatorOptions:
+  disableNameSuffixHash: true
