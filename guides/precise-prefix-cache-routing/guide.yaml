@@ -22,11 +22,11 @@ support:
       engines: {vllm: validated, sglang: community}
     amd:
       label: AMD GPU
-      notes: "2 replicas × TP=2 (4 GPUs)"
+      notes: "Instinct MI355X · 2 replicas × TP=2 (4 GPUs) · SGLang uses the dedicated render pool"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: validated}
+      engines: {vllm: validated, sglang: validated}
     xpu:
       label: Intel XPU
       notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool)"
@@ -149,7 +149,7 @@ deploy:
     # vLLM renders on the model servers through the router's endpoint
     # discovery, so only SGLang deploys a render pool: a dedicated, GPU-less
     # vLLM render Deployment, because SGLang has no render endpoints.
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu, amd]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
@@ -284,7 +284,7 @@ cleanup:
   modelserver:
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   render:
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
+    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu, amd]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
     - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
