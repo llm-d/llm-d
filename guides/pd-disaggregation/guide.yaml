@@ -86,6 +86,13 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community}
+    hygon:
+      label: Hygon HCU
+      notes: "BW1000 64 GiB · SGLang 1P (TP=4) + 1D (TP=4) Deployments · Mooncake over RoCE"
+      model: Qwen3-32B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {sglang: community}
     biren:
       label: Biren GPU
       notes: "166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v)"
@@ -122,7 +129,7 @@ env:
     # Extra router values for accelerators that need them (set by deploy.accelerator_values).
     ACCELERATOR_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, hygon, biren, mthreads, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     # The leaf selects the platform and, where an accelerator offers multiple
@@ -264,6 +271,11 @@ deploy:
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     metax:
       - when: {ACCELERATOR_TYPE: [metax]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    hygon:
+      - when: {ACCELERATOR_TYPE: [hygon]}
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
