@@ -1,4 +1,4 @@
-# llm-scaling-manager: fleet-wide autoscaling for llm-d
+# llm-d-scaling-manager: an analytical global scaling manager for llm-d
 
 **Authors**: Evgeny Shindin (_IBM_)
 
@@ -8,7 +8,8 @@ release candidate. Code and releases:
 
 ## Summary
 
-llm-scaling-manager autoscales an llm-d fleet as a whole. One controller
+llm-d-scaling-manager is an analytical global scaling manager: it autoscales
+an llm-d fleet as a whole. One controller
 decides the replica count of every model, across namespaces and accelerator
 types, inside the GPUs the cluster actually has or the quotas each team was
 given. When models peak at different times, it can share one GPU budget
