@@ -212,6 +212,37 @@ plugins:
 
 They are automatically active and do not need to be referenced elsewhere in the configuration.
 
+#### Data Producer Phases
+
+Request control runs once per request, before any scheduling profile:
+
+```text
+Locate endpoints -> Data producers (request handling) -> Screeners -> Data producers (remaining) -> Admitters -> Scheduling profiles
+```
+
+Each data producer runs in exactly one of the two phases:
+
+- **Request handling**: on every located endpoint, before screeners, so screeners can consume the data.
+- **Remaining** (default): on the endpoints that survive screening, before admitters and scheduling profiles.
+
+`requestHandler.dataProducers` lists the producers that run during request handling. Instantiate the producer in `plugins`, then reference it by name:
+
+```yaml
+plugins:
+- name: tokenizer
+  type: token-producer
+# ...
+requestHandler:
+  dataProducers:
+  - pluginRef: tokenizer
+```
+
+- A producer that is not listed also runs during request handling when a screener or a listed producer consumes its data, Required or Optional, directly or through other producers. This includes producers created automatically. For example, a screener that requires `PrefixCacheMatchInfo` moves `approx-prefix-cache-producer`, and the `token-producer` it consumes, to request handling without a `dataProducers` entry.
+- A producer runs once per request. Data produced during request handling stays visible to screeners, the remaining producers, admitters, and scheduling profiles.
+- The EPP fails to start when a `pluginRef` is undefined, listed twice, or not a data producer.
+- Producers that run during request handling see every located endpoint, so their per-endpoint work grows with the endpoints the screeners remove. They also run for requests that screeners reject.
+- At startup, the EPP logs `DataProducer runs before screeners` for each producer that runs during request handling. Their latency is recorded in `llm_d_epp_plugin_duration_seconds` with `extension_point="RequestHandlingDataProducer"`; the remaining producers use `extension_point="DataProducer"`.
+
 ---
 
 ### Flow Control
