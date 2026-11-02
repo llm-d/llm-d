@@ -132,7 +132,8 @@
           "instant": false,
           "legendFormat": "Error Rate",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "exemplar": true
         }
       ],
       "title": "Overall Error Rate",
@@ -230,7 +231,8 @@
           "instant": false,
           "legendFormat": "{{model_name}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "exemplar": true
         }
       ],
       "title": "Per-Model Error Rate",
@@ -932,7 +934,8 @@
           "instant": false,
           "legendFormat": "P99",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "exemplar": true
         }
       ],
       "title": "EPP E2E Latency P99",
