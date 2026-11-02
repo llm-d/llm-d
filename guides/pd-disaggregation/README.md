@@ -25,6 +25,8 @@ How the two pools are deployed depends on the accelerator:
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/disaggregation/pd-disaggregation.md).
 
+To add admission control to this setup, see [Flow control with prefill/decode](flow-control.md). This is an opt-in configuration; it does not change this guide's default deployment.
+
 ## Supported Accelerators and Model Servers
 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves one model; its platform overlays are selected with `INFRA_PROVIDER` (see [Configure the environment](#configure-the-environment)):
