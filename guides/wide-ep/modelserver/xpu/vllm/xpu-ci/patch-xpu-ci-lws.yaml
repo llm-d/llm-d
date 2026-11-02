@@ -1,15 +1,65 @@
 - op: replace
-  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/7/value
-  value: !!str 4
+  path: /spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1model
+  value: DeepSeek-V2-Lite-Chat
+- op: test
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/6/name
+  value: CCL_LOCAL_SIZE
 - op: replace
-  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/20/value
-  value: !!str 4
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/6/value
+  value: !!str 2
+- op: test
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/19/name
+  value: TP_SIZE
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/19/value
+  value: !!str 2
+- op: test
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/18/name
+  value: DP_SIZE_LOCAL
+- op: remove
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/18
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/args/0
+  value: |-
+    hostname "deepseek-${LWS_WORKER_INDEX:-0}"
+    find /dev/shm -type f -delete
+
+    exec vllm serve \
+      deepseek-ai/DeepSeek-V2-Lite-Chat \
+      --host 0.0.0.0 \
+      --port 8200 \
+      --trust-remote-code \
+      --dtype bfloat16 \
+      --block-size 64 \
+      --enforce-eager \
+      --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} \
+      --max-model-len ${MAX_MODEL_LEN} \
+      --tensor-parallel-size ${TP_SIZE} \
+      --enable-expert-parallel \
+      --all2all-backend allgather_reducescatter \
+      --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+      --shutdown-timeout 45
+    # The XPU CI network has no RDMA transport, so collectives use TCP.
+- op: test
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/13/name
+  value: FI_PROVIDER
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/13/value
+  value: tcp
+- op: test
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/14/name
+  value: I_MPI_OFI_PROVIDER
 - op: replace
   path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/14/value
   value: tcp
+- op: test
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/15/name
+  value: UCX_TLS
 - op: replace
   path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/15/value
   value: tcp
+# The XPU CI environment has no shared model-cache PVC; both replicas use
+# the node-local Hugging Face cache instead.
 - op: replace
   path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes/1
   value:

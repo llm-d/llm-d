@@ -92,8 +92,6 @@ spec:
                 value: "1"
               - name: VLLM_MULTIPROC_EXECUTE_MODEL_TIMEOUT_S
                 value: "1200"
-              - name: TORCH_LLM_ALLREDUCE
-                value: "1"
               - name: CCL_ATL_TRANSPORT
                 value: ofi
               - name: CCL_PROCESS_LAUNCHER
