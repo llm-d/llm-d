@@ -265,10 +265,12 @@ kubectl run dp-test --rm -i --restart=Never \
 # every running model server pod through the Kubernetes API server proxy (no
 # port-forward needed). NVIDIA GPU runs one API server per DP rank (prefill on
 # ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD serves
-# all ranks of each role on one port, while aggregated Intel XPU uses decode
-# role labels and port 8200 only.
-for role in prefill decode; do
-  first=8000; [ "${role}" = decode ] && first=8200
+# all ranks of each role on one port, while aggregated Intel XPU uses the
+# prefill-decode role label and port 8200 only.
+roles="prefill decode"
+[ "${ACCELERATOR_TYPE}" = xpu ] && roles=prefill-decode
+for role in ${roles}; do
+  first=8000; [ "${role}" = prefill ] || first=8200
   ports=${first}; [ "${ACCELERATOR_TYPE}" = gpu ] && ports=$(seq ${first} $((first + 7)))
   pods=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=${role} \
     --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}')

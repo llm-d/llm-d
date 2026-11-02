@@ -4,7 +4,7 @@ metadata:
   name: wide-ep-xpu-qwen3-235b
   labels:
     llm-d.ai/model: Qwen3-235B-A22B
-    llm-d.ai/role: decode
+    llm-d.ai/role: prefill-decode
 spec:
   replicas: 1
   leaderWorkerTemplate:
@@ -17,7 +17,7 @@ spec:
           llm-d.ai/accelerator-variant: xpu
           llm-d.ai/accelerator-vendor: intel
           llm-d.ai/model: Qwen3-235B-A22B
-          llm-d.ai/role: decode
+          llm-d.ai/role: prefill-decode
       spec:
         serviceAccountName: sa
         securityContext:
@@ -125,7 +125,7 @@ spec:
               - name: TP_SIZE
                 value: "8"
               - name: MAX_MODEL_LEN
-                value: "512"
+                value: "2048"
               - name: GPU_MEMORY_UTILIZATION
                 value: "0.8"
               - name: VLLM_LOGGING_LEVEL
