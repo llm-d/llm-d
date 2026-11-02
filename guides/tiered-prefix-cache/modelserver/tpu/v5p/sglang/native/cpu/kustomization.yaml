@@ -1,0 +1,6 @@
+# Applied by the nightly E2E workflow, which leaves INFRA_PROVIDER empty for the
+# TPU lanes and therefore renders this directory. Same as ./gke (which is ./base).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./base
