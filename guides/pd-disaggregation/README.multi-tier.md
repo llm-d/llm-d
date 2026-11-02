@@ -46,7 +46,7 @@ request -> router -> prefill HBM
   RDMA networking and the `llm-d-hf-token` Secret.
 - At least 16 GPUs for the guide topology: 8 TP=1 prefill instances and 2 TP=4
   decode instances.
-- vLLM v0.27.1 or later. The overlays pin v0.27.1.
+- vLLM v0.31.0 or later. The overlays pin v0.31.0.
 - Enough host memory for the configured tier. The example reserves 100 GiB per
   prefiller.
 - The same vLLM `--block-size` and router
@@ -124,7 +124,11 @@ Binding every rank directly to `tcp://*:5557` causes a port collision.
 Omitting the `START_RANK` adjustment on the second pod instead publishes on
 `5565-5572`, which does not match router discovery.
 
-Before benchmarking, verify all eight listeners on every model-server pod and
+The checked-in `multi-tier-base` overlay runs one TP=1 engine per prefill pod,
+so each pod binds only `5557`. The `5557-5564` block below applies to the DP=8
+flavor used for the GLM benchmark, not to the default overlay.
+
+For the DP flavor, verify all eight listeners on every model-server pod and
 all eight established router subscriptions. A correct listener check prints
 the same range for each pod:
 

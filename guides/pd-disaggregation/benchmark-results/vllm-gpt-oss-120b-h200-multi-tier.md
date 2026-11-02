@@ -1,5 +1,9 @@
 # GPT-OSS-120B P/D Multi Tier KV Cache on H200
 
+> These numbers were measured against the v0.27.1 draft of this guide. The
+> checked-in overlay now pins vLLM v0.31.0; re-run the comparison on the
+> current image before using these as capacity-planning inputs.
+
 This report compares plain NIXL P/D with CPU KV offloading. Neither arm uses a
 filesystem KV tier.
 

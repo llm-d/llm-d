@@ -1,5 +1,9 @@
 # GLM-5.2-FP8 DP P/D Multi Tier on H200
 
+> These numbers were measured with a draft image (`vllm-openai:nightly-6f91edf9-pr50302`).
+> Re-run the comparison with the current guide image before using them as
+> capacity-planning inputs.
+
 This report compares precise NIXL P/D with precise CPU Multi Tier under data
 parallelism. Neither arm uses a filesystem KV tier.
 
