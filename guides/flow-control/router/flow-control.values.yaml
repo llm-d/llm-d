@@ -8,6 +8,11 @@ router:
     # EPP Service, so declaring it again produces a duplicate-port conflict
     # that fails the install.
   epp:
+    flags:
+      # Serve the gRPC health check the Envoy sidecar runs on port 9002. Without
+      # it Envoy marks the EPP unhealthy and fails every request open, bypassing
+      # flow control. Remove once llm-d/llm-d-router#3863 ships in the chart.
+      health-checking: true
     pluginsConfigFile: "custom-plugins.yaml"
     pluginsCustomConfig:
       custom-plugins.yaml: |

@@ -16,6 +16,11 @@ router:
   # Prometheus scraping of the EPP is opt-in: MONITORING=true layers
   # guides/recipes/router/features/monitoring.values.yaml in README step 2.
   epp:
+    flags:
+      # Serve the gRPC health check the Envoy sidecar runs on port 9002. Without
+      # it Envoy marks the EPP unhealthy and fails every request open, bypassing
+      # flow control. Remove once llm-d/llm-d-router#3863 ships in the chart.
+      health-checking: true
     resources:
       requests:
         cpu: "1"
