@@ -4,7 +4,7 @@ metadata:
   name: wide-ep-xpu-qwen3-235b
   labels:
     llm-d.ai/model: Qwen3-235B-A22B
-    llm-d.ai/role: prefill-decode
+    llm-d.ai/role: decode
 spec:
   replicas: 1
   leaderWorkerTemplate:
@@ -17,7 +17,7 @@ spec:
           llm-d.ai/accelerator-variant: xpu
           llm-d.ai/accelerator-vendor: intel
           llm-d.ai/model: Qwen3-235B-A22B
-          llm-d.ai/role: prefill-decode
+          llm-d.ai/role: decode
       spec:
         serviceAccountName: sa
         securityContext:

@@ -170,9 +170,9 @@ verify:
           # port-forward needed). NVIDIA GPU runs one API server per DP rank (prefill on
           # ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD serves
           # all ranks of each role on one port, while aggregated Intel XPU uses the
-          # prefill-decode role label and port 8200 only.
+          # decode role label for CI compatibility and port 8200 only.
           roles="prefill decode"
-          [ "${ACCELERATOR_TYPE}" = xpu ] && roles=prefill-decode
+          [ "${ACCELERATOR_TYPE}" = xpu ] && roles=decode
           for role in ${roles}; do
             first=8000; [ "${role}" = prefill ] || first=8200
             ports=${first}; [ "${ACCELERATOR_TYPE}" = gpu ] && ports=$(seq ${first} $((first + 7)))
