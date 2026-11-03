@@ -66,6 +66,10 @@ spec:
                       name: torch-compile-cache
                     - mountPath: /.config
                       name: config-cache
+                    # vLLM's Triton JIT writes here. Without the mount the engine dies
+                    # with PermissionError on /.triton under a non-root SCC (OpenShift).
+                    - mountPath: /.triton
+                      name: triton-cache
                   startupProbe:
                     initialDelaySeconds: 15
                     periodSeconds: 30
@@ -87,4 +91,6 @@ spec:
                 - name: torch-compile-cache
                   emptyDir: {}
                 - name: config-cache
+                  emptyDir: {}
+                - name: triton-cache
                   emptyDir: {}
