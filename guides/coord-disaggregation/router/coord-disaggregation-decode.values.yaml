@@ -28,18 +28,73 @@ router:
     # (which active-request-scorer consumes) is local to this EPP process, so multiple
     # replicas would each see only a fraction of the per-endpoint load.
     replicas: 1
+    # TODO: Remove this image override once an official release including
+    # prefix-based-pd-decider's conditional-decode gate is published. Same reason
+    # as the single-EPP variant's override.
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: "main"
+    flags:
+      # prefix-based-pd-decider (the conditional-decode gate below) is an Alpha plugin.
+      allow-experimental-plugins: true
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
+      # This EPP is the one the Coordinator's conditional-decode step probes, so it
+      # carries the same gate and decode-side prefix signal as the single-EPP variant
+      # (router/coord-disaggregation.values.yaml) -- see the comments there. Without
+      # prefix-based-pd-decider the EPP default-denies `Prefer: if-available` with 412
+      # (llm-d-router#2335) and the fast path never runs.
+      #
+      # The rollout screener is not here: it has to see every role of the set to pick a
+      # revision, and this pool is scoped to decode only (modelServers below). In the
+      # 3-EPP topology, revision pinning needs the screener on all three EPPs with a
+      # shared CrossReplicaSyncer; see docs/operations/disaggregation/safe-rollouts.md.
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Real engine token IDs, rendered on the prefill pods (which serve
+        # /v1/*/render under --enable-scale-out). This EPP's own pool is decode-only,
+        # so discovery selects the prefill role explicitly rather than this pool.
+        - type: token-producer
+          parameters:
+            modelName: Qwen/Qwen3-VL-32B-Instruct
+            vllm:
+              endpointDiscovery:
+                portRules:
+                - selector:
+                    matchLabels:
+                      llm-d.ai/role: prefill
+                  basePort: 8000
+                attemptTimeout: 5s
+              prefillOnly: true
+              messagesRenderMode: native
+              omitMMKwargs: true
+              timeout: 15s
+              mmTimeout: 15s
         - type: inflight-load-producer
         - type: active-request-scorer
+        - type: approx-prefix-cache-producer
+          name: decode-prefix-producer
+          parameters:
+            autoTune: true
+            maxPrefixTokensToMatch: 0
+            maxPrefixBlocksToMatch: 0
+        - type: prefix-cache-scorer
+          name: decode-prefix-scorer
+          parameters:
+            prefixMatchInfoProducerName: decode-prefix-producer
+        - type: prefix-based-pd-decider
+          parameters:
+            # Keep in step with the single-EPP variant; see the tuning note there.
+            nonCachedTokens: 2048
+            prefixMatchInfoProducerName: decode-prefix-producer
         - type: max-score-picker
         schedulingProfiles:
         - name: default
           plugins:
+          - pluginRef: decode-prefix-scorer
           - pluginRef: active-request-scorer
           - pluginRef: max-score-picker
 

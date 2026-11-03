@@ -28,6 +28,12 @@ runs. Only if decode responds `412 Precondition Failed` does the Coordinator fal
 to the full `encode → prefill → decode` cascade — which is also how a request with
 multiple multimedia entries fans encode out in parallel, one call per entry.
 
+The probe is a `Prefer: if-available` request, and the EPP answers it only when a gate
+plugin is configured to claim that header: without one it default-denies with `412`, so
+every request takes the full cascade. This guide's router configures the gate
+(`prefix-based-pd-decider`) and the decode-side prefix index it reads from — see
+[Deploy the llm-d Router](#1-deploy-the-llm-d-router).
+
 See the [Coordinator architecture doc](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_architecture.md)
 for the full request-flow sequence diagram and design rationale.
 
@@ -293,6 +299,18 @@ Kubernetes Gateway. Deploy one first if your cluster doesn't already have one:
 
 One llm-d Router release, EPP, and InferencePool cover all three roles.
 
+[`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml)
+configures that EPP. Beyond the role filters and the `header-profile-handler` that
+selects a profile per phase, four plugins are what make the Coordinator's pipeline work
+as documented; the file's comments explain each one:
+
+| Plugin | Why the pipeline needs it |
+| --- | --- |
+| `prefix-based-pd-decider` | Claims the `Prefer: if-available` header of the `conditional-decode` step. Without a gate plugin the EPP default-denies with `412`, so the fast path never runs and every request pays the full cascade. |
+| `approx-prefix-cache-producer` (`decode-prefix-producer`) + `prefix-cache-scorer` | A decode-scoped prefix index, and the scorer that lands the probe on the decode pod holding the prefix instead of merely the least-busy one. |
+| `token-producer` | Real engine token IDs, rendered on the prefill pods. Without it the framework auto-creates a tokenizer-free `estimate` backend whose block hashes do not line up with the engine's, weakening every prefix signal. |
+| `disaggregatedset-rollout-screener` | Pins all phases of a request to one `DisaggregatedSet` revision during a rollout. See [Rolling out a change](#rolling-out-a-change). |
+
 1. *Deploy the llm-d Router*:
 
 ```bash
@@ -374,6 +392,15 @@ already does per-release. `router/coord-disaggregation-encode.values.yaml` has n
 `prefill`/`decode` profile to borrow from in pd-disaggregation, so it reuses
 `active-request-scorer` too (pick the least-busy encode pod) — encode has no
 prefix-cache affinity to speak of, just queue/load balancing.
+
+Two of the three carry extra plugins, for the same reasons as the single-EPP table
+above: the **decode** EPP is the one the `conditional-decode` step probes, so it needs
+`prefix-based-pd-decider` plus the decode-scoped prefix producer and scorer (and an
+EPP image and `allow-experimental-plugins` flag that have the Alpha decider); the
+**prefill** EPP needs a `token-producer` so its `prefix-cache-affinity-filter` hashes
+real engine tokens. The rollout screener is in none of them — see the note in
+[Rolling out a change](#rolling-out-a-change) for why a role-scoped pool cannot pin
+revisions on its own.
 
 1. *Deploy the llm-d Routers*:
 
@@ -564,8 +591,19 @@ curl -X POST http://${IP}:${PORT}/v1/completions \
     }' | jq
 ```
 
-This text-only prompt takes the fast path described in [Deferred decoding](#overview):
-`conditional-decode` serves it directly, so `encode` and `prefill` never get called.
+This text-only prompt can take the fast path described in [Deferred decoding](#overview):
+when the chosen decode pod already holds the prompt's prefix, `conditional-decode` serves
+it directly and `encode` and `prefill` never get called. On a cold cache the first request
+still runs the full cascade; send it twice to see the difference, and check which path it
+took in the Coordinator's own log:
+
+```bash
+kubectl logs -n ${NAMESPACE} deploy/llm-d-coordinator | grep -E "pipeline step timings|cache miss"
+```
+
+A `cache miss (412), continuing pipeline` line means decode declined the probe. Step
+timings that list only `conditional-decode` and `decode` mean it served the request
+directly.
 
 **Send a multimodal completion request** to exercise the full `encode → prefill →
 decode` pipeline:
@@ -640,7 +678,9 @@ What to expect, measured on the `coreweave` overlay (1 slice, encode 2 / prefill
 * **The render Service keeps serving**: it selects prefill pods by label, so it tracks whichever revision is Ready and never empties while at least one prefill pod is up.
 
 > [!NOTE]
-> Across a rollout the Coordinator can pair an `encode` or `prefill` pod of one revision with a `decode` pod of another, which is a risk for encoder-cache and KV transfer between mismatched engine versions. The Coordinator already tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, but nothing acts on those headers until you add the `disaggregatedset-rollout-screener` plugin to the EPP. To pin every phase of a request to one revision, follow [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision); this guide does not configure it by default.
+> Across a rollout, pairing an `encode` or `prefill` pod of one revision with a `decode` pod of another risks a failed encoder-cache or KV transfer between mismatched engine versions. The single-EPP topology pins every phase of a request to one revision: the Coordinator tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, and the `disaggregatedset-rollout-screener` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml) acts on them (scoped to the shared `llm-d.ai/guide` label, so it sees all three roles; `disableCoordination` left unset so the encode fan-out resolves to one revision).
+>
+> The **3-EPP topology does not** pin revisions. Each EPP's pool is scoped to a single role, so no one screener can see all three; pinning there needs the screener on all three EPPs with a shared `CrossReplicaSyncer`. See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
 
 ## Benchmark
 

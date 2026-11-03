@@ -56,19 +56,112 @@ router:
       # 33821, which is calibrated for gpt-oss-120b on 8x H200 prefill -- meaningless for
       # this guide's Qwen3-VL-32B-Instruct/TP=2 model servers). Recalibrate for your
       # hardware with guides/recipes/router/calibration/calibrate.sh.
+      #
+      # Plugin order below: the rollout screener runs per request before any profile,
+      # then the role filters and the profile handler, then the producers, and
+      # prefix-based-pd-decider last of the non-picker plugins because it reads from
+      # both token-producer and decode-prefix-producer.
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Keeps all phases of one request on a single DisaggregatedSet revision during
+        # a rollout, so an encode or prefill pod of one revision is never paired with a
+        # decode pod of another (mismatched engine versions can fail the encoder-cache
+        # or KV handshake). The Coordinator already tags each phase call with
+        # x-llm-d-disagg-revision and gives an image's parallel encode subrequests a
+        # shared x-llm-d-revision-decision-id; this plugin is what acts on them.
+        # See docs/operations/disaggregation/safe-rollouts.md.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              # The shared guide label, not disaggregatedset.x-k8s.io/name: the screener
+              # has to see every role of the set, and this matches the InferencePool
+              # selector below.
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
+              # disableCoordination is deliberately unset: the encode step fans out one
+              # subrequest per image (max_parallel: 8 in the Coordinator pipeline), and
+              # coordination is what resolves those to one revision. It is only safe to
+              # disable on the PD-only variant, which has no encode role.
         - type: encode-filter
         - type: prefill-filter
         - type: decode-filter
         - type: header-profile-handler
+        # Real engine token IDs, rendered through the prefill pods' own /render
+        # endpoints. Without this the framework auto-creates the tokenizer-free
+        # `estimate` backend, whose byte-packed IDs do not line up with the engine's
+        # block boundaries, so every prefix signal below is weaker than it looks.
+        - type: token-producer
+          parameters:
+            # Must match the model the overlay deploys: the render call lands on the
+            # model servers themselves, so a mismatch is rejected rather than silently
+            # tokenizing with the wrong tokenizer.
+            modelName: Qwen/Qwen3-VL-32B-Instruct
+            vllm:
+              endpointDiscovery:
+                # Render on the prefill pods only. They serve /v1/*/render because they
+                # run with --enable-scale-out, and this is the same role the render
+                # Service fronts (render/service.yaml) -- decode stays free to decode.
+                portRules:
+                - selector:
+                    matchLabels:
+                      llm-d.ai/role: prefill
+                  basePort: 8000
+                # Cap each attempt so one busy pod cannot consume the whole render
+                # budget and leave no time to retry on another. Multimodal renders
+                # download images, so this is looser than the text-only guides' 2s.
+                attemptTimeout: 5s
+              # Render only, never serve: rewrites the output budget on the render copy.
+              prefillOnly: true
+              messagesRenderMode: native
+              # Leave vLLM's processed multimodal tensors out of the render response.
+              # The producer only needs token IDs, mm_hashes and mm_placeholders, and
+              # the tensors can reach tens of MB per request.
+              omitMMKwargs: true
+              timeout: 15s
+              mmTimeout: 15s
         - type: approx-prefix-cache-producer
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
         - type: token-load-scorer
         - type: active-request-scorer
+        # A second, decode-scoped prefix index. prefix-based-pd-decider answers "can
+        # this decode pod serve the request directly?" from what each decode pod has
+        # already served, so the index has to be built from decode traffic, separately
+        # from the prefill-side producer above.
+        - type: approx-prefix-cache-producer
+          name: decode-prefix-producer
+          parameters:
+            autoTune: true
+            maxPrefixTokensToMatch: 0
+            maxPrefixBlocksToMatch: 0
+        - type: prefix-cache-scorer
+          name: decode-prefix-scorer
+          parameters:
+            prefixMatchInfoProducerName: decode-prefix-producer
+        # The gate for the Coordinator's conditional-decode step, which probes decode
+        # with `Prefer: if-available`. Without a plugin claiming that header the EPP
+        # default-denies with 412 (llm-d-router#2335), so the fast path never runs and
+        # every request pays the full encode -> prefill -> decode cascade.
+        - type: prefix-based-pd-decider
+          parameters:
+            # A request whose uncached suffix is shorter than this is served by the
+            # chosen decode pod directly; at or above it, the request disaggregates
+            # through encode/prefill. Set this to decode's --max-num-batched-tokens,
+            # so "fits one decode step" is what the gate actually measures. Decode
+            # leaves that flag unset here, and vLLM's default depends on the version
+            # and on the memory it finds, so read it from the decode pod's startup log
+            # (`max_num_batched_tokens=...`) and set it explicitly on both:
+            #   kubectl logs -n ${NAMESPACE} -l llm-d.ai/role=decode \
+            #       | grep -o 'max_num_batched_tokens=[0-9]*' | head -1
+            # 2048 is a deliberately conservative starting point: it under-serves the
+            # fast path (some requests that could have been served directly still
+            # disaggregate) rather than over-committing a decode step.
+            nonCachedTokens: 2048
+            prefixMatchInfoProducerName: decode-prefix-producer
         - type: max-score-picker
         schedulingProfiles:
         - name: encode
@@ -85,6 +178,10 @@ router:
         - name: decode
           plugins:
           - pluginRef: decode-filter
+          # Score decode on its own prefix index first, so the conditional-decode probe
+          # lands on the pod that actually holds the prefix rather than merely the
+          # least-busy one. Without this a direct serve happens only by chance.
+          - pluginRef: decode-prefix-scorer
           - pluginRef: active-request-scorer
           - pluginRef: max-score-picker
 

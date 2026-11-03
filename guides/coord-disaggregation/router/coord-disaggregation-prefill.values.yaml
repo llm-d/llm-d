@@ -41,6 +41,24 @@ router:
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Real engine token IDs for the prefix hashing below. Without this the
+        # framework auto-creates the tokenizer-free `estimate` backend, whose
+        # byte-packed IDs do not line up with the engine's block boundaries, so
+        # prefix-cache-affinity-filter's signal is weaker than it looks. This pool is
+        # prefill-scoped, so render lands on its own endpoints (they serve
+        # /v1/*/render under --enable-scale-out). See the single-EPP variant
+        # (coord-disaggregation.values.yaml) for the same block with more context.
+        - type: token-producer
+          parameters:
+            modelName: Qwen/Qwen3-VL-32B-Instruct
+            vllm:
+              endpointDiscovery:
+                attemptTimeout: 5s
+              prefillOnly: true
+              messagesRenderMode: native
+              omitMMKwargs: true
+              timeout: 15s
+              mmTimeout: 15s
         - type: approx-prefix-cache-producer
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
