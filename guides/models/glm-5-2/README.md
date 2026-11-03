@@ -500,9 +500,11 @@ The SGLang overlays all build on the GKE provider overlay (`modelserver/gpu/sgla
 the only one so far; other providers need their own `providers/<name>` overlay (RDMA device
 requests, HCA selection, cache volumes). Single-node DEP8 roles (`size=1`) resolve `auto` tuning
 defaults to `deepep_v2 direct`, `0.90` prefill / `0.945` decode HBM fractions, `2,048`-token
-prefill chunks, and `48` decode batch size; multi-node DEP16 roles (`size=2`) resolve `auto` to
-`deepep_v2 hybrid`, `0.85` HBM fractions, `8,192`-token prefill chunks, and `32` decode batch size
-so inter-node NCCL GIN buffers retain headroom. Every SGLang topology includes `hicache`, which
+prefill chunks, and `48` decode batch size; multi-node DEP16 roles (`size=2`) carry over the
+multi-node defaults (`deepep_v2 hybrid`, `0.85` HBM fractions, `8,192`-token prefill chunks, and
+`32` decode batch size) so inter-node NCCL GIN buffers retain headroom. Both 2-node DEP16 roles were
+boot- and health-validated on `v0.5.23-cu130` over GKE RoCE, while the `900 s` load sweeps in this
+guide were run on single-node `p1w1d1w1`. Every SGLang topology includes `hicache`, which
 enables the HiCache host-memory tier on prefill with `HICACHE_SIZE_GB_PER_RANK=100` (`direct` +
 `page_first_direct`). The SGLang components are:
 
@@ -614,9 +616,12 @@ If you disable `hicache` (for example with `benchmark/baseline/p1w1d1w1` or
 `HICACHE_SIZE_GB_PER_RANK=0`), set `lruCapacityPerServer` to `4084` in
 [`router/sglang.values.yaml`](router/sglang.values.yaml) so the router only tracks the `4,084`
 GPU-resident blocks (`261,376` tokens) per single-node DEP8 H200 prefill rank instead of the
-`34,235` GPU + CPU blocks. On multi-node DEP16 prefill topologies (`p1w2d1w2`, `p2w2d2w2`, `0.85`
-HBM fraction = `1,964` GPU blocks/rank), set `lruCapacityPerServer` to `32115`. For workloads with
-150-250 paused multi-turn sessions per DEP8 node, raise `HICACHE_SIZE_GB_PER_RANK` to `150`
+`34,235` GPU + CPU blocks. On 2-node DEP16 H200 prefill topologies (`p1w2d1w2`, `p2w2d2w2`), `0.85`
+HBM allocates `964,608` L1 KV tokens (`15,072` GPU blocks) per rank because MoE expert weights are
+sharded across 16 GPUs instead of 8, so set `lruCapacityPerServer` to `45223` (`15,072 + 30,151`, or
+`15072` without `hicache`); for any other memory fraction or hardware, read `#tokens` from `KV Cache
+is allocated` in the prefill startup log and set `tokens / 64` plus the CPU blocks. For workloads
+with 150-250 paused multi-turn sessions per DEP8 node, raise `HICACHE_SIZE_GB_PER_RANK` to `150`
 (`1500Gi` / `1800Gi` pod memory) and `lruCapacityPerServer` to `49310`.
 
 </details>
@@ -631,10 +636,10 @@ DEP16); pass an explicit value to override any variable:
 | Variable | Role | `auto` (`size=1` / `size>1`) | Flag / Effect |
 | --- | --- | --- | --- |
 | `DEEPEP_V2_MODE` | prefill + decode | `direct` / `hybrid` | `--deepep-v2-mode` (NVLink intra-node vs. NCCL GIN across nodes) |
-| `PREFILL_MEM_FRACTION_STATIC` | prefill | `0.90` / `0.85` | `--mem-fraction-static` (`261,376` vs. `125,696` L1 tokens/rank on H200) |
+| `PREFILL_MEM_FRACTION_STATIC` | prefill | `0.90` / `0.85` | `--mem-fraction-static` (`261,376` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
 | `PREFILL_CHUNK_TOKENS_PER_RANK` | prefill | `2048` / `8192` | `--chunked-prefill-size` (`value * DP_SIZE`) and per-rank `--max-prefill-tokens` |
 | `SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK` | prefill | matches chunk (`2048` / `8192`) | DeepEP v2 per-rank prefill dispatch buffer (`256` fixed on decode) |
-| `DECODE_MEM_FRACTION_STATIC` | decode | `0.945` / `0.85` | `--mem-fraction-static` (`383,552` L1 tokens/rank at `0.945` on H200) |
+| `DECODE_MEM_FRACTION_STATIC` | decode | `0.945` / `0.85` | `--mem-fraction-static` (`383,552` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
 | `DECODE_MAX_RUNNING_REQUESTS_PER_RANK` | decode | `48` / `32` | `--max-running-requests` (`value * DP_SIZE`) |
 | `DECODE_CUDA_GRAPH_MAX_BS` | decode | `48` / `32` | `--cuda-graph-max-bs-decode` |
 | `SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT` / `WAITING_TIMEOUT` | prefill + decode | SGLang default (`300` s) | P/D bootstrap and transfer-queue timeouts; overridden to `900` s in `benchmark/baseline/p1w1d1w1` |
@@ -822,10 +827,12 @@ both runs of each comparison. They compare model-server and topology choices, no
 
 Measured on two 8-GPU H200 nodes (`p1w1d1w1`, 16 GPUs, `lmsysorg/sglang:v0.5.23-cu130`, Mooncake
 DMA-BUF RDMA, [`router/sglang.values.yaml`](router/sglang.values.yaml)) using the same `900s`
-[aiperf command](#aiperf-command) (`--max-context-length 142000`). All stages completed with `0`
-request errors (`deployments/p1w1d1w1`, `hicache-fs`, and `no-mtp` use SGLang's default `300 s`
-disaggregation timeouts; `benchmark/baseline/p1w1d1w1` sets `900 s` timeouts because L1-only
-queueing reaches `266.75 s` p90 TTFT at concurrency 128 and tail requests exceed `300 s`):
+[aiperf command](#aiperf-command) (`--max-context-length 142000`). All 16 matched sweep stages ran
+with `900 s` disaggregation timeouts and completed with `0` request errors (`benchmark/baseline/p1w1d1w1`
+keeps `900 s` because L1-only queueing reaches `266.75 s` p90 / `377.9 s` max TTFT at concurrency
+128; `deployments/p1w1d1w1`, `hicache-fs`, and `no-mtp` ship with SGLang's `300 s` default, and
+revalidating `deployments/p1w1d1w1` at concurrency 128 for `900 s` under `300 s` timeouts completed
+`1,845` requests with `0` errors and `17.04 s` median / `109.3 s` max TTFT):
 
 | Overlay (`16x H200`) | Conc | Server Hit | TTFT p50 / p90 (s) | ITL p50 / p90 (ms) | Turn p50 (s) | Input tok/s | Output tok/s | E2E tok/s/user |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
