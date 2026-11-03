@@ -13,18 +13,14 @@ openapi:
   path: disaggregatedset-schema.json
 
 components:
-  # The recipe needs SGLang main from October 2026 or later: per-rank Rust
-  # listeners, P/D bootstrap on every listener, --attn-dp-size and
-  # per-listener /health warmup. No release tag contains all of them yet, so
-  # use the nightly image.
-  - ../../../../../../recipes/modelserver/components/images/gpu-sglang/nightly
+  - ../../../../../../recipes/modelserver/components/images/gpu-sglang/release
   # Only the main sidecar image routes SGLang requests through the P/D
   # handler so far.
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
 
-# Pin SGLang v0.5.23-cu130 by digest: includes native Rust chat-template
-# rendering and tokenization (sglang-processor), /flush_cache on Rust
-# listeners, busy-scheduler /health fixes, and reduced DeepEP v2 graph memory.
+# Pin SGLang v0.5.23-cu130 by digest: includes per-rank Rust listeners with
+# native chat-template rendering (sglang-processor), /flush_cache, busy-scheduler
+# /health fixes, and reduced DeepEP v2 graph memory.
 images:
   - name: docker.io/lmsysorg/sglang
     newName: docker.io/lmsysorg/sglang

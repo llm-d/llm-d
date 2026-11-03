@@ -68,7 +68,6 @@ spec:
                         - SYS_RAWIO
                     runAsGroup: 0
                     runAsUser: 0
-                  imagePullPolicy: Always
                   command:
                     - /bin/bash
                     - -c
@@ -108,28 +107,19 @@ spec:
                         fi
                       fi
 
-                      # Single-node roles use direct NVLink dispatch, a 2048-token prefill step, and
-                      # a 0.90 HBM fraction; multi-node roles use hybrid GIN dispatch and keep 0.85
-                      # and an 8192-token step so inter-node GIN buffers retain headroom.
-                      DEEPEP_V2_RESOLVED="${DEEPEP_V2_MODE:-auto}"
-                      PREFILL_MEM_RESOLVED="${PREFILL_MEM_FRACTION_STATIC:-auto}"
-                      PREFILL_CHUNK_RESOLVED="${PREFILL_CHUNK_TOKENS_PER_RANK:-auto}"
-                      if [ "${LWS_GROUP_SIZE}" = "1" ]; then
-                        case "${DEEPEP_V2_RESOLVED}" in auto) DEEPEP_V2_RESOLVED="direct" ;; esac
-                        case "${PREFILL_MEM_RESOLVED}" in auto) PREFILL_MEM_RESOLVED="0.90" ;; esac
-                        case "${PREFILL_CHUNK_RESOLVED}" in auto) PREFILL_CHUNK_RESOLVED="2048" ;; esac
-                      else
-                        case "${DEEPEP_V2_RESOLVED}" in auto) DEEPEP_V2_RESOLVED="hybrid" ;; esac
-                        case "${PREFILL_MEM_RESOLVED}" in auto) PREFILL_MEM_RESOLVED="0.85" ;; esac
-                        case "${PREFILL_CHUNK_RESOLVED}" in auto) PREFILL_CHUNK_RESOLVED="8192" ;; esac
+                      # Single-node DEP8 uses a 0.90 HBM fraction; multi-node roles keep 0.85 so
+                      # inter-node NCCL GIN buffers retain headroom.
+                      if [ -z "${PREFILL_MEM_FRACTION_STATIC:-}" ]; then
+                        if [ "${LWS_GROUP_SIZE}" = "1" ]; then
+                          PREFILL_MEM_FRACTION_STATIC=0.90
+                        else
+                          PREFILL_MEM_FRACTION_STATIC=0.85
+                        fi
                       fi
 
                       # SGLang splits --chunked-prefill-size and --max-running-requests across
                       # the attention-DP ranks, whereas --max-prefill-tokens is per rank.
-                      case "${SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK:-auto}" in
-                        auto) export SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK="${PREFILL_CHUNK_RESOLVED}" ;;
-                      esac
-                      CHUNKED_PREFILL_SIZE=$(( PREFILL_CHUNK_RESOLVED * DP_SIZE ))
+                      CHUNKED_PREFILL_SIZE=$(( ${PREFILL_CHUNK_TOKENS_PER_RANK:-2048} * DP_SIZE ))
                       MAX_RUNNING_REQUESTS=$(( ${PREFILL_MAX_RUNNING_REQUESTS_PER_RANK:-64} * DP_SIZE ))
 
                       # GLM-5.2 ships its chat template as chat_template.jinja,
@@ -158,15 +148,15 @@ spec:
                         --dsa-prefill-backend flashmla_kv \
                         --dsa-decode-backend flashmla_kv \
                         --moe-a2a-backend deepep_v2 \
-                        --deepep-v2-mode ${DEEPEP_V2_RESOLVED} \
+                        --deepep-v2-mode hybrid \
                         --moe-dense-tp-size 1 \
                         --enable-dp-lm-head \
                         --disaggregation-mode prefill \
                         --disaggregation-transfer-backend ${DISAGG_TRANSFER_BACKEND:-mooncake} \
                         --disaggregation-bootstrap-port 8000 \
-                        --mem-fraction-static ${PREFILL_MEM_RESOLVED} \
+                        --mem-fraction-static ${PREFILL_MEM_FRACTION_STATIC} \
                         --chunked-prefill-size ${CHUNKED_PREFILL_SIZE} \
-                        --max-prefill-tokens ${PREFILL_CHUNK_RESOLVED} \
+                        --max-prefill-tokens ${PREFILL_CHUNK_TOKENS_PER_RANK:-2048} \
                         --max-running-requests ${MAX_RUNNING_REQUESTS} \
                         ${CONTEXT_LENGTH:+--context-length ${CONTEXT_LENGTH}} \
                         --chat-template ${CHAT_TEMPLATE} \
@@ -213,19 +203,18 @@ spec:
                       value: "3"
                     - name: MTP_NUM_DRAFT_TOKENS
                       value: "4"
-                    - name: DEEPEP_V2_MODE
-                      value: "auto"
                     - name: PREFILL_MEM_FRACTION_STATIC
-                      value: "auto"
+                      value: ""
+                    # Cap each prefill step at 2048 tokens per rank to bound the
+                    # EAGLE MTP draft layer's all-gathered MoE activation buffer.
                     - name: PREFILL_CHUNK_TOKENS_PER_RANK
-                      value: "auto"
+                      value: "2048"
                     - name: PREFILL_MAX_RUNNING_REQUESTS_PER_RANK
                       value: "64"
-                    # DeepEP v2 per-rank dispatch buffer. When set to auto, the
-                    # launch script matches it to PREFILL_CHUNK_TOKENS_PER_RANK
-                    # so SGLang accepts the resolved prefill chunk size.
+                    # Must be >= PREFILL_CHUNK_TOKENS_PER_RANK so SGLang accepts
+                    # --max-prefill-tokens.
                     - name: SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK
-                      value: "auto"
+                      value: "2048"
                     - name: CONTEXT_LENGTH
                       value: ""
                     # HiCache size in GB per rank; 0 or empty keeps HiCache off.
@@ -424,7 +413,6 @@ spec:
                         - SYS_RAWIO
                     runAsGroup: 0
                     runAsUser: 0
-                  imagePullPolicy: Always
                   command:
                     - /bin/bash
                     - -c
@@ -445,23 +433,14 @@ spec:
                         MTP_ARGS="--speculative-algorithm EAGLE --speculative-num-steps ${MTP_NUM_STEPS:-3} --speculative-eagle-topk 1 --speculative-num-draft-tokens ${MTP_NUM_DRAFT_TOKENS:-4} --speculative-moe-a2a-backend none"
                       fi
 
-                      # Single-node roles use direct NVLink dispatch, a 0.945 HBM fraction, and a
-                      # 48-request per-rank batch; multi-node roles use hybrid GIN dispatch and keep
-                      # 0.85 and 32 requests so inter-node GIN buffers retain headroom.
-                      DEEPEP_V2_RESOLVED="${DEEPEP_V2_MODE:-auto}"
-                      DECODE_MEM_RESOLVED="${DECODE_MEM_FRACTION_STATIC:-auto}"
-                      DECODE_MAX_REQS_RESOLVED="${DECODE_MAX_RUNNING_REQUESTS_PER_RANK:-auto}"
-                      DECODE_GRAPH_BS_RESOLVED="${DECODE_CUDA_GRAPH_MAX_BS:-auto}"
-                      if [ "${LWS_GROUP_SIZE}" = "1" ]; then
-                        case "${DEEPEP_V2_RESOLVED}" in auto) DEEPEP_V2_RESOLVED="direct" ;; esac
-                        case "${DECODE_MEM_RESOLVED}" in auto) DECODE_MEM_RESOLVED="0.945" ;; esac
-                        case "${DECODE_MAX_REQS_RESOLVED}" in auto) DECODE_MAX_REQS_RESOLVED="48" ;; esac
-                        case "${DECODE_GRAPH_BS_RESOLVED}" in auto) DECODE_GRAPH_BS_RESOLVED="48" ;; esac
-                      else
-                        case "${DEEPEP_V2_RESOLVED}" in auto) DEEPEP_V2_RESOLVED="hybrid" ;; esac
-                        case "${DECODE_MEM_RESOLVED}" in auto) DECODE_MEM_RESOLVED="0.85" ;; esac
-                        case "${DECODE_MAX_REQS_RESOLVED}" in auto) DECODE_MAX_REQS_RESOLVED="32" ;; esac
-                        case "${DECODE_GRAPH_BS_RESOLVED}" in auto) DECODE_GRAPH_BS_RESOLVED="32" ;; esac
+                      # Single-node DEP8 uses a 0.945 HBM fraction; multi-node roles keep 0.85 so
+                      # inter-node NCCL GIN buffers retain headroom.
+                      if [ -z "${DECODE_MEM_FRACTION_STATIC:-}" ]; then
+                        if [ "${LWS_GROUP_SIZE}" = "1" ]; then
+                          DECODE_MEM_FRACTION_STATIC=0.945
+                        else
+                          DECODE_MEM_FRACTION_STATIC=0.85
+                        fi
                       fi
 
                       # DeepEP v2 dispatches at most
@@ -469,7 +448,7 @@ spec:
                       # rank per step: running requests x draft tokens with MTP.
                       # Keep the per-rank requests and the CUDA graph capture
                       # sizes within that budget.
-                      MAX_RUNNING_REQUESTS=$(( DECODE_MAX_REQS_RESOLVED * DP_SIZE ))
+                      MAX_RUNNING_REQUESTS=$(( ${DECODE_MAX_RUNNING_REQUESTS_PER_RANK:-48} * DP_SIZE ))
                       # See the prefill role: pass GLM-5.2's chat template.
                       CHAT_TEMPLATE=$(python3 -c "from huggingface_hub import hf_hub_download; print(hf_hub_download('zai-org/GLM-5.2-FP8', 'chat_template.jinja'))")
                       # The KV cache dtype, DSA backends and DeepEP v2 mode match
@@ -489,14 +468,14 @@ spec:
                         --dsa-prefill-backend flashmla_kv \
                         --dsa-decode-backend flashmla_kv \
                         --moe-a2a-backend deepep_v2 \
-                        --deepep-v2-mode ${DEEPEP_V2_RESOLVED} \
+                        --deepep-v2-mode hybrid \
                         --moe-dense-tp-size 1 \
                         --enable-dp-lm-head \
                         --disaggregation-mode decode \
                         --disaggregation-transfer-backend ${DISAGG_TRANSFER_BACKEND:-mooncake} \
-                        --mem-fraction-static ${DECODE_MEM_RESOLVED} \
+                        --mem-fraction-static ${DECODE_MEM_FRACTION_STATIC} \
                         --max-running-requests ${MAX_RUNNING_REQUESTS} \
-                        --cuda-graph-max-bs-decode ${DECODE_GRAPH_BS_RESOLVED} \
+                        --cuda-graph-max-bs-decode ${DECODE_CUDA_GRAPH_MAX_BS:-48} \
                         ${CONTEXT_LENGTH:+--context-length ${CONTEXT_LENGTH}} \
                         --chat-template ${CHAT_TEMPLATE} \
                         --reasoning-parser glm45 \
@@ -535,14 +514,12 @@ spec:
                       value: "3"
                     - name: MTP_NUM_DRAFT_TOKENS
                       value: "4"
-                    - name: DEEPEP_V2_MODE
-                      value: "auto"
                     - name: DECODE_MEM_FRACTION_STATIC
-                      value: "auto"
+                      value: ""
                     - name: DECODE_MAX_RUNNING_REQUESTS_PER_RANK
-                      value: "auto"
+                      value: "48"
                     - name: DECODE_CUDA_GRAPH_MAX_BS
-                      value: "auto"
+                      value: "48"
                     - name: CONTEXT_LENGTH
                       value: ""
                     - name: DISAGG_TRANSFER_BACKEND

@@ -81,12 +81,12 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 | Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
 | Serving topology         | P/D disaggregated: 1 prefill replica (DEP8, 1 node) + 1 decode replica (DEP8, 1 node), attention TP=1, DP=EP |
 | DP model                 | Rust frontend, one HTTP listener per DP rank (`SGLANG_RUST_SERVER=1`)         |
-| All-to-all               | DeepEP v2 on both roles (`deepep_v2`: `direct` on single-node DEP8, `hybrid` over NCCL GIN across nodes) |
+| All-to-all               | DeepEP v2 hybrid on both roles (`--moe-a2a-backend deepep_v2 --deepep-v2-mode hybrid`) |
 | MoE backend              | SGLang default (`--moe-runner-backend auto`)                                 |
 | KV transfer              | Mooncake (NIXL failed under long-context load on GKE RoCE)                   |
 | KV cache offloading      | HiCache host tier on prefill, 100 GB per rank with direct PCIe DMA (`hicache`, in every SGLang topology); optional shared-storage tier (`hicache-fs`) |
 | MTP speculative decoding | On (EAGLE, 3 steps)                                                          |
-| `mem-fraction-static`    | `auto`: 0.90 on prefill (2,048-token chunk per rank) and 0.945 on decode for 1-node DEP8; 0.85 on multi-node DEP16 roles |
+| `mem-fraction-static`    | 0.90 on prefill (2,048-token chunk per rank) and 0.945 on decode for 1-node DEP8; 0.85 on multi-node DEP16 |
 | Routing                  | GPU+CPU (HiCache) prefix-cache affinity + token load ([`sglang.values.yaml`](router/sglang.values.yaml)) |
 | Reasoning / tool-call    | glm45 / glm47                                                                |
 
@@ -497,13 +497,9 @@ vLLM ships every topology; SGLang ships the ones marked in the SGLang column.
 
 The SGLang overlays all build on the GKE provider overlay (`modelserver/gpu/sglang/providers/gke`),
 the only one so far; other providers need their own `providers/<name>` overlay (RDMA device
-requests, HCA selection, cache volumes). Single-node DEP8 roles (`size=1`) resolve `auto` tuning
-defaults to `deepep_v2 direct`, `0.90` prefill / `0.945` decode HBM fractions, `2,048`-token
-prefill chunks, and `48` decode batch size; multi-node DEP16 roles (`size=2`) carry over the
-multi-node defaults (`deepep_v2 hybrid`, `0.85` HBM fractions, `8,192`-token prefill chunks, and
-`32` decode batch size) so inter-node NCCL GIN buffers retain headroom. Every SGLang topology
-includes `hicache`, which enables the HiCache host-memory tier on prefill with
-`HICACHE_SIZE_GB_PER_RANK=100` (`direct` + `page_first_direct`). The SGLang components are:
+requests, HCA selection, cache volumes). Every SGLang topology includes `hicache`, which enables
+the HiCache host-memory tier on prefill with `HICACHE_SIZE_GB_PER_RANK=100` (`direct` +
+`page_first_direct`). The SGLang components are:
 
 | Component | Targets | Effect |
 | --------- | ------- | ------ |
@@ -611,42 +607,33 @@ The prefill launch script reads these environment variables (`0` or empty disabl
 | `SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE` | `hicache-fs` (`500Gi`) | free-space floor for LRU file eviction (IEC `Gi`/`Ti` or SI `G`/`T`) |
 | `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` | `hicache-fs` (`""`, optional) | optional directory size cap for LRU file eviction (`""` or `0` leaves uncapped) |
 
-If you disable `hicache` (for example with `benchmark/baseline/p1w1d1w1` or
-`HICACHE_SIZE_GB_PER_RANK=0`), set `lruCapacityPerServer` to `4084` in
-[`router/sglang.values.yaml`](router/sglang.values.yaml) so the router only tracks the `4,084`
-GPU-resident blocks (`261,376` tokens) per single-node DEP8 H200 prefill rank instead of the
-`34,235` GPU + CPU blocks. On 2-node DEP16 H200 prefill topologies (`p1w2d1w2`, `p2w2d2w2`), `0.85`
-HBM allocates `964,608` L1 KV tokens (`15,072` GPU blocks) per rank because MoE expert weights are
-sharded across 16 GPUs instead of 8, so set `lruCapacityPerServer` to `45223` (`15,072 + 30,151`, or
-`15072` without `hicache`); for any other memory fraction or hardware, read `#tokens` from `KV Cache
-is allocated` in the prefill startup log and set `tokens / 64` plus the CPU blocks. For workloads
-with 150-250 paused multi-turn sessions per DEP8 node, raise `HICACHE_SIZE_GB_PER_RANK` to `150`
-(`1500Gi` / `1800Gi` pod memory) and `lruCapacityPerServer` to `49310`.
+If you change the prefill KV cache size (disable `hicache`, change `HICACHE_SIZE_GB_PER_RANK`, or
+use a multi-node prefill topology), update `lruCapacityPerServer` in
+[`router/sglang.values.yaml`](router/sglang.values.yaml) to the per-rank block count: `#tokens`
+from the prefill `KV Cache is allocated` log divided by 64, plus `30151` with the default
+`hicache` (`0` without it). The values file lists the common cases.
 
 </details>
 <!-- tabs:end -->
 
 ### SGLang Wide-EP Tuning
 
-The SGLang `DisaggregatedSet` in `modelserver/gpu/sglang/base/disaggregatedset.yaml` resolves `auto`
-tuning defaults per role from `LWS_GROUP_SIZE` (`1` for single-node DEP8, `>1` for multi-node
-DEP16); pass an explicit value to override any variable:
+The SGLang `DisaggregatedSet` in `modelserver/gpu/sglang/base/disaggregatedset.yaml` exposes these
+tuning variables (leave `*_MEM_FRACTION_STATIC` empty to keep the topology default):
 
-| Variable | Role | `auto` (`size=1` / `size>1`) | Flag / Effect |
+| Variable | Role | Default | Flag / Effect |
 | --- | --- | --- | --- |
-| `DEEPEP_V2_MODE` | prefill + decode | `direct` / `hybrid` | `--deepep-v2-mode` (NVLink intra-node vs. NCCL GIN across nodes) |
-| `PREFILL_MEM_FRACTION_STATIC` | prefill | `0.90` / `0.85` | `--mem-fraction-static` (`261,376` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
-| `PREFILL_CHUNK_TOKENS_PER_RANK` | prefill | `2048` / `8192` | `--chunked-prefill-size` (`value * DP_SIZE`) and per-rank `--max-prefill-tokens` |
-| `SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK` | prefill | matches chunk (`2048` / `8192`) | DeepEP v2 per-rank prefill dispatch buffer (`256` fixed on decode) |
-| `DECODE_MEM_FRACTION_STATIC` | decode | `0.945` / `0.85` | `--mem-fraction-static` (`383,552` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
-| `DECODE_MAX_RUNNING_REQUESTS_PER_RANK` | decode | `48` / `32` | `--max-running-requests` (`value * DP_SIZE`) |
-| `DECODE_CUDA_GRAPH_MAX_BS` | decode | `48` / `32` | `--cuda-graph-max-bs-decode` |
+| `PREFILL_MEM_FRACTION_STATIC` | prefill | `0.90` (`size=1`) / `0.85` (`size>1`) | `--mem-fraction-static` (`261,376` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
+| `PREFILL_CHUNK_TOKENS_PER_RANK` | prefill | `2048` | `--chunked-prefill-size` (`value * DP_SIZE`) and per-rank `--max-prefill-tokens` |
+| `SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK` | prefill | `2048` | DeepEP v2 per-rank prefill dispatch buffer (`>= PREFILL_CHUNK_TOKENS_PER_RANK`; `256` on decode) |
+| `DECODE_MEM_FRACTION_STATIC` | decode | `0.945` (`size=1`) / `0.85` (`size>1`) | `--mem-fraction-static` (`383,552` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
+| `DECODE_MAX_RUNNING_REQUESTS_PER_RANK` | decode | `48` | `--max-running-requests` (`value * DP_SIZE`) |
+| `DECODE_CUDA_GRAPH_MAX_BS` | decode | `48` | `--cuda-graph-max-bs-decode` |
 | `SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT` / `WAITING_TIMEOUT` | prefill + decode | SGLang default (`300` s) | P/D bootstrap and transfer-queue timeouts; overridden to `900` s in `benchmark/baseline/p1w1d1w1` |
 
-Capping per-rank `--max-prefill-tokens` at `2048` on single-node DEP8 bounds the EAGLE MTP draft
-layer's all-gathered MoE activation buffer so `0.90` HBM fits without out-of-memory errors on
-long-context agentic prompts, at the cost of batching at most `2,048` new tokens of short prompts
-per rank per step.
+Capping per-rank `--max-prefill-tokens` at `2048` bounds the EAGLE MTP draft layer's all-gathered
+MoE activation buffer so `0.90` HBM fits without out-of-memory errors on long-context agentic
+prompts.
 
 ### InfiniBand Networking
 

@@ -25,10 +25,15 @@
 # - CPU: hicache component, 100 GB per rank = 1,929,664 tokens -> 30,151 blocks;
 # - total: 34,235 blocks.
 #
-# Every standard SGLang deployment overlay includes hicache. Set
-# lruCapacityPerServer to 4084 when hicache is disabled on DEP8, or to 45223 on
-# 2-node DEP16 H200 prefill (964,608 L1 tokens -> 15,072 GPU + 30,151 CPU
-# blocks; read #tokens from "KV Cache is allocated" for other sizes).
+# Common lruCapacityPerServer values on H200 (every standard deployment overlay
+# includes hicache at 100 GB/rank = 30,151 CPU blocks):
+# - 1-node DEP8 + hicache 100 GB/rank (default): 34235 (4,084 GPU + 30,151 CPU)
+# - 1-node DEP8 without hicache (benchmark/baseline/p1w1d1w1): 4084
+# - 1-node DEP8 + hicache 150 GB/rank (45,226 CPU blocks): 49310
+# - 2-node DEP16 (0.85 HBM = 964,608 tokens = 15,072 GPU blocks): 45223 with
+#   hicache 100 GB/rank, or 15072 without hicache.
+# For any other memory fraction or hardware, divide #tokens from the prefill
+# "KV Cache is allocated" startup log by 64 and add the CPU blocks.
 # When hicache-fs adds a shared storage tier (L3), keep lruCapacityPerServer
 # sized to GPU + CPU: the approximate index tracks per-rank locality, while the
 # shared L3 volume is accessible from every prefill rank.
