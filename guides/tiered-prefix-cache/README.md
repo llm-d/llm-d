@@ -138,7 +138,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 <!-- guide:deploy.router_values end -->
 
 > [!NOTE]
-> The router values configure two prefix-cache scorers: one for the accelerator (HBM) cache and one for the CPU tier. vLLM does not report the size of its CPU tier, so you set the CPU producer's capacity (`lruCapacityPerServer`) by hand. The unit is a router block of 64 tokens:
+> The router values configure two prefix-cache scorers: one for the accelerator (HBM) cache and one for the CPU tier. The HBM producer sets `capacityTier: hbm` so its index stays at the HBM size when the model server reports its host tier (SGLang HiCache; vLLM after v0.32.0); without it the two indexes would be the same size. vLLM releases up to v0.32.0 do not report the size of the CPU tier, so you set the CPU producer's capacity (`lruCapacityPerServer`) by hand. The unit is a router block of 64 tokens:
 >
 > `lruCapacityPerServer` = CPU tier bytes per pod / (64 × KV bytes per token)
 >
