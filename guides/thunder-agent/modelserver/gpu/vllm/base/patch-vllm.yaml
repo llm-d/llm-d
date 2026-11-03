@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "nvidia/GLM-5.2-NVFP4"
+            - "--revision=aec724e8c7b8ee9db3b48c01c320f63f9cdaf8aa"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            - "--trust-remote-code"
+            - "--kv-cache-dtype=fp8_e4m3"
+            - "--max-model-len=1048576"
+            - "--max-num-seqs=64"
+            - "--max-num-batched-tokens=8192"
+            - "--gpu-memory-utilization=0.8"
+            - "--enable-prefix-caching"
+            - '--speculative-config={"method":"mtp","num_speculative_tokens":3}'
+            # CPU KV tier: 820 GiB (~18.2M tokens; MLA shares KV across TP ranks).
+            - "--kv-offloading-size=820"
+            - "--kv-offloading-backend=native"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=glm47"
+            - "--enable-prompt-tokens-details"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: NCCL_CUMEM_ENABLE
+              value: "1"
+          resources:
+            limits:
+              memory: 1600Gi
+              nvidia.com/gpu: 8
+            requests:
+              cpu: '100'
+              memory: 1300Gi
+              nvidia.com/gpu: 8
+          volumeMounts:
+            # Holds the 820 GiB CPU KV tier.
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          # Initial startup downloads weights and pre-faults the CPU tier (~27 min with cached weights).
+          startupProbe:
+            initialDelaySeconds: 240
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2700
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 12
+          readinessProbe:
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 900Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
