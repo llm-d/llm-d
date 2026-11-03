@@ -6,11 +6,14 @@ spec:
   template:
     metadata:
       annotations:
-        # One dedicated RDMA-capable SR-IOV VF per pod, attached as net1 from the
-        # ${RDMA_NETWORK} NetworkAttachmentDefinition. A PCI-backed VF lets
-        # render_config.py find exactly one matching RDMA device, unlike a
-        # shared RDMA device pool (verbs access to every HCA on the node) or a
-        # macvlan interface (no PCI function to match).
+        # One dedicated RDMA-capable SR-IOV VF per pod, attached as net1 from
+        # the ${RDMA_NETWORK} NetworkAttachmentDefinition.
+        #
+        # No device whitelist is needed: although every HCA on the node shows
+        # up in /sys/class/infiniband, the SR-IOV device plugin's device cgroup
+        # leaves only the allocated VF's /dev/infiniband/uverbs node openable,
+        # and Mooncake's auto-discovery skips devices it cannot open -- so
+        # discovery registers exactly the attached VF.
         k8s.v1.cni.cncf.io/networks: |
           [
             {"name":"${RDMA_NETWORK}","interface":"net1"}
@@ -18,15 +21,6 @@ spec:
     spec:
       containers:
         - name: modelserver
-
-          command:
-            - /bin/sh
-            - -c
-            - |
-              python3 /scripts/render_config.py || exit 1
-              . /etc/mooncake/mooncake.env || exit 1
-              exec python3 -m sglang.launch_server "$@"
-            - --
           args:
             - "--model-path=Qwen/Qwen3-32B"
             - "--host=0.0.0.0"
@@ -64,21 +58,16 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            # Read straight from env by Mooncake's C++ lib (storage_backend.cpp), not the JSON.
-            - name: MOONCAKE_OFFLOAD_STORAGE_BACKEND_DESCRIPTOR
-              value: bucket_storage_backend
-            - name: MOONCAKE_OFFLOAD_BUCKET_MAX_TOTAL_SIZE
-              value: "182536110080" # 170Gi per TP rank; 2 ranks share the 400Gi sizeLimit
-            - name: MOONCAKE_OFFLOAD_BUCKET_MAX_PHYSICAL_BYTES
-              value: "193273528320"  # 180Gi per TP rank: 2 ranks x 180Gi = 360Gi, under the 400Gi sizeLimit
-            # Anything other than "fifo"/"lru" falls through to no eviction at all.
-            - name: MOONCAKE_OFFLOAD_BUCKET_EVICTION_POLICY
-              value: "lru"
+            - name: MOONCAKE_LOCAL_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           resources:
             limits:
               nvidia.com/gpu: "2"
               cpu: "16"
               memory: 512Gi
+              # One SR-IOV VF per pod.
               ${RDMA_VF_RESOURCE}: "1"
             requests:
               nvidia.com/gpu: "2"
@@ -86,30 +75,20 @@ spec:
               memory: 400Gi
               ${RDMA_VF_RESOURCE}: "1"
           volumeMounts:
-            - mountPath: /scripts
-              name: mooncake-render-script
-              readOnly: true
-            - mountPath: /etc/mooncake-template
-              name: mooncake-config-template
-              readOnly: true
+            # The mooncake JSON needs no per-pod rendering: local_hostname
+            # comes from the MOONCAKE_LOCAL_HOSTNAME downward-API env and
+            # device selection from the device cgroup isolation, so mount the
+            # ConfigMap read-only straight into SGLANG_HICACHE_MOONCAKE_CONFIG_PATH.
             - mountPath: /etc/mooncake
               name: mooncake-config
+              readOnly: true
             - mountPath: /.cache
               name: cache-volume
-            - mountPath: /data/mooncake-offload
-              name: mooncake-offload
+
       volumes:
-        - name: mooncake-render-script
-          configMap:
-            name: mooncake-render-config
-        - name: mooncake-config-template
+        - name: mooncake-config
           configMap:
             name: mooncake-store-config
-        - name: mooncake-config
-          emptyDir: {}
         - name: cache-volume
           emptyDir: {}
-        # Ephemeral: survives restarts but wiped on reschedule, so L3 cold-starts each rollout.
-        - name: mooncake-offload
-          emptyDir:
-            sizeLimit: 400Gi
+

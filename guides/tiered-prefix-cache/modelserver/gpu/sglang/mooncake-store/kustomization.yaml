@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - ../base
   - configmap.yaml
-  - configmap-render-config.yaml
 
 patches:
   - path: patch-sglang.yaml
