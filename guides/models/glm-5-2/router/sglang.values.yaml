@@ -28,10 +28,11 @@
 # Every standard SGLang deployment overlay includes hicache. If you disable
 # hicache (for example in the benchmark/baseline overlay or with
 # HICACHE_SIZE_GB_PER_RANK=0), set lruCapacityPerServer to 4084 so the router
-# does not count CPU cache blocks that do not exist. When hicache-fs adds a
-# shared storage tier (L3), keep lruCapacityPerServer sized to GPU + CPU: the
-# approximate index tracks per-rank locality, while the shared L3 volume is
-# accessible from every prefill rank.
+# does not count CPU cache blocks that do not exist; on multi-node DEP16 prefill
+# topologies (p1w2d1w2, p2w2d2w2, 0.85 HBM -> 1,964 GPU blocks), set it to 32115.
+# When hicache-fs adds a shared storage tier (L3), keep lruCapacityPerServer
+# sized to GPU + CPU: the approximate index tracks per-rank locality, while the
+# shared L3 volume is accessible from every prefill rank.
 router:
   modelServers:
     type: sglang
@@ -58,9 +59,10 @@ router:
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
-            # Peak single-rank 2048-token prefill rate measured on an H200 SGLang
-            # GLM-5.2-FP8 DEP8 prefill pod (scheduler chunk logs; calibrate.sh
-            # single-request TTFT is skewed by RustServerIdleSleeper 1s ticks).
+            # Peak single-rank prefill rate in tokens/s per DP-rank endpoint,
+            # taken as the max "input throughput (token/s)" across 1,938 uncached
+            # 2048-token scheduler batches at c32 on H200 DEP8. calibrate.sh is
+            # not used because 1s RustServerIdleSleeper sleep ticks inflate TTFT.
             peakPrefillThroughput: 3975
         - type: token-load-scorer
         - type: active-request-scorer

@@ -23,3 +23,26 @@ patches:
       - op: replace
         path: /spec/roles/1/spec/leaderWorkerTemplate/size
         value: 1
+  # Without HiCache, L1-only queueing at concurrency 128 reaches 267s p90 TTFT,
+  # so tail requests exceed SGLang's 300s default disaggregation timeouts.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-sglang-glm-5-2
+      spec:
+        roles:
+          - name: prefill
+            spec: &baseline-timeouts
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: sglang
+                        env:
+                          - name: SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT
+                            value: "900"
+                          - name: SGLANG_DISAGGREGATION_WAITING_TIMEOUT
+                            value: "900"
+          - name: decode
+            spec: *baseline-timeouts
