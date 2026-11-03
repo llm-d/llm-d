@@ -68,3 +68,24 @@ scrape_configs:
         target_label: inferencepool
     scrape_interval: 1s
     metrics_path: /metrics
+
+  - job_name: 'routing-sidecar'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ${NAMESPACE}
+    relabel_configs:
+      # The routing-proxy sidecar on decode pods serves llm_d_disagg_sidecar_*
+      # on the port named sc-metrics.
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        regex: sc-metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+      - source_labels: [__meta_kubernetes_pod_label_llm_d_ai_model]
+        target_label: model
+    scrape_interval: 1s
+    metrics_path: /metrics
