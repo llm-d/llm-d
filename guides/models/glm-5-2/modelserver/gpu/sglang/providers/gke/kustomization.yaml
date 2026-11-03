@@ -111,6 +111,12 @@ patches:
                           # UCX RoCE reachability across all subnet interfaces.
                           - name: UCX_IB_ROCE_REACHABILITY_MODE
                             value: "all"
+                          # Register GPU memory for Mooncake KV transfers through
+                          # DMA-BUF. The COS node image loads the NVIDIA open
+                          # kernel module without nvidia_peermem, so Mooncake's
+                          # default peermem registration fails on every buffer.
+                          - name: WITH_NVIDIA_PEERMEM
+                            value: "0"
                           # Disable HF XET when loading from the shared host
                           # cache.
                           - name: HF_HUB_DISABLE_XET

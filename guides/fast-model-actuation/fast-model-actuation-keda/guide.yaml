@@ -13,7 +13,7 @@ env:
     MONITORING_NAMESPACE: { default: "llm-d-monitoring" }
 
     # FMA controller/CRD/image version.
-    FMA_VERSION:             { default: "0.6.5" }
+    FMA_VERSION:             { default: "0.7.1" }
     FMA_CHART_INSTANCE_NAME: fma
 
     MODEL:           { default: "Qwen/Qwen3-0.6B" }

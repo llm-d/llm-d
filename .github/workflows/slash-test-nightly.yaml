@@ -7,6 +7,7 @@ name: /test-nightly Slash Command
 #   /test-nightly <glob-pattern> [key=value ...]   # glob pattern (* and ? supported)
 #   /test-nightly help                             # reply with usage and available nightlies
 #   /test-nightly list                             # reply with the available nightlies, one per line
+#   /test-nightly results                          # reply with the status of every nightly triggered on the PR
 #
 # Optional parameters (passed to E2E benchmark nightlies, ignored for others):
 #   workload=<profile>    Workload profile (default: sanity_random.yaml)
@@ -149,11 +150,134 @@ jobs:
                   'Optional parameters (applied to `build-image` only):',
                   '- `platforms=<list>` — platforms to build, comma-separated: cuda,xpu,sglang-xpu,cpu,all (default: `cuda`)',
                   '',
-                  '`/test-nightly help` shows this message; `/test-nightly list` lists the nightlies one per line.',
+                  '`/test-nightly help` shows this message; `/test-nightly list` lists the nightlies one per line;',
+                  '`/test-nightly results` shows the status of every nightly triggered on this PR.',
                   '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
                 ].join('\n')
+              });
+            }
+
+            // Post the status of every nightly this command triggered on the PR.
+            // Runs are found from the command's own "triggered" replies: each
+            // carries the run URL, or, when the run was not found in time, the
+            // workflow file and branch, which are used to look the run up.
+            async function postResults() {
+              const MAX_ROWS = 100;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+
+              // Run ID -> the PR head the reply recorded. A fork PR's run is on a
+              // temp branch with an extra empty commit, so the run's own head_sha
+              // is not the PR's.
+              const prHeadByRun = new Map();
+              const lookups = [];
+              for (const c of comments) {
+                const body = c.body || '';
+                if (c.user?.type !== 'Bot' || !/\*\*(Nightly|\d+ nightlies) triggered\*\*/.test(body)) continue;
+                const prHead = (body.match(/\| PR HEAD \| `([0-9a-f]+)` \|/) || [])[1];
+                for (const m of body.matchAll(/\/actions\/runs\/(\d+)/g)) prHeadByRun.set(Number(m[1]), prHead);
+                const branch = body.match(/\| Branch \| `([^`]+)` \|/);
+                for (const m of body.matchAll(/\/actions\/workflows\/([^)\s]+\.yaml)\)/g)) {
+                  if (branch) lookups.push({ workflowFile: m[1], branch: branch[1], after: c.created_at, prHead });
+                }
+              }
+
+              const runs = new Map();
+              for (const id of prHeadByRun.keys()) {
+                try {
+                  const { data } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id });
+                  runs.set(data.id, data);
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
+              // The earliest dispatched run of the workflow on that branch after the reply.
+              for (const l of lookups) {
+                const { data: { workflow_runs: candidates } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo,
+                  workflow_id: l.workflowFile,
+                  branch: l.branch,
+                  event: 'workflow_dispatch',
+                  created: `>=${new Date(Date.parse(l.after) - 120000).toISOString()}`,
+                  per_page: 20,
+                });
+                const run = candidates.sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+                if (run) {
+                  runs.set(run.id, run);
+                  prHeadByRun.set(run.id, l.prHead);
+                }
+              }
+
+              if (runs.size === 0) {
+                await github.rest.issues.createComment({
+                  owner, repo,
+                  issue_number: context.issue.number,
+                  body: 'ℹ️ No nightlies have been triggered on this PR with `/test-nightly` yet.',
+                });
+                return;
+              }
+
+              function outcome(r) {
+                if (r.status !== 'completed') return '⏳ ' + r.status.replace(/_/g, ' ');
+                const icons = { success: '✅', failure: '❌', cancelled: '🚫', skipped: '⏭️', timed_out: '⌛' };
+                return (icons[r.conclusion] || '⚠️') + ' ' + (r.conclusion || 'unknown').replace(/_/g, ' ');
+              }
+              function duration(r) {
+                const start = Date.parse(r.run_started_at || r.created_at);
+                const end = r.status === 'completed' ? Date.parse(r.updated_at) : Date.now();
+                const mins = Math.max(0, Math.round((end - start) / 60000));
+                return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+              }
+              const nightlyName = r => (r.path || '').split('/').pop()
+                .replace(/@.*$/, '').replace(/^nightly-(e2e-)?/, '').replace(/\.yaml$/, '');
+              const prHead = r => prHeadByRun.get(r.id) || r.head_sha.substring(0, 7);
+              const started = r => (r.run_started_at || r.created_at).replace('T', ' ').replace(/:\d\dZ$/, '');
+              function summary(list) {
+                const counts = {};
+                for (const r of list) {
+                  const o = outcome(r);
+                  counts[o] = (counts[o] || 0) + 1;
+                }
+                return Object.entries(counts).map(([o, n]) => `${o} ${n}`).join(' · ');
+              }
+
+              const sorted = [...runs.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+              // `sorted` is newest first, so the first run seen per nightly is its latest.
+              const latest = new Map();
+              for (const r of sorted) {
+                if (!latest.has(nightlyName(r))) latest.set(nightlyName(r), r);
+              }
+              const latestRuns = [...latest.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, r]) => r);
+
+              const lines = [
+                `ℹ️ **Latest run of each nightly triggered on this PR** ` +
+                  `(${latestRuns.length} nightl${latestRuns.length === 1 ? 'y' : 'ies'}: ${summary(latestRuns)})`,
+                '',
+                ...latestRuns.map(r =>
+                  `- ${outcome(r)} · \`${nightlyName(r)}\` · PR HEAD \`${prHead(r)}\` · ` +
+                  `${started(r)} UTC · [#${r.run_number}](${r.html_url})`),
+                '',
+                `**All runs** (${sorted.length}: ${summary(sorted)})`,
+                '',
+                '| Nightly | Result | PR HEAD | Started (UTC) | Duration | Run |',
+                '|---------|--------|---------|---------------|----------|-----|',
+                ...sorted.slice(0, MAX_ROWS).map(r =>
+                  `| \`${nightlyName(r)}\` | ${outcome(r)} | \`${prHead(r)}\` | ` +
+                  `${started(r)} | ${duration(r)} | [#${r.run_number}](${r.html_url}) |`),
+              ];
+              if (sorted.length > MAX_ROWS) {
+                lines.push('', `Showing the ${MAX_ROWS} most recent of ${sorted.length} runs.`);
+              }
+
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: context.issue.number,
+                body: lines.join('\n'),
               });
             }
 
@@ -181,6 +305,11 @@ jobs:
                 ].join('\n')
               });
               return 'list';
+            }
+
+            if (input === 'results') {
+              await postResults();
+              return 'results';
             }
 
             // Parse optional key=value parameters (with defaults for quick PR validation)

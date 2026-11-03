@@ -17,7 +17,7 @@
 # would only return 404s.
 #
 # Like the vLLM overrides, prefill gates on prefix-cache affinity over one
-# index sized for both the GPU and the CPU (HiCache) tier. autoTune reads the
+# index sized for the per-rank GPU and CPU (HiCache) tiers. autoTune reads the
 # KV size from /metrics, so the index is sized by hand per DP rank (one rank =
 # one endpoint) in 64-token blocks (the SGLang page size), for a DEP8 prefill
 # rank on H200:
@@ -25,10 +25,13 @@
 # - CPU: hicache component, 64 GB per rank = 1,235,008 tokens -> 19,297 blocks;
 # - total: 21,261 blocks.
 #
-# Every SGLang deployment overlay includes hicache. If you remove hicache from
-# an overlay, set lruCapacityPerServer to 1964. Otherwise the router counts
-# CPU cache blocks that do not exist, and prefill requests go to ranks that do
-# not have the prefix.
+# Every standard SGLang deployment overlay includes hicache. If you disable
+# hicache (for example in the benchmark/baseline overlay or with
+# HICACHE_SIZE_GB_PER_RANK=0), set lruCapacityPerServer to 1964 so the router
+# does not count CPU cache blocks that do not exist. When hicache-fs adds a
+# shared storage tier (L3), keep lruCapacityPerServer sized to GPU + CPU: the
+# approximate index tracks per-rank locality, while the shared L3 volume is
+# accessible from every prefill rank.
 router:
   modelServers:
     type: sglang

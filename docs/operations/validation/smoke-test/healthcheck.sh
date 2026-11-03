@@ -67,7 +67,7 @@ Examples:
   # JSON output for CI pipelines (requires jq)
   ./healthcheck.sh -o json
 EOF
-  exit 0
+  exit "${1:-0}"
 }
 
 # ── Flag parsing ─────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ while [[ $# -gt 0 ]]; do
     --api)                API_MODE="$2"; shift 2 ;;
     --require-health)     REQUIRE_HEALTH="true"; shift 1 ;;
     -h|--help)            show_help ;;
-    *) echo "Unknown option: $1" >&2; show_help ;;
+    *) echo "Unknown option: $1" >&2; show_help 1 ;;
   esac
 done
 

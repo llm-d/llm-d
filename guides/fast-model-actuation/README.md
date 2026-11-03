@@ -69,7 +69,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
-export FMA_VERSION=0.6.5
+export FMA_VERSION=0.7.1
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest

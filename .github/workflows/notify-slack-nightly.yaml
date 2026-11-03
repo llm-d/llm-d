@@ -82,6 +82,7 @@ on:
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (GKE GPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (Intel XPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (OCP GPU)"
+      - "Nightly - Tiered Prefix Cache E2E (GKE TPU SGLang)"
       - "Nightly - Tiered Prefix Cache E2E (GKE TPU)"
       - "Nightly - Tiered Prefix Cache FS Offloading E2E (AMD ROCM, Native)"
       - "Nightly - Tiered Prefix Cache FS Offloading LMCache E2E (AMD ROCM)"

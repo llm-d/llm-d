@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | Intel GPU via DRA · 1P + 1D, 1 GPU each · NIXL (SGLang: TP=1, NIXL over TCP) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | `2x2x1` v5p nodes on GKE · 1P + 1D, 4 chips each (TP=4) · TPUConnector · nightly runs on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | `2x4` v6e nodes on GKE · 1P + 1D, 8 chips each (TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · `vllm_torchtpu` TPUConnector · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · prefill PCP=8 → decode DP=8 · TPURaidenConnector + 64 GiB prefill host KV offload |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | `2x2x1` TPU7x nodes on GKE · 1P + 1D, 4 chips each · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (prefill PCP=8 → decode DP=8, TPURaidenConnector + 64 GiB prefill host KV offload); SGLang (`sglang:v0.1.0-tpu`): `openai/gpt-oss-120b` (TP=8 + EP on each role, raiden transfer backend, 32 GB/rank HiCache host tier on both roles) |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
 | Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
@@ -65,6 +65,7 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | NixlConnector | `biren/vllm/base` | RDMA (`UCX_TLS=rc_v`) | Biren 166M, `kv_buffer_device=cpu`. See the [Biren tab](#2-deploy-the-model-server). |
 | MooncakeConnector | `mthreads/vllm/base` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires the same TP on prefill and decode. See the [Moore Threads tab](#2-deploy-the-model-server). |
 | SGLang mooncake | `mthreads/sglang/base` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
+| SGLang raiden | `tpu/v7/sglang` | TCP over DCN via tpu-sync | SGLang `--disaggregation-transfer-backend raiden` on Torch TPU; the decode pulls each chunk's pages as the prefill commits them. See the [Google TPU tab](#2-deploy-the-model-server). |
 
 NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production.
 
@@ -273,7 +274,7 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[0] end -->
 
-**(Google TPU7x only) Layer the TPU7x router values**, which hash prefixes on the prefill engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology:
+**(Google TPU7x vLLM only) Layer the TPU7x router values**, which hash prefixes on the prefill engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology (skip for SGLang on TPU7x, which serves `openai/gpt-oss-120b` with 64-token pages and the shared router values):
 
 <!-- guide:deploy.accelerator_values[1] start -->
 <!-- llm-d-cicd:skip start -->
@@ -345,10 +346,16 @@ kubectl apply -n ${NAMESPACE} \
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.tpu[0] end -->
 
-The TPU overlays replace `NixlConnector` with a TPU KV connector and run on GKE only (`INFRA_PROVIDER=gke`). The v5p overlay uses `TPUConnector` from `tpu_inference`. The v6e overlay uses the Torch TPU `TPUConnector` (`vllm_torchtpu.distributed.kv_transfer.tpu_connector`, ZMQ + host shared-memory staging). The TPU7x Qwen3.5-397B overlay (`tpu/v7`) uses the vLLM Torch TPU (`tpu-sync`) connectors described below. The NVIDIA GPU `gke` platform requirements in [Prerequisites](#prerequisites) (GPU DRA / DRANet) do not apply.
+The TPU overlays replace `NixlConnector` with a TPU KV connector and run on GKE only (`INFRA_PROVIDER=gke`). The v5p overlay uses `TPUConnector` from `tpu_inference`. The v6e overlay uses the Torch TPU `TPUConnector` (`vllm_torchtpu.distributed.kv_transfer.tpu_connector`, ZMQ + host shared-memory staging). The TPU7x Qwen3.5-397B overlay (`tpu/v7`) uses the vLLM Torch TPU (`tpu-sync`) connectors described below.
+
+The TPU7x SGLang overlay (`tpu/v7`, `MODEL_SERVER=sglang`) serves `openai/gpt-oss-120b` with TP=8 and expert parallelism on each role, with the engine settings of the sglang-torchtpu P/D recipe.
+It moves KV with SGLang's `raiden` transfer backend (tpu-sync): the decode pulls each chunk's pages over the pod network as the prefill commits them, after the same bootstrap-server rendezvous the routing sidecar drives for SGLang on GPU. It needs nothing beyond the TPU node pool: no RDMA, DRA, or multi-networking.
+Both roles keep a host-DRAM KV tier behind HBM (SGLang HiCache over the same raiden DMA engine, `--hicache-size=32` GB per TP rank, 256 GB per pod inside the 512Gi request): the prefill restores evicted prefixes from host memory instead of recomputing them,
+and the decode keeps a radix cache (`--disaggregation-decode-enable-radix-cache`) so a follow-up turn reuses the KV it already holds instead of pulling it from the prefill again. This is the `pd_singlehost_kv_offload` configuration of the sglang-torchtpu CI. The NVIDIA GPU `gke` platform requirements in [Prerequisites](#prerequisites) (GPU DRA / DRANet) do not apply.
 
 Tool calling and reasoning parsing are enabled with the parsers for the model each overlay serves, not the GPU overlays' gpt-oss pair: `--tool-call-parser=hermes` with `--reasoning-parser=qwen3` for `Qwen/Qwen3-32B` on v5p and v6e (the parser [Qwen documents for vLLM](https://qwen.readthedocs.io/en/latest/framework/function_call.html#vllm)),
 and `--tool-call-parser=qwen3_coder` with `--reasoning-parser=qwen3` for `Qwen/Qwen3.5-397B-A17B-FP8` on TPU7x, whose chat template emits [XML-style](https://github.com/vllm-project/vllm/blob/main/docs/features/tool_calling.md) rather than Hermes-style tool calls.
+The TPU7x SGLang overlay serves `openai/gpt-oss-120b` and uses SGLang's gpt-oss (harmony) parsers, `--tool-call-parser=gpt-oss` with `--reasoning-parser=gpt-oss`, as upstream SGLang's gpt-oss-120b deployment does.
 
 **Requirements:**
 

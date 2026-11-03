@@ -3,3 +3,4 @@ kind: Kustomization
 
 resources:
   - prometheus-vllm-podmonitor.yaml
+  - prometheus-coordinator-podmonitor.yaml

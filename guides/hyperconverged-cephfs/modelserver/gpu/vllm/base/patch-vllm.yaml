@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 8
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["/bin/bash", "-c"]
+          # Tiers: GPU HBM -> CPU RAM (256 GiB per replica) -> shared CephFS.
+          # CephFS has higher latency than RAM, so the filesystem tier needs many
+          # workers (64 readers, 32 writers) to keep enough I/O in flight.
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3.6-35B-A3B \
+                --tensor-parallel-size=2 \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                --kv-transfer-config '{
+                  "kv_connector": "OffloadingConnector",
+                  "kv_role": "kv_both",
+                  "kv_connector_extra_config": {
+                    "spec_name": "TieringOffloadingSpec",
+                    "cpu_bytes_to_use": 274877906944,
+                    "secondary_tiers": [
+                      {"type": "fs", "root_dir": "/mnt/files-storage", "n_read_threads": 64, "n_write_threads": 32}
+                    ]
+                  }
+                }'
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Block hashes must be identical on every replica, or a block
+            # written by one replica is never found by another.
+            - name: PYTHONHASHSEED
+              value: "0"
+          resources:
+            limits:
+              cpu: '16'
+              memory: 400Gi
+              nvidia.com/gpu: 2
+            requests:
+              cpu: '8'
+              memory: 400Gi
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /mnt/files-storage
+              name: files-storage
+            - mountPath: /.cache
+              name: torch-compile-cache
+            - mountPath: /.triton
+              name: triton-cache
+            - mountPath: /.config
+              name: vllm-config
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 300Gi
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}

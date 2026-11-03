@@ -131,3 +131,15 @@ def test_auto_fallback_rebuilds_chat_payload():
             },
         ),
     ]
+
+
+def test_unknown_option_exits_nonzero():
+    result = subprocess.run(
+        [str(SCRIPT), "--bogus-flag"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "Unknown option: --bogus-flag" in result.stderr
