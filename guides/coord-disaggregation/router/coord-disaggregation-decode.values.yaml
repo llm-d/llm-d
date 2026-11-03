@@ -54,20 +54,6 @@ router:
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
-        # Pins all phases of a request to one DisaggregatedSet revision during a
-        # rollout. The screener does not read the InferencePool: it watches Pods
-        # through the manager cache (namespace-scoped, no label selector) and keeps
-        # the ones matching its own scope, so this role-scoped EPP still sees every
-        # role of the set. Each EPP is a single process, so the local coordination
-        # fallback covers the encode fan-out, and the forwarded
-        # x-llm-d-disagg-revision pins prefill to the same revision as decode.
-        - type: disaggregatedset-rollout-screener
-          parameters:
-            scope:
-              labelSelector: "llm-d.ai/guide=coord-disaggregation"
-            revisionGating:
-              mode: max-role
-              requiredRoles: [encode, prefill, decode]
         # Real engine token IDs. This EPP's pool is decode-only, and
         # endpointDiscovery can only map endpoints the pool already supplies --
         # portRules pick a port per endpoint, they do not discover pods outside it
@@ -86,14 +72,44 @@ router:
               omitMMKwargs: true
               timeout: 15s
               mmTimeout: 15s
-        - type: inflight-load-producer
-        - type: active-request-scorer
         - type: approx-prefix-cache-producer
           name: decode-prefix-producer
           parameters:
             autoTune: true
             maxPrefixTokensToMatch: 0
             maxPrefixBlocksToMatch: 0
+        # Pins all phases of a request to one DisaggregatedSet revision during a
+        # rollout. The screener does not read the InferencePool: it watches Pods
+        # through the manager cache (namespace-scoped, no label selector) and keeps
+        # the ones matching its own scope, so this role-scoped EPP still sees every
+        # role of the set. Each EPP is a single process, so the local coordination
+        # fallback covers the encode fan-out, and the forwarded
+        # x-llm-d-disagg-revision pins prefill to the same revision as decode.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
+              # Keep the turns of one session on one revision during a rollout.
+              # The default random draw spreads consecutive turns across the old and
+              # new revisions, so each switch lands on pods that do not hold the
+              # session's KV cache and the prefix is recomputed. This guide's
+              # multimodal requests have no text conversation prefix to key on, so
+              # prefixCache sends them to the revision holding the longest cached
+              # prefix -- the same decode-side index the gate reads, which is why
+              # both producers are declared above the screener (the match info has
+              # to cover every revision's endpoints, so they run during request
+              # handling rather than after screening).
+              affinity:
+                mode: prefix
+                sources:
+                - header: x-session-id
+                prefixCache:
+                  producerName: decode-prefix-producer
+        - type: inflight-load-producer
+        - type: active-request-scorer
         - type: prefix-cache-scorer
           name: decode-prefix-scorer
           parameters:

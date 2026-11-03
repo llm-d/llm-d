@@ -65,31 +65,6 @@ router:
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
-        # Keeps all phases of one request on a single DisaggregatedSet revision during
-        # a rollout, so an encode or prefill pod of one revision is never paired with a
-        # decode pod of another (mismatched engine versions can fail the encoder-cache
-        # or KV handshake). The Coordinator already tags each phase call with
-        # x-llm-d-disagg-revision and gives an image's parallel encode subrequests a
-        # shared x-llm-d-revision-decision-id; this plugin is what acts on them.
-        # See docs/operations/disaggregation/safe-rollouts.md.
-        - type: disaggregatedset-rollout-screener
-          parameters:
-            scope:
-              # The shared guide label, not disaggregatedset.x-k8s.io/name: the screener
-              # has to see every role of the set, and this matches the InferencePool
-              # selector below.
-              labelSelector: "llm-d.ai/guide=coord-disaggregation"
-            revisionGating:
-              mode: max-role
-              requiredRoles: [encode, prefill, decode]
-              # disableCoordination is deliberately unset: the encode step fans out one
-              # subrequest per image (max_parallel: 8 in the Coordinator pipeline), and
-              # coordination is what resolves those to one revision. It is only safe to
-              # disable on the PD-only variant, which has no encode role.
-        - type: encode-filter
-        - type: prefill-filter
-        - type: decode-filter
-        - type: header-profile-handler
         # Real engine token IDs, rendered through the prefill pods' own /render
         # endpoints. Without this the framework auto-creates the tokenizer-free
         # `estimate` backend, whose byte-packed IDs do not line up with the engine's
@@ -129,11 +104,6 @@ router:
               omitMMKwargs: true
               timeout: 15s
               mmTimeout: 15s
-        - type: approx-prefix-cache-producer
-        - type: inflight-load-producer
-        - type: prefix-cache-affinity-filter
-        - type: token-load-scorer
-        - type: active-request-scorer
         # A second, decode-scoped prefix index. prefix-based-pd-decider answers "can
         # this decode pod serve the request directly?" from what each decode pod has
         # already served, so the index has to be built from decode traffic, separately
@@ -144,6 +114,52 @@ router:
             autoTune: true
             maxPrefixTokensToMatch: 0
             maxPrefixBlocksToMatch: 0
+        # Keeps all phases of one request on a single DisaggregatedSet revision during
+        # a rollout, so an encode or prefill pod of one revision is never paired with a
+        # decode pod of another (mismatched engine versions can fail the encoder-cache
+        # or KV handshake). The Coordinator already tags each phase call with
+        # x-llm-d-disagg-revision and gives an image's parallel encode subrequests a
+        # shared x-llm-d-revision-decision-id; this plugin is what acts on them.
+        # See docs/operations/disaggregation/safe-rollouts.md.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              # The shared guide label, not disaggregatedset.x-k8s.io/name: the screener
+              # has to see every role of the set, and this matches the InferencePool
+              # selector below.
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
+              # Keep the turns of one session on one revision during a rollout.
+              # The default random draw spreads consecutive turns across the old and
+              # new revisions, so each switch lands on pods that do not hold the
+              # session's KV cache and the prefix is recomputed. This guide's
+              # multimodal requests have no text conversation prefix to key on, so
+              # prefixCache sends them to the revision holding the longest cached
+              # prefix -- the same decode-side index the gate reads, which is why
+              # both producers are declared above the screener (the match info has
+              # to cover every revision's endpoints, so they run during request
+              # handling rather than after screening).
+              affinity:
+                mode: prefix
+                sources:
+                - header: x-session-id
+                prefixCache:
+                  producerName: decode-prefix-producer
+              # disableCoordination is deliberately unset: the encode step fans out one
+              # subrequest per image (max_parallel: 8 in the Coordinator pipeline), and
+              # coordination is what resolves those to one revision. It is only safe to
+              # disable on the PD-only variant, which has no encode role.
+        - type: encode-filter
+        - type: prefill-filter
+        - type: decode-filter
+        - type: header-profile-handler
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
+        - type: active-request-scorer
         - type: prefix-cache-scorer
           name: decode-prefix-scorer
           parameters:

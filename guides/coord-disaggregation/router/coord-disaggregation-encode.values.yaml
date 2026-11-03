@@ -58,6 +58,11 @@ router:
             revisionGating:
               mode: max-role
               requiredRoles: [encode, prefill, decode]
+              # No affinity block here: prefixCache keys on a decode-side prefix
+              # index, which only the decode EPP has. Session affinity is pinned by
+              # the decode EPP's screener, and the revision it picks reaches this EPP
+              # on the Coordinator's forwarded x-llm-d-disagg-revision, which the
+              # screener honours as a strict revision rather than drawing again.
         - type: inflight-load-producer
         - type: active-request-scorer
         - type: max-score-picker
