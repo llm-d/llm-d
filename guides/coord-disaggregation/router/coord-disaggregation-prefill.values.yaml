@@ -35,12 +35,36 @@ router:
     # replicas would each see only a fraction of the per-endpoint load/cache picture
     # and mis-gate the affinity filter.
     replicas: 1
+    # TODO: Remove this image override once an official release including
+    # disaggregatedset-rollout-screener (and, on decode, prefix-based-pd-decider)
+    # is published.
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: "main"
+    flags:
+      # disaggregatedset-rollout-screener is an Alpha plugin.
+      allow-experimental-plugins: true
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Pins all phases of a request to one DisaggregatedSet revision during a
+        # rollout. The screener does not read the InferencePool: it watches Pods
+        # through the manager cache (namespace-scoped, no label selector) and keeps
+        # the ones matching its own scope, so this role-scoped EPP still sees every
+        # role of the set. Each EPP is a single process, so the local coordination
+        # fallback covers the encode fan-out, and the forwarded
+        # x-llm-d-disagg-revision pins prefill to the same revision as decode.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
         # Real engine token IDs for the prefix hashing below. Without this the
         # framework auto-creates the tokenizer-free `estimate` backend, whose
         # byte-packed IDs do not line up with the engine's block boundaries, so

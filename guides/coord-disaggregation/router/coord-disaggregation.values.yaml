@@ -105,6 +105,12 @@ router:
                 # Render on the prefill pods only. They serve /v1/*/render because they
                 # run with --enable-scale-out, and this is the same role the render
                 # Service fronts (render/service.yaml) -- decode stays free to decode.
+                # This pool spans all three roles (the guide label), so each encode and
+                # decode pod logs one harmless "does not match any port rule" extractor
+                # error when it joins the data layer; only prefill is a render target.
+                # portRules filter the endpoints this pool already supplies -- they
+                # cannot reach pods outside it, which is why the role-scoped decode EPP
+                # in coord-disaggregation-decode.values.yaml uses vllm.url instead.
                 portRules:
                 - selector:
                     matchLabels:
@@ -149,18 +155,19 @@ router:
         - type: prefix-based-pd-decider
           parameters:
             # A request whose uncached suffix is shorter than this is served by the
-            # chosen decode pod directly; at or above it, the request disaggregates
-            # through encode/prefill. Set this to decode's --max-num-batched-tokens,
-            # so "fits one decode step" is what the gate actually measures. Decode
-            # leaves that flag unset here, and vLLM's default depends on the version
-            # and on the memory it finds, so read it from the decode pod's startup log
-            # (`max_num_batched_tokens=...`) and set it explicitly on both:
+            # chosen decode pod directly; at or above it, it disaggregates through
+            # encode/prefill. The natural ceiling is decode's
+            # --max-num-batched-tokens, so "fits one decode step" is what the gate
+            # measures. Decode leaves that flag unset, and vLLM derives it from the
+            # device: 8192 for the OpenAI server on a >=70 GiB non-A100 GPU (the H200
+            # this guide targets), 16384 at >=160 GiB, 2048 otherwise. Confirm it for
+            # your hardware from the decode pod's startup log:
             #   kubectl logs -n ${NAMESPACE} -l llm-d.ai/role=decode \
             #       | grep -o 'max_num_batched_tokens=[0-9]*' | head -1
-            # 2048 is a deliberately conservative starting point: it under-serves the
-            # fast path (some requests that could have been served directly still
-            # disaggregate) rather than over-committing a decode step.
-            nonCachedTokens: 2048
+            # A lower value is a valid deliberate dial, not a safety margin: it sends
+            # more requests through prefill. The P2P guides ship 1024 and 512 for that
+            # reason. 8192 here keeps the fast path as wide as one decode step allows.
+            nonCachedTokens: 8192
             prefixMatchInfoProducerName: decode-prefix-producer
         - type: max-score-picker
         schedulingProfiles:

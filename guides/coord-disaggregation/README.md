@@ -393,14 +393,14 @@ already does per-release. `router/coord-disaggregation-encode.values.yaml` has n
 `active-request-scorer` too (pick the least-busy encode pod) — encode has no
 prefix-cache affinity to speak of, just queue/load balancing.
 
-Two of the three carry extra plugins, for the same reasons as the single-EPP table
-above: the **decode** EPP is the one the `conditional-decode` step probes, so it needs
-`prefix-based-pd-decider` plus the decode-scoped prefix producer and scorer (and an
-EPP image and `allow-experimental-plugins` flag that have the Alpha decider); the
-**prefill** EPP needs a `token-producer` so its `prefix-cache-affinity-filter` hashes
-real engine tokens. The rollout screener is in none of them — see the note in
-[Rolling out a change](#rolling-out-a-change) for why a role-scoped pool cannot pin
-revisions on its own.
+All three carry the rollout screener, for the same reason as the single-EPP table
+above. Two carry more: the **decode** EPP is the one the `conditional-decode` step
+probes, so it needs `prefix-based-pd-decider` plus the decode-scoped prefix producer
+and scorer, and it renders through the guide's render Service (`vllm.url`) rather than
+endpoint discovery, because its own pool holds only decode pods. The **prefill** EPP
+needs a `token-producer` so its `prefix-cache-affinity-filter` hashes real engine
+tokens. All three set `allow-experimental-plugins` and take the `main` EPP image,
+since the screener and the decider are Alpha.
 
 1. *Deploy the llm-d Routers*:
 
@@ -680,7 +680,7 @@ What to expect, measured on the `coreweave` overlay (1 slice, encode 2 / prefill
 > [!NOTE]
 > Across a rollout, pairing an `encode` or `prefill` pod of one revision with a `decode` pod of another risks a failed encoder-cache or KV transfer between mismatched engine versions. The single-EPP topology pins every phase of a request to one revision: the Coordinator tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, and the `disaggregatedset-rollout-screener` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml) acts on them (scoped to the shared `llm-d.ai/guide` label, so it sees all three roles; `disableCoordination` left unset so the encode fan-out resolves to one revision).
 >
-> The **3-EPP topology does not** pin revisions. Each EPP's pool is scoped to a single role, so no one screener can see all three; pinning there needs the screener on all three EPPs with a shared `CrossReplicaSyncer`. See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
+> The 3-EPP topology pins revisions the same way, with the screener in all three per-role values files. It does not read the InferencePool: it watches Pods through the manager cache (namespace-scoped, no label selector) and keeps the ones matching its own `scope.labelSelector`, so a role-scoped EPP still sees every role of the set. Each EPP is a single process, so its local coordination covers the encode fan-out. See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
 
 ## Benchmark
 

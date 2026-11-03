@@ -54,20 +54,33 @@ router:
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
-        # Real engine token IDs, rendered on the prefill pods (which serve
-        # /v1/*/render under --enable-scale-out). This EPP's own pool is decode-only,
-        # so discovery selects the prefill role explicitly rather than this pool.
+        # Pins all phases of a request to one DisaggregatedSet revision during a
+        # rollout. The screener does not read the InferencePool: it watches Pods
+        # through the manager cache (namespace-scoped, no label selector) and keeps
+        # the ones matching its own scope, so this role-scoped EPP still sees every
+        # role of the set. Each EPP is a single process, so the local coordination
+        # fallback covers the encode fan-out, and the forwarded
+        # x-llm-d-disagg-revision pins prefill to the same revision as decode.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
+        # Real engine token IDs. This EPP's pool is decode-only, and
+        # endpointDiscovery can only map endpoints the pool already supplies --
+        # portRules pick a port per endpoint, they do not discover pods outside it
+        # -- so a prefill selector here would reject every endpoint and leave the
+        # render picker empty. Render through the same Service the Coordinator's own
+        # render step uses (render/service.yaml, which fronts the Ready prefill
+        # pods); the trade against endpointDiscovery is Service load balancing
+        # instead of per-endpoint round-robin and the alternate-endpoint retry.
         - type: token-producer
           parameters:
             modelName: Qwen/Qwen3-VL-32B-Instruct
             vllm:
-              endpointDiscovery:
-                portRules:
-                - selector:
-                    matchLabels:
-                      llm-d.ai/role: prefill
-                  basePort: 8000
-                attemptTimeout: 5s
+              url: http://coord-disaggregation-render:8000
               prefillOnly: true
               messagesRenderMode: native
               omitMMKwargs: true
@@ -87,8 +100,10 @@ router:
             prefixMatchInfoProducerName: decode-prefix-producer
         - type: prefix-based-pd-decider
           parameters:
-            # Keep in step with the single-EPP variant; see the tuning note there.
-            nonCachedTokens: 2048
+            # Keep in step with the single-EPP variant; see the tuning note there
+            # (8192 = decode's derived --max-num-batched-tokens on a >=70 GiB
+            # non-A100 GPU; confirm from the decode pod's startup log).
+            nonCachedTokens: 8192
             prefixMatchInfoProducerName: decode-prefix-producer
         - type: max-score-picker
         schedulingProfiles:
