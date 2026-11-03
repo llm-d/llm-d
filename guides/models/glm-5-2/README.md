@@ -35,8 +35,7 @@ CoreWeave (CKS) with InfiniBand networking.
 An SGLang variant (`MODEL_SERVER=sglang`) runs the same wide-EP P/D layout on GKE A3 Ultra (RoCE)
 with the SGLang Rust frontend, which gives every DP rank its own HTTP listener. It serves the
 OpenAI routes and SGLang's native `/generate` API, keeps evicted KV in a host-memory tier on
-prefill and can add a shared-storage tier behind it (`hicache-fs`), with published 16-GPU H200
-[benchmark results](#sglang-benchmark-results-gke-a3-ultra-h200) below. It uses the same deploy,
+prefill, and can add a shared-storage tier behind it (`hicache-fs`). It uses the same deploy,
 verify and cleanup steps below. Where a section differs per engine, pick the SGLang tab. The rest
 of this page describes the vLLM recipe unless it says otherwise.
 
@@ -76,8 +75,8 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 
 `DEPLOYMENT=default` deploys `p1w1d1w1`: 1 DEP8 prefill node and 1 DEP8 decode node (2 nodes / 16 GPUs). Each SGLang topology enables MTP and HiCache (host-memory KV cache) on prefill. For decode across 2 nodes, select a different topology in [Scaling and Alternative Topologies](#scaling-and-alternative-topologies).
 
-| Parameter | Value |
-| :--- | :--- |
+| Parameter                | Value                                                                        |
+| ------------------------ | ---------------------------------------------------------------------------- |
 | Model                    | [zai-org/GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8)            |
 | Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
 | Serving topology         | P/D disaggregated: 1 prefill replica (DEP8, 1 node) + 1 decode replica (DEP8, 1 node), attention TP=1, DP=EP |
@@ -502,11 +501,9 @@ requests, HCA selection, cache volumes). Single-node DEP8 roles (`size=1`) resol
 defaults to `deepep_v2 direct`, `0.90` prefill / `0.945` decode HBM fractions, `2,048`-token
 prefill chunks, and `48` decode batch size; multi-node DEP16 roles (`size=2`) carry over the
 multi-node defaults (`deepep_v2 hybrid`, `0.85` HBM fractions, `8,192`-token prefill chunks, and
-`32` decode batch size) so inter-node NCCL GIN buffers retain headroom. Both 2-node DEP16 roles were
-boot- and health-validated on `v0.5.23-cu130` over GKE RoCE, while the `900 s` load sweeps in this
-guide were run on single-node `p1w1d1w1`. Every SGLang topology includes `hicache`, which
-enables the HiCache host-memory tier on prefill with `HICACHE_SIZE_GB_PER_RANK=100` (`direct` +
-`page_first_direct`). The SGLang components are:
+`32` decode batch size) so inter-node NCCL GIN buffers retain headroom. Every SGLang topology
+includes `hicache`, which enables the HiCache host-memory tier on prefill with
+`HICACHE_SIZE_GB_PER_RANK=100` (`direct` + `page_first_direct`). The SGLang components are:
 
 | Component | Targets | Effect |
 | --------- | ------- | ------ |
@@ -595,7 +592,9 @@ no HiCache (512Gi memory), since in P/D a decode miss is served by a transfer fr
   enables SGLang's LRU file evictor with a `500Gi` free-space floor
   (`SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE=500Gi`) so `write_through` does not fill fixed-size
   volumes; on elastic or multi-tenant filesystems, set `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` (for
-  example `8000Gi`) to cap directory size directly.
+  example `8000Gi`) to cap directory size directly. Enable `hicache-fs` for multi-replica prefill
+  pools, Spot nodes, rolling restarts, or multi-hour session pauses; omit it on a single
+  steady-state prefill replica to avoid write-through storage overhead.
 
 The prefill launch script reads these environment variables (`0` or empty disables
 `HICACHE_SIZE_GB_PER_RANK`; empty keeps SGLang's default for the others):
@@ -799,14 +798,12 @@ server capacity (warmup failures) and were excluded from the blog post results.
 ## Benchmark Results
 
 > [!NOTE]
-> **TODO (vLLM):** vLLM results for the current router config (prefix-cache affinity filter and
-> token-load scorer on prefill, active-request scorer on decode) are not yet published. Earlier
-> vLLM results, measured with the previous dual GPU+CPU prefix-cache and active-request scorers, are
-> in the [vLLM blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d). The
-> SGLang results below were measured with the current [`router/sglang.values.yaml`](router/sglang.values.yaml)
-> affinity filter and token-load scorer.
+> **TODO:** results for the current router config (prefix-cache affinity filter and token-load
+> scorer on prefill, active-request scorer on decode) are not yet published. Earlier results,
+> measured with the previous dual GPU+CPU prefix-cache and active-request scorers, are in
+> the [blog post](https://llm-d.ai/blog/serving-glm-5-2-agentic-workloads-on-llm-d).
 
-### What Each Optimization Changes (vLLM)
+### What Each Optimization Changes
 
 These matched comparisons were measured with the previous router config, which was the same in
 both runs of each comparison. They compare model-server and topology choices, not routing.
@@ -822,57 +819,6 @@ both runs of each comparison. They compare model-server and topology choices, no
   `p2w2d2w2` produces 8% more output and completes the median turn 10% sooner than
   `p3w2d1w2` at the same 64-GPU budget. `p3w2d1w2` reaches the first token 19% sooner and
   restores 63% less KV from CPU memory.
-
-### SGLang Benchmark Results (GKE A3 Ultra H200)
-
-Measured on two 8-GPU H200 nodes (`p1w1d1w1`, 16 GPUs, `lmsysorg/sglang:v0.5.23-cu130`, Mooncake
-DMA-BUF RDMA, [`router/sglang.values.yaml`](router/sglang.values.yaml)) using the same `900s`
-[aiperf command](#aiperf-command) (`--max-context-length 142000`). All 16 matched sweep stages ran
-with `900 s` disaggregation timeouts and completed with `0` request errors (`benchmark/baseline/p1w1d1w1`
-keeps `900 s` because L1-only queueing reaches `266.75 s` p90 / `377.9 s` max TTFT at concurrency
-128; `deployments/p1w1d1w1`, `hicache-fs`, and `no-mtp` ship with SGLang's `300 s` default, and
-revalidating `deployments/p1w1d1w1` at concurrency 128 for `900 s` under `300 s` timeouts completed
-`1,845` requests with `0` errors and `17.04 s` median / `109.3 s` max TTFT):
-
-| Overlay (`16x H200`) | Conc | Server Hit | TTFT p50 / p90 (s) | ITL p50 / p90 (ms) | Turn p50 (s) | Input tok/s | Output tok/s | E2E tok/s/user |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `benchmark/baseline/p1w1d1w1` (`L1` only) | `16` | `92.3%` | `3.07` / `10.46` | `11.06` / `15.86` | `6.58` | `22,573` | `182.1` | `56.2` |
-| `benchmark/baseline/p1w1d1w1` (`L1` only) | `32` | `87.9%` | `3.10` / `10.09` | `14.14` / `16.88` | `8.97` | `49,880` | `747.3` | `53.8` |
-| `benchmark/baseline/p1w1d1w1` (`L1` only) | `64` | `38.1%` | `55.28` / `110.80` | `12.90` / `15.79` | `62.08` | `34,324` | `456.0` | `10.6` |
-| `benchmark/baseline/p1w1d1w1` (`L1` only) | `128` | `6.0%` | `174.19` / `266.75` | `11.15` / `13.71` | `182.34` | `24,006` | `319.0` | `4.1` |
-| `deployments/p1w1d1w1` (`L1 + 100G L2`) | `16` | `94.8%` | `3.05` / `5.85` | `11.08` / `15.85` | `6.45` | `22,682` | `188.8` | `61.7` |
-| `deployments/p1w1d1w1` (`L1 + 100G L2`) | `32` | `85.3%` | `3.16` / `8.32` | `14.33` / `17.14` | `8.70` | `51,059` | `708.5` | `53.1` |
-| `deployments/p1w1d1w1` (`L1 + 100G L2`) | `64` | `90.2%` | `3.77` / `17.30` | `15.71` / `19.11` | `10.51` | `92,845` | `1,085.1` | `39.2` |
-| `deployments/p1w1d1w1` (`L1 + 100G L2`) | `128` | `88.5%` | `20.09` / `48.61` | `16.41` / `20.09` | `28.18` | `108,304` | `1,256.8` | `19.6` |
-| `benchmark/hicache-fs/p1w1d1w1` (`L1 + L2 + L3`) | `16` | `94.9%` | `3.49` / `8.21` | `11.38` / `15.66` | `7.03` | `22,883` | `183.8` | `55.4` |
-| `benchmark/hicache-fs/p1w1d1w1` (`L1 + L2 + L3`) | `32` | `91.6%` | `3.98` / `14.08` | `13.95` / `16.79` | `9.98` | `47,455` | `711.6` | `48.3` |
-| `benchmark/hicache-fs/p1w1d1w1` (`L1 + L2 + L3`) | `64` | `92.9%` | `5.00` / `24.55` | `15.35` / `18.63` | `12.55` | `85,030` | `999.0` | `33.3` |
-| `benchmark/hicache-fs/p1w1d1w1` (`L1 + L2 + L3`) | `128` | `90.3%` | `26.03` / `58.58` | `16.15` / `19.75` | `34.07` | `96,247` | `1,139.7` | `16.7` |
-| `benchmark/no-mtp/p1w1d1w1` (`No-MTP + 100G L2`) | `16` | `94.7%` | `2.98` / `8.00` | `21.30` / `22.78` | `8.98` | `21,875` | `164.4` | `35.6` |
-| `benchmark/no-mtp/p1w1d1w1` (`No-MTP + 100G L2`) | `32` | `90.5%` | `3.08` / `7.87` | `27.81` / `30.68` | `11.74` | `38,186` | `436.4` | `29.1` |
-| `benchmark/no-mtp/p1w1d1w1` (`No-MTP + 100G L2`) | `64` | `93.7%` | `3.21` / `11.23` | `32.18` / `33.22` | `13.95` | `73,908` | `767.9` | `24.4` |
-| `benchmark/no-mtp/p1w1d1w1` (`No-MTP + 100G L2`) | `128` | `89.2%` | `11.66` / `36.20` | `34.92` / `36.25` | `27.43` | `98,667` | `1,032.9` | `16.0` |
-
-- **HiCache L2 prevents L1 thrashing past concurrency 32:** At concurrency 64 and 128, `100 GB/rank`
-  direct HiCache raises output `2.38x` (`456.0 -> 1,085.1 tok/s`) and `3.94x` (`319.0 -> 1,256.8 tok/s`)
-  while cutting median TTFT from `55.28 s` to `3.77 s` and from `174.19 s` to `20.09 s`. On 200
-  paused multi-turn conversations (`~100K` avg ISL, `2.3 s` median / `27.9 s` p90 pause) with
-  `HICACHE_SIZE_GB_PER_RANK=150`, median TTFT drops from `229.53 s` (`L1` only) to `5.39 s`
-  (`96.5%` hit rate, `8.22 ms` ITL).
-- **EAGLE MTP halves ITL and quadruples interactive concurrency:** 3-step EAGLE accepts `~2.97`
-  tokens per verification step, cutting median ITL from `21.3-34.9 ms` to `11.1-16.4 ms` and keeping
-  end-to-end throughput above `30 tok/s/user` through concurrency 64 (`1,085.1 tok/s`) versus
-  concurrency 16 (`164.4 tok/s`) without MTP.
-- **Shared L3 (`hicache-fs`) trades steady-state overhead for cross-rank and restart recovery:**
-  Compared to DRAM-only `deployments/p1w1d1w1`, `write_through` + `wait_complete` persisted `1.7 TiB`
-  (`33.9M` tokens) and raised `c32-c128` cache hit rates via cross-rank L3 prefetches, at a cost of
-  `26-33%` higher median TTFT (`c32-c128`), `8-9%` lower output (`c64-c128`), and `38-43%` higher
-  median TTFT on warm 100-200 paused sessions (`5.4-5.5 s -> 7.6-7.7 s`). When sessions land on cold
-  DP ranks or restarted prefill pods with empty DRAM, restoring from Shared L3 cuts median TTFT by
-  `57%` (`38.84 -> 16.82 s` at 16 sessions, `97.8%` hit) and `49%` (`236.0 -> 121.1 s` across a
-  64-session cold-pod burst, `381.3 GB` restored). Keep DRAM-only `hicache` for a single steady-state
-  prefill replica; enable `hicache-fs` for multi-replica prefill, Spot nodes, rolling restarts, or
-  multi-hour pauses.
 
 ## Cleanup
 
