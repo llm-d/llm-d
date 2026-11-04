@@ -68,19 +68,19 @@ spec:
                     - "--data-parallel-size=4"
                     - "--data-parallel-size-local=4"
                     - "--data-parallel-multi-port-external-lb"
-                    - "--data-parallel-rpc-port=5555"
                     - "--enable-expert-parallel"
                     - "--block-size=4096"
                     - "--max-num-batched-tokens=512"
+                    - "--kv-cache-dtype=fp8"
+                    # Both roles must hash blocks alike, or decode cannot reuse the prefix cache prefill sends over NIXL;
+                    # sha256_cbor is the one that matches LMCache's hash.
                     - "--prefix-caching-hash-algo=sha256_cbor"
+                    # Prefetching shortens the weight load.
                     - "--safetensors-load-strategy=prefetch"
-                    - "--trust-remote-code"
                     - "--enable-auto-tool-choice"
                     - "--tool-call-parser=minimax_m2"
+                    - "--reasoning-parser=minimax_m2"
                     - '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
-                    # One max-length request is 204800 / 4096 = 50 blocks; the block pool
-                    # also reserves a null block, hence 51.
-                    - "--num-gpu-blocks-override=51"
                     - "--max-num-seqs=4"
                     - '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
                   ports:
@@ -95,9 +95,6 @@ spec:
                       protocol: TCP
                     - containerPort: 8203
                       name: rank3
-                      protocol: TCP
-                    - containerPort: 5555
-                      name: dp-rpc
                       protocol: TCP
                     - containerPort: 5600
                       name: nixl
@@ -123,43 +120,13 @@ spec:
                           key: HF_TOKEN
                     - name: VLLM_CACHE_ROOT
                       value: /workspace/.cache
-                    - name: RBLN_FORCE_CCL_ASYNC
-                      value: "1"
-                    - name: RBLN_LOCAL_IP
-                      value: 127.0.0.1
-                    - name: RBLN_ROOT_IP
-                      value: 127.0.0.1
-                    - name: RBLN_WEIGHT_FREE
-                      value: "1"
-                    - name: SAFETENSORS_FAST_GPU
-                      value: "1"
                     # Unreachable in practice: the startupProbe budget below is 7215s.
                     - name: VLLM_ENGINE_READY_TIMEOUT_S
                       value: "9600"
                     - name: VLLM_RPC_TIMEOUT
                       value: "1800000"
-                    - name: VLLM_RBLN_AUTO_PORT
-                      value: "1"
-                    - name: VLLM_RBLN_BATCH_ATTN_OPT
-                      value: "1"
-                    - name: VLLM_RBLN_COMPILE_STRICT_MODE
-                      value: "1"
-                    - name: VLLM_RBLN_DISABLE_OFFLOAD
-                      value: "1"
-                    - name: VLLM_RBLN_MOE_REDUCE_SCATTER
-                      value: "1"
-                    - name: VLLM_RBLN_SAMPLER
-                      value: "1"
-                    - name: VLLM_RBLN_SORT_BATCH
-                      value: "1"
-                    - name: VLLM_RBLN_SUB_BLOCK_CACHE
-                      value: "0"
-                    - name: VLLM_RBLN_USE_DEVICE_TENSOR
-                      value: "1"
-                    - name: VLLM_RBLN_USE_VLLM_MODEL
-                      value: "1"
                   resources:
-                    # Anonymous memory measured 68Gi for this role once serving; the rest of the
+                    # Anonymous memory measured 34Gi for this role once serving; the rest of the
                     # limit is headroom for the page cache the model read charges to the cgroup.
                     # Keep cpu even — a node with an SMT-aligned static CPU manager rejects odd
                     # counts.
