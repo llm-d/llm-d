@@ -1,0 +1,24 @@
+# Single DisaggregatedSet managing prefill (2 pods / 16 GPUs) and decode (2 pods / 16 GPUs)
+# roles for zai-org/GLM-5.3-Flash with DP=16, EP=16, TP=1 per role and NIXL KV transfer.
+# Requires LWS v0.11.1+ with the DisaggregatedSet CRD and controller installed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.3-Flash
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true

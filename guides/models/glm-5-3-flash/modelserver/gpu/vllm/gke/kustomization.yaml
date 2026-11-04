@@ -1,0 +1,124 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+# The schema component teaches kustomize the DisaggregatedSet merge keys so the
+# strategic merge patch below matches roles, containers, volumes, claims, and env
+# entries by name instead of array index.
+components:
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../../recipes/modelserver/components/gke-rdma
+
+patches:
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: wide-ep-vllm-glm-5-3-flash
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec: &gke-common
+                    affinity:
+                      podAffinity:
+                        preferredDuringSchedulingIgnoredDuringExecution:
+                          - weight: 2
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: prefill
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-block
+                          - weight: 1
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: prefill
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-subblock
+                    tolerations:
+                      - key: nvidia.com/gpu
+                        operator: Exists
+                        effect: NoSchedule
+                    resourceClaims:
+                      - name: gke-rdma-claim-0
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-1
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-2
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-3
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-4
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-5
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-6
+                        resourceClaimTemplateName: gke-rdma-template
+                      - name: gke-rdma-claim-7
+                        resourceClaimTemplateName: gke-rdma-template
+                    containers:
+                      - name: vllm
+                        resources:
+                          limits:
+                            nvidia.com/gpu: null
+                          requests:
+                            nvidia.com/gpu: null
+                          claims:
+                            - name: gke-rdma-claim-0
+                            - name: gke-rdma-claim-1
+                            - name: gke-rdma-claim-2
+                            - name: gke-rdma-claim-3
+                            - name: gke-rdma-claim-4
+                            - name: gke-rdma-claim-5
+                            - name: gke-rdma-claim-6
+                            - name: gke-rdma-claim-7
+                        env:
+                          - name: NCCL_TUNER_PLUGIN
+                            value: "none"
+                          - name: NCCL_NET_PLUGIN
+                            value: ""
+                          - name: UCX_IB_ROCE_REACHABILITY_MODE
+                            value: "all"
+                    volumes:
+                      - name: hf-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-hf-cache/
+                          type: DirectoryOrCreate
+                      - name: jit-cache
+                        emptyDir: null
+                        hostPath:
+                          path: /mnt/stateful_partition/kube-ephemeral-ssd/shared_disk/vllm-jit-cache/
+                          type: DirectoryOrCreate
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    <<: *gke-common
+                    affinity:
+                      podAffinity:
+                        preferredDuringSchedulingIgnoredDuringExecution:
+                          - weight: 2
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: decode
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-block
+                          - weight: 1
+                            podAffinityTerm:
+                              labelSelector:
+                                matchLabels:
+                                  llm-d.ai/role: decode
+                              matchLabelKeys:
+                                - component
+                              topologyKey: cloud.google.com/gce-topology-subblock
