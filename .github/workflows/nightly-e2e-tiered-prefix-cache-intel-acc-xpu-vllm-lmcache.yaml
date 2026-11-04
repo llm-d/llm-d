@@ -93,6 +93,7 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'base' }}
       offloading_target: ${{ inputs.offloading_target || 'cpu' }}
       connector: ${{ inputs.connector || 'lmcache-connector' }}
+      validation_script: .github/scripts/e2e/e2e-validate-tiered-prefix-cache.sh
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-tiered-prefix-cache-intel-xpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-xpu' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-xpu' }}
