@@ -6,9 +6,9 @@ resources:
 - deployment.yaml
 - httproute.yaml
 
-# release (llm-d-router v0.11.0): the config in configmap.yaml uses the key
-# names of this release (server.secure_coordinator). The nightly component
-# needs server.secure_serving instead, see llm-d-router#2908.
+# release (llm-d-router v1.0.0): configmap.yaml uses this release's key names
+# (server.secure_serving, renamed in llm-d-router#2908). The nightly component
+# tracks main and uses the same name, so either works.
 components:
 - ../../../recipes/modelserver/components/images/coordinator/release
 
