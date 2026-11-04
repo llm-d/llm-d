@@ -69,11 +69,14 @@ router:
               # cascades here after the conditional-decode probe answered 412
               # carries no x-llm-d-disagg-revision (a 412 never stamps one), so
               # without affinity this EPP would draw at random and the session
-              # could leave the revision the decode EPP chose for the probe. All
-              # three screeners see the same pods, so one session key hashes to
-              # the same revision on every EPP. No prefixCache: only the decode
-              # EPP has the index it reads. Later phases follow the revision
-              # this EPP's response stamps either way.
+              # could leave the revision the decode EPP chose for the probe. One
+              # session key hashes to the same revision on every EPP while they
+              # see the same eligible revisions and shares; each EPP derives the
+              # shares from its own Pod events, so two can briefly disagree during
+              # a rollout step (llm-d-router#3931 carries the probe's revision
+              # across the 412 instead). No prefixCache: only the decode EPP has
+              # the index it reads. Later phases follow the revision this EPP's
+              # response stamps either way.
               affinity:
                 mode: prefix
                 sources:
