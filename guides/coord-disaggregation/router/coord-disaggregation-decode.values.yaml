@@ -45,11 +45,6 @@ router:
       # (router/coord-disaggregation.values.yaml) -- see the comments there. Without
       # prefix-based-pd-decider the EPP default-denies `Prefer: if-available` with 412
       # (llm-d-router#2335) and the fast path never runs.
-      #
-      # The rollout screener is not here: it has to see every role of the set to pick a
-      # revision, and this pool is scoped to decode only (modelServers below). In the
-      # 3-EPP topology, revision pinning needs the screener on all three EPPs with a
-      # shared CrossReplicaSyncer; see docs/operations/disaggregation/safe-rollouts.md.
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig

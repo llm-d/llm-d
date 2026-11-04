@@ -248,10 +248,15 @@ architectures tie.
 > `encode` role), this is where the modularity described in the [Overview](#overview)
 > pays off:
 >
-> * Step 1: no change needed — the same single Router/EPP deployment serves whichever
->   roles you actually run; an `encode` scheduling profile with no `encode`-labeled pods
->   behind it is simply never called, since the Coordinator's pipeline (step 3) is what
->   decides whether an `encode` phase call happens at all.
+> * Step 1: drop `encode` from the rollout screener's `revisionGating.requiredRoles`
+>   (`[prefill, decode]`) in
+>   [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml), or in
+>   the prefill and decode files for the 3-EPP topology (the encode release is not needed).
+>   The screener only offers a revision that has a Ready pod of every required role, so
+>   with `encode` listed and no encode pods it drops every endpoint and the EPP answers
+>   `503` on each request. The `encode` scheduling profile itself needs no change: with no
+>   `encode`-labeled pods behind it, it is simply never called, since the Coordinator's
+>   pipeline (step 3) is what decides whether an `encode` phase call happens at all.
 > * Step 2: set the `encode` role's `replicas` to 0 in
 >   [`modelserver/gpu/vllm/base/patch-encode.yaml`](modelserver/gpu/vllm/base/patch-encode.yaml)
 >   before applying the overlay, or afterwards on the live set:
@@ -591,19 +596,22 @@ curl -X POST http://${IP}:${PORT}/v1/completions \
     }' | jq
 ```
 
-This text-only prompt can take the fast path described in [Deferred decoding](#overview):
-when the chosen decode pod already holds the prompt's prefix, `conditional-decode` serves
-it directly and `encode` and `prefill` never get called. On a cold cache the first request
-still runs the full cascade; send it twice to see the difference, and check which path it
-took in the Coordinator's own log:
+This short text-only prompt takes the fast path described in [Deferred decoding](#overview):
+`conditional-decode` serves it on the chosen decode pod and `encode` and `prefill` never
+run. With the shipped `nonCachedTokens: 8192`, the gate serves any prompt shorter than
+8192 tokens directly, cached or not, so sending it twice shows no change. Check which path
+a request took in the Coordinator's own log:
 
 ```bash
-kubectl logs -n ${NAMESPACE} deploy/llm-d-coordinator | grep -E "pipeline step timings|cache miss"
+kubectl logs -n ${NAMESPACE} deploy/llm-d-coordinator | grep -E "cache hit|cache miss"
 ```
 
-A `cache miss (412), continuing pipeline` line means decode declined the probe. Step
-timings that list only `conditional-decode` and `decode` mean it served the request
-directly.
+`cache hit, response forwarded` means decode served the request directly (its `pipeline
+step timings` line ends at `conditional-decode`); `cache miss (412), continuing pipeline`
+means decode declined the probe and the cascade ran. To see a cascade on a text prompt,
+send one whose uncached suffix on the selected decode pod is at least 8192 tokens.
+Lowering `nonCachedTokens` is the other way to route short prompts through prefill; see the
+note on that dial in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml).
 
 **Send a multimodal completion request** to exercise the full `encode → prefill →
 decode` pipeline:
@@ -680,7 +688,7 @@ What to expect, measured on the `coreweave` overlay (1 slice, encode 2 / prefill
 > [!NOTE]
 > Across a rollout, pairing an `encode` or `prefill` pod of one revision with a `decode` pod of another risks a failed encoder-cache or KV transfer between mismatched engine versions. The single-EPP topology pins every phase of a request to one revision: the Coordinator tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, and the `disaggregatedset-rollout-screener` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml) acts on them (scoped to the shared `llm-d.ai/guide` label, so it sees all three roles; `disableCoordination` left unset so the encode fan-out resolves to one revision).
 >
-> The 3-EPP topology pins revisions the same way, with the screener in all three per-role values files. It does not read the InferencePool: it watches Pods through the manager cache (namespace-scoped, no label selector) and keeps the ones matching its own `scope.labelSelector`, so a role-scoped EPP still sees every role of the set. Each EPP is a single process, so its local coordination covers the encode fan-out. See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
+> The 3-EPP topology carries the screener in all three per-role values files. The screener does not read the InferencePool: it watches Pods through the manager cache and keeps the ones matching its own `scope.labelSelector`, so a role-scoped EPP still sees every role of the set, and its local coordination covers the encode fan-out. One case differs from the single EPP: a request that cascades after a `412` from the conditional-decode probe carries no `x-llm-d-disagg-revision` (the EPP stamps it only once an upstream endpoint responds). The single EPP reuses the revision it stored under the Coordinator's per-request `x-llm-d-revision-decision-id`; three EPP processes do not share that memory. So all three screeners key the revision choice on the same `x-session-id` header, which resolves one session to one revision on every EPP; a request without it draws at random on encode or prefill. Later phases follow the stamped revision either way. See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
 
 ## Benchmark
 
