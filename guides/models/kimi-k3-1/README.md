@@ -1,26 +1,44 @@
-# Kimi-K3.1-Pro on TPU 7x (SGLang)
+# Kimi-K3.1-Pro on NVIDIA GB300 GPU (vLLM) and Google TPU 7x (SGLang)
 
-This recipe targets long-context, multi-turn serving: a 480K context with prefix-aware routing and
-a host-DRAM prefix cache, so repeated conversation prefixes are reused instead of recomputed.
+`Kimi-K3.1-Pro` on NVIDIA GB300 GPUs via vLLM using 3P1D P/D disaggregation (`3× TP=8 × EP=8` Prefill + `1× DP=16 × EP=16` Decode), DSpark speculative decoding, NIXL + Mooncake RDMA KV cache sharing, and ZMQ precise prefix-cache routing, alongside TPU 7x via SGLang using 480K long-context multi-host parallelism (`TP=32 × EP=8`) with prefix-aware routing and HiCache host-DRAM KV offloading.
 
 ## Overview
 
-This guide deploys [moonshotai/Kimi-K3.1-Pro](https://huggingface.co/moonshotai/Kimi-K3.1-Pro) on
-Google TPU 7x with SGLang on Torch TPU and the llm-d router. It composes the
-[tiered prefix cache](../../tiered-prefix-cache/README.md) foundation with prefix-aware routing:
+This guide deploys [moonshotai/Kimi-K3.1-Pro](https://huggingface.co/moonshotai/Kimi-K3.1-Pro) (MXFP4 experts, 1.56 TB; 69 KDA + 24 sparse-MLA layers with a DSA indexer) behind the `llm-d` router:
 
-- **Multi-host serving**: Kimi-K3.1-Pro (1.56 TB, MXFP4 experts) runs as one TP=32 × EP=8 engine per
-  `tpu7x` `2x2x4` slice (4 hosts × 4 chips), as a LeaderWorkerSet of 4 pods. Rank 0 serves the API;
-  only leader pods are router endpoints.
-- **Tiered prefix cache (KV cache offloading)** to host DRAM: SGLang HiCache over TPU Sync keeps
-  evicted prefixes (the sparse-MLA / DSA pages and the KDA recurrent-state slots) in a host pool twice
-  the size of the HBM pool, and loads them back when a multi-turn conversation reuses the
-  prefix instead of recomputing its prefill.
-- **Prefix-aware routing**: the router keeps an index of what each replica holds in HBM and host DRAM
-  and routes each turn of a conversation to the replica that holds its cache, balanced against
-  in-flight token load.
+- **3P1D P/D disaggregated GPU serving (vLLM on NVIDIA GB300)**: Kimi-K3.1-Pro runs as a 10-node (40× GB300 GPU)
+  P/D disaggregated pool (`modelserver/gpu/vllm/`) connected over cross-node NVLink (`ComputeDomain` MNNVL/IMEX) and 8-NIC RoCEv2 RDMA:
+  - **Prefill Pool (`3` replicas × `2` nodes = `6` nodes / `24`× GB300 GPUs, `TP=8 × EP=8`)**: Each prefill replica spans 2 nodes × 4 GPUs (`--nnodes 2 --tensor-parallel-size 8 --enable-expert-parallel --enable-ep-weight-filter --kv-cache-dtype nvfp4_ds_mla`), publishes ZMQ KV-cache events on `:5557` (`PYTHONHASHSEED=42`), and runs a co-located `vllm launch render` sidecar on `:8089` for EPP's `token-producer`.
+  - **Decode Pool (`1` replica × `4` nodes = `4` nodes / `16`× GB300 GPUs, `DP=16 × EP=16`)**: Spans 4 nodes × 4 GPUs (`--data-parallel-size 16 --data-parallel-size-local 4 --enable-expert-parallel --enable-ep-weight-filter --kv-cache-dtype nvfp4_ds_mla --use-replayssm`) with MXFP8 attention/expert projections and `llm-d-router-disagg-sidecar` (`--kv-connector=nixlv2`) fronting ports `8000..8003` -> `8200..8203`.
+  - **DSpark speculative decoding**: Both pools use the `Inferact/Kimi-K3.1-Pro-DSpark-preview` EAGLE3 drafter (`num_speculative_tokens=5`, `method=dspark`, `draft_sample_method=probabilistic`) and `fastsafetensors` weight loading.
+  - **NIXL + Mooncake RDMA KV cache sharing**: `MultiConnector` combines `NixlConnector` (`kv_producer` -> `kv_consumer`) with `MooncakeStoreConnector` (`protocol=rdma`, `global_segment_size=160GB/worker`, plus optional 500 GB/node `mooncake-donor` DRAM donors) coordinated by `mooncake-master`.
+- **Multi-host TPU serving (SGLang on Google TPU 7x)**: Kimi-K3.1-Pro runs as one TP=32 × EP=8 engine per
+  `tpu7x` `2x2x4` slice (4 hosts × 4 chips), as a LeaderWorkerSet of 4 pods (`modelserver/tpu/sglang/`).
+  SGLang HiCache over TPU Sync keeps evicted prefixes (sparse-MLA / DSA pages and KDA recurrent-state slots)
+  in a host-DRAM pool twice the size of the HBM pool.
+- **Precise & prefix-aware routing**: On GPU, the `llm-d` router (`kimi-k3-1-gpu.values.yaml`) runs `disagg-profile-handler` (`always-disagg-pd-decider`), `token-producer` (`:8089`), and `precise-prefix-cache-producer` (`blockSizeTokens=2048`, `hashSeed="42"`, ZMQ `:5557`) to route prefill turns to cache-warm replicas (`prefix-cache-scorer`) and balance decode across the 16 DP ranks. On TPU (`kimi-k3-1.values.yaml`), `approx-prefix-cache-producer` + `prefix-cache-affinity-filter` + `token-load-scorer` route turns to warm `tpu7x` slices.
 
 ## Default Configuration
+
+<!-- tabs:start group=accelerator -->
+<details open>
+<summary><b>NVIDIA GB300 GPU (vLLM)</b></summary>
+
+| Parameter | Value |
+| --- | --- |
+| Model | [moonshotai/Kimi-K3.1-Pro](https://huggingface.co/moonshotai/Kimi-K3.1-Pro) (MXFP4 experts, 1.56 TB; 69 KDA + 24 sparse-MLA layers with a DSA indexer) |
+| Speculative drafter | [Inferact/Kimi-K3.1-Pro-DSpark-preview](https://huggingface.co/Inferact/Kimi-K3.1-Pro-DSpark-preview) (`num_speculative_tokens: 5`, `method: dspark`, `draft_sample_method: probabilistic`) |
+| Topology (3P1D) | 10 nodes (40× NVIDIA GB300 GPUs): 3× 2-node Prefill LeaderWorkerSet groups (24 GPUs) + 1× 4-node Decode LeaderWorkerSet group (16 GPUs) |
+| Accelerator | NVIDIA GB300 NVL72 (4 GPUs per node) with NVIDIA DRA `ComputeDomain` (`numNodes: 10`, MNNVL / IMEX) and 8-NIC RoCEv2 RDMA |
+| Prefill parallelism | `TP=8 × EP=8` (`--nnodes 2 --tensor-parallel-size 8 --enable-expert-parallel --enable-ep-weight-filter --kv-cache-dtype nvfp4_ds_mla --max-num-seqs 32`) + co-located `vllm launch render` on `:8089` |
+| Decode parallelism | `DP=16 × EP=16` (`--data-parallel-size 16 --data-parallel-size-local 4 --enable-expert-parallel --enable-ep-weight-filter --kv-cache-dtype nvfp4_ds_mla --use-replayssm` + MXFP8 projections) behind `llm-d-router-disagg-sidecar` (`--kv-connector=nixlv2`) |
+| KV cache transfer & sharing | `MultiConnector`: `NixlConnector` (`kv_producer` -> `kv_consumer`, port `5600..5615`) + `MooncakeStoreConnector` (`protocol: rdma`, `mooncake-master` on `:8700`) |
+| Routing | Disaggregated P/D (`always-disagg-pd-decider`) + ZMQ `precise-prefix-cache-producer` (`blockSizeTokens: 2048`, `hashSeed: "42"`, `:5557`) + `token-producer` (`:8089`) ([`kimi-k3-1-gpu.values.yaml`](router/kimi-k3-1-gpu.values.yaml)) |
+| Model server | vLLM (`docker.io/vllm/vllm-openai:kimi-k31`, pinned by digest) |
+
+</details>
+<details>
+<summary><b>Google TPU 7x (SGLang)</b></summary>
 
 | Parameter | Value |
 | --- | --- |
@@ -35,20 +53,24 @@ Google TPU 7x with SGLang on Torch TPU and the llm-d router. It composes the
 | Model server | SGLang on Torch TPU (`docker.io/lmsysorg/sglang:dev-kimi-k31-pro-tpu`, pinned by digest) |
 
 > [!NOTE]
-> Serving is text only, and OpenAI tool calling does not work in this configuration yet. This SGLang
-> TPU recipe runs with `--grammar-backend none`, so requests that carry an OpenAI `tools` array are
+> On TPU 7x (`ACCELERATOR_TYPE=tpu`), serving is text only, and OpenAI tool calling does not work in this configuration yet.
+> This SGLang TPU recipe runs with `--grammar-backend none`, so requests that carry an OpenAI `tools` array are
 > rejected with HTTP 400, and coding-agent clients that send tools will fail. The `kimi_k3`
 > reasoning parser works. The server keeps `--tool-call-parser=kimi_k3` so tool calling works
 > without a manifest change once SGLang on TPU supports it; until then it has no effect.
+
+</details>
+<!-- tabs:end -->
 
 ## Supported Accelerators and Model Servers
 
 This guide includes configurations for the following accelerator and model server combinations:
 
 <!-- guide:support start -->
-| Accelerator | `ACCELERATOR_TYPE` | Served model | SGLang | Notes |
-| --- | --- | --- | --- | --- |
-| Google TPU v7x | `tpu` | `moonshotai/Kimi-K3.1-Pro` | 🟡 community | GKE only · SGLang on Torch TPU · 2 replicas, each a LeaderWorkerSet of 4 pods on one `tpu7x` `2x2x4` slice (16 chips): TP=32 × EP=8, MXFP4 experts, sparse-MLA (DSA) attention, fp8 KV cache, 480K context, host-DRAM HiCache over TPU Sync (2× the HBM pool) · text only (`--grammar-backend=none` in this SGLang recipe; OpenAI `tools` requests are not yet enabled) · weights on a ReadOnlyMany Hyperdisk ML volume hydrated from GCS |
+| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
+| --- | --- | --- | --- | --- | --- |
+| NVIDIA GB300 NVL72 | `gpu` | `moonshotai/Kimi-K3.1-Pro` | 🟡 community | — | vLLM (`vllm/vllm-openai:kimi-k31`) · 3P1D P/D disaggregated LeaderWorkerSets on 10 nodes / 40× GB300 GPUs: 3× 2-node Prefill (`TP=8 × EP=8`) + 1× 4-node Decode (`DP=16 × EP=16`, MXFP8 projections, ReplaySSM) · MXFP4 experts, `nvfp4_ds_mla` KV cache, `Inferact/Kimi-K3.1-Pro-DSpark-preview` speculative decoding (`num_speculative_tokens=5`, `dspark`), fastsafetensors · NIXL + MooncakeStore RDMA KV cache sharing (`MultiConnector`) and ZMQ precise prefix-cache routing (`blockSizeTokens=2048`) |
+| Google TPU v7x | `tpu` | `moonshotai/Kimi-K3.1-Pro` | — | 🟡 community | GKE only · SGLang on Torch TPU · 2 replicas, each a LeaderWorkerSet of 4 pods on one `tpu7x` `2x2x4` slice (16 chips): TP=32 × EP=8, MXFP4 experts, sparse-MLA (DSA) attention, fp8 KV cache, 480K context, host-DRAM HiCache over TPU Sync (2× the HBM pool) · text only (`--grammar-backend=none` in this SGLang recipe; OpenAI `tools` requests are not yet enabled) · weights on a ReadOnlyMany Hyperdisk ML volume hydrated from GCS |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -57,15 +79,20 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../../helpers/client-setup/README.md) to use this guide.
 
-- A GKE cluster with two TPU 7x (`tpu7x`) `2x2x4` node pools (4 nodes of 4 chips each), with
-  [Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
-  enabled. Each node needs about 800 GiB of allocatable host memory (weight loading peaks at about
-  660 GiB per pod, plus the HiCache host pools).
+- **For NVIDIA GB300 GPU (`ACCELERATOR_TYPE=gpu`, `MODEL_SERVER=vllm`)**:
+  - A Kubernetes cluster with 10× 4-GPU NVIDIA GB300 NVL72 nodes (40 GPUs total: 6 nodes for the 3× 2-node `TP=8 × EP=8` Prefill pool and 4 nodes for the 1× 4-node `DP=16 × EP=16` Decode pool).
+  - On GKE A4X-MAX (`modelserver/gpu/vllm/gke/`), enable the [NVIDIA DRA driver](https://github.com/NVIDIA/k8s-dra-driver-gpu) (`ComputeDomain` CRD `computedomains.resource.nvidia.com` for Multi-Node NVLink MNNVL / IMEX) and DRANET GPUDirect RDMA so `kimi-k3-1-compute-domain` and the 8-NIC `mrdma.google.com` `ResourceClaimTemplate` (`kimi-k3-1-gpu-vllm-rdma-nic`) resolve.
+
+- **For Google TPU 7x (`ACCELERATOR_TYPE=tpu`, `MODEL_SERVER=sglang`)**:
+  - A GKE cluster with two TPU 7x (`tpu7x`) `2x2x4` node pools (4 nodes of 4 chips each), with
+    [Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
+    enabled. Each node needs about 800 GiB of allocatable host memory (weight loading peaks at about
+    660 GiB per pod, plus the HiCache host pools).
 
 - The [LeaderWorkerSet (LWS) controller](../../../docs/infrastructure/model-server-orchestration.md).
 
 - A Google Cloud Storage bucket in the cluster's region, exported as `MODEL_BUCKET`, and a
-  Hyperdisk ML quota of at least 2 TB in the TPU zone.
+  Hyperdisk ML quota of at least 2 TB in the cluster's zone (or a pre-populated `/models` volume).
 
 - Create a [HuggingFace token](../../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -86,7 +113,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 ### Configure the environment
 
-**Set the guide-specific environment variables:**
+**Set the guide-specific environment variables** (defaults to `ACCELERATOR_TYPE=gpu` and `MODEL_SERVER=vllm`; set `ACCELERATOR_TYPE=tpu` and `MODEL_SERVER=sglang` for the TPU 7x recipe):
 
 <!-- guide:env.static start -->
 ```bash
@@ -95,8 +122,8 @@ export GUIDE_NAME=kimi-k3-1
 export NAMESPACE=llm-d-kimi-k3-1
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=tpu # options: tpu
-export MODEL_SERVER=sglang # options: sglang
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu
+export MODEL_SERVER=vllm # options: vllm, sglang
 export MODEL=moonshotai/Kimi-K3.1-Pro # the served model name
 export MODEL_BUCKET=my-model-bucket # GCS bucket that holds the moonshotai/Kimi-K3.1-Pro copy
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
@@ -152,17 +179,18 @@ kubectl create secret generic llm-d-hf-token \
 
 ### Stage the weights
 
-At 1.56 TB the checkpoint is far larger than a TPU node's boot disk, and reading it over a network
+At 1.56 TB the checkpoint is far larger than a node's boot disk, and reading it over a network
 filesystem dominates start-up. Copy it once into `MODEL_BUCKET` (in the cluster's region):
 
 <!-- guide:prerequisites.model_bucket start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# One-time copy of the 1.56 TB checkpoint into a bucket in the cluster's region. The
-# download needs about 1.6 TB of free local disk; run it on a GCE VM in the same region
-# with a large enough disk if your workstation does not have it.
+# One-time copy of the 1.56 TB checkpoint and DSpark speculative drafter into a bucket in
+# the cluster's region. The download needs about 1.6 TB of free local disk; run it on a GCE
+# VM in the same region with a large enough disk if your workstation does not have it.
 hf download moonshotai/Kimi-K3.1-Pro --local-dir ./Kimi-K3.1-Pro
-gcloud storage cp -r ./Kimi-K3.1-Pro gs://${MODEL_BUCKET}/moonshotai/
+HF_HOME=./hf-cache hf download Inferact/Kimi-K3.1-Pro-DSpark-preview
+gcloud storage cp -r ./Kimi-K3.1-Pro ./hf-cache gs://${MODEL_BUCKET}/moonshotai/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:prerequisites.model_bucket end -->
@@ -241,10 +269,28 @@ EOF
 **Prepare the paths to the `helm` values files** for the `llm-d` router:
 
 <!-- guide:deploy.router_values start -->
+<!-- variants:start -->
+<details open data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=vllm">
+<summary><b>NVIDIA GB300 NVL72 · vLLM</b></summary>
+
+```bash
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-gpu.values.yaml"
+```
+
+</details>
+<details data-when="ACCELERATOR_TYPE=tpu;MODEL_SERVER=sglang">
+<summary><b>Google TPU v7x · SGLang</b></summary>
+
+<!-- llm-d-cicd:skip start -->
 ```bash
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
 export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 ```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:deploy.router_values end -->
 
 **(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
@@ -257,12 +303,14 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 <!-- guide:deploy.monitoring_values end -->
 
 > [!NOTE]
-> The router's block size (`blockSizeTokens: 128`) equals SGLang's `--page-size`, and
-> `maxPrefixTokensToMatch` equals `--context-length`. `lruCapacityPerServer` is sized for the HBM
-> pool plus the HiCache host pool of one TP rank, from the engine's startup log, and
-> `peakPrefillThroughput` was measured with the
-> [calibration tool](../../recipes/router/calibration/README.md); re-measure both if you change the
-> context length, `--hicache-ratio` or the hardware.
+> On GPU (`kimi-k3-1-gpu.values.yaml`), the router configures `disagg-profile-handler` (`always-disagg-pd-decider`),
+> `token-producer` (targeting prefill leaders' `vllm launch render` sidecar on `:8089`), and `precise-prefix-cache-producer`
+> (`blockSizeTokens: 2048`, `hashSeed: "42"`, ZMQ `kvEventsConfig` on `:5557`) with `prefix-cache-scorer`,
+> `active-request-scorer`, and `token-load-scorer` on the `prefill` profile and
+> `active-request-scorer`, `queue-scorer`, and `kv-cache-utilization-scorer` across ports `8000..8003` on the `decode` profile.
+> On TPU (`kimi-k3-1.values.yaml`), `blockSizeTokens: 128` matches SGLang's `--page-size`, `maxPrefixTokensToMatch: 491520`
+> matches `--context-length`, `lruCapacityPerServer: 12478` covers the HBM + HiCache host pools of one TP rank, and
+> `peakPrefillThroughput: 4209` was calibrated on `tpu7x` `2x2x4`.
 
 **Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -279,7 +327,7 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-**Apply the Kustomize overlay:**
+**Apply the Kustomize overlay** (`ACCELERATOR_TYPE=gpu` and `MODEL_SERVER=vllm` deploys the 3P1D P/D disaggregated `prefill` + `decode` LeaderWorkerSets and `mooncake-master`; `ACCELERATOR_TYPE=tpu` and `MODEL_SERVER=sglang` deploys the 4-host `tpu7x` `2x2x4` LeaderWorkerSet):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -288,12 +336,28 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
-Wait for the model server to become ready. A cold start loads the weights (about 5–7 minutes from
-a local high-throughput volume) and compiles every prefill and decode graph (about 30 minutes);
-budget about 45 minutes:
+#### 3P1D Disaggregated GPU Architecture and GKE Overlay (`ACCELERATOR_TYPE=gpu`)
+
+Under [`modelserver/gpu/vllm/`](modelserver/gpu/vllm/), the 3P1D Disaggregated + Mooncake RDMA + Precise Prefix Cache Routing recipe deploys:
+
+| Component | Replicas × Size | Parallelism & Role | Key vLLM Flags & Sidecars |
+| --- | --- | --- | --- |
+| [`prefill-lws.yaml`](modelserver/gpu/vllm/base/prefill-lws.yaml) | `3` × `2` nodes (`24`× GB300 GPUs) | `TP=8 × EP=8` (`kv_both`) | `--nnodes 2 --tensor-parallel-size 8 --enable-expert-parallel --enable-ep-weight-filter --enable-cumem-allocator --enable-prefix-caching --load-format fastsafetensors --gpu-memory-utilization 0.95 --kv-cache-dtype nvfp4_ds_mla --language-model-only --max-num-seqs 32 --speculative-config '{"model":"Inferact/Kimi-K3.1-Pro-DSpark-preview","num_speculative_tokens":5,"method":"dspark","draft_sample_method":"probabilistic"}'` + `MultiConnector` (`NixlConnector` + `MooncakeStoreConnector`), ZMQ KV events (`:5557`), and co-located `vllm launch render` (`:8089`) |
+| [`decode-lws.yaml`](modelserver/gpu/vllm/base/decode-lws.yaml) | `1` × `4` nodes (`16`× GB300 GPUs) | `DP=16 × EP=16` (`kv_consumer`) | `--data-parallel-size 16 --data-parallel-size-local 4 --data-parallel-multi-port-external-lb --data-parallel-supervisor-port 8208 --enable-expert-parallel --enable-ep-weight-filter --enable-cumem-allocator --load-format fastsafetensors --gpu-memory-utilization 0.95 --kv-cache-dtype nvfp4_ds_mla --max-num-seqs 32 --max-num-batched-tokens 512 --max-cudagraph-capture-size 512 --no-enable-prefix-caching --use-replayssm` + MXFP8 quantization config, `MultiConnector`, and `llm-d-router-disagg-sidecar` (`--kv-connector=nixlv2`, ports `8000..8003` -> `8200..8203`) |
+| [`mooncake.yaml`](modelserver/gpu/vllm/base/mooncake.yaml) | `1` Deployment | Mooncake RDMA coordinator | `mooncake_master --port=8700 --enable_http_metadata_server=true --http_metadata_server_port=8080 --rpc_thread_num=32` + `mooncake-store-config` ConfigMap (`protocol: "rdma"`, `device_name: ""` for RDMA topology auto-discovery) |
+| [`modelserver/gpu/vllm/gke/`](modelserver/gpu/vllm/gke/) | Overlay | GKE A4X-MAX DRA + DRANET + Donors | Adds NVIDIA DRA `ComputeDomain` (`compute-domain.yaml`, `numNodes: 10`), 8-NIC `mrdma.google.com` `ResourceClaimTemplate` (`rdma-nic.yaml`), and optional `mooncake-donor` DaemonSet (`--global_segment_size=500GB`) |
+
+On GKE A4X-MAX clusters with NVIDIA DRA (`ComputeDomain`) and DRANET RDMA NIC claims (`mrdma.google.com`), apply the `gke/` overlay instead:
 
 ```bash
-kubectl wait --for=condition=Available leaderworkerset/kimi-k3-1-tpu-sglang-decode -n ${NAMESPACE} --timeout=7200s
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/gpu/vllm/gke/
+```
+
+Wait for the model server to become ready:
+
+```bash
+kubectl wait --for=condition=Available leaderworkerset/kimi-k3-1-${ACCELERATOR_TYPE}-${MODEL_SERVER}-decode -n ${NAMESPACE} --timeout=7200s
 ```
 
 **(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
@@ -347,9 +411,6 @@ kubectl run serve-check --rm -i --restart=Never \
 ```
 <!-- guide:verify.tests.served_model end -->
 
-The first request to each replica takes about two minutes while the compiled graphs are loaded;
-later requests return in about a second.
-
 ## Benchmarking
 
 This guide comes with an `inference-perf` benchmark preset (defined in [inference-perf.yaml](inference-perf.yaml)):
@@ -381,9 +442,9 @@ kubectl logs -n ${NAMESPACE} job/inference-perf -f
 
 ## Benchmark Results
 
-Results for `moonshotai/Kimi-K3.1-Pro` are being collected with the workload above on two `tpu7x`
-`2x2x4` replicas and will be published here with the image digest and benchmark parameters of each
-run.
+Results for `moonshotai/Kimi-K3.1-Pro` on multi-node NVIDIA GB300 GPUs (vLLM) and Google TPU 7x
+(`2x2x4`, SGLang) are being collected with the workload above and will be published here with the
+image digest and benchmark parameters of each run.
 
 ## Cleanup
 
