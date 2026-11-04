@@ -5,7 +5,10 @@ metadata:
   labels:
     llm-d.ai/guide: fast-model-actuation
 spec:
-  replicas: 2
+  # One requester, to keep a single instance per launcher on the fixed routing
+  # port 8000; see modelserver/launcherconfig.yaml. Raise once routing
+  # consumers learn FMA's assigned instance ports.
+  replicas: 1
   selector:
     matchLabels:
       app: fma-requester
@@ -21,7 +24,7 @@ spec:
       containers:
         - name: requester
           # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
-          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.7.1
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.8.0
           ports:
             - containerPort: 8080
               name: probes

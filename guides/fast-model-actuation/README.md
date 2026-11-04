@@ -40,7 +40,7 @@ For more details see [the FMA repo README](https://github.com/llm-d-incubation/l
 | Parameter               | Value                                                         |
 | ----------------------- | ------------------------------------------------------------- |
 | Model                   | [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B)  |
-| Requesting pod replicas | 2                                                             |
+| Requesting pod replicas | 1                                                             |
 | Launcher count          | 1 (per matching node)                                         |
 | GPUs per requesting pod | 1                                                             |
 | Router                  | llm-d-router-standalone                                      |
@@ -69,7 +69,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
-export FMA_VERSION=0.7.1
+export FMA_VERSION=0.8.0
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -259,7 +259,7 @@ for i in 1 2; do
   kubectl wait pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
     --for='jsonpath={.metadata.labels.dual-pods\.llm-d\.ai/sleeping}=true' \
     --timeout=120s
-  kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=2
+  kubectl scale deployment fma-requester -n ${NAMESPACE} --replicas=1
   kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
   kubectl get pods -l app.kubernetes.io/component=launcher -n ${NAMESPACE} \
     -o 'jsonpath={range .items[*]}{.metadata.name}{" sleeping="}{.metadata.labels.dual-pods\.llm-d\.ai/sleeping}{"\n"}{end}' || true
