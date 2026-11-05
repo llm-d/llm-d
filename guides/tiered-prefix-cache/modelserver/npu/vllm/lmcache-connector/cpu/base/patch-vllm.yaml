@@ -1,0 +1,36 @@
+# The RBLN LMCache connector (lmcache-rbln) with a host-memory tier.
+- op: add
+  path: /spec/template/spec/containers/0/args/-
+  value: "--kv-transfer-config"
+- op: add
+  path: /spec/template/spec/containers/0/args/-
+  value: '{"kv_connector":"RBLNLMCacheConnectorV1","kv_role":"kv_both"}'
+# vLLM and LMCache hash prefix blocks with the same algorithm.
+- op: add
+  path: /spec/template/spec/containers/0/args/-
+  value: "--prefix-caching-hash-algo=sha256_cbor"
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: {name: LMCACHE_PRE_CACHING_HASH_ALGORITHM, value: sha256_cbor_64bit}
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: {name: LMCACHE_LOCAL_CPU, value: "True"}
+# GiB per data-parallel rank: 4 x 50 = 200 GiB per pod.
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: {name: LMCACHE_MAX_LOCAL_CPU_SIZE, value: "50.0"}
+# Must divide --block-size (4096).
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: {name: LMCACHE_CHUNK_SIZE, value: "256"}
+# A fixed seed keeps the chunk hashes stable across pod restarts.
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value: {name: PYTHONHASHSEED, value: "42"}
+# The tier is host memory, so it counts toward the pod's limit: 460Gi plus 200Gi.
+- op: replace
+  path: /spec/template/spec/containers/0/resources/limits/memory
+  value: 660Gi
+- op: replace
+  path: /spec/template/spec/containers/0/resources/requests/memory
+  value: 660Gi
