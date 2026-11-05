@@ -8,7 +8,7 @@ self-contained deployment and backs it with benchmark results.
 
 - **[DeepSeek-V4](../../../guides/models/deepseek-v4/README.md)**: `DeepSeek-V4-Pro` on GB200 NVL72 — wide expert-parallel P/D disaggregation over cross-node NVLink, with operating points from low latency to maximum throughput.
 - **[GLM-5.2](../../../guides/models/glm-5-2/README.md)** *(optimized for agentic workloads)*: `GLM-5.2-FP8` on H200 — wide expert-parallel P/D disaggregation with MTP speculative decoding, dual-tier prefix-cache routing, and CPU+NVMe KV offloading; benchmarked on production agentic traces.
-- **[Kimi-K3.1-Pro](../../../guides/models/kimi-k3-1/README.md)**: `Kimi-K3.1-Pro` on TPU 7x with SGLang — long-context (480K) multi-turn serving: multi-host TP=32 × EP=8, prefix-aware routing and host-DRAM KV offloading (HiCache); no OpenAI tool calling on TPU yet.
+- **[Kimi-K3.1-Pro](../../../guides/models/kimi-k3-1/README.md)**: `Kimi-K3.1-Pro` on TPU 7x with SGLang — long-context (480K) multi-turn serving: multi-host TP=32 × EP=8, prefix-aware routing and host-DRAM KV offloading (HiCache).
 - **[NVIDIA Nemotron 3 Ultra](../../../guides/models/nemotron-3-ultra/README.md)** *(optimized for agentic workloads)*: `NVIDIA-Nemotron-3-Ultra-550B` on H200 — P/D disaggregation with disaggregation-aware prefix-cache routing and CPU KV offloading, plus ready-to-use coding-agent client configs.
 - **[Qwen3.5-397B](../../../guides/models/qwen3-5-397b/README.md)** *(optimized for agentic workloads)*: `Qwen3.5-397B-A17B-FP8` on TPU 7x with Torch TPU — prefix-aware routing and host-DRAM KV offloading, with a TPU Sync P/D-disaggregated configuration.
 

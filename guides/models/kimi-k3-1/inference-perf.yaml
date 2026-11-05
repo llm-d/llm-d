@@ -14,7 +14,8 @@ data:
       type: concurrent
       num_workers: 8
       worker_max_concurrency: 1000
-      request_timeout: 600
+      # Cold Turn-0 prefills of ~220K-420K tokens at 4,209 tok/s can exceed 600s when queued at C>=16.
+      request_timeout: 1800
       stages:
       - num_requests: ${NUM_REQUESTS}
         concurrency_level: ${CONCURRENCY_LEVEL}
@@ -35,22 +36,23 @@ data:
       type: conversation_replay
       conversation_replay:
         seed: ${SEED}
-        # Prompt cap: the guide's 491,520-token context minus the 4,096-token output maximum
-        # below, so conversations grow to the served context without overflowing it.
-        max_model_len: 487424
+        # Matches SGLang's --context-length=491520 (LocalUserSession already reserves max_tokens + 200).
+        max_model_len: 491520
         num_conversations: ${CONCURRENCY_LEVEL}
         shared_system_prompt_len: 3000
+        # Sized so sessions grow across 20 turns up to ~460K tokens without Turn-0 truncation,
+        # and active KV exceeds the 532K/replica HBM pool to exercise the 1.06M/replica HiCache tier.
         dynamic_system_prompt_len:
           type: lognormal
-          min: 2000
-          max: 64000
-          mean: 16000
-          std_dev: 16000
+          min: 32000
+          max: 420000
+          mean: 220000
+          std_dev: 160000
         turns_per_conversation:
           type: lognormal
-          min: 1
+          min: 20
           max: 200
-          mean: 30
+          mean: 50
           std_dev: 30
         input_tokens_per_turn:
           type: lognormal

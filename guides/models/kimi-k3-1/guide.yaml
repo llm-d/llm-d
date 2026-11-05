@@ -14,7 +14,7 @@ support:
       notes: >-
         GKE only · SGLang on Torch TPU · 2 replicas, each a LeaderWorkerSet of 4 pods on one `tpu7x` `2x2x4` slice (16 chips): TP=32 × EP=8,
         MXFP4 experts, sparse-MLA (DSA) attention, fp8 KV cache, 480K context, host-DRAM HiCache over TPU Sync (2× the HBM pool) ·
-        text only; OpenAI `tools` requests are rejected on TPU7x (no grammar backend) ·
+        text only (`--grammar-backend=none` in this SGLang recipe; OpenAI `tools` requests are not yet enabled) ·
         weights on a ReadOnlyMany Hyperdisk ML volume hydrated from GCS
       model: moonshotai/Kimi-K3.1-Pro
       engines: {sglang: community}

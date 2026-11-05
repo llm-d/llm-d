@@ -1,9 +1,7 @@
 # Kimi-K3.1-Pro on TPU 7x (SGLang)
 
 This recipe targets long-context, multi-turn serving: a 480K context with prefix-aware routing and
-a host-DRAM prefix cache, so repeated conversation prefixes are reused instead of recomputed. It is
-not yet a full agentic coding recipe, because OpenAI tool calling does not work on TPU 7x (see the
-note under [Default Configuration](#default-configuration)).
+a host-DRAM prefix cache, so repeated conversation prefixes are reused instead of recomputed.
 
 ## Overview
 
@@ -37,11 +35,11 @@ Google TPU 7x with SGLang on Torch TPU and the llm-d router. It composes the
 | Model server | SGLang on Torch TPU (`docker.io/lmsysorg/sglang:dev-kimi-k31-pro-tpu`, pinned by digest) |
 
 > [!NOTE]
-> Serving is text only, and OpenAI tool calling does not work yet. On TPU 7x, SGLang has no grammar
-> backend (`--grammar-backend none`), so requests that carry an OpenAI `tools` array are rejected
-> with HTTP 400, and coding-agent clients that send tools will fail. The `kimi_k3` reasoning parser
-> works. The server keeps `--tool-call-parser=kimi_k3` so tool calling works without a manifest
-> change once SGLang on TPU supports it; until then it has no effect.
+> Serving is text only, and OpenAI tool calling does not work in this configuration yet. This SGLang
+> TPU recipe runs with `--grammar-backend none`, so requests that carry an OpenAI `tools` array are
+> rejected with HTTP 400, and coding-agent clients that send tools will fail. The `kimi_k3`
+> reasoning parser works. The server keeps `--tool-call-parser=kimi_k3` so tool calling works
+> without a manifest change once SGLang on TPU supports it; until then it has no effect.
 
 ## Supported Accelerators and Model Servers
 
@@ -50,7 +48,7 @@ This guide includes configurations for the following accelerator and model serve
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | SGLang | Notes |
 | --- | --- | --- | --- | --- |
-| Google TPU v7x | `tpu` | `moonshotai/Kimi-K3.1-Pro` | 🟡 community | GKE only · SGLang on Torch TPU · 2 replicas, each a LeaderWorkerSet of 4 pods on one `tpu7x` `2x2x4` slice (16 chips): TP=32 × EP=8, MXFP4 experts, sparse-MLA (DSA) attention, fp8 KV cache, 480K context, host-DRAM HiCache over TPU Sync (2× the HBM pool) · text only; OpenAI `tools` requests are rejected on TPU7x (no grammar backend) · weights on a ReadOnlyMany Hyperdisk ML volume hydrated from GCS |
+| Google TPU v7x | `tpu` | `moonshotai/Kimi-K3.1-Pro` | 🟡 community | GKE only · SGLang on Torch TPU · 2 replicas, each a LeaderWorkerSet of 4 pods on one `tpu7x` `2x2x4` slice (16 chips): TP=32 × EP=8, MXFP4 experts, sparse-MLA (DSA) attention, fp8 KV cache, 480K context, host-DRAM HiCache over TPU Sync (2× the HBM pool) · text only (`--grammar-backend=none` in this SGLang recipe; OpenAI `tools` requests are not yet enabled) · weights on a ReadOnlyMany Hyperdisk ML volume hydrated from GCS |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -357,12 +355,22 @@ later requests return in about a second.
 This guide comes with an `inference-perf` benchmark preset (defined in [inference-perf.yaml](inference-perf.yaml)):
 multi-turn coding-style sessions over a shared system prompt, a large per-session repository context,
 and simulated pauses between turns (`tool_call_latency_sec`, client-side think time only; the requests
-carry no `tools` array).
+carry no `tools` array). The configuration parameters include:
+
+| Workload Characteristic | Metric / Distribution Type | Min | Max | Mean / Constant | Std Dev | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Shared System Prompt** | Constant | - | - | 3,000 tokens | - | Common base instructions, libraries, and API schemas shared across all sessions. Highly cacheable. |
+| **Dynamic System Prompt** | Lognormal | 32,000 | 420,000 | 220,000 tokens | 160,000 | Repository context, file indexes, and session-specific code context, sized so sessions reach ~460K tokens and active KV spills into the host-DRAM HiCache tier. |
+| **Turns per Conversation** | Lognormal | 20 | 200 | 50 turns | 30 | Depth of the multi-turn conversational loop, avoiding premature Turn-0 resets during 20-turn benchmark stages. |
+| **Input Tokens per Turn** | Lognormal | 100 | 10,000 | 1,500 tokens | 1,200 | Incremental prompt extensions (test logs, follow-ups, modified code blocks) on each turn. |
+| **Output Tokens per Turn** | Lognormal | 50 | 4,096 | 425 tokens | 825 | Model generations per turn. |
+| **Tool Call Latency** | Lognormal | 1s | 100s | 15 seconds | 55 | Simulated client-side delay between turns (compilation, unit tests, search). |
 
 ```bash
-# CONCURRENCY_LEVEL is the number of concurrent coding sessions; NUM_REQUESTS is 20 per session;
-# SEED is varied per concurrency level so prompts don't overlap across runs.
-export CONCURRENCY_LEVEL=8
+# CONCURRENCY_LEVEL is the number of concurrent coding sessions (at 16, active KV fills the
+# 1.60M-token/replica HBM + HiCache tier); NUM_REQUESTS is 20 per session; SEED is varied per
+# concurrency level so prompts don't overlap across runs.
+export CONCURRENCY_LEVEL=16
 export NUM_REQUESTS=$((20 * CONCURRENCY_LEVEL))
 export SEED=$((7 + CONCURRENCY_LEVEL))
 
