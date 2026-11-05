@@ -39,11 +39,12 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | H100 80 GB reference · the Optimized Baseline model servers, 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
+| Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | RBLN-CR series · 1 replica × 4 NPUs via DRA (one server per data-parallel rank, expert parallel) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-`agentic-api` owns conversation state and delegates each inference round to vLLM's own stateless Responses API, so the model server must expose `/v1/responses` ([`ARCHITECTURE.md`](https://github.com/vllm-project/agentic-api/blob/main/ARCHITECTURE.md), ADR-01 §1.1). SGLang and TensorRT-LLM model servers are therefore out of scope. Tool calls also need vLLM started with `--enable-auto-tool-choice` and the tool-call and reasoning parsers for its model; the Optimized Baseline NVIDIA GPU vLLM overlays are the ones that set them.
+`agentic-api` owns conversation state and delegates each inference round to vLLM's own stateless Responses API, so the model server must expose `/v1/responses` ([`ARCHITECTURE.md`](https://github.com/vllm-project/agentic-api/blob/main/ARCHITECTURE.md), ADR-01 §1.1). SGLang and TensorRT-LLM model servers are therefore out of scope. Tool calls also need vLLM started with `--enable-auto-tool-choice` and the tool-call and reasoning parsers for its model; the Optimized Baseline NVIDIA GPU vLLM overlays set them, and the Rebellions NPU overlay in this guide starts MiniMax-M2.7 with them.
 
 ## Prerequisites
 
@@ -77,10 +78,10 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=agentic-api
 export NAMESPACE=llm-d-agentic-api
-export ACCELERATOR_TYPE=gpu # options: gpu
+export ACCELERATOR_TYPE=gpu # options: gpu, npu
 export MODEL_SERVER=vllm # options: vllm
 export INFRA_PROVIDER=base # options: base, gke
-export MODEL=Qwen/Qwen3-32B # the model the overlays serve (table above)
+export MODEL=Qwen/Qwen3-32B # set to the Served model for your accelerator (table above)
 export LLM_API_BASE=${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -150,6 +151,16 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/optimized-baseline/router/optimized-ba
 ```
 <!-- guide:deploy.router_values end -->
 
+**(Rebellions NPU only) Layer the NPU router values**, which select this guide's NPU model server, list its four data-parallel rank ports, and match prefixes at the runtime's 512-token sub-block:
+
+<!-- guide:deploy.accelerator_values[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[0] end -->
+
 **Deploy the router** in Standalone Mode, with an Envoy sidecar in front of the router. Its helm release name, `${GUIDE_NAME}`, names the `Service/agentic-api-epp` that `LLM_API_BASE` points at:
 
 <!-- guide:deploy.standalone start -->
@@ -158,6 +169,7 @@ helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${ROUTER_BASE_VALUES} \
   -f ${ROUTER_VALUES} \
+  ${ACCELERATOR_VALUES:-} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
@@ -166,7 +178,7 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
-**Apply the Kustomize overlay** for your infrastructure provider. Each overlay is the [Optimized Baseline](../optimized-baseline/README.md#2-deploy-the-model-server) model server, which starts vLLM with `--enable-auto-tool-choice`, `--tool-call-parser=hermes` and `--reasoning-parser=qwen3`:
+**Apply the Kustomize overlay** for your infrastructure provider. Each overlay is the [Optimized Baseline](../optimized-baseline/README.md#2-deploy-the-model-server) model server, which starts vLLM with `--enable-auto-tool-choice` and the tool-call and reasoning parsers for its model (`hermes` and `qwen3`). On Rebellions NPU the overlay is this guide's own: MiniMax-M2.7 on four NPUs, one vLLM server per data-parallel rank, with `minimax_m2` as both parsers:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -199,13 +211,27 @@ kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
 
 ### 5. Wait for the Model Servers
 
-<!-- guide:deploy.ready start -->
+**NVIDIA GPU:**
+
+<!-- guide:deploy.ready[0] start -->
 ```bash
 # The model servers become Available once vLLM has loaded the model
 kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
   -l llm-d.ai/guide=optimized-baseline --timeout=30m
 ```
-<!-- guide:deploy.ready end -->
+<!-- guide:deploy.ready[0] end -->
+
+**Rebellions NPU:**
+
+<!-- guide:deploy.ready[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# The first start compiles the model for the NPU before it serves
+kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
+  -l llm-d.ai/guide=agentic-api --timeout=120m
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.ready[1] end -->
 
 ## Verification
 
