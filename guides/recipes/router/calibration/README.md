@@ -95,6 +95,8 @@ Where:
 
 [`calibrate-decode.sh`](calibrate-decode.sh) runs a measurement Job ([`calibration-peak-decode.yaml`](calibration-peak-decode.yaml)) that sends open-loop, decode-bound load (short ISL, long OSL) across a concurrency ladder, measures inter-token latency (TPOT) for each streamed chunk, selects the highest concurrency meeting the target latency SLO (`TARGET_TPOT_MS`), and calculates $V_D$ and the recommended $P:D$ ratio.
 
+The calibration script requests `stream_options.include_usage=True` and inspects generation chunks to distinguish actual token output from control/usage events (e.g. empty terminal events or usage summaries), ensuring exact token counts and uncorrupted TPOT measurements. If no tested concurrency level satisfies the target latency SLO (`p90 TPOT <= TARGET_TPOT_MS`), calibration fails and suppresses `PEAK_DECODE_THROUGHPUT` and sizing recommendations to prevent deploying non-compliant configurations.
+
 ### Usage
 
 ```bash

@@ -27,6 +27,7 @@ data:
     import os
     import random
     import statistics
+    import sys
     import time
     import urllib.error
     import urllib.request
@@ -70,6 +71,7 @@ data:
             "prompt": prompt_ids,
             "max_tokens": OSL,
             "stream": True,
+            "stream_options": {"include_usage": True},
             "temperature": 0,
         }).encode()
         req = urllib.request.Request(
@@ -78,9 +80,11 @@ data:
             headers={"Content-Type": "application/json"},
         )
         t_start = time.monotonic()
-        prev_chunk_t = None
+        prev_token_t = None
         itls = []
-        token_count = 0
+        generated_chunks = 0
+        reported_completion_tokens = None
+        saw_done = False
         try:
             with urllib.request.urlopen(req, timeout=180) as resp:
                 for line in resp:
@@ -88,23 +92,52 @@ data:
                         continue
                     payload = line.strip()[5:].strip()
                     if payload == b"[DONE]":
+                        saw_done = True
                         break
                     event = json.loads(payload)
                     if isinstance(event, dict) and "error" in event:
                         raise RuntimeError(f"completions stream failed: {str(event['error'])[:500]}")
-                    now = time.monotonic()
-                    if prev_chunk_t is not None:
-                        itls.append(now - prev_chunk_t)
-                    prev_chunk_t = now
-                    token_count += 1
+
+                    # Check for usage object emitted by OpenAI/vLLM when stream_options.include_usage=True
+                    if isinstance(event, dict) and "usage" in event and event["usage"]:
+                        reported_completion_tokens = event["usage"].get("completion_tokens")
+
+                    # Distinguish actual generation output from control/usage events
+                    choices = event.get("choices", []) if isinstance(event, dict) else []
+                    text = ""
+                    if choices and isinstance(choices, list) and len(choices) > 0 and isinstance(choices[0], dict):
+                        text = choices[0].get("text", "")
+
+                    if text:
+                        now = time.monotonic()
+                        if prev_token_t is not None:
+                            itls.append(now - prev_token_t)
+                        prev_token_t = now
+                        generated_chunks += 1
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:500]
             raise RuntimeError(f"request failed (HTTP {e.code}): {detail}") from e
 
         duration = time.monotonic() - t_start
+        if not saw_done:
+            raise RuntimeError("completions stream ended prematurely before [DONE]")
+
+        if reported_completion_tokens is not None and reported_completion_tokens > 0:
+            token_count = reported_completion_tokens
+        else:
+            token_count = generated_chunks
+
         if token_count == 0:
             raise RuntimeError("no streamed tokens received")
-        return token_count, duration, itls
+
+        # Normalize per-token latency when backend emits multiple tokens in one chunk
+        if token_count > generated_chunks and generated_chunks > 0:
+            tokens_per_chunk = token_count / generated_chunks
+            effective_itls = [itl / tokens_per_chunk for itl in itls]
+        else:
+            effective_itls = itls
+
+        return token_count, duration, effective_itls
 
     print(f"endpoint={VLLM_ENDPOINT} model={MODEL_NAME} ISL={ISL} OSL={OSL}", flush=True)
     print(f"decode_replicas={DECODE_REPLICAS} target_tpot={TARGET_TPOT_MS}ms", flush=True)
@@ -160,11 +193,18 @@ data:
 
     # 3. Select peak throughput satisfying SLO
     passing = [s for s in step_results if s["passed"]]
-    if passing:
-        best_step = max(passing, key=lambda s: s["output_rate"])
-    else:
-        print("\nWARNING: No concurrency level satisfied target p90 TPOT. Using lowest concurrency as baseline.")
-        best_step = step_results[0]
+    if not passing:
+        min_p90 = min(s["p90_ms"] for s in step_results) if step_results else 0.0
+        print(
+            f"\nERROR: No concurrency level satisfied target p90 TPOT <= {TARGET_TPOT_MS:.2f} ms.\n"
+            f"Lowest measured p90 TPOT was {min_p90:.2f} ms.\n"
+            "Decode capacity calibration failed. Suppressing PEAK_DECODE_THROUGHPUT and sizing outputs.",
+            file=sys.stderr,
+            flush=True,
+        )
+        sys.exit(1)
+
+    best_step = max(passing, key=lambda s: s["output_rate"])
 
     v_d = int(best_step["output_rate"] / DECODE_REPLICAS)
     print("\n================ Calibration Summary ================", flush=True)
