@@ -1,0 +1,53 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg-mthreads
+spec:
+  roles:
+    - name: prefill
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            metadata:
+              annotations:
+                # Attach the VF network defined in network-attachment-definitions.yaml.
+                k8s.v1.cni.cncf.io/networks: mthreads-sriov-vf0
+            spec:
+              containers:
+                - name: modelserver
+                  command:
+                    - /opt/entry/entry.sh
+                  args:
+                    - Qwen/Qwen3-32B
+                    - --served-model-name=Qwen3-32B
+                    - --port=8000
+                    - --tensor-parallel-size=4
+                    - --enforce-eager
+                    - --max-model-len=2048
+                    - --max-num-seqs=16
+                    - --max-num-batched-tokens=2048
+                    - --gpu-memory-utilization=0.5
+                    - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+                    - --kv-transfer-config
+                    # device_name is the RDMA device of the VF injected by the NAD.
+                    # Example value; replace it with the device on your node.
+                    - '{"kv_connector":"MooncakeConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail","kv_connector_extra_config":{"mooncake_protocol":"rdma","device_name":"mlx5_10"}}'
+                  resources:
+                    requests:
+                      rdma/rdma_shared_device: "1"
+                    limits:
+                      rdma/rdma_shared_device: "1"
+                  securityContext:
+                    capabilities:
+                      add:
+                        - IPC_LOCK
+                        - SYS_RESOURCE
+                  volumeMounts:
+                    - name: entry
+                      mountPath: /opt/entry
+                      readOnly: true
+              volumes:
+                - name: entry
+                  configMap:
+                    name: mthreads-rdma-entry
+                    defaultMode: 493
