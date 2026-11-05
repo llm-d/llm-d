@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# RDMA (SR-IOV VF) variant of the single-host vLLM P/D overlay.
+#
+# This overlay is an example: the VF PCI addresses, the VF network, the RDMA
+# device names and the node placement depend on the cluster. See README.md
+# for the values to edit before applying. The NADs live under examples/ and
+# are applied separately, since they are a cluster prerequisite.
+resources:
+  - ../base
+  - entry.yaml
+
+patches:
+  - path: patch-prefill.yaml
+    target:
+      kind: DisaggregatedSet
+      labelSelector: llm-d.ai/guide=pd-disaggregation
+  - path: patch-decode.yaml
+    target:
+      kind: DisaggregatedSet
+      labelSelector: llm-d.ai/guide=pd-disaggregation
