@@ -33,6 +33,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
+| Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | RBLN-CR series · 1 replica × 4 NPUs via DRA (one server per data-parallel rank, expert parallel) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -108,7 +109,7 @@ export NAMESPACE=llm-d-precise-prefix-cache-routing
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ENGINE_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, cpu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, cpu, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke
 export MODEL=Qwen/Qwen3-32B # set to the model your accelerator serves (table above)
@@ -212,6 +213,16 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 </details>
 <!-- tabs:end -->
 
+**(Rebellions NPU only) Layer the NPU router values**, which list the four data-parallel rank ports, index prefixes at the runtime's 512-token sub-block, and move the replay socket past the four ranks' event sockets:
+
+<!-- guide:deploy.accelerator_values[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[0] end -->
+
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
@@ -222,6 +233,7 @@ helm install ${GUIDE_NAME} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
   ${ENGINE_VALUES} \
+  ${ACCELERATOR_VALUES:-} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->

@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  # A rolling update keeps the old and the new pod both holding a claim, so
+  # neither becomes ready where there is no spare accelerator.
+  strategy:
+    type: Recreate
+  # Matches the startupProbe budget below.
+  progressDeadlineSeconds: 7215
+  template:
+    spec:
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 0
+        fsGroup: 1600
+      containers:
+        - name: modelserver
+          # vLLM runs one API server per data-parallel rank and hands rank i its own
+          # NPU; the external load balancer mode gives each rank a port from 8000
+          # upward, and the router addresses every rank as its own endpoint.
+          command: ["vllm", "serve"]
+          args:
+            - "MiniMaxAI/MiniMax-M2.7"
+            # Serves /v1/*/render on the inference port for the router's token-producer.
+            - "--enable-scale-out"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
+            - "--data-parallel-size=4"
+            - "--data-parallel-size-local=4"
+            - "--data-parallel-multi-port-external-lb"
+            - "--enable-expert-parallel"
+            - "--block-size=4096"
+            - "--max-num-batched-tokens=512"
+            - "--kv-cache-dtype=fp8"
+            # Prefetching shortens the weight load.
+            - "--safetensors-load-strategy=prefetch"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=minimax_m2"
+            - "--reasoning-parser=minimax_m2"
+            # Every rank gets this config and adds its data-parallel rank to both ports, so
+            # rank i binds 5556+i and 5560+i; the router dials the same offsets per endpoint.
+            - "--kv-events-config"
+            - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):8000@MiniMaxAI/MiniMax-M2.7"}'
+          ports:
+            - {containerPort: 8001, name: rank1, protocol: TCP}
+            - {containerPort: 8002, name: rank2, protocol: TCP}
+            - {containerPort: 8003, name: rank3, protocol: TCP}
+            - {containerPort: 5556, name: kv-events, protocol: TCP}
+            - {containerPort: 5557, name: kv-events-r1, protocol: TCP}
+            - {containerPort: 5558, name: kv-events-r2, protocol: TCP}
+            - {containerPort: 5559, name: kv-events-r3, protocol: TCP}
+            - {containerPort: 5560, name: kv-replay, protocol: TCP}
+            - {containerPort: 5561, name: kv-replay-r1, protocol: TCP}
+            - {containerPort: 5562, name: kv-replay-r2, protocol: TCP}
+            - {containerPort: 5563, name: kv-replay-r3, protocol: TCP}
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Pod-discovery mode: every router replica dials each rank's socket.
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+            # Four ranks take 5556-5559, so replay starts past them.
+            - name: KV_EVENTS_REPLAY_ENDPOINT
+              value: "tcp://*:5560"
+            - name: VLLM_CACHE_ROOT
+              value: /workspace/.cache
+            # Unreachable in practice: the startupProbe budget below is 7215s.
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "9600"
+            - name: VLLM_RPC_TIMEOUT
+              value: "1800000"
+          resources:
+            # Keep cpu even — a node with an SMT-aligned static CPU manager rejects odd
+            # counts. Most of the memory limit is headroom for the page cache the model
+            # read charges to the cgroup.
+            limits:
+              cpu: "40"
+              memory: 460Gi
+            requests:
+              cpu: "40"
+              memory: 460Gi
+            claims:
+              - name: npu-decode-claim
+          volumeMounts:
+            - mountPath: /workspace/.cache
+              name: rbln-compile-cache
+            - mountPath: /dev/shm
+              name: shm
+          # 15 + 30x240 = 7215s: the compile cache is an emptyDir, so every restart
+          # recompiles from zero, and a first start also pulls the weights.
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # The base probes the rank-0 port alone, which would mark the pod ready while
+          # the other three ranks are still starting.
+          readinessProbe:
+            httpGet: null
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - 'for p in 8000 8001 8002 8003; do curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${p}/v1/models" || exit 1; done'
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 3
+      resourceClaims:
+        - name: npu-decode-claim
+          resourceClaimTemplateName: npu-claim-template-decode
+      volumes:
+        - name: rbln-compile-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
