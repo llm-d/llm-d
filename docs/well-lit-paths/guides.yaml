@@ -67,14 +67,18 @@ sections:
         slug: glm-5-2
         title: GLM-5.2
         position: 2
+      - dir: guides/models/kimi-k3-1
+        slug: kimi-k3-1
+        title: Kimi-K3.1-Pro
+        position: 3
       - dir: guides/models/nemotron-3-ultra
         slug: nemotron-3-ultra
         title: NVIDIA Nemotron 3 Ultra
-        position: 3
+        position: 4
       - dir: guides/models/qwen3-5-397b
         slug: qwen3-5-397b
         title: Qwen3.5-397B
-        position: 4
+        position: 5
   # Operations: the sidebar is at most two levels deep (Operations > category
   # > page). Two guides are categories themselves (section `operations`,
   # target `operations`) and keep their child pages; the other sections map
