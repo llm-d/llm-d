@@ -77,6 +77,7 @@ data:
         )
         start = time.monotonic()
         first_chunk_ttft = None
+        completed = False
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 for line in resp:
@@ -84,12 +85,18 @@ data:
                         continue
                     payload = line.strip()[5:].strip()
                     if payload == b"[DONE]":
+                        completed = True
                         break
                     event = json.loads(payload)
                     if isinstance(event, dict) and "error" in event:
                         raise RuntimeError(f"completions stream failed: {str(event['error'])[:500]}")
                     if first_chunk_ttft is None:
                         first_chunk_ttft = time.monotonic() - start
+                    if isinstance(event, dict) and any(
+                        isinstance(c, dict) and c.get("finish_reason")
+                        for c in event.get("choices") or []
+                    ):
+                        completed = True
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:500]
             raise RuntimeError(
@@ -100,9 +107,13 @@ data:
             ) from e
         # Keep the first-chunk timing, but consume the stream so a later error
         # cannot turn a failed request into a successful calibration sample.
-        if first_chunk_ttft is not None:
-            return first_chunk_ttft
-        raise RuntimeError("no streamed chunk received")
+        if first_chunk_ttft is None:
+            raise RuntimeError("no streamed chunk received")
+        if not completed:
+            raise RuntimeError(
+                "completions stream ended before a finish_reason or [DONE] was received"
+            )
+        return first_chunk_ttft
 
     print(f"endpoint={VLLM_ENDPOINT} model={MODEL_NAME} chunk={CHUNK_SIZE}", flush=True)
     print(f"warmup={NUM_WARMUP} measurements={NUM_MEASUREMENTS}", flush=True)
