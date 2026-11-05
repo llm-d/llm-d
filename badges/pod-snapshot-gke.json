@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "label": "VLLM GPU",
+  "message": "failing",
+  "color": "red"
+}
