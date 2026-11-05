@@ -6,7 +6,7 @@ resources:
 nameSuffix: -tpu
 
 components:
-  - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
   - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
 
 labels:
@@ -15,6 +15,7 @@ labels:
       llm-d.ai/guide: pd-disaggregation
       llm-d.ai/accelerator-variant: tpu-v6e
       llm-d.ai/accelerator-vendor: google
+      llm-d.ai/backend: torch-tpu
       llm-d.ai/engine-type: vllm
     fields:
       - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/metadata/labels

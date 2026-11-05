@@ -1,0 +1,39 @@
+## GLM-5.2-FP8 on Google TPU 7x (Torch TPU vLLM) router values.
+##
+## The TPU deployment is a single aggregated DP=16 LeaderWorkerSet (no P/D
+## disaggregation), so the wide-EP DisaggregatedSet plugins in
+## glm-5-2.values.yaml do not apply. This file replaces them with prefix-cache
+## affinity + token-load scoring against the TPU pods, selected by the
+## `llm-d.ai/guide: glm-5-2-tpu` label set in
+## modelserver/tpu/vllm/deployments/*/kustomization.yaml.
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: glm-5-2-tpu-plugins.yaml
+    pluginsCustomConfig:
+      glm-5-2-tpu-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: token-load-scorer
+        - type: inflight-load-producer
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 32768
+            blockSizeTokens: 256
+        - type: prefix-cache-affinity-filter
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "glm-5-2-tpu"
+      llm-d.ai/inference-serving: "true"

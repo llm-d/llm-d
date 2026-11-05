@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: mm-baseline-tpu-v7-vllm-qwen35-
+
+components:
+  - ../../../../base/vllm
+  - ../../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
+  - ../../../../../../../recipes/modelserver/components/gke-model-cache-hostpath
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+      llm-d.ai/guide: aggregation
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+      llm-d.ai/backend: torch-tpu
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml

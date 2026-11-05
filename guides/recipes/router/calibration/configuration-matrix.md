@@ -31,7 +31,7 @@ rows because the serving engine changes prefill throughput.
 | `mthreads/vllm`  | MTT S5000 80 GB · vLLM-MUSA | 0.28.0 / MUSA 5.2.0 | 8 | Qwen3-32B | TBD |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
-| `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
+| `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.12.0 | 1 | gpt-oss-120B          | **12171** |
 | `xpu/vllm`    | Intel XPU · vLLM          | xpu v0.7.0           | 1 | Qwen3-0.6B              | 1970 ‡ |
 | `cpu/vllm`    | CPU · vLLM (AMX)          | cpu v0.6.0           | 1 | Llama-3.2-3B-Instruct   | **1970** |
 
@@ -65,7 +65,9 @@ rows because the serving engine changes prefill throughput.
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the
   `cpu/vllm` value (1970). Replace each with a real `calibrate.sh` run on that hardware when available.
 
-**Related (other guides):** the [Qwen3-Coder-480B](../../../models/qwen3-coder-480b/README.md) guide ships
+**Related (other guides):** the former Qwen3-Coder-480B guide (replaced by
+[Qwen3.5-397B](../../../models/qwen3-5-397b/README.md); see its
+[git history](https://github.com/llm-d/llm-d/commits/main/guides/models/qwen3-coder-480b)) shipped
 `peakPrefillThroughput=16444` for Qwen3-Coder-480B-FP8 on TPU v7x (TP=8) — same accelerator
 family, different model, so it is not an optimized-baseline path but is a useful second data point.
 The [GLM-5.2](../../../models/glm-5-2/README.md) guide ships `peakPrefillThroughput=3585` per

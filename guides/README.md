@@ -17,6 +17,7 @@ We currently offer the following:
 * [Precise Prefix Cache Routing](./precise-prefix-cache-routing/README.md) - Enhance optimized baseline with precise global indexing of the vLLM KV cache state.
 * [Tiered Prefix Cache](./tiered-prefix-cache/README.md) - Offload KV caches beyond accelerator memory (e.g. to CPU or disk), increasing the "KV-working set size" for multi-turn inference request patterns.
 * [P2P KV Cache Sharing](./p2p-kv-cache-sharing/README.md) (Experimental) - Pull cached prefix KV blocks from a peer's CPU offload tier instead of recomputing them on the scheduled model server.
+* [Hyperconverged CephFS KV-Cache Offloading](./hyperconverged-cephfs/README.md) - Share offloaded KV cache across GPU nodes through a CephFS filesystem that Rook runs on the nodes' own NVMe drives, so a prefix computed on one node is not recomputed on another.
 
 ## Serving Large Models
 
@@ -38,8 +39,9 @@ Benchmarked, fully tuned recipes for serving a specific state-of-the-art model o
 
 * [DeepSeek-V4](./models/deepseek-v4/README.md) - `deepseek-ai/DeepSeek-V4-Pro` on GB200 NVL72: wide expert-parallel P/D disaggregation over cross-node NVLink, with operating points from low latency to maximum throughput.
 * [GLM-5.2](./models/glm-5-2/README.md) - `zai-org/GLM-5.2-FP8` on H200, optimized for agentic workloads: wide expert-parallel P/D disaggregation with MTP, dual-tier prefix-cache routing, and CPU+NVMe KV offloading.
+* [Kimi-K3.1-Pro](./models/kimi-k3-1/README.md) - `Kimi-K3.1-Pro` on NVIDIA GB300 GPUs via vLLM using 3P1D P/D disaggregation (`3× TP=8 × EP=8` Prefill + `1× DP=16 × EP=16` Decode), DSpark speculative decoding, NIXL + Mooncake RDMA KV cache sharing, and ZMQ precise prefix-cache routing, alongside TPU 7x via SGLang using 480K long-context multi-host parallelism (`TP=32 × EP=8`) with prefix-aware routing and HiCache host-DRAM KV offloading.
 * [NVIDIA Nemotron 3 Ultra](./models/nemotron-3-ultra/README.md) - `NVIDIA-Nemotron-3-Ultra-550B` on H200, optimized for agentic code generation: P/D disaggregation with CPU KV offloading and coding-agent client configs.
-* [Qwen3-Coder-480B](./models/qwen3-coder-480b/README.md) - `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` on TPU 7x, optimized for agentic code generation: prefix-aware routing and CPU KV offloading.
+* [Qwen3.5-397B](./models/qwen3-5-397b/README.md) - `Qwen/Qwen3.5-397B-A17B-FP8` on TPU 7x with Torch TPU, optimized for agentic code generation: prefix-aware routing, tiered prefix cache (host KV offloading), and TPU Sync P/D disaggregation.
 
 ## Operations
 

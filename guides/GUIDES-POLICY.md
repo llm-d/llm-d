@@ -241,7 +241,7 @@ Here is how Foundation guides and Model guides compare:
 | Answers | "How does capability X work and how do I turn it on?" | "How do I serve model M on accelerator A with peak performance?" |
 | Content | One capability, routing algorithm, or execution topology | A benchmarked, fully tuned recipe for a specific model on a specific accelerator, composing several foundation capabilities |
 | Target tier | **Tiers 1–3** (deployable manifests, `guide.yaml`, nightly E2E validation) | **Tiers 4–5** (benchmarked under load with sane results, proven narrative with measured win over baseline) |
-| Examples | Intelligent routing, tiered prefix cache, P/D disaggregation, wide expert parallelism, multimodal serving | DeepSeek-V4 on GB200, GLM-5.2 on H200, Nemotron 3 Ultra on H200, Qwen3-Coder-480B on TPU v7 |
+| Examples | Intelligent routing, tiered prefix cache, P/D disaggregation, wide expert parallelism, multimodal serving | DeepSeek-V4 on GB200, GLM-5.2 on H200, Nemotron 3 Ultra on H200, Qwen3.5-397B on TPU v7 |
 | New machinery | May introduce it (new router/EPP plugins, cache backends, topologies) | **Must not** introduce it — it composes what exists in foundation guides and shared recipes |
 | Reader | An operator evaluating or adopting an architectural capability | An engineer deploying a specific model who needs a proven, optimal stack |
 

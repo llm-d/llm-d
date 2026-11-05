@@ -48,6 +48,7 @@ on:
       - "Nightly - Optimized Baseline E2E (CKS GPU)"
       - "Nightly - Optimized Baseline E2E (GKE GPU SGLang)"
       - "Nightly - Optimized Baseline E2E (GKE GPU)"
+      - "Nightly - Optimized Baseline E2E (GKE TPU SGLang)"
       - "Nightly - Optimized Baseline E2E (GKE TPU)"
       - "Nightly - Optimized Baseline E2E (Intel XPU)"
       - "Nightly - Optimized Baseline E2E (OCP GPU)"
@@ -59,6 +60,8 @@ on:
       - "Nightly - PD Disaggregation E2E (GKE TPU)"
       - "Nightly - PD Disaggregation E2E (Intel XPU)"
       - "Nightly - PD Disaggregation E2E (OCP GPU)"
+      - "Nightly - Pod Snapshot E2E (GKE GPU SGLang)"
+      - "Nightly - Pod Snapshot E2E (GKE GPU vLLM)"
       - "Nightly - Precise Prefix Cache E2E (GKE TPU)"
       - "Nightly - Precise Prefix Cache Routing E2E (AMD ROCM)"
       - "Nightly - Precise Prefix Cache Routing E2E (CKS GPU)"
@@ -81,6 +84,7 @@ on:
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (GKE GPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (Intel XPU)"
       - "Nightly - Tiered Prefix Cache CPU Offloading LMCache E2E (OCP GPU)"
+      - "Nightly - Tiered Prefix Cache E2E (GKE TPU SGLang)"
       - "Nightly - Tiered Prefix Cache E2E (GKE TPU)"
       - "Nightly - Tiered Prefix Cache FS Offloading E2E (AMD ROCM, Native)"
       - "Nightly - Tiered Prefix Cache FS Offloading LMCache E2E (AMD ROCM)"
@@ -89,8 +93,8 @@ on:
       - "Nightly - Wide EP LWS E2E (GKE GPU)"
       - "Nightly - Wide EP LWS E2E (Intel XPU)"
       - "Nightly - Wide EP LWS E2E (OCP GPU)"
+      - "Nightly - Workload Autoscaling KEDA+EPP E2E (OCP GPU)"
       - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (AMD ROCm)"
-      - "Nightly - Workload Autoscaling KEDA+EPP Queue E2E (OCP GPU)"
       # SLACK-WORKFLOWS-END
 
   # Replays an existing nightly run through the notifier. Because workflow_run

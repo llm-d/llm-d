@@ -15,7 +15,7 @@ Achieve SOTA Inference Performance On Any Accelerator
  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
  [![Join Slack](https://img.shields.io/badge/Join_Slack-blue?logo=slack)](https://llm-d.ai/slack)
 
-llm-d is a high-performance distributed inference serving stack optimized for production deployments on Kubernetes. We help you achieve the fastest "time to state-of-the-art (SOTA) performance" for key OSS large language models across most hardware accelerators and infrastructure providers with well-tested guides and real-world benchmarks.
+llm-d is a high-performance distributed inference serving stack optimized for production deployments on Kubernetes. We help you achieve the fastest "time to state-of-the-art (SOTA) performance" for key OSS large language models across most hardware accelerators and infrastructure providers, and sustain it in production operations with multi-tenant quality of service, zero-downtime upgrades, and agent-aware serving, all backed by well-tested guides and real-world benchmarks.
 
 llm-d is a [Cloud Native Computing Foundation (CNCF)](https://www.cncf.io/) sandbox project, founded by Red Hat, Google Cloud, IBM Research, CoreWeave, and NVIDIA.
 
@@ -25,24 +25,33 @@ Model servers like [vLLM](https://docs.vllm.ai) and [SGLang](https://github.com/
 
 * **[Intelligent Routing:](https://llm-d.ai/docs/well-lit-paths/foundations/optimized-baseline)** Maximize performance with prefix-cache and load-aware balancing, including experimental predicted latency-based scheduling to decrease latency and increase throughput.
 * **[Advanced KV-Cache Management:](https://llm-d.ai/docs/well-lit-paths/foundations/tiered-prefix-cache)** Increase the effective "working set size" for multi-turn requests with tiered offloading to CPU or disk and precise global indexing of the KV cache state.
-* **[Serving Large Models:](https://llm-d.ai/docs/well-lit-paths/foundations/wide-expert-parallelism)** Optimize massive models (e.g., DeepSeek-R1, GPT-OSS) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
-* **[Operational Excellence:](https://llm-d.ai/docs/operations)** Ensure production stability with intelligent flow control for multi-tenant serving and proactive, SLO-aware autoscaling based on real-time inference signals.
+* **[Serving Large Models:](https://llm-d.ai/docs/well-lit-paths/foundations/wide-expert-parallelism)** Optimize massive models (e.g., DeepSeek-V4, Kimi K3, gpt-oss-120b) using prefill/decode disaggregation and wide expert-parallelism over fast accelerator interconnects.
+* **[Agent-Aware Serving:](https://llm-d.ai/docs/well-lit-paths/workloads/agentic-serving)** Serve multi-turn agent workloads natively with session-aware routing, turn-priority scheduling, and native Responses API state, reusing context across turns instead of recomputing it.
+* **[Operational Excellence:](https://llm-d.ai/docs/operations)** Run inference as a Day-2 service with multi-tenant quality of service (priority- and fairness-aware flow control), zero-downtime operations (router high availability and lockstep prefill/decode rollouts), SLO-aware autoscaling, and end-to-end observability.
 * **[Batch Processing:](https://llm-d.ai/docs/operations/batch-serving)** Efficiently manage large-scale offline inference with OpenAI-compatible Batch APIs and asynchronous processing to maximize hardware utilization.
 
 For a complete list of tested recipes and architectural patterns, see our [well-lit path guides](https://llm-d.ai/docs/well-lit-paths). These guides provide benchmarked recipes and Helm charts to start serving quickly with best practices common to production deployments. Our intent is to eliminate the heavy lifting common in tuning and deploying generative AI inference on modern accelerators.
 
-## Performance Highlights
+## Performance and Adoption Highlights
 
 Validated performance gains from production deployments and partner benchmarks:
 
-* **3x higher output throughput** and **2x faster TTFT** with prefix-cache-aware routing vs round-robin — Llama 3.1 70B on 4× AMD MI300X, Tesla / Red Hat ([blog](https://llm-d.ai/blog/production-grade-llm-inference-at-scale-kserve-llm-d-vllm))
+* **3x higher output throughput** and **2x faster TTFT** with prefix-cache-aware routing vs round-robin, on Llama 3.1 70B with 4× AMD MI300X, Tesla / Red Hat ([blog](https://llm-d.ai/blog/production-grade-llm-inference-at-scale-kserve-llm-d-vllm))
 * **40% reduction in TTFT and ITL** with predicted-latency scheduling vs heuristics on NVIDIA GPUs, Google ([blog](https://llm-d.ai/blog/predicted-latency-based-scheduling-for-llms))
-* **Up to 70% higher tokens/sec** with prefill/decode disaggregation vs standard vLLM — GPT-OSS on NVIDIA B200 (p6-b200), AWS ([blog](https://aws.amazon.com/blogs/machine-learning/introducing-disaggregated-inference-on-aws-powered-by-llm-d/))
-* **10–30% throughput improvement** with disaggregated serving on identical infrastructure — GPT-OSS-120B and Llama 3.3 70B on AMD MI300X, Oracle ([blog](https://blogs.oracle.com/ai-and-datascience/llm-inference-at-scale-with-llm-d-on-oci))
-* **50k tokens/sec** cluster throughput with Wide Expert-Parallelism — 16×16 NVIDIA B200, ~3.1k tok/s per GPU ([blog](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale))
-* **13.9x throughput improvement** with hierarchical KV offloading at 250 concurrent users vs GPU-only — 4× NVIDIA H100 ([blog](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale))
+* **Up to 70% higher tokens/sec** with prefill/decode disaggregation vs standard vLLM, on GPT-OSS with NVIDIA B200 (p6-b200), AWS ([blog](https://aws.amazon.com/blogs/machine-learning/introducing-disaggregated-inference-on-aws-powered-by-llm-d/))
+* **10–30% throughput improvement** with disaggregated serving on identical infrastructure, for GPT-OSS-120B and Llama 3.3 70B on AMD MI300X, Oracle ([blog](https://blogs.oracle.com/ai-and-datascience/llm-inference-at-scale-with-llm-d-on-oci))
+* **50k tokens/sec** cluster throughput with Wide Expert-Parallelism on 16×16 NVIDIA B200, ~3.1k tok/s per GPU ([blog](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale))
+* **13.9x throughput improvement** with hierarchical KV offloading at 250 concurrent users vs GPU-only, on 4× NVIDIA H100 ([blog](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale))
 
 Explore detailed, reproducible benchmarks on [Prism](https://prism.llm-d.ai).
+
+A growing roster of [adopters](https://github.com/llm-d/llm-d/blob/main/ADOPTERS.md) runs llm-d in production across clouds, accelerator vendors, and enterprises:
+
+* **Google Cloud** integrates llm-d 1.0 into Google Kubernetes Engine across its TPU and NVIDIA GPU portfolio ([blog](https://cloud.google.com/blog/topics/ai-infrastructure/llm-d-1-0-an-open-source-stack-for-distributed-inference)).
+* **DigitalOcean** builds its distributed inference stack on llm-d for native GPU-type heterogeneity, serving the trillion-parameter Kimi K3 model across AMD and NVIDIA hardware ([blog](https://www.digitalocean.com/blog/serving-kimi-k3-inference-engine)).
+* **IBM Research** self-hosts frontier open models on llm-d for coding ([blog](https://research.ibm.com/blog/running-open-models-on-h100-gpus-with-llmd)) and chip-design ([blog](https://research.ibm.com/blog/open-agent-factories-and-distributed-inference-for-chip-design)) agents.
+* **Mistral AI** serves open models in production on llm-d as part of its [regional inference offering](https://mistral.ai/news/regional-inference-open-models-new-compute/).
+* **Red Hat** ships llm-d as the distributed inference stack in [Red Hat AI](https://www.redhat.com/en/blog/red-hat-ai-3-delivers-speed-accelerated-delivery-and-scale), generally available on OpenShift and managed Kubernetes.
 
 ## Get Started Now
 
@@ -53,12 +62,16 @@ Ready to achieve SOTA performance? Follow our [Quickstart Guide](https://llm-d.a
 
 ## Latest News 🔥
 
-* [2026-05] The v0.7 release introduces an optimized baseline renamed and stabilized, kustomize-first migrated guides, expanded nightly CI (OpenShift, GKE, CoreWeave), predicted-latency scheduling GA, batch gateway (experimental), and revamped project-wide documentation.
-* [2026-03] llm-d [joins the CNCF as a Sandbox project](https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/)! Founded by Red Hat, Google Cloud, IBM Research, CoreWeave, and NVIDIA, with support from AMD, Cisco, Hugging Face, Intel, Lambda, Mistral AI, UC Berkeley, and University of Chicago. We're excited to collaborate openly on building flexible, future-proof AI infrastructure.
-* [2026-02] The [v0.5](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale) introduces reproducible benchmark workflows, hierarchical KV offloading, cache-aware LoRA routing, active-active HA, UCCL-based transport resilience, and scale-to-zero autoscaling; validated ~3.1k tok/s per B200 decode GPU (wide-EP) and up to 50k output tok/s on a 16×16 B200 prefill/decode topology with order-of-magnitude TTFT reduction vs round-robin baseline.
-* [2025-12] The [v0.4](https://llm-d.ai/blog/llm-d-v0.4-achieve-sota-inference-across-accelerators) release demonstrates 40% reduction in per output token latency for DeepSeek V3.1 on H200 GPUs, Intel XPU and Google TPU disaggregation support for lower time to first token, a new well-lit path for prefix cache offload to vLLM-native CPU memory tiering, and a preview of the workload variant autoscaler improving model-as-a-service efficiency.
+* [2026-10] The [v1.0](https://llm-d.ai/blog/llm-d-v1.0-state-of-the-art-inference-ready-for-day-2) release is our most important milestone yet: it takes state-of-the-art distributed inference from a stack that performs to one you can sustain through production operations. It graduates the configuration API to a stable v1 and adds multi-tenant quality of service, zero-downtime operations (router high availability and lockstep prefill/decode upgrades), and agent-aware serving (session-aware routing and native Responses API state), validated in production across NVIDIA, AMD, and Intel GPUs and Google TPUs through both vLLM and SGLang.
+* [2026-09] The [v0.10](https://github.com/llm-d/llm-d/releases/tag/v0.10.0) release focuses on operational hardening and production readiness, graduating the flagship well-lit paths from "works" to "default" and upstreaming inference image builds to vLLM.
+* [2026-03] llm-d [joins the CNCF as a Sandbox project](https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/), founded by Red Hat, Google Cloud, IBM Research, CoreWeave, and NVIDIA with support from AMD, Cisco, Hugging Face, Intel, Lambda, Mistral AI, UC Berkeley, and University of Chicago.
 
 <!-- Previous News  -->
+<!-- - [2026-08] The [v0.9](https://llm-d.ai/blog/llm-d-v0.9-hardened-for-scale) release hardens the router for production scale with high availability, KEDA-native autoscaling, a formal plugin stability lifecycle, and end-to-end observability. -->
+<!-- - [2026-06] The [v0.8](https://llm-d.ai/blog/llm-d-v0.8-from-platform-to-control-plane) release graduates Flow Control, Batch Gateway, and multi-modal serving to production and aligns with upstream vLLM images. -->
+<!-- - [2026-05] The v0.7 release introduces an optimized baseline renamed and stabilized, kustomize-first migrated guides, predicted-latency scheduling GA, and batch gateway (experimental). -->
+<!-- - [2026-02] The [v0.5](https://llm-d.ai/blog/llm-d-v0.5-sustaining-performance-at-scale) introduces reproducible benchmark workflows, hierarchical KV offloading, active-active HA, and scale-to-zero autoscaling. -->
+<!-- - [2025-12] The [v0.4](https://llm-d.ai/blog/llm-d-v0.4-achieve-sota-inference-across-accelerators) release demonstrates 40% reduction in per output token latency for DeepSeek V3.1 on H200 GPUs, and Intel XPU and Google TPU disaggregation support. -->
 <!-- - [2025-08] Read more about the [optimized-baseline](https://llm-d.ai/blog/intelligent-optimized-baseline-with-llm-d), including a deep dive on how different balancing techniques are composed to improve throughput without overloading replicas. -->
 
 ## 🧱 Architecture

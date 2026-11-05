@@ -5,5 +5,8 @@ resources:
 
 namePrefix: tpu-v5p-vllm-
 
+components:
+  - ../../../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+
 patches:
   - path: patch-vllm.yaml

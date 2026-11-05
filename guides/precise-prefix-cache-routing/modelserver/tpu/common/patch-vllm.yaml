@@ -4,6 +4,10 @@ metadata:
   name: decode
 spec:
   replicas: 2
+  # TPU node pools are fixed-size: a RollingUpdate needs a spare 8-chip node to
+  # surge onto, so the rollout deadlocks with the new pod Pending.
+  strategy:
+    type: Recreate
   template:
     spec:
       containers:
@@ -41,10 +45,15 @@ spec:
                   name: llm-d-hf-token
                   key: HF_TOKEN
           volumeMounts:
-            - mountPath: /.cache
+            - mountPath: /root/.cache
               name: torch-compile-cache
-            - mountPath: /.triton
+            - mountPath: /root/.triton
               name: triton-cache
+            # vLLM's TP worker ring buffer (ShmRingBuffer) needs more than the
+            # container default 64 MiB /dev/shm; without this the engine core
+            # fails at startup with "Insufficient space in /dev/shm".
+            - mountPath: /dev/shm
+              name: dshm
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -63,3 +72,6 @@ spec:
           emptyDir: {}
         - name: triton-cache
           emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory

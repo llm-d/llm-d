@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 1
+  template:
+    spec:
+      priorityClassName: medium
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2x1"
+        cloud.google.com/gke-tpu-accelerator: "tpu7x"
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3.5-397B-A17B-FP8"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=8"
+            - "--enable-expert-parallel"
+            - "--enable-ep-weight-filter"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=16384"
+            - "--mm-processor-cache-gb=20"
+          env:
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "3600"
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
+          resources:
+            limits:
+              memory: 256Gi
+              google.com/tpu: 4
+            requests:
+              cpu: "64"
+              memory: 256Gi
+              google.com/tpu: 4

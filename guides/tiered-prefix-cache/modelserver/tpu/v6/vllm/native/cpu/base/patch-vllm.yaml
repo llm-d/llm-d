@@ -10,8 +10,69 @@ spec:
         cloud.google.com/gke-tpu-topology: "2x4"
       containers:
         - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-32B"
+            # Torch TPU's native host-RAM tier (tpu-sync KVCacheStore) instead of
+            # vLLM's generic OffloadingConnector: blocks are staged in a pinned,
+            # pre-mapped host buffer and copied with the TPU DMA path, and the
+            # tpu-sync KV cache manager tracks the HBM + host tiers as one pool.
+            # cpu_bytes_to_use is the host tier per engine (64 GiB here).
+            - "--kv-transfer-config"
+            - '{"kv_connector":"TPURaidenOffloadingConnector","kv_connector_module_path":"vllm_torchtpu.offload.raiden_connector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":68719476736}}'
+            - "--enable-prefix-caching"
+            - "--port=8000"
+            - "--tensor-parallel-size=8"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=32768"
+            - "--max-num-seqs=64"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=45"
+          env:
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
+            # -- tpu-sync host-RAM offload tier -------------------------------
+            # tpu-sync KV cache manager + unified HBM/host block pool; both are
+            # required for TPURaidenOffloadingConnector.
+            - name: TPU_USE_RAIDEN_KV_CACHE_MANAGER
+              value: "1"
+            - name: TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL
+              value: "1"
+            - name: TPU_RAIDEN_CLIENT_IMPL
+              value: "cpp"
+            # Pinned host staging buffer for HBM<->host DMA (bytes, 16 GiB) and
+            # the per-worker host KV buffer cap (GiB). Sized for the 64 GiB tier.
+            - name: TPU_PREMAPPED_BUFFER_SIZE
+              value: "17179869184"
+            - name: TPU_MAX_HOST_KV_BUFFER_SIZE
+              value: "64"
+            # Host shared-memory pool; Torch TPU defaults to 128 GB which does
+            # not fit a Memory-backed /dev/shm emptyDir.
+            - name: TPU_KV_SHM_POOL_GB
+              value: "8"
+            # HBM left free after the KV pool is sized, for offload scratch.
+            - name: TPU_KV_CACHE_HEADROOM_MIB
+              value: "6144"
+            # Block hashes must agree across TP workers and restarts.
+            - name: PYTHONHASHSEED
+              value: "0"
+          # Host memory: the 64 GiB tpu-sync tier plus a pinned 16 GiB staging
+          # buffer per TP worker (8 x 16 GiB) on top of model loading; 256Gi
+          # is OOMKilled during KVCacheStore construction. ct6e-standard-8t
+          # has 1440 GB.
           resources:
             requests:
-              google.com/tpu: "8"
+              google.com/tpu: 8
+              memory: 900Gi
             limits:
-              google.com/tpu: "8"
+              google.com/tpu: 8
+              memory: 900Gi

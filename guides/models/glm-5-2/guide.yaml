@@ -11,9 +11,17 @@ support:
   accelerators:
     gpu:
       label: NVIDIA H200
-      notes: "P/D disaggregated wide-EP on 8-GPU nodes; needs an all-to-all RDMA fabric · vLLM: CoreWeave InfiniBand, default 8 nodes / 64 GPUs (`p3w2d1w2` + tiered KV offloading), 2 to 10 nodes by `DEPLOYMENT` · SGLang: GKE A3 Ultra RoCE, default 2 nodes / 16 GPUs (`p1w1d1w1`), 2 to 8 nodes by `DEPLOYMENT`"
+      notes: >-
+        P/D disaggregated wide-EP on 8-GPU nodes; needs an all-to-all RDMA fabric ·
+        vLLM: CoreWeave InfiniBand, default 8 nodes / 64 GPUs (`p3w2d1w2` + tiered KV offloading), 2 to 10 nodes by `DEPLOYMENT` ·
+        SGLang: GKE A3 Ultra RoCE, default 2 nodes / 16 GPUs (`p1w1d1w1`), 2 to 8 nodes by `DEPLOYMENT`
       model: zai-org/GLM-5.2-FP8
       engines: {vllm: community, sglang: community}
+    tpu:
+      label: Google TPU v7x
+      notes: "GKE only · Torch TPU vLLM · `DEPLOYMENT=tpu7x-2x2x2-dp16`: one aggregated LeaderWorkerSet on a `2x2x2` tpu7x slice (2 hosts × 4 chips, DP=16 × TP=1, EP, fp8 KV cache) · no P/D disaggregation"
+      model: zai-org/GLM-5.2-FP8
+      engines: {vllm: community}
 
 env:
   static:
@@ -27,7 +35,7 @@ env:
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, tpu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     ROUTING: {default: approximate, values: [approximate, precise]}
     # vLLM: default = p3w2d1w2 + tiered KV offloading; ROUTING=precise sets
@@ -48,6 +56,8 @@ env:
         - p2w2d2w2
         - p3w2d1w2
         - p3w2d2w2
+        # Google TPU v7x (ACCELERATOR_TYPE=tpu): aggregated DP=16 LeaderWorkerSet
+        - tpu7x-2x2x2-dp16
 
     MODEL: {default: "zai-org/GLM-5.2-FP8", comment: "the model every deployment serves"}
 
@@ -77,7 +87,7 @@ prerequisites:
 deploy:
   router_values:
     approximate:
-      - when: {MODEL_SERVER: [vllm]}
+      - when: {MODEL_SERVER: [vllm], ACCELERATOR_TYPE: [gpu]}
         run: |
           # Paths to values files: the wide-EP router values, then the GLM-5.2
           # GPU+CPU prefix-cache affinity overrides on top
@@ -92,7 +102,7 @@ deploy:
           export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
           export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/sglang.values.yaml"
     precise:
-      - when: {ROUTING: [precise], MODEL_SERVER: [vllm]}
+      - when: {ROUTING: [precise], MODEL_SERVER: [vllm], ACCELERATOR_TYPE: [gpu]}
         # ROUTING is not a variant dimension (ACCELERATOR_TYPE/MODEL_SERVER), so
         # guide.py does not wrap it in cicd:skip; README-parsing nightlies run
         # the default approximate mode only.
@@ -105,6 +115,15 @@ deploy:
           export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/precise-routing.values.yaml"
           # Precise routing needs the kv-events + render overlay
           export DEPLOYMENT=p2w1d1w1-precise
+    tpu:
+      - when: {ACCELERATOR_TYPE: [tpu]}
+        run: |
+          # The TPU deployment is one aggregated DP=16 pool: prefix-cache affinity
+          # and token-load scoring instead of the wide-EP P/D plugins
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-tpu.values.yaml"
+          export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
+          export DEPLOYMENT=tpu7x-2x2x2-dp16
 
   monitoring_values:
     - when: {MONITORING: ["true"]}
@@ -127,7 +146,7 @@ deploy:
 
   monitoring:
     # PodMonitors that scrape every DP rank port (dp0-dp7 on prefill, rank0-rank7 on decode)
-    - when: {MONITORING: ["true"]}
+    - when: {MONITORING: ["true"], ACCELERATOR_TYPE: [gpu]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
 
 verify:

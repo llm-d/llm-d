@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  replicas: 8
+  replicas: 1
   template:
     spec:
       priorityClassName: medium
@@ -17,16 +17,25 @@ spec:
           args:
             - "google/gemma-4-31B-it"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-            - "--tensor-parallel-size=4"
-            - "--mm-processor-cache-gb"
-            - "20"
+            - "--tensor-parallel-size=8"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=16384"
+            - "--mm-processor-cache-gb=20"
             - "--shutdown-timeout=45"
+          env:
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
           resources:
             limits:
-              cpu: "16"
               memory: 256Gi
               google.com/tpu: 4
             requests:
-              cpu: "8"
-              memory: 128Gi
+              cpu: "64"
+              memory: 256Gi
               google.com/tpu: 4

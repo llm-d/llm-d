@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                # Run the base's script (passed in args, so $0 here) with the
+                # model's Hub ID swapped for its copy on the node-local hostPath.
+                # --served-model-name keeps the API model name unchanged, and
+                # args keep the Hub ID, which CI reads as the model name.
+                command:
+                  - /bin/bash
+                  - -c
+                  - m=Qwen/Qwen3-32B && exec /bin/bash -c "${0/"$m "//model-cache/models/$m --served-model-name $m }"
+                volumeMounts:
+                  # Model weights must already be on every node under
+                  # /var/model-cache/models/<org>/<model> (provisioned outside this guide).
+                  - mountPath: /model-cache
+                    name: model-storage
+                    readOnly: true
+            volumes:
+              # Node-local model cache. The directory must already exist on the
+              # node and, on SELinux nodes, be labelled container_file_t so
+              # non-spc_t containers can read it.
+              - name: model-storage
+                hostPath:
+                  path: /var/model-cache
+                  type: Directory

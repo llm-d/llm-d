@@ -76,11 +76,20 @@ data:
             headers={"Content-Type": "application/json"},
         )
         start = time.monotonic()
+        first_chunk_ttft = None
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 for line in resp:
-                    if line.strip().startswith(b"data:") and b"[DONE]" not in line:
-                        return time.monotonic() - start
+                    if not line.strip().startswith(b"data:"):
+                        continue
+                    payload = line.strip()[5:].strip()
+                    if payload == b"[DONE]":
+                        break
+                    event = json.loads(payload)
+                    if isinstance(event, dict) and "error" in event:
+                        raise RuntimeError(f"completions stream failed: {str(event['error'])[:500]}")
+                    if first_chunk_ttft is None:
+                        first_chunk_ttft = time.monotonic() - start
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:500]
             raise RuntimeError(
@@ -89,6 +98,10 @@ data:
                 "build may not accept token-ID arrays in `prompt`; substitute a "
                 "deterministic text prompt of exactly CHUNK_SIZE tokens instead."
             ) from e
+        # Keep the first-chunk timing, but consume the stream so a later error
+        # cannot turn a failed request into a successful calibration sample.
+        if first_chunk_ttft is not None:
+            return first_chunk_ttft
         raise RuntimeError("no streamed chunk received")
 
     print(f"endpoint={VLLM_ENDPOINT} model={MODEL_NAME} chunk={CHUNK_SIZE}", flush=True)

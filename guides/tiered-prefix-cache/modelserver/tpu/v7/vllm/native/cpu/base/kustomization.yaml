@@ -5,5 +5,15 @@ resources:
 
 namePrefix: tpu-v7-vllm-
 
+components:
+  - ../../../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/backend: torch-tpu
+      llm-d.ai/model: Qwen3.5-397B-A17B-FP8
+    includeSelectors: true
+    includeTemplates: true
+
 patches:
   - path: patch-vllm.yaml

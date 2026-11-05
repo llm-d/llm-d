@@ -14,21 +14,57 @@ spec:
                 cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
               containers:
                 - name: modelserver
+                  command: ["/bin/bash", "-c"]
                   args:
-                    - "Qwen/Qwen3-32B"
-                    - "--max-model-len=9216"
-                    - "--tensor-parallel-size=8"
-                    - "--enable-auto-tool-choice"
-                    - "--tool-call-parser=hermes"
-                    - "--reasoning-parser=qwen3"
-                    - "--dtype=bfloat16"
-                    - "--kv-transfer-config"
-                    - '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_producer","kv_ip":"$(POD_IP)"}'
-                    - "--port=8000"
-                    - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
-                    - "--shutdown-timeout=45"
+                    - |
+                      set -euo pipefail
+                      if [[ "${POD_IP}" == *":"* ]]; then
+                        HOST_ADDR="::"
+                        export VLLM_HOST_IP="[${POD_IP}]"
+                      else
+                        HOST_ADDR="0.0.0.0"
+                        export VLLM_HOST_IP="${POD_IP}"
+                      fi
+                      exec vllm serve Qwen/Qwen3-32B \
+                        --host "${HOST_ADDR}" \
+                        --max-model-len=16384 \
+                        --max-num-batched-tokens=8192 \
+                        --max-num-seqs=64 \
+                        --tensor-parallel-size=8 \
+                        --attention-backend=CUSTOM \
+                        --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_producer","kv_ip":"$(POD_IP)"}' \
+                        --port=8000 \
+                        --enable-auto-tool-choice \
+                        --tool-call-parser=hermes \
+                        --reasoning-parser=qwen3 \
+                        --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                        --shutdown-timeout=45
+                  env:
+                    - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                      value: "false"
+                    - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+                      value: "0"
+                    - name: VLLM_TARGET_DEVICE
+                      value: "tpu"
+                    - name: PJRT_DEVICE
+                      value: "TPU"
+                    - name: VLLM_PLUGINS
+                      value: "torchtpu"
+                    - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                      value: "1"   # drop weight-file page cache after load (local-path loads)
+                    # TPUConnector stages KV blocks in a host shared-memory pool before the ZMQ
+                    # transfer. Torch TPU sizes it at 128 GB by default, which does not fit the
+                    # 100Gi /dev/shm emptyDir from the base overlay; 8 GB is ample for a 1P1D pair.
+                    - name: TPU_KV_SHM_POOL_GB
+                      value: "8"
+                    # Keep prefill and decode shared-memory segments apart on co-located hosts.
+                    - name: TPU_KV_TRANSFER_NAMESPACE
+                      value: "prefill"
                   resources:
                     limits:
+                      memory: 256Gi
                       google.com/tpu: 8
                     requests:
+                      cpu: "64"
+                      memory: 256Gi
                       google.com/tpu: 8

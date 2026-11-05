@@ -509,9 +509,9 @@ default fairness policy and turn-priority never ran.
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
 > [!IMPORTANT]
-> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../docs/operations/validation/benchmark.md).**
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).**
 >
-> The Benchmarking section below contains only the **turn-priority-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../docs/operations/validation/benchmark.md).
+> The Benchmarking section below contains only the **turn-priority-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).
 
 > [!TIP]
 > If you stood the stack up with `llmdbenchmark` rather than Helm (see

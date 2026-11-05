@@ -32,6 +32,7 @@
     "infrastructure/providers/coreweave": { "label": "CoreWeave", "position": 2 },
     "infrastructure/providers/digitalocean": { "label": "DigitalOcean", "position": 3 },
     "infrastructure/providers/gke": { "label": "GKE", "position": 4 },
+    "infrastructure/providers/gke/tpu": { "label": "Google Cloud TPU", "position": 1 },
     "infrastructure/providers/minikube": { "label": "minikube", "position": 5 },
     "infrastructure/providers/openshift": { "label": "OpenShift", "position": 6 },
     "infrastructure/providers/openshift-aws": { "label": "OpenShift on AWS", "position": 7 },

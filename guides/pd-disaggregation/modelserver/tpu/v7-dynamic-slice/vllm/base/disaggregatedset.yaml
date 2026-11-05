@@ -106,12 +106,16 @@ spec:
                         --gpu-memory-utilization=0.80 \
                         --async-scheduling \
                         --enable-expert-parallel \
+                        --enable-ep-weight-filter \
                         --block-size=256 \
                         --kv-transfer-config '{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_producer","kv_ip":"$(POD_IP)"}' \
                         --port=8000 \
                         --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                         --shutdown-timeout=45
                   env:
+                    # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+                    - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                      value: "1"
                     - name: POD_IP
                       valueFrom:
                         fieldRef:
@@ -301,12 +305,16 @@ spec:
                         --gpu-memory-utilization=0.80 \
                         --async-scheduling \
                         --enable-expert-parallel \
+                        --enable-ep-weight-filter \
                         --block-size=256 \
                         --kv-transfer-config '{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_consumer","kv_ip":"$(POD_IP)"}' \
                         --port=8200 \
                         --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                         --shutdown-timeout=45
                   env:
+                    # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+                    - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                      value: "1"
                     - name: POD_IP
                       valueFrom:
                         fieldRef:

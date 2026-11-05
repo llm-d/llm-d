@@ -363,7 +363,7 @@ WVA v1 Saturation (Default) drives scaling decisions; HPA acts on the `wva_desir
 | Avg Queue Depth | Mean pending-request queue depth at the endpoint proxy (EPP) |
 | Pod Startup | Average time for a new replica to become ready (s) |
 
-> Full per-run data and additional WVA tuning variants are in the [upstream benchmark doc](https://github.com/llm-d/llm-d-workload-variant-autoscaler/blob/main/docs/benchmark.md).
+> Full per-run data and additional WVA tuning variants are in the [upstream benchmark doc](https://github.com/llm-d/llm-d-autoscaling/blob/main/legacy/docs/benchmark.md).
 
 ## FAQ
 

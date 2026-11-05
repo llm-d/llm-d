@@ -1,0 +1,30 @@
+## optimized-baseline router overrides for Google TPU v7 (Qwen3.5-397B-A17B-FP8).
+## Layer after optimized-baseline.values.yaml (deploy.accelerator_values sets ACCELERATOR_VALUES).
+##
+## Same plugin chain as the default values; the producer and the affinity gate are sized
+## for the TPU7x engines (DP=8 x TP=1, --block-size=4352, 262k context, no host tier).
+
+router:
+  epp:
+    pluginsCustomConfig:
+      optimized-baseline-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: approx-prefix-cache-producer
+          parameters:
+            # Engine --block-size=4352 on TPU7x and the 262k context.
+            blockSizeTokens: 4352
+            maxPrefixTokensToMatch: 262144
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured on TPU7x for Qwen3.5-397B-A17B-FP8; see the Qwen3.5-397B model
+            # guide. Re-measure for other hardware/models.
+            peakPrefillThroughput: 16444
+        - type: token-load-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer

@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../../recipes/modelserver/base/multi-host/default
+
+namePrefix: glm-5-2-tpu-vllm-
+
+components:
+  - ../../../../../../../recipes/modelserver/components/graceful-shutdown
+  - ../../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
+
+labels:
+  - pairs:
+      llm-d.ai/guide: glm-5-2-tpu
+      llm-d.ai/model: GLM-5.2-FP8
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+      llm-d.ai/backend: torch-tpu
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/leaderTemplate/metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        create: true
+patches:
+  - path: patch-vllm.yaml
+    target:
+      group: leaderworkerset.x-k8s.io
+      version: v1
+      kind: LeaderWorkerSet
+      name: decode

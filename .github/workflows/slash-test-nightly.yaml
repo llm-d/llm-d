@@ -5,6 +5,9 @@ name: /test-nightly Slash Command
 # Usage: Comment on a PR with:
 #   /test-nightly <nightly-name> [key=value ...]   # exact match
 #   /test-nightly <glob-pattern> [key=value ...]   # glob pattern (* and ? supported)
+#   /test-nightly help                             # reply with usage and available nightlies
+#   /test-nightly list                             # reply with the available nightlies, one per line
+#   /test-nightly results                          # reply with the status of every nightly triggered on the PR
 #
 # Optional parameters (passed to E2E benchmark nightlies, ignored for others):
 #   workload=<profile>    Workload profile (default: sanity_random.yaml)
@@ -12,6 +15,7 @@ name: /test-nightly Slash Command
 #   prefill_pods=<number> Number of prefill pods (default: 1)
 #   harness=<name>        Benchmark harness (default: inference-perf)
 #   dry_run=<bool>        Run in dry-run mode, no benchmark executed (default: false)
+#   verbose=<bool>        Run in verbose mode (default: the nightly's own default)
 #   update_badge=<bool>   Update gh-pages badge (default: false for slash command)
 #   cleanup=<bool>        Cleanup the llm-d stack after the run (default: true, set false for debugging)
 #
@@ -19,16 +23,23 @@ name: /test-nightly Slash Command
 #   platforms=<list>      Platforms to build (comma-separated: cuda,xpu,sglang-xpu,cpu,all; default: cuda)
 #
 # Examples:
-#   /test-nightly pd-disaggregation-ocp
-#   /test-nightly *-ocp
+#   /test-nightly pd-disaggregation-ibm-acc-gpu-vllm-x
+#   /test-nightly *-ibm-*
 #   /test-nightly optimized-baseline-*
-#   /test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1
+#   /test-nightly optimized-baseline-cks-acc-gpu-vllm-x workload=sanity_random.yaml decode_pods=1
 #   /test-nightly build-image
 #   /test-nightly build-image platforms=cuda
 #
-# The command checks out the PR head, pushes a temp branch
-# (test-nightly/pr-<number>) into the main repo, and
-# triggers the matching nightly workflow(s) on that branch.
+# The matching nightly workflow(s) always run with the workflow definition
+# from the PR head, not from the default branch:
+#   - same-repo PRs: dispatched on the PR branch
+#   - fork PRs: dispatched on a temp branch (test-nightly/pr-<number>-<comment>)
+#     pushed into the main repo with the PR head
+#   - nightlies that don't exist on the default branch yet (added in the PR):
+#     GitHub cannot dispatch them by name, so a temp branch
+#     (test-nightly/pr-<number>-<comment>-<name>) is pushed where
+#     test-nightly-runner.yaml is overwritten with the PR's nightly, and the
+#     runner is dispatched on that branch
 # Temp branches are cleaned up by slash-test-nightly-cleanup.yaml.
 #
 # Available nightlies are detected dynamically from workflow files
@@ -115,20 +126,22 @@ jobs:
               return null;
             }
 
-            if (!match) {
+            // Post the usage text. `/test-nightly help` asks for it explicitly;
+            // a bare `/test-nightly` gets it as an error.
+            async function postUsage(isError) {
               const all = await listAllNightlies();
               await github.rest.issues.createComment({
                 owner, repo,
                 issue_number: context.issue.number,
                 body: [
-                  '❌ **Usage**: `/test-nightly <name-or-pattern> [key=value ...]`',
+                  (isError ? '❌ ' : 'ℹ️ ') + '**Usage**: `/test-nightly <name-or-pattern> [key=value ...]`',
                   '',
                   'Supports exact names or glob patterns (`*` and `?`):',
                   '```',
-                  '/test-nightly pd-disaggregation-ocp',
-                  '/test-nightly *-ocp',
+                  '/test-nightly pd-disaggregation-ibm-acc-gpu-vllm-x',
+                  '/test-nightly *-ibm-*',
                   '/test-nightly optimized-baseline-*',
-                  '/test-nightly optimized-baseline-cks workload=sanity_random.yaml decode_pods=1',
+                  '/test-nightly optimized-baseline-cks-acc-gpu-vllm-x workload=sanity_random.yaml decode_pods=1',
                   '```',
                   '',
                   'Optional parameters (applied to E2E benchmark nightlies only):',
@@ -137,23 +150,177 @@ jobs:
                   '- `prefill_pods=<number>` — number of prefill pods (default: `1`)',
                   '- `harness=<name>` — benchmark harness (default: `inference-perf`)',
                   '- `dry_run=true` — validate setup without running the benchmark',
+                  '- `verbose=true` — run in verbose mode (default: the nightly\'s own default)',
                   '- `update_badge=true` — update gh-pages badge (default: skipped for slash commands)',
                   '- `cleanup=false` — keep the llm-d stack alive after the run (for debugging)',
                   '',
                   'Optional parameters (applied to `build-image` only):',
                   '- `platforms=<list>` — platforms to build, comma-separated: cuda,xpu,sglang-xpu,cpu,all (default: `cuda`)',
                   '',
+                  '`/test-nightly help` shows this message; `/test-nightly list` lists the nightlies one per line;',
+                  '`/test-nightly results` shows the status of every nightly triggered on this PR.',
+                  '',
                   'Available nightlies:',
                   all.map(n => '`' + n.name + '`').join(', '),
                 ].join('\n')
               });
+            }
+
+            // Post the status of every nightly this command triggered on the PR.
+            // Runs are found from the command's own "triggered" replies: each
+            // carries the run URL, or, when the run was not found in time, the
+            // workflow file and branch, which are used to look the run up.
+            async function postResults() {
+              const MAX_ROWS = 100;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+
+              // Run ID -> the PR head the reply recorded. A fork PR's run is on a
+              // temp branch with an extra empty commit, so the run's own head_sha
+              // is not the PR's.
+              const prHeadByRun = new Map();
+              const lookups = [];
+              for (const c of comments) {
+                const body = c.body || '';
+                if (c.user?.type !== 'Bot' || !/\*\*(Nightly|\d+ nightlies) triggered\*\*/.test(body)) continue;
+                const prHead = (body.match(/\| PR HEAD \| `([0-9a-f]+)` \|/) || [])[1];
+                for (const m of body.matchAll(/\/actions\/runs\/(\d+)/g)) prHeadByRun.set(Number(m[1]), prHead);
+                const branch = body.match(/\| Branch \| `([^`]+)` \|/);
+                for (const m of body.matchAll(/\/actions\/workflows\/([^)\s]+\.yaml)\)/g)) {
+                  if (branch) lookups.push({ workflowFile: m[1], branch: branch[1], after: c.created_at, prHead });
+                }
+              }
+
+              const runs = new Map();
+              for (const id of prHeadByRun.keys()) {
+                try {
+                  const { data } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id });
+                  runs.set(data.id, data);
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
+              // The earliest dispatched run of the workflow on that branch after the reply.
+              for (const l of lookups) {
+                const { data: { workflow_runs: candidates } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo,
+                  workflow_id: l.workflowFile,
+                  branch: l.branch,
+                  event: 'workflow_dispatch',
+                  created: `>=${new Date(Date.parse(l.after) - 120000).toISOString()}`,
+                  per_page: 20,
+                });
+                const run = candidates.sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+                if (run) {
+                  runs.set(run.id, run);
+                  prHeadByRun.set(run.id, l.prHead);
+                }
+              }
+
+              if (runs.size === 0) {
+                await github.rest.issues.createComment({
+                  owner, repo,
+                  issue_number: context.issue.number,
+                  body: 'ℹ️ No nightlies have been triggered on this PR with `/test-nightly` yet.',
+                });
+                return;
+              }
+
+              function outcome(r) {
+                if (r.status !== 'completed') return '⏳ ' + r.status.replace(/_/g, ' ');
+                const icons = { success: '✅', failure: '❌', cancelled: '🚫', skipped: '⏭️', timed_out: '⌛' };
+                return (icons[r.conclusion] || '⚠️') + ' ' + (r.conclusion || 'unknown').replace(/_/g, ' ');
+              }
+              function duration(r) {
+                const start = Date.parse(r.run_started_at || r.created_at);
+                const end = r.status === 'completed' ? Date.parse(r.updated_at) : Date.now();
+                const mins = Math.max(0, Math.round((end - start) / 60000));
+                return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+              }
+              const nightlyName = r => (r.path || '').split('/').pop()
+                .replace(/@.*$/, '').replace(/^nightly-(e2e-)?/, '').replace(/\.yaml$/, '');
+              const prHead = r => prHeadByRun.get(r.id) || r.head_sha.substring(0, 7);
+              const started = r => (r.run_started_at || r.created_at).replace('T', ' ').replace(/:\d\dZ$/, '');
+              function summary(list) {
+                const counts = {};
+                for (const r of list) {
+                  const o = outcome(r);
+                  counts[o] = (counts[o] || 0) + 1;
+                }
+                return Object.entries(counts).map(([o, n]) => `${o} ${n}`).join(' · ');
+              }
+
+              const sorted = [...runs.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+              // `sorted` is newest first, so the first run seen per nightly is its latest.
+              const latest = new Map();
+              for (const r of sorted) {
+                if (!latest.has(nightlyName(r))) latest.set(nightlyName(r), r);
+              }
+              const latestRuns = [...latest.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, r]) => r);
+
+              const lines = [
+                `ℹ️ **Latest run of each nightly triggered on this PR** ` +
+                  `(${latestRuns.length} nightl${latestRuns.length === 1 ? 'y' : 'ies'}: ${summary(latestRuns)})`,
+                '',
+                ...latestRuns.map(r =>
+                  `- ${outcome(r)} · \`${nightlyName(r)}\` · PR HEAD \`${prHead(r)}\` · ` +
+                  `${started(r)} UTC · [#${r.run_number}](${r.html_url})`),
+                '',
+                `**All runs** (${sorted.length}: ${summary(sorted)})`,
+                '',
+                '| Nightly | Result | PR HEAD | Started (UTC) | Duration | Run |',
+                '|---------|--------|---------|---------------|----------|-----|',
+                ...sorted.slice(0, MAX_ROWS).map(r =>
+                  `| \`${nightlyName(r)}\` | ${outcome(r)} | \`${prHead(r)}\` | ` +
+                  `${started(r)} | ${duration(r)} | [#${r.run_number}](${r.html_url}) |`),
+              ];
+              if (sorted.length > MAX_ROWS) {
+                lines.push('', `Showing the ${MAX_ROWS} most recent of ${sorted.length} runs.`);
+              }
+
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: context.issue.number,
+                body: lines.join('\n'),
+              });
+            }
+
+            if (!match) {
+              await postUsage(true);
               return 'error';
             }
 
             const input = match[1];
 
+            if (input === 'help') {
+              await postUsage(false);
+              return 'help';
+            }
+
+            if (input === 'list') {
+              const all = await listAllNightlies();
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: context.issue.number,
+                body: [
+                  `ℹ️ **${all.length} nightlies available** at this PR's head:`,
+                  '',
+                  ...all.map(n => '- `' + n.name + '` (`' + n.workflowFile + '`)'),
+                ].join('\n')
+              });
+              return 'list';
+            }
+
+            if (input === 'results') {
+              await postResults();
+              return 'results';
+            }
+
             // Parse optional key=value parameters (with defaults for quick PR validation)
-            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run', 'update_badge', 'cleanup'];
+            const SUPPORTED_PARAMS = ['workload', 'decode_pods', 'prefill_pods', 'harness', 'platforms', 'dry_run', 'verbose', 'update_badge', 'cleanup'];
             const DEFAULT_PARAMS = {
               workload: 'sanity_random.yaml',
               decode_pods: '1',
@@ -201,6 +368,20 @@ jobs:
                 body: `❌ ${hint}\n\nAvailable: ${all.map(n => '\`' + n.name + '\`').join(', ')}`
               });
               return 'error';
+            }
+
+            // workflow_dispatch resolves the workflow by its path on the default
+            // branch, so a nightly that only exists in this PR is unknown to the
+            // API (404). Those are dispatched through test-nightly-runner.yaml,
+            // whose contents get replaced by the PR's nightly on a temp branch.
+            for (const m of matches) {
+              try {
+                await github.rest.actions.getWorkflow({ owner, repo, workflow_id: m.workflowFile });
+                m.registered = true;
+              } catch (e) {
+                if (e.status !== 404) throw e;
+                m.registered = false;
+              }
             }
 
             core.setOutput('matches', JSON.stringify(matches));
@@ -333,55 +514,90 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Push temp branch (fork PRs only)
+      # Every nightly runs from the PR's workflow file. Each match gets the ref
+      # to dispatch on and the workflow file to dispatch:
+      #   - registered nightly, same-repo PR: the PR branch itself
+      #   - registered nightly, fork PR: a temp branch with the PR head
+      #   - nightly unknown to GitHub (added in this PR): a temp branch where
+      #     test-nightly-runner.yaml is overwritten with the PR's nightly
+      - name: Push temp branches
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         id: branch
         env:
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
-          MATCH_NAMES: ${{ steps.parse.outputs.match_names }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          MATCHES_JSON: ${{ steps.parse.outputs.matches }}
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           IS_FORK: ${{ steps.pr.outputs.is_fork }}
           WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
-          if [ "$IS_FORK" = "true" ]; then
+          RUNNER_FILE=test-nightly-runner.yaml
+          PR_SHA=$(git rev-parse HEAD)
+          UNREGISTERED=$(jq '[.[] | select(.registered == false)] | length' <<<"$MATCHES_JSON")
+          REGISTERED=$(jq '[.[] | select(.registered == true)] | length' <<<"$MATCHES_JSON")
+
+          if [ "$IS_FORK" = "true" ] || [ "$UNREGISTERED" -gt 0 ]; then
             if [ -z "$WORKFLOW_TOKEN" ]; then
-              echo "::error::Fork PR /test-nightly runs require WORKFLOW_TOKEN to be configured" \
-                "with permission to push branches and trigger workflows (for example," \
-                "a fine-grained PAT with Contents: write and Actions: write, or a" \
-                "classic PAT with repo and workflow scope)."
+              echo "::error::Fork PRs and nightlies added in the PR require WORKFLOW_TOKEN to be" \
+                "configured with permission to push branches and trigger workflows (for example," \
+                "a fine-grained PAT with Contents: write, Actions: write and Workflows: write," \
+                "or a classic PAT with repo and workflow scope)."
               exit 1
             fi
-            # Include comment ID to avoid races when multiple /test-nightly
-            # commands on the same PR run concurrently.
-            BRANCH="test-nightly/pr-${PR_NUMBER}-${{ github.event.comment.id }}"
             git remote set-url origin "https://x-access-token:${WORKFLOW_TOKEN}@github.com/${{ github.repository }}.git"
-            git checkout -b "$BRANCH"
-            # Add an empty commit so the branch tip has a fresh timestamp
-            # (used by cleanup to determine branch age)
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git commit --allow-empty -m "test-nightly: trigger ${MATCH_NAMES} for PR #${PR_NUMBER}"
-            git push origin "$BRANCH" --force
-            echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
-            echo "is_temp=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-            echo "is_temp=false" >> "$GITHUB_OUTPUT"
           fi
+
+          # Branch names include the comment ID to avoid races when multiple
+          # /test-nightly commands on the same PR run concurrently. Every temp
+          # branch gets a fresh commit so its tip timestamp reflects creation
+          # time (used by cleanup to determine branch age).
+          SHARED_REF="$HEAD_REF"
+          IS_TEMP=false
+          if [ "$IS_FORK" = "true" ] && [ "$REGISTERED" -gt 0 ]; then
+            SHARED_REF="test-nightly/pr-${PR_NUMBER}-${COMMENT_ID}"
+            git checkout -B "$SHARED_REF" "$PR_SHA"
+            git commit --allow-empty -m "test-nightly: trigger nightlies for PR #${PR_NUMBER}"
+            git push origin "$SHARED_REF" --force
+            IS_TEMP=true
+          fi
+
+          RESOLVED='[]'
+          while read -r m; do
+            NAME=$(jq -r '.name' <<<"$m")
+            WORKFLOW_FILE=$(jq -r '.workflowFile' <<<"$m")
+            if [ "$(jq -r '.registered' <<<"$m")" = "true" ]; then
+              REF="$SHARED_REF"
+              DISPATCH_FILE="$WORKFLOW_FILE"
+            else
+              REF="test-nightly/pr-${PR_NUMBER}-${COMMENT_ID}-${NAME}"
+              DISPATCH_FILE="$RUNNER_FILE"
+              git checkout -B "$REF" "$PR_SHA"
+              cp ".github/workflows/${WORKFLOW_FILE}" ".github/workflows/${RUNNER_FILE}"
+              git add ".github/workflows/${RUNNER_FILE}"
+              git commit --allow-empty -m "test-nightly: run ${WORKFLOW_FILE} for PR #${PR_NUMBER}"
+              git push origin "$REF" --force
+              IS_TEMP=true
+            fi
+            RESOLVED=$(jq -c --argjson m "$m" --arg ref "$REF" --arg file "$DISPATCH_FILE" \
+              '. + [$m + {ref: $ref, dispatchFile: $file}]' <<<"$RESOLVED")
+          done < <(jq -c '.[]' <<<"$MATCHES_JSON")
+
+          echo "matches=$RESOLVED" >> "$GITHUB_OUTPUT"
+          echo "is_temp=$IS_TEMP" >> "$GITHUB_OUTPUT"
 
       - name: Trigger nightlies and collect run URLs
         if: steps.parse.outputs.result == 'ok' && steps.perm.outputs.result == 'ok'
         id: trigger
         uses: actions/github-script@v9
         env:
-          MATCHES_JSON: ${{ steps.parse.outputs.matches }}
-          BRANCH_REF: ${{ steps.branch.outputs.ref }}
+          MATCHES_JSON: ${{ steps.branch.outputs.matches }}
           PARAMS_JSON: ${{ steps.parse.outputs.params }}
         with:
           script: |
             const matches = JSON.parse(process.env.MATCHES_JSON);
             const params = JSON.parse(process.env.PARAMS_JSON || '{}');
-            const ref = process.env.BRANCH_REF;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
@@ -391,16 +607,16 @@ jobs:
             // Record time before dispatching (used to identify new runs)
             const beforeDispatch = new Date();
 
-            // Get the HEAD SHA of the branch so we can correlate runs
-            // more precisely than timestamps alone.
-            const { data: refData } = await github.rest.git.getRef({
-              owner, repo,
-              ref: `heads/${ref}`,
-            });
-            const headSha = refData.object.sha;
-
             // Dispatch all workflows
             for (const m of matches) {
+              // Get the HEAD SHA of the branch so we can correlate runs
+              // more precisely than timestamps alone.
+              const { data: refData } = await github.rest.git.getRef({
+                owner, repo,
+                ref: `heads/${m.ref}`,
+              });
+              m.headSha = refData.object.sha;
+
               // Only send benchmark params to E2E benchmark nightlies (not WVA or utility nightlies)
               const isE2eBenchmark = m.workflowFile.startsWith('nightly-e2e-') && !m.workflowFile.includes('-wva-');
               const isBuildWorkflow = m.workflowFile === 'nightly-build-image.yaml';
@@ -416,13 +632,13 @@ jobs:
               }
               const benchmarkParams = workflowParams;
 
-              console.log(`Dispatching ${m.workflowFile} on ref ${ref}` +
+              console.log(`Dispatching ${m.workflowFile} (as ${m.dispatchFile}) on ref ${m.ref}` +
                 (Object.keys(workflowParams).length > 0 ? ` with params: ${JSON.stringify(workflowParams)}` : ''));
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   owner, repo,
-                  workflow_id: m.workflowFile,
-                  ref,
+                  workflow_id: m.dispatchFile,
+                  ref: m.ref,
                   inputs: {
                     pr_number: context.issue.number.toString(),
                     pr_repo: `${context.repo.owner}/${context.repo.repo}`,
@@ -434,8 +650,8 @@ jobs:
                   // Workflow doesn't declare pr_number/pr_repo inputs — retry without them
                   await github.rest.actions.createWorkflowDispatch({
                     owner, repo,
-                    workflow_id: m.workflowFile,
-                    ref,
+                    workflow_id: m.dispatchFile,
+                    ref: m.ref,
                     inputs: {
                       ...benchmarkParams,
                     },
@@ -458,15 +674,15 @@ jobs:
                 try {
                   const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
                     owner, repo,
-                    workflow_id: m.workflowFile,
-                    branch: ref,
+                    workflow_id: m.dispatchFile,
+                    branch: m.ref,
                     per_page: 5,
                   });
 
                   // Match on head_sha AND creation time to avoid picking
                   // a run from a different concurrent dispatch.
                   const newRun = runs.find(r =>
-                    r.head_sha === headSha &&
+                    r.head_sha === m.headSha &&
                     new Date(r.created_at) >= beforeDispatch
                   );
                   if (newRun) {
@@ -493,7 +709,6 @@ jobs:
         uses: actions/github-script@v9
         env:
           TRIGGER_RESULTS: ${{ steps.trigger.outputs.results }}
-          BRANCH_REF: ${{ steps.branch.outputs.ref }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           IS_TEMP: ${{ steps.branch.outputs.is_temp }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
@@ -502,7 +717,6 @@ jobs:
           script: |
             const results = JSON.parse(process.env.TRIGGER_RESULTS);
             const params = JSON.parse(process.env.PARAMS_JSON || '{}');
-            const ref = process.env.BRANCH_REF;
             const sha = process.env.HEAD_SHA.substring(0, 7);
             const isTemp = process.env.IS_TEMP === 'true';
             const prNumber = parseInt(process.env.PR_NUMBER);
@@ -511,8 +725,11 @@ jobs:
             function runLink(r) {
               return r.runUrl
                 ? `[View run](${r.runUrl})`
-                : `[Workflow page](https://github.com/${repo}/actions/workflows/${r.workflowFile})`;
+                : `[Workflow page](https://github.com/${repo}/actions/workflows/${r.dispatchFile})`;
             }
+
+            const branches = [...new Set(results.map(r => r.ref))]
+              .map(b => `\`${b}\``).join(', ');
 
             const lines = [];
 
@@ -540,7 +757,7 @@ jobs:
                 '|--------|-------|',
                 `| Run | ${runLink(r)} |`,
                 `| Workflow | \`${r.workflowFile}\` |`,
-                `| Branch | \`${ref}\` |`,
+                `| Branch | \`${r.ref}\` |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
               if (overridesRow) lines.push(overridesRow);
@@ -558,7 +775,7 @@ jobs:
                 '',
                 '| Detail | Value |',
                 '|--------|-------|',
-                `| Branch | \`${ref}\` |`,
+                `| Branches | ${branches} |`,
                 `| PR HEAD | \`${sha}\` |`,
               );
               if (overridesRow) lines.push(overridesRow);
@@ -567,7 +784,7 @@ jobs:
             if (isTemp) {
               lines.push(
                 '',
-                '> Temp branch will be cleaned up automatically within 24 hours.',
+                '> Temp branches will be cleaned up automatically within 24 hours.',
               );
             }
 

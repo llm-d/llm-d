@@ -385,20 +385,14 @@ spec:
                     - --model-server-port=8200
                     - --kv-connector=nixlv2
                     # Must agree with read_mode=false in both --kv-transfer-config blocks.
+                    # Serial dispatch waits for the prefill response before sending decode.
                     - --moriio-write-mode
                     - --moriio-dp-size=16
                     - --moriio-dp-size-local=8
                     - --moriio-tp-size=1
-                    - --moriio-parallel-dispatch
-                    # Parallel dispatch synthesises the prefill leg's KV params from these, so pin them
-                    # to the ports the prefill engine listens on rather than relying on sidecar defaults.
-                    - --moriio-prefill-handshake-port=6301
-                    - --moriio-prefill-notify-port=61005
                     - --moriio-local-pod-ip=$(POD_IP)
                     - --moriio-remote-hosts=$(MORIIO_REMOTE_HOSTS)
                     - --moriio-decode-hosts=$(MORIIO_DECODE_HOSTS)
-                    # 32k-token prompts at concurrency 64 can queue 75 s behind prefill; the 30 s default returns 504.
-                    - --moriio-parallel-decode-wait-timeout=180s
                     - --metrics-port=9095
                     - --zap-log-level=1
                     - --secure-proxy=false

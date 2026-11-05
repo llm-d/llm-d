@@ -1,0 +1,6 @@
+nameReference:
+  - kind: ResourceClaimTemplate
+    group: resource.k8s.io
+    fieldSpecs:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims/resourceClaimTemplateName
+        kind: DisaggregatedSet

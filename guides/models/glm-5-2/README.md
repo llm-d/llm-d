@@ -1,4 +1,4 @@
-# GLM-5.2-FP8 on H200
+# GLM-5.2-FP8 on H200 and Google TPU v7x
 
 ## Overview
 
@@ -34,9 +34,10 @@ CoreWeave (CKS) with InfiniBand networking.
 
 An SGLang variant (`MODEL_SERVER=sglang`) runs the same wide-EP P/D layout on GKE A3 Ultra (RoCE)
 with the SGLang Rust frontend, which gives every DP rank its own HTTP listener. It serves the
-OpenAI routes and SGLang's native `/generate` API, and has no benchmark numbers yet. It
-uses the same deploy, verify and cleanup steps below. Where a section differs per engine, pick the
-SGLang tab. The rest of this page describes the vLLM recipe unless it says otherwise.
+OpenAI routes and SGLang's native `/generate` API, keeps evicted KV in a host-memory tier on
+prefill, and can add a shared-storage tier behind it (`hicache-fs`). It uses the same deploy,
+verify and cleanup steps below. Where a section differs per engine, pick the SGLang tab. The rest
+of this page describes the vLLM recipe unless it says otherwise.
 
 ## Default Configuration
 
@@ -80,12 +81,12 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 | Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
 | Serving topology         | P/D disaggregated: 1 prefill replica (DEP8, 1 node) + 1 decode replica (DEP8, 1 node), attention TP=1, DP=EP |
 | DP model                 | Rust frontend, one HTTP listener per DP rank (`SGLANG_RUST_SERVER=1`)         |
-| All-to-all               | DeepEP v2 over NCCL GIN, hybrid mode, on both roles (`deepep_v2`)            |
+| All-to-all               | DeepEP v2 hybrid on both roles (`--moe-a2a-backend deepep_v2 --deepep-v2-mode hybrid`) |
 | MoE backend              | SGLang default (`--moe-runner-backend auto`)                                 |
 | KV transfer              | Mooncake (NIXL failed under long-context load on GKE RoCE)                   |
-| KV cache offloading      | HiCache on prefill, 64 GB per rank (`hicache`, in every SGLang topology)     |
+| KV cache offloading      | HiCache host tier on prefill, 100 GB per rank with direct PCIe DMA (`hicache`, in every SGLang topology); optional shared-storage tier (`hicache-fs`) |
 | MTP speculative decoding | On (EAGLE, 3 steps)                                                          |
-| `mem-fraction-static`    | 0.85 (prefill and decode)                                                    |
+| `mem-fraction-static`    | 0.90 on prefill (2,048-token chunk per rank) and 0.945 on decode for 1-node DEP8; 0.85 on multi-node DEP16 |
 | Routing                  | GPU+CPU (HiCache) prefix-cache affinity + token load ([`sglang.values.yaml`](router/sglang.values.yaml)) |
 | Reasoning / tool-call    | glm45 / glm47                                                                |
 
@@ -115,6 +116,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA H200 | `gpu` | `zai-org/GLM-5.2-FP8` | 🟡 community | 🟡 community | P/D disaggregated wide-EP on 8-GPU nodes; needs an all-to-all RDMA fabric · vLLM: CoreWeave InfiniBand, default 8 nodes / 64 GPUs (`p3w2d1w2` + tiered KV offloading), 2 to 10 nodes by `DEPLOYMENT` · SGLang: GKE A3 Ultra RoCE, default 2 nodes / 16 GPUs (`p1w1d1w1`), 2 to 8 nodes by `DEPLOYMENT` |
+| Google TPU v7x | `tpu` | `zai-org/GLM-5.2-FP8` | 🟡 community | — | GKE only · Torch TPU vLLM · `DEPLOYMENT=tpu7x-2x2x2-dp16`: one aggregated LeaderWorkerSet on a `2x2x2` tpu7x slice (2 hosts × 4 chips, DP=16 × TP=1, EP, fp8 KV cache) · no P/D disaggregation |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -140,6 +142,11 @@ This guide includes configurations for the following accelerator and model serve
 - For `MODEL_SERVER=sglang` on GKE A3 Ultra, prepare the cluster as described in the
   [GKE provider docs](../../../docs/infrastructure/providers/gke/README.md) (GPUDirect RDMA, DRA
   and DRANET drivers) so the `gke-rdma-template` resource claims resolve.
+
+- For the SGLang `hicache-fs` component, create a ReadWriteMany PersistentVolumeClaim named
+  `llm-d-kv-cache-storage` in `${NAMESPACE}` before deploying the model server. The
+  [tiered prefix cache guide](../../tiered-prefix-cache/README.md#filesystem-tier) has the claim
+  (`manifests/pvc.yaml`) and storage-class manifests for shared filesystems.
 
 - Create a [HuggingFace token](../../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -169,10 +176,10 @@ export GUIDE_NAME=glm-5-2
 export NAMESPACE=llm-d-glm-5-2
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export ROUTING=approximate # options: approximate, precise
-export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w1-precise, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2
+export DEPLOYMENT=default # options: default, p1w1d1w1, p1w1d1w2, p1w2d1w2, p2w1d1w1, p2w1d1w1-precise, p2w1d1w2, p2w2d1w2, p2w2d2w2, p3w2d1w2, p3w2d2w2, tpu7x-2x2x2-dp16
 export MODEL=zai-org/GLM-5.2-FP8 # the model every deployment serves
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -228,8 +235,8 @@ With `MODEL_SERVER=sglang`, [`sglang.values.yaml`](router/sglang.values.yaml) is
 
 <!-- guide:deploy.router_values.approximate start -->
 <!-- variants:start -->
-<details open data-when="MODEL_SERVER=vllm">
-<summary><b>vLLM</b></summary>
+<details open data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=vllm">
+<summary><b>NVIDIA H200 · vLLM</b></summary>
 
 ```bash
 # Paths to values files: the wide-EP router values, then the GLM-5.2
@@ -266,7 +273,7 @@ Layers [`precise-routing.values.yaml`](router/precise-routing.values.yaml) on to
 <!-- guide:deploy.router_values.precise start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# only when ROUTING=precise and MODEL_SERVER=vllm:
+# only when ROUTING=precise and MODEL_SERVER=vllm and ACCELERATOR_TYPE=gpu:
 # Paths to values files: the wide-EP router values, then the GLM-5.2
 # precise KV-event-backed prefix-cache routing overrides on top
 export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
@@ -277,6 +284,32 @@ export DEPLOYMENT=p2w1d1w1-precise
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.router_values.precise end -->
+
+</details>
+<details data-when="ACCELERATOR_TYPE=tpu">
+<summary><b>Google TPU v7x (aggregated)</b></summary>
+
+The TPU deployment is one aggregated DP=16 pool with no P/D disaggregation, so the wide-EP `DisaggregatedSet` plugins do not apply. [`glm-5-2-tpu.values.yaml`](router/glm-5-2-tpu.values.yaml) selects the TPU pods (`llm-d.ai/guide: glm-5-2-tpu`) and routes with `prefix-cache-affinity-filter` + `token-load-scorer`; it also sets `DEPLOYMENT=tpu7x-2x2x2-dp16`. `ROUTING` is ignored on TPU.
+
+<!-- guide:deploy.router_values.tpu start -->
+<!-- variants:start -->
+<details data-when="ACCELERATOR_TYPE=tpu">
+<summary><b>Google TPU v7x</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+# The TPU deployment is one aggregated DP=16 pool: prefix-cache affinity
+# and token-load scoring instead of the wide-EP P/D plugins
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-tpu.values.yaml"
+export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
+export DEPLOYMENT=tpu7x-2x2x2-dp16
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
+<!-- guide:deploy.router_values.tpu end -->
 
 </details>
 <!-- tabs:end -->
@@ -322,6 +355,15 @@ kubectl apply -n ${NAMESPACE} \
 Do not deploy the vLLM and SGLang recipes in the same namespace: the InferencePool selects pods by
 `llm-d.ai/guide` only and would mix both engines into one pool.
 
+<details data-when="ACCELERATOR_TYPE=tpu">
+<summary><b>Google TPU v7x notes</b></summary>
+
+- `tpu7x-2x2x2-dp16` is a two-host LeaderWorkerSet on a `2x2x2` tpu7x slice (4 chips per host, 2 TensorCores per chip): `vllm serve zai-org/GLM-5.2-FP8 --data-parallel-size=16 --tensor-parallel-size=1 --enable-expert-parallel --kv-cache-dtype=fp8 --max-model-len=32768`, one API server on the leader (port 8000). It runs on the Torch TPU vLLM image (`torch-tpu-vllm` component).
+- GKE only (`INFRA_PROVIDER` does not apply): the slice needs a `2x2x2` tpu7x node pool, a boot disk of at least 1.5 TB on every host (each host downloads the full 756 GB FP8 checkpoint into `/var/cache/huggingface`, a `hostPath`, and must keep it above the kubelet eviction threshold).
+- `MONITORING=true` is GPU-only here; the PodMonitors scrape per-rank GPU ports.
+
+</details>
+
 For vLLM, two hardware notes: prefill workers request `1500Gi` DRAM for the CPU offload tier, and the
 NVMe tier uses a host-path volume at `/mnt/local/kv-cache`. On nodes without local NVMe, swap
 the overlay's `offloading-tiered` component for `offloading-cpu` (DRAM only).
@@ -340,7 +382,7 @@ node-exporter sidecars and the plain-Prometheus alternative.
 
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and ACCELERATOR_TYPE=gpu:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -455,9 +497,20 @@ vLLM ships every topology; SGLang ships the ones marked in the SGLang column.
 
 The SGLang overlays all build on the GKE provider overlay (`modelserver/gpu/sglang/providers/gke`),
 the only one so far; other providers need their own `providers/<name>` overlay (RDMA device
-requests, HCA selection, cache volumes). The SGLang components are `no-mtp` and `hicache`.
-Every SGLang topology includes `hicache`, which enables HiCache (host-memory KV cache) on
-prefill with `HICACHE_SIZE_GB_PER_RANK=64`.
+requests, HCA selection, cache volumes). Every SGLang topology includes `hicache`, which enables
+the HiCache host-memory tier on prefill with `HICACHE_SIZE_GB_PER_RANK=100` (`direct` +
+`page_first_direct`). The SGLang components are:
+
+| Component | Targets | Effect |
+| --------- | ------- | ------ |
+| `hicache` | prefill only | HiCache host-memory tier, 100 GB per rank (`HICACHE_SIZE_GB_PER_RANK=100`, `direct` PCIe DMA), with the pod memory (`1200Gi` / `1600Gi`) to hold it |
+| `hicache-fs` | prefill only | Shared-storage tier behind the host tier: SGLang's file storage backend on the `llm-d-kv-cache-storage` claim (`HICACHE_STORAGE_BACKEND=file`); requires `hicache` |
+| `no-mtp` | prefill + decode | Disables MTP speculative decoding (`ENABLE_MTP=0`) |
+
+`modelserver/gpu/sglang/deployments/benchmark/` holds overlays for comparing KV cache tiers and
+MTP on `p1w1d1w1`: `baseline/p1w1d1w1` (no HiCache), `hicache-fs/p1w1d1w1` (host and
+shared-storage tiers), and `no-mtp/p1w1d1w1` (host tier with MTP disabled); `p1w1d1w1` itself is
+the MTP + host-tier configuration.
 
 Raw topology overlays ship with MTP on and offloading off; opt in or out per deployment by
 adding [Kustomize components](https://kubectl.docs.kubernetes.io/guides/config_management/components/)
@@ -474,7 +527,7 @@ entries merge by name, so their values replace the base defaults.
 
 ## Manifest Reference
 
-The KV cache offloading, InfiniBand and KV cache evictor sections apply to the vLLM recipe.
+The InfiniBand and KV cache evictor sections apply to the vLLM recipe.
 
 ### MTP Speculative Decoding
 
@@ -496,6 +549,10 @@ On by default for both roles as EAGLE with 3 steps and 4 draft tokens. Disable w
 
 ### KV Cache Offloading (Prefill)
 
+<!-- tabs:start group=engine -->
+<details open>
+<summary><b>vLLM</b></summary>
+
 Off in the raw topology overlays; enabled via the `offloading-cpu` or `offloading-tiered`
 component.
 
@@ -507,6 +564,76 @@ component.
   `/mnt/local/kv-cache` mounted as `/mnt/nvme-cache`.
 
 Decode pods do not use offloading (256Gi dshm, 512Gi memory).
+
+</details>
+<details>
+<summary><b>SGLang</b></summary>
+
+SGLang's hierarchical cache (HiCache) keeps KV that leaves the GPU in a host-memory tier and,
+optionally, in a storage tier behind it. Both run on the prefill role only; decode pods keep
+no HiCache (512Gi memory), since in P/D a decode miss is served by a transfer from prefill.
+
+- **`hicache`** - host-memory tier, `HICACHE_SIZE_GB_PER_RANK=100` with zero-copy PCIe DMA
+  (`HICACHE_IO_BACKEND=direct`, `HICACHE_MEM_LAYOUT=page_first_direct`). SGLang's `--hicache-size`
+  uses decimal GB (`host_size * 1e9`) per attention-DP rank, so a DEP8 prefill node pins 800 GB of
+  MLA+MTP KV plus 44.9 GB of DSA indexer cache (~787 GiB total, `1,929,664` tokens/rank, `15.44M`
+  tokens/node); the component raises the pod memory to `1200Gi` request / `1600Gi` limit.
+- **`hicache-fs`** - storage tier behind the host tier: SGLang's file storage backend on the
+  `llm-d-kv-cache-storage` ReadWriteMany claim, mounted at `/mnt/kv-cache-storage`, two files
+  per 64-token page (`.bin` and `.indexer.bin`) under `glm-5-2-fp8/`. The component switches the
+  write policy to `write_through`, so a page reaches storage as soon as it is prefilled, and waits
+  for storage prefetches (`wait_complete`), so a matched prefix is restored rather than recomputed.
+  GLM-5.2 is an MLA model, so the page files carry no rank in their name: every attention-DP rank,
+  and every prefill replica that mounts the volume, reads and writes the same cache. The component
+  enables SGLang's LRU file evictor with a `500Gi` free-space floor
+  (`SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE=500Gi`) so `write_through` does not fill fixed-size
+  volumes; on elastic or multi-tenant filesystems, set `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` (for
+  example `8000Gi`) to cap directory size directly. Enable `hicache-fs` for multi-replica prefill
+  pools, Spot nodes, rolling restarts, or multi-hour session pauses; omit it on a single
+  steady-state prefill replica to avoid write-through storage overhead.
+
+The prefill launch script reads these environment variables (`0` or empty disables
+`HICACHE_SIZE_GB_PER_RANK`; empty keeps SGLang's default for the others):
+
+| Variable | Set by | Flag |
+| --- | --- | --- |
+| `HICACHE_SIZE_GB_PER_RANK` | `hicache` (`100`; default `0`) | `--enable-hierarchical-cache --hicache-size` (decimal GB) |
+| `HICACHE_IO_BACKEND` | `hicache` (`direct`; default `kernel`) | `--hicache-io-backend` |
+| `HICACHE_MEM_LAYOUT` | `hicache` (`page_first_direct`; default `layer_first`) | `--hicache-mem-layout` |
+| `HICACHE_WRITE_POLICY` | `hicache-fs` (`write_through`; default `write_back`) | `--hicache-write-policy` |
+| `HICACHE_STORAGE_BACKEND` | `hicache-fs` (`file`) | `--hicache-storage-backend` |
+| `HICACHE_STORAGE_PREFETCH_POLICY` | `hicache-fs` (`wait_complete`; default `best_effort`) | `--hicache-storage-prefetch-policy` |
+| `SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR` | `hicache-fs` | storage directory of the file backend |
+| `SGLANG_HICACHE_FILE_BACKEND_MIN_FREE_SPACE` | `hicache-fs` (`500Gi`) | free-space floor for LRU file eviction (IEC `Gi`/`Ti` or SI `G`/`T`) |
+| `SGLANG_HICACHE_FILE_BACKEND_MAX_SIZE` | `hicache-fs` (`""`, optional) | optional directory size cap for LRU file eviction (`""` or `0` leaves uncapped) |
+
+If you change the prefill KV cache size (disable `hicache`, change `HICACHE_SIZE_GB_PER_RANK`, or
+use a multi-node prefill topology), update `lruCapacityPerServer` in
+[`router/sglang.values.yaml`](router/sglang.values.yaml) to the per-rank block count: `#tokens`
+from the prefill `KV Cache is allocated` log divided by 64, plus `30151` with the default
+`hicache` (`0` without it). The values file lists the common cases.
+
+</details>
+<!-- tabs:end -->
+
+### SGLang Wide-EP Tuning
+
+The SGLang `DisaggregatedSet` in `modelserver/gpu/sglang/base/disaggregatedset.yaml` exposes these
+tuning variables (leave `*_MEM_FRACTION_STATIC` empty to keep the topology default):
+
+| Variable | Role | Default | Flag / Effect |
+| --- | --- | --- | --- |
+| `PREFILL_MEM_FRACTION_STATIC` | prefill | `0.90` (`size=1`) / `0.85` (`size>1`) | `--mem-fraction-static` (`261,376` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
+| `PREFILL_CHUNK_TOKENS_PER_RANK` | prefill | `2048` | `--chunked-prefill-size` (`value * DP_SIZE`) and per-rank `--max-prefill-tokens` |
+| `SGLANG_DEEPEP_V2_NUM_MAX_DISPATCH_TOKENS_PER_RANK` | prefill | `2048` | DeepEP v2 per-rank prefill dispatch buffer (`>= PREFILL_CHUNK_TOKENS_PER_RANK`; `256` on decode) |
+| `DECODE_MEM_FRACTION_STATIC` | decode | `0.945` (`size=1`) / `0.85` (`size>1`) | `--mem-fraction-static` (`383,552` DEP8 vs. `964,608` DEP16 L1 tokens/rank on H200) |
+| `DECODE_MAX_RUNNING_REQUESTS_PER_RANK` | decode | `48` | `--max-running-requests` (`value * DP_SIZE`) |
+| `DECODE_CUDA_GRAPH_MAX_BS` | decode | `48` | `--cuda-graph-max-bs-decode` |
+| `SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT` / `WAITING_TIMEOUT` | prefill + decode | SGLang default (`300` s) | P/D bootstrap and transfer-queue timeouts; overridden to `900` s in `benchmark/baseline/p1w1d1w1` |
+
+Capping per-rank `--max-prefill-tokens` at `2048` bounds the EAGLE MTP draft layer's all-gathered
+MoE activation buffer so `0.90` HBM fits without out-of-memory errors on long-context agentic
+prompts.
 
 ### InfiniBand Networking
 

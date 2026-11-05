@@ -3,7 +3,7 @@
 This recipe is optimized for agentic code generation; see the
 [agentic workloads section of the Models overview](../../../docs/well-lit-paths/models/README.md#agentic-workloads)
 for the workload framing, and the [GLM-5.2](../glm-5-2/README.md) and
-[Qwen3-Coder-480B](../qwen3-coder-480b/README.md) guides for the other models benchmarked against
+[Qwen3.5-397B](../qwen3-5-397b/README.md) guides for the other models benchmarked against
 the same workload.
 
 ## Overview

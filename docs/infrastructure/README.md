@@ -4,7 +4,7 @@ This section covers the hardware and software requirements for llm-d, cluster co
 
 ### [Kubernetes Infrastructure Providers](providers/README.md)
 
-Provider-specific cluster setup notes (AKS, DigitalOcean, GKE, minikube, OpenShift, and OpenShift on AWS).
+Provider-specific cluster setup notes (AKS, DigitalOcean, GKE and [Google Cloud TPU](providers/gke/tpu/README.md), minikube, OpenShift, and OpenShift on AWS).
 
 ### [Kubernetes Gateways](gateway/README.md)
 
@@ -21,6 +21,10 @@ Running the llm-d routing stack on bare metal, HPC Slurm schedulers, or Ray via 
 ### [RDMA & Networking Configuration](rdma/README.md)
 
 Orchestrating multi-host replica topologies and RDMA networking fabrics.
+
+### [Rook CephFS Storage](storage/rook-cephfs/README.md)
+
+A hyperconverged Ceph cluster on the GPU nodes' NVMe drives, exposing a CephFS StorageClass tuned as a shared KV-cache offload tier.
 
 ---
 
