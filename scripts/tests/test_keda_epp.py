@@ -45,6 +45,14 @@ def test_nightly_renders_scaledobject(tmp_path, platform):
     kubectl = shutil.which("kubectl")
     if not kubectl:
         pytest.skip("kubectl is required for the kustomize render regression")
+    has_gnu_realpath = shutil.which("grealpath") or (
+        shutil.which("realpath")
+        and subprocess.run(
+            ["realpath", "--version"], capture_output=True, text=True
+        ).returncode == 0
+    )
+    if not has_gnu_realpath:
+        pytest.skip("GNU realpath (or grealpath) is required for the nightly keda-epp deploy scripts")
     root = GUIDE.parents[3]
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
