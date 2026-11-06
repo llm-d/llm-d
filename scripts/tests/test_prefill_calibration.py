@@ -15,20 +15,24 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "guides/recipes/router/calibration/calibration-peak-throughput.yaml"
 TOKEN = {"choices": [{"text": "hello", "finish_reason": None}]}
+FINISH = {"choices": [{"text": "", "finish_reason": "length"}]}
 ERROR = {"error": {"message": "synthetic backend failure", "code": 500}}
 
 
 @pytest.mark.parametrize(
-    "events, succeeds, diagnostic",
+    "events, send_done, succeeds, diagnostic",
     [
-        ([TOKEN], True, None),
-        ([ERROR], False, "synthetic backend failure"),
-        ([TOKEN, ERROR], False, "synthetic backend failure"),
-        ([], False, "no streamed chunk received"),
+        ([TOKEN], True, True, None),
+        ([TOKEN, FINISH], False, True, None),
+        ([ERROR], True, False, "synthetic backend failure"),
+        ([TOKEN, ERROR], True, False, "synthetic backend failure"),
+        ([], True, False, "no streamed chunk received"),
+        ([TOKEN], False, False, "stream ended before"),
     ],
-    ids=["token", "error-first", "error-after-token", "done-only"],
+    ids=["token-done", "finish-reason", "error-first", "error-after-token",
+         "done-only", "premature-eof"],
 )
-def test_calibration_stream(events, succeeds, diagnostic) -> None:
+def test_calibration_stream(events, send_done, succeeds, diagnostic) -> None:
     configmap = next(
         doc for doc in yaml.safe_load_all(MANIFEST.read_text())
         if doc["kind"] == "ConfigMap"
@@ -46,7 +50,8 @@ def test_calibration_stream(events, succeeds, diagnostic) -> None:
             self.end_headers()
             for event in events:
                 self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
-            self.wfile.write(b"data: [DONE]\n\n")
+            if send_done:
+                self.wfile.write(b"data: [DONE]\n\n")
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
