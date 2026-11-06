@@ -1,0 +1,11 @@
+endpoints:
+  - name: vllm-0
+    address: 127.0.0.1
+    port: "18081"
+    labels:
+      model: Qwen/Qwen3-0.6B
+  - name: vllm-1
+    address: 127.0.0.1
+    port: "18082"
+    labels:
+      model: Qwen/Qwen3-0.6B
