@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Apply from an outer overlay after the guide's patches replace the args list.
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      labelSelector: llm-d.ai/role=decode
+    patch: |-
+      - op: test
+        path: /spec/template/spec/containers/0/name
+        value: modelserver
+      - op: test
+        path: /spec/template/spec/containers/0/command
+        value: [vllm, serve]
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --collect-detailed-traces=all
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      labelSelector: llm-d.ai/role=decode
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                env:
+                  - name: OTEL_SERVICE_NAME
+                    value: vllm-decode
+                    valueFrom: null
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: http://otel-collector:4317
+                    valueFrom: null
+                  - name: OTEL_TRACES_EXPORTER
+                    value: otlp
+                    valueFrom: null
+                  - name: OTEL_TRACES_SAMPLER
+                    value: parentbased_traceidratio
+                    valueFrom: null
+                  - name: OTEL_TRACES_SAMPLER_ARG
+                    value: "0.1"
+                    valueFrom: null

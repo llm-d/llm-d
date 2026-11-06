@@ -22,9 +22,6 @@ spec:
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
-            # Uncomment for distributed tracing
-            # - "--otlp-traces-endpoint=http://otel-collector:4317"
-            # - "--collect-detailed-traces=all"
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -33,17 +30,6 @@ spec:
                   key: HF_TOKEN
             # - name: VLLM_LOGGING_LEVEL
             #   value: DEBUG
-            # Uncomment for distributed tracing env vars
-            # - name: OTEL_SERVICE_NAME
-            #   value: "vllm-decode"
-            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            #   value: "http://otel-collector:4317"
-            # - name: OTEL_TRACES_EXPORTER
-            #   value: "otlp"
-            # - name: OTEL_TRACES_SAMPLER
-            #   value: "parentbased_traceidratio"
-            # - name: OTEL_TRACES_SAMPLER_ARG
-            #   value: "0.1"
           resources:
             limits:
               cpu: "8"
