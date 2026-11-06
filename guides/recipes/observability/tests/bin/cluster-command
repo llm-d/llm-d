@@ -18,6 +18,48 @@ record_mutation() {
     "$command_name" "${KUBECONFIG-<unset>}" "$arguments" >> "$STUB_MUTATIONS"
 }
 
+# install-otel-collector-loki.sh. Namespaces listed in STUB_EXISTING_NAMESPACES
+# exist. STUB_ENFORCE_LEVEL and STUB_CREATED_BY are the Pod Security label and
+# created-by annotation every namespace reports. STUB_COLLECTED_NAMESPACES is
+# what a running agent collects; unset means no agent is deployed yet.
+if [[ "$command_name" == kubectl && "${STUB_MODE:-}" == logs ]]; then
+  case "$1" in
+    create|annotate|label|apply|set|delete)
+      record_mutation
+      ;;
+    rollout)
+      if [[ "${3:-}" == daemonset/* ]]; then
+        exit "${STUB_AGENT_ROLLOUT_STATUS:-0}"
+      fi
+      ;;
+    describe)
+      printf 'Events:\n  Warning  FailedCreate  daemonset-controller  violates PodSecurity "baseline:latest"\n'
+      ;;
+    get)
+      case "${2:-}" in
+        clusterversion)
+          [[ -n "${STUB_OPENSHIFT:-}" ]] || exit 1
+          ;;
+        nodes)
+          printf '%s' "${STUB_NODE_NAME:-kind-worker}"
+          ;;
+        namespace)
+          [[ " ${STUB_EXISTING_NAMESPACES:-} " == *" ${3:-} "* ]] || exit 1
+          case "$*" in
+            *enforce*) printf '%s' "${STUB_ENFORCE_LEVEL:-}" ;;
+            *created-by*) printf '%s' "${STUB_CREATED_BY:-}" ;;
+          esac
+          ;;
+        daemonset)
+          [[ -n "${STUB_COLLECTED_NAMESPACES+set}" ]] || exit 1
+          printf '%s' "$STUB_COLLECTED_NAMESPACES"
+          ;;
+      esac
+      ;;
+  esac
+  exit 0
+fi
+
 case "$command_name:$1" in
   kubectl:cluster-info)
     if [[ "${STUB_MODE:-}" == selected-fails && "${KUBECONFIG:-}" == "${SELECTED_KUBECONFIG:-}" ]]; then
