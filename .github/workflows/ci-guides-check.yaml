@@ -16,6 +16,7 @@ on:
       - .github/scripts/e2e/async-multitenant/**
       - guides/**
       - scripts/assigned-issue-reminder.py
+      - scripts/check-aws-image-versions.py
       - scripts/github_api.py
       - docs/well-lit-paths/guides.yaml
       - .github/workflows/nightly-e2e-*.yaml
@@ -61,6 +62,9 @@ jobs:
       # The list of guides llm-d.ai publishes (synced by llm-d/llm-d.github.io).
       - name: Check the llm-d.ai guide publish manifest
         run: python scripts/guide.py check-manifest docs/well-lit-paths/guides.yaml
+
+      - name: Check AWS model-server release versions (advisory)
+        run: python scripts/check-aws-image-versions.py
 
       - name: Run Python tests
         run: python -m pytest scripts/tests/ docker/scripts/cpu/ .github/scripts/nightly-e2e-verification/ docs/operations/validation/smoke-test/tests/ .github/scripts/e2e/async-multitenant/ -v
