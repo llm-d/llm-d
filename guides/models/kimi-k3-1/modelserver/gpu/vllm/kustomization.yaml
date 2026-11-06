@@ -1,0 +1,6 @@
+# Default Kimi-K3.1-Pro 3P1D Disaggregated + Mooncake RDMA + Precise Prefix Cache Routing GPU overlay
+# (3x 2-node TP=8 x EP=8 Prefill + 1x 4-node DP=16 x EP=16 Decode = 10 nodes / 40x NVIDIA GB300 GPUs).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ./base

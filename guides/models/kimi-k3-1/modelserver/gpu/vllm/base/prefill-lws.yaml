@@ -1,0 +1,320 @@
+# Kimi-K3.1-Pro (moonshotai/Kimi-K3.1-Pro: MXFP4 experts, 69 KDA + 24 gated sparse-MLA layers
+# with a DSA indexer, 1.56 TB) Prefill pool for the 3P1D Disaggregated + Mooncake RDMA +
+# Precise Prefix Cache Routing recipe on NVIDIA GB300 GPUs.
+#
+# Topology: 3 replicas x 2 nodes (4 GPUs/node) = 6 nodes / 24x GB300 GPUs total (TP=8 x EP=8 per replica).
+# Rank 0 of each 2-node group serves HTTP on :8000, publishes ZMQ KV-cache events on :5557 for
+# EPP's precise-prefix-cache-producer (blockSizeTokens=2048, PYTHONHASHSEED=42), and runs a
+# co-located `vllm launch render` process on :8089 for EPP's token-producer.
+# KV blocks are shared across Prefill and Decode replicas via MultiConnector (NixlConnector
+# kv_producer + MooncakeStoreConnector kv_both over RDMA).
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: prefill
+  labels:
+    llm-d.ai/guide: kimi-k3-1
+    llm-d.ai/role: prefill
+spec:
+  replicas: 3
+  startupPolicy: LeaderCreated
+  rolloutStrategy:
+    type: RollingUpdate
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 3
+  leaderWorkerTemplate:
+    size: 2
+    restartPolicy: RecreateGroupOnPodRestart
+    leaderTemplate:
+      metadata:
+        labels:
+          llm-d.ai/guide: kimi-k3-1
+          llm-d.ai/role: prefill
+          llm-d.ai/component: prefill
+          llm-d.ai/model: Kimi-K3.1-Pro
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/pool-member: "true"
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/accelerator-variant: gpu
+        annotations:
+          llm-d.ai/active-ports: "8000"
+      spec:
+        enableServiceLinks: false
+        hostIPC: true
+        terminationGracePeriodSeconds: 75
+        nodeSelector: &nodeSelector
+          kubernetes.io/arch: arm64
+        tolerations: &tolerations
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: kubernetes.io/arch
+            operator: Equal
+            value: arm64
+            effect: NoSchedule
+        containers:
+          - name: vllm
+            image: REPLACE_MODEL_SERVER_IMAGE
+            imagePullPolicy: IfNotPresent
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sleep", "15"]
+            securityContext: &securityContext
+              privileged: true
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+                  - SYS_PTRACE
+                  - NET_ADMIN
+            command: &command ["/bin/bash", "-c"]
+            args:
+              - |
+                vllm launch render /models/Kimi-K3.1-Pro \
+                  --served-model-name moonshotai/Kimi-K3.1-Pro \
+                  --trust-remote-code \
+                  --language-model-only \
+                  --disable-access-log-for-endpoints /health,/metrics,/v1/models,/v1/chat/completions/render,/v1/completions/render \
+                  --api-server-count 16 \
+                  --host 0.0.0.0 \
+                  --port 8089 >/tmp/vllm-render.log 2>&1 &
+
+                exec vllm serve /models/Kimi-K3.1-Pro \
+                  --host 0.0.0.0 \
+                  --port 8000 \
+                  --enable-scale-out \
+                  --nnodes 2 \
+                  --node-rank 0 \
+                  --master-addr "${LWS_LEADER_ADDRESS}" \
+                  --trust-remote-code \
+                  --served-model-name moonshotai/Kimi-K3.1-Pro \
+                  --tensor-parallel-size 8 \
+                  --enable-expert-parallel \
+                  --enable-ep-weight-filter \
+                  --enable-cumem-allocator \
+                  --enable-prefix-caching \
+                  --load-format fastsafetensors \
+                  --gpu-memory-utilization 0.95 \
+                  --kv-cache-dtype nvfp4_ds_mla \
+                  --language-model-only \
+                  --max-num-seqs 32 \
+                  --speculative-config '{"model":"Inferact/Kimi-K3.1-Pro-DSpark-preview","num_speculative_tokens":5,"method":"dspark","draft_sample_method":"probabilistic"}' \
+                  --kv-transfer-config '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"recompute","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail","kv_buffer_device":"cuda","kv_connector_extra_config":{"enforce_handshake_compat":false,"enable_cross_layers_blocks":false}},{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both","kv_load_failure_policy":"recompute","kv_connector_extra_config":{"load_async":true,"lookup_async":true,"enable_cross_layers_blocks":false,"enable_offload":false}}]}}' \
+                  --kv-events-config "{\"enable_kv_cache_events\":true,\"publisher\":\"zmq\",\"endpoint\":\"tcp://*:5557\",\"topic\":\"kv@${POD_IP}:8000@moonshotai/Kimi-K3.1-Pro\",\"buffer_steps\":10000}" \
+                  --shutdown-timeout 45
+            env: &env
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+                value: "5600"
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: NCCL_SOCKET_IFNAME
+                value: eth0
+              - name: PYTHONHASHSEED
+                value: "42"
+              - name: MOONCAKE_CONFIG_PATH
+                value: /etc/mooncake/mooncake_config.json
+              - name: VLLM_MOONCAKE_LOAD_RECV_THREADS
+                value: "4"
+              - name: MC_SLICE_SIZE
+                value: "1048576"
+              - name: MC_MAX_MR_SIZE
+                value: "4294967296"
+              - name: MC_ENABLE_DEST_DEVICE_AFFINITY
+                value: "1"
+              - name: NCCL_CUMEM_ENABLE
+                value: "1"
+              - name: NCCL_MNNVL_ENABLE
+                value: "1"
+              - name: NCCL_NVLS_ENABLE
+                value: "1"
+              - name: UCX_NET_DEVICES
+                value: all
+              - name: VLLM_SSM_CONV_STATE_LAYOUT
+                value: DS
+              - name: VLLM_ENGINE_READY_TIMEOUT_S
+                value: "3600"
+              - name: VLLM_USE_RUST_FRONTEND
+                value: "1"
+              - name: UCX_IB_ROCE_REACHABILITY_MODE
+                value: all
+              - name: UCX_IB_GID_INDEX
+                value: "3"
+              - name: UCX_IB_PCI_RELAXED_ORDERING
+                value: "y"
+              - name: UCX_CUDA_COPY_DMABUF
+                value: "y"
+              - name: UCX_CUDA_IPC_ENABLE_MNNVL
+                value: "y"
+              - name: UCX_MAX_RNDV_LANES
+                value: "8"
+              - name: UCX_MAX_EAGER_LANES
+                value: "8"
+              - name: UCX_WARN_UNUSED_ENV_VARS
+                value: "n"
+              - name: VLLM_CACHE_ROOT
+                value: /root/.cache/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /root/.cache/flashinfer
+              - name: TRITON_CACHE_DIR
+                value: /root/.cache/triton
+              - name: CUDA_CACHE_PATH
+                value: /root/.cache/cuda
+              - name: HF_HOME
+                value: /models/hf-cache
+              - name: HF_HUB_OFFLINE
+                value: "1"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+            ports:
+              - name: dp0
+                containerPort: 8000
+                protocol: TCP
+              - name: nixl
+                containerPort: 5600
+                protocol: TCP
+              - name: kvev0
+                containerPort: 5557
+                protocol: TCP
+              - name: render
+                containerPort: 8089
+                protocol: TCP
+            resources: &resources
+              requests:
+                cpu: "100"
+                memory: 700Gi
+                nvidia.com/gpu: "4"
+              limits:
+                memory: 860Gi
+                nvidia.com/gpu: "4"
+            startupProbe:
+              httpGet:
+                path: /health
+                port: dp0
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 540
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: dp0
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 10
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: dp0
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            volumeMounts: &volumeMounts
+              - mountPath: /dev/shm
+                name: dshm
+              - mountPath: /root/.cache
+                name: cache
+              - mountPath: /models
+                name: models
+                readOnly: true
+              - mountPath: /etc/mooncake
+                name: mooncake-config
+                readOnly: true
+        volumes: &volumes
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 250Gi
+          - name: cache
+            emptyDir: {}
+          - name: models
+            persistentVolumeClaim:
+              claimName: kimi-k3-1-models
+              readOnly: true
+          - name: mooncake-config
+            configMap:
+              name: mooncake-store-config
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/guide: kimi-k3-1
+          llm-d.ai/role: prefill
+          llm-d.ai/component: prefill
+          llm-d.ai/model: Kimi-K3.1-Pro
+          llm-d.ai/inference-serving: "false"
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/accelerator-variant: gpu
+        annotations:
+          llm-d.ai/active-ports: ""
+      spec:
+        enableServiceLinks: false
+        hostIPC: true
+        terminationGracePeriodSeconds: 75
+        nodeSelector: *nodeSelector
+        tolerations: *tolerations
+        containers:
+          - name: vllm
+            image: REPLACE_MODEL_SERVER_IMAGE
+            imagePullPolicy: IfNotPresent
+            securityContext: *securityContext
+            command: *command
+            args:
+              - |
+                exec vllm serve /models/Kimi-K3.1-Pro \
+                  --headless \
+                  --nnodes 2 \
+                  --node-rank "${LWS_WORKER_INDEX}" \
+                  --master-addr "${LWS_LEADER_ADDRESS}" \
+                  --trust-remote-code \
+                  --served-model-name moonshotai/Kimi-K3.1-Pro \
+                  --tensor-parallel-size 8 \
+                  --enable-expert-parallel \
+                  --enable-ep-weight-filter \
+                  --enable-cumem-allocator \
+                  --enable-prefix-caching \
+                  --load-format fastsafetensors \
+                  --gpu-memory-utilization 0.95 \
+                  --kv-cache-dtype nvfp4_ds_mla \
+                  --language-model-only \
+                  --max-num-seqs 32 \
+                  --speculative-config '{"model":"Inferact/Kimi-K3.1-Pro-DSpark-preview","num_speculative_tokens":5,"method":"dspark","draft_sample_method":"probabilistic"}' \
+                  --kv-transfer-config '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"recompute","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail","kv_buffer_device":"cuda","kv_connector_extra_config":{"enforce_handshake_compat":false,"enable_cross_layers_blocks":false}},{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both","kv_load_failure_policy":"recompute","kv_connector_extra_config":{"load_async":true,"lookup_async":true,"enable_cross_layers_blocks":false,"enable_offload":false}}]}}' \
+                  --shutdown-timeout 45
+            env: *env
+            ports:
+              - name: nixl
+                containerPort: 5600
+                protocol: TCP
+            resources: *resources
+            startupProbe:
+              exec:
+                command: &workerProbe ["/bin/bash", "-c", "curl -sf http://${LWS_LEADER_ADDRESS}:8000/health >/dev/null"]
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 540
+            livenessProbe:
+              exec:
+                command: *workerProbe
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 10
+            readinessProbe:
+              exec:
+                command: *workerProbe
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            volumeMounts: *volumeMounts
+        volumes: *volumes

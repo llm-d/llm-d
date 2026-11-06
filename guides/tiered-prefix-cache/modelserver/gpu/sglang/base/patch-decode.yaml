@@ -18,6 +18,8 @@ spec:
             # (default 64); SGLang uses --page-size (vLLM uses --block-size).
             - "--page-size=64"
             - "--enable-metrics"
+            - "--tool-call-parser=qwen"
+            - "--reasoning-parser=qwen3"
           env:
             - name: NAMESPACE
               valueFrom:
