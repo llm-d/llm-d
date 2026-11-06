@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          command: ["sglang", "serve"]
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--log-level=info"
+            - "--enable-metrics"
+            - "--tensor-parallel-size=2"
+            # KV-block granularity. This must match the router's
+            # tokenProcessorConfig.blockSizeTokens.
+            - "--page-size=64"
+            - "--kv-events-config"
+            - '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+          ports:
+            - containerPort: 5556
+              name: kv-events
+              protocol: TCP
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_PORT
+              value: "8000"
+            - name: KV_EVENTS_ENDPOINT
+              value: "tcp://*:5556"
+          resources:
+            limits:
+              cpu: "32"
+              memory: 64Gi
+              amd.com/gpu: 2
+            requests:
+              cpu: "32"
+              memory: 32Gi
+              amd.com/gpu: 2
+          volumeMounts:
+            - mountPath: /.config
+              name: metrics-volume
+            - mountPath: /dev/shm
+              name: dshm
+          startupProbe:
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: metrics-volume
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
