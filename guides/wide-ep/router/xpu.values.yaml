@@ -1,42 +1,25 @@
 router:
   epp:
-    # Same config as wide-ep.values.yaml minus the
-    # disaggregatedset-rollout-screener: the XPU path deploys plain
-    # LeaderWorkerSets, and the screener drops endpoints without
-    # DisaggregatedSet revision labels.
+    # The XPU deployment is aggregated: every endpoint handles both
+    # prefill and decode, so use one default scheduling profile.
     pluginsCustomConfig:
       wide-ep-config.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
-        - type: always-disagg-pd-decider
-        - type: disagg-profile-handler
-          parameters:
-            deciders:
-              prefill: always-disagg-pd-decider
-        - type: prefill-filter
-        - type: decode-filter
-        - type: prefix-cache-scorer
-        - type: queue-scorer
-        - type: active-request-scorer
+        - type: approx-prefix-cache-producer
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+        - type: token-load-scorer
         schedulingProfiles:
-        - name: prefill
+        - name: default
           plugins:
-          - pluginRef: prefill-filter
-          - pluginRef: prefix-cache-scorer
-            weight: 3
-          - pluginRef: queue-scorer
-            weight: 2
-          - pluginRef: active-request-scorer
-            weight: 2
-        - name: decode
-          plugins:
-          - pluginRef: decode-filter
-          - pluginRef: active-request-scorer
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
 
   modelServers:
     targetPorts:
-      - number: 8000
+      - number: 8200
     matchLabels:
       llm-d.ai/guide: "wide-ep"
       llm-d.ai/accelerator-variant: "xpu"
