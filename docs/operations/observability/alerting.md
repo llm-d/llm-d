@@ -43,7 +43,7 @@ NAME                 AGE
 epp-alerting-rules   10s
 ```
 
-Then open the Prometheus UI and check that the rules loaded under **Status → Rule Health** (or `http://localhost:9090/rules` after port-forwarding — see [Collect Metrics](./metrics.md#step-3-query-metrics-in-prometheus)). You should see the `epp.availability` and `epp.selfhealth` groups.
+Then open the Prometheus UI and check that the rules loaded under **Status → Rule Health** (or `http://localhost:9090/rules` after port-forwarding — see [Collect Metrics](./metrics.md#step-5-query-metrics-in-prometheus)). You should see the `epp.availability` and `epp.selfhealth` groups.
 
 ## Alert Reference
 
