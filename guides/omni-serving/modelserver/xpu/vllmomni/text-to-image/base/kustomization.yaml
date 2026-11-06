@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/default
+  - resource-claim-template.yaml
+
+namePrefix: omni-serving-t2i-intel-xpu-vllm-omni-
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/xpu-vllm-omni/local
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
+
+labels:
+  - pairs:
+      llm-d.ai/guide: omni-serving
+      llm-d.ai/model: stable-diffusion-xl-base-1.0
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
+      llm-d.ai/engine-type: vllm-omni
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-vllm-omni.yaml
