@@ -86,6 +86,47 @@ def test_unhealthy_endpoint_sets_failure_exit_code():
     # as unreachable in the summary table while the failure list below it showed
     # the true code.
     assert "/v1/models       HTTP 503" in result.stdout
+    assert (
+        "Failures:\n"
+        "  - /v1/models returned HTTP 503\n"
+        "  - /v1/chat/completions returned HTTP 503\n"
+    ) in result.stdout
+
+
+def test_json_report_lists_each_diagnostic_separately():
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), UnavailableHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = subprocess.run(
+            [
+                str(SCRIPT),
+                "--endpoint",
+                f"http://127.0.0.1:{server.server_port}",
+                "--timeout",
+                "2",
+                "--output",
+                "json",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["checks"] == {"passed": 0, "failed": 2, "warned": 1}
+    assert report["diagnostics"] == {
+        "failures": [
+            "  - /v1/models returned HTTP 503",
+            "  - /v1/chat/completions returned HTTP 503",
+        ],
+        "warnings": ["  - /health returned HTTP 503 (not required)"],
+    }
 
 
 def test_auto_fallback_rebuilds_chat_payload():
