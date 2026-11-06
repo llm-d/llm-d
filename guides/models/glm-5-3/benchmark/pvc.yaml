@@ -1,0 +1,11 @@
+# Benchmark results, the ROCm MAD checkout and the multi-turn corpus, reused across runs.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: glm-5-3-bench
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
