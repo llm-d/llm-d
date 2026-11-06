@@ -5,7 +5,7 @@ KV-Cache offloading extends the effective cache capacity beyond GPU HBM by movin
 llm-d works with any KV-cache connector compatible with vLLM or SGLang. Two integration patterns are supported:
 
 - **Native (vLLM `OffloadingConnector`)** — vLLM's built-in offloading path. Offloads to CPU RAM and, through multi-tier offloading, to secondary tiers such as a shared filesystem, an object store, or remote peers.
-- **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake), [NVIDIA KVBM](https://docs.nvidia.com/dynamo/latest/kvbm/)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage.
+- **Out-of-tree connectors** — third-party cache engines (e.g., [LMCache](https://lmcache.ai), [Mooncake](https://github.com/kvcache-ai/Mooncake), [NVIDIA KVBM](https://github.com/ai-dynamo/dynamo/blob/main/lib/bindings/kvbm/README.md)) that plug into the model server through its KV-cache connector API and own their own indexing, memory management, and storage.
 
 > [!NOTE]
 > Pairs with the **llm-d Router's** cache-aware routing — the Router (specifically the **EPP**) picks replicas that can reuse cached blocks; offloading grows the cache each replica can hold.

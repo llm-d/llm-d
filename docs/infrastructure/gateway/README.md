@@ -6,7 +6,7 @@ This directory contains guides for deploying a Kubernetes Gateway as a proxy for
 
 The **llm-d Router** extends [compatible Gateway providers](https://gateway-api-inference-extension.sigs.k8s.io/implementations/gateways/) with load balancing optimizations for LLM traffic across model server replicas.
 
-The integration with a Gateway allows self-hosted models to be exposed in a [wide variety of network topologies including](https://gateway-api.sigs.k8s.io/concepts/use-cases/):
+The integration with a Gateway allows self-hosted models to be exposed in a [wide variety of network topologies including](https://gateway-api.sigs.k8s.io/docs/concepts/use-cases/):
 
 * Internet-facing services
 * Internal to your cluster
