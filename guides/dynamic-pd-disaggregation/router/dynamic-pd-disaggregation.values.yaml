@@ -1,0 +1,43 @@
+# Dynamic P/D is experimental and remains disabled unless this guide is used.
+httpRoute:
+  create: false
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+  epp:
+    replicas: 1
+    flags:
+      allow-experimental-plugins: true
+    pluginsConfigFile: dynamic-pd.yaml
+    pluginsCustomConfig:
+      dynamic-pd.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+        - dynamicPD
+        plugins:
+        - type: prefill-filter
+        - type: decode-filter
+        - type: header-profile-handler
+          parameters:
+            headerName: x-llm-d-epp-profile
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: dynamic-pd-disaggregation
