@@ -99,6 +99,7 @@
     "operations/observability/alerting": { "position": 9, "label": "Configure Alerts" },
     "operations/observability/tracing": { "position": 10, "label": "Trace Requests" },
     "operations/observability/tpu": { "position": 11, "label": "Monitor GKE TPUs" },
+    "operations/observability/speculative-decoding": { "position": 12, "label": "Diagnose Speculative Decoding" },
     "operations/integrations/litellm": { "position": 1, "label": "LiteLLM" },
     "operations/integrations/kong": { "position": 2, "label": "Kong AI Gateway" },
     "operations/validation/smoke-test/README": { "position": 1, "label": "Run a Smoke Test" },

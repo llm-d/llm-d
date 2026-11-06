@@ -119,6 +119,25 @@ Requires the `flowControl` feature gate enabled on the EPP.
 | **Queue wait time P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_flow_control_request_queue_duration_seconds_bucket[5m])))` |
 | **Pool saturation** | `llm_d_epp_flow_control_pool_saturation` |
 
+### Speculative Decoding
+
+vLLM only. Add your namespace or job selector to every query so that separate deployments are not combined. Per-pod rows group by `namespace` as well as `pod`, so pods with the same name in different namespaces stay apart; where your series have no `pod` label, group by the scrape target label instead (for example `instance`).
+
+Model-level rows divide the sum of the numerator by the sum of the denominator over the same scope; never average per-pod ratios. Before reading a model-level ratio, run the per-engine coverage check: an engine whose accepted-token series is missing still adds its draft tokens to the denominator. An empty ratio is undefined, not 0. For the diagnostic order, see [Diagnose Speculative Decoding](./speculative-decoding.md).
+
+| Metric Need | PromQL Query |
+| ----------- | ------------ |
+| **Drafts per second per pod** | `sum by(model_name, namespace, pod) (rate(vllm:spec_decode_num_drafts_total[5m]))` |
+| **Draft token acceptance** | `sum by(model_name) (rate(vllm:spec_decode_num_accepted_tokens_total[5m])) / (sum by(model_name) (rate(vllm:spec_decode_num_draft_tokens_total[5m])) > 0)` |
+| **Draft token acceptance per engine** | `sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_accepted_tokens_total[5m])) / (sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_draft_tokens_total[5m])) > 0)` |
+| **Average proposal length per engine** | `sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_draft_tokens_total[5m])) / (sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_drafts_total[5m])) > 0)` |
+| **Engines with draft tokens but no accepted-token series** | `count by(model_name, namespace, pod, engine) (vllm:spec_decode_num_draft_tokens_total) unless count by(model_name, namespace, pod, engine) (vllm:spec_decode_num_accepted_tokens_total)` |
+| **Observed counter resets in 5m** | `sum by(model_name, namespace, pod, engine) (resets(vllm:spec_decode_num_draft_tokens_total[5m]))` |
+
+The average proposal length is a window average over drafts. It does not show that every draft had the same length, and it is not tokens generated per step.
+
+`rate()` adjusts for observed counter resets and extrapolates across the window. Missing samples and process replacement still limit interpretation. A reset is a hint of a restart, not a restart count; a replacement process with different labels starts a new series instead of showing a reset.
+
 ## Notes
 
 **Metric name prefix:** llm-d 0.10 / llm-d-router 0.11.0 removed the old EPP metric names. Use `llm_d_epp_*`; if a query returns no data, verify the installed router version and required feature gate.
