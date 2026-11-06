@@ -6,6 +6,12 @@ It has a `prepare-inference.sh` script to grab the gateway address and service e
 
 It has `kubectl` baked into the image so you can see most if not all `llm-d` resources.
 
+Its ServiceAccount can inspect cluster namespaces and cluster-wide RBAC resources.
+Those cluster-scoped permissions are read-only; resource editing permissions are
+granted within the pod's namespace.
+Set the namespace in manifests/kustomization.yaml to where the pod will run so
+the cluster role binding targets the matching ServiceAccount.
+
 ## Guidellm example
 
 Sourcing the prepare inference will feed you all the values you need to bench from `guidellm`.
