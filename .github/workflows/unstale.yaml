@@ -10,3 +10,4 @@ jobs:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-unstale.yaml@main
     permissions:
       issues: write
+      pull-requests: write
