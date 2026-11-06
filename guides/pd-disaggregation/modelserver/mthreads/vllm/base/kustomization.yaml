@@ -10,6 +10,7 @@ components:
   - ../../../../../recipes/modelserver/components/images/mthreads-vllm/release
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:
