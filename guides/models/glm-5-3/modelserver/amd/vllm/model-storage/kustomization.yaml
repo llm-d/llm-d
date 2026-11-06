@@ -1,0 +1,10 @@
+# model-pvc and a one-time download of amd/GLM-5.3-Quark-MXFP4-AttnFP8 at the pinned revision.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - pvc.yaml
+  - download-model.yaml
+
+labels:
+  - pairs:
+      llm-d.ai/guide: glm-5-3

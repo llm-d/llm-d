@@ -1,0 +1,34 @@
+# P/D on three MI355X nodes: two independent DP8/EP8 prefill instances and one DP8/EP8 decode
+# instance (measured on cold 256k and 512k prompts). Same router values as pd-1p1d.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../pd-1p1d
+
+patches:
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+      name: glm-5-3-pd
+    patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: glm-5-3-pd
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              replicas: 2
+          # 55e9 bytes per GPU (585,648 tokens per rank): decode registers its KV cache once per
+          # prefill instance it reads from, so it needs a smaller budget to keep 20 GiB free.
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: KV_CACHE_MEMORY_BYTES
+                            value: "55000000000"
