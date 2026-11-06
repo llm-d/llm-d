@@ -49,10 +49,6 @@ llm-d Router is deployed via Helm. We offer charts for both Standalone and Gatew
 
 The chart sources live in the [llm-d Router](https://github.com/llm-d/llm-d-router) repository (see [standalone mode source](https://github.com/llm-d/llm-d-router/tree/main/config/charts/llm-d-router-standalone) and [gateway mode source](https://github.com/llm-d/llm-d-router/tree/main/config/charts/llm-d-router-gateway)). Each well-lit path guide provides values files on top of the chart defaults to enable the functionality implemented in EPP.
 
-> [!NOTE]
-> In a future release, the Helm Charts will be published
-> from the llm-d project rather than from GAIE.
-
 ### Images
 
 llm-d releases the core EPP image as well as additional sidecar images for advanced functionality:
