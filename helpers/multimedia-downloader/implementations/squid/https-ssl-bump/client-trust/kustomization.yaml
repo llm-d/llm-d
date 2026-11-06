@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Adds Squid CA trust and proxy env vars to every Deployment in the client
+# kustomization. The patch expects the client container to be named "app";
+# copy and edit patch-client-deployment.yaml if yours is named differently.
+#
+# Usage (kustomization.yaml of the client workload):
+#   components:
+#   - <path-to>/helpers/multimedia-downloader/implementations/squid/https-ssl-bump/client-trust
+patches:
+- path: patch-client-deployment.yaml
+  target:
+    kind: Deployment

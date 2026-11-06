@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/default
+  - ../common
+
+namePrefix: coord-disaggregation-nvidia-gpu-vllm-
+
+# TODO: Switch to the release image once encode-disaggregation ships in an official vLLM release.
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen2.5-VL-32B-Instruct
+      llm-d.ai/guide: coord-disaggregation
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  - path: patch-decode.yaml
