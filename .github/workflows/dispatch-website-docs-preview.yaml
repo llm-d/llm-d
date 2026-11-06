@@ -1,17 +1,22 @@
 name: Dispatch website docs PR preview
 
 # When a pull request changes docs (or related community root files), notify
-# llm-d/llm-d.github.io to sync this PR's tip, build the full site, and publish
-# a Netlify alias preview. The website workflow comments the preview URL back
-# on this PR when LLM_D_PR_COMMENT_TOKEN is configured there.
+# llm-d/llm-d.github.io to sync this PR's tip, build the full site, check
+# links, and publish a Netlify alias preview. The website workflow comments
+# the preview URL and broken-links report back on this PR when
+# LLM_D_PR_COMMENT_TOKEN is configured there.
 #
 # Requires repository secret `WEBSITE_SYNC_TOKEN` (same as dispatch-website-sync):
 # a fine-grained PAT scoped to llm-d/llm-d.github.io with Contents: read and
-# write so it can create a repository_dispatch. Fork PRs skip this job (no
-# secrets).
+# write so it can create a repository_dispatch.
+#
+# Security: uses pull_request_target so fork PRs get secrets, but this workflow
+# never checks out or runs PR code — it only sends immutable metadata (PR
+# number, head repo, ref, sha) to the website repo. Do not add a checkout of
+# the PR head here. Manual runs use workflow_dispatch with a PR number.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "docs/**"
@@ -20,24 +25,64 @@ on:
       - "CODE_OF_CONDUCT.md"
       - "SECURITY.md"
       - "SIGS.md"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to preview
+        required: true
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: docs-pr-preview-${{ github.event.pull_request.number }}
+  group: docs-pr-preview-${{ github.event.pull_request.number || inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
   notify-website-preview:
     name: notify-website-preview
     runs-on: ubuntu-latest
-    # Same-repo PRs only (secrets unavailable / unsafe for fork workflows).
     if: >
       github.repository == 'llm-d/llm-d' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.draft == false
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.draft == false)
     steps:
+      - name: Resolve PR metadata
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER_INPUT: ${{ inputs.pr_number }}
+          PR_NUMBER_EVENT: ${{ github.event.pull_request.number }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if ! [[ "$PR_NUMBER_INPUT" =~ ^[0-9]+$ ]]; then
+              echo "::error::pr_number must be a positive integer (got: ${PR_NUMBER_INPUT})"
+              exit 1
+            fi
+            pr_json=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER_INPUT}")
+            echo "pr_number=${PR_NUMBER_INPUT}" >> "$GITHUB_OUTPUT"
+            echo "head_repo=$(jq -r '.head.repo.full_name' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
+            echo "ref=$(jq -r '.head.ref' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
+            echo "sha=$(jq -r '.head.sha' <<<"$pr_json")" >> "$GITHUB_OUTPUT"
+            draft=$(jq -r '.draft' <<<"$pr_json")
+            if [ "$draft" = "true" ]; then
+              echo "::error::PR #${PR_NUMBER_INPUT} is a draft; refusing to dispatch preview"
+              exit 1
+            fi
+          else
+            echo "pr_number=${PR_NUMBER_EVENT}" >> "$GITHUB_OUTPUT"
+            echo "head_repo=${HEAD_REPO}" >> "$GITHUB_OUTPUT"
+            echo "ref=${HEAD_REF}" >> "$GITHUB_OUTPUT"
+            echo "sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check WEBSITE_SYNC_TOKEN
         id: token
         env:
@@ -60,14 +105,15 @@ jobs:
           client-payload: |
             {
               "source_repo": "${{ github.repository }}",
-              "head_repo": "${{ github.event.pull_request.head.repo.full_name }}",
-              "pr_number": "${{ github.event.pull_request.number }}",
-              "ref": "${{ github.event.pull_request.head.ref }}",
-              "sha": "${{ github.event.pull_request.head.sha }}"
+              "head_repo": "${{ steps.meta.outputs.head_repo }}",
+              "pr_number": "${{ steps.meta.outputs.pr_number }}",
+              "ref": "${{ steps.meta.outputs.ref }}",
+              "sha": "${{ steps.meta.outputs.sha }}"
             }
 
       - name: Preview pointer
         if: steps.token.outputs.present == 'true'
         run: |
-          echo "Dispatched docs-pr-preview for PR #${{ github.event.pull_request.number }}"
+          echo "Dispatched docs-pr-preview for PR #${{ steps.meta.outputs.pr_number }}"
+          echo "head=${{ steps.meta.outputs.head_repo }}@${{ steps.meta.outputs.sha }}"
           echo "Watch: https://github.com/llm-d/llm-d.github.io/actions/workflows/docs-pr-preview.yml"
