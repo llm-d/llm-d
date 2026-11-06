@@ -275,7 +275,9 @@ this guide:
 
 For tuning guidance on each value, see [KEDA with EPP Metrics](../../../docs/architecture/autoscaling/keda-epp.md).
 
-For how thresholds are interpreted (per-replica `AverageValue` targets) and how to validate them, see [Dual-Metric Strategy](../../../docs/architecture/autoscaling/keda-epp.md#dual-metric-strategy).
+For how request-count thresholds use per-replica `AverageValue` targets while the
+pool-saturation ratio uses a direct `Value` target, and how to validate them, see
+[Dual-Metric Strategy](../../../docs/architecture/autoscaling/keda-epp.md#dual-metric-strategy).
 
 For how flow-control on/off changes which trigger sees demand, see [Flow Control On vs. Off](../../../docs/architecture/autoscaling/keda-epp.md#flow-control-on-vs-off).
 
@@ -298,7 +300,8 @@ review and adjust directly in the YAML are:
 
 - Prometheus `serverAddress` (the bundled kube-prometheus-stack on generic
   Kubernetes; the OCP overlays point it at Thanos Querier)
-- The trigger thresholds (per-replica `AverageValue` targets)
+- The trigger thresholds (`AverageValue` for request counts; `Value` for the
+  normalized pool-saturation ratio)
 
 This walkthrough intentionally begins with one target replica so that a 1-to-N
 scale-up is observable. Scale the target Deployment down before creating the
