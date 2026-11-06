@@ -1,0 +1,39 @@
+# Colocated expert-parallel overrides for glm-5-3.values.yaml (deployments/colocated-ep and
+# colocated-ep-chunk1024: 2 pods x 4 DP ranks, one endpoint per rank). One profile with prefix
+# affinity and load scoring; no session pin. The plugin config is one string, so it is restated.
+router:
+  epp:
+    pluginsCustomConfig:
+      glm-5-3-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: single-profile-handler
+        # One endpoint = one DP rank: 1,064,816 KV tokens / 64-token router blocks = 16,637.
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 131072
+            autoTune: false
+            blockSizeTokens: 64
+            lruCapacityPerServer: 16637
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            peakPrefillThroughput: 3000
+        - type: token-load-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        # Keep a session's prefix on the rank that holds it, then pick by queued prefill tokens.
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    # One API server per DP rank. Listing only 8000 would send every request to rank 0.
+    targetPorts:
+      - number: 8000
+      - number: 8001
+      - number: 8002
+      - number: 8003

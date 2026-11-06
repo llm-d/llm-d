@@ -1,0 +1,33 @@
+# Colocated tensor-parallel overrides for glm-5-3.values.yaml (deployments/colocated-tp: 2 pods
+# x TP4, one endpoint per pod). The plugin config is one string, so it is restated.
+router:
+  epp:
+    pluginsCustomConfig:
+      glm-5-3-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: single-profile-handler
+        # One endpoint = one TP4 replica: about 1.59M KV tokens / 64-token router blocks.
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 131072
+            autoTune: false
+            blockSizeTokens: 64
+            lruCapacityPerServer: 24786
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            peakPrefillThroughput: 12000
+        - type: token-load-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    targetPorts:
+      - number: 8000
