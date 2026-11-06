@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  strategy:
+    type: Recreate
+  progressDeadlineSeconds: 7200
+  template:
+    spec:
+      schedulerName: hami-scheduler
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: modelserver
+          imagePullPolicy: IfNotPresent
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              exec python3 -m sglang.launch_server \
+                --model-path Qwen/Qwen3-32B \
+                --served-model-name Qwen3-32B \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --page-size 64 \
+                --tp-size 4 \
+                --context-length 32768 \
+                --reasoning-parser qwen3 \
+                --tool-call-parser qwen \
+                --mem-fraction-static 0.85 \
+                --disable-cuda-graph \
+                --skip-server-warmup \
+                --disable-overlap-schedule \
+                --attention-backend fa3 \
+                --chunked-prefill-size 8192 \
+                --max-prefill-tokens 32768 \
+                --max-running-requests 128 \
+                --watchdog-timeout 3600 \
+                --dist-timeout 3600 \
+                --enable-metrics
+          env:
+            - name: NCCL_IB_DISABLE
+              value: "1"
+            - name: NCCL_SOCKET_IFNAME
+              value: eth0
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: TP_SOCKET_IFNAME
+              value: eth0
+            - name: PYTORCH_ALLOC_CONF
+              value: expandable_segments:True
+            - name: SGLANG_SET_CPU_AFFINITY
+              value: "1"
+            - name: USE_DCU_CUSTOM_ALLREDUCE
+              value: "1"
+            - name: SGLANG_USE_LIGHTOP
+              value: "1"
+            - name: HIP_KERNEL_BATCH_CEILING
+              value: "100"
+            - name: HSA_KERNARG_POOL_SIZE
+              value: "8388608"
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+                - SYS_RESOURCE
+            seccompProfile:
+              type: Unconfined
+          resources:
+            requests:
+              cpu: "16"
+              memory: 64Gi
+              hygon.com/hcunum: "4"
+            limits:
+              cpu: "64"
+              memory: 128Gi
+              hygon.com/hcunum: "4"
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 180
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi

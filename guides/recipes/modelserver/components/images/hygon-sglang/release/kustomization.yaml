@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: harbor.sourcefind.cn:5443/hcu/admin/base/sglang
+    newTag: 0.5.12-ubuntu22.04-dtk2604-py3.10

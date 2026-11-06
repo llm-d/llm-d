@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefill
+  labels:
+    llm-d.ai/role: prefill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      llm-d.ai/role: prefill
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        llm-d.ai/role: prefill
+      annotations:
+        # Eight RoCE rails so Mooncake can use the GIDs on the pod IP.
+        # Rename the NetworkAttachmentDefinitions if the cluster's rails differ.
+        k8s.v1.cni.cncf.io/networks: |
+          [{"name":"roce-rail-1","namespace":"default","interface":"rdma1"},{"name":"roce-rail-2","namespace":"default","interface":"rdma2"},
+           {"name":"roce-rail-3","namespace":"default","interface":"rdma3"},{"name":"roce-rail-4","namespace":"default","interface":"rdma4"},
+           {"name":"roce-rail-5","namespace":"default","interface":"rdma5"},{"name":"roce-rail-6","namespace":"default","interface":"rdma6"},
+           {"name":"roce-rail-7","namespace":"default","interface":"rdma7"},{"name":"roce-rail-8","namespace":"default","interface":"rdma8"}]
+        sglang.ai/bootstrap-port: "8998"
+    spec:
+      serviceAccountName: sa
+      schedulerName: hami-scheduler
+      terminationGracePeriodSeconds: 120
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: llm-d.ai/role
+                    operator: In
+                    values:
+                      - prefill
+                      - decode
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: modelserver
+          image: REPLACE_MODEL_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              exec python3 -m sglang.launch_server \
+                --model-path Qwen/Qwen3-32B \
+                --served-model-name Qwen3-32B \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --page-size 64 \
+                --tp-size 4 \
+                --context-length 32768 \
+                --reasoning-parser qwen3 \
+                --tool-call-parser qwen \
+                --mem-fraction-static 0.85 \
+                --disable-cuda-graph \
+                --skip-server-warmup \
+                --disable-overlap-schedule \
+                --attention-backend fa3 \
+                --chunked-prefill-size 8192 \
+                --max-prefill-tokens 32768 \
+                --max-running-requests 64 \
+                --watchdog-timeout 3600 \
+                --dist-timeout 3600 \
+                --enable-metrics \
+                --disaggregation-mode prefill \
+                --disaggregation-transfer-backend mooncake \
+                --disaggregation-bootstrap-port 8998 \
+                --disaggregation-ib-device "${NCCL_IB_HCA}"
+          env:
+            - name: NCCL_IB_DISABLE
+              value: "1"
+            - name: NCCL_IB_HCA
+              value: mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
+            - name: NCCL_SOCKET_IFNAME
+              value: eth0
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: TP_SOCKET_IFNAME
+              value: eth0
+            - name: PYTORCH_ALLOC_CONF
+              value: expandable_segments:True
+            - name: SGLANG_SET_CPU_AFFINITY
+              value: "1"
+            - name: SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT
+              value: "600"
+            - name: USE_DCU_CUSTOM_ALLREDUCE
+              value: "1"
+            - name: SGLANG_USE_LIGHTOP
+              value: "1"
+            - name: HIP_KERNEL_BATCH_CEILING
+              value: "100"
+            - name: HSA_KERNARG_POOL_SIZE
+              value: "8388608"
+          ports:
+            - name: bootstrap
+              containerPort: 8998
+              protocol: TCP
+            - name: modelserver
+              containerPort: 8000
+              protocol: TCP
+            - name: nixl
+              containerPort: 5600
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+                - SYS_RESOURCE
+                - SYS_ADMIN
+            seccompProfile:
+              type: Unconfined
+          resources:
+            requests:
+              cpu: "16"
+              memory: 64Gi
+              hygon.com/hcunum: "4"
+              rdma/hca_shared_devices_a: "1"
+            limits:
+              cpu: "64"
+              memory: 128Gi
+              hygon.com/hcunum: "4"
+              rdma/hca_shared_devices_a: "1"
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 180
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
