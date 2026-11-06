@@ -63,7 +63,7 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | TPUConnector / TPUConnectorHMA | `tpu/*` | TPU ICI / DCN | From `tpu_inference`; HMA on TPU7x. |
 | IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
 | NixlConnector | `biren/vllm/base` | RDMA (`UCX_TLS=rc_v`) | Biren 166M, `kv_buffer_device=cpu`. See the [Biren tab](#2-deploy-the-model-server). |
-| MooncakeConnector | `mthreads/vllm/base` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires the same TP on prefill and decode. See the [Moore Threads tab](#2-deploy-the-model-server). |
+| MooncakeConnector | `mthreads/vllm/base` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires the same TP on prefill and decode. The `mthreads/vllm/rdma-sriov` overlay switches the same topology to RDMA over an SR-IOV VF. See the [Moore Threads tab](#2-deploy-the-model-server). |
 | SGLang mooncake | `mthreads/sglang/base` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
 | SGLang raiden | `tpu/v7/sglang` | TCP over DCN via tpu-sync | SGLang `--disaggregation-transfer-backend raiden` on Torch TPU; the decode pulls each chunk's pages as the prefill commits them. See the [Google TPU tab](#2-deploy-the-model-server). |
 
@@ -583,8 +583,16 @@ The routing sidecar sets `bootstrap_host` to the InferencePool **Pod IP**. Moonc
 - Decode: `MooncakeConnector`, `kv_role=kv_consumer`, `mooncake_protocol=tcp`.
 - Decode sidecar: `--kv-connector=mooncake`, `--mooncake-bootstrap-port=8998`.
 - Prefill and Decode use `kv_load_failure_policy=fail` so a failed KV pull is visible as an inference error instead of silently recomputing the prompt.
-- The standalone-store settings are a separate RDMA-backed Mooncake Store setup. They are not required for this single-node P2P validation. A successful HTTP response alone is not sufficient: inspect the vLLM logs for `Using MUSA transport`, Mooncake bootstrap startup, and successful KV-transfer metrics.
+- This topology is pure P2P: `MooncakeConnector` moves KV blocks directly from Prefill to Decode. It deploys no Mooncake Master, Store, or Client and needs no `mooncake_config.json`; the transport comes from the connector's `kv_connector_extra_config`.
 - `guides/pd-disaggregation/router/pd-disaggregation.values.yaml` is enough for a functional smoke test, but its `peakPrefillThroughput: 33821` is an NVIDIA H200 reference value. Do not use it for MTT S5000 performance claims; measure the MThreads Qwen3-32B TP=4 prefill path with the calibration recipe and override the value.
+
+**RDMA variant** (`mthreads/vllm/rdma-sriov`): the same prefill `TP=4` + decode `TP=4` topology with `mooncake_protocol=rdma` over a per-pod SR-IOV VF. It keeps the base P/D wiring and adds:
+
+- an `isRdma` RDMA device plugin exposing `rdma/rdma_shared_device`, and SR-IOV VFs on the RoCE network;
+- one VF NAD per role (the overlay ships `mthreads-sriov-vf0`/`mthreads-sriov-vf1` as examples);
+- `rdma/rdma_shared_device` in the role requests, `SYS_RESOURCE`, and an `entry.sh` wrapper that raises `ulimit -l unlimited` before `vllm serve`.
+
+Edit the overlay's example values before applying: the VF PCI addresses and IPAM in its `network-attachment-definitions.yaml`, the per-role `device_name` (`mlx5_10`/`mlx5_11`) in its role patches, and pin both roles to the same node. Use it only when the cluster provides RDMA; the TCP base needs none of these. On the RDMA path the vLLM log shows `The Mooncake Transfer Engine is using rdma as its protocol.`
 
 Treat the vLLM path as a compatibility smoke test until a clean multi-hour soak and hardware-specific calibration have been completed.
 

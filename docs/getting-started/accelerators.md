@@ -117,7 +117,7 @@ paths. The device plugin must expose `mthreads.com/gpu`.
 **vLLM**
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
-- **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
+- **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA. The [`rdma-sriov`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/rdma-sriov/) overlay switches the same topology to RDMA over an SR-IOV VF.
 
 **SGLang**
 
