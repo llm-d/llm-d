@@ -1,0 +1,446 @@
+{
+  "id": null,
+  "uid": "llmd-ipp",
+  "title": "llm-d Inference Payload Processor",
+  "description": "IPP ALPHA metrics: processing, plugin latency, model selection, body fields and TTFT. Requires existing authenticated metrics collection.",
+  "tags": [
+    "llm-d",
+    "ipp",
+    "observability"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "options": [],
+        "current": {}
+      },
+      {
+        "name": "namespace",
+        "label": "namespace",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(ipp_info, namespace)",
+        "definition": "label_values(ipp_info, namespace)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "pod",
+        "label": "pod",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(ipp_info{namespace=~\"$namespace\"}, pod)",
+        "definition": "label_values(ipp_info{namespace=~\"$namespace\"}, pod)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "model",
+        "label": "model",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(ipp_request_ttft_seconds_count{namespace=~\"$namespace\",pod=~\"$pod\"}, model)",
+        "definition": "label_values(ipp_request_ttft_seconds_count{namespace=~\"$namespace\",pod=~\"$pod\"}, model)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Scope and prerequisites",
+      "type": "text",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "For existing **Inference Payload Processor (IPP)** deployments. Metrics must already be scraped with the configured authentication and `namespace` / `pod` target labels. [Metric reference and scrape prerequisites](https://github.com/llm-d/llm-d/blob/main/docs/operations/observability/ipp-metrics.md). The **model** filter applies only to TTFT; other IPP counters have no model label. IPP processing success does not prove downstream inference success. Empty selection/plugin panels can mean that path has not run."
+      }
+    },
+    {
+      "id": 2,
+      "title": "IPP processing successes / second",
+      "type": "timeseries",
+      "description": "Successful IPP processing, not a total request count or inference success denominator.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(ipp_success_total{namespace=~\"$namespace\",pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "processing successes",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Model-selection attempts / second",
+      "type": "timeseries",
+      "description": "Only pipelines that run model selection emit attempts. status is success or failure.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (status) (rate(ipp_model_selector_attempt_total{namespace=~\"$namespace\",pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Model-selection latency p99",
+      "type": "timeseries",
+      "description": "Selector buckets extend to 0.1s before +Inf; very slow observations have limited quantile resolution.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(ipp_model_selector_e2e_duration_seconds_bucket{namespace=~\"$namespace\",pod=~\"$pod\"}[$__rate_interval])))",
+          "legendFormat": "selection p99",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Plugin processing latency p99",
+      "type": "timeseries",
+      "description": "Preserves extension point, plugin type and plugin name to distinguish configured plugin instances.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, extension_point, plugin_type, plugin_name) (rate(ipp_plugin_duration_seconds_bucket{namespace=~\"$namespace\",pod=~\"$pod\"}[$__rate_interval])))",
+          "legendFormat": "{{extension_point}} / {{plugin_type}} / {{plugin_name}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Missing or empty body fields / second",
+      "type": "timeseries",
+      "description": "Absence and present-but-empty are separate counters; inspect the request schema and configured field.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (field) (rate(ipp_body_field_not_found_total{namespace=~\"$namespace\",pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "missing: {{field}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (field) (rate(ipp_body_field_empty_total{namespace=~\"$namespace\",pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "empty: {{field}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Time to first token p99 by model",
+      "type": "timeseries",
+      "description": "The model filter applies here. TTFT buckets extend to 30s before +Inf.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, model) (rate(ipp_request_ttft_seconds_bucket{namespace=~\"$namespace\",pod=~\"$pod\",model=~\"$model\"}[$__rate_interval])))",
+          "legendFormat": "{{model}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "IPP build information",
+      "type": "table",
+      "description": "Value 1 carries build identity in commit and build_ref labels, plus collector target labels.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "ipp_info{namespace=~\"$namespace\",pod=~\"$pod\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}
