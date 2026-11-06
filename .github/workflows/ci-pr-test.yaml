@@ -35,6 +35,9 @@ jobs:
   # images need building.
   needs-build-check:
     if: github.event_name == 'pull_request_target'
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       any_image_changes: ${{ steps.check.outputs.any_image_changes }}
@@ -77,6 +80,12 @@ jobs:
   build-images:
     needs: [needs-build-check, pr-gate, auto-gate]
     if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+      security-events: write
+      id-token: write
     uses: ./.github/workflows/build-image.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha || '' }}
