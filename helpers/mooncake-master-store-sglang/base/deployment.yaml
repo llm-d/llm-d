@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mooncake-master-store
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9003"
+        prometheus.io/path: "/metrics"
+    spec:
+      # The snapshots PVC is provisioned by the Spectrum Scale CSI driver, which only runs
+      # on nodes labelled scale=true (the same selector its own DaemonSet uses). Without
+      # this, the Recreate strategy can place the master on a node lacking the driver, where
+      # it hangs in ContainerCreating with:
+      #   AttachVolume.Attach failed ... CSINode <node> does not contain driver
+      #   spectrumscale.csi.ibm.com
+      # Adjust or remove this if the snapshot volume uses a different storage class.
+
+      containers:
+        - name: mooncake-master-store
+          image: kvcacheai/mooncake:0.3.13.post1
+          command: ["mooncake_master"]
+          args:
+            - "--config_path=/etc/mooncake/master.yaml"
+            # Required for the disk tier: without it the Master rejects
+            # MountLocalDiskSegment RPCs from clients with UNABLE_OFFLOAD. No-op when no
+            # client attempts to mount disk. Pairs with cluster_id/root_fs_dir in
+            # configmap.yaml.
+            - "--enable_offload"
+          env:
+            - name: MOONCAKE_SNAPSHOT_LOCAL_PATH
+              value: "/data/snapshots"
+          ports:
+            - name: rpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9003
+              protocol: TCP
+            - name: metadata
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: rpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: rpc
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "4"
+              memory: "4Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mooncake
+              readOnly: true
+            - name: snapshots
+              mountPath: /data/snapshots
+      volumes:
+        - name: config
+          configMap:
+            name: mooncake-master-store-config
+        - name: snapshots
+          persistentVolumeClaim:
+            claimName: mooncake-master-store-snapshots

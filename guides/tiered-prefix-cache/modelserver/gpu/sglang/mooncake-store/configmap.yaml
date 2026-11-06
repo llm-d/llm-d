@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-store-config
+data:
+  # Mounted read-only straight into SGLANG_HICACHE_MOONCAKE_CONFIG_PATH -- no
+  # per-pod rendering. The two values that once needed it are covered
+  # elsewhere: local_hostname comes from the MOONCAKE_LOCAL_HOSTNAME
+  # downward-API env (SGLang's loader prefers it over this JSON), and device
+  # selection needs no MC_MS_FILTERS because the SR-IOV device plugin's device
+  # cgroup leaves only the pod's allocated VFs openable, which Mooncake's
+  # auto-discovery already respects. device_name stays empty so auto-discovery
+  # runs and picks up the attached VF.
+  #   global_segment_size - L3 DRAM landing zone, split across TP ranks.
+  mooncake_config.json: |
+    {
+      "metadata_server": "P2PHANDSHAKE",
+      "master_server_address": "mooncake-master-store:50051",
+      "global_segment_size": "360GB",
+      "local_buffer_size": "4GB",
+      "protocol": "rdma",
+      "device_name": "",
+      "enable_ssd_offload": false
+    }

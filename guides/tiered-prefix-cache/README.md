@@ -21,7 +21,7 @@ The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas 
 | --- | --- | --- | --- |
 | `native` (recommended) | vLLM [`OffloadingConnector`](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) (`fs` adds a filesystem tier through `TieringOffloadingSpec`); SGLang HiCache; the vLLM TPU offload connector | `cpu`, `fs` (TPU v7: `cpu`, `fs`; TPU v6/v5p: `cpu`) | vLLM on NVIDIA GPU, AMD GPU, Intel XPU, Google TPU; SGLang on NVIDIA GPU, Google TPU v7 |
 | `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
-| `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
+| `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU; SGLang on NVIDIA GPU over RoCE/SR-IOV (see [MooncakeStore - SGLang](#mooncakestore---sglang-rocesr-iov)) |
 
 Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size` (GB per tensor-parallel rank): 200 on NVIDIA GPU (TP=2), 32 on TPU v7 (TP=8). LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank).
 vLLM keeps its CPU tier in `/dev/shm`, so the tier counts toward the pod's memory limit. When you change the tier size, change the pod's memory request and limit, and the router's `lruCapacityPerServer` (see the note in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
@@ -277,6 +277,90 @@ kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/mooncake
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.mooncake end -->
+
+#### MooncakeStore - SGLang (RoCE/SR-IOV)
+
+SGLang's HiCache can also back onto MooncakeStore, using an RDMA (RoCE)
+transport instead of the CPU-only paths above. This requires the [per-namespace
+Mooncake Master](../../helpers/mooncake-master-store-sglang/) metadata service
+and a dedicated [SR-IOV RDMA network](../../helpers/sriov-network/) so each
+decode pod gets its own RDMA-capable VF instead of sharing a NIC pool.
+
+Unlike the vLLM paths above, this variant deploys its own master into
+`${NAMESPACE}` alongside the decode pods rather than sharing the cluster-wide
+one in the `mooncake` namespace — which is why its config addresses the master
+as the bare `mooncake-master-store:50051`. That helper also pins a mooncake
+version matched to the SGLang image; see its README before changing either.
+
+**Prerequisites:**
+
+```bash
+# Metadata service, deployed into your own namespace (use base/ instead of
+# monitoring/ if you don't have the Prometheus Operator)
+kubectl apply -k ${REPO_ROOT}/helpers/mooncake-master-store-sglang/monitoring/ -n ${NAMESPACE}
+```
+
+Each decode pod also needs its own RDMA-backed SR-IOV VF. The model server
+is configured through two variables, so it works with whichever method your
+cluster uses to provide them:
+
+- `RDMA_NETWORK` - the NetworkAttachmentDefinition in `${NAMESPACE}` that the
+  pod attaches as `net1`. Defaults to `${NAMESPACE}-rdma`.
+- `RDMA_VF_RESOURCE` - the full extended-resource name that hands the pod one
+  VF together with its `/dev/infiniband` devices, e.g.
+  `openshift.io/p1_sriov_nodepolicy`. No default.
+
+**Option: the SR-IOV network helper (OpenShift).** Follow
+[helpers/sriov-network/README.md](../../helpers/sriov-network/README.md) to
+create `${NAMESPACE}-rdma`. It covers the `SriovNetworkNodePolicy`
+prerequisite, picking `SRIOV_RESOURCE_NAME` and the IP range for your
+cluster, and how a pod ends up consuming the VF it creates. Then:
+
+```bash
+export RDMA_VF_RESOURCE=openshift.io/${SRIOV_RESOURCE_NAME}
+```
+
+**Other options.** Any setup that provides a NetworkAttachmentDefinition and a
+VF resource works, for example the upstream SR-IOV Network Operator, the
+NVIDIA Network Operator, or the SR-IOV device plugin with a hand-written
+NetworkAttachmentDefinition. The attached interface must be a PCI-backed VF,
+not macvlan or ipvlan, because each pod finds its RDMA device by the VF's PCI
+address. Set the variables to match your setup:
+
+```bash
+export RDMA_NETWORK=your-rdma-network       # name of your NetworkAttachmentDefinition
+export RDMA_VF_RESOURCE=nvidia.com/sriov_rdma   # resource your device plugin advertises
+```
+
+**Deploy the model server:**
+
+The Deployment's Multus annotation and VF resource request are templated, so
+this variant needs its kustomize output piped through `envsubst` before
+applying (every other path here can go straight through `kubectl apply -k`).
+`envsubst` turns an unset variable into an empty string, so check them first:
+
+```bash
+export RDMA_NETWORK="${RDMA_NETWORK:-${NAMESPACE}-rdma}"
+: "${NAMESPACE:?must be set}" \
+  "${RDMA_VF_RESOURCE:?must be set, e.g. openshift.io/p1_sriov_nodepolicy}"
+
+kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/sglang/mooncake-store | \
+  envsubst '${RDMA_NETWORK} ${RDMA_VF_RESOURCE}' | \
+  kubectl apply -n ${NAMESPACE} -f -
+```
+
+**Sizing host RAM:** with this SGLang version, `--hicache-size` is the L2 host
+cache size in GB **per TP rank**, not per pod. With `--tensor-parallel-size=2`,
+the default `--hicache-size 100` allocates about 200 GB of host RAM per pod
+(762,944 tokens for Qwen3-32B), plus a few GB for Mooncake's
+`global_segment_size` and `local_buffer_size`. Keep the total within the pod's
+`memory` limit (400Gi here). To check the allocated L2 size on a running pod,
+read `sglang:hicache_host_total_tokens` from its `/metrics` endpoint.
+
+Each pod matches its attached VF to the right RDMA device itself at startup —
+`configmap-render-config.yaml` walks the PCI address the VF's netdev sits on
+and finds the `/sys/class/infiniband` entry on that same PCI function, so
+there's no manual IP/GID setup per namespace.
 
 #### Model servers
 
