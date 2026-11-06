@@ -37,21 +37,21 @@ Both plugins are used with their built-in defaults — no per-deployment tuning 
 This guide includes configurations for the following accelerator and model server combinations (set `ACCELERATOR_TYPE` and `MODEL_SERVER` accordingly). Each accelerator serves exactly one model:
 
 <!-- guide:support start -->
-| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Atom | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | — | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
-| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | ✅ validated | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | — | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
-| Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · nightly runs on Spot capacity |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8, 16k context) · Torch TPU (`torch-tpu-vllm` / `sglang:v0.1.0-tpu`) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`) · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (DP=8 × TP=1, EP, fp8 KV, 262k context, no KV offload or MTP); SGLang (`sglang:v0.1.0-tpu`): `Qwen/Qwen3-32B` (TP=8, 16k context) |
-| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
-| Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
-| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
-| Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
-| MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | — | 2 replicas × TP=8 (16 GPUs) |
-| Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
-| Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
+| Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | TensorRT-LLM | Atom | Inference Simulator | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | — | — | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
+| AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | ✅ validated | — | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | — | — | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
+| Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · nightly runs on Spot capacity |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8, 16k context) · Torch TPU (`torch-tpu-vllm` / `sglang:v0.1.0-tpu`) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`) · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (DP=8 × TP=1, EP, fp8 KV, 262k context, no KV offload or MTP); SGLang (`sglang:v0.1.0-tpu`): `Qwen/Qwen3-32B` (TP=8, 16k context) |
+| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
+| Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
+| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | — | 🟡 community | vLLM: x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16 need `--dtype=float32` for bf16). Simulator: 2 replicas × 100m CPU / 128 MiB requested; no accelerator or model download. |
+| Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
+| MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | — | — | 2 replicas × TP=8 (16 GPUs) |
+| Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
+| Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -73,11 +73,11 @@ the [MThreads SGLang overlay](./modelserver/mthreads/sglang/).
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
+- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)). The simulator path below uses ordinary CPU nodes, including a local Kind cluster.
 
 - For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
 
-- Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
+- For real model servers, create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell. The simulator does not need this token or secret.
 
 - (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
@@ -106,13 +106,26 @@ export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, biren, mthreads
-export MODEL_SERVER=vllm # options: vllm, sglang, trtllm, atom
+export MODEL_SERVER=vllm # options: vllm, sglang, trtllm, atom, sim
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2
 export MODEL=Qwen/Qwen3-32B # set to the Served model for your accelerator (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
+
+**CPU-only simulator:** to exercise the same router and verification commands without loading a model, select these values after the environment block above:
+
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_TYPE=cpu
+export MODEL_SERVER=sim
+export INFRA_PROVIDER=base
+export MODEL=meta-llama/Llama-3.2-3B-Instruct
+```
+<!-- llm-d-cicd:skip end -->
+
+This path runs two [llm-d-inference-sim](https://github.com/llm-d/llm-d-inference-sim) replicas with small CPU/memory requests and a lighter router resource profile. The served model name is an API alias: the simulator uses a dummy model and simple tokenizer, so no model weights, HuggingFace token, or render server are required. It returns synthetic text and simulated vLLM metrics; use this path for deployment, routing, and monitoring smoke tests, not model quality or hardware performance measurements. It is a community configuration and is not covered by a nightly E2E run.
 
 **Install the Gateway API Inference Extension CRDs:**
 
@@ -134,6 +147,10 @@ kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -
 **Create the `llm-d-hf-token` secret** in your target namespace with the key [`HF_TOKEN`](../../helpers/hf-token.md) matching a valid HuggingFace token to pull models:
 
 <!-- guide:prerequisites.secrets start -->
+<!-- variants:start -->
+<details open data-when="MODEL_SERVER=vllm,sglang,trtllm,atom">
+<summary><b>vLLM / SGLang / TensorRT-LLM / Atom</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl create secret generic llm-d-hf-token \
@@ -142,6 +159,9 @@ kubectl create secret generic llm-d-hf-token \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:prerequisites.secrets end -->
 
 ## Installation Instructions
@@ -152,8 +172,8 @@ kubectl create secret generic llm-d-hf-token \
 
 <!-- guide:deploy.router_values start -->
 <!-- variants:start -->
-<details open data-when="MODEL_SERVER=vllm,sglang,atom">
-<summary><b>vLLM / SGLang / Atom</b></summary>
+<details open data-when="MODEL_SERVER=vllm,sglang,atom,sim">
+<summary><b>vLLM / SGLang / Atom / Inference Simulator</b></summary>
 
 ```bash
 # Paths to values files
@@ -229,6 +249,16 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.va
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[1] end -->
+
+**(Simulator only) Layer the small router resource profile** so the EPP and proxy fit alongside the two simulator replicas on a local cluster:
+
+<!-- guide:deploy.accelerator_values[2] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/sim.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[2] end -->
 
 **Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
 
@@ -450,7 +480,7 @@ kubectl run prefix-test --rm -i --restart=Never \
 for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | grep -E '^(vllm:prefix_cache_(hits|queries)_total|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
+    | grep -E '^(vllm:prefix_cache_(hits|queries)(_total)?|vllm:request_success_total|sglang:(cache_hit_rate|cached_tokens_total|num_requests_total))' || true
 done
 ```
 <!-- guide:verify.tests.pod_metrics end -->
@@ -586,7 +616,10 @@ kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+# A simulator-only cluster need not install the PodMonitor CRD.
+if [[ "${MODEL_SERVER}" != sim || "${MONITORING}" == true ]]; then
+  kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+fi
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash

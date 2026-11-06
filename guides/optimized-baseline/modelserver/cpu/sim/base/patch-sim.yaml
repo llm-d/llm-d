@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            # The dummy model uses the simulator's simple tokenizer. The API
+            # alias matches this guide's CPU model without downloading it.
+            - --model=llm-d-sim
+            - --served-model-name=meta-llama/Llama-3.2-3B-Instruct
+            - --port=8000
+            - --max-model-len=8192
+            - --max-num-seqs=16
+            - --enable-kvcache
+            - --time-to-first-token=20ms
+            - --inter-token-latency=5ms
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

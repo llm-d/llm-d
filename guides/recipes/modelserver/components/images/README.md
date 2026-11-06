@@ -19,6 +19,8 @@ This directory contains Kustomize Components that define the **default container
 ├── coordinator
 │   ├── nightly
 │   └── release
+├── cpu-sim
+│   └── release
 ├── cpu-vllm
 │   ├── llm-d
 │   ├── nightly
