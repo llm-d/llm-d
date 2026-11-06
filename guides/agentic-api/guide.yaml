@@ -10,7 +10,8 @@ name: agentic-api
 # needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
 # narrows one to a subset); llm-d.ai turns it into the provider selector.
 # agentic-api needs vLLM started with the tool-calling flags for its model;
-# the Optimized Baseline NVIDIA GPU vLLM overlays are the ones that set them.
+# the Optimized Baseline NVIDIA GPU vLLM overlays set them, and the Rebellions
+# NPU overlay in this guide starts MiniMax-M2.7 with them.
 support:
   engines: {vllm: vLLM}
   accelerators:
@@ -22,6 +23,13 @@ support:
         - {name: base, label: "Kubernetes (base)"}
         - {name: gke, label: "GKE"}
       engines: {vllm: validated}
+    npu:
+      label: Rebellions NPU
+      notes: "RBLN-CR series · 1 replica × 4 NPUs via DRA (one server per data-parallel rank, expert parallel)"
+      model: MiniMaxAI/MiniMax-M2.7
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community}
 
 env:
   static:
@@ -30,12 +38,12 @@ env:
     GUIDE_NAME: agentic-api
     NAMESPACE: llm-d-agentic-api
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     INFRA_PROVIDER: {default: base, values: [base, gke]}
 
-    MODEL: {default: "Qwen/Qwen3-32B", comment: "the model the overlays serve (table above)"}
+    MODEL: {default: "Qwen/Qwen3-32B", comment: "set to the Served model for your accelerator (table above)"}
 
     # The llm-d Router agentic-api sends each inference round to: the Service
     # of this guide's router, whose helm release is ${GUIDE_NAME}.
@@ -85,12 +93,20 @@ deploy:
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
         export ROUTER_VALUES="${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml"
 
+  # The Rebellions NPU router values: they select this guide's NPU model server,
+  # list its four rank ports and pin the 512-token prefix unit the runtime reuses.
+  accelerator_values:
+    - when: {ACCELERATOR_TYPE: [npu]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+
   standalone:
     - run: |
         helm install ${GUIDE_NAME} \
           ${ROUTER_STANDALONE_CHART} \
           -f ${ROUTER_BASE_VALUES} \
           -f ${ROUTER_VALUES} \
+          ${ACCELERATOR_VALUES:-} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
@@ -111,10 +127,17 @@ deploy:
         kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
 
   ready:
-    - run: |
+    - when: {ACCELERATOR_TYPE: [gpu]}
+      run: |
         # The model servers become Available once vLLM has loaded the model
         kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
           -l llm-d.ai/guide=optimized-baseline --timeout=30m
+    - when: {ACCELERATOR_TYPE: [npu]}
+      skip_in: [ci]
+      run: |
+        # The first start compiles the model for the NPU before it serves
+        kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
+          -l llm-d.ai/guide=agentic-api --timeout=120m
 
 verify:
   endpoint:
