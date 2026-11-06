@@ -45,6 +45,8 @@ teams can ensure stability and performance, quickly identifying and reverting an
 1. **Configure traffic splitting**: Use an HTTPRoute to split traffic between the existing InferencePool and the new InferencePool. The `backendRefs.weight` field controls the traffic percentage allocated to each pool.
 1. **Preserve rollback capability**: Retain the original nodes and InferencePool during the roll out to facilitate a rollback if necessary.
 
+Before increasing the candidate's traffic share or deleting the old pool, follow the [rollout observability and troubleshooting checklist](./README.md#observability--troubleshooting) to compare errors, latency, and serving capacity for both pools.
+
 ## Example
 
 This is an example of InferencePool rollout with node (compute, accelerator) update roll out
