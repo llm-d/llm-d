@@ -53,7 +53,7 @@ def test_scaledobject_is_retargeted_to_the_requester(overlay):
     spec = obj["spec"]
     assert spec["scaleTargetRef"]["name"] == "fma-requester"
     assert spec["minReplicaCount"] == 0
-    assert spec["maxReplicaCount"] == 2
+    assert spec["maxReplicaCount"] == 1
     assert spec["cooldownPeriod"] == 30
     # The scale-down window the guide's 240s scale-to-zero wait budgets for.
     assert spec["advanced"]["horizontalPodAutoscalerConfig"]["behavior"]["scaleDown"]["stabilizationWindowSeconds"] == 30

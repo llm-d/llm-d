@@ -29,7 +29,7 @@ patches:
         value: 0
       - op: replace
         path: /spec/maxReplicaCount
-        value: 2
+        value: 1
       # Seconds of zero demand before KEDA scales to 0 (that direction only;
       # scale-up from 0 is governed by the trigger's activation threshold).
       - op: replace
