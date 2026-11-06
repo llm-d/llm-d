@@ -1,0 +1,192 @@
+name: glm-5-3
+
+# Which model server runs on which accelerator. `validated` = covered by a
+# nightly E2E workflow; `community` = an overlay exists but is not run nightly.
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    amd:
+      label: AMD MI355X
+      notes: >-
+        Default: P/D on 2 nodes, DP8/EP8 prefill + DP8/EP8 decode, MoRI-IO READ (`pd-1p1d`) ·
+        `pd-2p1d`: 3 nodes · colocated on 1 node: `colocated-ep`, `colocated-ep-chunk1024`, `colocated-tp`
+      model: amd/GLM-5.3-Quark-MXFP4-AttnFP8
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: glm-5-3
+    NAMESPACE: llm-d-glm-5-3
+
+    ACCELERATOR_TYPE: {default: amd, values: [amd]}
+    MODEL_SERVER: {default: vllm, values: [vllm]}
+    # pd-1p1d: 1 prefill + 1 decode instance (2 nodes); pd-2p1d: 2 prefill + 1 decode (3 nodes);
+    # colocated-*: two 4-GPU replicas on 1 node, expert parallel (2,048- or 1,024-token prefill
+    # chunks) or tensor parallel.
+    DEPLOYMENT: {default: pd-1p1d, values: [pd-1p1d, pd-2p1d, colocated-ep, colocated-ep-chunk1024, colocated-tp]}
+
+    MODEL: amd/GLM-5.3-Quark-MXFP4-AttnFP8
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+  network:
+    - run: |
+        # RDMA rail attachment the engines reference as glm-5-3-rdma; edit spec.config for your CNI first
+        kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/amd/vllm/network/rdma-nad.yaml
+  model:
+    - run: |
+        # model-pvc (RWX, 1 TiB) and a one-time download of the pinned checkpoint (410 GB)
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/amd/vllm/model-storage
+        kubectl wait -n ${NAMESPACE} --for=condition=complete --timeout=6h job/download-glm-5-3
+
+deploy:
+  router_values:
+    - run: |
+        # P/D: prefix-based P/D decider, prefill and decode profiles, and the Envoy Lua filter
+        # that pins both legs of a request to the same DP rank
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+        export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
+        export ROUTER_POST_RENDERER="--post-renderer ${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/session-sticky/post-render.py"
+    - when: {DEPLOYMENT: [colocated-ep, colocated-ep-chunk1024]}
+      run: |
+        # One endpoint per DP rank, prefix-cache affinity and token-load scoring, no rank pin
+        export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-colocated-ep.values.yaml"
+        export ROUTER_POST_RENDERER="${ROUTER_POST_RENDERER} --post-renderer-args=--dp-ranks=0"
+    - when: {DEPLOYMENT: [colocated-tp]}
+      run: |
+        # One endpoint per TP4 replica, prefix-cache affinity and token-load scoring, no rank pin
+        export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}-colocated-tp.values.yaml"
+        export ROUTER_POST_RENDERER="${ROUTER_POST_RENDERER} --post-renderer-args=--dp-ranks=0"
+
+  standalone:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_STANDALONE_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          -f ${ROUTER_VALUES} \
+          -f ${ROUTER_OVERRIDES_VALUES} \
+          ${ROUTER_POST_RENDERER} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
+    - run: |
+        # First start JIT-compiles the AITER, Triton and MoRI kernels (~30 min); the startup probe allows 2 h
+        kubectl wait -n ${NAMESPACE} --for=condition=Ready pod -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/inference-serving=true --timeout=2h
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    ext_proc:
+      - run: |
+          # Envoy must see the EPP (ext_proc) as healthy; until then the router refuses requests
+          EPP_IP=$(kubectl -n ${NAMESPACE} get endpointslices \
+            -l kubernetes.io/service-name=${GUIDE_NAME}-epp \
+            -o jsonpath='{.items[0].endpoints[0].addresses[0]}')
+          kubectl run extproc-check --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="EPP_IP=${EPP_IP}" \
+            -- /bin/sh -c 'for i in $(seq 1 30); do
+                curl -s "http://${EPP_IP}:19001/stats/prometheus" \
+                  | grep -q "^envoy_cluster_membership_healthy{envoy_cluster_name=\"ext_proc\"} 1" \
+                  && { echo "OK: ext_proc healthy"; exit 0; }
+                sleep 5
+              done; echo "FAIL: ext_proc not healthy"; exit 1'
+    served_model:
+      - run: |
+          # A real answer through the router: max_tokens=1 is an error under the glm45 reasoning parser
+          kubectl run serve-check --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'Q="{\"role\": \"user\", \"content\": \"What is 17 times 23?\"}"
+              B="{\"model\": \"${MODEL}\", \"max_tokens\": 1024, \"temperature\": 0, \"messages\": [${Q}]}"
+              R=$(curl -sS -m 600 -X POST "http://${IP}/v1/chat/completions" -H "Content-Type: application/json" -d "${B}")
+              echo "${R}" | grep -q "391" \
+                && echo "OK: ${MODEL} answered through the router" \
+                || { echo "FAIL: ${R}"; exit 1; }'
+
+benchmark:
+  setup:
+    - when: {DEPLOYMENT: [pd-1p1d, pd-2p1d]}
+      run: |
+        # Engine /metrics endpoints: prefill vLLM on 8000, decode vLLM on 8200 (behind the sidecar)
+        sel="llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role"
+        METRICS_ENDPOINTS="$(kubectl get pods -n ${NAMESPACE} -l ${sel}=prefill \
+          -o jsonpath='{range .items[*]}prefill={.status.podIP}:8000 {end}')$(kubectl get pods -n ${NAMESPACE} -l ${sel}=decode \
+          -o jsonpath='{range .items[*]}decode={.status.podIP}:8200 {end}')"
+    - when: {DEPLOYMENT: [colocated-ep, colocated-ep-chunk1024]}
+      run: |
+        # One /metrics endpoint per DP rank
+        METRICS_ENDPOINTS=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/inference-serving=true \
+          -o jsonpath='{range .items[*]}coloc={.status.podIP}:8000 coloc={.status.podIP}:8001 coloc={.status.podIP}:8002 coloc={.status.podIP}:8003 {end}')
+    - when: {DEPLOYMENT: [colocated-tp]}
+      run: |
+        METRICS_ENDPOINTS=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/inference-serving=true \
+          -o jsonpath='{range .items[*]}coloc={.status.podIP}:8000 {end}')
+    - when: {DEPLOYMENT: [pd-1p1d]}
+      run: |
+        # 256k retained context, +30k new tokens per turn, 16 sessions on 16 GPUs
+        BENCH_RUN=(--from-literal=MODE=multiturn --from-literal=RETAINED_TOKENS=256000 --from-literal=NEW_TOKENS=30000
+                   --from-literal=CONCURRENCY=16 --from-literal=GPUS=16 --from-literal=LAYOUT=pd)
+    - when: {DEPLOYMENT: [pd-2p1d]}
+      run: |
+        # Cold 256k-token prompts, 12 in flight, 36 measured, on 24 GPUs
+        BENCH_RUN=(--from-literal=MODE=cold --from-literal=PROMPT_TOKENS=256000 --from-literal=NUM_PROMPTS=36
+                   --from-literal=CONCURRENCY=12 --from-literal=GPUS=24 --from-literal=LAYOUT=pd)
+    - when: {DEPLOYMENT: [colocated-ep, colocated-ep-chunk1024, colocated-tp]}
+      run: |
+        # 256k retained context, +30k new tokens per turn, 8 sessions on the node's 8 GPUs
+        BENCH_RUN=(--from-literal=MODE=multiturn --from-literal=RETAINED_TOKENS=256000 --from-literal=NEW_TOKENS=30000
+                   --from-literal=CONCURRENCY=8 --from-literal=GPUS=8 --from-literal=LAYOUT=coloc)
+    - run: |
+        # The run definition, then the Job, its script and the results PVC
+        kubectl create configmap glm-5-3-bench-run -n ${NAMESPACE} "${BENCH_RUN[@]}" \
+          --from-literal=METRICS_ENDPOINTS="${METRICS_ENDPOINTS}" --dry-run=client -o yaml | kubectl apply -f -
+        kubectl delete job glm-5-3-bench -n ${NAMESPACE} --ignore-not-found=true
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark
+  execute:
+    - run: |
+        kubectl wait -n ${NAMESPACE} --for=condition=complete --timeout=8h job/glm-5-3-bench
+        kubectl logs -n ${NAMESPACE} job/glm-5-3-bench | grep -E 'MT_RESULT|goodput|\[STALL\]' | tail -n 20
+
+cleanup:
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/deployments/${DEPLOYMENT}
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: |
+        kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/benchmark --ignore-not-found=true
+        kubectl delete configmap glm-5-3-bench-run -n ${NAMESPACE} --ignore-not-found=true
+        kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/amd/vllm/network/rdma-nad.yaml --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

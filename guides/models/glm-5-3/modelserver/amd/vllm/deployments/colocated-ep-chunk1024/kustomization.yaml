@@ -1,0 +1,25 @@
+# colocated-ep with 1,024-token prefill chunks: lower decode-step stalls while other sessions
+# prefill, at the cost of prefill speed. Pair with router/glm-5-3-colocated-ep.values.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../colocated-ep
+
+patches:
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: glm-5-3
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: glm-5-3
+      spec:
+        template:
+          spec:
+            containers:
+              - name: vllm
+                env:
+                  - name: MAX_NUM_BATCHED_TOKENS
+                    value: "1024"
