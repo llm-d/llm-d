@@ -11,7 +11,7 @@ name: omni-serving
 # needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
 # narrows one to a subset); llm-d.ai turns it into the provider selector.
 # Overlays are modelserver/<acc>/<engine>/<TASK>/<provider>/; SGLang serves
-# the two image tasks only.
+# the two image tasks only. Text-to-video is currently XPU vLLM-Omni only.
 support:
   engines: {vllmomni: vLLM-Omni, sglang: SGLang}
   accelerators:
@@ -25,11 +25,11 @@ support:
       engines: {vllmomni: community, sglang: community}
     xpu:
       label: Intel XPU
-      notes: "`text-to-image`, `image-to-image` · Arc Pro B60 · 2 replicas × 1 XPU via DRA · memory offload (`--performance-mode=memory`)"
-      model: black-forest-labs/FLUX.2-klein-4B
+      notes: "SGLang: `text-to-image`, `image-to-image`, 2 replicas × 1 Arc Pro B60 · vLLM-Omni: `text-to-video`, Wan2.1 EG, 1 replica × 2 XPUs · DRA"
+      model: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
       providers:
-        - {name: base, label: "Kubernetes (base)", engines: [sglang]}
-      engines: {sglang: community}
+        - {name: base, label: "Kubernetes (base)", engines: [vllmomni, sglang]}
+      engines: {vllmomni: community, sglang: community}
 
 env:
   static:
@@ -45,13 +45,13 @@ env:
 
     # What the pool serves: `omni` = one omni checkpoint answering several
     # endpoints; the others = one single-endpoint generator per pool.
-    TASK: {default: omni, values: [omni, text-to-image, image-to-image, text-to-speech]}
+    TASK: {default: omni, values: [omni, text-to-image, image-to-image, text-to-speech, text-to-video]}
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, xpu]}
     MODEL_SERVER: {default: vllmomni, values: [vllmomni, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<TASK>/<INFRA_PROVIDER>/.
     INFRA_PROVIDER: {default: base, values: [base, gke]}
 
-    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511 (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"}
+    MODEL: {default: "Qwen/Qwen3-Omni-30B-A3B-Instruct", comment: "the model the TASK's overlay serves: omni Qwen/Qwen3-Omni-30B-A3B-Instruct, text-to-image Qwen/Qwen-Image (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), image-to-image Qwen/Qwen-Image-Edit-2511 (GPU) or black-forest-labs/FLUX.2-klein-4B (XPU SGLang), text-to-speech Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice, text-to-video Wan-AI/Wan2.1-T2V-1.3B-Diffusers (XPU vLLM-Omni)"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
@@ -102,6 +102,12 @@ deploy:
           # Paths to values files
           export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
           export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-speech.values.yaml"
+    text-to-video:
+      - when: {TASK: [text-to-video]}
+        run: |
+          # Paths to values files
+          export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+          export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/text-to-video.values.yaml"
 
   monitoring_values:
     - when: {MONITORING: ["true"]}
@@ -137,6 +143,11 @@ deploy:
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}/
+    text-to-video:
+      - when: {TASK: [text-to-video]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-video/${INFRA_PROVIDER}/
 
   monitoring:
     - when: {MONITORING: ["true"], MODEL_SERVER: [vllmomni]}
@@ -215,12 +226,30 @@ verify:
                 -X POST "http://${IP}/v1/audio/speech" -H "Content-Type: application/json" \
                 -d "{\"model\": \"${MODEL}\", \"input\": \"llm-d routes speech requests to the least busy pod.\", \"voice\": \"vivian\", \"response_format\": \"wav\"}"
               echo "header: $(head -c 4 /tmp/speech.wav)"'
+    text-to-video:
+      - when: {TASK: [text-to-video]}
+        run: |
+          # Text in, MP4 out: report HTTP status, size, and file signature.
+          kubectl run t2v-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS --fail-with-body -o /tmp/wan.mp4 \
+                -w "HTTP %{http_code}, %{size_download} bytes, %{content_type}\n" \
+                -X POST "http://${IP}/v1/videos/sync" \
+                -F "model=${MODEL}" \
+                -F "prompt=A fluffy orange tabby cat sitting on a wooden windowsill in warm morning sunlight, blinking slowly and gently turning its head toward the camera." \
+                -F "width=384" -F "height=384" -F "num_frames=33" \
+                -F "num_inference_steps=16" -F "guidance_scale=5.0" \
+                -F "fps=16" -F "seed=123"
+              echo "signature: $(od -An -j4 -N8 -c /tmp/wan.mp4 | tr -d " \\n")"'
     pod_logs:
       - run: |
           # The model servers' logs: every request above, by endpoint path,
           # on the pods of the pool (each line prefixed with its pod name)
           kubectl logs -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -c modelserver --tail=-1 --prefix \
-            | grep -E 'POST /v1/(chat/completions|images/generations|images/edits|audio/speech)' || true
+            | grep -E 'POST /v1/(chat/completions|images/generations|images/edits|audio/speech|videos/sync)' || true
 
 cleanup:
   modelserver:
@@ -236,6 +265,9 @@ cleanup:
     text-to-speech:
       - when: {TASK: [text-to-speech]}
         run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-speech/${INFRA_PROVIDER}
+    text-to-video:
+      - when: {TASK: [text-to-video]}
+        run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/text-to-video/${INFRA_PROVIDER}
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
