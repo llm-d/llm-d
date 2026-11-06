@@ -3,6 +3,7 @@ kind: Component
 
 resources:
   - prefill-podmonitor.yaml
+  - encode-podmonitor.yaml
 
 components:
   - ../monitoring
