@@ -8,6 +8,7 @@ INSTALLER="${REPOSITORY}/guides/recipes/observability/install-prometheus-grafana
 TLS_HELPER="${REPOSITORY}/guides/recipes/observability/generate-prometheus-tls-certs.sh"
 STUB_DIR="${TEST_DIR}/bin"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/llm-d-kubeconfig-test.XXXXXX")"
+WORK_DIR="$(cd "$WORK_DIR" && pwd)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 SELECTED_KUBECONFIG="${WORK_DIR}/selected kubeconfig"
@@ -111,5 +112,26 @@ assert_all_selected "$tls_log"
 assert_contains "$tls_log" "command=kubectl kubeconfig=[${SELECTED_KUBECONFIG}] args=[create][secret][generic][prometheus-web-tls]"
 assert_contains "$tls_log" "command=kubectl kubeconfig=[${SELECTED_KUBECONFIG}] args=[create][configmap][prometheus-web-tls-ca]"
 printf '%s\n' 'PASS TLS helper retains the selected target after changing directory.'
+
+# A relative selection must remain usable after the helper changes directory.
+relative_log="${WORK_DIR}/relative.log"
+relative_mutations="${WORK_DIR}/relative.mutations"
+: > "$relative_log"
+: > "$relative_mutations"
+(
+  cd "$WORK_DIR"
+  env \
+    PATH="${STUB_DIR}:/usr/bin:/bin" \
+    STUB_MODE=tls \
+    STUB_LOG="$relative_log" \
+    STUB_MUTATIONS="$relative_mutations" \
+    STUB_OPENSSL_LOG="$openssl_log" \
+    KUBECONFIG="$AMBIENT_KUBECONFIG" \
+    bash "$TLS_HELPER" -g 'selected kubeconfig' -d "${WORK_DIR}/relative certs" >/dev/null 2>&1
+)
+assert_all_selected "$relative_log"
+assert_contains "$relative_log" "args=[create][secret][generic][prometheus-web-tls]"
+assert_contains "$relative_log" "args=[create][configmap][prometheus-web-tls-ca]"
+printf '%s\n' 'PASS relative kubeconfig remains usable after changing directory.'
 
 printf '%s\n' 'All kubeconfig-targeting tests passed.'
