@@ -396,10 +396,18 @@ def _check_step_list(node: Any, path: str, declared: set[str], f: Findings) -> N
     )
 
 
+def _yaml_str(value: Any) -> str:
+    """``value`` as YAML spells it. ``str(True)`` is ``"True"``, which no
+    ``--var`` override or quoted default ever is."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def _in_values(value: Any, allowed: list) -> bool:
     """Membership against a declared ``values:`` list, compared as strings —
     YAML may parse entries (or the candidate) as ints or booleans."""
-    return str(value) in [str(v) for v in allowed]
+    return _yaml_str(value) in [_yaml_str(v) for v in allowed]
 
 
 def _check_env(env: Any, f: Findings) -> set[str]:
@@ -541,7 +549,7 @@ def _declared_values(guide: Any, var: str) -> list[str]:
     static = env.get("static") if isinstance(env, dict) else None
     spec = static.get(var) if isinstance(static, dict) else None
     if isinstance(spec, dict) and isinstance(spec.get("values"), list):
-        return [str(v) for v in spec["values"]]
+        return [_yaml_str(v) for v in spec["values"]]
     return []
 
 
@@ -550,7 +558,7 @@ def _declared_default(guide: Any, var: str) -> str | None:
     static = env.get("static") if isinstance(env, dict) else None
     spec = static.get(var) if isinstance(static, dict) else None
     if isinstance(spec, dict) and "default" in spec:
-        return str(spec["default"])
+        return _yaml_str(spec["default"])
     return None
 
 
@@ -1123,10 +1131,10 @@ def _env_static_lines(node: Any) -> list[tuple[str, bool, str]]:
                     )
                 out.append((var, True, f"export {var}={spec['default']}"))
             elif "default" in spec:
-                line = f"export {var}={spec['default']}"
+                line = f"export {var}={_yaml_str(spec['default'])}"
                 notes = []
                 if spec.get("values"):
-                    notes.append("options: " + ", ".join(str(v) for v in spec["values"]))
+                    notes.append("options: " + ", ".join(_yaml_str(v) for v in spec["values"]))
                 if spec.get("comment"):
                     notes.append(str(spec["comment"]))
                 if notes:
@@ -1191,7 +1199,7 @@ def _format_filters(step: dict) -> str:
     if not when:
         return ""
     clauses = [
-        f"{var}={' or '.join(str(v) for v in allowed)}" for var, allowed in when.items()
+        f"{var}={' or '.join(_yaml_str(v) for v in allowed)}" for var, allowed in when.items()
     ]
     return "# only when " + " and ".join(clauses) + ":"
 
@@ -1269,7 +1277,7 @@ def _variant_label(when: dict, guide: dict) -> str:
 
 def _data_when(when: dict) -> str:
     return ";".join(
-        f"{var}={','.join(str(v) for v in when[var])}" for var in VARIANT_VARS if var in when
+        f"{var}={','.join(_yaml_str(v) for v in when[var])}" for var in VARIANT_VARS if var in when
     )
 
 
@@ -1565,7 +1573,8 @@ def emit_script(
         if isinstance(spec, dict) and spec.get("values"):
             if not _in_values(value, spec["values"]):
                 raise GuideError(
-                    f"--var {var}={value!r} not in declared values {spec['values']}"
+                    f"--var {var}={value!r} not in declared values "
+                    f"{[_yaml_str(v) for v in spec['values']]}"
                 )
     resolved = _resolved_env_values(env, overrides)
 
