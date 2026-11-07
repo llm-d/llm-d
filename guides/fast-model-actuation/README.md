@@ -1,6 +1,7 @@
 # Fast Model Actuation
 
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml)
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-gke-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -72,6 +73,7 @@ export NAMESPACE=llm-d-fast-model-actuation
 export FMA_VERSION=0.7.1
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
+export INFRA_PROVIDER=ocp # options: ocp, gke
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 export BENCHMARK_REF=main
 export HARNESS=nop
@@ -184,11 +186,13 @@ helm install ${GUIDE_NAME} \
 
 ### 5. Deploy the Model Server (Dual Pods)
 
-Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` (which define the model to serve, the launcher pod template, and how many launchers to place) — **together with** the server-requesting pods that reserve GPUs and trigger model loading. The requester `Deployment` is included as a resource of `modelserver/kustomization.yaml` (via `../requester`), so a single apply stands up both halves of the dual-pods design. A `Deployment` is used for the requesters (rather than a bare `ReplicaSet`) so they integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA):
+Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` (which define the model to serve, the launcher pod template, and how many launchers to place) — **together with** the server-requesting pods that reserve GPUs and trigger model loading. The requester `Deployment` is included as a resource of `modelserver/kustomization.yaml` (via `../requester`), so a single apply stands up both halves of the dual-pods design. A `Deployment` is used for the requesters (rather than a bare `ReplicaSet`) so they integrate cleanly with autoscalers such as the Workload Variant Autoscaler (WVA).
+
+The apply goes through the platform overlay selected by `INFRA_PROVIDER` (`platform/ocp` is a passthrough of `modelserver/`; `platform/gke` layers on the [GKE component](./components/gke/kustomization.yaml), see the note below):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/platform/${INFRA_PROVIDER}
 
 kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 ```
@@ -204,7 +208,10 @@ kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 > The launcher pod does **not** request GPU resources from the Kubernetes scheduler or device plugin. Instead, the FMA controller sets `CUDA_VISIBLE_DEVICES` to point to the GPU reserved by the corresponding requesting pod, giving the launcher direct access to that GPU via the CUDA runtime. The `runtimeClassName: nvidia` is required on platforms (e.g., OpenShift) where GPU driver libraries are injected via the runtime class rather than the device plugin resource request.
 
 > [!NOTE]
-> `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node that has `nvidia.com/gpu.present: "true"`. Only launchers that get bound to a requesting pod will actually start a vLLM instance.
+> **GKE** (`INFRA_PROVIDER=gke`) has no `nvidia` RuntimeClass: the GKE device plugin only injects drivers and device nodes into containers that *request* `nvidia.com/gpu`. The `platform/gke` overlay therefore runs the launcher **privileged**, with the host driver tree (`/home/kubernetes/bin/nvidia`) and `/dev` bind-mounted — the same posture as GKE's own `nvidia-gpu-device-plugin` DaemonSet — and tolerates the `nvidia.com/gpu=present:NoSchedule` taint GKE puts on GPU nodes. Requires a GKE **Standard** cluster (Autopilot rejects privileged pods).
+
+> [!NOTE]
+> `launcherCount` is **per matching node**. Setting `launcherCount: 1` creates one launcher pod on each node that has `nvidia.com/gpu.present: "true"` (on GKE, `cloud.google.com/gke-gpu: "true"`, since GKE does not run GPU Feature Discovery). Only launchers that get bound to a requesting pod will actually start a vLLM instance.
 
 You should see:
 
@@ -334,7 +341,7 @@ the pods drain leaves finalizer-bound pods stuck in `Terminating` forever.
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/platform/${INFRA_PROVIDER} --ignore-not-found=true
 
 kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
 
@@ -344,14 +351,14 @@ helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
 
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
-kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
-
 kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml --ignore-not-found=true
 
 kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
+kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
+
 kubectl delete namespace ${NAMESPACE}
 
 kubectl delete crd inferenceserverconfigs.fma.llm-d.ai launcherconfigs.fma.llm-d.ai launcherpopulationpolicies.fma.llm-d.ai
