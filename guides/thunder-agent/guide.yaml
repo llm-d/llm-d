@@ -70,6 +70,21 @@ deploy:
             --set provider.name=${PROVIDER_NAME} \
             -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
+  # The charts hard-code proxy timeouts below headWaitStarvationMs (1800 s):
+  # Envoy ext_proc message_timeout 1000 s, GKE GCPBackendPolicy 300 s.
+  standalone_timeout:
+    - run: |
+        kubectl get configmap envoy -n ${NAMESPACE} -o yaml \
+            | sed 's/message_timeout: 1000s/message_timeout: 2400s/' \
+            | kubectl apply -f -
+        kubectl rollout restart deploy/${GUIDE_NAME}-epp -n ${NAMESPACE}
+
+  gateway_timeout:
+    - run: |
+        # only for PROVIDER_NAME=gke; other providers use httpRoute.requestTimeout: 0s
+        kubectl patch gcpbackendpolicy ${GUIDE_NAME} -n ${NAMESPACE} --type merge \
+            -p '{"spec":{"default":{"timeoutSec":2400}}}'
+
   modelserver:
     - run: kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/ -n ${NAMESPACE}
 
@@ -190,3 +205,4 @@ cleanup:
   - run: |
       # INFRA_PROVIDER must match the value used at deploy time
       kubectl delete -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/ -n ${NAMESPACE}
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
