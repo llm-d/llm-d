@@ -18,6 +18,13 @@ env:
 
     MODEL:           { default: "Qwen/Qwen3-0.6B" }
 
+    # Platform: selects platform/<INFRA_PROVIDER> (how the launcher reaches the
+    # GPUs -- see the base guide), router/monitoring-<INFRA_PROVIDER>.values.yaml
+    # (who scrapes the EPP: OpenShift user-workload monitoring vs Google Managed
+    # Prometheus) and keda/<INFRA_PROVIDER> (which Prometheus KEDA queries:
+    # Thanos Querier vs the GMP frontend).
+    INFRA_PROVIDER:  { default: ocp, values: [ocp, gke] }
+
     # VERIFICATION
     CURL_TEST_IMAGE: { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
 
@@ -103,7 +110,7 @@ deploy:
           ${ROUTER_STANDALONE_CHART} \
           -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
           -f ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-          -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+          -f ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/router/monitoring-${INFRA_PROVIDER}.values.yaml \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
@@ -112,16 +119,18 @@ deploy:
   # leaves KEDA nothing to read. Step 6 scales this to 0 instead.
   modelserver:
     - run: |
-        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/platform/${INFRA_PROVIDER}
 
         kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
 
-  # KEDA scale-from-zero autoscaling of the requester Deployment. The OCP overlay
-  # carries the ScaledObject, its TriggerAuthentication, and the metrics-reader
-  # ServiceAccount + token. Once Ready, KEDA owns the replica count.
+  # KEDA scale-from-zero autoscaling of the requester Deployment. The ocp
+  # overlay carries the ScaledObject, its TriggerAuthentication, and the
+  # metrics-reader ServiceAccount + token (Thanos Querier); the gke overlay
+  # points the ScaledObject at the GMP frontend. Once Ready, KEDA owns the
+  # replica count.
   keda:
     - run: |
-        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/${INFRA_PROVIDER}
 
         kubectl wait --for=condition=Ready --timeout=120s \
           scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
@@ -191,11 +200,12 @@ benchmark:
 cleanup:
   # Order matters. Delete the KEDA ScaledObject/TriggerAuth FIRST so the HPA stops
   # scaling the requester while we tear it down.
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
-  # Then the model-server CRs and the requester Deployment (both in modelserver/):
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/${INFRA_PROVIDER} --ignore-not-found=true
+  # Then the model-server CRs and the requester Deployment (the platform overlay
+  # over modelserver/):
   # this unbinds the requester/provider pairs and tells the controller to tear
   # down the launcher pods.
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/platform/${INFRA_PROVIDER} --ignore-not-found=true
   # Wait for pods to drain while the controller is still running to strip their
   # finalizers. If the controller is removed first, finalizer-bound pods get stuck
   # in Terminating forever.
