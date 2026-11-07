@@ -19,7 +19,7 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
         - {name: gke, label: "GKE"}
-      engines: {vllm: validated, sglang: community}
+      engines: {vllm: validated, sglang: validated}
     amd:
       label: AMD GPU
       notes: "2 replicas × TP=2 (4 GPUs)"
