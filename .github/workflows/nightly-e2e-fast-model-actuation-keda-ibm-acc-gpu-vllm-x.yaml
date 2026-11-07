@@ -18,7 +18,7 @@ on:
         required: false
         default: 'epponly'
       monitoring_enabled:
-        description: 'Enabled monitoring ("true", "false"). Must be "true": KEDA reads the EPP pool-saturation metric from Prometheus.'
+        description: 'Enabled monitoring ("true", "false"). Must be "true": KEDA reads the EPP flow-control queue-size metric from Prometheus.'
         required: true
         type: 'string'
         default: 'true'
@@ -93,7 +93,7 @@ jobs:
       prefill_pods: ${{ inputs.prefill_pods || 'auto' }}
       accelerator_type: ${{ inputs.accelerator_type || 'gpu' }}
       backend_type: ${{ inputs.backend_type || 'vllm' }}
-      infra_provider: ${{ inputs.infra_provider || 'base' }}
+      infra_provider: ${{ inputs.infra_provider || 'ocp' }}
       connector: ${{ inputs.connector || '' }}
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-fast-model-actuation-keda-ibm-gpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-ibm' }}

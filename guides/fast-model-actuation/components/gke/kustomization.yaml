@@ -1,0 +1,85 @@
+# GKE platform component for the Fast Model Actuation guides.
+#
+# FMA's dual-pods technique runs vLLM in a *launcher* pod that requests zero
+# `nvidia.com/gpu` yet must be able to open any GPU on its node; the controller
+# then steers it to the requester's GPU via CUDA_VISIBLE_DEVICES. On OpenShift
+# that access comes from the `nvidia` RuntimeClass (nvidia-container-runtime
+# honours NVIDIA_VISIBLE_DEVICES=all). GKE Container-Optimized OS nodes have no
+# such RuntimeClass: the GKE device plugin injects drivers and device nodes only
+# into containers that *request* `nvidia.com/gpu`. This component gives the
+# launcher the same access the GKE device plugin DaemonSet itself uses --
+# privileged, with the host driver tree and /dev bind-mounted -- and adapts the
+# node selection to GKE's labels and taints.
+#
+# Compose it from an overlay:
+#   resources:  [../../modelserver]
+#   components: [../../components/gke]
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      group: fma.llm-d.ai
+      version: v1alpha1
+      kind: LauncherConfig
+      name: fma-launcher
+    patch: |-
+      # No `nvidia` RuntimeClass on GKE (and none is needed with the mounts below).
+      - op: remove
+        path: /spec/podTemplate/spec/runtimeClassName
+      # GKE taints GPU nodes `nvidia.com/gpu=present:NoSchedule` and only
+      # auto-tolerates it for pods that request `nvidia.com/gpu`. The launcher
+      # requests none, so it must tolerate the taint explicitly.
+      - op: add
+        path: /spec/podTemplate/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Equal
+            value: present
+            effect: NoSchedule
+      # Host driver tree (nvidia-smi, libcuda, libnvidia-ml) and device nodes.
+      # /home/kubernetes/bin/nvidia is where GKE's driver installer places the
+      # user-space driver on COS; mounting it at /usr/local/nvidia matches the
+      # paths the NVIDIA CUDA base images already have on PATH/LD_LIBRARY_PATH.
+      - op: add
+        path: /spec/podTemplate/spec/volumes
+        value:
+          - name: nvidia-driver
+            hostPath:
+              path: /home/kubernetes/bin/nvidia
+              type: Directory
+          - name: dev
+            hostPath:
+              path: /dev
+      - op: add
+        path: /spec/podTemplate/spec/containers/0/volumeMounts
+        value:
+          - name: nvidia-driver
+            mountPath: /usr/local/nvidia
+            readOnly: true
+          - name: dev
+            mountPath: /dev
+      # Privileged: without the device plugin allocating devices, the container's
+      # device cgroup would deny /dev/nvidia*. This is the same posture as GKE's
+      # nvidia-gpu-device-plugin DaemonSet.
+      - op: add
+        path: /spec/podTemplate/spec/containers/0/securityContext
+        value:
+          privileged: true
+
+  - target:
+      group: fma.llm-d.ai
+      version: v1alpha1
+      kind: LauncherPopulationPolicy
+      name: fma-lpp
+    patch: |-
+      # GKE does not run NVIDIA GPU Feature Discovery, so there is no
+      # `nvidia.com/gpu.present` label. `cloud.google.com/gke-gpu=true` is set on
+      # every GKE GPU node. `launcherCount` is per matching node, so this creates
+      # one launcher on each GPU node in the cluster; narrow it (e.g. to
+      # `cloud.google.com/gke-accelerator: nvidia-h100-80gb` or a node-pool
+      # label) if the cluster mixes accelerator types or is shared.
+      - op: replace
+        path: /spec/enhancedNodeSelector/labelSelector/matchLabels
+        value:
+          cloud.google.com/gke-gpu: "true"
