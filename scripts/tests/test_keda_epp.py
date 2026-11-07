@@ -37,7 +37,7 @@ envsubst() { cat; }
         assert "apply -f -" in calls.read_text()
 
 
-@pytest.mark.parametrize("platform", ["ocp", "amd"])
+@pytest.mark.parametrize("platform", ["ocp", "amd", "gke"])
 def test_nightly_renders_scaledobject(tmp_path, platform):
     """Run the deploy script through real kustomize, without a cluster."""
     import shutil
@@ -78,14 +78,25 @@ esac
     assert obj["metadata"]["name"] == "optimized-baseline-keda-epp"
     spec = obj["spec"]
     assert spec["advanced"]["horizontalPodAutoscalerConfig"]["name"] == "optimized-baseline-keda-epp-hpa"
-    assert spec["scaleTargetRef"]["name"] == ("optimized-baseline-nvidia-gpu-vllm-decode" if platform == "ocp" else "optimized-baseline-rocm-vllm-decode")
+    assert spec["scaleTargetRef"]["name"] == (
+        "optimized-baseline-rocm-vllm-decode"
+        if platform == "amd"
+        else "optimized-baseline-nvidia-gpu-vllm-decode"
+    )
     assert spec["maxReplicaCount"] == 2
     assert spec["advanced"]["horizontalPodAutoscalerConfig"]["behavior"]["scaleDown"]["stabilizationWindowSeconds"] == 60
-    if platform == "amd":
+    if platform in ("amd", "gke"):
+        selector = 'service="test-epp"' if platform == "amd" else 'job="keda-epp-gke"'
         assert len(spec["triggers"]) == 2
-        for trigger, metric in zip(spec["triggers"], ["llm_d_epp_flow_control_queue_size", "llm_d_epp_request_running"]):
-            assert trigger["metadata"]["query"] == f'sum({metric}{{namespace="nightly-test",service="test-epp",model_name="test/model"}})'
+        for trigger, metric in zip(
+            spec["triggers"],
+            ["llm_d_epp_flow_control_queue_size", "llm_d_epp_request_running"],
+            strict=True,
+        ):
+            assert trigger["metadata"]["query"] == f'sum({metric}{{namespace="nightly-test",{selector},model_name="test/model"}})'
             assert "${" not in trigger["metadata"]["serverAddress"]
+            if platform == "gke":
+                assert "authenticationRef" not in trigger
         assert spec["advanced"]["horizontalPodAutoscalerConfig"]["behavior"]["scaleUp"]["stabilizationWindowSeconds"] == 0
         return
     assert len(spec["triggers"]) == 1
