@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "VLLM GPU Autoscaling",
-  "message": "failing",
-  "color": "red"
+  "message": "passing",
+  "color": "brightgreen"
 }
