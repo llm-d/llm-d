@@ -1,0 +1,58 @@
+## Layer on top of: recipes/router/base.values.yaml
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+    # No metrics entry here: the chart already exposes http-metrics:9090 on the
+    # EPP Service, so declaring it again causes a duplicate-port conflict.
+  epp:
+    flags:
+      # Required because thunder-agent and agent-identity are Alpha.
+      allow-experimental-plugins: true
+    pluginsConfigFile: "thunder-agent-plugins.yaml"
+    pluginsCustomConfig:
+      thunder-agent-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        plugins:
+        # Extracts session IDs from Claude Code, OpenCode, Codex, and x-session-id.
+        - type: agent-identity
+          parameters:
+            additionalSessionHeaders:
+            - x-session-id
+        # Shared across scorer, saturationDetector, and fairnessPolicyRef slots.
+        - type: thunder-agent
+          name: thunder
+          parameters:
+            # Fallback when vllm:cache_config_info is absent (size to GPU KV pool, never CPU tier).
+            capacityTokens: 1572864
+            # Fraction of pod GPU KV capacity (1.0 = 100%).
+            utilThreshold: 1.0
+            # Seconds an idle session retains its room (about one tool call).
+            idleLeaseSeconds: 10
+            # Forced-admission backstop (30 min), as in the benchmark. The README raises
+            # the Envoy and GKE proxy timeouts to 2400 s after the router is deployed.
+            headWaitStarvationMs: 1800000
+            # Must exceed headWaitStarvationMs.
+            evictionTtlSeconds: 3600
+
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: thunder
+
+        flowControl:
+          # Disable TTL drops so held requests wait up to headWaitStarvationMs.
+          defaultRequestTTL: "0s"
+          saturationDetector:
+            pluginRef: thunder
+          defaultPriorityBand:
+            fairnessPolicyRef: thunder
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "thunder-agent"
