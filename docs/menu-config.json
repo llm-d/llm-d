@@ -69,6 +69,7 @@
 
     "architecture/model-server-orchestration/leaderworkerset": { "position": 1, "label": "LeaderWorkerSet (LWS)" },
     "architecture/model-server-orchestration/disaggregatedset": { "position": 2, "label": "DisaggregatedSet" },
+    "architecture/model-server-orchestration/grove": { "position": 3, "label": "Grove" },
 
     "architecture/autoscaling/keda-epp": { "position": 1, "label": "KEDA + EPP Metrics" },
     "architecture/autoscaling/slo-aware-keda": { "position": 2, "label": "SLO-Aware Autoscaling" },
