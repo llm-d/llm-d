@@ -1,0 +1,9 @@
+# OpenShift platform passthrough: the guide's model-server manifests as-is.
+# They rely on the `nvidia` RuntimeClass and the NVIDIA GPU Feature Discovery
+# node label (`nvidia.com/gpu.present`), both provided by the NVIDIA GPU
+# Operator on OpenShift (or any cluster set up the same way). Selected by
+# INFRA_PROVIDER=ocp in the guide. See ../gke for GKE.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../modelserver
