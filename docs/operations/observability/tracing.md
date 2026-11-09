@@ -36,13 +36,29 @@ Deploy the OTel Collector and Jaeger into the same namespace as your llm-d workl
 > [!NOTE]
 > If the [OpenTelemetry Operator](https://opentelemetry.io/docs/kubernetes/operator/) is installed, the script uses an `OpenTelemetryCollector` CR. Otherwise it deploys a standalone collector Deployment.
 
-Wait for the collector and Jaeger to become ready, then check their Deployments. These names work for both the standalone collector and the Operator-managed collector; their Pod labels differ.
+Allow up to five minutes for the collector Deployment to appear, then wait for the collector and Jaeger rollouts. These Deployment names work for both the standalone collector and the Operator-managed collector.
 
 ```bash
-kubectl wait -n "${NAMESPACE}" --for=create deployment/otel-collector --timeout=5m
-kubectl rollout status -n "${NAMESPACE}" deployment/otel-collector --timeout=5m
-kubectl rollout status -n "${NAMESPACE}" deployment/jaeger --timeout=5m
-kubectl get deployment -n "${NAMESPACE}" otel-collector jaeger
+(
+  deadline=$((SECONDS + 300))
+  collector=""
+  while (( SECONDS < deadline )); do
+    collector=$(kubectl get deployment/otel-collector -n "${NAMESPACE}" \
+      --ignore-not-found --request-timeout=5s -o name) || exit 1
+    if [[ -n "${collector}" ]]; then
+      break
+    fi
+    sleep 2
+  done
+  if [[ -z "${collector}" ]]; then
+    echo "Timed out waiting for deployment/otel-collector in ${NAMESPACE}" >&2
+    exit 1
+  fi
+
+  kubectl rollout status -n "${NAMESPACE}" deployment/otel-collector --timeout=5m --request-timeout=5m &&
+  kubectl rollout status -n "${NAMESPACE}" deployment/jaeger --timeout=5m --request-timeout=5m &&
+  kubectl get deployment -n "${NAMESPACE}" otel-collector jaeger --request-timeout=5s
+)
 ```
 
 Expected output:
@@ -116,31 +132,43 @@ Set the collector endpoint according to your Step 1 backend:
 
 The [Optimized Baseline](../../../guides/optimized-baseline/README.md) and [Precise Prefix-Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) guides provide opt-in tracing overlays for vLLM Deployments. Use the environment variables from your running guide, including `REPO_ROOT`, `GUIDE_NAME`, `NAMESPACE`, `ACCELERATOR_TYPE`, `MODEL_SERVER`, and `INFRA_PROVIDER`.
 
-| Guide | Accelerator | Provider |
-|-------|-------------|----------|
-| Both guides | `gpu`, `cpu`, `tpu/v6`, `tpu/v7` | `base`, `gke` |
-| Both guides | `amd`, `xpu` | `base` |
-| Optimized Baseline | `amd` | `amd-ci` |
-| Optimized Baseline | `npu`, `metax` | `base` |
+All listed overlays were rendered offline with Kustomize. The last column records which configurations were also run with tracing enabled.
 
-These overlays configure containers that execute `vllm serve`. Iluvatar shell launchers, TPU dynamic-slice LeaderWorkerSets, DisaggregatedSets, routing proxies, and other serving engines require separate configuration.
+| Guide | Accelerator | Provider | Runtime tracing verification |
+| --- | --- | --- | --- |
+| Optimized Baseline | `gpu` | `base` | Verified on NVIDIA A100 (CUDA) with vLLM `v0.31.0` |
+| Precise Prefix-Cache Routing | `gpu` | `base` | Startup with tracing unverified |
+| Both guides | `gpu` | `gke` | Startup with tracing unverified |
+| Both guides | `cpu`, `tpu/v5p`, `tpu/v6`, `tpu/v7` | `base`, `gke` | Startup with tracing unverified |
+| Both guides | `amd`, `xpu` | `base` | Startup with tracing unverified |
+| Optimized Baseline | `amd` | `amd-ci` | Startup with tracing unverified |
+| Optimized Baseline | `npu`, `metax`, `mthreads` | `base` | Startup with tracing unverified |
 
-Select the overlay for the same accelerator and provider as your deployment:
+These overlays configure containers that execute `vllm serve` directly. OpenShift GPU (`gpu/vllm/ocp`), Biren, and Iluvatar use wrapper launchers and require separate configuration, as do TPU dynamic-slice LeaderWorkerSets, DisaggregatedSets, routing proxies, and other serving engines.
+
+Select the overlay for the same accelerator and provider as your deployment. If your configuration has no tracing overlay, skip the remaining commands in this subsection and see [Other Workloads and Serving Engines](#other-workloads-and-serving-engines).
 
 ```bash
-export MODEL_SERVER_BASE="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
 export MODEL_SERVER_TRACING="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tracing/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
 
-# A missing overlay means this engine/accelerator/provider combination is unsupported.
-test -f "${MODEL_SERVER_TRACING}/kustomization.yaml"
-kubectl kustomize "${MODEL_SERVER_TRACING}"
-kubectl apply --dry-run=server -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}"
-kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}"
-kubectl rollout status -n "${NAMESPACE}" deployment \
-  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
+(
+  if [[ ! -f "${MODEL_SERVER_TRACING}/kustomization.yaml" ]]; then
+    echo "${GUIDE_NAME} ${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER} has no tracing overlay" >&2
+    exit 1
+  fi
+
+  kubectl kustomize "${MODEL_SERVER_TRACING}" &&
+  kubectl apply --dry-run=server -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}" &&
+  kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}" &&
+  kubectl rollout status -n "${NAMESPACE}" deployment \
+    -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
+)
 ```
 
 Applying the tracing overlay updates the existing model server Deployment and restarts its pods. It preserves the selected provider's configuration, model arguments, credentials, and KV-cache event settings. Keep the guide's other deployment steps, including the render Service for Precise Prefix-Cache Routing.
+
+> [!NOTE]
+> Each model server rollout in this guide, including cleanup, can pull an image and reload the model. Increase `--timeout` to give `kubectl` more time to wait. A Deployment separately reports `ProgressDeadlineExceeded` after `spec.progressDeadlineSeconds` without progress (600 seconds by default), which causes `kubectl rollout status` to fail. This failure can be benign on a slow start: Kubernetes only reports the condition and does not stop the rollout, so the new Pods keep initializing. Before rolling back, inspect the new Pods with `kubectl describe pod` and `kubectl logs -c modelserver`. If they show healthy but slow initialization, wait for them to become Ready and rerun `kubectl rollout status`. To avoid this failure on later rollouts, increase `spec.progressDeadlineSeconds` in your Deployment configuration. [Kubernetes Deployment status](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#failed-deployment)
 
 The shared [vLLM Deployment component](../../../guides/recipes/observability/tracing/components/vllm-deployment/kustomization.yaml) adds `--collect-detailed-traces=all` and `--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)`. Kubernetes expands the endpoint variable when starting the container. The component exports to the same-namespace collector as `vllm-decode`, with a `parentbased_traceidratio` sampler and a `0.1` ratio for root spans. Child spans follow the parent's sampling decision.
 
@@ -289,19 +317,21 @@ A ratio of `1.0` on EPP samples every request without an upstream parent. An uns
 
 ## Step 4: View Traces
 
-Send a request through the router using your guide's endpoint selection and served `MODEL`. For a standalone installation:
+For a standalone installation, get the router Service IP and send a completion request using your guide's served `MODEL`:
 
 ```bash
 export IP=$(kubectl get service "${ROUTER_RELEASE}-epp" -n "${NAMESPACE}" -o jsonpath='{.spec.clusterIP}')
 kubectl run tracing-request --rm -i --restart=Never \
   --image="${CURL_TEST_IMAGE}" --namespace="${NAMESPACE}" \
   --env="IP=${IP}" --env="MODEL=${MODEL}" \
-  -- /bin/sh -c 'curl --fail-with-body --max-time 120 -sS -X POST "http://${IP}/v1/completions" \
+  -- /bin/sh -c 'curl --fail --max-time 120 -sS -X POST "http://${IP}/v1/completions" \
     -H "Content-Type: application/json" \
     -d "{\"model\":\"${MODEL}\",\"prompt\":\"Explain distributed tracing briefly.\",\"max_tokens\":32}"'
 ```
 
-If the request Pod reports `ImagePullBackOff`, set `CURL_TEST_IMAGE` to a registry mirror or an approved image with `/bin/sh` and `curl`, then retry. For a gateway installation, use the request command from its guide. Confirm a successful completion response before checking traces.
+For a Gateway installation, use the **Gateway Mode** tab to get the IP, then send a completion request as shown in Optimized Baseline Verification. [Get the IP of the Proxy](../../../guides/optimized-baseline/README.md#1-get-the-ip-of-the-proxy) · [Send Test Requests](../../../guides/optimized-baseline/README.md#2-send-test-requests)
+
+If the request Pod reports `ImagePullBackOff`, set `CURL_TEST_IMAGE` to a registry mirror or an approved image with `/bin/sh` and `curl`, then retry. Confirm a successful completion response before checking traces.
 
 <!-- tabs:start group=tracing -->
 <details open>
@@ -400,6 +430,15 @@ When tracing is enabled, these environment variables are set on model server and
 | `OTEL_TRACES_SAMPLER_ARG` | Sampling ratio (`1.0` = 100%, `0.1` = 10%, `0.05` = 5%) |
 
 ## Cleanup
+
+In a new shell, rerun the environment setup from the guide you deployed, including sourcing `guides/env.sh`. Restore the original `REPO_ROOT`, `GUIDE_NAME`, `NAMESPACE`, `ACCELERATOR_TYPE`, `MODEL_SERVER`, and `INFRA_PROVIDER`, along with any chart or version overrides used for the router. [Optimized Baseline environment](../../../guides/optimized-baseline/README.md#configure-the-environment) · [Precise Prefix-Cache Routing environment](../../../guides/precise-prefix-cache-routing/README.md#configure-the-environment)
+
+If you used a non-default Helm release, set `ROUTER_RELEASE` to the actual release name shown by `helm list -n "${NAMESPACE}"` before running the following commands.
+
+```bash
+export MODEL_SERVER_BASE="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
+export ROUTER_RELEASE="${ROUTER_RELEASE:-${GUIDE_NAME}}"
+```
 
 To disable model server tracing while keeping inference running, reapply the original overlay:
 
