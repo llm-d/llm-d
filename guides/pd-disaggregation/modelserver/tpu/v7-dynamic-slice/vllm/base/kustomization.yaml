@@ -10,6 +10,7 @@ kind: Kustomization
 # (see disaggregatedset.yaml), and Kueue bounds them to 39 characters.
 resources:
   - serviceaccount.yaml
+  - rbac.yaml
   - disaggregatedset.yaml
 
 components:

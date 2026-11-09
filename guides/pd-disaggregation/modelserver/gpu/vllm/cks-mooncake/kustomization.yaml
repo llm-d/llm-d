@@ -87,6 +87,7 @@ patches:
                           - --kv-connector=mooncake
                           - --zap-log-level=1
                           - --secure-serving=false
+                          - --enable-ssrf-protection=true
                     containers:
                       - name: modelserver
                         args:
