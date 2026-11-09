@@ -17,22 +17,18 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPONENT = REPO_ROOT / "guides/recipes/observability/tracing/components/vllm-deployment"
-GUIDE_VARIANTS = {
-    "optimized-baseline": [
-        "gpu/vllm/base", "gpu/vllm/gke",
-        "amd/vllm/base", "amd/vllm/amd-ci",
-        "cpu/vllm/base", "cpu/vllm/gke",
-        "xpu/vllm/base", "npu/vllm/base", "metax/vllm/base",
-        "tpu/v6/vllm/base", "tpu/v6/vllm/gke",
-        "tpu/v7/vllm/base", "tpu/v7/vllm/gke",
-    ],
-    "precise-prefix-cache-routing": [
-        "gpu/vllm/base", "gpu/vllm/gke",
-        "amd/vllm/base", "cpu/vllm/base", "cpu/vllm/gke",
-        "xpu/vllm/base",
-        "tpu/v6/vllm/base", "tpu/v6/vllm/gke",
-        "tpu/v7/vllm/base", "tpu/v7/vllm/gke",
-    ],
+TRACING_EXCLUSIONS = {
+    "optimized-baseline": {
+        "gpu/vllm/ocp",  # Shell launcher for the node-local model cache.
+        "biren/vllm/base",  # Vendor entrypoint wraps vllm serve.
+        "iluvatar/vllm/base",  # Shell launcher configures the accelerator.
+        # Dynamic slices use LeaderWorkerSets instead of Deployments.
+        "tpu/v7-dynamic-slice/vllm/2x2x1",
+        "tpu/v7-dynamic-slice/vllm/2x2x2",
+    },
+    "precise-prefix-cache-routing": {
+        "gpu/vllm/ocp",  # Shell launcher for the node-local model cache.
+    },
 }
 TRACING_ARGS = [
     "--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)",
@@ -69,9 +65,37 @@ def modelserver(resources):
     return container
 
 
+def overlay_paths(root):
+    return {manifest.parent.relative_to(root) for manifest in root.rglob("kustomization.yaml")}
+
+
+def tracing_overlays(guide):
+    return overlay_paths(REPO_ROOT / "guides" / guide / "modelserver" / "tracing")
+
+
+@pytest.mark.parametrize("guide", TRACING_EXCLUSIONS)
+def test_tracing_covers_vllm_provider_overlays(guide):
+    root = REPO_ROOT / "guides" / guide / "modelserver"
+    traced = tracing_overlays(guide)
+    # A provider directory follows vllm. Nightly entry points end at vllm.
+    providers = {
+        path for path in overlay_paths(root)
+        if path.parts[:1] != ("tracing",) and "vllm" in path.parts[:-1]
+    }
+    exclusions = {Path(path) for path in TRACING_EXCLUSIONS[guide]}
+
+    assert traced, "No tracing overlays found"
+    assert exclusions <= providers, "Remove exclusions for provider overlays that no longer exist"
+    assert traced == providers - exclusions, "Keep tracing overlays and provider exclusions in sync"
+
+
 @pytest.mark.parametrize(
     "guide,variant",
-    [(guide, variant) for guide, variants in GUIDE_VARIANTS.items() for variant in variants],
+    [
+        (guide, variant.as_posix())
+        for guide in TRACING_EXCLUSIONS
+        for variant in sorted(tracing_overlays(guide))
+    ],
 )
 def test_tracing_preserves_complete_provider_configuration(guide, variant):
     root = REPO_ROOT / "guides" / guide / "modelserver"
