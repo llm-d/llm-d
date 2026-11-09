@@ -59,7 +59,7 @@ workflow files:
 
 ## Slack notifications
 
-[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
+[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file (the nearest one at or above the workflow's `guide_path`, or `guides/<guide>/` when it has none) when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
 
 This replaces the old `/github subscribe` integration, which also fired on manual `workflow_dispatch` runs.
 
