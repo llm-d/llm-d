@@ -14,9 +14,7 @@ Include the affected component and version, the configuration needed to reproduc
 
 ### Urgent contact
 
-We prefer to keep all vulnerability-related communication in the GitHub security report. For urgent issues, you can contact the Vulnerability Management Team (VMT) directly.
-
-- Juan Pérez de Algaba ([jperezde@redhat.com](mailto:jperezde@redhat.com))
+We prefer to keep all vulnerability-related communication in the GitHub security report. For urgent issues, contact the Vulnerability Management Team (VMT) at [llm-d-security-reporting@googlegroups.com](mailto:llm-d-security-reporting@googlegroups.com).
 
 ### When Should I Report a Vulnerability?
 
