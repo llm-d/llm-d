@@ -419,12 +419,28 @@ jobs:
             // Guide owners may run the nightlies for the guides they own. Each nightly
             // maps to a guide via its `standup_scenario` (guides/<scenario>/OWNERS); the
             // commenter must be listed in the OWNERS of *every* matched nightly's guide.
+            //
+            // The mapping and the OWNERS files are read from the PR's base branch, never
+            // from its head: on a fork PR the head tree belongs to the PR author, who could
+            // add their own login to an OWNERS file or add a nightly that maps to a guide
+            // they created. A nightly that exists only in the PR has no base-side mapping
+            // and stays maintainers-only.
+            //
+            // The dispatched nightly runs the PR's workflow file with repository secrets.
+            // A guide owner is not a collaborator, so a PR that changes any workflow file
+            // stays maintainers-only too; guide owners test guide changes against the
+            // nightly code that is already on the base branch.
             async function ownsAllMatchedGuides() {
               if (matches.length === 0) return false;
               const { data: pr } = await github.rest.pulls.get({
                 owner, repo, pull_number: context.issue.number,
               });
-              const ref = pr.head.sha;
+              const ref = pr.base.ref;
+
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: context.issue.number, per_page: 100,
+              });
+              if (files.some(f => f.filename.startsWith('.github/workflows/'))) return false;
 
               async function readFile(path) {
                 try {
