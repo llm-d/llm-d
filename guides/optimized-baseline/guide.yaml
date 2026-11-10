@@ -69,12 +69,12 @@ support:
       engines: {vllm: community}
     cpu:
       label: CPU
-      notes: "x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model)"
+      notes: "x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) · SGLang needs AMX (`intel_amx` attention backend, Sapphire Rapids+)"
       model: meta-llama/Llama-3.2-3B-Instruct
       providers:
         - {name: base, label: "Kubernetes (base)"}
         - {name: gke, label: "GKE"}
-      engines: {vllm: community}
+      engines: {vllm: community, sglang: community}
     iluvatar:
       label: Iluvatar GPU
       notes: "BI-V150 (dual-die) · 1 replica × 4 GPUs"
