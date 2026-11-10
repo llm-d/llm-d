@@ -201,7 +201,8 @@ deploy:
         run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   # The Rebellions NPU decode role serves one API server per data-parallel
-  # rank; the router must list every rank port. No nightly covers this
+  # rank; the router must list every rank port and match prefixes at the
+  # runtime's 512-token sub-block. No nightly covers this
   # accelerator; skip_in: [ci] keeps the README-parsing nightlies from
   # harvesting the export.
   accelerator_values:

@@ -150,12 +150,13 @@ a different Rebellions product than the guide was measured on.
 `resource.kubernetes.io/numaNode` match constraint — such a constraint needs two or more
 requests in one claim to bind together.
 
-**Prefix caching is off, so layer the NPU router values.** The runtime disables prefix
-caching for sliding-window models, and `openai/gpt-oss-120b` is one: enabling it reports
-0 hits over every query. The guide's default scheduling profile is prefix-cache aware, so
-apply [`router/npu.rbln.values.yaml`](../../guides/optimized-baseline/router/npu.rbln.values.yaml)
-after the guide's own values to fall back to the load scorer alone. Both the flag and that
-file go away once the runtime supports prefix caching here.
+**Layer the NPU router values.** The runtime reuses prefixes in 512-token sub-blocks of
+each 4096-token KV block, but its `vllm:cache_config_info` reports `prefix_match_unit` as
+`None`, so the router's autotune would hash prompts at 4096 tokens and find no shared
+prefix in a shorter one. Apply
+[`router/npu.rbln.values.yaml`](../../guides/optimized-baseline/router/npu.rbln.values.yaml)
+after the guide's own values: it turns autotune off, matches at 512 tokens, and sets the
+`peakPrefillThroughput` measured on this NPU.
 
 **Set `MODEL` when running the guide's steps.** The overlay pins
 `openai/gpt-oss-120b`, while the guide defaults `MODEL` to `Qwen/Qwen3-32B`. Export

@@ -1,0 +1,28 @@
+# GKE A4X-MAX (NVIDIA GB300 NVL72) overlay for Kimi-K3.1-Pro 3P1D Disaggregated + Mooncake RDMA:
+# adds NVIDIA DRA ComputeDomain (MNNVL / IMEX) and DRANET 8-NIC RoCEv2 resource claims (mrdma.google.com)
+# to Prefill and Decode pods, plus the optional Mooncake RDMA DRAM donor DaemonSet.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+  - compute-domain.yaml
+  - rdma-nic.yaml
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/vllm/vllm-openai
+    newTag: kimi-k31@sha256:904520f3fefc32414abcedf6ba8dadc9c5978db1bcdaf40f58d6b9036ef30a99
+
+patches:
+  - path: patch-gke-prefill.yaml
+    target:
+      group: leaderworkerset.x-k8s.io
+      version: v1
+      kind: LeaderWorkerSet
+      name: prefill
+  - path: patch-gke-decode.yaml
+    target:
+      group: leaderworkerset.x-k8s.io
+      version: v1
+      kind: LeaderWorkerSet
+      name: decode

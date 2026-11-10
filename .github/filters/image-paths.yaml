@@ -1,0 +1,19 @@
+# Paths that trigger an image build, one filter per image. Shared by
+# ci-pr-test.yaml (approval gate for fork PRs) and build-image.yaml (which
+# images to build), so the gate and the builds cannot drift apart.
+xpu:
+  - 'docker/Dockerfile.xpu'
+  - 'docker/common-versions'
+xpu-omni:
+  - 'docker/Dockerfile.xpu-omni'
+  - 'docker/common-versions'
+sglang-xpu:
+  - 'docker/common-versions'
+  - 'patches/sglang_xpu_source_pins.patch'
+cpu:
+  - 'docker/Dockerfile.cpu'
+  - 'docker/common-versions'
+  - 'docker/scripts/cpu/**'
+rdma-tools:
+  - 'docker/Dockerfile.rdma-tools'
+  - 'docker/common-versions'

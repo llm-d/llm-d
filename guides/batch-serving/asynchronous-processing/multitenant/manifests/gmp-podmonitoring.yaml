@@ -19,3 +19,19 @@ spec:
     - port: metrics
       path: /metrics
       interval: 15s
+---
+# Scrapes the coordinator deployed in README step 4; selects nothing until it is deployed.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

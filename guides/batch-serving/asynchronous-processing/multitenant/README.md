@@ -791,7 +791,7 @@ to install the standard Prometheus and Grafana stack:
 # 1. Install standard Prometheus + Grafana stack
 ${REPO_ROOT}/guides/recipes/observability/install-prometheus-grafana.sh
 
-# 2. Scrape the vLLM model server
+# 2. Scrape the vLLM model server and, once step 4 has deployed it, the coordinator
 kubectl apply -n ${NAMESPACE} -k ${MT}/manifests/monitoring
 
 # 3. Scrape the llm-d Router EPP. Skip this if step 2 ran with MONITORING=true; otherwise
@@ -832,7 +832,7 @@ against Prometheus directly as in [Scenario C](#scenario-c--priority-under-satur
 
 <!-- llm-d-cicd:skip start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-podmonitoring.yaml    # AP metrics -> Cloud Monitoring
+kubectl apply -n ${NAMESPACE} -f ${MT}/manifests/gmp-podmonitoring.yaml    # AP and coordinator metrics -> Cloud Monitoring
 
 # Deploy Cloud Monitoring dashboard (supports both Redis and Pub/Sub backends):
 gcloud monitoring dashboards create --project ${PROJECT_ID} \
@@ -847,7 +847,7 @@ helm upgrade llm-d-async oci://ghcr.io/llm-d/charts/llm-d-async \
 ```
 <!-- llm-d-cicd:skip end -->
 
-The `PodMonitoring` ingests the AP metrics; the dashboards chart request/success rate, in-flight, p95
+The `PodMonitoring` resources ingest the AP metrics and, once step 4 has deployed it, the coordinator's; the dashboards chart request/success rate, in-flight, p95
 latency, broker backlog (`llm_d_async_async_broker_backlog`), in-process queue depth (`llm_d_async_async_queue_depth`),
 exceeded deadlines, deadline proximity (`llm_d_async_async_deadline_proximity_millis`), and token throughput.
 Note that deadline proximity only works when Redis Sorted Set queues are used (`--transport=redis-sortedset`).

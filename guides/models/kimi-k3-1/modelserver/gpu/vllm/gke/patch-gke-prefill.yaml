@@ -1,0 +1,19 @@
+# GKE A4X-MAX (NVIDIA GB300 NVL72) DRA ComputeDomain + DRANET 8-NIC RoCEv2 resource claims for Prefill LWS.
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/resourceClaims
+  value: &resourceClaims
+    - name: compute-domain-channel
+      resourceClaimTemplateName: kimi-k3-1-compute-domain
+    - name: rdma-nic
+      resourceClaimTemplateName: kimi-k3-1-gpu-vllm-rdma-nic
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/resources/claims
+  value: &claims
+    - name: compute-domain-channel
+    - name: rdma-nic
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/resourceClaims
+  value: *resourceClaims
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources/claims
+  value: *claims

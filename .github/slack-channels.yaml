@@ -59,6 +59,8 @@ channels:
     - nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-pod-snapshot-gke-acc-gpu-sglang-x.yaml
+    - nightly-e2e-pod-snapshot-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml
@@ -79,6 +81,7 @@ channels:
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml
