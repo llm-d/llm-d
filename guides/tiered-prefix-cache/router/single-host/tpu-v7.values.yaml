@@ -30,7 +30,7 @@ router:
             maxPrefixTokensToMatch: 262144
             # Keep this index at the HBM tier when the model server reports its
             # host tier; the CPU index below covers that tier.
-            capacityTier: hbm
+            capacityTiers: [hbm]
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
