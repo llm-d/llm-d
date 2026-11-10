@@ -39,13 +39,13 @@ security-testing:
     Dependabot is enabled for this repo.
 security-contacts:
 - type: email
-  value: <llm-d-security-announce@googlegroups.com>
+  value: <llm-d-security-reporting@googlegroups.com>
 vulnerability-reporting:
   accepts-vulnerability-reports: true
   security-policy: <https://github.com/llm-d/llm-d/blob/main/SECURITY.md>
-  email-contact: <llm-d-security-announce@googlegroups.com>
+  email-contact: <llm-d-security-reporting@googlegroups.com>
   comment: |
-    The first and best way to report a vulnerability is by using private security issues in GitHub.
+    Use GitHub private vulnerability reporting when possible. Reporters who cannot use GitHub may use the email contact above.
 dependencies:
   third-party-packages: true
   dependencies-lists:
