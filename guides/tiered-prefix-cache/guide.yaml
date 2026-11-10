@@ -253,32 +253,17 @@ verify:
               | grep -E '^sglang[:_](hicache_host_used_tokens|evicted_tokens_total|load_back_tokens_total|cached_tokens_total)' || true
           done
     offload_gate:
-      - when: {MODEL_SERVER: [vllm], CONNECTOR: [native], ACCELERATOR_TYPE: [gpu, amd, xpu]}
-        run: |
-          # Gate: the native OffloadingConnector writes every computed block to
-          # the offload tier, so after the burst above the bytes stored, summed
-          # over all model server pods, must be above zero.
-          STORED=0
-          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
-            STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-              | awk -v s="${STORED}" '/^vllm:kv_offload_store_bytes_total/ {s += $NF} END {print s + 0}')
-          done
-          echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
-          awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
-            || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
-      - when:
-          ACCELERATOR_TYPE: [xpu]
-          MODEL_SERVER: [vllm]
-          CONNECTOR: [lmcache-connector]
-          VARIANT: [cpu]
+      # Nightly Standup parses the README. It must not run this controlled
+      # probe unless the caller opts in through e2e_validate_args; the wrapper
+      # emits this section with --context e2e-validation instead.
+      - skip_in: [ci]
         run: |
           # Check every model pod directly with the guide's verifier.
-          if python3 "${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py" \
-              -n "${NAMESPACE}" -m "${MODEL}"; then
-            LLMD_XPU_LMCACHE_KV_VALIDATED=1
-          else
-            (exit $?)
-          fi
+          python3 "${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py" \
+            -n "${NAMESPACE}" -m "${MODEL}" \
+            --model-server "${MODEL_SERVER}" --connector "${CONNECTOR}" \
+            --variant "${VARIANT}"
+          LLMD_TIERED_PREFIX_CACHE_VALIDATED=1
     shared_tier:
       - when: {MODEL_SERVER: [vllm], VARIANT: [fs], CONNECTOR: [native]}
         run: |

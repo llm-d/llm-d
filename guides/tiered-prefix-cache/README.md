@@ -446,38 +446,6 @@ With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the 
 
 For LMCache, `lmcache:num_stored_tokens_total` counts tokens requested for storage; a positive increase in `lmcache:time_to_store_count` provides completed-store observations. `lmcache:num_hit_tokens_total` increases on completed retrieval. Cache usage and `lmcache:retrieve_hit_rate` are diagnostics: the inspected LMCache v0.5.0 reports a hit rate of 1 when no retrieval has finished.
 
-**Run the offloading assertions for your configuration.** For `CONNECTOR=native` on GPU, AMD, and Intel XPU, the gate fails if the stored bytes are still zero after the burst above.
-
-For Intel XPU with vLLM, `CONNECTOR=lmcache-connector` and `VARIANT=cpu`, the gate invokes [`verify.py`](verify.py) to send controlled cold/warm requests directly to every model-server pod. It checks the served model and actual tokenized prompt length (at least 1024 tokens and four complete LMCache chunks), successful inference, a full-chunk storage attempt, completed storage and retrieval, and identical deterministic output. It reads the effective LMCache chunk size from the installed adapter's configuration loader and respects the server's context limit. The store histogram can be absent before its first observation; it must appear with completed observations after the cold request.
-
-The two requests use the same tokens and different `cache_salt` values. In the inspected vLLM v0.30.0 / LMCache v0.5.0 path, salt changes vLLM's resident prefix-cache hashes while LMCache keys remain token-derived. The gate requires positive completed LMCache retrieval and zero warm resident-cache hits; it fails on request errors, missing evidence, counter rollback, pod replacement/restart or output mismatch. The XPU LMCache CPU nightly invokes this gate after Standup and before its existing benchmark; other nightly callers do not opt in.
-
-<!-- guide:verify.tests.offload_gate start -->
-```bash
-# only when MODEL_SERVER=vllm and CONNECTOR=native and ACCELERATOR_TYPE=gpu or amd or xpu:
-# Gate: the native OffloadingConnector writes every computed block to
-# the offload tier, so after the burst above the bytes stored, summed
-# over all model server pods, must be above zero.
-STORED=0
-for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
-  STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | awk -v s="${STORED}" '/^vllm:kv_offload_store_bytes_total/ {s += $NF} END {print s + 0}')
-done
-echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
-awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
-  || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
-
-# only when ACCELERATOR_TYPE=xpu and MODEL_SERVER=vllm and CONNECTOR=lmcache-connector and VARIANT=cpu:
-# Check every model pod directly with the guide's verifier.
-if python3 "${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py" \
-    -n "${NAMESPACE}" -m "${MODEL}"; then
-  LLMD_XPU_LMCACHE_KV_VALIDATED=1
-else
-  (exit $?)
-fi
-```
-<!-- guide:verify.tests.offload_gate end -->
-
 </details>
 <details>
 <summary><b>SGLang</b></summary>
@@ -503,7 +471,37 @@ done
 </details>
 <!-- tabs:end -->
 
-The shared-prefix burst usually keeps its prefix in HBM. Under cache pressure, an evicted prefix requested again produces offload-tier hits (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang:cached_tokens_total{cache_source="host"}` and `sglang:load_back_tokens_total`). The XPU LMCache gate above uses distinct salts to exercise retrieval without requiring eviction.
+**Run the offloading assertions for your configuration.** [`verify.py`](verify.py) sends controlled cold/warm requests directly to every eligible model-server pod. It checks pod health and stability, the deployed engine and connector, the served model, successful inference, and identical deterministic output. The actual tokenized prompt contains at least 1024 tokens and four cache chunks/pages and must fit the server's context limit.
+
+The checks use the selected `MODEL_SERVER`, `CONNECTOR`, and `VARIANT`, independently of the accelerator:
+
+| Engine and connector | Required offload evidence from the controlled requests |
+| --- | --- |
+| vLLM, `lmcache-connector` | A full-chunk storage attempt, completed storage, and completed warm retrieval with zero resident prefix-cache hits |
+| vLLM, native `OffloadingConnector` | An increase in stored bytes, using the current counter or the legacy `GPU_to_CPU` counter |
+| vLLM, native TPU connectors or `mooncake-store` | A configured connector and an increase in external prefix-cache lookups |
+| SGLang, `native` (HiCache) | An increase in host occupancy by at least one page, or a completed backup counter increase, with positive host occupancy |
+
+For LMCache, the probe reads the effective chunk size from the installed adapter's configuration loader. The two requests use the same tokens and different `cache_salt` values: in the inspected vLLM v0.30.0 / LMCache v0.5.0 path, salt changes vLLM's resident prefix-cache hashes while LMCache keys remain token-derived. The store histogram may be absent before its first observation; it must appear with completed observations after the cold request. The other connectors check storage or lookups and output consistency; retrieval after accelerator-memory eviction is covered by the observations below.
+
+For `VARIANT=fs`, native and LMCache deployments must mount a Bound offload PVC at `/mnt/files-storage`. The probe checks the connector's filesystem configuration: native's secondary storage path, LMCache's disk tier, SGLang's file backend, or MooncakeStore's standalone Client pool. MooncakeStore uses its external Client pool instead of a model-pod PVC.
+
+<!-- guide:verify.tests.offload_gate start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# Check every model pod directly with the guide's verifier.
+python3 "${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py" \
+  -n "${NAMESPACE}" -m "${MODEL}" \
+  --model-server "${MODEL_SERVER}" --connector "${CONNECTOR}" \
+  --variant "${VARIANT}"
+LLMD_TIERED_PREFIX_CACHE_VALIDATED=1
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.offload_gate end -->
+
+Nightly workflows opt in after Standup and before the benchmark with `e2e_validate_args: '--extra-validate tiered-prefix-cache'`. The wrapper reads the nightly's accelerator, backend, connector, and offloading-target settings; explicit command-line selections can override them. Currently only the XPU LMCache nightly opts in. Callers that omit `e2e_validate_args` skip this validation, and the README-parsing Standup also skips the gate.
+
+The shared-prefix burst usually keeps its prefix in HBM. Under cache pressure, an evicted prefix requested again produces offload-tier hits (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang:cached_tokens_total{cache_source="host"}` and `sglang:load_back_tokens_total`). The LMCache gate above uses distinct salts to exercise retrieval without requiring eviction.
 
 For vLLM `native` with `VARIANT=fs` and at least two model server pods (Intel XPU runs one, so the check is skipped there), the shared tier makes a hit easy to provoke: **send a new prefix to one pod, then to a second pod** that has never seen it. The second pod loads the blocks the first one wrote to the filesystem, so its `vllm:external_prefix_cache_hits_total` is above zero:
 
