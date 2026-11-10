@@ -35,7 +35,7 @@ For general security questions, feel free to ask in `#sig-security` on the [llm-
 
 ## Reporter credit
 
-The Vulnerability Management Team credits the first reporter of a vulnerability.
+The Vulnerability Management Team credits the first reporter of a vulnerability. At its discretion, the team may also credit a later reporter whose report adds material analysis.
 
 ## Security Vulnerability Response
 
