@@ -496,7 +496,7 @@ def test_wrapper_fails_for_missing_or_failed_gate(wrapper_environment, settings,
     assert not list(tmp_path.glob("tiered-prefix-cache-verify.*"))
 
 
-def test_standup_skips_controlled_gate_and_only_xpu_nightly_opts_in():
+def test_standup_skips_controlled_gate_and_only_xpu_nightlies_opt_in():
     result = subprocess.run([sys.executable, str(REPO_ROOT / "scripts/guide.py"),
                              "emit", str(GUIDE_DIR), "--context", "ci",
                              "verify.tests.offload_gate"],
@@ -512,4 +512,7 @@ def test_standup_skips_controlled_gate_and_only_xpu_nightly_opts_in():
         workflow = yaml.safe_load(path.read_text())
         if workflow["jobs"]["nightly"]["with"].get("e2e_validate_args"):
             callers.append(path.name)
-    assert callers == ["nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml"]
+    assert sorted(callers) == [
+        "nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml",
+        "nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-native.yaml",
+    ]

@@ -499,7 +499,7 @@ LLMD_TIERED_PREFIX_CACHE_VALIDATED=1
 <!-- llm-d-cicd:skip end -->
 <!-- guide:verify.tests.offload_gate end -->
 
-Nightly workflows opt in after Standup and before the benchmark with `e2e_validate_args: '--extra-validate tiered-prefix-cache'`. The wrapper reads the nightly's accelerator, backend, connector, and offloading-target settings; explicit command-line selections can override them. Currently only the XPU LMCache nightly opts in. Callers that omit `e2e_validate_args` skip this validation, and the README-parsing Standup also skips the gate.
+Nightly workflows opt in after Standup and before the benchmark with `e2e_validate_args: '--extra-validate tiered-prefix-cache'`. The wrapper reads the nightly's accelerator, backend, connector, and offloading-target settings; explicit command-line selections can override them. Currently the XPU native and LMCache nightlies opt in. Callers that omit `e2e_validate_args` skip this validation, and the README-parsing Standup also skips the gate.
 
 The shared-prefix burst usually keeps its prefix in HBM. Under cache pressure, an evicted prefix requested again produces offload-tier hits (`vllm:external_prefix_cache_hits_total`, `vllm:kv_offload_load_bytes_total`, or `sglang:cached_tokens_total{cache_source="host"}` and `sglang:load_back_tokens_total`). The LMCache gate above uses distinct salts to exercise retrieval without requiring eviction.
 
