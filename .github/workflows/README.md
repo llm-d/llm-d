@@ -2,6 +2,14 @@
 
 Each one of the [guides](../../guides) in `llm-d` (also known as "well-lit paths", undergoes a nightly test cycle. This test aims to check not only the basic functionality of a given guide, but in addition to it, track performance regressions by running a "representative" (as defined by the "guide owners", e.g., [optimized-baseline](../../guides/optimized-baseline/OWNERS)) workload against it.
 
+## Container vulnerability scans
+
+Image builds attach a full Trivy JSON report for each image digest to their workflow run. The scheduled [dev image build](nightly-build-image.yaml) publishes the default branch's Code Scanning baseline for CPU, vLLM XPU, SGLang XPU, and RDMA tools. Pull request and manual build reports are available as workflow artifacts. Release scans report against the release tags.
+
+The scheduled run also attaches `dependency-upgrades.csv`. Each row groups findings by image, package ecosystem, installed version, and the fixed versions reported by Trivy. The count uses distinct vulnerability IDs so repeated findings at multiple paths do not inflate an upgrade's ranking. The original reports include findings without an available fix.
+
+After GitHub shows a fresh baseline for all four images, use [Trivy tool status](https://github.com/llm-d/llm-d/security/code-scanning/tools/Trivy/status) to verify and remove retired configurations from the default branch. Review the old `build-image.yml` workflow, the previous PR and manual upload configurations, and the retired CUDA, ROCm, and HPU nightly configurations. [GitHub documents the removal procedure](https://docs.github.com/en/code-security/how-tos/manage-security-alerts/manage-code-scanning-alerts/resolve-alerts#removing-stale-configurations-and-alerts-from-a-branch).
+
 ## Components
 
 The main component of this arrangement are the following.

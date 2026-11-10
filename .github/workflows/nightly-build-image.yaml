@@ -41,3 +41,46 @@ jobs:
       force_build: ${{ github.event_name == 'schedule' || inputs.platforms == 'all' }}
       platforms: ${{ inputs.platforms || '' }}
     secrets: inherit
+
+  dependency-upgrades:
+    name: Rank dependency upgrades
+    if: ${{ !cancelled() && github.event_name == 'schedule' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download nightly Trivy reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: trivy-*-amd64
+          path: reports
+
+      - name: Group fixable vulnerabilities by image and package version
+        run: |
+          jq -rs '
+            [
+              .[] | (.ArtifactName | split("@")[0]) as $image
+              | .Results[]? | .Type as $ecosystem
+              | .Vulnerabilities[]? | select((.FixedVersion // "") != "")
+              | {
+                  image: $image, ecosystem: $ecosystem, package: .PkgName,
+                  installed: .InstalledVersion, fixed: .FixedVersion, id: .VulnerabilityID
+                }
+            ]
+            | group_by([.image, .ecosystem, .package, .installed, .fixed])
+            | map(.[0] + {ids: (map(.id) | unique)})
+            | sort_by(-(.ids | length), .image, .ecosystem, .package, .installed, .fixed)
+            | ["Image", "Ecosystem", "Package", "Installed", "Fixed versions", "Unique findings", "Vulnerability IDs"],
+              (.[] | [.image, .ecosystem, .package, .installed, .fixed, (.ids | length), (.ids | join(" "))])
+            | @csv
+          ' reports/trivy-{rdma-tools,xpu,xpu-sglang,cpu}-amd64/trivy-results.json > dependency-upgrades.csv
+
+      - name: Save ranked dependency upgrades
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-upgrades
+          path: dependency-upgrades.csv
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
