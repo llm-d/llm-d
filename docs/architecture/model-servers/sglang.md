@@ -56,6 +56,17 @@ SGLang supports disaggregated prefill and decode pools coordinated through a pre
 
 See [Disaggregated Serving](../disaggregation/pd-disaggregation.md) and [SGLang Disaggregation Operations](../../operations/disaggregation/sglang.md) for details.
 
+## Data Parallelism (DP)
+
+With `--dp-size > 1`, SGLang runs multiple data-parallel ranks per pod. How those ranks are exposed over HTTP depends on the frontend:
+
+- **Python frontend (default):** the DP ranks share a single serving port. **The EPP observes one endpoint per pod**, and per-rank KV-cache aware routing has limited support.
+- **Rust frontend:** each DP rank runs its own standalone HTTP listener, with its own request queue. The EPP can schedule and account requests at rank granularity instead of pod granularity, which improves prefix-cache affinity and load balancing.
+
+The Rust frontend is enabled with the `SGLANG_RUST_SERVER=1` environment variable and requires SGLang `v0.5.22` or newer. The Python/uvicorn server is expected to be deprecated upstream once the migration completes ([sgl-project/sglang#23206](https://github.com/sgl-project/sglang/issues/23206)).
+
+This is the same rank-as-endpoint model described in [DP-Aware Routing](../disaggregation/wide-expert-parallelism.md#dp-aware-routing) for vLLM; SGLang's Rust frontend provides the same behavior.
+
 ## Wide Expert Parallelism (MoE)
 
 For large Mixture-of-Experts (MoE) models, SGLang combines data-parallel attention (`--dp-size`, `--enable-dp-attention`) with expert-parallel MoE layers (`--ep-size`, `--enable-ep-moe`) using DeepEP all-to-all kernels across multi-node [LeaderWorkerSet](../model-server-orchestration/leaderworkerset.md) or [DisaggregatedSet](../model-server-orchestration/disaggregatedset.md) groups. See [Wide Expert Parallelism](../disaggregation/wide-expert-parallelism.md).
