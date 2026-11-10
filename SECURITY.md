@@ -41,7 +41,7 @@ The Vulnerability Management Team credits the first reporter of a vulnerability.
 
 The Vulnerability Management Team will acknowledge and assess each report as soon as possible.
 
-Reporters are expected to answer the Vulnerability Management Team's follow-up questions before the team accepts a report as a draft advisory. The team will close a report for inactivity if its follow-up questions go unanswered for 14 days.
+Reporters are expected to answer the Vulnerability Management Team's follow-up questions before the team accepts a report as a draft advisory. The team will close a report for inactivity if its follow-up questions go unanswered for 7 days.
 
 The Vulnerability Management Team keeps vulnerability information within the llm-d project and shares it with other projects only when necessary to fix the issue.
 
