@@ -433,10 +433,10 @@ kubectl run prefix-test --rm -i --restart=Never \
 # Offload counters of every model server pod, read through the
 # Kubernetes API server proxy (no port-forward needed). On TPU
 # multi-host only LeaderWorkerSet leaders (worker-index 0) serve :8000.
-for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} --request-timeout=10s \
+for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
     -o go-template='{{range .items}}{{$i := index .metadata.labels "leaderworkerset.sigs.k8s.io/worker-index"}}{{if or (not $i) (eq $i "0")}}{{.metadata.name}} {{end}}{{end}}'); do
   echo "== ${pod}"
-  kubectl get --request-timeout=10s --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+  kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
     | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total|prefix_cache_hits_total|request_success_total)|lmcache:(local_cache_usage|retrieve_hit_rate|num_(stored|hit)_tokens_total|time_to_store_count))' || true
 done
 ```
