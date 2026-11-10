@@ -459,7 +459,7 @@ def verify_pods(namespace, model, model_server, connector, variant):
     def snapshot():
         response = json.loads(kubectl(
             "get", "pods", "-l", f"llm-d.ai/guide={guide}",
-            "-o", "json", "--request-timeout=10s",
+            "-o", "json",
         ))
         pods = {}
         for pod in response["items"]:
@@ -505,8 +505,7 @@ def verify_pods(namespace, model, model_server, connector, variant):
                 if not claim:
                     raise RuntimeError(f"{name}: filesystem tier has no PVC at /mnt/files-storage")
                 if claim not in checked_pvcs:
-                    phase = kubectl("get", "pvc", claim, "-o", "jsonpath={.status.phase}",
-                                    "--request-timeout=10s").strip()
+                    phase = kubectl("get", "pvc", claim, "-o", "jsonpath={.status.phase}").strip()
                     if phase != "Bound":
                         raise RuntimeError(f"{name}: offload PVC {claim} is not Bound: {phase!r}")
                     checked_pvcs.add(claim)
