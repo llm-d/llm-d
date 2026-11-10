@@ -38,6 +38,7 @@ Or include the monitoring component directly in your `kustomization.yaml`:
 components:
   - ../../../recipes/modelserver/components/monitoring       # decode PodMonitor
   # - ../../../recipes/modelserver/components/monitoring-pd  # add for prefill/decode disaggregation
+  # - ../../../recipes/modelserver/components/monitoring-epd # add for encode disaggregation (E/PD, E/P/D)
 ```
 
 See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details (for TensorRT-LLM, set `path: /prometheus/metrics` on the `PodMonitor` endpoint).
@@ -48,7 +49,7 @@ Verify the `PodMonitor` resources exist:
 kubectl get podmonitors -n ${NAMESPACE}
 ```
 
-Expected output (`prefill` also appears when `monitoring-pd` is applied):
+Expected output (`prefill` also appears when `monitoring-pd` is applied, and `encode` when `monitoring-epd` is applied):
 
 ```text
 NAME                    AGE
