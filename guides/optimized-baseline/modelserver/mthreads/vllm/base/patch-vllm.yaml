@@ -17,6 +17,7 @@ spec:
             - Qwen/Qwen3-32B
             - --served-model-name=Qwen/Qwen3-32B
             - --port=8000
+            - --shutdown-timeout=45
             - --tensor-parallel-size=8
             - --enforce-eager
             - --max-model-len=2048
