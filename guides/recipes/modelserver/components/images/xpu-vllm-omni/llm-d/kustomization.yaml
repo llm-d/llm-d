@@ -2,5 +2,5 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: vllm-omni-xpu
-    newTag: latest
+    newName: ghcr.io/llm-d/llm-d-xpu-omni
+    newTag: sha-fb7ab707

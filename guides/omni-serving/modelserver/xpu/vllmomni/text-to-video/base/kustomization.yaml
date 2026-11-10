@@ -7,7 +7,7 @@ resources:
 namePrefix: omni-serving-t2v-intel-xpu-vllm-omni-
 
 components:
-  - ../../../../../../recipes/modelserver/components/images/xpu-vllm-omni/release
+  - ../../../../../../recipes/modelserver/components/images/xpu-vllm-omni/llm-d
 
 patches:
   - path: patch-vllm-omni.yaml

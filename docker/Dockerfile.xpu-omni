@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.7
+
+ARG BASE_IMAGE=vllm/vllm-openai-xpu:v0.32.0
+
+FROM ${BASE_IMAGE} AS vllm-omni
+
+ENTRYPOINT []
+CMD ["/bin/bash"]
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN sed -i \
+        -e 's|http://archive.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g' \
+        -e 's|http://security.ubuntu.com/ubuntu/|https://security.ubuntu.com/ubuntu/|g' \
+        /etc/apt/sources.list.d/ubuntu.sources && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends espeak-ng ffmpeg git jq && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace/vllm-omni
+COPY . .
+
+ENV VLLM_OMNI_TARGET_DEVICE=xpu
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --no-build-isolation --excludes <(printf "torch\ntriton-xpu\n") \
+    ".[dev]"
+
+FROM vllm-omni AS vllm-omni-openai
+
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+
+ENTRYPOINT ["vllm", "serve", "--omni"]

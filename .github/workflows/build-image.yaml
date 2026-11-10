@@ -14,7 +14,7 @@ on:
         type: string
         default: ''
       platforms:
-        description: 'Platforms to build (comma-separated: xpu,sglang-xpu,cpu). Overrides change detection when non-empty.'
+        description: 'Platforms to build (comma-separated: xpu,xpu-omni,sglang-xpu,cpu). Overrides change detection when non-empty.'
         required: false
         type: string
         default: ''
@@ -37,13 +37,16 @@ on:
       xpu:
         description: 'Whether XPU image was built'
         value: ${{ jobs.detect-changes.outputs.xpu }}
+      xpu-omni:
+        description: 'Whether XPU vLLM-Omni image was built'
+        value: ${{ jobs.detect-changes.outputs['xpu-omni'] }}
       sglang-xpu:
         description: 'Whether the SGLang XPU image was built'
         value: ${{ jobs.detect-changes.outputs.sglang-xpu }}
   workflow_dispatch:
     inputs:
       platforms:
-        description: "Platforms to build (comma-separated: xpu,sglang-xpu,cpu)"
+        description: "Platforms to build (comma-separated: xpu,xpu-omni,sglang-xpu,cpu)"
         required: false
         default: "xpu"
         type: string
@@ -112,6 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
+      xpu-omni: ${{ steps.force.outputs['xpu-omni'] || steps.platforms-input.outputs['xpu-omni'] || steps.filter.outputs['xpu-omni'] }}
       sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu }}
       cpu: ${{ steps.force.outputs.cpu || steps.platforms-input.outputs.cpu || steps.filter.outputs.cpu }}
       rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
@@ -121,6 +125,7 @@ jobs:
         id: force
         run: |
           echo "xpu=true" >> $GITHUB_OUTPUT
+          echo "xpu-omni=true" >> $GITHUB_OUTPUT
           echo "sglang-xpu=true" >> $GITHUB_OUTPUT
           echo "cpu=true" >> $GITHUB_OUTPUT
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
@@ -139,6 +144,7 @@ jobs:
             esac
           }
           echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
+          echo "xpu-omni=$(has_platform xpu-omni)" >> $GITHUB_OUTPUT
           echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
           echo "cpu=$(has_platform cpu)" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v7
@@ -152,6 +158,9 @@ jobs:
           filters: |
             xpu:
               - 'docker/Dockerfile.xpu'
+              - 'docker/common-versions'
+            xpu-omni:
+              - 'docker/Dockerfile.xpu-omni'
               - 'docker/common-versions'
             sglang-xpu:
               - 'docker/common-versions'
@@ -360,6 +369,101 @@ jobs:
       - name: Sign image with cosign
         if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
         run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu@${{ steps.build-and-push.outputs.digest }}
+
+  xpu-omni-build-llm-d:
+    needs: [detect-changes, resolve-registry]
+    if: ${{ needs.detect-changes.outputs['xpu-omni'] == 'true' }}
+    runs-on: vllm-runner
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || '' }}
+          allow-unsafe-pr-checkout: true
+
+      - name: Load vLLM-Omni source configuration
+        id: common-versions
+        run: |
+          source docker/common-versions
+          echo "repository=${VLLM_OMNI_REPOSITORY}" >> $GITHUB_OUTPUT
+          echo "ref=${VLLM_OMNI_REF}" >> $GITHUB_OUTPUT
+          echo "short_ref=${VLLM_OMNI_REF:0:8}" >> $GITHUB_OUTPUT
+          echo "base_image=${VLLM_OMNI_BASE_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Checkout vLLM-Omni source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.common-versions.outputs.repository }}
+          ref: ${{ steps.common-versions.outputs.ref }}
+          path: .cache/vllm-omni
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ needs.resolve-registry.outputs.registry }}
+          username: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          password: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
+
+      - name: Set image tags
+        id: set-tag
+        run: |
+          echo "tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "source_tag=sha-${{ steps.common-versions.outputs.short_ref }}" >> $GITHUB_OUTPUT
+          PR_TAG="${{ github.event.pull_request.number }}"
+          if [ -n "${PR_TAG}" ]; then
+            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push the image
+        id: build-and-push
+        uses: docker/build-push-action@v7
+        with:
+          context: ./.cache/vllm-omni
+          file: ./docker/Dockerfile.xpu-omni
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          build-args: |
+            BASE_IMAGE=${{ steps.common-versions.outputs.base_image }}
+          tags: |
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-omni:${{ steps.set-tag.outputs.tag }}
+            ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-omni:${{ steps.set-tag.outputs.source_tag }}
+            ${{ steps.set-tag.outputs.pr_tag != '' && format('{0}/{1}-xpu-omni:{2}', needs.resolve-registry.outputs.registry, github.repository, steps.set-tag.outputs.pr_tag) || '' }}
+            ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request_target' && format('{0}/{1}-xpu-omni:latest', needs.resolve-registry.outputs.registry, github.repository) || '' }}
+          github-token: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-omni@${{ steps.build-and-push.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          scanners: vuln
+          timeout: 30m
+          skip-dirs: /root/.cache/uv
+        env:
+          TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
+          TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4.37.6
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: trivy-xpu-omni
+
+      - name: Install cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign
+        if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
+        run: cosign sign --yes ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-omni@${{ steps.build-and-push.outputs.digest }}
+
   xpu-sglang-build-llm-d:
     needs: [detect-changes, resolve-registry]
     if: ${{ needs.detect-changes.outputs.sglang-xpu == 'true' }}

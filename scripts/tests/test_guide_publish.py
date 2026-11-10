@@ -577,27 +577,36 @@ def test_omni_serving_matrix_matches_repo():
     g = guide.Guide.load(REPO_ROOT / "guides" / "omni-serving")
     assert g.check().ok(), _errors(g.check())
     # Every TASK resolves to an overlay per engine that serves it and per
-    # INFRA_PROVIDER (modelserver/gpu/<engine>/<TASK>/<provider>/), and to the
+    # INFRA_PROVIDER (modelserver/<accelerator>/<engine>/<TASK>/<provider>/), and to the
     # router/<TASK>.values.yaml its deploy.router_values step exports.
     root = REPO_ROOT / "guides" / "omni-serving"
     tasks = {
-        "vllmomni": ("omni", "text-to-image", "image-to-image", "text-to-speech"),
-        "sglang": ("text-to-image", "image-to-image"),
+        "gpu": {
+            "vllmomni": ("omni", "text-to-image", "image-to-image", "text-to-speech"),
+            "sglang": ("text-to-image", "image-to-image"),
+        },
+        "xpu": {
+            "vllmomni": ("text-to-video",),
+            "sglang": ("text-to-image", "image-to-image"),
+        },
     }
+    providers = {"gpu": ("base", "gke"), "xpu": ("base",)}
     overlays = [
-        root / "modelserver" / "gpu" / e / t / p
-        for e, ts in tasks.items()
-        for t in ts
-        for p in ("base", "gke")
+        root / "modelserver" / accelerator / engine / task / provider
+        for accelerator, engines in tasks.items()
+        for engine, engine_tasks in engines.items()
+        for task in engine_tasks
+        for provider in providers[accelerator]
     ]
     missing = [str(o) for o in overlays if not (o / "kustomization.yaml").is_file()]
+    task_values = ("omni", "text-to-image", "image-to-image", "text-to-speech", "text-to-video")
     missing += [
-        str(root / "router" / f"{t}.values.yaml")
-        for t in tasks["vllmomni"]
-        if not (root / "router" / f"{t}.values.yaml").is_file()
+        str(root / "router" / f"{task}.values.yaml")
+        for task in task_values
+        if not (root / "router" / f"{task}.values.yaml").is_file()
     ]
     assert not missing, missing
-    assert g.data["env"]["static"]["TASK"]["values"] == list(tasks["vllmomni"])
+    assert g.data["env"]["static"]["TASK"]["values"] == list(task_values)
 
 
 def test_wide_ep_matrix_matches_repo():
