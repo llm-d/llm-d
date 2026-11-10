@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      # Spread replicas across nodes. Each tp=1 replica binds to the first NUMA node's
+      # cores (cpuManagerPolicy=none gives no exclusive cpuset), so replicas sharing a
+      # node compete for the same cores. Use requiredDuringScheduling... to enforce it
+      # (replicas then stay Pending when there are fewer nodes than replicas).
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    llm-d.ai/role: decode
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "sglang.launch_server"]
+          args:
+            - "--model-path=meta-llama/Llama-3.2-3B-Instruct"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--device=cpu"
+            # AMX (Sapphire Rapids+) attention kernels. The image sets
+            # SGLANG_USE_CPU_ENGINE=1 and preloads tcmalloc/iomp.
+            - "--attention-backend=intel_amx"
+            - "--dtype=bfloat16"
+            - "--tensor-parallel-size=1"
+            - "--context-length=8192"
+            # SGLang sizes the KV pool from *host* memory (mem_fraction_static ~0.95 of
+            # the node's RAM), ignoring the pod's cgroup limit, so the container is
+            # OOMKilled right after weight loading. Cap the pool in tokens instead:
+            # 262144 tokens x ~112 KiB/token (Llama-3.2-3B, bf16) ~= 28 GiB. Scale with
+            # the model's KV size and the memory limit below.
+            - "--max-total-tokens=262144"
+            - "--enable-metrics"
+            # Uncomment for distributed tracing
+            # - "--enable-trace"
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+          env:
+            # Stop Intel OpenMP threads from spinning while idle, which would otherwise
+            # starve other pods on the same node.
+            - name: KMP_BLOCKTIME
+              value: "0"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            # Uncomment for distributed tracing env vars
+            # - name: OTEL_SERVICE_NAME
+            #   value: "sglang-decode"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector:4317"
+            # - name: OTEL_TRACES_EXPORTER
+            #   value: "otlp"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
+          securityContext:
+            seccompProfile:
+              type: Unconfined
+            capabilities:
+              add:
+                - SYS_NICE
+          resources:
+            limits:
+              memory: 64Gi
+              cpu: "64"
+            requests:
+              cpu: "64"
+              memory: 64Gi
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /.cache
+              name: sglang-cache
+          # /v1/models responds before SGLang completes its generation warmup.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+        - name: sglang-cache
+          emptyDir: {}
