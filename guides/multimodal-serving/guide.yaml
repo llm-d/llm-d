@@ -7,8 +7,8 @@ name: multimodal-serving
 # is the model the accelerator's overlay serves (used for MODEL on llm-d.ai);
 # `notes` (optional, one line) fills the Notes column of the support table.
 # The nightly E2E workflows deploy the aggregation/ and e-disaggregation/
-# scenarios this guide selects with TOPOLOGY (gpu: aggregated and E/PD;
-# tpu/v7: aggregated).
+# scenarios this guide selects with TOPOLOGY (gpu and amd: aggregated and
+# E/PD; tpu/v7: aggregated).
 # `providers` lists the INFRA_PROVIDER values the accelerator takes (each
 # needs a modelserver/<acc>/<engine>/.../<provider>/ overlay; `engines:`
 # narrows one to a subset); llm-d.ai turns it into the provider selector.
@@ -30,7 +30,7 @@ support:
       model: Qwen/Qwen3-VL-32B-Instruct
       providers:
         - {name: base, label: "Kubernetes (base)"}
-      engines: {vllm: community}
+      engines: {vllm: validated}
     xpu:
       label: Intel XPU
       notes: "Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base`"

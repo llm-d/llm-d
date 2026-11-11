@@ -42,6 +42,8 @@ on:
       - "Nightly - Fast Model Actuation E2E (OCP GPU)"
       - "Nightly - Flow Control E2E (AMD ROCm)"
       - "Nightly - Flow Control E2E (GKE GPU)"
+      - "Nightly - Multimodal Serving Aggregation E2E (AMD ROCM)"
+      - "Nightly - Multimodal Serving E-Disaggregation E2E (AMD ROCM NIXL)"
       - "Nightly - Optimized Baseline E2E (AMD ROCM ATOM)"
       - "Nightly - Optimized Baseline E2E (AMD ROCM SGLang)"
       - "Nightly - Optimized Baseline E2E (AMD ROCM)"

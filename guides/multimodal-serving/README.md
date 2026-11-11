@@ -64,7 +64,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | H200 reference · aggregated 8 replicas × TP=2 (16 GPUs), E/PD 2 Encode + 8 PD, E/P/D 2 Encode + 4 Prefill + 4 Decode (TP=2) · `INFRA_PROVIDER` `base`, `gke` (+ `coreweave` for E/PD and E/P/D) · E/P/D is not run nightly |
-| AMD GPU | `amd` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Instinct MI355X (288 GB HBM) · aggregated (8 replicas × TP=2, 16 GPUs) and E/PD (2 Encode + 8 PD, TP=2) over NIXL · `INFRA_PROVIDER=base` |
+| AMD GPU | `amd` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | Instinct MI355X (288 GB HBM) · aggregated (8 replicas × TP=2, 16 GPUs) and E/PD (2 Encode + 8 PD, TP=2) over NIXL · `INFRA_PROVIDER=base` |
 | Intel XPU | `xpu` | `Qwen/Qwen3-VL-32B-Instruct` | 🟡 community | Arc Pro B60 · aggregated only · 2 replicas × 2 GPUs through DRA · `INFRA_PROVIDER=base` |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-VL-32B-Instruct` | ✅ validated | GKE only (`INFRA_PROVIDER=gke`) · aggregated only · 8 replicas × 4 chips (`2x2x1`, TP=4) · needs the `medium` PriorityClass |
 
