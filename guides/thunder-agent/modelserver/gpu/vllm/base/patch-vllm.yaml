@@ -11,14 +11,9 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "nvidia/GLM-5.2-NVFP4"
-            - "--revision=aec724e8c7b8ee9db3b48c01c320f63f9cdaf8aa"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=8"
             - "--trust-remote-code"
-            # Flags below differ from the vLLM defaults on purpose, to match the
-            # benchmark. FP8 KV (the default is the model dtype). Memory 0.8 and
-            # 64 seqs set the GPU KV pool to 1,572,864 tokens, the capacity the
-            # README reports. 8192 pins the prefill chunk across vLLM versions.
             - "--kv-cache-dtype=fp8_e4m3"
             - "--max-num-seqs=64"
             - "--max-num-batched-tokens=8192"
@@ -31,7 +26,6 @@ spec:
             - "--enable-auto-tool-choice"
             - "--tool-call-parser=glm47"
             - "--enable-prompt-tokens-details"
-            # Graceful shutdown: pairs with the graceful-shutdown component.
             - "--shutdown-timeout=45"
           env:
             - name: HF_TOKEN

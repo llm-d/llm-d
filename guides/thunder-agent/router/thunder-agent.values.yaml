@@ -34,8 +34,7 @@ router:
             utilThreshold: 1.0
             # Seconds an idle session retains its room (about one tool call).
             idleLeaseSeconds: 10
-            # Forced-admission backstop (30 min), as in the benchmark. The README raises
-            # the Envoy and GKE proxy timeouts to 2400 s after the router is deployed.
+            # Forced-admission backstop (30 min).
             headWaitStarvationMs: 1800000
             # Must exceed headWaitStarvationMs.
             evictionTtlSeconds: 3600
