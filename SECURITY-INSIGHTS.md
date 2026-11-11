@@ -45,7 +45,7 @@ vulnerability-reporting:
   security-policy: <https://github.com/llm-d/llm-d/blob/main/SECURITY.md>
   email-contact: <llm-d-security-reporting@googlegroups.com>
   comment: |
-    Use GitHub private vulnerability reporting when possible. Reporters who cannot use GitHub may use the email contact above.
+    Report vulnerabilities for all llm-d components through private vulnerability reporting in llm-d/llm-d and specify the affected component's repository. Advisories are created, handled, and published in llm-d/llm-d, while fixes belong in the affected repositories. Reporters who cannot use GitHub may use the email contact above.
 dependencies:
   third-party-packages: true
   dependencies-lists:

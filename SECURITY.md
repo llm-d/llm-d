@@ -6,11 +6,13 @@ Join the [llm-d-security-announce](https://groups.google.com/u/1/g/llm-d-securit
 
 We're extremely grateful for security researchers and users that report vulnerabilities to the llm-d Open Source Community. All reports are thoroughly investigated by a set of community volunteers.
 
-Before submitting a report, check open and closed pull requests and published security advisories for the same issue. Check both this repository ([pull requests](https://github.com/llm-d/llm-d/pulls), [advisories](https://github.com/llm-d/llm-d/security/advisories)) and the affected component's repository if it is separate (for example, [llm-d-router advisories](https://github.com/llm-d/llm-d-router/security/advisories)).
+The [llm-d/llm-d repository](https://github.com/llm-d/llm-d) is the security reporting hub for all llm-d components. All vulnerability reports and advisories are tracked there. Advisories are created, handled, and published there, while fixes belong in the repositories that own the affected code.
 
-Please report security issues privately in the repository that owns the affected code or use [this repository's vulnerability submission form](https://github.com/llm-d/llm-d/security/advisories/new). The Vulnerability Management Team will move reports between repositories as needed.
+Before submitting a report, check the [published security advisories in llm-d/llm-d](https://github.com/llm-d/llm-d/security/advisories) and open and closed pull requests in both [llm-d/llm-d](https://github.com/llm-d/llm-d/pulls) and the affected component's repository for the same issue.
 
-Include the affected component and version, the configuration needed to reproduce the issue, the steps to reproduce it, and the security impact in your private report.
+Please report security issues privately using the [llm-d/llm-d vulnerability submission form](https://github.com/llm-d/llm-d/security/advisories/new) for every llm-d component.
+
+In the affected component field, specify the corresponding repository, such as `llm-d/llm-d-router` or `llm-d/llm-d-kv-cache`. Include the affected version, the configuration needed to reproduce the issue, the steps to reproduce it, and the security impact in your private report.
 
 ### Email contact
 
@@ -20,7 +22,7 @@ We prefer to keep all vulnerability-related communication in the GitHub security
 
 - You think you discovered a potential security vulnerability in llm-d
 - You are unsure how a vulnerability affects llm-d
-- You think you discovered a vulnerability in another project that llm-d depends on
+- You think you discovered a vulnerability in an external project that llm-d depends on
   - For projects with their own vulnerability reporting and disclosure process, please report it directly there
 
 ### When Should I NOT Report a Vulnerability?
@@ -55,8 +57,8 @@ The Vulnerability Management Team has final say over the CVSS score and vector r
 
 After a security advisory has been accepted:
 
-- A CVE is requested when a patch for the advisory is merged.
-- The advisory is published when the fix ships in a release of the affected llm-d component.
+- A CVE is requested when a patch for the advisory is merged in the affected component's repository.
+- The advisory is published in llm-d/llm-d when the fix ships in a release of the affected llm-d component.
 
 ## Public Disclosure Timing
 
