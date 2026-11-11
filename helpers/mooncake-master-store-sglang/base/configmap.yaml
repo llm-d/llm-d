@@ -20,10 +20,7 @@ data:
     default_kv_lease_ttl: 5000
     default_kv_soft_pin_ttl: 1800000
     allow_evict_soft_pinned_objects: true
-    # Start draining the DRAM pool to disk well before it is full, and free more per cycle.
-    # At the defaults (0.95 / 0.05) a sustained writer exhausts DRAM faster than the offload
-    # path can drain it: puts succeeded up to the pool size and then failed outright rather
-    # than spilling. 0.7 leaves 30% of the pool as burst headroom instead of 5%.
+
     eviction_ratio: 0.05
     eviction_high_watermark_ratio: 0.95
 

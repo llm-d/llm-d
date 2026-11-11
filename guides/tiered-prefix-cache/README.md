@@ -323,9 +323,9 @@ export RDMA_VF_RESOURCE=openshift.io/${SRIOV_RESOURCE_NAME}
 **Other options.** Any setup that provides a NetworkAttachmentDefinition and a
 VF resource works, for example the upstream SR-IOV Network Operator, the
 NVIDIA Network Operator, or the SR-IOV device plugin with a hand-written
-NetworkAttachmentDefinition. The attached interface must be a PCI-backed VF,
-not macvlan or ipvlan, because each pod finds its RDMA device by the VF's PCI
-address. Set the variables to match your setup:
+NetworkAttachmentDefinition. The deployment requires an RDMA-capable SR-IOV VF for each pod.
+Mooncake automatically discovers the available HCA devices for RDMA communication. 
+Set the variables to match your setup:
 
 ```bash
 export RDMA_NETWORK=your-rdma-network       # name of your NetworkAttachmentDefinition
@@ -357,10 +357,7 @@ the default `--hicache-size 100` allocates about 200 GB of host RAM per pod
 `memory` limit (400Gi here). To check the allocated L2 size on a running pod,
 read `sglang:hicache_host_total_tokens` from its `/metrics` endpoint.
 
-Each pod matches its attached VF to the right RDMA device itself at startup —
-`configmap-render-config.yaml` walks the PCI address the VF's netdev sits on
-and finds the `/sys/class/infiniband` entry on that same PCI function, so
-there's no manual IP/GID setup per namespace.
+Each pod is allocated an RDMA-capable SR-IOV VF, and Mooncake automatically discovers the available HCA devices. SGLang obtains the local IP address through the `MOONCAKE_LOCAL_HOSTNAME` environment variable.
 
 #### Model servers
 
