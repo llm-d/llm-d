@@ -1,0 +1,493 @@
+# Grove alternative to base/disaggregatedset.yaml: the same prefill and decode
+# pods, orchestrated by one Grove PodCliqueSet instead of a DisaggregatedSet.
+#
+# Each role is a PodClique of two pods wrapped in its own PodCliqueScalingGroup,
+# so a scaling group replica plays the part of a LeaderWorkerSet group: one
+# DP16/EP group across two nodes. Scaling a group's replicas adds or removes
+# whole DP16 groups. The vLLM arguments differ from the DisaggregatedSet base
+# only in the rank variables, which come from Grove instead of LWS:
+#   LWS_WORKER_INDEX   -> GROVE_PCSG_POD_INDEX
+#   LWS_GROUP_SIZE     -> GROVE_PCSG_TEMPLATE_NUM_PODS
+#   LWS_LEADER_ADDRESS -> ${GROVE_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}
+# Requires the Grove operator; see the Grove section of the guide README.
+apiVersion: grove.io/v1alpha1
+kind: PodCliqueSet
+metadata:
+  name: wide-ep-grove
+  labels:
+    llm-d.ai/model: DeepSeek-R1-0528
+    llm-d.ai/guide: wide-ep
+    llm-d.ai/accelerator-variant: gpu
+    llm-d.ai/accelerator-vendor: nvidia
+spec:
+  replicas: 1
+  # The default RollingRecreate strategy deletes and recreates one scaling
+  # group replica at a time, so an update needs no spare copy of a role's
+  # GPUs (like the DisaggregatedSet base's maxSurge=0). Prefill and decode
+  # update independently; the router keeps a request on one llm-d.ai/revision
+  # (see the clique labels below).
+  template:
+    # A rank that keeps crashing breaches its PodClique's minAvailable, and
+    # once the breach outlasts terminationDelay Grove recreates the whole
+    # PodCliqueSet replica: the gang restart LWS performs on any pod restart.
+    # Grove's 4h default would leave a broken DP group serving errors for
+    # hours. Startup does not count as a breach, so this does not race the
+    # long model load.
+    terminationDelay: 5m
+    cliques:
+      - name: prefill
+        labels:
+          # Compatibility revision for the router's rollout screener
+          # (router/grove.values.yaml), which only pairs prefill and decode
+          # pods with the same llm-d.ai/revision. Grove has no cross-role
+          # revision of its own, so bump this on both cliques whenever a
+          # change makes new prefill and decode pods incompatible with old
+          # ones (image, KV connector, engine flags). Changing it changes
+          # both pod templates, so Grove rolls both roles.
+          # TODO(ai-dynamo/grove#947): use a Grove-managed revision label.
+          llm-d.ai/revision: '1'
+          llm-d.ai/inference-serving: 'true'
+          llm-d.ai/guide: wide-ep
+          llm-d.ai/accelerator-variant: gpu
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/model: DeepSeek-R1-0528
+          llm-d.ai/role: prefill
+        spec:
+          roleName: prefill
+          # Two pods form one DP16/EP group (8 GPUs each); minAvailable gangs
+          # them, so the group is scheduled and restarted as a unit.
+          replicas: 2
+          minAvailable: 2
+          podSpec:
+            serviceAccountName: deepseek-r1
+            volumes:
+              - name: dshm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 2Gi
+              - name: hf-cache
+                emptyDir: {}
+              - name: jit-cache
+                emptyDir: {}
+            containers:
+              - name: vllm
+                image: REPLACE_MODEL_SERVER_IMAGE
+                securityContext:
+                  capabilities:
+                    add:
+                      - IPC_LOCK
+                      - SYS_RAWIO
+                  runAsGroup: 0
+                  runAsUser: 0
+                imagePullPolicy: Always
+                command:
+                  - /bin/bash
+                  - -c
+                args:
+                  - |-
+                    # Clear /dev/shm on start to prevent running out of space when crashes occur
+                    # https://github.com/llm-d/llm-d/issues/352
+                    find /dev/shm -type f -delete
+
+                    #################
+                    # RUN vLLM prefill workers via DP Supervisor
+                    # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
+                    # --data-parallel-rank to each child process based on local_rank.
+                    #################
+                    START_RANK=$(( ${GROVE_PCSG_POD_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                    # Rank 0 of this group is pod 0 of this PodClique, resolved through the
+                    # headless Service Grove creates for each PodCliqueSet replica.
+                    LEADER_ADDRESS="${GROVE_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
+
+                    # Tool calling needs vLLM's own R1 template: the one bundled with
+                    # DeepSeek-R1-0528 never renders the `tools` list. It ships in the image
+                    # under /vllm-workspace/examples. No reasoning parser is set, because vLLM
+                    # lists deepseek_r1 reasoning as not supporting tool calling.
+                    exec vllm serve \
+                      deepseek-ai/DeepSeek-R1-0528 \
+                      --enable-auto-tool-choice \
+                      --tool-call-parser deepseek_v3 \
+                      --chat-template /vllm-workspace/examples/tool_chat_template_deepseekr1.jinja \
+                      --port 8000 \
+                      --enforce-eager \
+                      --gpu-memory-utilization 0.80 \
+                      --disable-access-log-for-endpoints=/health,/metrics \
+                      --data-parallel-multi-port-external-lb \
+                      --data-parallel-supervisor-port 8008 \
+                      --enable-expert-parallel \
+                      --tensor-parallel-size $TP_SIZE \
+                      --max-num-batched-tokens 2048 \
+                      --data-parallel-size $((GROVE_PCSG_TEMPLATE_NUM_PODS * DP_SIZE_LOCAL)) \
+                      --data-parallel-size-local $DP_SIZE_LOCAL \
+                      --data-parallel-address ${LEADER_ADDRESS} \
+                      --data-parallel-rpc-port 5555 \
+                      --data-parallel-start-rank $START_RANK \
+                      --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                              "kv_role":"kv_producer",
+                                              "kv_load_failure_policy":"fail"}' \
+                      --moe-backend deep_gemm \
+                      --all2all-backend deepep_v2 \
+                      --shutdown-timeout 45
+
+                      # To enable tracing, add:
+                      # --otlp-traces-endpoint http://otel-collector:4317 \
+                      # --collect-detailed-traces all
+                env:
+                  - name: HF_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: llm-d-hf-token
+                        key: HF_TOKEN
+                  - name: VLLM_ENGINE_READY_TIMEOUT_S
+                    value: '3000'
+                  - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                    value: '1'
+                  - name: DP_SIZE_LOCAL
+                    value: '8'
+                  - name: TP_SIZE
+                    value: '1'
+                  - name: TRITON_LIBCUDA_PATH
+                    value: /usr/lib64
+                  - name: VLLM_SKIP_P2P_CHECK
+                    value: '1'
+                  - name: NVIDIA_GDRCOPY
+                    value: enabled
+                  - name: GLOO_SOCKET_IFNAME
+                    value: eth0
+                  - name: NCCL_SOCKET_IFNAME
+                    value: eth0
+                  - name: VLLM_LOGGING_LEVEL
+                    value: INFO
+                  - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                    value: '120'
+                  - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP
+                  - name: CUDA_CACHE_PATH
+                    value: /var/cache/vllm/cuda
+                  - name: CCACHE_DIR
+                    value: /var/cache/vllm/ccache
+                  - name: VLLM_CACHE_ROOT
+                    value: /var/cache/vllm/vllm
+                  - name: FLASHINFER_WORKSPACE_BASE
+                    value: /var/cache/vllm/flashinfer
+                  - name: HF_HUB_CACHE
+                    value: /var/cache/huggingface
+                ports:
+                  - containerPort: 8000
+                    name: rank0
+                    protocol: TCP
+                  - containerPort: 8001
+                    name: rank1
+                    protocol: TCP
+                  - containerPort: 8002
+                    name: rank2
+                    protocol: TCP
+                  - containerPort: 8003
+                    name: rank3
+                    protocol: TCP
+                  - containerPort: 8004
+                    name: rank4
+                    protocol: TCP
+                  - containerPort: 8005
+                    name: rank5
+                    protocol: TCP
+                  - containerPort: 8006
+                    name: rank6
+                    protocol: TCP
+                  - containerPort: 8007
+                    name: rank7
+                    protocol: TCP
+                  - containerPort: 8008
+                    name: supervisor
+                    protocol: TCP
+                startupProbe:
+                  httpGet:
+                    path: /health
+                    port: supervisor
+                  initialDelaySeconds: 0
+                  periodSeconds: 1
+                  timeoutSeconds: 5
+                  failureThreshold: 2700
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: supervisor
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: supervisor
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+                resources:
+                  limits:
+                    ephemeral-storage: 1Ti
+                    memory: 512Gi
+                    nvidia.com/gpu: '8'
+                  requests:
+                    cpu: 32
+                    ephemeral-storage: 1Ti
+                    memory: 512Gi
+                    nvidia.com/gpu: '8'
+                volumeMounts:
+                  - name: dshm
+                    mountPath: /dev/shm
+                  - name: hf-cache
+                    mountPath: /var/cache/huggingface
+                  - name: jit-cache
+                    mountPath: /var/cache/vllm
+      - name: decode
+        labels:
+          # Keep equal to the prefill clique's llm-d.ai/revision.
+          llm-d.ai/revision: '1'
+          llm-d.ai/inference-serving: 'true'
+          llm-d.ai/guide: wide-ep
+          llm-d.ai/accelerator-variant: gpu
+          llm-d.ai/accelerator-vendor: nvidia
+          llm-d.ai/model: DeepSeek-R1-0528
+          llm-d.ai/role: decode
+        spec:
+          roleName: decode
+          # Two pods form one DP16/EP group (8 GPUs each); minAvailable gangs
+          # them, so the group is scheduled and restarted as a unit.
+          replicas: 2
+          minAvailable: 2
+          podSpec:
+            serviceAccountName: deepseek-r1
+            initContainers:
+              - name: routing-proxy
+                args:
+                  - --port=8000
+                  - --data-parallel-size=8
+                  - --kv-connector=nixlv2
+                  - --zap-log-level=1
+                  - --secure-serving=false
+                  - --enable-prefiller-sampling
+                image: REPLACE_ROUTING_SIDECAR_IMAGE
+                imagePullPolicy: Always
+                ports:
+                  - containerPort: 8000
+                    name: rank0
+                    protocol: TCP
+                  - containerPort: 8001
+                    name: rank1
+                    protocol: TCP
+                  - containerPort: 8002
+                    name: rank2
+                    protocol: TCP
+                  - containerPort: 8003
+                    name: rank3
+                    protocol: TCP
+                  - containerPort: 8004
+                    name: rank4
+                    protocol: TCP
+                  - containerPort: 8005
+                    name: rank5
+                    protocol: TCP
+                  - containerPort: 8006
+                    name: rank6
+                    protocol: TCP
+                  - containerPort: 8007
+                    name: rank7
+                    protocol: TCP
+                restartPolicy: Always
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  runAsNonRoot: true
+            volumes:
+              - name: dshm
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 2Gi
+              - name: hf-cache
+                emptyDir: {}
+              - name: jit-cache
+                emptyDir: {}
+            containers:
+              - name: vllm
+                image: REPLACE_MODEL_SERVER_IMAGE
+                securityContext:
+                  capabilities:
+                    add:
+                      - IPC_LOCK
+                      - SYS_RAWIO
+                  runAsGroup: 0
+                  runAsUser: 0
+                imagePullPolicy: Always
+                command:
+                  - /bin/bash
+                  - -c
+                args:
+                  - |-
+                    # Clear /dev/shm on start to prevent running out of space when crashes occur
+                    # https://github.com/llm-d/llm-d/issues/352
+                    find /dev/shm -type f -delete
+
+                    #################
+                    # RUN vLLM decode workers via DP Supervisor
+                    # The supervisor automatically assigns CUDA_VISIBLE_DEVICES and
+                    # --data-parallel-rank to each child process based on local_rank.
+                    #################
+                    START_RANK=$(( ${GROVE_PCSG_POD_INDEX:-0} * DP_SIZE_LOCAL ))
+
+                    # Rank 0 of this group is pod 0 of this PodClique, resolved through the
+                    # headless Service Grove creates for each PodCliqueSet replica.
+                    LEADER_ADDRESS="${GROVE_PCLQ_NAME}-0.${GROVE_HEADLESS_SERVICE}"
+
+                    # Tool calling needs vLLM's own R1 template: the one bundled with
+                    # DeepSeek-R1-0528 never renders the `tools` list. It ships in the image
+                    # under /vllm-workspace/examples. No reasoning parser is set, because vLLM
+                    # lists deepseek_r1 reasoning as not supporting tool calling.
+                    exec vllm serve \
+                      deepseek-ai/DeepSeek-R1-0528 \
+                      --enable-auto-tool-choice \
+                      --tool-call-parser deepseek_v3 \
+                      --chat-template /vllm-workspace/examples/tool_chat_template_deepseekr1.jinja \
+                      --port 8200 \
+                      --disable-access-log-for-endpoints=/health,/metrics \
+                      --data-parallel-multi-port-external-lb \
+                      --data-parallel-supervisor-port=8208 \
+                      --enable-expert-parallel \
+                      --tensor-parallel-size $TP_SIZE \
+                      --max-num-batched-tokens ${MAX_TOKENS} \
+                      --max-num-seqs ${MAX_TOKENS} \
+                      --data-parallel-size $((GROVE_PCSG_TEMPLATE_NUM_PODS * DP_SIZE_LOCAL)) \
+                      --data-parallel-size-local $DP_SIZE_LOCAL \
+                      --data-parallel-address ${LEADER_ADDRESS} \
+                      --data-parallel-rpc-port 5555 \
+                      --data-parallel-start-rank $START_RANK \
+                      --kv_transfer_config '{"kv_connector":"NixlConnector",
+                                              "kv_role":"kv_consumer",
+                                              "kv_load_failure_policy":"fail"}' \
+                      --all2all-backend deepep_v2 \
+                      --moe-backend deep_gemm \
+                      --shutdown-timeout 45
+                      # To enable tracing, add:
+                      # --otlp-traces-endpoint http://otel-collector:4317 \
+                      # --collect-detailed-traces all
+                env:
+                  - name: HF_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: llm-d-hf-token
+                        key: HF_TOKEN
+                  - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                    value: '1'
+                  - name: MAX_TOKENS
+                    value: '256'
+                  - name: DP_SIZE_LOCAL
+                    value: '8'
+                  - name: TP_SIZE
+                    value: '1'
+                  - name: TRITON_LIBCUDA_PATH
+                    value: /usr/lib64
+                  - name: VLLM_SKIP_P2P_CHECK
+                    value: '1'
+                  - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                    value: '1'
+                  - name: VLLM_USE_DEEP_GEMM
+                    value: '1'
+                  - name: NVIDIA_GDRCOPY
+                    value: enabled
+                  - name: GLOO_SOCKET_IFNAME
+                    value: eth0
+                  - name: NCCL_SOCKET_IFNAME
+                    value: eth0
+                  - name: VLLM_LOGGING_LEVEL
+                    value: INFO
+                  - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP
+                  - name: CUDA_CACHE_PATH
+                    value: /var/cache/vllm/cuda
+                  - name: CCACHE_DIR
+                    value: /var/cache/vllm/ccache
+                  - name: VLLM_CACHE_ROOT
+                    value: /var/cache/vllm/vllm
+                  - name: FLASHINFER_WORKSPACE_BASE
+                    value: /var/cache/vllm/flashinfer
+                  - name: HF_HUB_CACHE
+                    value: /var/cache/huggingface
+                ports:
+                  - containerPort: 8200
+                    name: vllm-rank0
+                    protocol: TCP
+                  - containerPort: 8201
+                    name: vllm-rank1
+                    protocol: TCP
+                  - containerPort: 8202
+                    name: vllm-rank2
+                    protocol: TCP
+                  - containerPort: 8203
+                    name: vllm-rank3
+                    protocol: TCP
+                  - containerPort: 8204
+                    name: vllm-rank4
+                    protocol: TCP
+                  - containerPort: 8205
+                    name: vllm-rank5
+                    protocol: TCP
+                  - containerPort: 8206
+                    name: vllm-rank6
+                    protocol: TCP
+                  - containerPort: 8207
+                    name: vllm-rank7
+                    protocol: TCP
+                  - containerPort: 8208
+                    name: supervisor
+                    protocol: TCP
+                startupProbe:
+                  httpGet:
+                    path: /health
+                    port: supervisor
+                  initialDelaySeconds: 0
+                  periodSeconds: 1
+                  timeoutSeconds: 5
+                  failureThreshold: 2700
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: supervisor
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: supervisor
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+                resources:
+                  limits:
+                    ephemeral-storage: 1Ti
+                    memory: 512Gi
+                    nvidia.com/gpu: '8'
+                  requests:
+                    cpu: 32
+                    ephemeral-storage: 1Ti
+                    memory: 512Gi
+                    nvidia.com/gpu: '8'
+                volumeMounts:
+                  - name: dshm
+                    mountPath: /dev/shm
+                  - name: hf-cache
+                    mountPath: /var/cache/huggingface
+                  - name: jit-cache
+                    mountPath: /var/cache/vllm
+    podCliqueScalingGroups:
+      - name: prefill-group
+        cliqueNames: [prefill]
+        replicas: 1
+        minAvailable: 1
+      - name: decode-group
+        cliqueNames: [decode]
+        replicas: 1
+        minAvailable: 1

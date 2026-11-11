@@ -9,7 +9,7 @@ Traditional Kubernetes workload primitives (such as Deployments and StatefulSets
 * **Multi-Node Pod Groups:** Large models distributed via tensor, data, or expert parallelism require a leader coordinator and multiple worker pods that must be scheduled, placed, and restarted together as a single atomic unit.
 * **Multi-Role Topologies:** Disaggregated architectures split serving into distinct prefill and decode stages that must be deployed with synchronized revisions, co-located within high-speed interconnect domains, and scaled in tandem as unified slices.
 
-llm-d builds on two complementary Kubernetes SIG Apps APIs to address these challenges:
+llm-d builds on two complementary Kubernetes SIG Apps APIs to address these challenges, and supports Grove as an alternative for wide expert parallelism:
 
 ## Supported APIs
 
@@ -33,20 +33,31 @@ Learn more in the [LeaderWorkerSet deep dive](leaderworkerset.md).
 
 Learn more in the [DisaggregatedSet deep dive](disaggregatedset.md).
 
+### [Grove](grove.md)
+
+[Grove](grove.md) describes a whole multi-role, multi-node serving system as one `PodCliqueSet`. The [wide expert parallelism guide](../../../guides/wide-ep/README.md#grove-orchestration) can deploy its NVIDIA GPU model servers on Grove instead of a `DisaggregatedSet`. Key capabilities include:
+
+* **Hierarchical Gang Scheduling:** Publishes each group's `minAvailable` as `PodGang` resources for a gang-scheduling backend such as the KAI Scheduler.
+* **Scaling Groups:** Scales sets of pod groups (`PodCliqueScalingGroup`s) as units, each replica one complete multi-node group.
+* **Topology-Aware Placement:** Packs pods into racks or NVLink domains, and can configure NVIDIA Multi-Node NVLink automatically.
+
+Learn more in the [Grove deep dive](grove.md).
+
 ## Comparison
 
-| Feature | LeaderWorkerSet (LWS) | DisaggregatedSet |
-| --- | --- | --- |
-| **Primary Abstraction** | Homogeneous pod group (leader + workers) | Multi-role topology (e.g., prefill + decode) |
-| **Workload Focus** | Multi-node tensor, data, or expert parallelism | Disaggregated serving architectures |
-| **Rollout Unit** | Per-group pod rollout | Coordinated rollout across all roles |
-| **Topology Domain** | Node-level or rack-level pod groups | Slice-level placement across interconnect domains |
-| **Sub-Controllers** | Manages Pods directly | Generates and manages child `LeaderWorkerSet` resources |
+| Feature | LeaderWorkerSet (LWS) | DisaggregatedSet | Grove |
+| --- | --- | --- | --- |
+| **Primary Abstraction** | Homogeneous pod group (leader + workers) | Multi-role topology (e.g., prefill + decode) | Multi-role, multi-node system (`PodCliqueSet`) |
+| **Workload Focus** | Multi-node tensor, data, or expert parallelism | Disaggregated serving architectures | Disaggregated, multi-node serving |
+| **Rollout Unit** | Per-group pod rollout | Coordinated rollout across all roles | Per-role rolling recreate (default), or coherent units across roles |
+| **Topology Domain** | Node-level or rack-level pod groups | Slice-level placement across interconnect domains | Topology constraints at system, scaling group or clique level |
+| **Sub-Controllers** | Manages Pods directly | Generates and manages child `LeaderWorkerSet` resources | Generates `PodClique`, `PodCliqueScalingGroup` and `PodGang` resources |
 
 ## Operations
 
 For operational runbooks, Kueue configuration, and rolling update strategies, see:
 
 * [Operating the DisaggregatedSet](../../operations/disaggregation/disaggregatedset.md)
+* [Install Grove](../../infrastructure/model-server-orchestration.md#alternative-install-grove)
 * [Disaggregated Serving Architecture](../disaggregation/pd-disaggregation.md)
 * [Wide Expert Parallelism Architecture](../disaggregation/wide-expert-parallelism.md)

@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
-# Graceful shutdown for vLLM model server Deployments, LeaderWorkerSets and
-# DisaggregatedSets, so rolling updates, scale-down and node drains do not fail
+# Graceful shutdown for vLLM model server Deployments, LeaderWorkerSets,
+# DisaggregatedSets and Grove PodCliqueSets, so rolling updates, scale-down and node drains do not fail
 # in-flight requests. Uses the same preStop + drain pattern as KServe's vLLM
 # presets. See docs/operations/lifecycle/graceful-shutdown.md.
 #
@@ -26,7 +26,8 @@ kind: Component
 # terminationGracePeriodSeconds in its own patch, which overrides the value here.
 #
 # The patches assume the vLLM container is containers/0. For a
-# DisaggregatedSet they patch roles/0 and roles/1 only; any other role, and any
+# DisaggregatedSet they patch roles/0 and roles/1 only, and for a PodCliqueSet
+# cliques/0 and cliques/1 only; any other role or clique, and any
 # LeaderWorkerSet leaderTemplate, must set these fields itself.
 
 patches:
@@ -71,6 +72,27 @@ patches:
         value: 75
       - op: add
         path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/lifecycle
+        value:
+          preStop:
+            exec:
+              command: ["/bin/sleep", "15"]
+  - target:
+      kind: PodCliqueSet
+    patch: |-
+      - op: add
+        path: /spec/template/cliques/0/spec/podSpec/terminationGracePeriodSeconds
+        value: 75
+      - op: add
+        path: /spec/template/cliques/0/spec/podSpec/containers/0/lifecycle
+        value:
+          preStop:
+            exec:
+              command: ["/bin/sleep", "15"]
+      - op: add
+        path: /spec/template/cliques/1/spec/podSpec/terminationGracePeriodSeconds
+        value: 75
+      - op: add
+        path: /spec/template/cliques/1/spec/podSpec/containers/0/lifecycle
         value:
           preStop:
             exec:
