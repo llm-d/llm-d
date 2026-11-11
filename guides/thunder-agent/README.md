@@ -293,7 +293,6 @@ On GKE, raise the backend timeout of the `GCPBackendPolicy` above `headWaitStarv
 
 <!-- guide:deploy.gateway_timeout start -->
 ```bash
-# only for PROVIDER_NAME=gke; other providers use httpRoute.requestTimeout: 0s
 kubectl patch gcpbackendpolicy ${GUIDE_NAME} -n ${NAMESPACE} --type merge \
     -p '{"spec":{"default":{"timeoutSec":2400}}}'
 ```

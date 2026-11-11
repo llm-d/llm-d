@@ -70,8 +70,6 @@ deploy:
             --set provider.name=${PROVIDER_NAME} \
             -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
-  # The charts hard-code proxy timeouts below headWaitStarvationMs (1800 s):
-  # Envoy ext_proc message_timeout 1000 s, GKE GCPBackendPolicy 300 s.
   standalone_timeout:
     - run: |
         kubectl get configmap envoy -n ${NAMESPACE} -o yaml \
@@ -81,7 +79,6 @@ deploy:
 
   gateway_timeout:
     - run: |
-        # only for PROVIDER_NAME=gke; other providers use httpRoute.requestTimeout: 0s
         kubectl patch gcpbackendpolicy ${GUIDE_NAME} -n ${NAMESPACE} --type merge \
             -p '{"spec":{"default":{"timeoutSec":2400}}}'
 
