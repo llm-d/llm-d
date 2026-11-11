@@ -1,0 +1,120 @@
+# inference-perf job for the kimi-k3-1 guide: replays a multi-turn coding-style
+# workload (plain prompts; tool_call_latency_sec only pauses the client between turns) against the kimi-k3-1-epp Service. Render with envsubst after
+# exporting CONCURRENCY_LEVEL, NUM_REQUESTS and SEED (see the guide's
+# Benchmarking section).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-perf-config
+  labels:
+    app: inference-perf
+data:
+  config.yaml: |
+    load:
+      type: concurrent
+      num_workers: 8
+      worker_max_concurrency: 1000
+      # Cold Turn-0 prefills of ~220K-420K tokens at 4,209 tok/s can exceed 600s when queued at C>=16.
+      request_timeout: 1800
+      stages:
+      - num_requests: ${NUM_REQUESTS}
+        concurrency_level: ${CONCURRENCY_LEVEL}
+    api:
+      type: completion
+      streaming: true
+    server:
+      type: sglang
+      model_name: moonshotai/Kimi-K3.1-Pro
+      base_url: http://kimi-k3-1-epp
+    # Kimi-K3.1 ships a custom (tiktoken-based) tokenizer, so loading it runs the tokenizer code
+    # from the Hugging Face repo's main branch inside this Job (inference-perf has no revision
+    # field to pin it). The model servers do not: they read the local copy with HF_HUB_OFFLINE=1.
+    tokenizer:
+      pretrained_model_name_or_path: moonshotai/Kimi-K3.1-Pro
+      trust_remote_code: true
+    data:
+      type: conversation_replay
+      conversation_replay:
+        seed: ${SEED}
+        # Matches SGLang's --context-length=491520 (LocalUserSession already reserves max_tokens + 200).
+        max_model_len: 491520
+        num_conversations: ${CONCURRENCY_LEVEL}
+        shared_system_prompt_len: 3000
+        # Sized so sessions grow across 20 turns up to ~460K tokens without Turn-0 truncation,
+        # and active KV exceeds the 532K/replica HBM pool to exercise the 1.06M/replica HiCache tier.
+        dynamic_system_prompt_len:
+          type: lognormal
+          min: 32000
+          max: 420000
+          mean: 220000
+          std_dev: 160000
+        turns_per_conversation:
+          type: lognormal
+          min: 20
+          max: 200
+          mean: 50
+          std_dev: 30
+        input_tokens_per_turn:
+          type: lognormal
+          min: 100
+          max: 10000
+          mean: 1500
+          std_dev: 1200
+        output_tokens_per_turn:
+          type: lognormal
+          min: 50
+          max: 4096
+          mean: 425
+          std_dev: 825
+        tool_call_latency_sec:
+          type: lognormal
+          min: 1
+          max: 100
+          mean: 15
+          std_dev: 55
+    report:
+      request_lifecycle:
+        summary: true
+        per_stage: true
+        per_request: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inference-perf
+  labels:
+    app: inference-perf
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: inference-perf
+    spec:
+      containers:
+        - name: inference-perf
+          image: quay.io/inference-perf/inference-perf:v0.6.0
+          command: ["inference-perf"]
+          args: ["--config_file", "/etc/config/config.yaml"]
+          env:
+            - name: RAYON_NUM_THREADS
+              value: "4"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            requests:
+              cpu: "4"
+              memory: 16Gi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+              readOnly: true
+      restartPolicy: Never
+      volumes:
+        - name: config-volume
+          configMap:
+            name: inference-perf-config

@@ -171,8 +171,8 @@ deploy:
         skip_in: [ci]
         run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
-  # The Rebellions NPU overlay serves gpt-oss-120b with prefix caching off, so the
-  # router drops the prefix-cache-affinity-filter (router/npu.rbln.values.yaml).
+  # The Rebellions NPU runtime reuses prefixes in 512-token sub-blocks without
+  # publishing that unit, so the router pins it (router/npu.rbln.values.yaml).
   # No nightly covers this accelerator; skip_in: [ci] keeps the README-parsing
   # nightlies from harvesting the export.
   accelerator_values:

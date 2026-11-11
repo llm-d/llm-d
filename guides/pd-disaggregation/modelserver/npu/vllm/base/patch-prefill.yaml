@@ -47,15 +47,16 @@ spec:
                     - "--pipeline-parallel-size=4"
                     - "--block-size=4096"
                     - "--max-num-batched-tokens=512"
+                    - "--kv-cache-dtype=fp8"
+                    # Both roles must hash blocks alike, or decode cannot reuse the prefix cache prefill sends over NIXL;
+                    # sha256_cbor is the one that matches LMCache's hash.
                     - "--prefix-caching-hash-algo=sha256_cbor"
+                    # Prefetching shortens the weight load.
                     - "--safetensors-load-strategy=prefetch"
-                    - "--trust-remote-code"
                     - "--enable-auto-tool-choice"
                     - "--tool-call-parser=minimax_m2"
+                    - "--reasoning-parser=minimax_m2"
                     - '--structured-outputs-config={"backend":"xgrammar","disable_any_whitespace":true,"enable_in_reasoning":true}'
-                    # A pp4 rank holds one stage rather than all layers, so KV per block is a
-                    # quarter of dp4's. 201 = max-num-seqs x 50, plus the null block.
-                    - "--num-gpu-blocks-override=201"
                     - "--max-num-seqs=4"
                     - '--kv-transfer-config={"kv_connector":"RblnNixlConnector","kv_role":"kv_both","kv_buffer_device":"rbln","kv_connector_extra_config":{"name":"nixl"}}'
                   env:
@@ -73,18 +74,8 @@ spec:
                     - name: VLLM_NIXL_SIDE_CHANNEL_PORT
                       value: "5600"
                     # The pipeline spans all four claimed NPUs; the runtime does not infer that.
-                    - name: RBLN_DEVICES
+                    - name: RBLN_VISIBLE_DEVICES
                       value: "0,1,2,3"
-                    - name: RBLN_FORCE_CCL_ASYNC
-                      value: "1"
-                    - name: RBLN_LOCAL_IP
-                      value: 127.0.0.1
-                    - name: RBLN_ROOT_IP
-                      value: 127.0.0.1
-                    - name: RBLN_WEIGHT_FREE
-                      value: "1"
-                    - name: SAFETENSORS_FAST_GPU
-                      value: "1"
                     # The decode sidecar holds an idle upstream connection for about 90s while
                     # vLLM closes one after 5s, so a reused connection would reset the handoff.
                     - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
@@ -94,28 +85,8 @@ spec:
                       value: "9600"
                     - name: VLLM_RPC_TIMEOUT
                       value: "1800000"
-                    - name: VLLM_RBLN_AUTO_PORT
-                      value: "1"
-                    - name: VLLM_RBLN_BATCH_ATTN_OPT
-                      value: "1"
-                    - name: VLLM_RBLN_COMPILE_STRICT_MODE
-                      value: "1"
-                    - name: VLLM_RBLN_DISABLE_OFFLOAD
-                      value: "1"
-                    - name: VLLM_RBLN_MOE_REDUCE_SCATTER
-                      value: "1"
-                    - name: VLLM_RBLN_SAMPLER
-                      value: "1"
-                    - name: VLLM_RBLN_SORT_BATCH
-                      value: "1"
-                    - name: VLLM_RBLN_SUB_BLOCK_CACHE
-                      value: "0"
-                    - name: VLLM_RBLN_USE_DEVICE_TENSOR
-                      value: "1"
-                    - name: VLLM_RBLN_USE_VLLM_MODEL
-                      value: "1"
                   resources:
-                    # Anonymous memory measured 59Gi for this role once serving; the rest of the
+                    # Anonymous memory measured 20Gi for this role once serving; the rest of the
                     # limit is headroom for the page cache the model read charges to the cgroup.
                     # Keep cpu even — a node with an SMT-aligned static CPU manager rejects odd
                     # counts.

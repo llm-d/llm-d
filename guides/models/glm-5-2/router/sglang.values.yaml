@@ -21,17 +21,22 @@
 # KV size from /metrics, so the index is sized by hand per DP rank (one rank =
 # one endpoint) in 64-token blocks (the SGLang page size), for a DEP8 prefill
 # rank on H200:
-# - GPU: 125,696 KV tokens per DEP8 prefill rank -> 1,964 blocks;
-# - CPU: hicache component, 64 GB per rank = 1,235,008 tokens -> 19,297 blocks;
-# - total: 21,261 blocks.
+# - GPU: 261,376 KV tokens per DEP8 prefill rank -> 4,084 blocks;
+# - CPU: hicache component, 100 GB per rank = 1,929,664 tokens -> 30,151 blocks;
+# - total: 34,235 blocks.
 #
-# Every standard SGLang deployment overlay includes hicache. If you disable
-# hicache (for example in the benchmark/baseline overlay or with
-# HICACHE_SIZE_GB_PER_RANK=0), set lruCapacityPerServer to 1964 so the router
-# does not count CPU cache blocks that do not exist. When hicache-fs adds a
-# shared storage tier (L3), keep lruCapacityPerServer sized to GPU + CPU: the
-# approximate index tracks per-rank locality, while the shared L3 volume is
-# accessible from every prefill rank.
+# Common lruCapacityPerServer values on H200 (every standard deployment overlay
+# includes hicache at 100 GB/rank = 30,151 CPU blocks):
+# - 1-node DEP8 + hicache 100 GB/rank (default): 34235 (4,084 GPU + 30,151 CPU)
+# - 1-node DEP8 without hicache (benchmark/baseline/p1w1d1w1): 4084
+# - 1-node DEP8 + hicache 150 GB/rank (45,226 CPU blocks): 49310
+# - 2-node DEP16 (0.85 HBM = 964,608 tokens = 15,072 GPU blocks): 45223 with
+#   hicache 100 GB/rank, or 15072 without hicache.
+# For any other memory fraction or hardware, divide #tokens from the prefill
+# "KV Cache is allocated" startup log by 64 and add the CPU blocks.
+# When hicache-fs adds a shared storage tier (L3), keep lruCapacityPerServer
+# sized to GPU + CPU: the approximate index tracks per-rank locality, while the
+# shared L3 volume is accessible from every prefill rank.
 router:
   modelServers:
     type: sglang
@@ -54,13 +59,15 @@ router:
           parameters:
             autoTune: false
             blockSizeTokens: 64
-            lruCapacityPerServer: 21261
+            lruCapacityPerServer: 34235
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
-            # TODO: measured for vLLM on an H200 GLM-5.2-FP8 DP8 cell, not yet
-            # for SGLang (guides/recipes/router/calibration).
-            peakPrefillThroughput: 3585
+            # Peak single-rank prefill rate in tokens/s per DP-rank endpoint,
+            # taken as the max "input throughput (token/s)" across 1,938 uncached
+            # 2048-token scheduler batches at c32 on H200 DEP8. calibrate.sh is
+            # not used because 1s RustServerIdleSleeper sleep ticks inflate TTFT.
+            peakPrefillThroughput: 3975
         - type: token-load-scorer
         - type: active-request-scorer
         - type: max-score-picker

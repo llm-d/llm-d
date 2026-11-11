@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - mooncake.yaml
+  - prefill-lws.yaml
+  - decode-lws.yaml
+
+namePrefix: kimi-k3-1-gpu-vllm-
+
+configurations:
+  - namereference.yaml
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/release
+
+# Kimi-K3.1-Pro day-0 vLLM build (vllm/vllm-openai:kimi-k31), including KDA + gated
+# sparse-MLA (DSA) attention, MXFP4 experts, nvfp4_ds_mla KV cache, ReplaySSM, and
+# the DSpark EAGLE3 speculative drafter. Overrides the image after gpu-vllm/release runs.
+images:
+  - name: docker.io/vllm/vllm-openai
+    newName: docker.io/vllm/vllm-openai
+    newTag: kimi-k31@sha256:904520f3fefc32414abcedf6ba8dadc9c5978db1bcdaf40f58d6b9036ef30a99

@@ -69,7 +69,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=fast-model-actuation
 export NAMESPACE=llm-d-fast-model-actuation
-export FMA_VERSION=0.7.1
+export FMA_VERSION=0.8.0
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
@@ -245,7 +245,7 @@ kubectl run curl-test --rm -i --restart=Never \
 
 ### 3. Demonstrate Sleep/Wake
 
-This section demonstrates FMA's core value: fast model actuation via sleep/wake. Scaling the requesting pods to `0` triggers the FMA controller to unbind them from their launchers and tell vLLM to sleep (the model stays in GPU memory but stops serving). Scaling back up re-binds them and wakes the sleeping instances — resuming in seconds rather than cold-starting:
+This section demonstrates FMA's core value: fast model actuation via sleep/wake. Scaling the requesting pods to `0` triggers the FMA controller to unbind them from their launchers and tell vLLM to sleep (model tensors move to host memory while the CUDA context retains a small amount of GPU memory). Scaling back up re-binds them and wakes the sleeping instances — resuming in seconds rather than cold-starting:
 
 <!-- guide:verify.tests.sleep_wake start -->
 ```bash

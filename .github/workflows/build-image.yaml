@@ -149,20 +149,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch' && inputs.force_build != true && inputs.platforms == ''
         id: filter
         with:
-          filters: |
-            xpu:
-              - 'docker/Dockerfile.xpu'
-              - 'docker/common-versions'
-            sglang-xpu:
-              - 'docker/common-versions'
-              - 'patches/sglang_xpu_source_pins.patch'
-            cpu:
-              - 'docker/Dockerfile.cpu'
-              - 'docker/common-versions'
-              - 'docker/scripts/cpu/**'
-            rdma-tools:
-              - 'docker/Dockerfile.rdma-tools'
-              - 'docker/common-versions'
+          filters: .github/filters/image-paths.yaml
 
   rdma-tools-build-llm-d:
     needs: [detect-changes, resolve-registry]

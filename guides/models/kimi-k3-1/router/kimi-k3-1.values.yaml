@@ -1,0 +1,57 @@
+## Kimi-K3.1-Pro (TPU v7x, SGLang, TOPOLOGY=unified) guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which the token-load-scorer and affinity filter consume) is local to each
+    # EPP process, so multiple replicas would each see only a fraction of the
+    # per-endpoint load and incorrectly gate the affinity filter.
+    replicas: 1
+    pluginsConfigFile: kimi-k3-1-plugins.yaml
+    pluginsCustomConfig:
+      kimi-k3-1-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: approx-prefix-cache-producer
+          parameters:
+            # Matches SGLang's --page-size=128 and --context-length=491520.
+            blockSizeTokens: 128
+            maxPrefixTokensToMatch: 491520
+            # autoTune sizes the LRU from HBM blocks only and ignores the HiCache host tier
+            # (llm-d/llm-d-router#1650); sized for the host tier instead. Unit: 128-token
+            # blocks, from the engine's startup log for one TP rank (every rank holds the same
+            # tokens): HBM KV pool 532,352 tokens + HiCache host pool 1,064,832 tokens
+            # (--hicache-ratio 2) = 1,597,184 tokens / 128.
+            autoTune: false
+            lruCapacityPerServer: 12478
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured with guides/recipes/router/calibration/calibrate.sh through the router
+            # (CHUNK_SIZE=4096, the engine's --chunked-prefill-size) on tpu7x 2x2x4,
+            # TP=32/EP=8. Re-measure for other hardware/models.
+            peakPrefillThroughput: 4209
+        - type: token-load-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    # core-metrics-extractor reads SGLang's metric names.
+    type: sglang
+    matchLabels:
+      llm-d.ai/guide: "kimi-k3-1"
+      # Only rank 0 of each 4-host engine serves the API.
+      llm-d.ai/inference-serving: "true"

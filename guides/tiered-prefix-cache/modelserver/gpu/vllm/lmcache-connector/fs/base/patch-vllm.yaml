@@ -17,6 +17,9 @@ spec:
             - "1024"
             - "--kv-transfer-config"
             - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
             - "--shutdown-timeout=45"
           env:
             - name: HF_TOKEN
