@@ -2,89 +2,96 @@
 
 ## Overview
 
-> [!WARNING]
-> This is an **experimental architecture**. It is less mature and less tested than
-> [P/D Disaggregation](../pd-disaggregation/README.md), and may change in upcoming
-> releases.
+This guide deploys the **Coordinator**, a standalone, stateless service in front of the
+Encode / Prefill / Decode (EPD) disaggregation topology. It replaces the per-decode-pod
+[Routing Sidecar](https://github.com/llm-d/llm-d-router/tree/main/pkg/sidecar) which dispatches a fixed
+prefill→decode sequence.
+In both designs, pod selection still runs through the EPP over the
+[Endpoint Picker protocol](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/004-endpoint-picker-protocol)
+(`ext_proc`), but orchestration shifts from a single upfront EPP cycle, which picks every
+pod before decode is even contacted, to one EPP call per phase, made right before that
+phase runs.
 
-This guide deploys a standalone **Coordinator** service in front of an Encode /
-Prefill / Decode (EPD) topology. Instead of the per decode pod [Routing
-Sidecar](../../docs/architecture/disaggregation/pd-disaggregation.md) that today's
-[P/D Disaggregation](../pd-disaggregation/README.md) guide uses to dispatch a fixed
-prefill→decode sequence, the Coordinator is a single service that drives a
-**configurable pipeline** over each request:
+Each request runs through a configurable pipeline of steps:
 
 ```
 replace-media-urls → render → conditional-decode → encode → prefill → decode
 ```
 
-Every call the Coordinator makes for a phase (`conditional-decode`, `encode`, `prefill`,
-`decode`) goes through the same Gateway and the same EPP, which picks the pod for that
-phase via the [Endpoint Picker protocol](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/004-endpoint-picker-protocol)
-(`ext_proc`). `conditional-decode` tries decode first, optimistically, before running
-encode or prefill at all: if the chosen decode pod already has what it needs (e.g. the
-prompt is already cached), it serves the request directly and the full pipeline never
-runs. Only if decode responds `412 Precondition Failed` does the Coordinator fall back
-to the full `encode → prefill → decode` cascade — which is also how a request with
-multiple multimedia entries fans encode out in parallel, one call per entry.
+| Step | What it does | EPP call |
+| --- | --- | --- |
+| `replace-media-urls` | Fetches the request's media URLs concurrently, optionally through a caching proxy ([step 4](#4-optional-deploy-the-multimedia-downloader-caching-proxy)) | None |
+| `render` | Tokenizes and normalizes the prompt once, through the [render Service](render/service.yaml) | None |
+| `conditional-decode` | Asks decode to serve the request directly (`Prefer: if-available`); the pipeline stops here on a hit and continues on `412` | `decode` profile |
+| `encode` | One call per multimodal entry, issued in parallel | `encode` profile, per entry |
+| `prefill` | Remote prefill; hands the KV-transfer parameters on to decode | `prefill` profile |
+| `decode` | Proxies to the client's original path and streams the response back | `decode` profile |
 
-The probe is a `Prefer: if-available` request, and the EPP answers it only when a gate
-plugin is configured to claim that header: without one it default-denies with `412`, so
-every request takes the full cascade. This guide's router configures the gate
-(`prefix-based-pd-decider`) and the decode-side prefix index it reads from — see
-[Deploy the llm-d Router](#1-deploy-the-llm-d-router).
+Each phase call goes back out through the proxy that fronts the EPP and carries an `x-llm-d-epp-profile` header, which
+selects the EPP scheduling profile for that phase.
+
+**Conditional decode.** `conditional-decode` tries decode first, before running encode
+or prefill at all. It sends the request to the decode profile with an
+[RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: if-available` header: serve
+this now if you can, or tell me you can't. If the chosen decode pod already holds the
+prompt's KV cache, or the prompt is short enough that remote prefill would cost more than
+it saves, the pod serves the request and the rest of the pipeline never runs. Otherwise
+the EPP answers `412 Precondition Failed`, and the Coordinator treats that as a signal
+rather than an error and runs the full `encode → prefill → decode` cascade. The EPP only
+answers the probe when a gate plugin is configured to claim the header. Without one it
+default-denies with `412`, so every request takes the full cascade. This guide's router
+configures the gate (`prefix-based-pd-decider`) and the decode-side prefix index it reads
+from. See [Deploy the llm-d Router](#1-deploy-the-llm-d-router).
+
+The Coordinator is a candidate to **replace the routing sidecar**. It changes three things
+about how requests are orchestrated:
+
+* **Composable pipeline.** The pipeline is a plain list of named steps in the
+  Coordinator's `ConfigMap` ([`coordinator/base/configmap.yaml`](coordinator/base/configmap.yaml)).
+  You add, remove, or reorder steps by editing that list, without code changes or a new
+  image. The [PD-only note](#installation-instructions) below is a worked example:
+  dropping `replace-media-urls`, `render`, and `encode` turns this into a text-only P/D
+  deployment. The sidecar only dispatches a fixed cascade, so each new orchestration
+  concern there needs a new header contract between the EPP and the sidecar.
+* **Deferred, per-phase selection.** The sidecar's EPP picks the encode, prefill, *and*
+  decode pods in one scheduling cycle, before the request has reached encode or prefill.
+  The Coordinator calls the EPP for a phase only when that phase is about to run, so the
+  decode pod is picked after encode and prefill have finished, on the pool's state at
+  that moment. This pays off only in specific regimes. See
+  [When to use the Coordinator](#when-to-use-the-coordinator).
+* **No sidecar.** Nothing extra runs on the decode pod, so there is no sidecar image to
+  build, version, and upgrade in lockstep with vLLM. The Coordinator keeps all
+  per-request state on the request itself, so it runs as a plain Deployment behind a
+  Service: any replica serves any request, with no leader election or sticky routing.
 
 See the [Coordinator architecture doc](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_architecture.md)
-for the full request-flow sequence diagram and design rationale.
-
-This is the experimental part of the architecture: the Coordinator is a candidate to
-**replace the routing sidecar**, and it changes two things about how requests are
-orchestrated:
-
-* **Modularity** — the pipeline is a plain list of named steps in the Coordinator's
-  `ConfigMap` (see [`coordinator/base/configmap.yaml`](coordinator/base/configmap.yaml)). Steps
-  can be added, removed, or reordered by editing that list — no code changes, no
-  rebuilding an image. The [PD-only note](#installation-instructions) below is a
-  worked example: dropping the `replace-media-urls`, `render`, and `encode` steps is
-  all it takes to turn this into a text-only P/D deployment.
-* **Deferred decoding** — with the sidecar, the EPP picks the encode, prefill, *and*
-  decode pods together in one scheduling cycle, before the request has even reached
-  encode or prefill. By the time decode actually starts, whatever made that decode pod
-  look best (queue depth, KV cache state, in-flight load) may no longer hold, so the
-  pre-picked pod can be a stale, sub-optimal choice. The Coordinator only calls the EPP
-  for a phase when that phase is actually about to run, so the decode pod is selected
-  after encode/prefill have already completed — on the pool's current state, not a
-  snapshot taken one or more phases earlier.
+for the full request-flow sequence diagram, the step-authoring guide, and the design
+rationale.
 
 The three roles run as one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/)
 (`pd-disagg-coord`) with an `encode`, a `prefill` and a `decode` role in a single slice,
 the same orchestration the [P/D Disaggregation](../pd-disaggregation/README.md) guide
-uses: the set rolls all three roles out as one version and can replicate the whole
+uses. The set rolls all three roles out as one version and can replicate the whole
 pipeline into independent copies (`slices`). It requires the LeaderWorkerSet controller
 (see [Prerequisites](#prerequisites)) and is covered in
 [Operating the DisaggregatedSet](#operating-the-disaggregatedset).
 
-The result of this guide is a combination of two independent choices you make in
-[Installation Instructions](#installation-instructions): which of two **EPP
-topologies** to run, and whether to run the full **EPD** pipeline or drop the
-`encode` role for a **PD-only** deployment (see the PD-only note there). The two
-choices don't interact — any EPP topology works with either pipeline scope. The EPP
-topology choice:
+In [Installation Instructions](#installation-instructions) you make two independent
+choices: which **EPP topology** to run, and whether to run the full **EPD** pipeline or
+drop the `encode` role for a **PD-only** deployment (see the PD-only note there). Either
+EPP topology works with either pipeline scope:
 
-* **Either: 1 Endpoint Picker (EPP)** covering all three roles, and **1 InferencePool**
-  spanning them. The EPP runs one scheduling profile per call — `encode`, `prefill`,
-  or `decode` — selected by the Coordinator's `x-llm-d-epp-profile` header via the
+* **Either 1 Endpoint Picker (EPP)** covering all three roles, with **1 InferencePool**
+  spanning them. The EPP runs one scheduling profile per call (`encode`, `prefill`, or
+  `decode`), selected by the Coordinator's `x-llm-d-epp-profile` header through the
   [header-profile-handler](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/scheduling/profilehandler/headerprofile/README.md)
-  plugin. Each profile filters the shared pool down to its own role with a role filter.
-* **Or: 3 EPPs**, one per role, each with its own **InferencePool** scoped to that
-  role's pods via `modelServers.matchLabels`. Each EPP runs a single `default`
-  scheduling profile picked implicitly by the chart's `single-profile-handler`
-  (no profile-selection plugin needed, since a role-scoped EPP never has to
-  choose between profiles) — no custom image either. Each role's file does
-  configure its own scorer plugins (see below); that's just picking which
-  endpoint within the role, not which profile to run. The Gateway's `HTTPRoute`
-  (not the EPP) is what dispatches each `x-llm-d-epp-profile` value to the right EPP's
-  InferencePool.
+  plugin. Each profile filters the shared pool down to its own role.
+* **Or 3 EPPs**, one per role, each with its own **InferencePool** scoped to that role's
+  pods through `modelServers.matchLabels`. Each EPP runs a single `default` profile,
+  picked by the chart's `single-profile-handler`, so it needs no profile-selection plugin
+  or custom image. Each role still configures its own scorers, which pick an endpoint
+  within the role. The Gateway's `HTTPRoute`, not the EPP, sends each
+  `x-llm-d-epp-profile` value to the right role's InferencePool.
 
 ### When to use the Coordinator
 
@@ -101,18 +108,21 @@ Under concurrent load it disappears entirely:
 
 | Setting | TTFT (Coordinator vs. sidecar) | E2E latency / ITL |
 |---|---|---|
-| Single request, text (`gpt-oss-120b`, 1–1,000 input or 100–2,500 output tokens) | median 1.6–4.9% higher | within ±1.5% / ±0.7% |
+| Single request, text (`gpt-oss-120b`, 1–1,000 input or 100–2,500 output tokens) | median 1.6–4.9% higher (at most 2.4ms) | within ±1.5% / ±0.7% |
 | Concurrent spikes, text (`DeepSeek-V2`, 50–500 concurrent) | 10–12% *lower* at ≤100 concurrent, tied above | tied, no consistent edge |
 | Prefill-bound multimodal (`Qwen3-VL-235B`, 1P/3D) | 4–8% higher | tied |
 | Decode-contended multimodal, closed loop (`Qwen3-VL-235B`, 2P/2D, 50–300 concurrent) | p99 within 1–4% | within ~2% |
 
-**The benefit is real but conditional.** With heavy-tailed multimodal requests
-released in bursts against KV-saturated decode pods, the Coordinator delivers 4–10%
-higher throughput and 5–10% lower E2E latency at every burst size, and at the
-heaviest burst cuts p99 TTFT by 15% and mean TPOT by 12%, because its later decode
-pick keeps the decode pods balanced where the sidecar's up-front placement lets them
-drift apart. Under uniform or steady load, or when prefill is the bottleneck, the two
-architectures tie.
+**The benefit is real but conditional.** When heavy-tailed multimodal requests arrive in
+bursts against KV-saturated decode pods, the Coordinator delivers 4–10% higher throughput
+and 5–10% lower mean E2E latency at every burst size. At the heaviest burst it also cuts
+p99 TTFT by 15% and mean TPOT by 12%. Its later decode pick keeps the decode pods
+balanced, where the sidecar's up-front placement lets them drift apart. Under uniform or
+steady load, or when prefill is the bottleneck, the two architectures tie.
+
+All of these runs disable `conditional-decode` so that both arms prefill every request.
+They measure the Coordinator's worst case, not its shipped configuration. See
+[What the numbers don't cover](#what-the-numbers-dont-cover).
 
 **Use the Coordinator when:**
 
@@ -122,7 +132,7 @@ architectures tie.
   sequence only. This is the primary reason to pick it, and it is independent of the
   numbers above.
 * **Decode is the contended stage, per-request load is heterogeneous, and arrivals
-  are bursty.** All three together are what deferred decoding needs to pay off (see
+  are bursty.** Deferred decoding needs all three to pay off (see
   [When to expect an advantage from deferred decoding](#deferred-decoding-under-heavy-multimodal-load-qwen3-vl-235b-h200)).
   Expect single- to low-double-digit gains in throughput and tail latency, which more
   than cover the few milliseconds of TTFT the extra hop costs.
@@ -131,17 +141,13 @@ architectures tie.
   prefill, so the sidecar's early pick is working from staler data than in these
   benchmarks, and the Coordinator's gap will be larger than measured here.
 
-**Stay with the [P/D Disaggregation](../pd-disaggregation/README.md) sidecar when:**
+**Stay with the routing sidecar when:**
 
 * **It is text-only P/D and prefill is the bottleneck, or load is uniform and
-  steady.** The decode choice does not matter in that regime, so there is nothing for
-  deferred decoding to improve, and the Coordinator is a small net cost (a few percent
-  of TTFT).
+  steady.** The decode choice doesn't matter in that regime, so deferred decoding has
+  nothing to improve, and the Coordinator is a small net cost (a few percent of TTFT).
 * **Single-request TTFT is budgeted to the millisecond.** The overhead is small but
-  consistent, and only shows up there.
-* **You need the more mature path.** The Coordinator is experimental and less tested
-  (see the warning in the [Overview](#overview)); the sidecar is the established
-  architecture.
+  consistent, and that is the only place it shows up.
 
 ## Default Configuration
 
@@ -610,7 +616,7 @@ curl -X POST http://${IP}:${PORT}/v1/completions \
     }' | jq
 ```
 
-This short text-only prompt takes the fast path described in [Deferred decoding](#overview):
+This short text-only prompt takes the fast path described in [Conditional decode](#overview):
 `conditional-decode` serves it on the chosen decode pod and `encode` and `prefill` never
 run. With the shipped `nonCachedTokens: 8192`, the gate serves any prompt shorter than
 8192 tokens directly, cached or not, so sending it twice shows no change. Check which path
@@ -708,69 +714,61 @@ What to expect, measured on the `coreweave` overlay (1 slice, encode 2 / prefill
 
 The benchmarks in this section answer two separate questions about the Coordinator.
 [When to use the Coordinator](#when-to-use-the-coordinator) in the Overview condenses
-the results into guidance; the sections below hold the full setups and numbers.
+the results into guidance. The sections below give the full setups and numbers.
 
 1. **What does the Coordinator cost?** Every pipeline phase is its own round trip
-   through the Gateway and EPP, where the sidecar's decode pod calls prefill directly
+   through the Proxy and EPP, while the sidecar's decode pod calls prefill directly
    in one hop. [Overhead of the extra per-phase hop](#overhead-of-the-extra-per-phase-hop)
    measures that cost in isolation: both arms were forced down the same
    prefill → decode path on every request, so the only difference left was the number
    of hops.
 2. **What does the Coordinator buy?** It picks the decode pod only after prefill has
-   finished, on the pool's current state, where the sidecar commits prefill and decode
-   together before prefill starts.
+   finished, on the pool's state at that moment. The sidecar commits to prefill and
+   decode together before prefill starts.
    [Deferred decoding under heavy multimodal load](#deferred-decoding-under-heavy-multimodal-load-qwen3-vl-235b-h200)
    measures that benefit under a workload chosen to make the later pick matter.
 
 ### Overhead of the extra per-phase hop
 
 The Coordinator adds a real architectural cost per request: every pipeline phase
-(`encode`, `prefill`, `decode`) is its own round trip through the Gateway and EPP
+(`encode`, `prefill`, `decode`) is its own round trip through the Proxy and EPP
 (`conditional-decode` → `encode` → `prefill` → `decode`, each a separate `ext_proc`
-scheduling decision), versus the [P/D Disaggregation](../pd-disaggregation/README.md)
-sidecar's decode pod calling prefill directly in one hop. That's close to double the
+scheduling decision), versus the sidecar's decode pod calling prefill directly in one hop. That's close to double the
 local network hops for a P/D-only request.
 
-To isolate that hop-count difference instead of comparing two different decisions about
-*whether* to disaggregate a given request, both sides of the benchmark were configured
-to always take the full prefill → decode path: the sidecar ran with the routing
-sidecar's `always-disagg-pd-decider` plugin (always
-dispatching a separate prefill call), and the Coordinator ran the
-[PD-only pipeline](#installation-instructions) (`prefill` → `decode`, no
-`conditional-decode` step, so it never takes the optimistic decode-first fast path
-described in the [Overview](#overview)). With both sides guaranteed to hit prefill on
-every request, the only architectural difference left is the Coordinator's extra
-Gateway/EPP round trip per phase, and that extra hop count barely shows up in TTFT
-(time to first token) or TTOT/ITL (time per output token), and under concurrent load
-it doesn't show up at all: the Coordinator matches the sidecar's latency, and at
-several concurrency levels beats it.
+To isolate the hop count, both arms were forced down the full prefill → decode path on
+every request. Otherwise the comparison would mix in two different decisions about
+*whether* to disaggregate. The sidecar ran with `always-disagg-pd-decider`, which always
+dispatches a separate prefill call. The Coordinator ran a `prefill → decode` pipeline:
+the [PD-only pipeline](#installation-instructions) with its `conditional-decode` step
+removed, so the decode-first fast path never fired. With prefill guaranteed on both
+sides, the Coordinator's extra Gateway/EPP round trip per phase is the only remaining
+architectural difference.
 
 Both single-request sweeps below share the same deployment: `openai/gpt-oss-120b` on
 H200 GPUs, decode at 1 replica × TP4 (4 GPUs), prefill at 1 replica × TP1 (1 GPU), 5
-GPUs total, identical on both architectures.
+GPUs total, identical on both architectures. Prefill and decode were pinned to the same
+nodes on both arms to keep node variance out of the comparison.
 
 * **[Varying input prompt length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_prompt_always_disaggr_pinned)**
   (1, 10, 100, 1,000 prompt tokens; fixed 20-token output; prefill/decode pinned to
   identical nodes on both architectures to isolate architecture from node variance):
 
   <p float="left">
-    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/ttft_distribution.png" width="45%" />
-    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/ttft_distribution.png" alt="Varying input length: TTFT distribution" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/request_latency_distribution.png" alt="Varying input length: request latency distribution" width="45%" />
   </p>
 
-  Median TTFT is 1.8-4.8% higher with the Coordinator across all four prompt lengths
-  (e.g. 40.36ms vs. 38.51ms at 10 tokens); median request latency is within 0.2-1.5%;
-  median ITL (time per output token) is within ±0.7%, indistinguishable from
-  measurement noise. An ITL p90-p10 spread roughly 2-3x wider with the Coordinator
-  (~2.4-3.2ms vs. sidecar's ~0.8-1.5ms) is the one open secondary finding; it doesn't
-  move the median, and isn't root-caused in the linked analysis.
+  Median TTFT is 1.8–4.8% higher with the Coordinator at all four prompt lengths
+  (e.g. 40.36ms vs. 38.51ms at 10 tokens). Median request latency is within 0.2–1.5%,
+  and median ITL (time per output token) within ±0.7%, which is measurement noise.
 
 * **[Varying output length](https://github.com/dmitripikus/coordinator-performance/tree/main/pd-comparison-analysis/inconcurrent_var_output_always_disaggr_pinned)**
   (100, 500, 1,000, 2,500 output tokens; fixed 250-token input; same node-pinning):
 
   <p float="left">
-    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/ttft_distribution.png" width="45%" />
-    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/ttft_distribution.png" alt="Varying output length: TTFT distribution" width="45%" />
+    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/request_latency_distribution.png" alt="Varying output length: request latency distribution" width="45%" />
   </p>
 
   Median TTFT is 1.6-4.9% higher with the Coordinator; median request latency is
@@ -788,8 +786,8 @@ GPUs total, identical on both architectures.
   stages from 50 to 500; every stage hit 100% success on both sides.
 
   <p float="left">
-    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/ttft_distribution.png" width="45%" />
-    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/request_latency_distribution.png" width="45%" />
+    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/ttft_distribution.png" alt="Concurrent stress spikes: TTFT distribution" width="45%" />
+    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/request_latency_distribution.png" alt="Concurrent stress spikes: request latency distribution" width="45%" />
   </p>
 
   At the two lowest concurrency stages the Coordinator is ahead on both metrics that
@@ -812,43 +810,41 @@ into a performance penalty.
 
 ### Deferred decoding under heavy multimodal load (Qwen3-VL-235B, H200)
 
-The [overhead runs above](#overhead-of-the-extra-per-phase-hop) forced both arms
-down the same prefill → decode path and found the Coordinator's extra Gateway/EPP round
-trip per phase costs a few milliseconds, at most a few percent of TTFT.
+The [overhead runs above](#overhead-of-the-extra-per-phase-hop) found that the extra
+per-phase round trip costs a few milliseconds of TTFT. This benchmark asks the other
+question: *is there a benefit to picking the decode pod later?* The sidecar picks
+prefill and decode together, before prefill starts. The Coordinator picks decode only
+after prefill has finished, when the pool's state may have changed. The workload was
+chosen to make that difference matter: long multimodal prefills, long outputs, and
+decode pushed to its KV-cache limit.
 
-This benchmark asks the other question: *is there a benefit to picking the decode pod
-later?* The sidecar picks prefill and decode together, before prefill starts; the
-Coordinator picks decode only after prefill has finished, when the pool's state may
-have changed. It was run under a workload chosen to make that difference matter —
-long multimodal prefills, long outputs, and decode pushed to its KV-cache limit.
-
-This benchmark runs with 4 × `a3-ultragpu-8g` (8 × H200 141GB each), `Qwen/Qwen3-VL-235B-A22B-Instruct` on vLLM v0.26.0, TP=8 (one pod per node),
-NixlConnector over GKE multi-network RDMA, 2 prefill + 2 decode pods. Both arms run in
-Gateway mode behind the same GKE Gateway, with the same EPP image and this guide's
-scheduling profiles on both sides: prefill = `prefix-cache-affinity-filter` +
-`token-load-scorer`, decode = `active-request-scorer`. The sidecar arm is the
-[P/D Disaggregation](../pd-disaggregation/README.md) guide (`always-disagg-pd-decider`);
-the Coordinator arm runs the PD-only pipeline `prefill → decode` (no `conditional-decode`,
-so every request does prefill then decode on both arms). Load comes from
-[inference-perf](https://github.com/kubernetes-sigs/inference-perf) running in-cluster:
-~300 text tokens plus 1–14 synthetic images per request, every request unique, same
-seed on both arms, each load level run twice.
+Setup: 4 × `a3-ultragpu-8g` (8 × H200 141GB each), `Qwen/Qwen3-VL-235B-A22B-Instruct` on
+vLLM v0.26.0, TP=8 (one pod per node), NixlConnector over GKE multi-network RDMA,
+2 prefill + 2 decode pods. Both arms run in Gateway mode behind the same GKE Gateway,
+with the same EPP image and this guide's scheduling profiles on both sides: prefill =
+`prefix-cache-affinity-filter` + `token-load-scorer`, decode = `active-request-scorer`.
+The sidecar arm is the [P/D Disaggregation](../pd-disaggregation/README.md) guide
+(`always-disagg-pd-decider`). The Coordinator arm runs the `prefill → decode` pipeline
+with no `conditional-decode`, so every request does prefill then decode on both arms.
+Load comes from [inference-perf](https://github.com/kubernetes-sigs/inference-perf)
+running in-cluster: ~300 text tokens plus 1–14 synthetic images per request, every
+request unique, the same seed on both arms, and each load level run twice.
 
 **Where the two architectures tie.** With a fixed 6000-token output and 1–12 × 1080p
-images per request, a closed-loop concurrency ladder (50 → 300) is indistinguishable
-between the arms: throughput, TPOT, ITL and E2E latency agree within ~2% at every
-level and TTFT p99 within 1–4%. Bursts of 160–280 requests with the same per-request
-shape give the Coordinator a ~10% mean/p99 TTFT edge only right at the decode
-KV-capacity knee (N≈160) and nothing above it, where both decode pods queue regardless
-of routing. A 1 prefill + 3 decode layout is prefill-bound: the Coordinator keeps the
-three decode pods visibly more even (running-request gap 2 vs 6) but decode is never
-contended, so nothing improves and the extra per-phase Gateway hop costs 4–8% of TTFT.
+images per request, a closed-loop concurrency ladder (50 → 300) can't tell the arms
+apart: throughput, TPOT, ITL and E2E latency agree within ~2% at every level, and
+p99 TTFT within 1–4%. Bursts of 160–280 requests with the same per-request shape give
+the Coordinator a ~10% mean/p99 TTFT edge only at the decode KV-capacity knee (N≈160),
+and nothing above it, where both decode pods queue regardless of routing. A 1 prefill
++ 3 decode layout is prefill-bound. The Coordinator keeps the three decode pods visibly
+more even (running-request gap 2 vs. 6), but decode is never contended, so nothing
+improves and the extra per-phase Gateway hop costs 4–8% of TTFT.
 
-**Where the Coordinator wins.** Keep 2P/2D, make the per-request load heavy-tailed —
-output length log-normal (mean 2500, std 3000, capped at 11000 tokens) and images
-1–14 × 360p/1080p mixed, i.e. ~10× spread in both KV footprint and decode residency —
-and release the requests in bursts of 300 / 360 / 420 so that the two decode pods run
-at 125–145 concurrent requests and 85–100% KV. Means of two repeats per level
+**Where the Coordinator wins.** Keep 2P/2D and make the per-request load heavy-tailed:
+output length log-normal (mean 2500, std 3000, capped at 11000 tokens) and 1–14 mixed
+360p/1080p images, about a 10× spread in both KV footprint and decode residency. Then
+release the requests in bursts of 300 / 360 / 420, so the two decode pods run at
+125–145 concurrent requests and 85–100% KV. Means of two repeats per level
 (sidecar / Coordinator):
 
 | Burst size | Throughput (req/s) | Mean E2E (s) | Mean TTFT (s) | P99 TTFT (s) | Mean TPOT (ms) |
@@ -858,44 +854,60 @@ at 125–145 concurrent requests and 85–100% KV. Means of two repeats per leve
 | 420 | 1.05 / **1.15** | 171 / **154** | 64.1 / **61.1** | 147 / **124** | 52.1 / **45.7** |
 
 <p float="left">
-  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_throughput.png" width="45%" />
-  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_latency.png" width="45%" />
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_throughput.png" alt="2P/2D burst: throughput" width="45%" />
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_latency.png" alt="2P/2D burst: latency" width="45%" />
 </p>
 <p float="left">
-  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_decode_imbalance.png" width="60%" />
+  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_decode_imbalance.png" alt="2P/2D burst: per-pod decode imbalance" width="60%" />
 </p>
 
-Throughput is 4–10% higher and E2E latency 5–10% lower at every burst size, and at 420
-requests — the one level where the sidecar's decode pods drift far enough apart to
-exhaust one pod's KV (per-pod running-request gap up to 71, 84 requests queued behind
-the fuller pod while the other drained) — p99 TTFT drops 15% and mean TPOT 12%.
-The per-pod traces show the mechanism directly: under the sidecar the two decode
-pods start level and separate as short requests finish, because every placement was
-fixed at t=0; under the Coordinator they stay within ~15 requests of each other for
-the whole burst.
+Throughput is 4–10% higher and mean E2E latency 5–10% lower at every burst size. At 420
+requests, p99 TTFT drops 15% and mean TPOT 12%. The per-pod traces show the mechanism,
+not just the outcome. Under the sidecar the two decode pods start level and drift apart
+as short requests finish, because every placement was fixed at t=0. At 420 requests the
+gap reaches 71 running requests, and one pod exhausts its KV with 84 requests queued
+behind it while the other drains. Under the Coordinator the two pods stay within ~15
+requests of each other for the whole burst.
 
 **When to expect an advantage from deferred decoding.** The EPP picks the decode pod
-with the fewest in-flight requests, and the in-flight count is maintained in the
-EPP process at *scheduling* time, not read back from vLLM. So the sidecar's early
-pick is not working from stale data — it is working from an exact reservation made
-before prefill starts — and the Coordinator's later pick only adds information when
-all three of the following hold:
+with the fewest in-flight requests, and it tracks that count in-process at *scheduling*
+time rather than reading it back from vLLM. So the sidecar's early pick isn't working
+from stale data: it is an exact reservation made before prefill starts. The
+Coordinator's later pick adds information only when all three of the following hold:
 
-1. **Decode is the contended stage** (KV near its limit or per-step latency rising with
-   batch size). If prefill is the bottleneck the decode choice does not matter and the
-   Coordinator's extra round trip per phase is a small net cost.
-2. **Per-request load is heterogeneous** — long-tailed output lengths and/or widely
-   varying prompt (image) sizes — so that an equal *count* of requests per pod is not
-   an equal *load*. With uniform requests the count is already the right measure.
-3. **Placement is committed in bulk** (bursts). Deciding at prefill completion lets
-   the Coordinator see which pod has actually freed KV since the burst arrived; in a
-   steady stream the sidecar's counts receive the same feedback from completions and
-   the two converge.
+1. **Decode is the contended stage** (KV near its limit, or per-step latency rising
+   with batch size). If prefill is the bottleneck, the decode choice doesn't matter and
+   the Coordinator's extra round trip per phase is a small net cost.
+2. **Per-request load is heterogeneous**: long-tailed output lengths and/or widely
+   varying prompt (image) sizes, so an equal *count* of requests per pod isn't an equal
+   *load*. With uniform requests, the count is already the right measure.
+3. **Placement is committed in bulk** (bursts). Deciding when prefill completes lets
+   the Coordinator see which pod has actually freed KV since the burst arrived. In a
+   steady stream, completions feed the sidecar's counts the same information, and the
+   two converge.
 
 Deployments that pick decode from scraped vLLM metrics (`queue-scorer`,
-`kv-cache-utilization-scorer`) will see a larger gap than measured here, because those
-signals lag and do not include requests still in prefill; the in-process `token-load-scorer`
-and `active-request-scorer` used by both guides remove most of that staleness.
+`kv-cache-utilization-scorer`) are likely to see a larger gap than measured here,
+because those signals lag and leave out requests still in prefill. The in-process
+`token-load-scorer` and `active-request-scorer` used by both guides remove most of that
+staleness.
+
+### What the numbers don't cover
+
+* **`conditional-decode` is off in every run.** All the benchmarks above, cost and win
+  alike, disable it so that both arms prefill every request. They measure the
+  Coordinator's worst case, not the pipeline this guide ships, where requests that hit
+  decode's prefix cache, or are short enough, skip encode and prefill entirely.
+* **Tokenizing once isn't quantified.** Experimentally, the `render` step can hand
+  token IDs to encode and prefill through `/inference/v1/generate`
+  (`use_openai_format: false`) so no worker re-tokenizes. The request-size cost of that
+  format is measured in the
+  [Coordinator architecture doc](https://github.com/llm-d/llm-d-router/blob/main/docs/coordinator_architecture.md),
+  but its wall-clock benefit isn't measured yet. This guide uses the default OpenAI-format path.
+* **ITL spread is wider with the Coordinator.** On the input-length sweep, the ITL
+  p90–p10 spread is roughly 2.4–3.2ms vs. the sidecar's 0.8–1.5ms, and the
+  output-length sweep shows a heavier decode tail (occasional slow tokens raising
+  p95/p99 ITL). Neither moves the median, and the linked analysis doesn't find the root cause.
 
 ## Cleanup
 
