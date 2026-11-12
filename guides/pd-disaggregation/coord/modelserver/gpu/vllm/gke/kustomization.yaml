@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# GKE: GPU DRA and DRANet RoCE (one GPU+NIC claim per rank) and a node-local
+# HuggingFace cache, on top of ../base. Same GKE settings as the
+# routing-sidecar guide's gke overlay.
+resources:
+  - ../base
+
+components:
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../modelserver/gpu/vllm/components/gke

@@ -212,7 +212,12 @@ def test_precise_prefix_cache_routing_matrix_matches_repo():
 
 
 def test_pd_disaggregation_matrix_matches_repo():
-    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation")
+    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation" / "sidecar")
+    assert g.check().ok(), _errors(g.check())
+
+
+def test_pd_disaggregation_coordinator_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation" / "coord")
     assert g.check().ok(), _errors(g.check())
 
 
@@ -535,6 +540,20 @@ def test_manifest_duplicate_slug(tmp_path):
     errs = _errors(guide.check_manifest(m, root))
     assert any("duplicate slug 'a'" in e for e in errs)
     assert any("already published" in e for e in errs)
+
+
+def test_manifest_landing_page_needs_no_guide_yaml(tmp_path):
+    # A landing page whose child pages are all guides (sub-dir README.md next
+    # to a guide.yaml) is published from its README alone.
+    root = _manifest_repo(tmp_path)
+    (root / "guides" / "a" / "guide.yaml").unlink()
+    (root / "guides" / "a" / "bench" / "guide.yaml").write_text("name: b\n")
+    assert guide.check_manifest(_manifest(), root).ok()
+
+    # A child page that is not a guide keeps the guide.yaml requirement.
+    (root / "guides" / "a" / "bench" / "guide.yaml").unlink()
+    errs = _errors(guide.check_manifest(_manifest(), root))
+    assert any("guides/a/guide.yaml does not exist" in e for e in errs)
 
 
 def test_repo_manifest_is_valid():

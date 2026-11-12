@@ -107,21 +107,21 @@ jobs:
           done
           exit $failed
 
-      - name: Dry-run router charts (pd-disaggregation)
+      - name: Dry-run router charts (pd-disaggregation, Sidecar Mode)
         run: |
           CHART_VERSION=v0
           failed=0
           for chart in llm-d-router-standalone llm-d-router-gateway; do
             echo ""
             echo "========================================"
-            echo "pd-disaggregation: router (${chart})"
+            echo "pd-disaggregation (sidecar): router (${chart})"
             echo "========================================"
             echo "--- helm template ---"
             if ! helm template pd-disaggregation-router \
               "oci://ghcr.io/llm-d/charts/${chart}" \
               -f guides/recipes/router/base.values.yaml \
               -f guides/recipes/router/features/monitoring.values.yaml \
-              -f guides/pd-disaggregation/router/pd-disaggregation.values.yaml \
+              -f guides/pd-disaggregation/sidecar/router/pd-disaggregation.values.yaml \
               --version "${CHART_VERSION}" > /tmp/rendered.yaml; then
               echo "FAIL: helm template failed for ${chart}"
               failed=1
@@ -129,9 +129,9 @@ jobs:
             fi
             echo "--- kubectl apply --dry-run=server ---"
             if kubectl apply --dry-run=server -f /tmp/rendered.yaml; then
-              echo "PASS: pd-disaggregation / router (${chart})"
+              echo "PASS: pd-disaggregation (sidecar) / router (${chart})"
             else
-              echo "FAIL: pd-disaggregation / router (${chart})"
+              echo "FAIL: pd-disaggregation (sidecar) / router (${chart})"
               failed=1
             fi
           done

@@ -1,18 +1,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# P/D disaggregation on GKE TPU7x dynamic sub-slices (2x2x1) as one
-# DisaggregatedSet, each role's LeaderWorkerSet scheduled via Kueue TAS.
-# Cluster prerequisites (slice controller, Kueue, LocalQueue, LWS v0.11.1+):
-# docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke
-#
-# No namePrefix: the generated LeaderWorkerSet names derive from the set name
-# (see disaggregatedset.yaml), and Kueue bounds them to 39 characters.
+# ../common plus the routing sidecar on decode: the TPU7x dynamic sub-slice
+# model servers of the routing-sidecar P/D guide.
 resources:
-  - serviceaccount.yaml
-  - disaggregatedset.yaml
+  - ../common
 
+# The routing-sidecar image component must come after ../components/routing-sidecar,
+# which adds the container it sets the image of.
 components:
-  - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../components/routing-sidecar
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
-  - ../../../../../../recipes/modelserver/components/graceful-shutdown

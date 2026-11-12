@@ -1,0 +1,72 @@
+## Router values for P/D disaggregation with the Coordinator. Layer on top of recipes/router/base.values.yaml
+## and install with the llm-d-router-gateway chart.
+##
+## One EPP and one InferencePool cover both roles. The Coordinator calls the
+## EPP once per phase and names the phase in the `x-llm-d-epp-profile` header,
+## so the `header-profile-handler` runs exactly that one profile, instead of
+## the `disagg-profile-handler` of the sidecar guide picking a prefill and a
+## decode pod together. The prefill and decode profiles are the same as in
+## ../../sidecar/router/pd-disaggregation.values.yaml.
+
+# The chart's HTTPRoute would be a catch-all on `/` that competes with the
+# Coordinator's route on the same Gateway. ../coordinator/ ships both routes.
+httpRoute:
+  create: false
+
+router:
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token
+    # accounting (which the token-load-scorer and affinity filter consume) is
+    # local to each EPP process, so multiple replicas would each see only a
+    # fraction of the per-endpoint load and incorrectly gate the affinity filter.
+    replicas: 1
+    flags:
+      # header-profile-handler is an Alpha plugin; the EPP refuses to start
+      # without this flag.
+      allow-experimental-plugins: true
+    pluginsConfigFile: "pd-coordinator-config.yaml"
+    pluginsCustomConfig:
+      pd-coordinator-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: prefill-filter
+        - type: decode-filter
+        # Runs the profile named by x-llm-d-epp-profile; calls without the
+        # header (e.g. /v1/models) run the default `decode` profile.
+        - type: header-profile-handler
+        - type: approx-prefix-cache-producer
+          parameters:
+            # 5k-ISL gpt-oss-120b reference workload; a modest match window
+            # keeps EPP prefix-matching cheap.
+            maxPrefixTokensToMatch: 131072
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Calibrated through the sidecar guide's P/D path on the reference
+            # fleet (gpt-oss-120b, prefill TP=1 on H200). Re-measure for other
+            # hardware/models with guides/recipes/router/calibration/calibrate.sh.
+            peakPrefillThroughput: 33821
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        # Prefill does the prompt pass: keep prefix groups on cache-warm pods
+        # (affinity filter) and pick by queued prefill token load.
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests: pick the
+        # least-busy endpoint.
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "pd-disaggregation-coordinator"

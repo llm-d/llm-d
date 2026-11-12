@@ -1,6 +1,6 @@
 # Safe Rollouts of Disaggregated Deployments with DisaggregatedSet
 
-This guide shows how to replace one version of a prefill/decode (P/D) deployment with another under live traffic, without failing requests and without pairing a prefill pod of one version with a decode pod of another. It applies to deployments that run prefill and decode as a [`DisaggregatedSet`](./disaggregatedset.md), such as the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) and [wide-ep](../../../guides/wide-ep/README.md) guides.
+This guide shows how to replace one version of a prefill/decode (P/D) deployment with another under live traffic, without failing requests and without pairing a prefill pod of one version with a decode pod of another. It applies to deployments that run prefill and decode as a [`DisaggregatedSet`](./disaggregatedset.md), such as the [P/D disaggregation](../../../guides/pd-disaggregation/README.md) guides (with the routing sidecar or the Coordinator) and the [wide-ep](../../../guides/wide-ep/README.md) guide.
 
 A version change is anything that changes a role's pod template: the model server image, engine flags, the KV connector, resources, or node placement.
 
@@ -40,7 +40,7 @@ Use the automatic rolling update for routine changes. Use the manual canary when
 
 ## Step 1: Keep P/D Pairs Inside One Revision
 
-Add the rollout screener to the top-level `plugins` list of your EPP configuration. It runs once per request before every scheduling profile, so do not add it to a profile. For the P/D guide, edit [`pd-disaggregation.values.yaml`](../../../guides/pd-disaggregation/router/pd-disaggregation.values.yaml) and upgrade the router release:
+Add the rollout screener to the top-level `plugins` list of your EPP configuration. It runs once per request before every scheduling profile, so do not add it to a profile. For the P/D guide with the routing sidecar, edit [`pd-disaggregation.values.yaml`](../../../guides/pd-disaggregation/sidecar/router/pd-disaggregation.values.yaml) and upgrade the router release:
 
 ```yaml
 router:
@@ -64,6 +64,30 @@ router:
               requiredRoles: [prefill, decode]
         # ...the existing plugins, unchanged
 ```
+
+For the [P/D guide with the Coordinator](../../../guides/pd-disaggregation/coord/README.md), add the same entry to [`pd-disaggregation-coordinator.values.yaml`](../../../guides/pd-disaggregation/coord/router/pd-disaggregation-coordinator.values.yaml), which already sets `allow-experimental-plugins: true`, and upgrade the router release:
+
+```yaml
+router:
+  epp:
+    pluginsCustomConfig:
+      pd-coordinator-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              # Automatic rolling update: the set's name (pd-disagg-tpu-vllm on TPU7x sub-slices).
+              # Manual canary: a label both sets carry, e.g. "llm-d.ai/guide=pd-disaggregation-coordinator".
+              labelSelector: "disaggregatedset.x-k8s.io/name=pd-disagg-vllm"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
+        # ...the existing plugins, unchanged
+```
+
+The Coordinator sends prefill and decode to the EPP as two separate requests, so the screener cannot pick both pods in one scheduling cycle as it does behind the sidecar. Instead, the prefill call chooses the revision and the EPP returns it in the `x-llm-d-disagg-revision` response header. The Coordinator forwards that header into the decode call, where the screener treats it as a strict constraint, so decode lands on a pod of the same revision. The Coordinator forwards this header by default; if you rename it with `revisionGating.revisionHeaderName`, add the new name to the Coordinator's `forward_response_headers`.
 
 The wide-ep and model guides ([DeepSeek-V4](../../../guides/models/deepseek-v4/README.md), [GLM-5.2](../../../guides/models/glm-5-2/README.md)) already ship this plugin.
 
@@ -89,7 +113,7 @@ spec:
   # Must exceed the preStop sleep plus --shutdown-timeout.
   terminationGracePeriodSeconds: 150
   initContainers:
-  - name: routing-proxy           # decode pods only
+  - name: routing-proxy           # decode pods, routing-sidecar guide only
     restartPolicy: Always         # native sidecar: stops after the model server exits
   containers:
   - name: modelserver
@@ -106,7 +130,7 @@ Each setting covers a different part of the drain:
 
 1. The `preStop` sleep keeps the engine fully up while requests the EPP had already scheduled reach the pod. For a prefill pod, it also gives decode pods time to pull the KV cache of prefills that just finished. vLLM cannot yet hold a prefill pod open until its blocks are fetched (see [Scaling Down Prefill Replicas](./vllm.md#scaling-down-prefill-replicas)), so this sleep is the mitigation.
 2. `--shutdown-timeout` makes vLLM finish in-flight requests on `SIGTERM` instead of aborting them.
-3. Because the routing proxy is a native sidecar (an `initContainer` with `restartPolicy: Always`), Kubernetes stops it only after the model server exits, so draining decode requests keep their proxy.
+3. Because the routing proxy is a native sidecar (an `initContainer` with `restartPolicy: Always`), Kubernetes stops it only after the model server exits, so draining decode requests keep their proxy. With the Coordinator, decode pods run no proxy, and the Coordinator's in-flight phase calls finish against the draining model server directly.
 
 Size the sleep and the timeout to your p99 request duration. [Graceful Shutdown & Draining](../lifecycle/graceful-shutdown.md) explains the termination sequence for aggregated serving.
 
@@ -174,7 +198,7 @@ v0/kustomization.yaml # nameSuffix: -v0, the incumbent's template and admission 
 v1/kustomization.yaml # nameSuffix: -v1, the candidate's template and admission replicas
 ```
 
-Both sets must carry the label that the `InferencePool` and the screener's `scope.labelSelector` select on (for the P/D guide, `llm-d.ai/guide: pd-disaggregation`). Their templates differ, so the controller gives them different revisions.
+Both sets must carry the label that the `InferencePool` and the screener's `scope.labelSelector` select on (for the P/D guides, `llm-d.ai/guide: pd-disaggregation` with the routing sidecar or `llm-d.ai/guide: pd-disaggregation-coordinator` with the Coordinator). Their templates differ, so the controller gives them different revisions.
 
 The procedure below takes a 2P+2D fleet from `v0` to `v1`:
 

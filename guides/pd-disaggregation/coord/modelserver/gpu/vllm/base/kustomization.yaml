@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Model servers on NVIDIA GPU with vLLM: the prefill and decode roles shared
+# with the routing-sidecar guide (guides/pd-disaggregation/modelserver/gpu/vllm/common),
+# with no routing sidecar. The llm-d Coordinator dispatches the prefill and
+# decode phases through the Gateway, so decode serves port 8000 directly, the
+# port the InferencePool targets on every pod. This is also the
+# INFRA_PROVIDER=base overlay; ../gke adds GPU DRA and DRANet RoCE.
+resources:
+  - ../../../../../modelserver/gpu/vllm/common
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+
+patches:
+  # Label the pods with this guide's name, so the InferencePool of the
+  # pd-disaggregation-coordinator router release selects them.
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+      name: pd-disagg-vllm
+    patch: |-
+      - op: replace
+        path: /metadata/labels/llm-d.ai~1guide
+        value: pd-disaggregation-coordinator
+      - op: replace
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1guide
+        value: pd-disaggregation-coordinator
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1guide
+        value: pd-disaggregation-coordinator
