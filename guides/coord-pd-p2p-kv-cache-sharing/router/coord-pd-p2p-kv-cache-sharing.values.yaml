@@ -1,0 +1,191 @@
+## coord-pd-p2p-kv-cache-sharing guide overrides for the router: one EPP and
+## one InferencePool over the prefill and decode model servers, behind the
+## Coordinator's conditional-decode, prefill, decode pipeline.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Two scheduling profiles selected by the Coordinator's x-llm-d-epp-profile
+## header through the header-profile-handler (default decode, so calls without
+## the header, such as the verification request, run the decode profile):
+##   prefill: prefill-filter and the P2P KV Cache Sharing guide's token-aware
+##            placement (inflight-load-producer, token-load-scorer,
+##            max-score-picker). The p2p-source-producer compares sources
+##            against this profile's target and writes
+##            kv_transfer_params.remote_kv_source into the prefill body when a
+##            peer, a decode pod holding the session history or a prefill pod
+##            holding the prefix, out-caches it by minCachedTokenDelta. It also
+##            stamps the prefill pod's P2P tier address on the request, and the
+##            request-header-copy-handler copies it onto the prefill response
+##            for the Coordinator's kv-offloading connector.
+##   decode:  decode-filter, prefix-cache-scorer and active-request-scorer:
+##            the decode pod that holds the conversation, else the least busy
+##            one. The Coordinator's conditional-decode probe (Prefer:
+##            if-available) runs this profile; the prefix-based-pd-decider
+##            answers 412 when the chosen pod misses nonCachedTokens or more of
+##            the prompt, and the probe body has no remote_prefiller, so the
+##            p2p-source-producer may name a source for a decode pod that
+##            serves directly. The decode call after prefill carries
+##            remote_prefiller, so no source is written on it (outcome
+##            decode-request).
+##
+## One EPP replica: the inflight-load-producer's in-flight token accounting,
+## which the prefill profile's token-load-scorer and the decode profile's
+## active-request-scorer consume, is local to the EPP process; a second
+## replica would see only its own share of the per-endpoint load and
+## mis-place requests. The precise prefix index would converge across
+## replicas (each dials every vLLM pod's KV-events socket), the load
+## accounting does not.
+
+# The chart's HTTPRoute would be a catch-all on `/` that ties with the
+# Coordinator's HTTPRoute on the same Gateway. ./httproute/base carries the
+# x-llm-d-epp-profile header matches instead.
+httpRoute:
+  create: false
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: see the header comment (in-flight load accounting is
+    # per process, as in the Coordinator Disaggregation and P/D guides).
+    replicas: 1
+    # The p2p-source-producer of the chart's default EPP image sets the KV
+    # cache source header for the routing sidecar and does not write the
+    # source into the body, so behind the Coordinator no pull would fire.
+    # This build comes from the llm-d-router branch
+    # kvoff-4-coordinator-kv-offloading (revit13/llm-d-inference-scheduler,
+    # llm-d-router#3522), paired with the coordinator image of the same tag in
+    # ../coordinator/base/kustomization.yaml. Replace both with ghcr.io/llm-d
+    # tags once a release ships the body write, the
+    # request-header-copy-handler and the kv-offloading connector.
+    image:
+      registry: ghcr.io/revit13
+      repository: llm-d-router-endpoint-picker
+      tag: dev-kvoff-43
+      pullPolicy: Always
+    flags:
+      ha-enable-leader-election: false
+      allow-experimental-plugins: true
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: llm-d-hf-token
+            key: HF_TOKEN
+    pluginsConfigFile: "coord-pd-p2p-kv-cache-sharing-plugins.yaml"
+    pluginsCustomConfig:
+      coord-pd-p2p-kv-cache-sharing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: prefill-filter
+          - type: decode-filter
+          - type: header-profile-handler
+          - type: token-producer
+            parameters:
+              modelName: openai/gpt-oss-120b # Must match the render Service model and the deployed model server
+              vllm:
+                # The guide's render Service (../render/), fronting the model
+                # servers' engine port 8200 (both roles).
+                url: "http://coord-pd-p2p-kv-cache-sharing-render:8000"
+          - type: endpoint-notification-source
+          - type: metrics-data-source
+            parameters: {scheme: "http", path: "/metrics", insecureSkipVerify: true}
+          - type: core-metrics-extractor
+          - type: inflight-load-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: precise-prefix-cache-producer
+            parameters:
+              indexerConfig:
+                kvBlockIndexConfig:
+                  inMemoryConfig:
+                    # (endpoints x tiers) holders per block; 32 covers 16 pods.
+                    podCacheSize: 32
+                kvCacheBackendConfigs:
+                - name: gpu
+                  weight: 1.0
+                - name: cpu
+                  weight: 0.9
+              tokenProcessorConfig:
+                blockSizeTokens: 64
+              speculativeIndexing: false
+              kvEventsConfig:
+                topicFilter: "kv@"
+                concurrency: 8
+                discoverPods: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+          - type: p2p-source-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              # The prefill profile's target computes the prefix, so sources
+              # are compared against it. Default, stated for clarity.
+              prefillProfileName: prefill
+              minCachedTokenDelta: 2048
+          # Gate for the Coordinator's conditional-decode probe. Without a
+          # plugin claiming the Prefer: if-available header the EPP answers
+          # 412 to every probe and every turn runs prefill then decode, even
+          # when the decode pod already holds the whole conversation. The
+          # probe passes (the decode pod serves directly) when fewer than
+          # nonCachedTokens prompt tokens are missing from the chosen decode
+          # pod's cache: a follow-up turn's new question. A longer uncached
+          # suffix, a new document or a long tool result, goes to prefill.
+          - type: prefix-based-pd-decider
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              nonCachedTokens: 1024
+              # 0 disables the extra prompt-length gate.
+              promptTokens: 0
+          # The p2p-source-producer sets the prefill pod's P2P tier address on
+          # the prefill request; Envoy does not copy request headers onto the
+          # response, so this copies it for the Coordinator's kv-offloading
+          # connector, which builds the decode request's remote_prefiller from
+          # it. Needs response_header_mode SEND on the EPP ext_proc filter;
+          # Istio sets that per route for InferencePool backends, the Gateway
+          # recipe does not configure it.
+          - type: request-header-copy-handler
+            parameters:
+              headers:
+                - x-llm-d-kv-cache-prefill-p2p-host-port
+          - type: token-load-scorer
+          - type: prefix-cache-scorer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: active-request-scorer
+          - type: max-score-picker
+        dataLayer:
+          sources:
+            - pluginRef: metrics-data-source
+              extractors:
+                - pluginRef: core-metrics-extractor
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: prefill
+            plugins:
+              - pluginRef: prefill-filter
+              - pluginRef: token-load-scorer
+              - pluginRef: max-score-picker
+          - name: decode
+            plugins:
+              - pluginRef: decode-filter
+              - pluginRef: prefix-cache-scorer
+                weight: 2
+              - pluginRef: active-request-scorer
+                weight: 1
+              - pluginRef: max-score-picker
+
+  modelServers:
+    # Both roles carry the guide label
+    # (../modelserver/gpu/vllm/base/decode/kustomization.yaml); the profiles
+    # filter by llm-d.ai/role.
+    matchLabels:
+      llm-d.ai/guide: "coord-pd-p2p-kv-cache-sharing"
+    # No routing sidecar: the pool targets the vLLM engine port.
+    targetPorts:
+      - number: 8200
