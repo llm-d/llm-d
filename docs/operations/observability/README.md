@@ -18,6 +18,7 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 * [Configure Alerts](./alerting.md) — Apply the default EPP and Batch Gateway Prometheus alerting rules
 * [Trace Requests](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
 * [Monitor GKE TPUs](./tpu.md) — Interpret TPU hardware metrics and troubleshoot missing data
+* [Diagnose Speculative Decoding](./speculative-decoding.md) — Tell configured, observed, and intentionally skipped drafting apart on vLLM
 
 ## Runnable assets
 
