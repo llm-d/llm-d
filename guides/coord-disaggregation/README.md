@@ -43,7 +43,8 @@ default-denies with `412`, so every request takes the full cascade. This guide's
 configures the gate (`prefix-based-pd-decider`) and the decode-side prefix index it reads
 from. See [Deploy the llm-d Router](#1-deploy-the-llm-d-router).
 
-The Coordinator is a candidate to **replace the routing sidecar**. It changes three things
+The Coordinator replaces the per-decode-pod
+[Routing Sidecar](https://github.com/llm-d/llm-d-router/tree/main/pkg/sidecar). It changes three things
 about how requests are orchestrated:
 
 * **Composable pipeline.** The pipeline is a plain list of named steps in the
