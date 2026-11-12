@@ -7,6 +7,8 @@
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-ibm-acc-gpu-vllm-x.yaml)
 [![E2E (Intel XPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-intel-acc-xpu-vllm-x.yaml)
 
+[![E2E SGLang (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-gke-acc-gpu-sglang-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-precise-prefix-cache-routing-gke-acc-gpu-sglang-x.yaml)
+
 ## Overview
 
 This guide routes requests on precise per-pod KV-cache state rather than request-traffic heuristics. It builds on the [Optimized Baseline](../optimized-baseline/README.md) with the same `prefix-cache-affinity-filter` and `token-load-scorer`, but replaces the approximate prefix-cache estimate with the model servers' own record of what they cache:
@@ -26,7 +28,7 @@ This guide includes configurations for the following accelerator and model serve
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool) |
+| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity |
@@ -643,3 +645,15 @@ kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup.rest end -->
+
+## SGLang routing regression test
+
+The [GKE GPU SGLang nightly](../../.github/workflows/nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-sglang-x.yaml) deploys both SGLang replicas and the dedicated render pool from this guide. For each of `/generate`, `/v1/chat/completions`, and `/v1/completions`, it sends a cold request and a follow-up with a shared prefix, separated by more than the router's speculative-index TTL. The test fails unless the EPP predicts at least one cached block and the follow-up reaches the cache-warm backend and reuses that block. It also rejects router render failures and non-successful API responses.
+
+To run the same probe against an otherwise idle two-replica SGLang deployment:
+
+```bash
+python3 guides/precise-prefix-cache-routing/verify-sglang.py --namespace "${NAMESPACE}"
+```
+
+The probe needs `kubectl` access to list pods and forward their inference and metrics ports. The nightly disables EPP metrics authentication only for its isolated test namespace. For authenticated metrics, also pass `--metrics-token-file` with a file containing a bearer token authorized to read `/metrics`, using the [metrics RBAC](#4-verify-that-the-router-renders) described above. The test reports endpoint, warm backend, predicted cached tokens, and reused tokens, and exits non-zero if any endpoint fails.
