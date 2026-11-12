@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-d-coordinator-config
+data:
+  coordinator.yaml: |
+    log_level: 2
+    server:
+      listen_addr: ":8080"
+      # The coordinator image serves TLS by default; keep this listener plain
+      # HTTP, because the kubelet probes and the Gateway speak plain HTTP to it.
+      secure_serving: false
+      read_timeout: 30s
+      # Matches the 300s request timeout on the Gateway routes (httproute.yaml,
+      # ../gke/gcpbackendpolicy.yaml and the chart's GCPBackendPolicy).
+      write_timeout: 300s
+
+    gateway:
+      # Every per-phase call goes back out through the Gateway, tagged with
+      # x-llm-d-epp-profile, so the EPP picks the prefill or decode pod.
+      # Filled in by envsubst; see ../../README.md.
+      address: "${GATEWAY_ADDRESS}"
+      max_idle_conns_per_host: 100
+      idle_conn_timeout: 90s
+      # Time to the response headers of one phase call, so it has to cover
+      # prefill queueing under load.
+      timeout: 60s
+
+    # Every request runs prefill, then decode, matching the always-disagg
+    # decider of the sidecar guide (../../../sidecar/). To serve short prompts
+    # on decode directly, add a `conditional-decode` step before prefill
+    # together with its EPP gate; see guides/coord-disaggregation/README.md.
+    pipeline:
+      kv_connector: kv-nixl
+      steps:
+        - type: prefill
+        - type: decode

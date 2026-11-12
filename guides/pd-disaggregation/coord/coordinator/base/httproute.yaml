@@ -1,0 +1,148 @@
+# Two HTTPRoutes on the llm-d-inference-gateway, as in the Coordinator
+# Disaggregation guide (guides/coord-disaggregation/coordinator/base/httproute.yaml
+# and router/httproute/base/httproute.yaml):
+#
+#   * coordinator: client calls to the inference paths the Coordinator serves
+#     go to the Coordinator, which runs the prefill -> decode pipeline.
+#   * pd-disaggregation-coordinator: the Coordinator's own phase calls reuse those paths
+#     with an x-llm-d-epp-profile header and go to the InferencePool, as does
+#     every other path (e.g. /v1/models), which the EPP's header-profile-handler
+#     schedules with its default `decode` profile.
+#
+# Gateway API ranks path specificity before header matches, so the router
+# route uses the same Exact paths as the Coordinator route: on a tie, its extra
+# header match wins. A PathPrefix there would lose to the Coordinator's Exact
+# match even when the header is present.
+#
+# SECURITY NOTE: x-llm-d-epp-profile is a plain client-controllable header, not
+# a trust boundary. A client that sets it bypasses the Coordinator and reaches
+# the router directly. Do not expose this Gateway to untrusted clients without
+# network-level isolation (mTLS peer identity, NetworkPolicy) or a
+# provider-specific header strip at ingress.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: coordinator
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-d-inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+    - path:
+        type: Exact
+        value: /v1/responses
+    - path:
+        type: Exact
+        value: /v1/messages
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+    backendRefs:
+    - kind: Service
+      name: llm-d-coordinator
+      port: 8080
+    # Removed by the gke overlay: GKE Gateway does not implement this field and
+    # takes the timeout from a GCPBackendPolicy instead.
+    timeouts:
+      request: 300s
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # Named after the router's Helm release, ${GUIDE_NAME}, like its InferencePool.
+  name: pd-disaggregation-coordinator
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-d-inference-gateway
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/completions
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: decode
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: decode
+    - path:
+        type: Exact
+        value: /v1/responses
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/responses
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: decode
+    - path:
+        type: Exact
+        value: /v1/messages
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /v1/messages
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: decode
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: prefill
+    - path:
+        type: Exact
+        value: /inference/v1/generate
+      headers:
+      - type: Exact
+        name: x-llm-d-epp-profile
+        value: decode
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: pd-disaggregation-coordinator
+    # Removed by the gke overlay, as above.
+    timeouts:
+      request: 300s

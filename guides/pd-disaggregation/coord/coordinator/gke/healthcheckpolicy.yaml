@@ -1,0 +1,21 @@
+# GKE Gateway does not derive health checks from the pod's probes. Without
+# this policy the load balancer probes `/`, the Coordinator answers 404, the
+# backend is marked unhealthy and every request returns 503.
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: llm-d-coordinator-hcp
+spec:
+  default:
+    checkIntervalSec: 2
+    # Must be <= checkIntervalSec.
+    timeoutSec: 2
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080
+        requestPath: /healthz
+  targetRef:
+    group: ""
+    kind: Service
+    name: llm-d-coordinator

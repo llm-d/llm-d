@@ -209,7 +209,7 @@ For how TPUs map onto llm-d — chips vs devices, slice topologies, the Torch TP
 This section covers the llm-d-specific configuration for serving model servers on GKE Ironwood (TPU7x) dynamic sub-slices. It is the infrastructure prerequisite for the dynamic-slice recipes in the well-lit path guides:
 
 * [Optimized Baseline on TPU sub-slices](../../../../guides/optimized-baseline/README.md#2-deploy-the-model-server)
-* [P/D Disaggregation on TPU sub-slices](../../../../guides/pd-disaggregation/README.md#2-deploy-the-model-server)
+* [P/D Disaggregation on TPU sub-slices](../../../../guides/pd-disaggregation/sidecar/README.md#2-deploy-the-model-server)
 
 #### Dynamic Slicing Overview
 

@@ -212,7 +212,12 @@ def test_precise_prefix_cache_routing_matrix_matches_repo():
 
 
 def test_pd_disaggregation_matrix_matches_repo():
-    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation")
+    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation" / "sidecar")
+    assert g.check().ok(), _errors(g.check())
+
+
+def test_pd_disaggregation_coordinator_matrix_matches_repo():
+    g = guide.Guide.load(REPO_ROOT / "guides" / "pd-disaggregation" / "coord")
     assert g.check().ok(), _errors(g.check())
 
 

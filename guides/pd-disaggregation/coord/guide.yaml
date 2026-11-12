@@ -1,0 +1,192 @@
+name: pd-disaggregation-coordinator
+
+# Accelerator x model server support; see guides/pd-disaggregation/sidecar/guide.yaml
+# for the field reference. No nightly E2E workflow covers this guide yet, so
+# every cell is `community`.
+support:
+  engines: {vllm: vLLM}
+  accelerators:
+    gpu:
+      label: NVIDIA GPU
+      notes: "H200 · 1P (TP=1) + 1D (TP=4), 5 GPUs · NIXL · Coordinator behind a Kubernetes Gateway"
+      model: openai/gpt-oss-120b
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
+
+env:
+  static:
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: pd-disaggregation-coordinator
+    NAMESPACE: llm-d-pd-disaggregation-coordinator
+
+    # Prometheus monitoring is opt-in: set MONITORING=true (requires the
+    # monitoring stack) to run the deploy.monitoring* steps.
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_VALUES: {default: ""}
+
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    MODEL_SERVER: {default: vllm, values: [vllm]}
+    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    INFRA_PROVIDER: {default: gke, values: [base, gke], comment: "gke: GPU DRA and DRANet RoCE (see Prerequisites)"}
+    # The provider of the llm-d-inference-gateway Gateway. The Coordinator sends
+    # every phase call through it, so it also decides GATEWAY_ADDRESS.
+    GW_PROVIDER_NAME: {default: gke, values: [gke, istio, agentgateway]}
+
+    MODEL: {default: "openai/gpt-oss-120b"}
+
+  source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  lws:
+    - skip_in: [ci]
+      run: |
+        # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
+        # "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
+        helm pull oci://registry.k8s.io/lws/charts/lws --version=${LWS_VERSION} --untar
+        kubectl apply --server-side --force-conflicts -f lws/crds
+        helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
+          --version=${LWS_VERSION} \
+          --namespace lws-system --create-namespace \
+          --set enableDisaggregatedSet=true \
+          --wait --timeout 300s
+  namespace:
+    - run: kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+deploy:
+  router_values:
+    - run: |
+        # Paths to values files
+        export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/pd-disaggregation/coord/router/${GUIDE_NAME}.values.yaml"
+
+  # skip_in: [ci] keeps README-parsing tooling from harvesting the export.
+  monitoring_values:
+    standard:
+      - when: {MONITORING: ["true"]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"], GW_PROVIDER_NAME: [gke]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+
+  # The router behind the llm-d-inference-gateway Gateway. The release name is
+  # also the InferencePool name the Coordinator's HTTPRoute targets.
+  gateway:
+    - run: |
+        helm install ${GUIDE_NAME} \
+          ${ROUTER_GATEWAY_CHART} \
+          -f ${ROUTER_BASE_VALUES} \
+          ${MONITORING_VALUES} \
+          -f ${ROUTER_VALUES} \
+          --set provider.name=${GW_PROVIDER_NAME} \
+          -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+  # The Coordinator and the two HTTPRoutes that split client calls (Coordinator)
+  # from its per-phase calls (EPP).
+  coordinator:
+    - run: |
+        case "${GW_PROVIDER_NAME}" in
+          # GKE Gateway is a Google Cloud load balancer with no in-cluster Service:
+          # use the address published on the Gateway's status.
+          gke)
+            export COORDINATOR_OVERLAY=gke
+            export GATEWAY_ADDRESS="http://$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}'):80"
+            ;;
+          # agentgateway names its Service after the Gateway, with no provider suffix.
+          agentgateway)
+            export COORDINATOR_OVERLAY=base
+            export GATEWAY_ADDRESS="http://llm-d-inference-gateway.${NAMESPACE}.svc:80"
+            ;;
+          *)
+            export COORDINATOR_OVERLAY=base
+            export GATEWAY_ADDRESS="http://llm-d-inference-gateway-${GW_PROVIDER_NAME}.${NAMESPACE}.svc:80"
+            ;;
+        esac
+        echo "GATEWAY_ADDRESS=${GATEWAY_ADDRESS}" # must be non-empty
+    - run: kustomize build ${REPO_ROOT}/guides/pd-disaggregation/coord/coordinator/${COORDINATOR_OVERLAY}/ | envsubst '${GATEWAY_ADDRESS}' | kubectl apply -n ${NAMESPACE} -f -
+
+  modelserver:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+
+  monitoring:
+    - when: {MONITORING: ["true"]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
+
+verify:
+  endpoint:
+    gateway:
+      - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
+  tests:
+    request:
+      - run: |
+          kubectl run curl-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'curl -sS -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}"'
+    pd_requests:
+      - run: |
+          # 5 requests with a ~1k-token prompt: each is prefilled on a prefill
+          # pod, and its KV cache is transferred to a decode pod
+          kubectl run pd-test --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 60); do printf "The prefill pod computes the KV cache and the decode pod pulls it to generate tokens. "; done)
+              for i in $(seq 1 5); do
+                curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+              done'
+    pod_metrics:
+      - run: |
+          # Request and KV-transfer counters of the prefill and decode pods, read
+          # through the Kubernetes API server proxy (no port-forward needed).
+          # Both engines serve on port 8000: decode runs no routing sidecar.
+          for role in prefill decode; do
+            for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=${role} -o jsonpath='{.items[*].metadata.name}'); do
+              echo "== ${role}: ${pod}"
+              kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+                | grep -E '^vllm:(request_success_total|prompt_tokens_total|external_prefix_cache_hits_total|nixl_bytes_transferred_sum)' || true
+            done
+          done
+    coordinator_log:
+      - run: |
+          # One line per request, with the time spent in each pipeline step
+          kubectl logs -n ${NAMESPACE} deploy/llm-d-coordinator | grep "pipeline step timings"
+
+cleanup:
+  modelserver:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  coordinator:
+    - run: kustomize build ${REPO_ROOT}/guides/pd-disaggregation/coord/coordinator/${COORDINATOR_OVERLAY}/ | envsubst '${GATEWAY_ADDRESS}' | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
+  rest:
+    - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true
+    - skip_in: [ci]
+      run: kubectl delete namespace ${NAMESPACE}

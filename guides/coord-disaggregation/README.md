@@ -388,7 +388,7 @@ one configured profile automatically (see the [Overview](#overview)).
 `router/coord-disaggregation-prefill.values.yaml` and
 `router/coord-disaggregation-decode.values.yaml` configure the same scorers as the
 `prefill`/`decode` profiles in
-[`guides/pd-disaggregation/router/pd-disaggregation.values.yaml`](../pd-disaggregation/router/pd-disaggregation.values.yaml):
+[`guides/pd-disaggregation/sidecar/router/pd-disaggregation.values.yaml`](../pd-disaggregation/sidecar/router/pd-disaggregation.values.yaml):
 `prefix-cache-affinity-filter` + `token-load-scorer` for prefill (stay on cache-warm
 pods, then pick by queued token load), `active-request-scorer` for decode (pick the
 least-busy endpoint) — minus the `prefill-filter`/`decode-filter`/`disagg-*` plugins

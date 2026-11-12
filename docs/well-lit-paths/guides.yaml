@@ -34,26 +34,32 @@ sections:
         slug: enable-p2p-prefix-cache-sharing
         title: Enable P2P Prefix Cache Sharing
         position: 5
-      - dir: guides/pd-disaggregation
+      # guides/pd-disaggregation/README.md is a landing page that links the
+      # two P/D guides below; the routing-sidecar guide keeps the original slug.
+      - dir: guides/pd-disaggregation/sidecar
         slug: pd-disaggregation
         title: Deploy Prefill/Decode Disaggregation
         position: 6
+      - dir: guides/pd-disaggregation/coord
+        slug: pd-disaggregation-coordinator
+        title: Deploy Prefill/Decode Disaggregation with the Coordinator
+        position: 7
       - dir: guides/wide-ep
         slug: wide-expert-parallelism
         title: Scale MoE Models with Wide Expert Parallelism
-        position: 7
+        position: 8
       - dir: guides/multimodal-serving
         slug: serve-multimodal-models
         title: Serve Multimodal Models
-        position: 8
+        position: 9
       - dir: guides/omni-serving
         slug: serve-omni-models
         title: Serve Omni Models
-        position: 9
+        position: 10
       - dir: guides/agentic-api
         slug: serve-responses-api
         title: Serve the Stateful OpenAI Responses API
-        position: 10
+        position: 11
   # Models: benchmarked recipes for one model on one accelerator, each with a
   # guide.yaml support matrix like the Foundations guides.
   models:

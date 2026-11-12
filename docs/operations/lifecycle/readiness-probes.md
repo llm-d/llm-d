@@ -171,7 +171,7 @@ Container Start
 
 ### Disaggregated Decode Pod
 
-Condensed from the decode role in `guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml`. The probes target the vLLM container port (8200, named `modelserver`), not the routing sidecar on 8000:
+Condensed from the decode role in `guides/pd-disaggregation/sidecar/modelserver/gpu/vllm/base/disaggregatedset.yaml`. The probes target the vLLM container port (8200, named `modelserver`), not the routing sidecar on 8000:
 
 ```yaml
 containers:

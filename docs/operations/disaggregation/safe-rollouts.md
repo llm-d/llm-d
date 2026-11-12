@@ -34,13 +34,13 @@ Use the automatic rolling update for routine changes. Use the manual canary when
 
 ## Prerequisites
 
-* A running P/D deployment on a DisaggregatedSet, with the LeaderWorkerSet controller `v0.11.1` or newer and `enableDisaggregatedSet=true` (see the [P/D disaggregation prerequisites](../../../guides/pd-disaggregation/README.md#prerequisites)).
+* A running P/D deployment on a DisaggregatedSet, with the LeaderWorkerSet controller `v0.11.1` or newer and `enableDisaggregatedSet=true` (see the [P/D disaggregation prerequisites](../../../guides/pd-disaggregation/sidecar/README.md#prerequisites)).
 * The llm-d Router installed for that deployment. The rollout screener is an Alpha plugin, so the EPP needs `allow-experimental-plugins: true`.
 * Model server images pinned by tag or digest. NIXL's compatibility check includes the vLLM version, so two nodes that pulled different `nightly` images cannot transfer KV to each other.
 
 ## Step 1: Keep P/D Pairs Inside One Revision
 
-Add the rollout screener to the top-level `plugins` list of your EPP configuration. It runs once per request before every scheduling profile, so do not add it to a profile. For the P/D guide, edit [`pd-disaggregation.values.yaml`](../../../guides/pd-disaggregation/router/pd-disaggregation.values.yaml) and upgrade the router release:
+Add the rollout screener to the top-level `plugins` list of your EPP configuration. It runs once per request before every scheduling profile, so do not add it to a profile. For the P/D guide, edit [`pd-disaggregation.values.yaml`](../../../guides/pd-disaggregation/sidecar/router/pd-disaggregation.values.yaml) and upgrade the router release:
 
 ```yaml
 router:

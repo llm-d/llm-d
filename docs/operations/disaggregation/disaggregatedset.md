@@ -23,7 +23,7 @@ See the [DisaggregatedSet architecture overview](../../architecture/model-server
 
 ## Pinning Slices to Accelerator Domains (Placement Policy)
 
-Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/modelserver/gpu/vllm/base/disaggregatedset.yaml)). The P/D guide ships `slices: 1` (one prefill and one decode); placement policy pays off once you raise `slices` to run several copies:
+Placement policy pins each slice to one topology domain and spreads slices across domains, keeping prefill-to-decode KV-cache transfer inside the low-latency fabric. To enable it, uncomment `placementPolicy` in the set's manifest (for P/D, [`modelserver/gpu/vllm/base/disaggregatedset.yaml`](../../../guides/pd-disaggregation/sidecar/modelserver/gpu/vllm/base/disaggregatedset.yaml)). The P/D guide ships `slices: 1` (one prefill and one decode); placement policy pays off once you raise `slices` to run several copies:
 
 ```yaml
 spec:
@@ -75,7 +75,7 @@ Then point HPA, KEDA, or any `/scale`-aware autoscaler at the auto-created `Disa
 
 ## Kueue-Scheduled Sets (TPU7x Dynamic Sub-slices)
 
-The P/D guide's [TPU7x dynamic sub-slice overlay](../../../guides/pd-disaggregation/README.md#2-deploy-the-model-server) runs `pd-disagg-tpu-vllm` under Kueue Topology-Aware Scheduling, with the `kueue.x-k8s.io/queue-name` label on each role's `metadata` and the default `groupIdentity: Ordinal`.
+The P/D guide's [TPU7x dynamic sub-slice overlay](../../../guides/pd-disaggregation/sidecar/README.md#2-deploy-the-model-server) runs `pd-disagg-tpu-vllm` under Kueue Topology-Aware Scheduling, with the `kueue.x-k8s.io/queue-name` label on each role's `metadata` and the default `groupIdentity: Ordinal`.
 
 <details>
 <summary><b>Why these two settings differ from the NVIDIA GPU sets</b></summary>
