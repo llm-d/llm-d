@@ -14,6 +14,12 @@ env:
 
     MODEL:           { default: "Qwen/Qwen3-0.6B" }
 
+    # Platform overlay under platform/: how the launcher pod gets at the node's
+    # GPUs without requesting them. `ocp` = nvidia RuntimeClass + GPU Feature
+    # Discovery labels (OpenShift with the NVIDIA GPU Operator); `gke` = privileged
+    # launcher with the host driver tree mounted, GKE node labels and taints.
+    INFRA_PROVIDER:  { default: ocp, values: [ocp, gke] }
+
     # VERIFICATION
     CURL_TEST_IMAGE: { default: "cfmanteiga/alpine-bash-curl-jq:latest" }
 
@@ -89,12 +95,15 @@ deploy:
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   # Deploys the FMA custom resources (ISC/LauncherConfig/LauncherPopulationPolicy)
-  # AND the server-requesting pods together
+  # AND the server-requesting pods together, through the platform overlay for
+  # ${INFRA_PROVIDER} (platform/ocp is a passthrough of modelserver/).
+  # The rollout wait allows for a first pull of the launcher image (about 9 GB),
+  # which can take longer than five minutes on a node that has not run FMA before.
   modelserver:
     - run: |
-        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
+        kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/platform/${INFRA_PROVIDER}
 
-        kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
+        kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=900s
 
 verify:
   endpoint:
@@ -163,23 +172,26 @@ benchmark:
 
 cleanup:
   # Order matters. Delete the model-server CRs and the requester Deployment
-  # FIRST (both live in modelserver/): this unbinds the requester/provider
-  # pairs and tells the dual-pods controller to tear down the launcher pods.
-  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+  # FIRST (both come from the platform overlay over modelserver/): this unbinds
+  # the requester/provider pairs and tells the dual-pods controller to tear down
+  # the launcher pods.
+  - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/platform/${INFRA_PROVIDER} --ignore-not-found=true
   # Then wait for the requester and launcher pods to fully drain while the
   # controller is still running to strip their finalizers. If the controller
   # is removed first, finalizer-bound pods get stuck in Terminating forever.
   - run: kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
   - run: kubectl wait --for=delete pod -l app.kubernetes.io/component=launcher -n ${NAMESPACE} --timeout=120s
   # Only after the pods have drained, remove the controllers (dual-pods
-  # controller + launcher populator), then the router and the cluster-scoped RBAC.
+  # controller + launcher populator), then the router and the RBAC.
   - run: helm uninstall ${FMA_CHART_INSTANCE_NAME} -n ${NAMESPACE}
   - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-  - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
   # Namespaced RBAC for this guide (Role + ServiceAccount from rbac/role.yaml,
   # plus the imperatively-created RoleBinding).
   - run: kubectl delete -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/role.yaml --ignore-not-found=true
   - run: kubectl delete rolebinding fma-launcher-pod-state-writer -n ${NAMESPACE} --ignore-not-found=true
+  # Skipped in CI, where the cluster is shared; run only on a cluster you own.
+  - skip_in: [ci]
+    run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/rbac/clusterrole.yaml --ignore-not-found=true
   # Destructive / cluster-wide -- skipped in CI, where the namespace is reused
   # and the FMA CRDs are shared across deployments. Run only on a cluster you own.
   - skip_in: [ci]
