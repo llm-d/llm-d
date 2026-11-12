@@ -101,7 +101,7 @@ MetaX C500X GPUs are supported for community-contributed well-lit paths. The dev
 Biren 166M GPUs are supported for community-contributed well-lit paths. The device plugin must expose `birentech.com/gpu`; the P/D overlay also requests InfiniBand through an RDMA device plugin (`rdma/ib`):
 
 - [Optimized Baseline](../../guides/optimized-baseline/README.md) `modelserver/biren/vllm/` — co-located P+D, two `TP=8` replicas of Qwen3-32B.
-- [P/D Disaggregation](../../guides/pd-disaggregation/README.md) `sidecar/modelserver/biren/vllm/` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
+- [P/D Disaggregation](../../guides/pd-disaggregation/README.md) with `ACCELERATOR_TYPE=biren`, `MODEL_SERVER=vllm` — 1P+1D `NixlConnector` over RDMA (`UCX_TLS=rc_v`).
 
 ## Moore Threads MTT S5000
 
@@ -111,12 +111,12 @@ paths. The device plugin must expose `mthreads.com/gpu`.
 **vLLM**
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
-- **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/sidecar/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/sidecar/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
+- **[P/D disaggregation](../../guides/pd-disaggregation/README.md)** (one 8-GPU node): `ACCELERATOR_TYPE=mthreads`, `MODEL_SERVER=vllm` — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
 
 **SGLang**
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/sglang/base`](../../guides/optimized-baseline/modelserver/mthreads/sglang/base/) — Prefill and Decode in one process (`--tp 8 --ep 8`).
-- **P/D disaggregation** (two 8-GPU nodes): [`guides/pd-disaggregation/sidecar/modelserver/mthreads/sglang/base`](../../guides/pd-disaggregation/sidecar/modelserver/mthreads/sglang/base/) — 1P+1D, each TP=8, Mooncake KV transfer.
+- **[P/D disaggregation](../../guides/pd-disaggregation/README.md)** (two 8-GPU nodes): `ACCELERATOR_TYPE=mthreads`, `MODEL_SERVER=sglang` — 1P+1D, each TP=8, Mooncake KV transfer.
 
 See the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) and the [optimized-baseline guide](../../guides/optimized-baseline/README.md).
 

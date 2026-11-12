@@ -60,7 +60,7 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | --------- | -------- | --------- | ----- |
 | NixlConnector | default on NVIDIA GPU, AMD GPU, Intel XPU and MetaX | UCX (RDMA / TCP) | Supports heterogeneous TP across P/D. |
 | RblnNixlConnector | `npu/vllm/base` | NIXL over a RoCE VF | Rebellions' NIXL connector with `kv_buffer_device=rbln`. See the [Rebellions NPU tab](#2-deploy-the-model-server). |
-| MooncakeConnector | `gpu/vllm/cks-mooncake` | RDMA via Mooncake Transfer Engine | CKS with InfiniBand. See the platform table in [Prerequisites](#prerequisites). |
+| MooncakeConnector | `gpu/vllm/cks-mooncake` | RDMA via Mooncake Transfer Engine | CKS with InfiniBand. See the [platform prerequisites](../README.md#platform-prerequisites). |
 | MoRIIOConnector | `amd/vllm/moriio/*` | RDMA via MoRI-IO | AMD GPU. |
 | TPUConnector / TPUConnectorHMA | `tpu/*` | TPU ICI / DCN | From `tpu_inference`; HMA on TPU7x. |
 | IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
@@ -96,17 +96,7 @@ Both engines run on NVIDIA GPU with the same router configuration and move KV ca
 - The [LeaderWorkerSet controller](https://lws.sigs.k8s.io/docs/installation/) `v0.11.1` or newer with the `DisaggregatedSet` API enabled (`--set enableDisaggregatedSet=true` when installing with Helm, which also installs its validating webhook and RBAC). The [environment step](#configure-the-environment) below installs it; skip that step if your cluster already runs it.
   For TPU7x dynamic sub-slices, install or upgrade it through the [GKE dynamic slicing](../../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke) cluster preparation instead, whose GKE-documented minimum LWS version is older.
 
-- Prepare the cluster for your platform (`INFRA_PROVIDER`). `base`, `nixl/base`, `moriio/base`, and the TPU and community accelerators need nothing beyond the accelerator's device plugin (see the [model server tabs](#2-deploy-the-model-server)); the other platforms need:
-
-  | Accelerator | `INFRA_PROVIDER` | Cluster requirements | Setup |
-  | --- | --- | --- | --- |
-  | NVIDIA GPU | `gke`, `gke/a4x`, `gke/a4xmax` | GPU DRA (manual node labels and driver install, not yet GKE-managed) and managed DRANET for RoCE; `gke` targets A3/A4, `gke/a4x` / `gke/a4xmax` target A4X / A4X Max (GB200 / GB300); DRANet must support hairpin (same-node) and cross-rail (inter-node multi-rail) routing | [GKE: GPU DRA and DRANET](../../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke), [GKE A4X setup](../../../docs/infrastructure/providers/gke/README.md#gke-a4x-gb200-setup) |
-  | | `coreweave` | An RDMA device plugin exposing `rdma/ib` inside pods (one per pod); a default StorageClass supporting `ReadWriteMany` for the model cache PVC | [CoreWeave](../../../docs/infrastructure/providers/coreweave/README.md), [RDMA resources](../../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
-  | | `cks-mooncake` | vLLM only. GPUs via `nvidia.com/gpu`; InfiniBand devices exposed inside pods via an `rdma/ib` device plugin (NVIDIA Network Operator, Multus with SR-IOV, or equivalent); a vLLM image with `mooncake-transfer-engine` (the standard image may not include it); `VLLM_MOONCAKE_BOOTSTRAP_PORT` (default `8998`) unique per co-located instance. Configures `MooncakeConnector` transport only, not Mooncake Store | [RDMA resources](../../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities), [verify RDMA in a pod](../../../docs/infrastructure/rdma/README.md#2-inter-pod-network), [Mooncake installation](https://kvcache-ai.github.io/Mooncake/) |
-  | | `aws` | `p5en.48xlarge` nodes with the EFA device plugin exposing `vpc.amazonaws.com/efa` | [AWS EFA notes](../../../docs/infrastructure/rdma/README.md#aws-efa-deprecated---use-upstream-aws-images) |
-  | AMD GPU | `nixl/oci` | OKE `BM.GPU.MI300X.8` nodes; NVIDIA Network Operator SR-IOV VFs as `nvidia.com/sriov-rdma-vf`, with a `sriov-rdma-vf` SriovNetwork in namespace `default` | [RDMA resources](../../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
-  | | `nixl/tensorwave` | An RDMA device plugin exposing `rdma/ib` inside pods | [RDMA resources](../../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
-  | Intel XPU | `rdma` | A network DRA driver publishing a `dranet-rdma` DeviceClass with RDMA-capable NICs (`dra.net` `rdma` attribute); each claim aligns the NIC with its GPU's PCIe root | [RDMA resources](../../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
+- Prepare the cluster for your platform (`INFRA_PROVIDER`): see [Platform prerequisites](../README.md#platform-prerequisites) in the P/D overview.
 
 ### Get the guide
 
@@ -134,9 +124,9 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 | `iluvatar`, `metax`, `biren`, `mthreads`, `npu` | `base` |
 
 - `base`: generic Kubernetes cluster.
-- `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see the platform table in [Prerequisites](#prerequisites)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
+- `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see the [platform prerequisites](../README.md#platform-prerequisites)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
 - `coreweave`: CoreWeave with `rdma/ib`. `aws`: AWS with EFA.
-- `cks-mooncake`: CoreWeave CKS with `MooncakeConnector` over InfiniBand, vLLM only (see the platform table in [Prerequisites](#prerequisites)).
+- `cks-mooncake`: CoreWeave CKS with `MooncakeConnector` over InfiniBand, vLLM only (see the [platform prerequisites](../README.md#platform-prerequisites)).
 - `nixl/*`: `NixlConnector` on AMD; `nixl/oci` targets OCI OKE `BM.GPU.MI300X.8` with SR-IOV RDMA VFs, and `nixl/tensorwave` targets TensorWave.
 - `moriio/base`: `MoRIIOConnector` instead of NIXL, serving `Qwen/Qwen3-32B` (set `MODEL` accordingly).
 - `rdma` (Intel XPU): NIXL over RDMA instead of TCP.
@@ -313,7 +303,7 @@ For model sources, caching, and startup optimization, see the [Model Loading and
 <!-- guide:deploy.modelserver.standard[0] start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- guide:deploy.modelserver.standard[0] end -->
 
@@ -327,7 +317,7 @@ The GPU overlays enable tool calling and reasoning parsing with `--enable-auto-t
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.xpu[0] end -->
@@ -343,7 +333,7 @@ Its prefill liveness and readiness probes allow longer response times because `/
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.tpu[0] end -->
@@ -394,7 +384,7 @@ The TPU7x SGLang overlay serves `openai/gpt-oss-120b` and uses SGLang's gpt-oss 
 # One DisaggregatedSet; each role's LeaderWorkerSet group gets a 2x2x1 sub-slice, admitted by Kueue
 kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.dynamic_slice[0] end -->
@@ -428,7 +418,7 @@ This overlay sets `--enable-auto-tool-choice --tool-call-parser=qwen3_xml`, the 
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.iluvatar[0] end -->
@@ -454,7 +444,7 @@ The `iluvatar` overlay runs vLLM on Iluvatar BI-V150 with `IluNixlConnector`, Il
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.metax[0] end -->
@@ -484,7 +474,7 @@ The `metax` overlay runs vLLM on MetaX C500X over `NixlConnector` and the llm-d 
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.biren[0] end -->
@@ -510,7 +500,7 @@ The `biren` overlay is a **1 Prefill + 1 Decode** compatibility configuration: e
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.npu[0] end -->
@@ -550,7 +540,7 @@ The Rebellions configuration serves [MiniMax-M2.7](https://huggingface.co/MiniMa
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.modelserver.mthreads[0] end -->
@@ -763,7 +753,7 @@ To remove the deployed components:
 
 <!-- guide:cleanup.modelserver start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
 ```
 <!-- guide:cleanup.modelserver end -->
 

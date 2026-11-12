@@ -49,7 +49,7 @@ Options:
 
 After this completes, run the standard deployment:
     cd ../../../../guides/pd-disaggregation
-    # Follow guides/pd-disaggregation/sidecar/README.md to deploy the router and model server
+    # Follow guides/pd-disaggregation/README.md to deploy the router and model server
 
 EOF
 }
@@ -193,7 +193,7 @@ main() {
     echo
     print_status "Next step: Run standard deployment"
     echo "    cd ../../../../guides/pd-disaggregation"
-    echo "    # Follow guides/pd-disaggregation/sidecar/README.md to deploy the router and model server"
+    echo "    # Follow guides/pd-disaggregation/README.md to deploy the router and model server"
 }
 
 main "$@"

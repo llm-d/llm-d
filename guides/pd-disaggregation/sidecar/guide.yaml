@@ -124,7 +124,7 @@ env:
 
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
-    # The overlay is sidecar/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    # The overlay is guides/pd-disaggregation/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     # The leaf selects the platform and, where an accelerator offers multiple
     # connectors, includes it in the value (cks-mooncake: MooncakeConnector on
     # GPU; nixl/* or moriio/* on AMD; rdma: NIXL over RDMA on Intel XPU).
@@ -236,17 +236,17 @@ deploy:
       - when: {ACCELERATOR_TYPE: [gpu, amd]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     xpu:
       - when: {ACCELERATOR_TYPE: [xpu]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     tpu:
       - when: {ACCELERATOR_TYPE: ["tpu/v5p", "tpu/v6", "tpu/v7"]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     # Dynamic sub-slices are admitted by Kueue: the LocalQueue must exist in
     # the guide namespace before the overlay is applied. No nightly covers this
     # accelerator (it needs a full TPU7x 4x4x4 sub-block), hence skip_in: [ci].
@@ -257,32 +257,32 @@ deploy:
           # One DisaggregatedSet; each role's LeaderWorkerSet group gets a 2x2x1 sub-slice, admitted by Kueue
           kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     iluvatar:
       - when: {ACCELERATOR_TYPE: [iluvatar]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     metax:
       - when: {ACCELERATOR_TYPE: [metax]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     biren:
       - when: {ACCELERATOR_TYPE: [biren]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     mthreads:
       - when: {ACCELERATOR_TYPE: [mthreads]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
     npu:
       - when: {ACCELERATOR_TYPE: [npu]}
         run: |
           kubectl apply -n ${NAMESPACE} \
-            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+            -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -343,7 +343,7 @@ cleanup:
   modelserver:
     # For TPU dynamic sub-slices, delete the overlay before removing any node
     # pools so that Kueue releases the Slice resources it created.
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true

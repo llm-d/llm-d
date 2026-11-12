@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ../common plus the routing sidecar on decode: the model servers of the
+# routing-sidecar P/D guide, which every overlay below builds on.
+resources:
+  - ../common
+
+# NOTE: the model server image component is intentionally not set here.
+# Each overlay sets its own (e.g. gpu-vllm/release, gpu-vllm/aws-efa) because
+# kustomize resolves component image transforms at the base level, preventing
+# overlays from overriding the resolved image name with a different component.
+# The routing-sidecar image component must come after ../components/routing-sidecar,
+# which adds the container it sets the image of.
+components:
+  - ../components/routing-sidecar
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly

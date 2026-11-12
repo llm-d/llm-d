@@ -34,7 +34,7 @@ Use the automatic rolling update for routine changes. Use the manual canary when
 
 ## Prerequisites
 
-* A running P/D deployment on a DisaggregatedSet, with the LeaderWorkerSet controller `v0.11.1` or newer and `enableDisaggregatedSet=true` (see the [P/D disaggregation prerequisites](../../../guides/pd-disaggregation/sidecar/README.md#prerequisites)).
+* A running P/D deployment on a DisaggregatedSet, with the LeaderWorkerSet controller `v0.11.1` or newer and `enableDisaggregatedSet=true` (see the [P/D disaggregation prerequisites](../../../guides/pd-disaggregation/README.md#prerequisites)).
 * The llm-d Router installed for that deployment. The rollout screener is an Alpha plugin, so the EPP needs `allow-experimental-plugins: true`.
 * Model server images pinned by tag or digest. NIXL's compatibility check includes the vLLM version, so two nodes that pulled different `nightly` images cannot transfer KV to each other.
 

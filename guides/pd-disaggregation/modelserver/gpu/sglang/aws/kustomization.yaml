@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+# TODO(#1894): Remove override once upstream sglang images support EFA.
+# Keep the version in step with gpu-sglang/release.
+images:
+  - name: docker.io/lmsysorg/sglang
+    newName: public.ecr.aws/deep-learning-containers/sglang
+    newTag: 0.5.20-gpu-py312-cu130-ubuntu24.04-ec2
+
+components:
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml
+  # EFA devices, no CPU limit, and the p5en instance type.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-sglang
+      spec:
+        roles:
+          - name: decode
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    nodeSelector:
+                      node.kubernetes.io/instance-type: p5en.48xlarge
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            cpu: null
+                            vpc.amazonaws.com/efa: "8"
+                          requests:
+                            vpc.amazonaws.com/efa: "8"
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    nodeSelector:
+                      node.kubernetes.io/instance-type: p5en.48xlarge
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            cpu: null
+                            vpc.amazonaws.com/efa: "8"
+                          requests:
+                            vpc.amazonaws.com/efa: "8"

@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/pd-disaggregatedset/sglang
+  - resource-claim-templates.yaml
+
+nameSuffix: -xpu-sglang
+
+configurations:
+  - namereference.yaml
+
+components:
+  # NIXL/UCX with Level Zero support ships in images built after it was added;
+  # the v0.10.0 release image does not include NIXL.
+  - ../../../../../recipes/modelserver/components/images/xpu-sglang/nightly
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+
+labels:
+  - pairs:
+      llm-d.ai/model: Qwen3-0.6B
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/accelerator-variant: xpu
+      llm-d.ai/accelerator-vendor: intel
+      llm-d.ai/engine-type: sglang
+    fields:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        kind: DisaggregatedSet
+        create: true
+
+patches:
+  - path: patch-decode.yaml
+  - path: patch-prefill.yaml

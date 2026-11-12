@@ -1,0 +1,114 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+
+components:
+  - ../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+
+patches:
+  # Both roles get the same settings: written once under prefill and aliased into decode.
+  - patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: pd-disagg-vllm
+      spec:
+        roles:
+          - name: prefill
+            spec: &ocp
+              leaderWorkerTemplate:
+                workerTemplate:
+                  metadata:
+                    annotations:
+                      # One SR-IOV VF per rail (NetworkAttachmentDefinitions in `default`),
+                      # each backed by the matching openshift.io/pN_sriov_nodepolicy resource below.
+                      k8s.v1.cni.cncf.io/networks: default/compute-p1v0,default/compute-p2v0,default/compute-p3v0,default/compute-p4v0,default/compute-p5v0,default/compute-p6v0,default/compute-p7v0,default/compute-p8v0
+                  spec:
+                    initContainers:
+                      # llm-d-benchmark preprocess: discovers the node's RDMA HCAs/GIDs and
+                      # writes the matching NCCL/UCX/NVSHMEM exports (plus this container's
+                      # env) to /shared-config/llmdbench_env.sh. Requires the
+                      # `llm-d-benchmark-preprocesses` ConfigMap in the namespace.
+                      - name: preprocess
+                        image: ghcr.io/llm-d/llm-d-benchmark:v1.0.0
+                        imagePullPolicy: Always
+                        command:
+                          - python3
+                          - /setup/preprocess/set_llmdbench_environment.py
+                          - -e
+                          - /shared-config/llmdbench_env.sh
+                          - -i
+                        env:
+                          - name: HOME
+                            value: /tmp
+                          - name: LLMDBENCH_POD_NS
+                            valueFrom:
+                              fieldRef:
+                                fieldPath: metadata.namespace
+                          - name: UCX_TLS
+                            value: rc,sm,cuda_ipc,cuda_copy,tcp
+                          - name: UCX_SOCKADDR_TLS_PRIORITY
+                            value: tcp
+                        volumeMounts:
+                          - mountPath: /shared-config
+                            name: shared-config
+                          - mountPath: /setup/preprocess
+                            name: preprocesses
+                    containers:
+                      - name: modelserver
+                        # Source the env file written by `preprocess`, then run the base's
+                        # `vllm serve` args with the model ($1, a Hub ID) swapped for its
+                        # copy on the node-local hostPath. --served-model-name keeps the
+                        # API model name unchanged.
+                        command:
+                          - /bin/bash
+                          - -c
+                          - . /shared-config/llmdbench_env.sh && exec vllm serve "/model-cache/models/$1" --served-model-name "$1" "${@:2}"
+                          - vllm
+                        resources:
+                          limits: &sriov
+                            openshift.io/p1_sriov_nodepolicy: "1"
+                            openshift.io/p2_sriov_nodepolicy: "1"
+                            openshift.io/p3_sriov_nodepolicy: "1"
+                            openshift.io/p4_sriov_nodepolicy: "1"
+                            openshift.io/p5_sriov_nodepolicy: "1"
+                            openshift.io/p6_sriov_nodepolicy: "1"
+                            openshift.io/p7_sriov_nodepolicy: "1"
+                            openshift.io/p8_sriov_nodepolicy: "1"
+                            rdma/roce_gdr: "1"
+                          requests: *sriov
+                        securityContext:
+                          capabilities:
+                            add:
+                              # IPC_LOCK: pin RDMA memory regions; the rest match the
+                              # existing SR-IOV/RoCE pods on this cluster.
+                              - IPC_LOCK
+                              - SYS_RAWIO
+                              - NET_ADMIN
+                              - NET_RAW
+                        volumeMounts:
+                          - mountPath: /shared-config
+                            name: shared-config
+                          # Model weights must already be on every node under
+                          # /var/model-cache/models/<org>/<model> (provisioned outside this guide).
+                          - mountPath: /model-cache
+                            name: model-storage
+                            readOnly: true
+                    volumes:
+                      - name: shared-config
+                        emptyDir: {}
+                      - name: preprocesses
+                        configMap:
+                          name: llm-d-benchmark-preprocesses
+                          defaultMode: 0755
+                      # Node-local model cache. The directory must already exist on the
+                      # node and, on SELinux nodes, be labelled container_file_t so
+                      # non-spc_t containers can read it.
+                      - name: model-storage
+                        hostPath:
+                          path: /var/model-cache
+                          type: Directory
+          - name: decode
+            spec: *ocp

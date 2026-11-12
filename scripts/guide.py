@@ -798,6 +798,15 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 
+def _modelserver_root(guide_dir: Path) -> Path:
+    """The guide's ``modelserver/`` directory. A guide split into modes that
+    share one set of overlays (``guides/pd-disaggregation/{sidecar,coord}``)
+    has none of its own and uses its parent's."""
+    own = guide_dir / "modelserver"
+    shared = guide_dir.parent / "modelserver"
+    return shared if not own.is_dir() and shared.is_dir() else own
+
+
 def _check_provider_overlays(guide: dict, guide_dir: Path) -> Findings:
     """Every provider the site can select — each (accelerator, engine
     supported on it, provider allowing that engine) — must have at least one
@@ -805,10 +814,13 @@ def _check_provider_overlays(guide: dict, guide_dir: Path) -> Findings:
     ``/<provider>``. Suffix match, because some guides nest extra levels
     (``<connector>/<tier>/<provider>``) and providers may contain ``/``
     (``gke/a4x``). Every ``modelserver/`` directory in the guide counts, so
-    guides split by topology (``<topology>/modelserver/...``) are covered."""
+    guides split by topology (``<topology>/modelserver/...``) are covered, as
+    is a shared parent ``modelserver/`` (see :func:`_modelserver_root`)."""
     f = Findings()
     accels = guide["support"].get("accelerators")
     ms_dirs = sorted(p for p in guide_dir.rglob("modelserver") if p.is_dir())
+    if not ms_dirs and _modelserver_root(guide_dir).is_dir():
+        ms_dirs = [_modelserver_root(guide_dir)]
     for accel in accels if isinstance(accels, dict) else {}:
         for prov in support_providers(guide, str(accel)):
             name = prov["name"].strip("/")
@@ -855,7 +867,7 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
         return f
     engine_values = set(_declared_values(guide, ENGINE_VAR))
 
-    ms_dir = guide_dir / "modelserver"
+    ms_dir = _modelserver_root(guide_dir)
     if ms_dir.is_dir():
         for accel, spec in accels.items():
             cells = spec.get("engines") if isinstance(spec, dict) else None

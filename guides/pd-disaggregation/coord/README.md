@@ -50,7 +50,7 @@ KV cache moves from prefill to decode with vLLM's `NixlConnector`. NIXL works ov
 
 - A Kubernetes Gateway named `llm-d-inference-gateway` in the guide namespace, deployed with one of [the gateway guides](../../../docs/infrastructure/gateway) after you create the namespace below.
 
-- For `INFRA_PROVIDER=gke`: GKE A3 Ultra / A4 nodes with GPU DRA and managed DRANet for RoCE. See [GKE: GPU DRA and DRANET](../../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
+- For `INFRA_PROVIDER=gke`: GKE A3 Ultra / A4 nodes with GPU DRA and managed DRANet for RoCE. See [Platform prerequisites](../README.md#platform-prerequisites) and [GKE: GPU DRA and DRANET](../../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
 
 ### Get the guide
 
