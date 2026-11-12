@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Install shellcheck
         run: |
@@ -38,9 +40,8 @@ jobs:
       - name: Run pre-commit
         uses: j178/prek-action@v2
         with:
-          extra-args: ''
+          extra-args: --from-ref origin/main --to-ref HEAD
 
       - name: Run unit tests
         run: |
           python3 -m unittest discover -t . -s docker/scripts/snapshot
-
