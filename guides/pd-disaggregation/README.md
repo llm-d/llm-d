@@ -22,6 +22,20 @@ Both guides deploy the prefill and decode roles as one [`DisaggregatedSet`](http
 
 **Consider the [Coordinator](coord/README.md)** when decode is the contended stage, per-request load is heterogeneous (long-tailed outputs, widely varying prompt or image sizes), and requests arrive in bursts. Its later decode pick then keeps the decode pods balanced: in the [Coordinator Disaggregation benchmarks](../coord-disaggregation/README.md#benchmark) it delivered 4–10% higher throughput and up to 15% lower p99 TTFT in that regime, at the cost of a few milliseconds of TTFT per request for the extra Gateway round trip per phase.
 
+## RDMA networking
+
+NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production. Each guide selects its RDMA setup with an `INFRA_PROVIDER` overlay; the per-platform prerequisites are in the [sidecar guide's Prerequisites](sidecar/README.md#prerequisites) and the [Coordinator guide's Prerequisites](coord/README.md#prerequisites).
+
+### Intel XPU with RDMA
+
+The sidecar guide's RDMA overlay ([`sidecar/modelserver/xpu/vllm/rdma/`](sidecar/modelserver/xpu/vllm/rdma/)) carries KV-cache transfer on Intel XPU over RDMA instead of TCP. It requires:
+
+- An RDMA DRA driver exposing the `dranet-rdma` device class (e.g., [Intel Network Operator for Kubernetes](https://github.com/intel/network-operator)).
+- GPU-NIC PCIe alignment for optimal transfer performance.
+- UCX transport configured with `ib,rc,ze_copy`.
+
+The overlay reuses the standard XPU vLLM base and adds one RDMA DRA claim per pod plus RDMA-specific UCX transport settings. Deploy it with `ACCELERATOR_TYPE=xpu` and `INFRA_PROVIDER=rdma` in the [sidecar guide](sidecar/README.md).
+
 ## Layout
 
 ```
