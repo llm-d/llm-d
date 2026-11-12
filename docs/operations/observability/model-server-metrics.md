@@ -59,9 +59,15 @@ The descriptions below were checked against vLLM at `85e199e` ([`spec_decode/met
 | Metric | What it measures | Why it matters |
 | -------- | ------------------ | ---------------- |
 | `vllm:spec_decode_num_drafts_total` | Drafts counted in the engine's stats: one per request per step that scheduled at least one draft token | Shows that drafting was recorded. Not a count of requests or scheduler steps |
-| `vllm:spec_decode_num_draft_tokens_total` | Draft tokens counted in the engine's stats. Draft tokens rejected by a structured-output grammar before verification are not counted | Denominator for acceptance. Divided by drafts, it gives the average proposal length to compare with the configured number of speculative tokens |
+| `vllm:spec_decode_num_draft_tokens_total` | Draft tokens counted in the engine's stats, as scheduled. Draft tokens invalidated by a structured-output grammar are not counted. With adaptive verification, draft tokens the target did not verify are counted | Denominator for acceptance. Divided by drafts, it gives the average proposal length to compare with the configured number of speculative tokens |
 | `vllm:spec_decode_num_accepted_tokens_total` | Draft tokens the target model accepted. The token the target model samples itself is not counted | Numerator for acceptance |
 | `vllm:spec_decode_num_accepted_tokens_per_pos_total` | Accepted draft tokens by draft `position` | Shows where acceptance drops off along the draft |
+
+Three counts are easy to mix up: draft tokens the drafter proposed, draft tokens the target verified, and draft tokens the target accepted. At the revision above, only the draft-token and accepted-token counters exist, and the draft-token counter is neither exactly the proposed nor the verified count.
+
+Adaptive verification (`enable_adaptive_verification`, Model Runner V2, `dspark` method at that revision) verifies only part of the drafted tokens. Open upstream proposals add a verified count with different names and semantics ([vllm-project/vllm#58340](https://github.com/vllm-project/vllm/pull/58340), [vllm-project/vllm#64099](https://github.com/vllm-project/vllm/issues/64099)); neither is merged, so confirm any verified-token series and its meaning on the installed server.
+
+Acceptance (accepted over draft tokens) and mean acceptance length (1 + accepted over drafts, as vLLM logs it) are separate quantities. Mean acceptance length includes the token the target samples itself, and it is not the number of tokens a client received.
 
 > [!NOTE]
 > Acceptance is a ratio of draft tokens, not a health check, an output-correctness check, or a measure of end-to-end speedup. A 0 acceptance while draft tokens increase is a real observation. An empty ratio is undefined: no draft tokens in the window, a missing series, too few samples, or mismatched labels can each produce it. If the counters stay flat, `--disable-log-stats` is one thing to check, based on the stats path at the revision above.

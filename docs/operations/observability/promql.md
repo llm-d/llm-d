@@ -131,10 +131,13 @@ Model-level rows divide the sum of the numerator by the sum of the denominator o
 | **Draft token acceptance** | `sum by(model_name) (rate(vllm:spec_decode_num_accepted_tokens_total[5m])) / (sum by(model_name) (rate(vllm:spec_decode_num_draft_tokens_total[5m])) > 0)` |
 | **Draft token acceptance per engine** | `sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_accepted_tokens_total[5m])) / (sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_draft_tokens_total[5m])) > 0)` |
 | **Average proposal length per engine** | `sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_draft_tokens_total[5m])) / (sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_drafts_total[5m])) > 0)` |
+| **Mean acceptance length per engine** | `1 + sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_accepted_tokens_total[5m])) / (sum by(model_name, namespace, pod, engine) (rate(vllm:spec_decode_num_drafts_total[5m])) > 0)` |
 | **Engines with draft tokens but no accepted-token series** | `count by(model_name, namespace, pod, engine) (vllm:spec_decode_num_draft_tokens_total) unless count by(model_name, namespace, pod, engine) (vllm:spec_decode_num_accepted_tokens_total)` |
 | **Observed counter resets in 5m** | `sum by(model_name, namespace, pod, engine) (resets(vllm:spec_decode_num_draft_tokens_total[5m]))` |
 
 The average proposal length is a window average over drafts. It does not show that every draft had the same length, and it is not tokens generated per step.
+
+Acceptance, average proposal length, and mean acceptance length are computed from draft counts. They do not show how many draft tokens the target verified: with adaptive verification, skipped draft tokens are still counted as draft tokens, and a lower mean acceptance length can follow a smaller verification budget. Mean acceptance length is not tokens received by clients. See [Diagnose Speculative Decoding](./speculative-decoding.md#lower-acceptance-or-mean-acceptance-length).
 
 `rate()` adjusts for observed counter resets and extrapolates across the window. Missing samples and process replacement still limit interpretation. A reset is a hint of a restart, not a restart count; a replacement process with different labels starts a new series instead of showing a reset.
 

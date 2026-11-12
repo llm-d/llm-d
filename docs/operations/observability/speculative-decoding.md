@@ -15,15 +15,18 @@ not a cause. A missing series is recorded as unknown, not filled in as 0.
 | Configuration | Image digest, vLLM version, resolved speculative config in the server log | The SD config the running engine reports | That drafting happened, or output correctness |
 | Collection | The server's raw `/metrics` and what Prometheus stored for the same target | Where a series stops appearing | That SD is off, from a missing series alone |
 | Drafting | Increase of drafts and draft tokens in the window | Drafting recorded in that scope | That every request or step drafted |
-| Acceptance | Accepted over draft tokens, same engines and window | Share of recorded draft tokens accepted | Health, correctness, or end-to-end speedup |
+| Acceptance | Accepted over draft tokens, same engines and window | Share of recorded draft tokens accepted | Health, correctness, end-to-end speedup, or how many draft tokens were verified |
+| Mean acceptance length | 1 + accepted over drafts, same engines and window | Average tokens counted per draft, including the token the target samples | Tokens the client received, or a degraded state on its own |
+| Verification | Adaptive verification setting in the resolved config; a verified-token series only if the installed version has one | Whether the target can verify fewer draft tokens than were drafted | How many were verified, from draft counts alone |
 | Selected K (optional) | Increase per `num_spec_tokens` value of the proposed upstream metric | Distribution of the K chosen for steps that scheduled work | Tokens, requests, or time per K |
 | Latency | ITL/TPOT, load, version, separate dispatch evidence | Changes that happen together | That SD or CUDA graphs caused a speedup |
 
 ## 1. Record what is running
 
 Record the image digest, the vLLM version, the SD method, the drafter, and the
-resolved speculative config the server logs at startup. Command-line flags alone
-do not show which configuration was applied.
+resolved speculative config the server logs at startup, including whether
+adaptive verification (`enable_adaptive_verification`) is on. Command-line flags
+alone do not show which configuration was applied.
 
 ## 2. Compare the raw output with what Prometheus stored
 
@@ -92,6 +95,46 @@ Missing samples and process replacement still limit interpretation. When
 comparing runs, record the window and the process lifetimes separately. The
 "Observed counter resets in 5m" query gives a hint of restarts, not a count.
 
+### Lower acceptance or mean acceptance length
+
+Check the adaptive verification setting from step 1 before reading a drop, for
+example one that follows rising load, as a problem.
+
+- **Adaptive verification on**: the target verifies a batch-wide budget of
+  draft tokens, shared out by confidence as a prefix of each draft, and can verify
+  fewer of them at high concurrency (see the
+  [vLLM adaptive verification post](https://vllm.ai/blog/2026-08-14-dspark-adaptive-verification)).
+  Fewer tokens can then be accepted, so a lower mean acceptance length can
+  reflect a smaller verification budget rather than worse drafts. It is not, on
+  its own, a degraded state.
+- **Adaptive verification off or unknown**: the drop is an observation. Compare
+  it with load, prompts, output lengths, and version before naming a cause.
+
+At the vLLM revision noted in
+[Model Server Metrics](./model-server-metrics.md#vllm-speculative-decoding-metrics),
+draft tokens that adaptive verification did not verify still count as draft
+tokens, and there is no verified-token counter. Acceptance and average proposal
+length therefore do not show how many draft tokens the target verified. Two open
+upstream proposals add a verified count with different names and meanings:
+
+- [vllm-project/vllm#58340](https://github.com/vllm-project/vllm/pull/58340)
+  (not merged): `vllm:spec_decode_num_verified_draft_tokens_total`, exposed only
+  with adaptive verification on.
+- [vllm-project/vllm#64099](https://github.com/vllm-project/vllm/issues/64099)
+  (RFC, implementation not merged):
+  `vllm:spec_decode_num_verified_tokens_total`, always exposed, together with a
+  change to what the draft-token counter includes.
+
+If the installed server exposes a verified-token series, read it with that
+version's definition. Otherwise the verification budget stays undetermined; do
+not infer it from draft counts.
+
+Mean acceptance length is an engine-stats average per draft. It is not the
+number of tokens a client received: tokens accepted after an end-of-sequence
+token are still counted
+([vllm-project/vllm#56101](https://github.com/vllm-project/vllm/issues/56101),
+open).
+
 ## 5. Selected K (optional)
 
 The proposed upstream metric
@@ -134,6 +177,10 @@ no-draft steps were recorded. It does not show that every request in the window
 ran at K=0. It also does not explain every flat draft counter at that time.
 
 Without this metric, whether K=0 was intentional stays undetermined.
+
+The selected K, the number of draft tokens the target verified, and the mean
+acceptance length are three different quantities. With adaptive verification,
+the target can verify fewer draft tokens than the selected K.
 
 ## 6. Compare latency separately
 
