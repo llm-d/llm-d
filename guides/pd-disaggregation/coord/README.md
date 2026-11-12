@@ -20,7 +20,7 @@ For the Coordinator's design, its benchmarks against the sidecar, and when the l
 
 This guide covers:
 
-- **NVIDIA GPU with vLLM only.** SGLang is not supported.
+- **vLLM on NVIDIA GPU and on Google TPU7x dynamic sub-slices.** SGLang is not supported. The TPU7x variant has not been run end to end with the Coordinator yet (see its [model server tab](#3-deploy-the-model-server)).
 - **Gateway Mode only.** The Coordinator sends every phase call back through a Kubernetes Gateway, so the router's Standalone Mode is not supported.
 - **One EPP for both phases.** The per-role EPP topology of the [Coordinator Disaggregation](../../coord-disaggregation/README.md) guide is not covered.
 
@@ -30,11 +30,12 @@ This guide covers:
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `openai/gpt-oss-120b` | 🟡 community | H200 · 1P (TP=1) + 1D (TP=4), 5 GPUs · NIXL · Coordinator behind a Kubernetes Gateway |
+| Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA · not yet run end to end |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-KV cache moves from prefill to decode with vLLM's `NixlConnector`. NIXL works over TCP, but RDMA networking is **highly recommended**; the `gke` overlay uses GPU DRA and DRANet RoCE.
+KV cache moves from prefill to decode with vLLM's `NixlConnector` on NVIDIA GPU and `TPUConnectorHMA` on TPU7x. NIXL works over TCP, but RDMA networking is **highly recommended**; the NVIDIA GPU `gke` overlay uses GPU DRA and DRANet RoCE.
 
 ## Prerequisites
 
@@ -50,7 +51,9 @@ KV cache moves from prefill to decode with vLLM's `NixlConnector`. NIXL works ov
 
 - A Kubernetes Gateway named `llm-d-inference-gateway` in the guide namespace, deployed with one of [the gateway guides](../../../docs/infrastructure/gateway) after you create the namespace below.
 
-- For `INFRA_PROVIDER=gke`: GKE A3 Ultra / A4 nodes with GPU DRA and managed DRANet for RoCE. See [Platform prerequisites](../README.md#platform-prerequisites) and [GKE: GPU DRA and DRANET](../../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
+- For `INFRA_PROVIDER=gke` on NVIDIA GPU: GKE A3 Ultra / A4 nodes with GPU DRA and managed DRANet for RoCE. See [Platform prerequisites](../README.md#platform-prerequisites) and [GKE: GPU DRA and DRANET](../../../docs/infrastructure/providers/gke/README.md#gpu-dynamic-resource-allocation-dra-and-dranet-roce-on-gke).
+
+- For `ACCELERATOR_TYPE=tpu/v7-dynamic-slice`: pre-provisioned TPU7x `4x4x4` sub-blocks, with the cluster preparation and Kueue resources from [GKE dynamic slicing](../../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke), which also installs the LeaderWorkerSet controller.
 
 ### Get the guide
 
@@ -65,7 +68,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 
 ### Configure the environment
 
-`INFRA_PROVIDER` selects the model server overlay: `gke` for GKE with GPU DRA and DRANet RoCE, `base` for a generic Kubernetes cluster. `GW_PROVIDER_NAME` is the provider of your Gateway.
+`INFRA_PROVIDER` selects the model server overlay: on NVIDIA GPU, `gke` for GKE with GPU DRA and DRANet RoCE and `base` for a generic Kubernetes cluster; `tpu/v7-dynamic-slice` takes `gke` only. Set `MODEL` to the model your accelerator serves ([Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)). `GW_PROVIDER_NAME` is the provider of your Gateway.
 
 <!-- guide:env.static start -->
 ```bash
@@ -74,18 +77,22 @@ export GUIDE_NAME=pd-disaggregation-coordinator
 export NAMESPACE=llm-d-pd-disaggregation-coordinator
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu
+export ACCELERATOR_TYPE=gpu # options: gpu, tpu/v7-dynamic-slice
 export MODEL_SERVER=vllm # options: vllm
-export INFRA_PROVIDER=gke # options: base, gke; gke: GPU DRA and DRANet RoCE (see Prerequisites)
+export INFRA_PROVIDER=gke # options: base, gke; gke: GPU DRA and DRANet RoCE on NVIDIA GPU, the GKE TPU7x sub-slices on TPU (see Prerequisites); TPU takes gke only
 export GW_PROVIDER_NAME=gke # options: gke, istio, agentgateway
-export MODEL=openai/gpt-oss-120b
+export MODEL=openai/gpt-oss-120b # tpu/v7-dynamic-slice serves Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
 <!-- guide:env.static end -->
 
-**Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`):
+**Install the LeaderWorkerSet controller with the `DisaggregatedSet` API** (skip if your cluster already runs LWS `v0.11.1` or newer with `enableDisaggregatedSet=true`; for TPU7x dynamic sub-slices, the GKE dynamic slicing cluster preparation installs it instead):
 
 <!-- guide:prerequisites.lws start -->
+<!-- variants:start -->
+<details open data-when="ACCELERATOR_TYPE=gpu">
+<summary><b>NVIDIA GPU</b></summary>
+
 <!-- llm-d-cicd:skip start -->
 ```bash
 # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
@@ -99,6 +106,9 @@ helm upgrade --install lws oci://registry.k8s.io/lws/charts/lws \
   --wait --timeout 300s
 ```
 <!-- llm-d-cicd:skip end -->
+
+</details>
+<!-- variants:end -->
 <!-- guide:prerequisites.lws end -->
 
 **Install the Gateway API Inference Extension CRDs:**
@@ -244,16 +254,47 @@ The `gke` overlay adds a `HealthCheckPolicy` and a 300s `GCPBackendPolicy` for t
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../../docs/operations/startup/model-loading-and-startup.md).
 
-**Apply the Kustomize overlay.** [`modelserver/gpu/vllm/base`](modelserver/gpu/vllm/base/) deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`) as one `DisaggregatedSet`. The engines are the same as in the sidecar guide, but decode runs no routing sidecar and serves port 8000 directly. The `gke` overlay adds one GPU and RoCE NIC claim per rank and a node-local HuggingFace cache.
+**Apply the Kustomize overlay** for your accelerator. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`) as one `DisaggregatedSet`, built on the same model server manifests as the sidecar guide ([`../modelserver/`](../modelserver/)), but decode runs no routing sidecar and serves port 8000 directly.
 
-<!-- guide:deploy.modelserver start -->
+<!-- tabs:start group=modelserver -->
+<details open>
+<summary><b>NVIDIA GPU</b></summary>
+
+<!-- guide:deploy.modelserver.standard[0] start -->
 ```bash
 kubectl apply -n ${NAMESPACE} \
   -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 ```
-<!-- guide:deploy.modelserver end -->
+<!-- guide:deploy.modelserver.standard[0] end -->
 
-The overlays enable tool calling and reasoning parsing with `--enable-auto-tool-choice --tool-call-parser=openai --reasoning-parser=openai_gptoss`. Scaling and rollouts work as in the sidecar guide; see [Disaggregated Serving: Operations (DisaggregatedSet)](../../../docs/operations/disaggregation/disaggregatedset.md).
+[`modelserver/gpu/vllm/base`](modelserver/gpu/vllm/base/) applies [`../modelserver/gpu/vllm/common`](../modelserver/gpu/vllm/common/), and the `gke` overlay adds one GPU and RoCE NIC claim per rank and a node-local HuggingFace cache. The overlays enable tool calling and reasoning parsing with `--enable-auto-tool-choice --tool-call-parser=openai --reasoning-parser=openai_gptoss`.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=tpu/v7-dynamic-slice">
+<summary><b>Google TPU v7 (dynamic slicing)</b></summary>
+
+<!-- guide:deploy.modelserver.dynamic_slice[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# One DisaggregatedSet; each role's LeaderWorkerSet group gets a 2x2x1 sub-slice, admitted by Kueue
+kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.dynamic_slice[0] end -->
+
+> [!WARNING]
+> Not yet run end to end with the Coordinator: a run needs a full TPU7x `4x4x4` sub-block (64 chips), which llm-d CI does not have. The routing sidecar drives this overlay's `TPUConnectorHMA` with its `nixlv2` protocol, the same prefill-then-decode `kv_transfer_params` exchange as the Coordinator's `kv-nixl` connector.
+
+`ACCELERATOR_TYPE=tpu/v7-dynamic-slice` deploys `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` (`TP=8` per `2x2x1` sub-slice) as one `DisaggregatedSet` (`pd-disagg-tpu-vllm`) with a `prefill` and a `decode` role of one replica each, from [`../modelserver/tpu/v7-dynamic-slice/vllm/common`](../modelserver/tpu/v7-dynamic-slice/vllm/common/). Kueue Topology-Aware Scheduling places each role's LeaderWorkerSet group on a sub-slice that [GKE dynamic slicing](../../../docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke) forms on demand. Pods are admitted once their `Slice` resources are `ACTIVE` (`kubectl get slices -n ${NAMESPACE}`). The overlay sets `--enable-auto-tool-choice --tool-call-parser=qwen3_xml` and no reasoning parser.
+
+The router values keep the gpt-oss-120b H200 `peakPrefillThroughput`; calibrate it for this model with the [calibration guide](../../recipes/router/calibration/README.md) before performance work. For the requirements, xPyD tuning, and Kueue-specific settings, see the [sidecar guide's TPU7x dynamic-slice tab](../sidecar/README.md#2-deploy-the-model-server).
+
+</details>
+<!-- tabs:end -->
+
+Scaling and rollouts work as in the sidecar guide; see [Disaggregated Serving: Operations (DisaggregatedSet)](../../../docs/operations/disaggregation/disaggregatedset.md).
 
 **(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../../docs/operations/observability/metrics.md)):
 

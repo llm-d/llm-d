@@ -13,7 +13,7 @@ llm-d drives the two phases of a request in one of two ways. Each has its own gu
 | Who drives the phases | A routing sidecar in front of each decode engine: the request lands on the decode pod, whose sidecar sends the prompt to the prefill pod and then decodes locally | A standalone Coordinator service runs a `prefill → decode` pipeline per request and calls the router once per phase |
 | When the decode pod is picked | Together with the prefill pod, in one scheduling cycle, before prefill starts | After prefill has finished, based on the pool's state at that time |
 | Router | One EPP with the `disagg-profile-handler`; Standalone or Gateway Mode | One EPP with the `header-profile-handler`; Gateway Mode only |
-| Accelerators and model servers | NVIDIA, AMD, Intel XPU, Google TPU and community accelerators; vLLM and SGLang | NVIDIA GPU with vLLM |
+| Accelerators and model servers | NVIDIA, AMD, Intel XPU, Google TPU and community accelerators; vLLM and SGLang | vLLM on NVIDIA GPU and TPU7x dynamic sub-slices (TPU not yet run end to end) |
 | Maturity | Nightly E2E on several platforms | Community; not covered by nightly E2E |
 
 Both guides deploy the prefill and decode roles as one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) and use the same prefill and decode scheduling profiles.
@@ -43,7 +43,7 @@ Each guide selects the platform with `INFRA_PROVIDER`. `base`, `nixl/base`, `mor
 | | `nixl/tensorwave` | An RDMA device plugin exposing `rdma/ib` inside pods | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
 | Intel XPU | `rdma` | A network DRA driver publishing a `dranet-rdma` DeviceClass with RDMA-capable NICs (`dra.net` `rdma` attribute); each claim aligns the NIC with its GPU's PCIe root | [RDMA resources](../../docs/infrastructure/rdma/README.md#rdma-resources-and-capabilities) |
 
-The [Coordinator guide](coord/README.md) supports NVIDIA GPU with `base` and `gke` only.
+The [Coordinator guide](coord/README.md) supports NVIDIA GPU with `base` and `gke`, and TPU7x dynamic sub-slices with `gke`.
 
 ### Intel XPU with RDMA
 
@@ -64,9 +64,12 @@ guides/pd-disaggregation/
     gpu/vllm/base/                      common + the routing sidecar on decode (the sidecar guide)
     gpu/vllm/components/routing-sidecar adds the sidecar; moves decode vLLM to port 8200
     gpu/vllm/components/gke             GPU DRA + DRANet RoCE, used by both guides' gke overlays
+    tpu/v7-dynamic-slice/vllm/common/   TPU7x sub-slice DisaggregatedSet, no routing sidecar;
+                                        base/ adds components/routing-sidecar the same way
   sidecar/        guide.yaml, README.md, router/
   coord/          guide.yaml, README.md, router/, coordinator/,
-                  modelserver/gpu/vllm/{base,gke} (thin overlays over gpu/vllm/common)
+                  modelserver/gpu/vllm/{base,gke}, modelserver/tpu/v7-dynamic-slice/vllm/gke
+                  (thin overlays over the shared common/ directories)
 ```
 
 Every other accelerator's overlays include the routing sidecar directly and serve the sidecar guide only.

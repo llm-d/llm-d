@@ -14,6 +14,13 @@ support:
         - {name: base, label: "Kubernetes (base)"}
         - {name: gke, label: "GKE"}
       engines: {vllm: community}
+    "tpu/v7-dynamic-slice":
+      label: Google TPU v7 (dynamic slicing)
+      notes: "TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA · not yet run end to end"
+      model: Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+      providers:
+        - {name: gke, label: "GKE"}
+      engines: {vllm: community}
 
 env:
   static:
@@ -27,15 +34,15 @@ env:
     MONITORING: {default: "false", values: ["false", "true"]}
     MONITORING_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, "tpu/v7-dynamic-slice"]}
     MODEL_SERVER: {default: vllm, values: [vllm]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
-    INFRA_PROVIDER: {default: gke, values: [base, gke], comment: "gke: GPU DRA and DRANet RoCE (see Prerequisites)"}
+    INFRA_PROVIDER: {default: gke, values: [base, gke], comment: "gke: GPU DRA and DRANet RoCE on NVIDIA GPU, the GKE TPU7x sub-slices on TPU (see Prerequisites); TPU takes gke only"}
     # The provider of the llm-d-inference-gateway Gateway. The Coordinator sends
     # every phase call through it, so it also decides GATEWAY_ADDRESS.
     GW_PROVIDER_NAME: {default: gke, values: [gke, istio, agentgateway]}
 
-    MODEL: {default: "openai/gpt-oss-120b"}
+    MODEL: {default: "openai/gpt-oss-120b", comment: "tpu/v7-dynamic-slice serves Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"}
 
   source: ["${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE"]
 
@@ -50,8 +57,11 @@ prerequisites:
     - run: |
         # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
         kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+  # TPU7x dynamic sub-slices get their LWS controller from the GKE cluster
+  # preparation (docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke).
   lws:
-    - skip_in: [ci]
+    - when: {ACCELERATOR_TYPE: [gpu]}
+      skip_in: [ci]
       run: |
         # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
         # "Upgrade by Helm"); this upgrades them on clusters that run an older LWS.
@@ -126,10 +136,24 @@ deploy:
         echo "GATEWAY_ADDRESS=${GATEWAY_ADDRESS}" # must be non-empty
     - run: kustomize build ${REPO_ROOT}/guides/pd-disaggregation/coord/coordinator/${COORDINATOR_OVERLAY}/ | envsubst '${GATEWAY_ADDRESS}' | kubectl apply -n ${NAMESPACE} -f -
 
+  # Model server variants, one README tab each.
   modelserver:
-    - run: |
-        kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    standard:
+      - when: {ACCELERATOR_TYPE: [gpu]}
+        run: |
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    # Dynamic sub-slices are admitted by Kueue: the LocalQueue must exist in
+    # the guide namespace before the overlay is applied. It needs a full TPU7x
+    # 4x4x4 sub-block, hence skip_in: [ci].
+    dynamic_slice:
+      - when: {ACCELERATOR_TYPE: ["tpu/v7-dynamic-slice"]}
+        skip_in: [ci]
+        run: |
+          # One DisaggregatedSet; each role's LeaderWorkerSet group gets a 2x2x1 sub-slice, admitted by Kueue
+          kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/docs/infrastructure/providers/gke/dynamic-slicing/kueue-localqueue.yaml
+          kubectl apply -n ${NAMESPACE} \
+            -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -182,6 +206,8 @@ verify:
 
 cleanup:
   modelserver:
+    # For TPU dynamic sub-slices, delete the overlay before removing any node
+    # pools so that Kueue releases the Slice resources it created.
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/pd-disaggregation/coord/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
   coordinator:
     - run: kustomize build ${REPO_ROOT}/guides/pd-disaggregation/coord/coordinator/${COORDINATOR_OVERLAY}/ | envsubst '${GATEWAY_ADDRESS}' | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -

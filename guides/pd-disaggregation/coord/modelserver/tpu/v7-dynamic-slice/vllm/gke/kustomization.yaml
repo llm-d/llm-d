@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Model servers on GKE TPU7x dynamic sub-slices (2x2x1): the prefill and decode
+# roles shared with the routing-sidecar guide
+# (guides/pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/common), with no
+# routing sidecar, so decode serves port 8000 directly. Each role's
+# LeaderWorkerSet is admitted by Kueue; see the cluster prerequisites in
+# docs/infrastructure/providers/gke/README.md#tpu-dynamic-slicing-on-gke.
+#
+# Untested: no end-to-end run of the Coordinator on TPU7x sub-slices yet. The
+# routing sidecar drives TPUConnectorHMA with its nixlv2 protocol, which is the
+# exchange the Coordinator's kv-nixl connector runs.
+resources:
+  - ../../../../../../modelserver/tpu/v7-dynamic-slice/vllm/common
+
+patches:
+  # Label the pods with this guide's name, so the InferencePool of the
+  # pd-disaggregation-coordinator router release selects them.
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+      name: pd-disagg-tpu-vllm
+    patch: |-
+      - op: replace
+        path: /metadata/labels/llm-d.ai~1guide
+        value: pd-disaggregation-coordinator
+      - op: replace
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1guide
+        value: pd-disaggregation-coordinator
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/metadata/labels/llm-d.ai~1guide
+        value: pd-disaggregation-coordinator

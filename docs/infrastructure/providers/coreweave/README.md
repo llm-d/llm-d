@@ -24,7 +24,7 @@ kubectl apply -n ${NAMESPACE} -f guides/recipes/modelserver/components/model-cac
 
 [`model-cache-pvc.yaml`](../../../../guides/recipes/modelserver/components/model-cache/model-cache-pvc.yaml) omits `storageClassName`, so the PVC binds the cluster's default StorageClass.
 
-Guides that automate this run the step above when `INFRA_PROVIDER=coreweave`; see the [Prefill/Decode disaggregation guide](../../../../guides/pd-disaggregation/README.md) for an example.
+Guides that automate this run the step above when `INFRA_PROVIDER=coreweave`; see the [Prefill/Decode disaggregation guide](../../../../guides/pd-disaggregation/README.md#prerequisites) for an example.
 
 ### Cold cache with multiple replicas
 
