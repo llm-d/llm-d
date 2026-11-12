@@ -36,13 +36,13 @@ def _render(overlay: str) -> str:
     return result.stdout
 
 
-@pytest.mark.parametrize("overlay", ["ocp", "k8s"])
+@pytest.mark.parametrize("overlay", ["ocp", "k8s", "gke"])
 def test_overlay_renders_without_placeholders(overlay):
     text = _render(overlay)
     assert "${" not in text
 
 
-@pytest.mark.parametrize("overlay", ["ocp", "k8s"])
+@pytest.mark.parametrize("overlay", ["ocp", "k8s", "gke"])
 def test_scaledobject_is_retargeted_to_the_requester(overlay):
     docs = [x for x in yaml.safe_load_all(_render(overlay)) if x]
     obj = next(x for x in docs if x.get("kind") == "ScaledObject")
@@ -68,3 +68,17 @@ def test_ocp_trigger_authentication_has_no_placeholder_namespace():
     obj = next(x for x in docs if x.get("kind") == "TriggerAuthentication")
     assert obj["metadata"]["name"] == "keda-prometheus-auth"
     assert "namespace" not in obj["metadata"]
+
+
+def test_gke_overlay_targets_the_gmp_frontend_without_auth():
+    """The gke overlay queries Google Managed Prometheus through its in-cluster
+    frontend over plain HTTP: no TriggerAuthentication, no authModes, and the
+    serverAddress is the shared llm-d-monitoring frontend Service."""
+    docs = [x for x in yaml.safe_load_all(_render("gke")) if x]
+    assert [x["kind"] for x in docs] == ["ScaledObject"]
+    trigger = docs[0]["spec"]["triggers"][0]
+    assert trigger["metadata"]["serverAddress"] == (
+        "http://frontend.llm-d-monitoring.svc.cluster.local:9090"
+    )
+    assert "authModes" not in trigger["metadata"]
+    assert "authenticationRef" not in trigger
