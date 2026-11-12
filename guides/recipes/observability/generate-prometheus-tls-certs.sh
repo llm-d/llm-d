@@ -88,6 +88,9 @@ setup_env() {
       log_error "Error, the context file \"$KUBERNETES_CONTEXT\", passed via command-line option, does not exist!"
       exit 1
     fi
+    if [[ "$KUBERNETES_CONTEXT" != /* ]]; then
+      KUBERNETES_CONTEXT="$PWD/$KUBERNETES_CONTEXT"
+    fi
     export KUBECONFIG="$KUBERNETES_CONTEXT"
   fi
 
