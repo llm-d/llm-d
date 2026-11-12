@@ -2096,8 +2096,11 @@ def _manifest_pillar(name: str) -> str | None:
 def check_manifest(data: Any, repo_root: Path) -> Findings:
     """Validate the llm-d.ai publish manifest: every guide directory exists
     with a ``README.md`` (and a ``guide.yaml``, except in Operations
-    sections), slugs are unique across sections, child pages exist, and
-    titles are present."""
+    sections and on landing pages), slugs are unique across sections, child
+    pages exist, and titles are present. A landing page is an entry whose
+    child pages are all ``<subdir>/README.md`` of guides with their own
+    ``guide.yaml`` (``guides/pd-disaggregation`` with ``sidecar/`` and
+    ``coord/``): its own README only links them."""
     f = Findings()
     if not isinstance(data, dict) or not isinstance(data.get("sections"), dict):
         f.error("manifest: must be a map with `sections:`")
@@ -2153,7 +2156,16 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
                 f.error(f"{gp}.dir: {d} is already published by {seen_dirs[d]}")
             seen_dirs[d] = gp
             gdir = repo_root / d
-            for req in required:
+            pages = entry.get("pages") or []
+            landing = bool(pages) and all(
+                isinstance(pg, dict)
+                and isinstance(pg.get("from"), str)
+                and Path(pg["from"]).name == GUIDE_MD
+                and len(Path(pg["from"]).parts) > 1
+                and (gdir / Path(pg["from"]).parent / GUIDE_YAML).is_file()
+                for pg in pages
+            )
+            for req in ((GUIDE_MD,) if landing else required):
                 if not (gdir / req).is_file():
                     f.error(f"{gp}.dir: {d}/{req} does not exist")
             if "position" in entry and not isinstance(entry["position"], int):

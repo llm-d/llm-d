@@ -97,7 +97,7 @@ Settings to decide:
 * **`revisionGating.mode`** sets how traffic is shared between revisions while both serve:
   * `max-role` weights each revision by its Ready pods of the globally most numerous role. Use it for a stable, asymmetric ratio such as 2P:10D.
   * `sum` weights each revision by all of its Ready pods. Use it when role ratios change during the rollout.
-* **`revisionGating.disableCoordination`**: leave it unset unless you run one EPP, or separate prefill and decode EPPs with sequential P/D. Multi-replica EPPs with parallel E/P/D requests need coordination through a shared syncer. The P/D Coordinator guide is sequential P/D, so it may set `disableCoordination: true`; leaving it unset is also correct. See the [screener README](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requesthandling/screener/disaggregatedsetrollout/README.md#request-lifecycle).
+* **`revisionGating.disableCoordination`**: leave it unset unless you run one EPP, or separate prefill and decode EPPs with sequential P/D. Multi-replica EPPs with parallel E/P/D requests need coordination through a shared syncer. See the [screener README](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requestcontrol/screener/disaggregatedsetrollout/README.md#request-lifecycle).
 
 > [!IMPORTANT]
 > The screener fails closed. If no revision has a Ready pod of every required role, the EPP returns `503` instead of pairing across revisions or sending traffic to a half-started revision. Keep at least one complete revision Ready throughout a rollout.
