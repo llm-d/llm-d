@@ -27,17 +27,17 @@ utilization metrics miss this churn because idle blocks sit on the free list as 
 Based on ThunderAgent ([arXiv 2602.13692](https://arxiv.org/abs/2602.13692)), the `thunder-agent`
 plugin adds **session-aware KV cache admission control** in the llm-d Router. It tracks each
 session's KV footprint per pod in an in-memory ledger. It admits new or paused sessions (paused:
-admitted earlier, then idle past `idleLeaseSeconds`, so its room went to other sessions) only while
+admitted earlier, then idle past `idleGracePeriod`, so its room went to other sessions) only while
 room remains.
 
 The room left on each pod is:
 
 ```text
-room(pod) = utilThreshold * capacity(pod) - workingSet(pod)
+room(pod) = usableCapacityRatio * capacity(pod) - workingSet(pod)
 ```
 
 * `capacity(pod)` is the pod's total GPU KV cache in tokens, read from the model server.
-* `utilThreshold` is a configurable fraction of that capacity (`1.0` in this guide).
+* `usableCapacityRatio` is a configurable fraction of that capacity (`1.0` by default).
 * `workingSet(pod)` sums the KV footprints of sessions bound to that pod.
 
 Sessions that do not fit wait in the EPP flow control queue instead of competing for GPU memory.
@@ -66,7 +66,7 @@ the turn takes through admission control:
 | :--- | :--- | :--- |
 | Admitted | Green | The session is bound to a pod and counts in its working set, while it runs a turn or sits idle. |
 | Paused | Orange | Admission control took back the room of this idle session. Its KV blocks stay in the model server, so it must return to its original pod. |
-| New | Blue | The ledger has no entry: a first turn, or a session dropped after `evictionTtlSeconds` idle. |
+| New | Blue | The ledger has no entry: a first turn, or a session that the router dropped after 1 hour idle. |
 
 ```mermaid
 flowchart LR
@@ -89,7 +89,7 @@ flowchart LR
     NI -->|no| H
 
     H[("Hold in the EPP queue<br/>retry every dispatch cycle")]:::hold
-    H -->|"waits past<br/>headWaitStarvationMs"| F["Force-admit"]:::hold
+    H -->|"waits past<br/>forceAdmitTimeout"| F["Force-admit"]:::hold
 
     classDef admitted fill:#C8E6C9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
     classDef paused fill:#FFE0B2,stroke:#EF6C00,stroke-width:2px,color:#E65100
@@ -105,20 +105,21 @@ flowchart LR
 
 Rules that the diagram does not show:
 
-1. **Idle lease.** After a turn, a session keeps its room for `idleLeaseSeconds`. Admission control
-   pauses only sessions idle past the lease, longest-idle first, and never a session with a queued
-   turn. Pausing changes only the ledger.
+1. **Idle grace period.** After a turn, a session keeps its room for `idleGracePeriod`. Admission
+   control pauses only sessions idle past that period, longest-idle first, and never a session with
+   a queued turn. Pausing changes only the ledger.
 2. **Admitted turns over the ceiling.** An admitted turn dispatches even when it pushes its pod over
-   `utilThreshold * capacity`. Admission control then pauses idle sessions on that pod.
-3. **Priority.** Queue heads that wait past `headWaitStarvationMs` go first, oldest first. Then come
+   `usableCapacityRatio * capacity`. Admission control then pauses idle sessions on that pod.
+3. **Priority.** Queue heads that wait past `forceAdmitTimeout` go first, oldest first. Then come
    admitted, paused, and new sessions. Within a class, the smallest session goes first. A held queue
    does not block smaller sessions that fit.
 4. **Force-admit target.** A force-admitted paused session returns to its original pod and pauses
    idle sessions there. A force-admitted new session that fits no pod goes where the scheduler puts
    it.
 
-One named `thunder-agent` instance fills four extension points, so token accounting and dispatch
-decisions share one ledger:
+One `thunder-agent` instance fills four extension points, so token accounting and dispatch
+decisions share one ledger. The config loader adds the instance to the default scheduling profile,
+so the values file declares no `schedulingProfiles`:
 
 | Slot | Role |
 | :--- | :--- |
@@ -145,11 +146,9 @@ Router settings in [`router/thunder-agent.values.yaml`](./router/thunder-agent.v
 
 | Setting | Value | Purpose |
 | :--- | :--- | :--- |
-| `capacityTokens` | `1572864` | Fallback GPU KV pool size when `vllm:cache_config_info` is absent. |
-| `utilThreshold` | `1.0` | Admits sessions up to 100% of pod GPU KV capacity. |
-| `idleLeaseSeconds` | `10` | Retains an idle session's room across a typical tool call. |
-| `headWaitStarvationMs` | `1800000` | Force-admits a waiting queue head after 30 minutes. |
-| `evictionTtlSeconds` | `3600` | Idle session state retention (must exceed `headWaitStarvationMs`). |
+| `fallbackCapacityTokens` | `1572864` | Fallback GPU KV pool size when `vllm:cache_config_info` is absent. |
+| `idleGracePeriod` | `10s` | Retains an idle session's room across a typical tool call. |
+| `forceAdmitTimeout` | `30m` | Force-admits a waiting queue head after 30 minutes. |
 | `defaultRequestTTL` | `0s` | Disables TTL queue drops so held turns wait for admission. |
 | `additionalSessionHeaders` | `[x-session-id]` | Session header read during verification and benchmarking. |
 
@@ -164,10 +163,10 @@ per-pod capacity from the model server, so it adapts to your accelerator and mod
 
 | Parameter | Guidance |
 | :--- | :--- |
-| Capacity and `utilThreshold` | Size admission control to the **GPU KV pool** (`utilThreshold: 1.0`), never the CPU offload tier. Setting capacity to 2x or 4x the GPU pool lets admitted sessions evict each other from HBM. GPU prefix hits then fall under 4% and median TTFT returns to model server queue wait. |
-| `idleLeaseSeconds` | Match a typical tool-call gap (`10` s here). Too short a lease pauses sessions during their tool calls. Their room goes to other sessions, so the returning turn must fit its pod again and can wait in the queue. Longer leases (`30` s) hold idle footprints across tool calls under contention, cutting throughput by 7% to 10% and raising TTFT p99. |
-| `headWaitStarvationMs` | Keep long (`1800000` ms, as in the benchmark). Short backstops (60 s or 300 s) force-admit held sessions early and remove the throughput gain. |
-| `defaultRequestTTL` and timeouts | Keep `defaultRequestTTL` at `0s` (or higher than `headWaitStarvationMs`) to avoid HTTP 429 drops. Set proxy, route, and client timeouts higher than `headWaitStarvationMs`. The charts default to 1000 s for the standalone Envoy `ext_proc` `message_timeout` and 300 s for the GKE `GCPBackendPolicy`. [Deploy the Router](#1-deploy-the-router) raises both to 2400 s. |
+| Capacity and `usableCapacityRatio` | Size admission control to the **GPU KV pool** (`usableCapacityRatio: 1.0`, the default), never the CPU offload tier. Setting capacity to 2x or 4x the GPU pool lets admitted sessions evict each other from HBM. GPU prefix hits then fall under 4% and median TTFT returns to model server queue wait. |
+| `idleGracePeriod` | Match a typical tool-call gap (`10s` here). Too short a period pauses sessions during their tool calls. Their room goes to other sessions, so the returning turn must fit its pod again and can wait in the queue. Longer periods (`30s`, the plugin default) hold idle footprints across tool calls under contention, cutting throughput by 7% to 10% and raising TTFT p99. |
+| `forceAdmitTimeout` | Keep long (`30m`, as in the benchmark). Short timeouts (`60s`, or `5m`, the plugin default) force-admit held sessions early and remove the throughput gain. |
+| `defaultRequestTTL` and timeouts | Keep `defaultRequestTTL` at `0s` (or higher than `forceAdmitTimeout`) to avoid HTTP 429 drops. Set proxy, route, and client timeouts higher than `forceAdmitTimeout`. The charts default to 1000 s for the standalone Envoy `ext_proc` `message_timeout` and 300 s for the GKE `GCPBackendPolicy`. [Deploy the Router](#1-deploy-the-router) raises both to 2400 s. |
 
 ## Prerequisites
 
@@ -259,7 +258,7 @@ helm upgrade --install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-Raise the Envoy `ext_proc` `message_timeout` above `headWaitStarvationMs`, so Envoy keeps waiting
+Raise the Envoy `ext_proc` `message_timeout` above `forceAdmitTimeout`, so Envoy keeps waiting
 for the admission decision. A later `helm upgrade` resets it, so run this step again after one:
 
 <!-- guide:deploy.standalone_timeout start -->
@@ -288,7 +287,7 @@ helm upgrade --install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.gateway end -->
 
-On GKE, raise the backend timeout of the `GCPBackendPolicy` above `headWaitStarvationMs`. A later
+On GKE, raise the backend timeout of the `GCPBackendPolicy` above `forceAdmitTimeout`. A later
 `helm upgrade` resets it too:
 
 <!-- guide:deploy.gateway_timeout start -->
@@ -326,7 +325,7 @@ kubectl logs deploy/${GUIDE_NAME}-nvidia-gpu-vllm-decode -n ${NAMESPACE} \
 The reference pod reports `1,572,864` tokens (`24,576` blocks of `64`). Some models, such as
 hybrid attention models, report a `cache_config_info` that does not match token capacity. For them,
 add a `core-metrics-extractor` engine config for `vllm` with an empty `cacheInfoSpec`, and set
-`capacityTokens`.
+`fallbackCapacityTokens`.
 
 ### 4. Enable monitoring (optional)
 
@@ -647,7 +646,7 @@ Router metrics (`llm_d_epp_thunder_agent_*`, Alpha) and the model server cache-h
 | `releases_total{class}` | Dispatches picked by admission control, by session class (`admitted`, `paused`, `new`). |
 | `delayed_dispatches_total{class}` | Dispatches that waited at least 1 s in the EPP queue. |
 | `pauses_total`, `resumes_total` | Idle sessions paused to free room, and paused sessions resumed. |
-| `starvation_promotions_total` | Queue heads force-admitted at `headWaitStarvationMs`. Rising counts signal sustained overload. |
+| `starvation_promotions_total` | Queue heads force-admitted at `forceAdmitTimeout`. Rising counts signal sustained overload. |
 | `rate(vllm:prefix_cache_hits_total[5m]) / rate(vllm:prefix_cache_queries_total[5m])` | Model server GPU prefix-cache hit ratio protected by admission control. |
 
 To verify that admission control engaged under load, look for non-zero `pauses_total` and
@@ -662,20 +661,20 @@ per-pod working sets, and capacities. Session IDs never appear in metrics, state
 ## Limitations
 
 * **Alpha stability.** Plugin parameters and metric names might change in future releases.
-* **Higher tail latency on held sessions.** Held sessions can wait up to `headWaitStarvationMs`,
+* **Higher tail latency on held sessions.** Held sessions can wait up to `forceAdmitTimeout`,
   which fits coding and background agents rather than strict interactive chat SLOs.
 * **KV capacity is the only modeled resource.** Admission control adds no throughput for
   compute-bound workloads or cheap cache misses.
 * **Single EPP replica.** The session ledger runs in-process, so multiple EPP replicas split
   accounting.
 * **No end-of-session signal.** Finished sessions count as idle until another session reclaims their
-  room after `idleLeaseSeconds` or `evictionTtlSeconds` expires. Agent harnesses do not need to send
-  a release signal, but `idleLeaseSeconds` must match the tool-call gaps of the workload.
+  room after `idleGracePeriod`, or the router drops them after 1 hour idle. Agent harnesses do not
+  need to send a release signal, but `idleGracePeriod` must match the tool-call gaps of the workload.
 * **Anonymous requests pass untracked.** Requests without a session ID bypass admission control.
-  Pair `thunder` with a lower-weight load scorer to place unlabeled traffic across replicas. Do not
-  add `session-affinity-scorer` to the same profile.
+  Pair `thunder-agent` with a lower-weight load scorer in an explicit scheduling profile to place
+  unlabeled traffic across replicas. Do not add `session-affinity-scorer` to the same profile.
 * **Strict origin affinity on resume.** A paused session waits for its original pod (up to
-  `headWaitStarvationMs`) even when another replica has spare room.
+  `forceAdmitTimeout`) even when another replica has spare room.
 
 ## Cleanup
 
