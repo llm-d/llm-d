@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "SGLANG TPU",
-  "message": "failing",
-  "color": "red"
+  "message": "passing",
+  "color": "brightgreen"
 }
