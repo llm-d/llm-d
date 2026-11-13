@@ -1,5 +1,6 @@
-# GKE settings for both SGLang roles: DRA RDMA claims, UCX networking, and a persistent
-# HuggingFace cache. Written once under prefill and aliased into decode.
+# GKE settings for both SGLang roles: DRA RDMA claims and UCX networking. Written once
+# under prefill and aliased into decode. The HuggingFace cache comes from the
+# hf-node-cache component.
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
@@ -28,12 +29,6 @@ spec:
                     # disable-gke-nccl-tuner-patch component does for Deployment/LWS.
                     - name: NCCL_TUNER_PLUGIN
                       value: "none"
-                    - name: HF_HOME
-                      value: /root/.cache/huggingface
-                    - name: HF_HUB_DOWNLOAD_TIMEOUT
-                      value: "60"
-                    - name: HF_HUB_DISABLE_XET
-                      value: "1"
                     # The base patches enable the KV staging buffer for heterogeneous TP.
                     # This overlay runs homogeneous TP=2 (#2442), and SGLang's NIXL
                     # transfer backend does not accept the staging path's
@@ -85,14 +80,5 @@ spec:
                     claims:
                       - name: gke-rdma-claim-0
                       - name: gke-rdma-claim-1
-                  volumeMounts:
-                    # Mount a persistent volume for huggingface cache, so that the cache is shared across restarts
-                    - mountPath: /root/.cache/huggingface
-                      name: huggingface-cache
-              volumes:
-                - name: huggingface-cache
-                  hostPath:
-                    path: /var/cache/huggingface
-                    type: DirectoryOrCreate
     - name: decode
       spec: *gke-common
