@@ -82,6 +82,19 @@ components:
 
 The component replaces the `REPLACE_MODEL_SERVER_IMAGE` placeholder (`REPLACE_ROUTING_SIDECAR_IMAGE` for the sidecar, `REPLACE_COORDINATOR_IMAGE` for the coordinator) with the default image.
 
+### Updating AWS EFA images
+
+When bumping `gpu-vllm/release` or `gpu-sglang/release`, also check the corresponding AWS EFA pin:
+
+| Shared release | AWS EFA pin | Available DLC tags |
+| --- | --- | --- |
+| [`gpu-vllm/release`](gpu-vllm/release/kustomization.yaml) | [`gpu-vllm/aws-efa/release`](gpu-vllm/aws-efa/release/kustomization.yaml) | [vLLM ECR gallery](https://gallery.ecr.aws/deep-learning-containers/vllm) |
+| [`gpu-sglang/release`](gpu-sglang/release/kustomization.yaml) | [P/D SGLang AWS overlay](../../../../pd-disaggregation/modelserver/gpu/sglang/aws/kustomization.yaml) | [SGLang ECR gallery](https://gallery.ecr.aws/deep-learning-containers/sglang) |
+
+Run `python scripts/check-aws-image-versions.py` from the repository root. The Guides CI runs the same check whenever guides or the checker change and annotates differences as warnings. It compares the major/minor/patch release, ignoring an upstream `.postN` suffix and AWS's platform suffix; floating, prerelease, or digest pins produce a notice to check compatibility manually.
+
+AWS DLC releases can lag upstream. Check that the desired EFA-enabled image exists and validate it on the AWS path before updating the pin; do not substitute an upstream image just to match version numbers. Until a compatible build is available, the warning keeps the drift visible without blocking unrelated guide changes. See [#1944](https://github.com/llm-d/llm-d/issues/1944).
+
 ## Overriding
 
 If a guide requires a different image (e.g. a nightly build, a vendor fork, or a platform-specific variant), add an `images:` section in the same overlay. The override's `name:` must match the image **as baked by the component** (registry-qualified, e.g. `docker.io/vllm/vllm-openai`), not the `REPLACE_*` placeholder — an inline override that names the placeholder is silently ignored when a component also replaces it:
