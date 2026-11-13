@@ -1,7 +1,8 @@
 name: Dispatch website docs sync
 
-# When docs change on main, notify the website repo (llm-d/llm-d.github.io) to
-# re-sync the "dev" documentation from this repository and redeploy.
+# When docs or translations change on main, notify the website repo
+# (llm-d/llm-d.github.io) to re-sync the "dev" documentation from this
+# repository and redeploy.
 #
 # Requires a repository secret `WEBSITE_SYNC_TOKEN`: a fine-grained PAT (or GitHub
 # App installation token) scoped to llm-d/llm-d.github.io with "Contents: read and
@@ -15,6 +16,7 @@ on:
       - main
     paths:
       - "docs/**"
+      - "translations/**"
       - "guides/**"
       - "CONTRIBUTING.md"
       - "CODE_OF_CONDUCT.md"

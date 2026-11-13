@@ -1,0 +1,41 @@
+---
+slug: /
+translation_source: docs/getting-started/README.mdx
+translation_source_commit: 188e66d95d851bdc9c621fa4f117df23f46fd964
+translation_source_blob: 19767a8c9b9a6cc3b9e37ae1a03bcded51a8c08a
+---
+
+import Link from '@docusaurus/Link';
+
+# 在任何加速器上实现业界领先 LLM 推理的最快路径
+
+llm-d 是面向 Kubernetes 的开源推理服务软件栈。它将你选择的模型服务引擎（包括 vLLM、SGLang 等）部署到整个集群，把单节点引擎扩展为适用于生产环境的分布式推理服务，并复用你现有的基础设施。无论使用 NVIDIA、AMD 还是专用加速器，都能为主流开放模型提供领先的性能。
+
+llm-d 适用于智能体工作流、大语言模型、多模态模型和高吞吐量推理服务，不依赖特定引擎或硬件。
+
+<div class="intro-ctas">
+  <Link className="button button--primary" to="/getting-started/quickstart">开始使用</Link>
+  <Link className="button button--secondary" to="https://prism.llm-d.ai/" target="_blank" rel="noopener noreferrer">查看性能数据</Link>
+</div>
+
+<div class="intro-founded">
+  <div class="intro-cncf">
+    <img class="intro-cncf-logo" src="https://llm-d.ai/img/CNCF-logo.svg" alt="CNCF" />
+    <span>llm-d 是 CNCF 沙箱项目，由 Red Hat、Google Cloud、IBM Research、CoreWeave 和 NVIDIA 共同发起。</span>
+  </div>
+</div>
+
+## Well-Lit Paths
+
+除了软件组件，llm-d 还提供 Well-Lit Paths：针对常见生产环境部署模式经过测试和基准评测的方案。你可以根据自己的模型、硬件和流量模式调整这些方案，以支持智能体、多模态和批处理工作负载。
+
+每条路径都包含：
+
+- 可部署的 Helm Chart 和 Kustomize 清单
+- 用于性能调优的关键配置项
+- 示例工作负载，以及与基线配置的基准测试结果
+- 监控和可观测性配置
+
+<div class="intro-ctas">
+  <Link className="button button--primary" to="/well-lit-paths">查看所有 Well-Lit Paths</Link>
+</div>

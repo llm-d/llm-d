@@ -14,13 +14,14 @@ name: CI Site Preview
 on:
   pull_request:
     branches: [main]
-    # What llmd-site sync reads from llm-d/llm-d: docs/**, the guides listed
-    # in docs/well-lit-paths/guides.yaml (all under guides/), and the
+    # What llmd-site sync reads from llm-d/llm-d: docs/**, translations/**,
+    # the guides listed in docs/well-lit-paths/guides.yaml (all under guides/), and the
     # community pages mirrored from the repo root (llm-d.github.io's
     # docs-sync.yaml). Same list as dispatch-website-sync.yaml.
     paths:
       - .github/workflows/ci-site-preview.yaml
       - docs/**
+      - translations/**
       - guides/**
       - CONTRIBUTING.md
       - CODE_OF_CONDUCT.md
