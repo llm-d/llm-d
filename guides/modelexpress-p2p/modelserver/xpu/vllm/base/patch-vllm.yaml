@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  # One seed and one receiver is the smallest real P2P transfer.
+  replicas: 2
+  # DRA devices are reserved for a pod's lifetime. Avoid a surge pod that
+  # cannot acquire an XPU while the old replica still owns it.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              llm-d.ai/guide: modelexpress-p2p
+              llm-d.ai/accelerator-variant: xpu
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3-0.6B"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--tensor-parallel-size=1"
+            - "--dtype=bfloat16"
+            - "--max-model-len=2048"
+            - "--gpu-memory-utilization=0.50"
+            - "--max-num-seqs=8"
+            - "--enforce-eager"
+            - "--load-format=mx"
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [IPC_LOCK]
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: USER
+              value: llm-d
+            - name: TORCH_LLM_ALLREDUCE
+              value: "1"
+            - name: VLLM_PLUGINS
+              value: modelexpress
+            - name: MX_SERVER_ADDRESS
+              value: modelexpress-server:8001
+            - name: MX_METADATA_PORT
+              value: "5555"
+            - name: MX_WORKER_GRPC_PORT
+              value: "6555"
+            - name: MX_NIXL_BACKEND
+              value: UCX
+            # Correctness-first XPU path. Do not add rc_mlx5: direct mlx5
+            # reads from compressible B60 VRAM regions can corrupt bytes.
+            - name: NIXL_UCX_TLS
+              value: tcp,ze_copy
+            - name: UCX_TLS
+              value: tcp,ze_copy
+            - name: UCX_MEMTYPE_CACHE
+              value: "0"
+            - name: UCX_TCP_TX_SEG_SIZE
+              value: 16M
+            - name: UCX_TCP_RX_SEG_SIZE
+              value: 16M
+            - name: HF_HUB_CACHE
+              value: /models
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            limits:
+              cpu: "16"
+              memory: 48Gi
+            requests:
+              cpu: "8"
+              memory: 24Gi
+            claims:
+              - name: intel-xpu
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: shm
+            - mountPath: /root/.cache
+              name: torch-compile-cache
+            - mountPath: /root/.config
+              name: vllm-config
+            - mountPath: /models
+              name: model-cache
+          startupProbe:
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 20
+          readinessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      resourceClaims:
+        - name: intel-xpu
+          resourceClaimTemplateName: intel-xpu-claim
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 8Gi
