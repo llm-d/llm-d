@@ -32,6 +32,7 @@ spec:
                     - "--kv-cache-dtype=fp8"
                     - "--enable-auto-tool-choice"
                     - "--enable-prefix-caching"
+                    - "--prefix-cache-retention-interval=0"
                     - "--tool-call-parser=qwen3_coder"
                     - "--reasoning-parser=nemotron_v3"
                     - "--model-loader-extra-config"
