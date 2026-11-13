@@ -457,7 +457,7 @@ To enable HA, ensure that the number of replicas in the EPP Deployment is greate
 
 The EPP exposes a Prometheus-compatible metrics endpoint on **port 9090** at `/metrics`. These metrics provide visibility into request processing, scheduling decisions, flow control behavior, and backend pool health.
 
-> For full upstream documentation, see the [Gateway API Inference Extension Metrics & Observability Guide](https://gateway-api-inference-extension.sigs.k8s.io/guides/metrics-and-observability/).
+> For full upstream documentation, see the [llm-d Router metrics reference](https://github.com/llm-d/llm-d-router/blob/main/docs/metrics.md).
 
 ### EPP Metrics by Subsystem
 
@@ -469,7 +469,7 @@ Metrics are organized by the subsystem that owns the logic. For detailed tables 
 
 ### Monitoring Stack
 
-The recommended monitoring stack is **Prometheus + Grafana**. A pre-built Grafana dashboard is available at [`tools/dashboards/inference_gateway.json`](https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/tools/dashboards/inference_gateway.json) in the upstream repository.
+The recommended monitoring stack is **Prometheus + Grafana**. A pre-built Grafana dashboard is available at [`guides/recipes/observability/grafana/dashboards/llm-d-router.json`](../../../guides/recipes/observability/grafana/dashboards/llm-d-router.json).
 
 Pre-configured alert rules are also available upstream, covering:
 
