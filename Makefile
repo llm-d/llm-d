@@ -31,6 +31,12 @@ USE_SCCACHE ?= false
 # MAX_JOBS: parallel compilation jobs (reduce to avoid OOM, e.g., MAX_JOBS=1)
 MAX_JOBS ?= 3
 
+# Build args docker/Dockerfile.cpu needs to fetch vLLM; the workflows pass the
+# same values from docker/common-versions. strip drops the whitespace Make keeps
+# before the trailing "# vX.Y.Z release" comment on the SHA line. The Dockerfile
+# reads its job count from the lowercase ARG max_jobs.
+CPU_BUILD_ARGS = $(if $(filter cpu,$(DEVICE)),--build-arg VLLM_REPO=$(strip $(VLLM_REPO)) --build-arg VLLM_COMMIT_SHA=$(strip $(VLLM_COMMIT_SHA)) --build-arg max_jobs=$(MAX_JOBS))
+
 # BUILD_TYPE, options ['dev', 'prod']
 BUILD_TYPE ?= dev
 REGISTRY ?= $(IMAGE_REGISTRY)
@@ -99,6 +105,7 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  echo "🔧 Buildah detected: Building for $(ARCH) with $(DOCKERFILE_PATH)…"; \
 	  buildah build --file $(DOCKERFILE_PATH) --arch=$(ARCH) --os=linux --layers \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
+		$(CPU_BUILD_ARGS) \
 		-t $(IMG) $(BUILD_CONTEXT) || exit 1; \
 	  echo "🚀 Pushing image: $(IMG)"; \
 	  buildah push $(IMG) docker://$(IMG) || exit 1; \
@@ -109,12 +116,13 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 	  docker buildx use image-builder; \
 	  docker buildx build --push --platform=linux/$(ARCH) --tag $(IMG) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
+		$(CPU_BUILD_ARGS) \
 		-f $(DOCKERFILE_DIR)/Dockerfile.cross $(BUILD_CONTEXT) || exit 1; \
 	  docker buildx rm image-builder || true; \
 	  rm $(DOCKERFILE_DIR)/Dockerfile.cross; \
 	elif [ "$(BUILDER)" = "podman" ]; then \
 	  echo "⚠️ Podman detected: Building for linux/$(ARCH)..."; \
-	  podman build --platform=linux/$(ARCH) --format=docker -f $(DOCKERFILE_PATH) -t $(IMG) $(BUILD_CONTEXT) || exit 1; \
+	  podman build --platform=linux/$(ARCH) --format=docker $(CPU_BUILD_ARGS) -f $(DOCKERFILE_PATH) -t $(IMG) $(BUILD_CONTEXT) || exit 1; \
 	  podman push $(IMG) || exit 1; \
 	else \
 	  echo "❌ No supported container tool available."; \
@@ -128,6 +136,7 @@ image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 		--build-arg USE_SCCACHE=$(USE_SCCACHE) \
 		--build-arg MAX_JOBS=$(MAX_JOBS) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
+		$(CPU_BUILD_ARGS) \
 		-t $(IMG) -f $(DOCKERFILE_PATH) $(BUILD_CONTEXT)
 
 .PHONY: image-push
