@@ -35,7 +35,7 @@ The following Prometheus metrics are produced by OpenCost after install:
 | Metric | Labels | Description |
 |---|---|---|
 | `llm_total_hourly_cost` | `model_name`, `model_version`, `namespace`, `cost_basis`, `workload_type` | Instantaneous hourly infrastructure cost rate ($/hour) attributed to the model — not a cumulative counter. `cost_basis` is `allocation` (max(request,usage) × price + idle/shared share; use for chargeback) or `usage` (actual consumption only, excludes idle and shared infra; use for efficiency analysis) |
-| `llm_cost_per_million_tokens` | `model_name`, `model_version`, `namespace`, `cost_basis`, `phase`, `allocation_method`, `workload_type` | Cost per 1M tokens. `phase` is empty for blended (input+output combined), `prompt` for input-only, or `generation` for output-only. `allocation_method` is `compute_time` (split by vLLM prefill/decode time), `prefix_caching_off` (time-based split, prefix caching disabled), `multiplier` (fixed 2.5× ratio, timing metrics unavailable), or empty (no tokens processed or join failed) |
+| `llm_cost_per_million_tokens` | `model_name`, `model_version`, `namespace`, `cost_basis`, `phase`, `allocation_method`, `workload_type` | Cost per 1M tokens. `phase` is empty for blended (input+output combined), `prompt` for input-only, or `generation` for output-only. `allocation_method` is `compute_time` (split by vLLM prefill/decode time), `prefix_caching_off` (time-based split, prefix caching disabled), `multiplier` (fixed 2.5× ratio, timing metrics unavailable), or empty. It is always empty on blended rows (`phase=""`); on `prompt` or `generation` rows, empty means no tokens were processed or the model-name join failed |
 | `llm_cache_savings_fraction` | `model_name`, `model_version`, `namespace`, `workload_type` | Fraction of prompt tokens served from the KV cache (0–1); zero when prefix caching is disabled, no cache hits occurred, or `vllm:prefix_cache_hits_total` is missing |
 
 **Note:** The `workload_type` label is currently always `inference`. Future values may include `training`, `fine-tuning`, etc.
@@ -136,7 +136,8 @@ kubectl get pods -n llm-d-monitoring -l app.kubernetes.io/name=opencost
 ### Check inference cost metrics
 
 ```bash
-kubectl port-forward -n llm-d-monitoring svc/opencost 9003:9003
+# The installer names the OpenCost release, and so its service, opencost-<namespace>
+kubectl port-forward -n llm-d-monitoring svc/opencost-llm-d-monitoring 9003:9003
 curl -s http://localhost:9003/metrics | grep llm_
 ```
 
@@ -152,7 +153,7 @@ If the metrics are empty, generate some traffic first (the module requires at le
 ### Access the OpenCost UI
 
 ```bash
-kubectl port-forward -n llm-d-monitoring svc/opencost 9090:9090
+kubectl port-forward -n llm-d-monitoring svc/opencost-llm-d-monitoring 9090:9090
 ```
 
 Open http://localhost:9090. The **Allocation** view shows cost broken down by `llm-d.ai/model` label. The inference cost gauges appear in Prometheus under the `llm_*` prefix.
