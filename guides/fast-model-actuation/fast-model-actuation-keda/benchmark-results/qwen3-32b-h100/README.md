@@ -41,6 +41,12 @@ The [keda-epp](../../../../workload-autoscaling/keda-epp/README.md) configuratio
 to 6 and HPA scale-up/scale-down policies added. Thresholds, polling interval,
 trigger queries, metric source, and plugin set are the guide's defaults.
 
+> [!NOTE]
+> These saturation results were collected with a pool-saturation
+> `AverageValue` target, before the overlay changed to `Value`. They describe
+> the former per-replica target and do not validate the current `Value` target.
+> Rerun the benchmark to measure the current saturation configuration.
+
 | Component | Parameter | Value |
 |---|---|---|
 | Model | Name / max length | `Qwen/Qwen3-32B` / 16000 |
