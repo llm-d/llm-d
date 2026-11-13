@@ -208,7 +208,7 @@ By default, vLLM checks for [compatibility between instances](https://github.com
 
 ## Known NIXL Connector Issues and Limitations
 
-Beyond the operational flows above, the NIXL connector has a couple of current gaps worth planning deployments around.
+Beyond the operational flows above, the NIXL connector has a few current gaps worth planning deployments around.
 
 ### Prefill TP > Decode TP Is Not Supported
 
@@ -235,6 +235,22 @@ Source: `vllm/distributed/kv_transfer/kv_connector/v1/nixl/base_worker.py`, func
 Hitting this path crashes the decode engine with `AssertionError`. A related bug in vLLM's failure-cleanup handler (`_handle_failed_transfer`) often surfaces it as `IndexError: list index out of range` instead, making it look like a generic connector bug rather than an unsupported-topology guard.
 
 Total GPU count (TP × replicas) and replica counts on each side are unaffected by this constraint — only the TP ratio direction between whichever specific prefill/decode engine pair handles a given request matters.
+
+### Mixed GPU Generations in One Pool
+
+> [!WARNING]
+> **A prefill/decode pair split across GPU generations fails every KV transfer by default.** In a pool that mixes compute capability 10.x GPUs (e.g. B200, B300) with Hopper or other GPUs, pass the same `--attention-backend` to every prefill and decode server.
+
+Each vLLM instance selects its attention backend for its own GPU. For non-MLA models, compute capability 10.x GPUs default to `FLASHINFER`, while other CUDA GPUs, including Hopper, default to `FLASH_ATTN`. The backend name is part of the [compatibility check](#rollouts) in the NIXL handshake, so a B300 prefill and a Hopper decode instance reject each other with `NIXL compatibility hash mismatch`. The EPP treats all P and D instances in an `InferencePool` as compatible and schedules such pairs.
+
+Either:
+
+- pass the same `--attention-backend`, for example `--attention-backend FLASHINFER`, to every prefill and decode server in the pool, or
+- keep each GPU generation in its own `InferencePool`.
+
+The compatibility check also includes the `model` argument as passed, so every server needs the same Hugging Face ID or the same local path.
+
+In a test with vLLM 0.31.0 (Qwen3-8B, B300 prefill, GH200 decode, default `kv_load_failure_policy=fail`), every request failed with HTTP 500 under the default backends. With `--attention-backend FLASHINFER` on both sides, every request completed and the decode side's KV blocks were byte-identical to the prefill side's. See [vllm-project/vllm#64913](https://github.com/vllm-project/vllm/pull/64913).
 
 ### Stale NIXL Agent Cache After a Prefill Pod Restart
 
