@@ -14,6 +14,7 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY="$(cd "${TEST_DIR}/../../../.." && pwd)"
 INSTALLER="${REPOSITORY}/guides/recipes/observability/install-prometheus-grafana.sh"
 DASHBOARD="${REPOSITORY}/guides/recipes/observability/grafana/dashboards/llm-d-failure-saturation-dashboard.json"
+ROUTER_DASHBOARD="${REPOSITORY}/guides/recipes/observability/grafana/dashboards/llm-d-router.json"
 STUB_DIR="${TEST_DIR}/bin"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/llm-d-exemplar-test.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -242,26 +243,46 @@ STUB_RELEASE_CHART_VERSION=62.7.0 STUB_RELEASE_VALUES="${WORK_DIR}/plain-release
 check_lacks "does not upgrade without jaeger" "${WORK_DIR}/no-tracing-upgrade.mutations" "args=[upgrade]"
 check_contains "says how to add the links later" "${WORK_DIR}/no-tracing-upgrade.log" "then re-run this script"
 
-echo "dashboard panel is wired to the metric that carries the exemplar"
-EXEMPLAR_METRIC="llm_d_epp_request_duration_seconds_bucket"
-if jq -e . "$DASHBOARD" >/dev/null 2>&1; then
-  printf '  ok   dashboard is valid json\n'
+echo "dashboard panels are wired to metrics that carry exemplars"
+# Every EPP histogram that attaches a trace exemplar. A query with exemplars
+# enabled on a metric that carries none renders an empty panel with no error,
+# which is the failure this whole path is about.
+EXEMPLAR_METRIC_RE='llm_d_epp_(request_duration_seconds_bucket|request_ttft_seconds_bucket|request_streaming_tpot_seconds_bucket|request_streaming_itl_seconds_bucket|request_ntpot_seconds_bucket|scheduler_e2e_duration_seconds_bucket|flow_control_request_queue_duration_seconds_bucket|request_error_total)'
 
-  # A query with exemplars enabled on a metric that carries none renders an
-  # empty panel with no error, which is the failure this whole path is about.
-  check "every exemplar query uses ${EXEMPLAR_METRIC}" "0" \
-    "$(jq "[.panels[]?.targets[]? | select(.exemplar == true) | select(.expr | contains(\"${EXEMPLAR_METRIC}\") | not)] | length" "$DASHBOARD")"
+check_exemplar_dashboard() { # name dashboard-file
+  local name="$1" dashboard="$2"
+  if ! jq -e . "$dashboard" >/dev/null 2>&1; then
+    printf '  FAIL %s dashboard is not valid json\n' "$name"
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+  printf '  ok   %s dashboard is valid json\n' "$name"
 
-  check "at least one panel requests exemplars" "true" \
-    "$(jq '[.panels[]?.targets[]? | select(.exemplar == true)] | length > 0' "$DASHBOARD")"
+  check "$name: every exemplar query uses a metric that carries exemplars" "0" \
+    "$(jq --arg re "$EXEMPLAR_METRIC_RE" '[.. | objects | select(has("targets")) | .targets[]? | select(.exemplar == true) | select((.expr // "") | test($re) | not)] | length' "$dashboard")"
+
+  check "$name: at least one panel requests exemplars" "true" \
+    "$(jq '[.. | objects | select(has("targets")) | .targets[]? | select(.exemplar == true)] | length > 0' "$dashboard")"
 
   # The EPP renamed this metric; queries left on the old name return nothing.
-  check "no query uses the retired objective latency metric" "0" \
-    "$(jq '[.panels[]?.targets[]? | select(.expr // "" | contains("inference_objective_request_duration_seconds"))] | length' "$DASHBOARD")"
-else
-  printf '  FAIL dashboard is not valid json\n'
-  FAILURES=$((FAILURES + 1))
-fi
+  check "$name: no query uses the retired objective latency metric" "0" \
+    "$(jq '[.. | objects | select(has("targets")) | .targets[]? | select(.expr // "" | contains("inference_objective_request_duration_seconds"))] | length' "$dashboard")"
+
+  # vLLM metrics do not carry EPP trace exemplars.
+  check "$name: no vLLM metric is marked as an exemplar source" "0" \
+    "$(jq '[.. | objects | select(has("targets")) | .targets[]? | select(.exemplar == true) | select((.expr // "") | test("vllm:"))] | length' "$dashboard")"
+}
+
+check_exemplar_dashboard "failure-saturation" "$DASHBOARD"
+check_exemplar_dashboard "router" "$ROUTER_DASHBOARD"
+
+check "router: E2E P99 target has exemplars" "true" \
+  "$(jq '[.. | objects | select(.title? == "E2E Request Latency") | .targets[]? | select(.legendFormat == "99%" and .exemplar == true)] | length > 0' "$ROUTER_DASHBOARD")"
+
+for title in "TTFT P99" "TPOT P99" "ITL P99" "NTPOT P99"; do
+  check "router: ${title} panel exists with exemplars" "true" \
+    "$(jq --arg title "$title" '[.. | objects | select(.title? == $title) | .targets[]? | select(.exemplar == true)] | length > 0' "$ROUTER_DASHBOARD")"
+done
 
 echo
 if ((FAILURES > 0)); then
