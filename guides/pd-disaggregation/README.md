@@ -18,6 +18,8 @@ This guide splits inference into separate **prefill** and **decode** pools. Pref
 
 The default deployment serves `openai/gpt-oss-120b` on NVIDIA GPUs with **1 prefill pod (TP=1) and 1 decode pod (TP=4)**, 5 GPUs in total: the smallest topology that exercises the full P/D path. Production deployments scale the two pools independently (see [When to use P/D and how to tune it](../../docs/architecture/disaggregation/pd-disaggregation.md#when-to-use-pd-and-how-to-tune-it)).
 
+An experimental variant adds CPU KV-cache retention beyond HBM capacity while keeping NIXL as the P/D transport: see **[P/D Multi Tier KV Cache](./README.multi-tier.md)**.
+
 How the two pools are deployed depends on the accelerator:
 
 - **All accelerators**: one [`DisaggregatedSet`](https://lws.sigs.k8s.io/docs/concepts/disaggregatedset/) (`pd-disagg-vllm` or `pd-disagg-sglang` on NVIDIA GPU, `pd-disagg-tpu-vllm` on TPU7x dynamic sub-slices, `pd-disagg-<accelerator>` elsewhere) with a `prefill` and a `decode` role, in a single slice.
