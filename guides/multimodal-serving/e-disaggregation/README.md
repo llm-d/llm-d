@@ -40,6 +40,8 @@ E/P/D extends P/D disaggregation by adding a dedicated encode stage. This provid
 * 4 TP=2 Prefill Workers
 * 4 TP=2 Decode Workers
 
+On AMD Instinct MI355X the E/P/D profile runs 2 Encode + 6 Prefill + 2 Decode instead.
+
 ### Best Practices
 
 Encode disaggregation is most beneficial for workloads with:
@@ -62,6 +64,8 @@ Choose between topologies:
 | --- | --- | --- | --- | --- | --- |
 | vLLM | E/PD | NVIDIA GPU | `modelserver/gpu/vllm/e-pd/` | `router/vllm/e-pd-disaggregation.values.yaml` | Default vLLM profile |
 | vLLM | E/P/D | NVIDIA GPU | `modelserver/gpu/vllm/e-p-d/` | `router/vllm/e-p-d-disaggregation.values.yaml` | Default vLLM profile |
+| vLLM | E/PD | AMD GPU | `modelserver/amd/vllm/e-pd/moriio/` | `router/vllm/e-pd-disaggregation.values.yaml` + `amd.e-pd-disaggregation.values.yaml` | MoRI-IO for the embeddings: [AMD E/PD and E/P/D over MoRI-IO](#amd-epd-and-epd-over-mori-io) |
+| vLLM | E/P/D | AMD GPU | `modelserver/amd/vllm/e-p-d/moriio/` | `router/vllm/e-p-d-disaggregation.values.yaml` + `amd.e-p-d-disaggregation.values.yaml` | MoRI-IO for the embeddings and the KV cache: [AMD E/PD and E/P/D over MoRI-IO](#amd-epd-and-epd-over-mori-io) |
 | SGLang | E/PD | Intel XPU Encode + GPU PD | `modelserver/hetero/sglang/e-pd/xpu-encode-gpu-pd/` | `router/sglang/e-pd-disaggregation.values.yaml` | [SGLang XPU Encode + GPU PD profile](./profiles/sglang-xpu-encode-gpu-pd.md) |
 
 ## Prerequisites
@@ -392,6 +396,24 @@ Client -> Envoy -> EPP -> Decode Worker Sidecar
 5. Sidecar sends prefill request (with embedding metadata) to Prefill Worker
 6. Prefill Worker reads embeddings via EC_Connector, runs prefill, returns KV parameters
 7. Decode Worker reads KV cache from Prefill Worker and runs decode
+
+### AMD E/PD and E/P/D over MoRI-IO
+
+On AMD Instinct MI355X (`ACCELERATOR_TYPE=amd`), the `moriio/` overlays use MoRI-IO RDMA instead of NIXL. For E/PD that is the embeddings hop (Encode to PD pod), configured with `"ec_transport": "moriio"` in the ECCPU Connector. For E/P/D it is both transfers: the embeddings hop (Encode to Prefill) the same way, and the KV hop (Prefill to Decode) with the `MoRIIOConnector` in WRITE mode and the routing sidecar in serial dispatch (`--moriio-write-mode`, no `--moriio-parallel-dispatch`). Aggregation and the NIXL E/PD overlay (`e-pd/base`, `e-pd/amd-ci`) are described in the main guide README.
+
+| | `moriio/base` | `moriio/amd-ci` |
+| --- | --- | --- |
+| E/PD layout | 2 Encode + 8 PD (TP=2, 20 GPUs) | same |
+| E/P/D layout | 2 Encode + 6 Prefill + 2 Decode (TP=2, 20 GPUs) | same |
+| Adds | E/P/D: KV cache capped at 100 GB per pod | RDMA NIC attachments (`amd.com/vnic`, `IPC_LOCK`, host IPC) and the model-cache PVC |
+
+Requirements:
+
+* **vLLM image.** The embeddings transport (`ec_transport=moriio`) is proposed in [vllm-project/vllm#63674](https://github.com/vllm-project/vllm/pull/63674); the overlays need a vLLM image that has it. `e-pd/moriio/base` uses the same `amd-vllm/release` component as the NIXL E/PD overlay; `e-p-d/moriio/base` pins a MoRI-IO nightly build, because the KV hop also needs a MoRI build that registers the KV cache as a single region.
+* **Buffer size.** MoRI-IO registers the Encode pod's `ec_cpu_bytes` region with the NIC on the first read and aborts the engine if the NIC rejects it. Keep `ec_cpu_bytes` at 1 GiB.
+* **Serial dispatch (E/P/D).** The sidecar's KV-wait timer starts at dispatch, so with parallel dispatch time queued at Prefill counts against it; the overlay uses serial dispatch.
+
+[Confirm the EC Transfer](#3-confirm-the-ec-transfer-vllm-profiles) works on this profile as written (`EC_CONSUMER_ROLE=prefill`): the `EC consumer: NIXL xfer complete` line it greps for comes from the connector's shared scheduler code, so it also appears when MoRI-IO moves the data.
 
 ## References
 
