@@ -94,6 +94,7 @@
     "operations/observability/model-server-metrics": { "position": 4, "label": "Model Server Metrics" },
     "operations/observability/router-metrics": { "position": 5, "label": "Router (EPP) Metrics" },
     "operations/observability/batch-gateway-metrics": { "position": 6, "label": "Batch Gateway Metrics" },
+    "operations/observability/ipp-metrics": { "position": 12, "label": "Inference Payload Processor Metrics" },
     "operations/observability/inference-cost": { "position": 7, "label": "Track Inference Cost" },
     "operations/observability/promql": { "position": 8, "label": "PromQL Query Reference" },
     "operations/observability/alerting": { "position": 9, "label": "Configure Alerts" },
