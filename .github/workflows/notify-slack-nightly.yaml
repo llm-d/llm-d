@@ -38,6 +38,7 @@ on:
       - "Nightly - Agentic API E2E (GKE GPU)"
       - "Nightly - Async Multi-Tenant Eviction E2E (GKE GPU)"
       - "Nightly - Async Multi-Tenant Holdback E2E (GKE GPU)"
+      - "Nightly - Fast Model Actuation + KEDA E2E (GKE GPU)"
       - "Nightly - Fast Model Actuation + KEDA E2E (OCP GPU)"
       - "Nightly - Fast Model Actuation E2E (GKE GPU)"
       - "Nightly - Fast Model Actuation E2E (OCP GPU)"

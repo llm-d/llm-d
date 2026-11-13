@@ -1,6 +1,7 @@
 # Fast Model Actuation + KEDA Autoscaling
 
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml)
+[![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-keda-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-fast-model-actuation-keda-gke-acc-gpu-vllm-x.yaml)
 
 ## Overview
 
@@ -52,6 +53,7 @@ export MONITORING_NAMESPACE=llm-d-monitoring
 export FMA_VERSION=0.8.0
 export FMA_CHART_INSTANCE_NAME=fma
 export MODEL=Qwen/Qwen3-0.6B
+export INFRA_PROVIDER=ocp # options: ocp, gke
 export CURL_TEST_IMAGE=cfmanteiga/alpine-bash-curl-jq:latest
 export BENCHMARK_REF=main
 export HARNESS=inference-perf
@@ -174,7 +176,7 @@ kubectl wait --for=condition=available --timeout=120s \
 
 ### 4. Deploy the llm-d Router (EPP flow-control enabled)
 
-The router values for this guide enable the EPP `flowControl` feature gate so the flow-control queue-depth metric is emitted for KEDA to scale on (and so requests enqueue when no backend is ready yet):
+The router values for this guide enable the EPP `flowControl` feature gate so the flow-control queue-depth metric is emitted for KEDA to scale on (and so requests enqueue when no backend is ready yet). The monitoring values are selected by `INFRA_PROVIDER`: `ocp` creates a `ServiceMonitor` for OpenShift user-workload monitoring, `gke` an authenticated Google Managed Prometheus `PodMonitoring`:
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -182,35 +184,39 @@ helm install ${GUIDE_NAME} \
   ${ROUTER_STANDALONE_CHART} \
   -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
   -f ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
-  -f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml \
+  -f ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/router/monitoring-${INFRA_PROVIDER}.values.yaml \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->
 
 ### 5. Deploy the Model Server (Dual Pods)
 
-Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` — **together with** the server-requesting `fma-requester` Deployment in a single `kubectl apply -k modelserver/`.
+Apply the FMA custom resources — `InferenceServerConfig`, `LauncherConfig`, and `LauncherPopulationPolicy` — **together with** the server-requesting `fma-requester` Deployment in a single apply, through the platform overlay selected by `INFRA_PROVIDER` (`platform/ocp` is a passthrough of `modelserver/`; `platform/gke` adds the privileged-launcher component described in the [base guide](../README.md#5-deploy-the-model-server-dual-pods)).
 
 This creates 1 [server-requesting pod](../README.md#overview), which reserves a GPU, and the FMA controllers bind it to a [launcher pod](../README.md#overview) — the launcher is what actually runs the vLLM instance. KEDA takes over the replica count in [step 6](#6-enable-scale-from-zero-autoscaling-keda).
 
 <!-- guide:deploy.modelserver start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/platform/${INFRA_PROVIDER}
 
-kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=300s
+kubectl rollout status deployment/fma-requester -n ${NAMESPACE} --timeout=900s
 ```
 <!-- guide:deploy.modelserver end -->
 
 ### 6. Enable Scale-from-Zero Autoscaling (KEDA)
 
-Apply the KEDA layer — the `ScaledObject`, its `TriggerAuthentication`, and the
-metrics-reader ServiceAccount + token — from the `ocp` overlay, then wait for the
-`ScaledObject` to reconcile `Ready`. KEDA then creates the HPA and owns the
-requester's replica count from here on. The overlay follows the
-[`keda-epp`](../../workload-autoscaling/keda-epp) guide, pointing the
-queue-depth trigger at Thanos Querier; on OpenShift the service-ca operator
-injects the Thanos CA into the token Secret, so **no `prometheus-token` copy is
-required**.
+Apply the KEDA layer from the overlay selected by `INFRA_PROVIDER`, then wait for
+the `ScaledObject` to reconcile `Ready`. KEDA then creates the HPA and owns the
+requester's replica count from here on. The overlays follow the
+[`keda-epp`](../../workload-autoscaling/keda-epp) guide:
+
+- `ocp` — the `ScaledObject`, its `TriggerAuthentication`, and the metrics-reader
+  ServiceAccount + token, pointing the queue-depth trigger at Thanos Querier; the
+  service-ca operator injects the Thanos CA into the token Secret, so **no
+  `prometheus-token` copy is required**.
+- `gke` — the `ScaledObject` alone, pointing the trigger at the
+  [Google Managed Prometheus frontend](#gke-google-managed-prometheus) over plain
+  in-cluster HTTP (see the GKE note below).
 
 No traffic has arrived yet, so the EPP flow-control queue reads 0 and KEDA scales
 `fma-requester` to zero, deleting its one server-requesting pod — releasing the GPU
@@ -220,7 +226,7 @@ shortened delays (`cooldownPeriod` 30s, then the HPA's 30s stabilization window)
 
 <!-- guide:deploy.keda start -->
 ```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/${INFRA_PROVIDER}
 
 kubectl wait --for=condition=Ready --timeout=120s \
   scaledobject/${GUIDE_NAME}-queue -n ${NAMESPACE}
@@ -233,9 +239,10 @@ kubectl get deployment/fma-requester -n ${NAMESPACE}
 <!-- guide:deploy.keda end -->
 
 > [!NOTE]
-> **Generic Kubernetes (non-OpenShift).** The command above uses the `ocp` overlay,
-> which targets OpenShift's Thanos Querier. Use the `keda/k8s` overlay instead, and
-> copy the bundled Prometheus CA into the namespace first so KEDA can authenticate:
+> **Generic Kubernetes (non-OpenShift, non-GKE).** The `ocp` overlay targets
+> OpenShift's Thanos Querier. On a cluster running the bundled kube-prometheus-stack,
+> use the `keda/k8s` overlay instead, and copy the bundled Prometheus CA into the
+> namespace first so KEDA can authenticate:
 
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -248,6 +255,45 @@ kubectl create secret generic keda-prometheus-auth \
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/k8s
 ```
 <!-- llm-d-cicd:skip end -->
+
+<a id="gke-google-managed-prometheus"></a>
+> [!NOTE]
+> **GKE (Google Managed Prometheus).** With `INFRA_PROVIDER=gke` the router values in
+> step 4 create a GMP `PodMonitoring` for the EPP, and the `keda/gke` overlay points
+> the trigger at `http://frontend.llm-d-monitoring.svc.cluster.local:9090` — the
+> [GMP standalone Prometheus frontend](https://cloud.google.com/stackdriver/docs/managed-prometheus/query#ui-prometheus),
+> a stateless proxy that authenticates to the Cloud Monitoring API on the
+> cluster's behalf, so KEDA needs no `TriggerAuthentication`. Like KEDA itself,
+> the frontend is **shared cluster infrastructure**: deploy it once per cluster
+> (cluster admin), into `llm-d-monitoring`, with Workload Identity granting its
+> ServiceAccount `roles/monitoring.viewer`:
+
+<!-- llm-d-cicd:skip start -->
+```bash
+# GKE only, once per cluster (cluster admin):
+export GCP_PROJECT=$(gcloud config get-value project)
+kubectl create namespace llm-d-monitoring --dry-run=client -o yaml | kubectl apply -f -
+curl -sSL https://raw.githubusercontent.com/GoogleCloudPlatform/prometheus-engine/v0.17.0/examples/frontend.yaml \
+  | sed "s/\$PROJECT_ID/${GCP_PROJECT}/" \
+  | kubectl apply -n llm-d-monitoring -f -
+# Grant the frontend's ServiceAccount read access to Cloud Monitoring (Workload Identity Federation for GKE):
+gcloud projects add-iam-policy-binding ${GCP_PROJECT} --role=roles/monitoring.viewer \
+  --member="principal://iam.googleapis.com/projects/$(gcloud projects describe ${GCP_PROJECT} --format='value(projectNumber)')/locations/global/workloadIdentityPools/${GCP_PROJECT}.svc.id.goog/subject/ns/llm-d-monitoring/sa/default"
+```
+<!-- llm-d-cicd:skip end -->
+
+> GMP ingests scrapes with a short delay (typically under a minute) on top of the
+> `PodMonitoring` interval, so expect scale-to-zero and scale-from-zero to react a
+> little later than on OpenShift. The `cluster-monitoring-view` ClusterRoleBinding
+> created in step 2 has no effect on GKE (that ClusterRole does not exist there);
+> it is harmless and removed by the cleanup.
+>
+> The frontend answers for the whole GCP project, and the trigger query matches
+> on `inference_pool` alone. A second copy of this guide in the same project, in
+> another namespace or on another cluster, adds its queue to this trigger: it can
+> wake an idle `fma-requester` or keep it from scaling to zero. Run one copy per
+> project at a time, or add GMP's `namespace` and `cluster` labels to the query
+> in `keda/gke/kustomization.yaml`.
 
 ## Verification
 
@@ -353,9 +399,9 @@ To remove all deployed components:
 
 <!-- guide:cleanup start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/ocp --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/keda/${INFRA_PROVIDER} --ignore-not-found=true
 
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/modelserver/ --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/fast-model-actuation/${GUIDE_NAME}/platform/${INFRA_PROVIDER} --ignore-not-found=true
 
 kubectl wait --for=delete pod -l app=fma-requester -n ${NAMESPACE} --timeout=120s
 

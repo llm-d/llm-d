@@ -1,0 +1,9 @@
+# GKE platform overlay for the FMA + KEDA guide: the KEDA variant's model-server
+# manifests plus the shared GKE component (see ../../../components/gke).
+# Selected by INFRA_PROVIDER=gke in the guide.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../modelserver
+components:
+  - ../../../components/gke

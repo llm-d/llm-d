@@ -1,0 +1,8 @@
+# DETECTION-ONLY overlay for INFRA_PROVIDER=gke -- NOT part of the FMA standup.
+# The llm-d-benchmark CI renders modelserver/<accelerator>/<backend>/<INFRA_PROVIDER>
+# to detect the served model; the platform-specific manifests actually applied by
+# the guide live under ../../../../platform/gke. See ../base/kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
