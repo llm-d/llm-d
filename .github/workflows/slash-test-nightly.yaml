@@ -417,8 +417,9 @@ jobs:
             }
 
             // Guide owners may run the nightlies for the guides they own. Each nightly
-            // maps to a guide via its `standup_scenario` (guides/<scenario>/OWNERS); the
-            // commenter must be listed in the OWNERS of *every* matched nightly's guide.
+            // maps to a guide via its `guide_path`, `standup_scenario` or `guide_name`
+            // (the nearest OWNERS at or above that guide directory); the commenter must
+            // be listed in the OWNERS of *every* matched nightly's guide.
             //
             // The mapping and the OWNERS files are read from the PR's base branch, never
             // from its head: on a fork PR the head tree belongs to the PR author, who could
@@ -464,11 +465,32 @@ jobs:
                 return logins;
               }
 
+              // A bespoke e2e lane names its guide directory in `guide_path` (its
+              // `guide_name` is only a label, e.g. async-multitenant for
+              // guides/batch-serving/asynchronous-processing/multitenant), so prefer it.
+              // Same lookup as .github/scripts/notify-slack-nightly.py.
+              function guideDirOf(wf) {
+                const path = wf.match(/^\s*guide_path:\s*['"]?([^'"\s]+)/m);
+                const scen = wf.match(/standup_scenario:[^']*'([^']+)'/)
+                  || wf.match(/^\s*guide_name:\s*['"]?([^'"\s]+)/m);
+                const dir = path ? path[1] : scen ? `guides/${scen[1]}` : null;
+                if (!dir) return null;
+                const parts = dir.replace(/\/+$/, '').split('/');
+                if (parts[0] !== 'guides' || parts.length < 2) return null;
+                if (parts.some(p => p === '' || p === '.' || p === '..')) return null;
+                return parts;
+              }
+
               for (const m of matches) {
                 const wf = await readFile(`.github/workflows/${m.workflowFile}`);
-                const scen = wf && wf.match(/standup_scenario:[^']*'([^']+)'/);
-                if (!scen) return false; // no guide mapping => maintainers only
-                const ownersText = await readFile(`guides/${scen[1]}/OWNERS`);
+                const parts = wf && guideDirOf(wf);
+                if (!parts) return false; // no guide mapping => maintainers only
+                // Nested guides may share an OWNERS file with their parent directory, so
+                // use the nearest one at or above the guide, stopping at guides/ itself.
+                let ownersText = null;
+                for (let i = parts.length; i >= 2 && !ownersText; i--) {
+                  ownersText = await readFile(`${parts.slice(0, i).join('/')}/OWNERS`);
+                }
                 if (!ownersText || !ownersFrom(ownersText).has(login.toLowerCase())) return false;
               }
               return true;
