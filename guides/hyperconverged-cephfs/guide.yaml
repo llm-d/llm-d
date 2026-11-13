@@ -10,6 +10,8 @@ env:
 
     HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
 
+    MONITORING: {default: "false", values: ["false", "true"]}
+    MONITORING_BACKEND: {default: prometheus, values: [prometheus, gmp], comment: "prometheus: OSS/OpenShift; gmp: GKE Managed Prometheus"}
     MONITORING_VALUES: {default: ""}
     PROVIDER_NAME: {default: none, values: [none, gke, agentgateway, istio]}
 
@@ -77,14 +79,13 @@ deploy:
         export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
 
   monitoring_values:
-    - run: |
-        #
-        # Uncomment the below to enable Prometheus monitoring on the llm-d router
-        #
-        # Unlike the ROUTER_*_VALUES paths above, this variable carries its own
-        # -f flag: it is empty by default, so the helm commands expand it as-is.
-        #
-        # export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    standard:
+      - when: {MONITORING: ["true"], MONITORING_BACKEND: [prometheus]}
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+    gke:
+      - when: {MONITORING: ["true"], MONITORING_BACKEND: [gmp]}
+        skip_in: [ci]
+        run: export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
 
   standalone:
     - run: |
@@ -113,7 +114,8 @@ deploy:
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/
 
   monitoring:
-    - run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+    - when: {MONITORING: ["true"], MONITORING_BACKEND: [prometheus]}
+      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 
 verify:
   endpoint:
@@ -163,7 +165,8 @@ cleanup:
   stack:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/ --ignore-not-found=true
-    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+    - when: {MONITORING: ["true"], MONITORING_BACKEND: [prometheus]}
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
     - run: kubectl delete pvc llm-d-kv-cache-storage -n ${NAMESPACE} --ignore-not-found=true
     - skip_in: [ci]
       run: kubectl delete namespace ${NAMESPACE}
