@@ -122,6 +122,33 @@ def test_list_env_values_fail_validation_and_cli_emit(tmp_path, capsys, spec, fi
     assert "export BAD=" not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "section, steps, path",
+    [
+        ("deploy", [{"run": "echo gke", "when": {"FLAVOR": ["gek"]}}], "deploy[0]"),
+        ("deploy", {"gateway": [{"run": "echo gke", "when": {"FLAVOR": ["gek"]}}]}, "deploy.gateway[0]"),
+        ("cleanup", [{"run": "echo gke", "when": {"FLAVOR": ["gek"]}}], "cleanup[0]"),
+    ],
+)
+def test_when_value_outside_declared_values_fails_validation(section, steps, path):
+    # A typo'd when: value would otherwise pass check and drop the step from
+    # every emitted script, since --var already rejects that value.
+    data = _minimal(**{section: steps})
+    msgs = [str(f) for f in guide.check_yaml(data)]
+    assert any(f"{path}:" in m and "'gek'" in m and "not in declared values" in m for m in msgs)
+
+    fixed = yaml.safe_load(yaml.safe_dump(data).replace("gek", "gke"))
+    assert not [str(f) for f in guide.check_yaml(fixed)]
+
+
+def test_when_value_check_skips_malformed_steps_and_free_variables():
+    # A step that is not a map gets its schema error, not a crash, and a
+    # variable without a values: list accepts any when: value.
+    data = _minimal(deploy=["echo not a map", {"run": "echo ns", "when": {"NAMESPACE": ["anything"]}}])
+    msgs = [str(f) for f in guide.check_yaml(data)]
+    assert len(msgs) == 1 and "deploy[0]" in msgs[0] and "must be a map" in msgs[0]
+
+
 def test_non_bool_sensitive_flag_fails_validation():
     # `sensitive: "true"` passed validation as non-sensitive but was treated
     # as sensitive by render and emit — the export silently vanished.
