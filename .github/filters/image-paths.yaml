@@ -4,6 +4,9 @@
 xpu:
   - 'docker/Dockerfile.xpu'
   - 'docker/common-versions'
+xpu-omni:
+  - 'docker/Dockerfile.xpu-omni'
+  - 'docker/common-versions'
 sglang-xpu:
   - 'docker/common-versions'
   - 'patches/sglang_xpu_source_pins.patch'
