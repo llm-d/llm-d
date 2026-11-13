@@ -26,6 +26,8 @@ flowchart TD
     subgraph EPP ["EPP Request Handling"]
         direction TB
         Parse[Parser]:::highlight
+        PrepRH["DataProducer (request handling)"]:::highlight
+        Screen[Screener]:::highlight
         Prep[DataProducer]:::highlight
         FC[FlowControl]:::flowcontrol
         Admit[Admitter]:::highlight
@@ -36,8 +38,11 @@ flowchart TD
     %% Connections
     Req --> Parse
     Parse -->|InferenceRequest| FC
-    FC --> Prep
+    FC --> PrepRH
     FC -->|"Rejected"| Reject
+    PrepRH --> Screen
+    Screen --> Prep
+    Screen -->|"No endpoints"| Reject
     Prep --> Admit
     Admit -->|"Admit"| Scheduler
     Admit -->|"Deny"| Reject
@@ -48,7 +53,8 @@ flowchart TD
 #### Core Components
 
 * **Parser**: Responsible for parsing the incoming request to a structured internal representation consumable by the request scheduler, and parsing the response to extract usage data if reported by the model server.
-* **DataProducer**: A pluggable extension that allows customizing request pre-processing and producing per-request state needed for scheduling, such as tokenization, prefix-cache matches, predicted processing latency etc.
+* **DataProducer**: A pluggable extension that allows customizing request pre-processing and producing per-request state needed for scheduling, such as tokenization, prefix-cache matches, predicted processing latency etc. Each producer runs in one of two phases: during request handling, on every located endpoint before screeners, or after screeners, on the screened endpoints (the default). Producers whose data a screener consumes run during request handling; see [Data Producer Phases](configuration.md#data-producer-phases).
+* **Screener**: Removes located endpoints before every scheduling profile, for mandatory constraints such as pinning a request to one rollout revision. Screeners can consume data from producers that run during request handling. A request with no endpoint left is rejected with HTTP 503.
 * **Admitter**: Decides whether to admit a request based on criteria like latency SLOs. Runs after dataProducer but before request scheduling. Requests failing admission are rejected, while admitted requests proceed to the request scheduling phase.
 
 #### Advanced Hooks
