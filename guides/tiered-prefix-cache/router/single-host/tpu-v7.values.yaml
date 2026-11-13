@@ -28,6 +28,9 @@ router:
             # Engine --block-size=4352 on TPU7x and the 262k context.
             blockSizeTokens: 4352
             maxPrefixTokensToMatch: 262144
+            # Keep this index at the HBM tier when the model server reports its
+            # host tier; the CPU index below covers that tier.
+            capacityTiers: [hbm]
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
