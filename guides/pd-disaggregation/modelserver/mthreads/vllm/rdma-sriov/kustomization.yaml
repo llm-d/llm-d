@@ -9,7 +9,6 @@ kind: Kustomization
 # are applied separately, since they are a cluster prerequisite.
 resources:
   - ../base
-  - entry.yaml
 
 patches:
   - path: patch-prefill.yaml

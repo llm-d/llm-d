@@ -15,8 +15,6 @@ spec:
             spec:
               containers:
                 - name: modelserver
-                  command:
-                    - /opt/entry/entry.sh
                   args:
                     - Qwen/Qwen3-32B
                     - --served-model-name=Qwen3-32B
@@ -37,17 +35,3 @@ spec:
                       rdma/rdma_shared_device: "1"
                     limits:
                       rdma/rdma_shared_device: "1"
-                  securityContext:
-                    capabilities:
-                      add:
-                        - IPC_LOCK
-                        - SYS_RESOURCE
-                  volumeMounts:
-                    - name: entry
-                      mountPath: /opt/entry
-                      readOnly: true
-              volumes:
-                - name: entry
-                  configMap:
-                    name: mthreads-rdma-entry
-                    defaultMode: 493
