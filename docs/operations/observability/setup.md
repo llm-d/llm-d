@@ -223,6 +223,9 @@ If `--managed-otel-scope` is not enabled on your cluster, you can deploy a stand
 </details>
 <!-- tabs:end -->
 
+> [!NOTE]
+> **Exemplars and tail sampling:** the router attaches a trace exemplar to a metric only when the request's span was sampled at the start of the trace (head sampling, set by `samplerArg`). If your OpenTelemetry Collector also applies tail sampling, it can drop a trace after its exemplar was recorded, and the exemplar link then opens a trace that was never exported. To keep every exemplar link working, don't tail-sample llm-d traces in the collector.
+
 For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 
 ## Cleanup
