@@ -304,6 +304,8 @@ For model sources, caching, and startup optimization, see the [Model Loading and
 
 **Apply the Kustomize overlay** for your accelerator and model server. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`, with the routing sidecar in front of the engine): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU and TPU7x dynamic sub-slices, two `Deployments` elsewhere. See [Configure the environment](#configure-the-environment) for the `INFRA_PROVIDER` values of each accelerator.
 
+On NVIDIA GPU and TPU7x dynamic sub-slices, the decode routing sidecar runs with `--enable-ssrf-protection=true`. It accepts a prefill target only when the target is a pod of the `${GUIDE_NAME}` InferencePool on a pool target port, and rejects any other value of the prefill header with `403`. The overlay gives the decode service account a `Role` to list and watch the InferencePool and its pods, and mounts a service account token in the sidecar container only. See [SSRF Protection](https://github.com/llm-d/llm-d-router/blob/main/docs/disaggregation.md#ssrf-protection) in the router docs.
+
 <!-- tabs:start group=modelserver -->
 <details open>
 <summary><b>Default (NVIDIA GPU, AMD)</b></summary>

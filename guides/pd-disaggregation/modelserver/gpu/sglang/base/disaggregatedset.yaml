@@ -150,6 +150,22 @@ spec:
                     - --kv-connector=sglang
                     - --zap-log-level=1
                     - --secure-serving=false
+                    - --enable-ssrf-protection=true
+                  env:
+                    # The allowlist watches the InferencePool named after the router
+                    # Helm release, which the guide installs as pd-disaggregation.
+                    - name: POD_NAMESPACE
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.namespace
+                    - name: INFERENCE_POOL
+                      value: $(POD_NAMESPACE)/pd-disaggregation
+                  volumeMounts:
+                    # Only the sidecar gets a service account token; the pod keeps
+                    # automountServiceAccountToken off for the model server.
+                    - name: sidecar-sa-token
+                      mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+                      readOnly: true
                   ports:
                     - containerPort: 8000
                       name: sidecar
@@ -236,6 +252,22 @@ spec:
                     - mountPath: /.config
                       name: metrics-volume
               volumes:
+                - name: sidecar-sa-token
+                  projected:
+                    sources:
+                      - serviceAccountToken:
+                          path: token
+                          expirationSeconds: 3600
+                      - configMap:
+                          name: kube-root-ca.crt
+                          items:
+                            - key: ca.crt
+                              path: ca.crt
+                      - downwardAPI:
+                          items:
+                            - path: namespace
+                              fieldRef:
+                                fieldPath: metadata.namespace
                 - emptyDir: {}
                   name: metrics-volume
                 - emptyDir:
