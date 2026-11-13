@@ -150,9 +150,13 @@ spec:
                     - --kv-connector=sglang
                     - --zap-log-level=1
                     - --secure-serving=false
+                    - --metrics-port=9095
                   ports:
                     - containerPort: 8000
                       name: sidecar
+                      protocol: TCP
+                    - containerPort: 9095
+                      name: sc-metrics
                       protocol: TCP
                   resources: {}
                   restartPolicy: Always

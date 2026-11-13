@@ -90,6 +90,7 @@ spec:
                     - --moriio-tp-size=8
                     - --moriio-parallel-dispatch
                     - --moriio-local-pod-ip=$(POD_IP)
+                    - --metrics-port=9095
               containers:
                 - name: modelserver
                   args:

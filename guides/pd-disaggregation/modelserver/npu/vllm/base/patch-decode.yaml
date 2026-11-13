@@ -41,6 +41,7 @@ spec:
                     - --kv-connector=nixlv2
                     - --zap-log-level=1
                     - --secure-proxy=false
+                    - --metrics-port=9095
                   ports:
                     - containerPort: 8000
                       name: sidecar
@@ -53,6 +54,9 @@ spec:
                       protocol: TCP
                     - containerPort: 8003
                       name: sidecar-rank3
+                      protocol: TCP
+                    - containerPort: 9095
+                      name: sc-metrics
                       protocol: TCP
               containers:
                 - name: modelserver

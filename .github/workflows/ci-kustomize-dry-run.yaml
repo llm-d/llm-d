@@ -32,6 +32,9 @@ jobs:
       - name: Test observability exemplar wiring
         run: guides/recipes/observability/tests/test-prometheus-exemplar-config.sh
 
+      - name: Test routing sidecar metrics check
+        run: .github/scripts/test-check-routing-sidecar-metrics.sh
+
       - name: Create kind cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa  # v1.15.1
         with:
@@ -252,6 +255,15 @@ jobs:
               echo "--- kustomize build ---"
               if ! kustomize build "${kust_dir}" > /tmp/rendered.yaml; then
                 echo "FAIL: kustomize build failed for ${name}"
+                results+=("FAIL ${name}")
+                failed=1
+                continue
+              fi
+
+              # Every routing sidecar must serve /metrics on the sc-metrics port
+              # the decode PodMonitors scrape (llm-d#2988).
+              if ! .github/scripts/check-routing-sidecar-metrics.sh /tmp/rendered.yaml; then
+                echo "FAIL: routing sidecar metrics in ${name}"
                 results+=("FAIL ${name}")
                 failed=1
                 continue
