@@ -5,12 +5,14 @@
 #
 # Server flags and environment follow SGLang's own Kimi-K3.1 TPU recipe
 # (benchmark/tpu/recipe/configs/kimi_k3_1/server.py in the image), with a 480K context instead
-# of the recipe's 128K + 8K sizing. One replica's KV pool holds 532,352 tokens (measured; MLA
-# latents and DSA index keys are replicated on every rank), short of the model's 1M, and the
-# batch-64 decode kernel keeps a 64-sequence page table in its 1 MiB SMEM: at 523,264 tokens
-# (4,089 pages) the batch-64 compile ran out of SMEM by 51.6K (measured on tpu7x). 491,520 tokens
-# (3,841 pages) fits with ~10 KB to spare and keeps the recipe's 64-request batch and 128-token
-# pages.
+# of the recipe's 128K + 8K sizing. --max-mamba-cache-size=384 sizes the KDA recurrent-state
+# pool for multi-turn agentic serving and gives the remaining HBM to the KV pool: 751,104 tokens
+# per replica (532,352 with the recipe's 708 slots). Each cached prefix also keeps a KDA state
+# snapshot, so keep enough slots for the concurrent sessions plus their cached prefixes; 384 was
+# validated at 16 concurrent sessions per replica. The batch-64 decode kernel keeps a 64-sequence
+# page table in its 1 MiB SMEM, which sets the context length: 491,520 tokens (3,841 pages) fits
+# with ~10 KB to spare and keeps the recipe's 64-request batch and 128-token pages; 523,264
+# tokens (4,089 pages) does not compile at batch 64 (measured on tpu7x).
 #
 # Tiered prefix cache: SGLang HiCache over TPU Sync (raiden) keeps evicted prefixes, both the
 # sparse-MLA / DSA pages and the KDA state slots, in a host-DRAM pool twice the HBM pool, and
@@ -100,8 +102,10 @@ spec:
                   --enable-torch-compile \
                   --torch-compile-max-bs=64 \
                   --mamba-ssm-dtype=bfloat16 \
-                  --scheduler-recv-interval=16 \
+                  --max-mamba-cache-size=384 \
+                  --scheduler-recv-interval=8 \
                   --weight-loader-disable-mmap \
+                  --weight-loader-drop-cache-after-load \
                   --grammar-backend=none \
                   --reasoning-parser=kimi_k3 \
                   --tool-call-parser=kimi_k3 \
@@ -202,6 +206,21 @@ spec:
                 value: "1"
               - name: SGLANG_TPU_PALLAS_VMEM_RIGHTSIZE
                 value: "1"
+              # Prefill/decode overlap for agentic workloads, as in SGLang's agentic TPU recipe
+              # (benchmark/tpu/recipe/configs/muse_spark/agentic.py in the image):
+              # - SGLANG_PREFILL_CHUNK_SHARE_MIN_TOKENS: batch decode steps with chunked prefill.
+              # - SGLANG_PREFILL_DECODE_INTERVAL_SKIP_IDLE: schedule the next prefill chunk without
+              #   an idle interval.
+              # - SGLANG_TPU_RAIDEN_COALESCE_PAGES: transfer contiguous HiCache pages in one DMA.
+              # - TPU_PREMAPPED_BUFFER_SIZE: 8 GiB pinned host buffer for HiCache transfers.
+              - name: SGLANG_PREFILL_CHUNK_SHARE_MIN_TOKENS
+                value: "1024"
+              - name: SGLANG_PREFILL_DECODE_INTERVAL_SKIP_IDLE
+                value: "1"
+              - name: SGLANG_TPU_RAIDEN_COALESCE_PAGES
+                value: "1"
+              - name: TPU_PREMAPPED_BUFFER_SIZE
+                value: "8589934592"
               - name: LIBTPU_INIT_ARGS
                 value: >-
                   --xla_tpu_enable_async_collective_fusion=true

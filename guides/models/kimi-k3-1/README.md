@@ -47,8 +47,8 @@ This guide deploys [moonshotai/Kimi-K3.1-Pro](https://huggingface.co/moonshotai/
 | Accelerator | Google TPU 7x (`tpu7x`) |
 | Topology | `2x2x4` (4 hosts × 4 chips, 32 TensorCores) per replica; 32 chips for the default 2 replicas |
 | Parallelism | TP=32 × EP=8 (SGLang's Kimi-K3.1 TPU recipe) |
-| Context length | 491,520 tokens (480K). The batch-64 decode kernel's SMEM caps the context at about 496K tokens; the HBM KV pool holds 532,352 tokens |
-| KV cache | fp8, `--page-size 128`, radix cache; HiCache host tier with `--hicache-ratio 2` (1,064,832 host tokens per rank) |
+| Context length | 491,520 tokens (480K). The batch-64 decode kernel's SMEM caps the context at about 496K tokens; the HBM KV pool holds 751,104 tokens |
+| KV cache | fp8, `--page-size 128`, radix cache; HiCache host tier with `--hicache-ratio 2`; `--max-mamba-cache-size 384` KDA state slots, which frees HBM for KV |
 | Model weights | `ReadOnlyMany` Hyperdisk ML volume hydrated once from a GCS copy of the Hugging Face repo |
 | Model server | SGLang on Torch TPU (`docker.io/lmsysorg/sglang:dev-kimi-k31-pro-tpu`, pinned by digest) |
 
@@ -309,7 +309,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 > `active-request-scorer`, and `token-load-scorer` on the `prefill` profile and
 > `active-request-scorer`, `queue-scorer`, and `kv-cache-utilization-scorer` across ports `8000..8003` on the `decode` profile.
 > On TPU (`kimi-k3-1.values.yaml`), `blockSizeTokens: 128` matches SGLang's `--page-size`, `maxPrefixTokensToMatch: 491520`
-> matches `--context-length`, `lruCapacityPerServer: 12478` covers the HBM + HiCache host pools of one TP rank, and
+> matches `--context-length`, `lruCapacityPerServer: 12478` was sized from the HBM + HiCache host pools of one TP rank before the KDA slot cap, and
 > `peakPrefillThroughput: 4209` was calibrated on `tpu7x` `2x2x4`.
 
 **Deploy the router** in [Standalone Mode](../../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. Keep the release name `${GUIDE_NAME}`: the verification steps look up the `${GUIDE_NAME}-epp` Service by that name. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../../optimized-baseline/README.md#1-deploy-the-llm-d-router).
