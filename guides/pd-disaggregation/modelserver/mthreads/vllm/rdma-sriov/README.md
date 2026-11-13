@@ -11,8 +11,9 @@ routing sidecar are inherited from `../base`; the RDMA additions are:
   `kv_connector_extra_config`;
 - one SR-IOV VF NAD per pod and the matching Multus annotation;
 - a `rdma/rdma_shared_device` request and limit;
-- `IPC_LOCK` + `SYS_RESOURCE`, and an `entry.sh` wrapper that raises
-  `ulimit -l unlimited` before `vllm serve`.
+- `IPC_LOCK`, which `../base` already grants: with it, RDMA memory
+  registration (`ib_umem_get()`) does not enforce `RLIMIT_MEMLOCK`, so the
+  overlay needs no `ulimit` wrapper.
 
 ## Prerequisites
 

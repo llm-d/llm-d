@@ -590,7 +590,7 @@ The routing sidecar sets `bootstrap_host` to the InferencePool **Pod IP**. Moonc
 
 - an `isRdma` RDMA device plugin exposing `rdma/rdma_shared_device`, and SR-IOV VFs on the RoCE network;
 - one VF NAD per role (the overlay ships `mthreads-sriov-vf0`/`mthreads-sriov-vf1` as examples);
-- `rdma/rdma_shared_device` in the role requests, `SYS_RESOURCE`, and an `entry.sh` wrapper that raises `ulimit -l unlimited` before `vllm serve`.
+- `rdma/rdma_shared_device` in the role requests. `IPC_LOCK`, which the TCP base already grants, is enough for RDMA memory registration (`ib_umem_get()` does not enforce `RLIMIT_MEMLOCK` with it), so no `ulimit` wrapper is needed.
 
 Edit the overlay's example values before applying: the VF PCI addresses and IPAM in its `network-attachment-definitions.yaml`, the per-role `device_name` (`mlx5_10`/`mlx5_11`) in its role patches, and pin both roles to the same node. Use it only when the cluster provides RDMA; the TCP base needs none of these. On the RDMA path the vLLM log shows `The Mooncake Transfer Engine is using rdma as its protocol.`
 
