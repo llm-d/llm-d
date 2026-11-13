@@ -22,6 +22,9 @@ and run.
 > backend from the
 > [optimized-baseline modelserver overlays](../optimized-baseline/modelserver/).
 
+For Docker deployment on Ascend NPUs, see the [Ascend recipe](./ascend/README.md),
+validated with two Ascend 910B3 workers, EPP, and Envoy.
+
 ## What's in this directory
 
 | Path                                       | Purpose                                                       |
