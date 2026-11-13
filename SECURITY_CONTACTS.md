@@ -1,12 +1,12 @@
 Defined below are the security contacts for this repo.
 
-They are the contact point for the Product Security Committee to reach out
-to for triage and handling of incoming issues.
+The Vulnerability Management Team can reach out to these contacts for help
+triaging and handling incoming issues.
 
 The below names agree to address security concerns if and when they arise.
 
-DO NOT REPORT SECURITY VULNERABILITIES DIRECTLY TO THESE NAMES, SEND INFORMATION
-TO [llm-d-security-announce@googlegroups.com](mailto:llm-d-security-announce@googlegroups.com)
+To report a vulnerability, follow the [security policy](SECURITY.md) or email the
+private [llm-d-security-reporting@googlegroups.com](mailto:llm-d-security-reporting@googlegroups.com) list.
 
 chcost<br/>
 robertgshaw2-redhat<br/>
