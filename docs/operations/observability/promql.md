@@ -119,6 +119,18 @@ Requires the `flowControl` feature gate enabled on the EPP.
 | **Queue wait time P99** | `histogram_quantile(0.99, sum by(le) (rate(llm_d_epp_flow_control_request_queue_duration_seconds_bucket[5m])))` |
 | **Pool saturation** | `llm_d_epp_flow_control_pool_saturation` |
 
+### Multimodal & Encode Disaggregation
+
+| Metric Need | PromQL Query |
+| ----------- | ------------ |
+| **Multimodal embedding cache hit rate** | `sum(rate(vllm:mm_cache_hits_total[5m])) / sum(rate(vllm:mm_cache_queries_total[5m]))` |
+| **Encoder tier worker utilization** | `avg by(pod) (vllm:num_requests_running{pod=~".*encode.*"})` |
+| **Cross-tier request throughput** | `sum by(pod) (rate(vllm:request_success_total[5m]))` |
+| **Multimodal prompt token inflation ratio** | `sum(rate(llm_d_epp_prefix_mm_prompt_tokens[5m])) / sum(rate(vllm:prompt_tokens_total[5m]))` |
+| **Sidecar encode duration P95 (ms)** | `histogram_quantile(0.95, sum by(le) (rate(llm_d_disagg_sidecar_encode_duration_seconds_bucket[5m]))) * 1000` |
+
+In E/PD and E/P/D disaggregated topologies, `vllm:mm_cache_*` metrics evaluate Vision Transformer (ViT) embedding reuse on Encode workers, while `llm_d_disagg_sidecar_encode_duration_seconds` measures the time spent encoding media before prefill starts.
+
 ## Notes
 
 **Metric name prefix:** llm-d 0.10 / llm-d-router 0.11.0 removed the old EPP metric names. Use `llm_d_epp_*`; if a query returns no data, verify the installed router version and required feature gate.
