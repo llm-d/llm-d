@@ -114,7 +114,7 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`disagg-profile-handler`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/profilehandler/disagg)**: Runs two scheduling profiles, one for prefill and one for decode. The **decode endpoint** is set as the primary destination for the proxy to forward the original request, while the **prefill endpoint** is injected into the request as a specialized header.
 
 > [!NOTE]
-> An older handler, `data-parallel-profile-handler`, is **deprecated** and kept only for backward compatibility, use `single-profile-handler` instead.
+> `data-parallel-profile-handler` was removed in llm-d Router v1.0.0. Configurations that still reference it fail at startup; use `single-profile-handler` instead.
 
 ---
 
