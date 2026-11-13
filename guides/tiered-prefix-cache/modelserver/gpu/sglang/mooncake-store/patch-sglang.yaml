@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    metadata:
+      annotations:
+        # One dedicated RDMA-capable SR-IOV VF per pod, attached as net1 from
+        # the ${RDMA_NETWORK} NetworkAttachmentDefinition.
+        #
+        # No device whitelist is needed: although every HCA on the node shows
+        # up in /sys/class/infiniband, the SR-IOV device plugin's device cgroup
+        # leaves only the allocated VF's /dev/infiniband/uverbs node openable,
+        # and Mooncake's auto-discovery skips devices it cannot open -- so
+        # discovery registers exactly the attached VF.
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"${RDMA_NETWORK}","interface":"net1"}
+          ]
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--tensor-parallel-size=2"
+            # KV-block granularity. Must match the router scorer's
+            # tokenProcessorConfig.blockSizeTokens (default 64); SGLang's knob is
+            # --page-size, where vLLM uses --block-size.
+            - "--page-size=64"
+            - "--mem-fraction-static=0.9"
+            - "--enable-metrics"
+            - "--enable-hierarchical-cache"
+            - "--hicache-host-memory-mode"
+            - "buffer_only"
+            - "--hicache-write-policy"
+            - "write_through"
+            - "--hicache-io-backend"
+            - "kernel"
+            - "--hicache-size"
+            - "20"
+            - "--hicache-storage-backend"
+            - "mooncake"
+            - "--disable-custom-all-reduce"
+            - "--hicache-storage-prefetch-policy"
+            - "timeout"
+          env:
+            - name: SGLANG_HICACHE_MOONCAKE_CONFIG_PATH
+              value: /etc/mooncake/mooncake_config.json
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: TRITON_CACHE_DIR
+              value: /.cache/triton
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: MOONCAKE_LOCAL_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            limits:
+              nvidia.com/gpu: "2"
+              cpu: "16"
+              memory: 512Gi
+              # One SR-IOV VF per pod.
+              ${RDMA_VF_RESOURCE}: "1"
+            requests:
+              nvidia.com/gpu: "2"
+              cpu: "8"
+              memory: 400Gi
+              ${RDMA_VF_RESOURCE}: "1"
+          volumeMounts:
+            # The mooncake JSON needs no per-pod rendering: local_hostname
+            # comes from the MOONCAKE_LOCAL_HOSTNAME downward-API env and
+            # device selection from the device cgroup isolation, so mount the
+            # ConfigMap read-only straight into SGLANG_HICACHE_MOONCAKE_CONFIG_PATH.
+            - mountPath: /etc/mooncake
+              name: mooncake-config
+              readOnly: true
+            - mountPath: /.cache
+              name: cache-volume
+
+      volumes:
+        - name: mooncake-config
+          configMap:
+            name: mooncake-store-config
+        - name: cache-volume
+          emptyDir: {}
+
