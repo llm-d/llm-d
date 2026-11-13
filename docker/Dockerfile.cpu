@@ -1,5 +1,4 @@
-# Using Ubuntu 22.04 to match upstream vLLM compilation environment with glibc 2.35 for now.
-FROM ubuntu:25.10 AS base-common
+FROM ubuntu:26.04 AS base-common
 
 ARG CACHE_BUSTER
 RUN if [ -n "${CACHE_BUSTER}" ]; then \
@@ -69,7 +68,7 @@ ENV UV_HTTP_TIMEOUT=500
 ENV UV_HTTP_RETRIES=10
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --upgrade pip && \
-    uv pip install -r requirements/cpu.txt -v
+    uv pip install -r requirements/cpu.txt 'pillow>=13.0.0' -v
 
 RUN echo 'ulimit -c 0' >> ~/.bashrc
 
