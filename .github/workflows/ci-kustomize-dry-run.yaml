@@ -32,6 +32,9 @@ jobs:
       - name: Test observability exemplar wiring
         run: guides/recipes/observability/tests/test-prometheus-exemplar-config.sh
 
+      - name: Test observability log pipeline
+        run: guides/recipes/observability/tests/test-otel-collector-loki.sh
+
       - name: Create kind cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa  # v1.15.1
         with:

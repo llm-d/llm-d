@@ -225,6 +225,16 @@ If `--managed-otel-scope` is not enabled on your cluster, you can deploy a stand
 
 For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 
+## Step 4: Collect Logs (Optional)
+
+To find every log line of one request by its trace ID, deploy Loki and a log agent that collects your workload namespace:
+
+```bash
+./guides/recipes/observability/install-otel-collector-loki.sh -n ${NAMESPACE}
+```
+
+The agent runs as root in its own `llm-d-logging` namespace, and is not supported on OpenShift or GKE Autopilot. See [Query Logs by Trace ID](./logging.md) for the details and for those platforms.
+
 ## Cleanup
 
 ```bash
@@ -233,6 +243,9 @@ For full tracing configuration across vLLM, the routing proxy, and the EPP, see 
 
 # Remove OTel Collector and Jaeger
 ./guides/recipes/observability/install-otel-collector-jaeger.sh -u -n ${NAMESPACE}
+
+# Remove the log agent and Loki
+./guides/recipes/observability/install-otel-collector-loki.sh -u
 ```
 
 ## Troubleshooting
