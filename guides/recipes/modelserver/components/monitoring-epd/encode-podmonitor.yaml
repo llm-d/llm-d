@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: encode
+  labels:
+    llm-d.ai/role: encode
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/role: encode
+  podMetricsEndpoints:
+    - port: "modelserver"
+      path: /metrics
+      interval: 30s
