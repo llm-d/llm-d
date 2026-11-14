@@ -15,7 +15,7 @@ export NAMESPACE=<your-llm-d-namespace>
 
 | Component | Config Method | Traced Operations |
 | --- | --- | --- |
-| **vLLM / SGLang** (prefill + decode) | Kustomize: container args + env vars | Inference engine spans (`llm_request`, model loading, compilation) |
+| **vLLM / SGLang** (prefill + decode) | Kustomize: container args + env vars | Inference requests (for example, `llm_request` in vLLM) |
 | **Routing proxy** (P/D sidecar) | Kustomize: container args + env vars | KV transfer coordination |
 | **EPP** | Helm: [`tracing.values.yaml`](../../../guides/recipes/router/features/tracing.values.yaml) or [`tracing-gke.values.yaml`](../../../guides/recipes/router/features/tracing-gke.values.yaml) | Request routing, endpoint filtering/scoring, KV-cache indexing, tokenization |
 
@@ -168,9 +168,13 @@ export MODEL_SERVER_TRACING="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/traci
 Applying the tracing overlay updates the existing model server Deployment and restarts its pods. It preserves the selected provider's configuration, model arguments, credentials, and KV-cache event settings. Keep the guide's other deployment steps, including the render Service for Precise Prefix-Cache Routing.
 
 > [!NOTE]
-> Each model server rollout in this guide, including cleanup, can pull an image and reload the model. Increase `--timeout` to give `kubectl` more time to wait. A Deployment separately reports `ProgressDeadlineExceeded` after `spec.progressDeadlineSeconds` without progress (600 seconds by default), which causes `kubectl rollout status` to fail. This failure can be benign on a slow start: Kubernetes only reports the condition and does not stop the rollout, so the new Pods keep initializing. Before rolling back, inspect the new Pods with `kubectl describe pod` and `kubectl logs -c modelserver`. If they show healthy but slow initialization, wait for them to become Ready and rerun `kubectl rollout status`. To avoid this failure on later rollouts, increase `spec.progressDeadlineSeconds` in your Deployment configuration. [Kubernetes Deployment status](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#failed-deployment)
+> Each model server rollout in this guide, including cleanup, can pull an image and reload the model.
+> Increase `--timeout` to give `kubectl` more time to wait. A Deployment separately reports `ProgressDeadlineExceeded` after `spec.progressDeadlineSeconds` without progress (600 seconds by default), which causes `kubectl rollout status` to fail.
+> This failure can be benign on a slow start: Kubernetes only reports the condition and does not stop the rollout, so the new Pods keep initializing.
+> Before rolling back, inspect the new Pods with `kubectl describe pod` and `kubectl logs -c modelserver`. If they show healthy but slow initialization, wait for them to become Ready and rerun `kubectl rollout status`.
+> To avoid this failure on later rollouts, increase `spec.progressDeadlineSeconds` in your Deployment configuration. [Kubernetes Deployment status](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#failed-deployment)
 
-The shared [vLLM Deployment component](../../../guides/recipes/observability/tracing/components/vllm-deployment/kustomization.yaml) adds `--collect-detailed-traces=all` and `--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)`. Kubernetes expands the endpoint variable when starting the container. The component exports to the same-namespace collector as `vllm-decode`, with a `parentbased_traceidratio` sampler and a `0.1` ratio for root spans. Child spans follow the parent's sampling decision.
+The shared [vLLM Deployment component](../../../guides/recipes/observability/tracing/components/vllm-deployment/kustomization.yaml) enables tracing with `--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)`. Kubernetes expands the endpoint variable when starting the container. The component exports to the same-namespace collector as `vllm-decode`, with a `parentbased_traceidratio` sampler and a `0.1` ratio for root spans. Child spans follow the parent's sampling decision.
 
 Check the deployed configuration:
 
@@ -192,17 +196,9 @@ kubectl rollout status -n "${NAMESPACE}" deployment \
   -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
 ```
 
-For a manual trace test, sample all model server root spans:
+For the routed trace test in Step 4, configure sampling on EPP in Step 3. The model server's `OTEL_TRACES_SAMPLER_ARG` applies to root spans, such as direct requests to vLLM that arrive without a `traceparent` header.
 
-```bash
-kubectl set env -n "${NAMESPACE}" deployment \
-  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" \
-  --containers=modelserver OTEL_TRACES_SAMPLER_ARG=1.0
-kubectl rollout status -n "${NAMESPACE}" deployment \
-  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
-```
-
-Reapplying the tracing overlay restores its default collector endpoint and sampling ratio. For persistent endpoint or sampling customization, create another Kustomization that references the tracing overlay and patches the `modelserver` env entries by name. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to the collector's full Service DNS name when it runs in another namespace; the CLI endpoint follows that env value.
+Reapplying the tracing overlay restores its default collector endpoint and sampling ratio. To persist an endpoint or root sampling override, create another Kustomization that references the tracing overlay and patches the `modelserver` env entries by name. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to the collector's full Service DNS name when it runs in another namespace; the CLI endpoint follows that env value.
 
 ### Composing the Component
 
@@ -217,7 +213,7 @@ components:
   - ../../../../../../recipes/observability/tracing/components/vllm-deployment
 ```
 
-Keep this outer overlay parallel to the original accelerator directories. Kustomize rejects a descendant overlay that references its own ancestor. Components run before patches in the same Kustomization, so adding the component directly to a guide's base allows the guide's full `args` patch to overwrite the tracing flags. The component checks the first container's name and command before appending flags.
+Keep this outer overlay parallel to the original accelerator directories. Kustomize rejects a descendant overlay that references its own ancestor. Components run before patches in the same Kustomization, so adding the component directly to a guide's base allows the guide's full `args` patch to overwrite the tracing flag. The component checks the first container's name and command before appending the endpoint argument.
 
 ### Other Workloads and Serving Engines
 
@@ -226,7 +222,6 @@ Configure tracing for other workloads in their own manifests. Set `OTEL_SERVICE_
 ```yaml
 # Add to the modelserver container args (vLLM shown):
 #   - "--otlp-traces-endpoint=http://otel-collector:4317"
-#   - "--collect-detailed-traces=all"
 
 # Add to the modelserver container env (applies to any OpenTelemetry-capable engine):
 env:
@@ -406,7 +401,7 @@ Open [Trace Explorer](https://console.cloud.google.com/traces/explorer) in the G
 
 If you only see generic `GET` spans, check that:
 
-- The vLLM container args include `--collect-detailed-traces=all`
+- The vLLM container args include `--otlp-traces-endpoint` and the endpoint resolves to the configured collector
 - The EPP deployment has `router.tracing.enabled=true` and `samplerArg` is high enough to sample your test traffic
 
 If EPP and vLLM appear in separate traces, check `traceparent` propagation through the request path. If vLLM traces are missing, check the model server startup logs for unsupported flags or missing OpenTelemetry dependencies, verify collector connectivity, and check the sampling configuration on both components.
@@ -448,7 +443,7 @@ kubectl rollout status -n "${NAMESPACE}" deployment \
   -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
 ```
 
-Repeat the configuration check from Step 2: the tracing flags and env entries should be absent. Send another completion request to verify serving still works. If EPP tracing was enabled for this test, disable it using the same chart selection and version as Step 3:
+Repeat the configuration check from Step 2 to verify that the vLLM tracing endpoint argument and OpenTelemetry env entries are gone. Send another completion request to verify serving still works. If EPP tracing was enabled for this test, disable it using the same chart selection and version as Step 3:
 
 ```bash
 helm upgrade "${ROUTER_RELEASE}" "${ROUTER_STANDALONE_CHART}" \
