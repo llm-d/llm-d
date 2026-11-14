@@ -1,0 +1,280 @@
+# GLM-5.3 Quark MXFP4 colocated (prefill and decode in the same engine) on MI355X: two replicas of
+# four GPUs fill one 8-GPU node, MTP-3. PARALLELISM picks the replica layout:
+#   ep  DP=4 / EP=4 / TP=1, one API server per DP rank on ports 8000-8003 so the router picks the
+#       rank (--data-parallel-multi-port-external-lb), aggregated health on 8008.
+#   tp  TP=4, one API server on 8000 (deployments/colocated-tp also moves the ports and probes).
+# Variants patch the env entries below by name instead of replacing args.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: glm-5-3
+  labels:
+    app.kubernetes.io/name: glm-5-3
+spec:
+  serviceName: glm-5-3
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: glm-5-3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: glm-5-3
+        llm-d.ai/inference-serving: "true"
+      annotations:
+        # One RDMA rail per allocated amd.com/vnic, through the NetworkAttachmentDefinition created
+        # in the prerequisites (network/rdma-nad.yaml).
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {"name":"glm-5-3-rdma","interface":"net1"},
+            {"name":"glm-5-3-rdma","interface":"net2"},
+            {"name":"glm-5-3-rdma","interface":"net3"},
+            {"name":"glm-5-3-rdma","interface":"net4"}
+          ]
+    spec:
+      serviceAccountName: glm-5-3
+      # Same drain as recipes/modelserver/components/graceful-shutdown, which does not patch
+      # StatefulSets: preStop 15 s + --shutdown-timeout 45 s + 15 s teardown.
+      terminationGracePeriodSeconds: 75
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Gi
+        - name: jit-cache
+          emptyDir: {}
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-pvc
+      containers:
+        - name: vllm
+          image: REPLACE_MODEL_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "15"]
+          securityContext:
+            # IPC_LOCK: MoRI pins memory for its symmetric heap.
+            capabilities:
+              add:
+                - IPC_LOCK
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |-
+              # Clear /dev/shm on start to prevent running out of space when crashes occur https://github.com/llm-d/llm-d/issues/352
+              find /dev/shm -type f -delete
+              if [[ "${PARALLELISM}" == tp ]]; then
+                PAR=(--tensor-parallel-size 4 --data-parallel-size 1)
+              else
+                PAR=(--data-parallel-multi-port-external-lb --data-parallel-supervisor-port 8008
+                     --tensor-parallel-size 1 --data-parallel-size 4 --data-parallel-size-local 4
+                     --data-parallel-address "${POD_IP}" --data-parallel-rpc-port 13345
+                     --enable-expert-parallel --all2all-backend mori)
+              fi
+              # shellcheck disable=SC2086
+              exec vllm serve "${MODEL}" \
+                --revision "${MODEL_REVISION}" \
+                --port 8000 \
+                --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                "${PAR[@]}" \
+                --block-size "${BLOCK_SIZE}" \
+                --kv-cache-dtype auto \
+                --gpu-memory-utilization 0.6 \
+                --kv-cache-memory-bytes "${KV_CACHE_MEMORY_BYTES}" \
+                --max-model-len "${MAX_MODEL_LEN}" \
+                --max-num-batched-tokens "${MAX_NUM_BATCHED_TOKENS}" \
+                --max-num-seqs 64 \
+                --enable-prefix-caching \
+                --trust-remote-code \
+                --distributed-timeout-seconds 7200 \
+                --tool-call-parser glm47 \
+                --reasoning-parser glm45 \
+                --enable-auto-tool-choice \
+                --chat-template-content-format string \
+                --skip-mm-profiling \
+                --speculative-config "${SPEC_CONFIG}" \
+                --compilation-config '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["+quant_fp8"]}' \
+                --cudagraph-capture-sizes ${CUDAGRAPH_CAPTURE_SIZES} \
+                --shutdown-timeout 45 \
+                ${EXTRA_ARGS}
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # Served offline from model-pvc; download-model.yaml fetches this revision.
+            - name: MODEL
+              value: amd/GLM-5.3-Quark-MXFP4-AttnFP8
+            - name: MODEL_REVISION
+              value: bcd1ec31dc1fd474b9997dd2476c92687790b83d
+            - name: HF_HOME
+              value: /model-cache
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: PARALLELISM
+              value: ep
+            - name: BLOCK_SIZE
+              value: "16"
+            # 100e9 bytes per GPU = 1,064,816 tokens per rank at EP4. The router's
+            # lruCapacityPerServer is sized from this.
+            - name: KV_CACHE_MEMORY_BYTES
+              value: "100000000000"
+            - name: MAX_MODEL_LEN
+              value: "560000"
+            # The prefill chunk: decode steps of every session on the replica wait behind it.
+            - name: MAX_NUM_BATCHED_TOKENS
+              value: "2048"
+            - name: SPEC_CONFIG
+              value: '{"method":"mtp","num_speculative_tokens":3}'
+            # A decode step carries running sequences x (1 + 3) tokens per rank; larger steps run
+            # without CUDA graphs. Multiples of 4 up to max-num-seqs (64) x 4.
+            - name: CUDAGRAPH_CAPTURE_SIZES
+              value: "4 8 16 32 48 64 96 128 160 192 224 256"
+            - name: EXTRA_ARGS
+              value: ""
+            - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+              value: "120"
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "7200"
+            - name: VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS
+              value: "3600"
+            # Enables POST /reset_prefix_cache, which the benchmark Job calls before cold prompts.
+            # Remove it outside benchmarking.
+            - name: VLLM_SERVER_DEV_MODE
+              value: "1"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+            # MoRI-EP V1 IntraNode kernels (`--all2all-backend mori` otherwise selects V2). The
+            # receive-row alignment of 4096 is required by the engine image's MoRI-EP receive-row
+            # bound (see the ROCm MAD recipe). Fabric settings come from components/fabric.
+            - name: VLLM_MORI_EP_V2
+              value: "0"
+            - name: VLLM_MORI_RECV_ROW_ALIGN
+              value: "4096"
+            - name: MORI_SHMEM_HEAP_SIZE
+              value: "17179869184"
+            - name: MORI_DISABLE_TOPO
+              value: "1"
+            - name: MORI_GPU_ARCHS
+              value: gfx950
+            - name: MORI_IO_CP_TIMEOUT_MS
+              value: "60000"
+
+            - name: VLLM_ROCM_USE_AITER
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_MOE
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_MLA
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_RMSNORM
+              value: "1"
+            - name: VLLM_ROCM_USE_AITER_FP8BMM
+              value: "0"
+            - name: VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS
+              value: "0"
+            - name: VLLM_ROCM_USE_AITER_LINEAR
+              value: "0"
+            - name: VLLM_SPARSE_INDEXER_MAX_LOGITS_MB
+              value: "4096"
+            - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+              value: "1"
+            - name: TORCHINDUCTOR_USE_STATIC_CUDA_LAUNCHER
+              value: "0"
+            - name: PYTORCH_ALLOC_CONF
+              value: expandable_segments:False
+            - name: PYTORCH_HIP_ALLOC_CONF
+              value: expandable_segments:False
+            # Never 0 or empty: ROCm/rocm-systems#4066.
+            - name: ROCPROFILER_QUEUE_INTERPOSITION
+              value: "1"
+            - name: HSA_ENABLE_SDMA
+              value: "1"
+            - name: HSA_FORCE_FINE_GRAIN_PCIE
+              value: "1"
+            - name: HSA_NO_SCRATCH_RECLAIM
+              value: "1"
+            - name: HIP_FORCE_DEV_KERNARG
+              value: "1"
+            - name: NCCL_IB_DISABLE
+              value: "1"
+            - name: NCCL_SOCKET_IFNAME
+              value: eth0
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: NCCL_DEBUG
+              value: WARN
+            - name: VLLM_CACHE_ROOT
+              value: /var/cache/vllm/vllm
+            - name: TORCHINDUCTOR_CACHE_DIR
+              value: /var/cache/vllm/inductor
+            - name: TRITON_CACHE_DIR
+              value: /var/cache/vllm/triton
+            - name: AITER_JIT_DIR
+              value: /var/cache/vllm/aiter_jit
+            - name: COMGR_CACHE_DIR
+              value: /var/cache/vllm/comgr
+            - name: MORI_JIT_CACHE_DIR
+              value: /var/cache/vllm/mori_jit
+          ports:
+            - containerPort: 8000
+              name: rank0
+              protocol: TCP
+            - containerPort: 8001
+              name: rank1
+              protocol: TCP
+            - containerPort: 8002
+              name: rank2
+              protocol: TCP
+            - containerPort: 8003
+              name: rank3
+              protocol: TCP
+            # Aggregated health of all local ranks.
+            - containerPort: 8008
+              name: supervisor
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "40"
+              memory: 600Gi
+              amd.com/gpu: "4"
+              amd.com/vnic: "4"
+            requests:
+              cpu: "40"
+              memory: 600Gi
+              amd.com/gpu: "4"
+              amd.com/vnic: "4"
+          # 60 s + 240 x 30 s = 2 h; an empty JIT cache takes ~30 min.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: supervisor
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 240
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: supervisor
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: supervisor
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: jit-cache
+              mountPath: /var/cache/vllm
+            - name: model-cache
+              mountPath: /model-cache

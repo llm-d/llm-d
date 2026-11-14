@@ -1,0 +1,17 @@
+# RDMA rail attachment for the engine pods, one per allocated amd.com/vnic. The engines reference
+# it by name (glm-5-3-rdma) in their k8s.v1.cni.cncf.io/networks annotation, so keep the name or
+# change both. This example uses the AMD network operator's amd-host-device CNI; replace spec.config
+# with the CNI configuration your cluster uses for its RDMA NICs.
+#
+# The resourceName annotation lets Multus pass the CNI the PCI address of each device the device
+# plugin allocated to the pod; without it the attachment fails with "failed to get PCI BUS ID".
+#
+# Not part of a kustomization: apply it once per namespace (README prerequisites).
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: glm-5-3-rdma
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: amd.com/vnic
+spec:
+  config: '{"cniVersion":"0.3.1","name":"glm-5-3-rdma","type":"amd-host-device"}'

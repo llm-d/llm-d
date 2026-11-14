@@ -1,0 +1,18 @@
+# Colocated GLM-5.3 engines, one StatefulSet. Needs model-pvc (model-storage) and the glm-5-3-rdma
+# NetworkAttachmentDefinition (network/rdma-nad.yaml) in the target namespace.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - statefulset.yaml
+  - serviceAccount.yaml
+
+components:
+  - ../components/image
+
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.3
+      llm-d.ai/guide: glm-5-3
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+    includeTemplates: true

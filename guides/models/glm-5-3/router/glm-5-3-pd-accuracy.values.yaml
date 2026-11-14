@@ -1,0 +1,50 @@
+# Accuracy gates on P/D: disaggregate every request, so each one exercises the KV transfer
+# (GSM8K prompts are shorter than the 2,048-token threshold and would otherwise run on decode
+# alone). Layer on top of glm-5-3.values.yaml with `helm upgrade`, and upgrade back without this
+# file before benchmarking. The plugin config is one string, so it is restated in full.
+router:
+  epp:
+    pluginsCustomConfig:
+      glm-5-3-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "disaggregatedset.x-k8s.io/name=glm-5-3-pd"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 131072
+            autoTune: false
+            blockSizeTokens: 64
+            lruCapacityPerServer: 106484
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            peakPrefillThroughput: 24000
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker

@@ -1,0 +1,91 @@
+# llm-d router for GLM-5.3 P/D (deployments/pd-1p1d and pd-2p1d). Layer after
+# guides/recipes/router/base.values.yaml; glm-5-3-colocated-ep.values.yaml,
+# glm-5-3-colocated-tp.values.yaml and glm-5-3-pd-accuracy.values.yaml go on top of this file.
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting (which the
+    # token-load-scorer and affinity filter consume) is local to each EPP process.
+    replicas: 1
+    # TODO: drop the pin once a released EPP is validated with this guide (needs a tracking issue
+    # in llm-d/llm-d). The llm-d main-branch build the reference results were measured with.
+    image:
+      tag: main@sha256:fadd5d9ea21a6c9d0a1515b93f0f442a8a7d73f02f394e6bc0c5bf9accc54b9c
+    flags:
+      # disaggregatedset-rollout-screener is Alpha stability.
+      allow-experimental-plugins: true
+    pluginsConfigFile: "glm-5-3-config.yaml"
+    pluginsCustomConfig:
+      glm-5-3-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        # Pin each request to a single DisaggregatedSet revision during rollouts so prefill and
+        # decode never pair across revisions.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "disaggregatedset.x-k8s.io/name=glm-5-3-pd"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [prefill, decode]
+        # Disaggregate when the prefix estimate leaves at least 2,048 input tokens uncached.
+        - type: prefix-based-pd-decider
+          parameters:
+            nonCachedTokens: 2048
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: prefix-based-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        # Approximate prefix index: hashes the prompt in 64-token router blocks without
+        # tokenizing, independent of the engine's 16-token KV blocks. lruCapacityPerServer counts
+        # router blocks per endpoint, and a P/D endpoint is a whole DP8 pod:
+        # 851,856 KV tokens per rank x 8 ranks / 64 = 106,482 (106,484 as measured).
+        - type: approx-prefix-cache-producer
+          parameters:
+            maxPrefixTokensToMatch: 131072
+            autoTune: false
+            blockSizeTokens: 64
+            lruCapacityPerServer: 106484
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Saturated prefill tokens/s of one endpoint (a DP8 prefill pod).
+            peakPrefillThroughput: 24000
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+
+  proxy:
+    # The Envoy build the reference results were measured with (the chart's default tag, by digest).
+    image: docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded
+    # Fail closed: while Envoy marks the EPP's ext_proc cluster unhealthy, requests get an error
+    # instead of bypassing scheduling (and, for P/D, disaggregation).
+    failOpen: false
+
+  modelServers:
+    # Prefill's eight API servers share 8000, and on decode the routing sidecar fronts 8000.
+    targetPorts:
+      - number: 8000
+    matchLabels:
+      llm-d.ai/guide: "glm-5-3"
+      llm-d.ai/inference-serving: "true"
