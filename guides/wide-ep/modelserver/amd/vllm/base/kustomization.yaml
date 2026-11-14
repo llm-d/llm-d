@@ -12,7 +12,7 @@ openapi:
   path: disaggregatedset-schema.json
 
 components:
-  - ../../../../../recipes/modelserver/components/images/amd-vllm/beta
+  - ../../../../../recipes/modelserver/components/images/amd-vllm/release
   - ../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../recipes/modelserver/components/graceful-shutdown
 
