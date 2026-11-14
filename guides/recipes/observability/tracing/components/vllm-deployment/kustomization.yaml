@@ -18,9 +18,6 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/args/-
         value: --otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --collect-detailed-traces=all
   - target:
       group: apps
       version: v1

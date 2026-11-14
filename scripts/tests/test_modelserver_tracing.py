@@ -32,7 +32,6 @@ TRACING_EXCLUSIONS = {
 }
 TRACING_ARGS = [
     "--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)",
-    "--collect-detailed-traces=all",
 ]
 TRACING_ENV = {
     "OTEL_SERVICE_NAME": "vllm-decode",
