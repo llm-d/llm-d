@@ -150,16 +150,61 @@ Select the overlay for the same accelerator and provider as your deployment. If 
 
 ```bash
 export MODEL_SERVER_TRACING="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tracing/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
+export MODEL_SERVER_APPLY="${MODEL_SERVER_TRACING}"
+export MODEL_SERVER_GKE_TRACING="${REPO_ROOT}/tracing-gke-${GUIDE_NAME}-${ACCELERATOR_TYPE//\//-}-${MODEL_SERVER}-${INFRA_PROVIDER}"
+```
 
+For GKE Managed OpenTelemetry, create an outer Kustomization before applying the tracing overlay. It uses the selected overlay as a resource and sets the managed collector endpoint on the `modelserver` container. Keep this directory for future updates and reapply it to preserve the endpoint. For a collector deployed in the workload namespace, use the selected overlay directly.
+
+Run this block once to create the GKE override:
+
+```bash
+mkdir "${MODEL_SERVER_GKE_TRACING}" &&
+  cat > "${MODEL_SERVER_GKE_TRACING}/kustomization.yaml" <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../guides/${GUIDE_NAME}/modelserver/tracing/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      labelSelector: llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: decode
+      spec:
+        template:
+          spec:
+            containers:
+              - name: modelserver
+                env:
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317
+EOF
+```
+
+Select the saved GKE override for both the initial apply and subsequent updates:
+
+```bash
+export MODEL_SERVER_APPLY="${MODEL_SERVER_GKE_TRACING}"
+```
+
+Render, validate, and apply the chosen configuration:
+
+```bash
 (
   if [[ ! -f "${MODEL_SERVER_TRACING}/kustomization.yaml" ]]; then
     echo "${GUIDE_NAME} ${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER} has no tracing overlay" >&2
     exit 1
   fi
 
-  kubectl kustomize "${MODEL_SERVER_TRACING}" &&
-  kubectl apply --dry-run=server -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}" &&
-  kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_TRACING}" &&
+  kubectl kustomize "${MODEL_SERVER_APPLY}" &&
+  kubectl apply --dry-run=server -n "${NAMESPACE}" -k "${MODEL_SERVER_APPLY}" &&
+  kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_APPLY}" &&
   kubectl rollout status -n "${NAMESPACE}" deployment \
     -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
 )
@@ -185,20 +230,9 @@ kubectl get deployment -n "${NAMESPACE}" \
       {args, tracingEnv: [.env[] | select(.name | startswith("OTEL_"))]}'
 ```
 
-For GKE Managed OpenTelemetry, update the endpoint to the managed collector before sending requests:
-
-```bash
-kubectl set env -n "${NAMESPACE}" deployment \
-  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" \
-  --containers=modelserver \
-  OTEL_EXPORTER_OTLP_ENDPOINT=http://opentelemetry-collector.gke-managed-otel.svc.cluster.local:4317
-kubectl rollout status -n "${NAMESPACE}" deployment \
-  -l "llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode" --timeout=20m
-```
-
 For the routed trace test in Step 4, configure sampling on EPP in Step 3. The model server's `OTEL_TRACES_SAMPLER_ARG` applies to root spans, such as direct requests to vLLM that arrive without a `traceparent` header.
 
-Reapplying the tracing overlay restores its default collector endpoint and sampling ratio. To persist an endpoint or root sampling override, create another Kustomization that references the tracing overlay and patches the `modelserver` env entries by name. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to the collector's full Service DNS name when it runs in another namespace; the CLI endpoint follows that env value.
+Use the same outer overlay pattern to persist a custom collector endpoint or root sampling ratio. If the collector runs in another Kubernetes namespace, use its full Service DNS name. The vLLM endpoint argument takes its value from `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ### Composing the Component
 
@@ -234,6 +268,8 @@ env:
   - name: OTEL_TRACES_SAMPLER_ARG
     value: "1.0"
 ```
+
+When running `vllm serve` on a VM or in a standalone container, use the same `--otlp-traces-endpoint` flag with a collector URL reachable from that process and set the same `OTEL_*` variables in its environment.
 
 ### Routing Proxy (`routing-proxy` sidecar, P/D disaggregation only)
 

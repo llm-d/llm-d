@@ -17,6 +17,11 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPONENT = REPO_ROOT / "guides/recipes/observability/tracing/components/vllm-deployment"
+TRACING_GUIDES = sorted(
+    path.parent.parent.name
+    for path in (REPO_ROOT / "guides").glob("*/modelserver/tracing")
+    if path.is_dir()
+)
 TRACING_EXCLUSIONS = {
     "optimized-baseline": {
         "gpu/vllm/ocp",  # Shell launcher for the node-local model cache.
@@ -72,8 +77,18 @@ def tracing_overlays(guide):
     return overlay_paths(REPO_ROOT / "guides" / guide / "modelserver" / "tracing")
 
 
-@pytest.mark.parametrize("guide", TRACING_EXCLUSIONS)
+def test_tracing_exclusions_reference_existing_guides():
+    stale = TRACING_EXCLUSIONS.keys() - set(TRACING_GUIDES)
+    assert not stale, (
+        f"Remove TRACING_EXCLUSIONS entries for guides without a tracing directory: {sorted(stale)}"
+    )
+
+
+@pytest.mark.parametrize("guide", TRACING_GUIDES)
 def test_tracing_covers_vllm_provider_overlays(guide):
+    assert guide in TRACING_EXCLUSIONS, (
+        f"Add {guide!r} to TRACING_EXCLUSIONS (use set() if no provider overlays are excluded)"
+    )
     root = REPO_ROOT / "guides" / guide / "modelserver"
     traced = tracing_overlays(guide)
     # A provider directory follows vllm. Nightly entry points end at vllm.
@@ -83,7 +98,7 @@ def test_tracing_covers_vllm_provider_overlays(guide):
     }
     exclusions = {Path(path) for path in TRACING_EXCLUSIONS[guide]}
 
-    assert traced, "No tracing overlays found"
+    assert traced, f"No tracing overlays found for {guide!r}"
     assert exclusions <= providers, "Remove exclusions for provider overlays that no longer exist"
     assert traced == providers - exclusions, "Keep tracing overlays and provider exclusions in sync"
 
@@ -92,7 +107,7 @@ def test_tracing_covers_vllm_provider_overlays(guide):
     "guide,variant",
     [
         (guide, variant.as_posix())
-        for guide in TRACING_EXCLUSIONS
+        for guide in TRACING_GUIDES
         for variant in sorted(tracing_overlays(guide))
     ],
 )
