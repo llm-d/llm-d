@@ -145,7 +145,8 @@ optimized-baseline   1m
 
 The coordinator serves `llm_d_coordinator_*` metrics on its own listener, separate from the serving port (`server.listen_addr`, default `:8080`). The metrics listener is configured by `server.metrics_port` in the coordinator config file: it defaults to `9090`, serves `/metrics` over plain HTTP unless `server.metrics_cert_dir` enables TLS on it, and is disabled when `server.metrics_port` is non-positive.
 
-The `PodMonitor` and `PodMonitoring` examples below select the coordinator pods by label and scrape the named container port `metrics`. If your coordinator Deployment only declares the serving port, add the metrics port first:
+The `PodMonitor` and `PodMonitoring` examples below select the coordinator pods by label and scrape the named container port `metrics`. The [coordinator disaggregation](../../../guides/coord-disaggregation/README.md) and [multitenant](../../../guides/batch-serving/asynchronous-processing/multitenant/README.md) guides already declare that port and ship both resources,
+so apply the guide's own monitoring directory instead of the examples here: `coordinator/monitoring` for coord-disaggregation, `manifests/monitoring` for multitenant, or that directory's `gmp-podmonitoring.yaml` when Managed Prometheus is in use. If your own coordinator Deployment only declares the serving port, add the metrics port first:
 
 ```yaml
 ports:
@@ -239,7 +240,7 @@ The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` m
 `--metrics-port` is independent of the proxy serving port (`--port`) and of `--secure-serving`; `0` disables the endpoint. The metrics listener serves plain HTTP unless `--metrics-cert-dir` is set.
 
 > [!NOTE]
-> Guides that deploy the sidecar do not pass `--metrics-port` today. Add the flag and port to the overlay you deploy before creating the scrape resource below.
+> Of the guides that deploy the sidecar, only the Wide-EP AMD overlay enables the metrics listener today: it passes `--metrics-port=9095` and names the port `sc-metrics` in [`guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml`](../../../guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml), so its scrape endpoint uses `port: sc-metrics`. Every other guide leaves `--metrics-port` unset; add the flag and a named port to the overlay you deploy before creating the scrape resource below.
 
 The sidecar runs next to the model server in the same pod, so select the pod by its shared label and scrape only the named sidecar metrics port:
 
