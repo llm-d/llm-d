@@ -66,13 +66,35 @@ def test_lint_script_accepts_declared_var_nested_in_default(tmp_path):
 
 
 def test_find_used_vars_sees_length_and_indirect_expansions():
-    content = 'echo "${#A[@]} ${!B} ${!PREFIX*}"\n'
+    content = 'echo "${#A[@]} ${!B} ${!ARR[@]}"\n'
 
-    assert lint.find_used_vars(content) == {"A", "B", "PREFIX"}
+    assert lint.find_used_vars(content) == {"A", "B", "ARR"}
 
 
 def test_find_used_vars_ignores_special_parameter_expansions():
     assert lint.find_used_vars('echo "${#} ${!}"\n') == set()
+
+
+def test_find_used_vars_ignores_prefix_name_expansions():
+    content = 'echo "${!PREFIX*} ${!PREFIX@}"\n'
+
+    assert lint.find_used_vars(content) == set()
+
+
+def test_find_used_vars_sees_parameter_transformation():
+    assert lint.find_used_vars('echo "${A@Q}"\n') == {"A"}
+
+
+def test_lint_script_accepts_prefix_name_expansion(tmp_path):
+    script = tmp_path / "prefix.sh"
+    script.write_text(
+        HEADER +
+        'for var in "${!DECLARED_*}"; do echo "$var"; done\n'
+    )
+
+    ok, errors = lint.lint_script(script)
+
+    assert ok, errors
 
 
 def test_lint_script_flags_undeclared_var_in_length_expansion(tmp_path):
