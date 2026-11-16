@@ -95,85 +95,6 @@ jobs:
             echo "No vulnerabilities found or scan failed."
           fi
 
-  release-cpu-llm-d:
-    runs-on: vllm-runner
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          # fetch tags for docker/metadata semver handling (if you use git describe etc.)
-          fetch-depth: 0
-
-      - name: Load vLLM version from file
-        id: common-versions
-        run: |
-          source docker/common-versions
-          echo "repo=${VLLM_REPO}" >> $GITHUB_OUTPUT
-          echo "commit_sha=${VLLM_COMMIT_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          buildkitd-flags: --oci-worker-gc
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build and push the image
-        id: build-and-push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/Dockerfile.cpu
-          platforms: linux/amd64
-          push: true
-          provenance: true
-          # disabling cache from cache to temporarily to prevent building issues
-          # cache-from: type=gha,scope=cpu
-          # cache-to: type=gha,mode=max,scope=cpu,oci-mediatypes=true,compression=zstd
-          build-args: |
-            VLLM_REPO=${{ steps.common-versions.outputs.repo }}
-            VLLM_COMMIT_SHA=${{ steps.common-versions.outputs.commit_sha }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
-            ${{ env.IS_STABLE == 'true' && format('{0}/{1}-cpu:latest', env.REGISTRY, github.repository) || '' }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-        env:
-          DOCKER_BUILDKIT: "1"
-          BUILDKIT_PROGRESS: "plain"
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-cpu:${{ env.TAG }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
-          scanners: vuln
-          timeout: 30m
-          skip-dirs: /root/.cache/uv
-        env:
-          TRIVY_USERNAME: ${{ secrets.GHCR_USER }}
-          TRIVY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4.37.6
-        with:
-          sarif_file: "trivy-results.sarif"
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
-
   release-rdma-tools-llm-d:
     runs-on: ubuntu-latest
     steps:
@@ -368,7 +289,6 @@ jobs:
   verify-release-images:
     name: Verify all release images exist
     needs:
-      - release-cpu-llm-d
       - release-xpu-llm-d
       - release-sglang-xpu-llm-d
       - release-rdma-tools-llm-d
@@ -389,7 +309,6 @@ jobs:
         run: |
           TAG="${{ env.TAG }}"
           IMAGES=(
-            "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-xpu-sglang:${TAG}"
             "${{ env.REGISTRY }}/llm-d/llm-d-rdma-tools:${TAG}"

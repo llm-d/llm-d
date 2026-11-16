@@ -37,6 +37,8 @@ This guide includes configurations for the following accelerator and model serve
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
+The CPU overlay and standalone render pool use the upstream [`vllm/vllm-openai-cpu:v0.34.0`](../recipes/modelserver/components/images/cpu-vllm/release/kustomization.yaml) image directly. This guide requires neither NIXL nor UCX.
+
 > [!NOTE]
 > The router and the model servers must agree on two things:
 >
@@ -56,7 +58,7 @@ The TPU7x overlay runs DP=2 × TP=4 so per-rank KV events are exercised with a s
 
 Precise routing needs the router's token IDs to match the model server's exactly, so the router tokenizes each request with the render endpoint vLLM provides for that API:
 
-| API | Router render call | vLLM 0.30 (NVIDIA, AMD, Intel, CPU; SGLang render pool) | vLLM 0.29 (TPU) |
+| API | Router render call | vLLM 0.30+ (NVIDIA, AMD, Intel, CPU; SGLang render pool) | vLLM 0.29 (TPU) |
 | --- | --- | --- | --- |
 | `/v1/completions` | `/v1/completions/render` | ✅ native | ✅ native |
 | `/v1/chat/completions` | `/v1/chat/completions/render` | ✅ native | ✅ native |
@@ -69,7 +71,7 @@ The `token-producer` picks the render path with `vllm.messagesRenderMode` and `v
 - `native`: always use the native endpoint, with no fallback; rendering fails if the render endpoint lacks it.
 - `legacy`: translate the request into a chat-completions render call. This path is deprecated and does not guarantee token parity, so some precise matches are lost.
 
-Responses support is a preview: vLLM renders it natively, but the router's token-parity coverage for Responses requests is still in progress. On the TPU overlays (vLLM 0.29, no `/v1/responses/render`), `auto` falls back to `legacy` and the router logs a deprecation message. vLLM 0.30 serves both APIs and their render endpoints, which the Messages and Responses requests in [Verification](#3-send-test-requests) exercise; with SGLang, whether those APIs are served depends on the SGLang server.
+Responses support is a preview: vLLM renders it natively, but the router's token-parity coverage for Responses requests is still in progress. On the TPU overlays (vLLM 0.29, no `/v1/responses/render`), `auto` falls back to `legacy` and the router logs a deprecation message. vLLM 0.30+ serves both APIs and their render endpoints, which the Messages and Responses requests in [Verification](#3-send-test-requests) exercise; with SGLang, whether those APIs are served depends on the SGLang server.
 
 ## Prerequisites
 
@@ -252,7 +254,7 @@ The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v
 <summary><b>vLLM</b></summary>
 
 **Nothing to deploy.** The router renders on the model servers you just deployed: `vllm.endpointDiscovery` in the [router values](router/precise-prefix-cache-routing.values.yaml) sends each render call to one of the `Ready` endpoints of the InferencePool, round-robin, and retries once on another endpoint after a transport error, a timeout, or a 408, 429 or 5xx response.
-vLLM 0.30 serves `/v1/*/render` only with `--enable-scale-out`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set it, and the TPU overlays use vLLM 0.29, which exposes the endpoint without the flag. Without it every render call returns 404 and the router routes without cache information, which the [render check](#2-check-rendering) catches.
+vLLM 0.30+ serves `/v1/*/render` only with `--enable-scale-out`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set it, and the TPU overlays use vLLM 0.29, which exposes the endpoint without the flag. Without it every render call returns 404 and the router routes without cache information, which the [render check](#2-check-rendering) catches.
 Render capacity scales with the fleet, which keeps render latency (part of TTFT, since every request is tokenized before it is routed) contained at higher QPS.
 The trade-off: tokenization CPU competes with serving on the same pods (the GPU overlay requests 8 CPU / limits 16 per replica; raise that if render latency climbs under load).
 

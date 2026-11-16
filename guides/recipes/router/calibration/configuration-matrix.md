@@ -41,8 +41,9 @@ rows because the serving engine changes prefill throughput.
   ~1.9× the vLLM prefill throughput on identical hardware, which is exactly why the serving
   engine is its own row.
 - **1970** — measured for `cpu/vllm` (Llama-3.2-3B) on **GCP C3 (Intel Sapphire Rapids, AMX)**,
-  bf16. The `llm-d-cpu` image runs the model in bf16, which **requires AMX or AVX512-BF16**.
+  bf16, using the former `llm-d-cpu:v0.6.0` image. bf16 **requires AMX or AVX512-BF16**.
   Calibrated at `CHUNK_SIZE=2048` (the CPU vLLM chunked-prefill default), not 8192.
+  The upstream CPU image has not been recalibrated.
 - **26290 / 27336** — measured for `tpu/v6/vllm` (TPU v6e, 2x4 = **8 chips**) and `tpu/v7/vllm`
   (TPU v7x, 2x2x1 = **4 chips**), both Qwen3-32B at TP=8.
 - **5773 / 5468** — measured on MetaX C500X for `metax/vllm` (Qwen3-14B, TP=1,
