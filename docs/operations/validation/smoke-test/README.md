@@ -58,14 +58,18 @@ Location:
 
 This uses `alpine` and installs dependencies at runtime (simple and reproducible):
 
+Run these commands from the repository root. The local script is sent to the pod
+over standard input; the pod does not need a copy of the repository.
+
 ```bash
 kubectl run llm-d-healthcheck --rm -i --restart=Never \
   --namespace llm-d \
   --image=alpine:3.20 \
-  -- sh -lc '
+  --command -- sh -c '
     apk add --no-cache bash curl jq >/dev/null &&
-    bash -lc "$(cat docs/operations/validation/smoke-test/healthcheck.sh)" -- -e http://llm-d-gateway:80 -o json
-  '
+    exec bash -s -- "$@"
+  ' -- -e http://llm-d-gateway:80 -o json \
+  < docs/operations/validation/smoke-test/healthcheck.sh
 ```
 
 If you prefer **no jq**, drop it and provide `-m` explicitly:
@@ -74,10 +78,11 @@ If you prefer **no jq**, drop it and provide `-m` explicitly:
 kubectl run llm-d-healthcheck --rm -i --restart=Never \
   --namespace llm-d \
   --image=alpine:3.20 \
-  -- sh -lc '
+  --command -- sh -c '
     apk add --no-cache bash curl >/dev/null &&
-    bash -lc "$(cat docs/operations/validation/smoke-test/healthcheck.sh)" -- -e http://llm-d-gateway:80 -m meta-llama/Llama-3-8B
-  '
+    exec bash -s -- "$@"
+  ' -- -e http://llm-d-gateway:80 -m meta-llama/Llama-3-8B \
+  < docs/operations/validation/smoke-test/healthcheck.sh
 ```
 
 ### ConfigMap + Job (recommended)
