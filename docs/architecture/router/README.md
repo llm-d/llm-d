@@ -23,7 +23,7 @@ See the [**Proxy deep dive**](proxy.md) to learn about deployment modes (Standal
 
 A specialized service that the proxy consults for every request. The [EPP](epp.md) contains the routing "intelligence," using real-time signals from model servers to make optimal placement decisions.
 
-See the [**llm-d EPP deep dive**](epp.md) to learn about the routing engine's architecture, plugin pipeline (Filters, Scorers, Pickers), and flow control mechanisms.
+See the [**llm-d EPP deep dive**](epp.md) to learn about the routing engine's architecture, plugin pipeline (Filters, Scorers, Pickers), and flow control mechanisms, and the [**Workload and State Model**](workload-model.md) for how multi-turn and multi-agent workloads join across the EPP's three replica-local state domains.
 
 ### InferencePool
 

@@ -27,7 +27,7 @@ The Flow Control layer intercepts requests at the EPP and holds them in centrali
 To understand how policy plugins act, it helps to visualize the queuing topology as a grid defined by two dimensions: **Priority** and **Flow (Fairness ID)**.
 
 1. **Flow Identification**: Every request is assigned a `FlowKey` — a tuple of `(FairnessID, Priority)`.
-    * `FairnessID` is extracted from the `x-llm-d-inference-fairness-id` header (e.g., tenant ID).
+    * `FairnessID` is extracted from the `x-llm-d-inference-fairness-id` header (e.g., tenant ID), or composed as `<tenant>/<program>` when `requestHandler.composeFairnessIDs` is enabled with `agent-lineage` or `agent-identity` (see [Workload and State Model](workload-model.md)).
     * `Priority` is derived from the `InferenceObjective`.
 2. **Separate Queues**: Each unique `FlowKey` maps to its own in-memory queue.
 
@@ -409,6 +409,8 @@ The Flow Control layer behavior is customizable via several extension points imp
 
 * **[`global-strict-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/globalstrict/README.md)**: Ignores flow isolation and serves all requests in a single global order based on the Ordering Policy. Ideal when strict global ordering must be enforced across all requests within the band and fairness is not a concern.
 * **[`round-robin-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/roundrobin/README.md)**: Guarantees fair sharing by cycling through active flows one by one. Prevents a single high-volume flow from starving others (solving the "Noisy Neighbor" problem).
+* **[`weighted-fair-share-fairness-policy`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/weightedfairshare/README.md)** *(alpha; `--allow-experimental-plugins`)*: Allocates band dispatch capacity across active `FlowKey.ID` queues by virtual-time request and token cost using configured `flowWeights` (`defaultFlowWeight` fallback), bursting work-conservingly when peer flows are idle.
+* **[`program-aware-fairness`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/fairness/program-aware/README.md)** *(beta)*: Tracks per-`FairnessID` turn depth and weighted token service to rank flows within a band. Supports **Least Attained Service** (`strategy: las`, default; exponentially decayed `1:2` input/output tokens controlled by `lasHalfLifeSeconds` plus head wait) and **Turn Priority** (`strategy: turn-priority`; `turnNumber + turnPriorityTimeWeight * headWaitSeconds`).
 
 #### Ordering Policies
 
