@@ -331,7 +331,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "builder",
-              "expr": "sum by(name, model_server_pod, pod) (llm_d_epp_per_endpoint_queue_size)",
+              "expr": "sum by(name, model_server_endpoint, pod) (llm_d_epp_per_endpoint_queue_size)",
               "fullMetaSearch": false,
               "includeNullMetadata": false,
               "instant": false,

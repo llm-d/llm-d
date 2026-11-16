@@ -15,6 +15,9 @@ spec:
                 --tensor-parallel-size=2 \
                 --kv-transfer-config \
                 '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both","kv_connector_extra_config":{"load_async":true}}' \
+                --enable-auto-tool-choice \
+                --tool-call-parser=hermes \
+                --reasoning-parser=qwen3 \
                 --shutdown-timeout=45
           env:
             - name: MOONCAKE_CONFIG_PATH

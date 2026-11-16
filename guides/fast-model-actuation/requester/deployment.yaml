@@ -14,6 +14,8 @@ spec:
       labels:
         app: fma-requester
         llm-d.ai/guide: fast-model-actuation
+        # InferencePool routing label; the EPP selects requesters (FMA #831).
+        llm-d.ai/model: "qwen3-0.6b"
       annotations:
         dual-pods.llm-d.ai/inference-server-config: "fma-isc"
         dual-pods.llm-d.ai/admin-port: "8081"
@@ -21,12 +23,19 @@ spec:
       containers:
         - name: requester
           # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
-          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.7.1
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/requester:v0.8.0
+          # Serve the TCP proxy on 8000, the conventional vLLM port, so the
+          # EPP targets requesters like any other model-server pod.
+          args:
+            - --proxy-port=8000
           ports:
             - containerPort: 8080
               name: probes
             - containerPort: 8081
               name: admin
+            # TCP proxy to the bound vLLM instance; the EPP's targetPort.
+            - containerPort: 8000
+              name: proxy
           readinessProbe:
             httpGet:
               path: /ready

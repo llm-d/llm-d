@@ -37,7 +37,9 @@ channels:
     - nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-fast-model-actuation-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-fast-model-actuation-keda-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-flow-control-amd-ci-acc-rocm-vllm-x.yaml
     - nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml
@@ -59,6 +61,8 @@ channels:
     - nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-pod-snapshot-gke-acc-gpu-sglang-x.yaml
+    - nightly-e2e-pod-snapshot-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml

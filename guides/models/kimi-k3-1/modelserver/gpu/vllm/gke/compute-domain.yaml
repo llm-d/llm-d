@@ -1,0 +1,12 @@
+# NVIDIA DRA ComputeDomain for multi-node NVLink (MNNVL / IMEX) across the 10-node (40x GB300 GPU)
+# Kimi-K3.1-Pro 3P1D deployment (6 Prefill nodes + 4 Decode nodes).
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: kimi-k3-1-gpu-vllm-compute-domain
+spec:
+  numNodes: 10
+  channel:
+    allocationMode: Single
+    resourceClaimTemplate:
+      name: kimi-k3-1-compute-domain
