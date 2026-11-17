@@ -1,6 +1,7 @@
 # Flow control with prefill/decode
 
-This walkthrough configures [flow control](../flow-control/README.md) to prioritize traffic and manage load across the prefill and decode pools using a hybrid request/token detector. Request counts alone can understate pressure from large prompts; uncached prompt-token counts alone can understate pressure from long-running decode requests. The hybrid detector evaluates both signals, and the Endpoint Picker uses the higher of the prefill and decode saturation scores to control dispatch. [Request priorities](#configure-request-priorities) determine which queued requests receive dispatch opportunities first.
+This walkthrough configures [flow control](../flow-control/README.md) to prioritize traffic and manage load across the prefill and decode pools using a hybrid request/token detector. Request counts alone can understate pressure from large prompts; uncached prompt-token counts alone can understate pressure from long-running decode requests.
+The hybrid detector evaluates both signals, and the Endpoint Picker uses the higher of the prefill and decode saturation scores to control dispatch. [Request priorities](#configure-request-priorities) determine which queued requests receive dispatch opportunities first.
 
 The steps below add hybrid detection to the [P/D deployment](README.md), configure priorities, and verify saturation and queueing under both prefill-heavy and decode-heavy load.
 
