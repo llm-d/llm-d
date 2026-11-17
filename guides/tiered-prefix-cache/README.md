@@ -264,7 +264,7 @@ The native connectors do not evict data from the shared tier. Capacity is manage
 
 #### Intel XPU LMCache MP
 
-With `ACCELERATOR_TYPE=xpu` and `CONNECTOR=lmcache-connector`, either overlay deploys the vLLM model server, an LMCache DaemonSet, a node-local Service, and the connector ConfigMap together. `VARIANT=fs` mounts the PVC on the cache servers. Configure the matching Intel node selectors before applying the overlay; see the [XPU MP guide](./modelserver/xpu/vllm/lmcache-connector/README.md).
+With `ACCELERATOR_TYPE=xpu` and `CONNECTOR=lmcache-connector`, either overlay deploys the vLLM model server, an LMCache DaemonSet, and a node-local Service together. The connection JSON is inline in the shared model-server patch. `VARIANT=fs` mounts the PVC on the cache servers. Configure the matching Intel node selectors before applying the overlay; see the [XPU MP guide](./modelserver/xpu/vllm/lmcache-connector/README.md).
 
 #### MooncakeStore
 

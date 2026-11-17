@@ -20,8 +20,9 @@ flowchart LR
 The model server serves `Qwen/Qwen3-8B` with tensor parallelism 1 and one
 `gpu.intel.com` DRA device, BF16 weights, and an explicit 90% GPU memory budget.
 Its external connector is `LMCacheMPConnector` from
-`lmcache.integration.vllm.lmcache_mp_connector`. The connection JSON is in
-[`cpu/base/kv-transfer-config.json`](cpu/base/kv-transfer-config.json).
+`lmcache.integration.vllm.lmcache_mp_connector`. The connection JSON is inline
+in [`cpu/base/patch-vllm.yaml`](cpu/base/patch-vllm.yaml), which both the CPU and
+filesystem overlays use.
 
 The worker uses `lmcache.mp.mp_transfer_mode=engine_driven` to copy KV data
 between XPU and CPU. The server uses `--supported-transfer-mode engine_driven`
@@ -151,10 +152,11 @@ router uses to discover model pods. Model pods retain that label and have
 `llm-d.ai/lmcache-mode=mp` for the nightly verifier.
 
 An existing in-process Deployment can be updated by applying this overlay.
-The generated ConfigMap hash triggers a model rollout when connection
-configuration changes. After changing server arguments, upgrading its image,
-or switching between `cpu` and `fs`, wait for the DaemonSet rollout and then
-restart the model Deployment so clients register with the replacement servers:
+The connection configuration is part of the Deployment's pod arguments, so
+changing it triggers a model rollout. After changing server arguments,
+upgrading its image, or switching between `cpu` and `fs`, wait for the DaemonSet
+rollout and then restart the model Deployment so clients register with the
+replacement servers:
 
 ```bash
 kubectl rollout status -n "${NAMESPACE}" daemonset/xpu-vllm-lmcache
@@ -270,7 +272,7 @@ is another way to isolate external-cache retrieval during a test.
 
 ## Cleanup
 
-Deleting the selected model overlay also deletes its DaemonSet, Service, and
-connector ConfigMap. Delete the optional cache PodMonitor separately or follow
+Deleting the selected model overlay also deletes its DaemonSet and Service.
+Delete the optional cache PodMonitor separately or follow
 the root guide's cleanup steps. PVC deletion and legacy cache-file cleanup
 remain separate operations.

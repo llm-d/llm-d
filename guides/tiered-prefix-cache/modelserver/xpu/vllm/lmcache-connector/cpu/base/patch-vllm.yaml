@@ -59,7 +59,17 @@ spec:
                 --max-num-seq 128 \
                 --max-model-len 20480 \
                 --uvicorn-log-level warning \
-                --kv-transfer-config "${LMCACHE_KV_CONFIG}" \
+                --kv-transfer-config \
+                '{
+                  "kv_connector": "LMCacheMPConnector",
+                  "kv_connector_module_path": "lmcache.integration.vllm.lmcache_mp_connector",
+                  "kv_role": "kv_both",
+                  "kv_connector_extra_config": {
+                    "lmcache.mp.host": "tcp://xpu-vllm-lmcache",
+                    "lmcache.mp.port": 5555,
+                    "lmcache.mp.mp_transfer_mode": "engine_driven"
+                  }
+                }' \
                 --shutdown-timeout=45
           env:
             - name: HF_TOKEN
@@ -67,10 +77,5 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            - name: LMCACHE_KV_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: xpu-vllm-lmcache-connection
-                  key: kv-transfer-config.json
             - name: PYTHONHASHSEED
               value: "0"

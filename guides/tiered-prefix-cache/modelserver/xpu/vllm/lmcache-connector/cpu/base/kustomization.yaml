@@ -9,11 +9,6 @@ components:
   # Use the same LMCache installation for the MP server and the vLLM client.
   - ../../../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
 
-configMapGenerator:
-  - name: xpu-vllm-lmcache-connection
-    files:
-      - kv-transfer-config.json
-
 replacements:
   # The init container is added after the image component is evaluated.
   - source:
