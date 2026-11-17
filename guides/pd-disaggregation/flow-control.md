@@ -1,8 +1,8 @@
 # Flow control with prefill/decode
 
-A P/D deployment can serve interactive requests and background jobs through the same prefill and decode pools. If either pool becomes saturated, you may want to give interactive requests priority over background work. With flow control enabled, the Endpoint Picker queues requests and uses their configured priorities to choose which queued requests to dispatch first.
+Flow control lets you prioritize requests while managing load across the prefill and decode pools. The Endpoint Picker checks saturation in both pools to decide when to dispatch requests. With the default settings, it holds requests in its queue when either pool reaches its saturation limit. Configured priorities determine which queued requests it dispatches first.
 
-The Endpoint Picker checks saturation separately for each pool and uses the higher value to decide when to dispatch. The steps below add flow control to the [P/D deployment](README.md), check its stage metrics, and configure request priorities.
+The steps below add flow control to the [P/D deployment](README.md), check its stage metrics, and configure request priorities.
 
 ## Enable flow control
 
