@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: xpu-vllm-lmcache
+spec:
+  template:
+    spec:
+      containers:
+        - name: lmcache
+          env:
+            - name: LMCACHE_L2_ADAPTER
+              value: >-
+                {"type":"fs_native","base_path":"/mnt/files-storage/kv-cache/mp",
+                 "num_workers":4,"use_odirect":true,"max_capacity_gb":100,
+                 "eviction":{"eviction_policy":"LRU","trigger_watermark":0.8,
+                             "eviction_ratio":0.2}}
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

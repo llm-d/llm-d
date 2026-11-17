@@ -2,10 +2,35 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base
+  - lmcache-daemonset.yaml
+  - lmcache-service.yaml
+
+components:
+  # Use the same LMCache installation for the MP server and the vLLM client.
+  - ../../../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
+
+configMapGenerator:
+  - name: xpu-vllm-lmcache-connection
+    files:
+      - kv-transfer-config.json
+
+replacements:
+  # The init container is added after the image component is evaluated.
+  - source:
+      kind: DaemonSet
+      name: xpu-vllm-lmcache
+      fieldPath: spec.template.spec.containers.[name=lmcache].image
+    targets:
+      - select:
+          kind: Deployment
+          name: xpu-vllm-decode
+        fieldPaths:
+          - spec.template.spec.initContainers.[name=wait-for-lmcache].image
 
 labels:
   - pairs:
-      llm-d.ai/guide: tiered-prefix-cache
+      # The shared vLLM base already labels model pods with llm-d.ai/guide.
+      # Cache pods must not have it: the router uses it to find model servers.
       llm-d.ai/subguide: tiered-prefix-cache-xpu-lmcache
       llm-d.ai/model: Qwen3-8B
     includeSelectors: true
