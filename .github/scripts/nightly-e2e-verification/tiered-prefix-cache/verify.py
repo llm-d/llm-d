@@ -23,11 +23,18 @@ Metric checks (both variants):
   Both are `check_per_pod` with the default `combine=max`, so "any pod hit
   it" is enough — we don't require every replica to have been exercised.
 
+XPU LMCache MP pods are identified by `llm-d.ai/lmcache-mode=mp`.
+Their offload counters are read from the node-local cache servers on port
+8080; filesystem checks inspect those servers' MP directory on the PVC.
+These checks prove stores, not retrieval after HBM eviction.
+
 All output is plain text (no markdown) so raw CI logs stay readable.
 """
 from __future__ import annotations
 
+import math
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -38,6 +45,11 @@ import verify_helpers as v  # noqa: E402
 
 OFFLOAD_MOUNT = "/mnt/files-storage"
 KV_CACHE_DIR = f"{OFFLOAD_MOUNT}/kv-cache"
+MP_KV_CACHE_DIR = f"{KV_CACHE_DIR}/mp"
+MP_CACHE_SELECTOR = (
+    "app.kubernetes.io/name=lmcache,"
+    "app.kubernetes.io/instance=tiered-prefix-cache-xpu"
+)
 
 
 def is_storage_mode() -> bool:
@@ -48,6 +60,64 @@ def is_storage_mode() -> bool:
     `cpu` = RAM-only.
     """
     return os.environ.get("LLMDBENCH_CICD_OFFLOADING_TARGET", "").lower() == "fs"
+
+
+def is_lmcache_mp(namespace: str, pod: str) -> bool:
+    """Identify MP clients without depending on benchmark-specific env vars."""
+    return v.kubectl([
+        "get", "pod", pod, "-n", namespace, "-o",
+        r"jsonpath={.metadata.labels.llm-d\.ai/lmcache-mode}",
+    ]).strip() == "mp"
+
+
+def prometheus_counter(text: str, name: str) -> float | None:
+    """Sum a counter's label series; None means it has not emitted a sample."""
+    pattern = re.compile(rf"^{re.escape(name)}(?:\{{.*?\}})?\s+(\S+)")
+    samples = []
+    for line in text.splitlines():
+        match = pattern.match(line)
+        if match:
+            value = float(match[1])
+            if not math.isfinite(value) or value < 0:
+                raise ValueError(f"invalid counter sample: {line}")
+            samples.append(value)
+    return sum(samples) if samples else None
+
+
+def check_lmcache_mp_stores(
+    namespace: str, pods: list[str], storage_mode: bool,
+) -> list[v.Check]:
+    """Require successful MP stores on at least one cache server."""
+    if not pods:
+        return [v.Check("LMCache MP servers", False, "no cache-server pods found")]
+    snapshots = {
+        pod: v.kubectl([
+            "get", "--raw",
+            f"/api/v1/namespaces/{namespace}/pods/{pod}:8080/proxy/metrics",
+        ])
+        for pod in pods
+    }
+    names = ["lmcache_mp_l1_write_chunks_total"]
+    if storage_mode:
+        names.append("lmcache_mp_l2_store_completed_objects_chunks_total")
+    checks = []
+    for name in names:
+        total = 0.0
+        errors = []
+        for pod, text in snapshots.items():
+            if not text:
+                errors.append(f"{pod}: no metrics")
+                continue
+            try:
+                total += prometheus_counter(text, name) or 0.0
+            except ValueError as exc:
+                errors.append(f"{pod}: {exc}")
+        checks.append(v.Check(
+            name=f"{name} (all MP servers)",
+            passed=total > 0 and not errors,
+            detail=f"stored chunks={total:g}" + (f"; {'; '.join(errors)}" if errors else ""),
+        ))
+    return checks
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +171,9 @@ def check_pvc_is_bound(namespace: str, pod: str) -> v.Check:
     )
 
 
-def check_pvc_has_data(namespace: str, pod: str) -> v.Check:
+def check_pvc_has_data(
+    namespace: str, pod: str, cache_dir: str = KV_CACHE_DIR,
+) -> v.Check:
     """Assert kv-cache blocks are actually on the PVC by counting files
     under KV_CACHE_DIR from inside the pod, and report their total size.
 
@@ -114,9 +186,9 @@ def check_pvc_has_data(namespace: str, pod: str) -> v.Check:
     name = "PVC has KV cache data"
     lines = v.kubectl(
         ["exec", "-n", namespace, pod, "--", "sh", "-c",
-         f"[ -d {KV_CACHE_DIR} ] || {{ echo MISSING; exit 0; }}; "
-         f"find {KV_CACHE_DIR} -type f 2>/dev/null | wc -l; "
-         f"du -sh {KV_CACHE_DIR} 2>/dev/null | awk '{{print $1}}'"],
+         f"[ -d {cache_dir} ] || {{ echo MISSING; exit 0; }}; "
+         f"find {cache_dir} -type f 2>/dev/null | wc -l; "
+         f"du -sh {cache_dir} 2>/dev/null | awk '{{print $1}}'"],
         timeout=30,
     ).splitlines()
 
@@ -125,7 +197,7 @@ def check_pvc_has_data(namespace: str, pod: str) -> v.Check:
                        detail=f"kubectl exec failed on {pod}")
     if lines == ["MISSING"]:
         return v.Check(name=name, passed=False,
-                       detail=f"{KV_CACHE_DIR} does not exist on {pod}")
+                       detail=f"{cache_dir} does not exist on {pod}")
     try:
         n = int(lines[0])
     except (ValueError, IndexError):
@@ -135,7 +207,7 @@ def check_pvc_has_data(namespace: str, pod: str) -> v.Check:
     return v.Check(
         name=name,
         passed=n > 0,
-        detail=f"{n} files ({size}) at {KV_CACHE_DIR} on {pod}",
+        detail=f"{n} files ({size}) at {cache_dir} on {pod}",
     )
 
 
@@ -185,32 +257,41 @@ def main() -> int:
     if not pods:
         v.error(f"No model pods found in namespace {namespace}")
         return 1
-    # PVC-side checks only apply in storage mode. The PVC is RWX and shared
-    # across every model pod, so we only need to check one of them.
-    if storage_mode:
-        checks.append(check_pvc_is_bound(namespace, pods[0]))
-        checks.append(check_pvc_has_data(namespace, pods[0]))
+    if is_lmcache_mp(namespace, pods[0]):
+        cache_pods = [
+            name.removeprefix("pod/")
+            for name in v.kubectl([
+                "get", "pod", "-n", namespace, "-l", MP_CACHE_SELECTOR, "-o", "name",
+            ]).split()
+        ]
+        checks.extend(check_lmcache_mp_stores(namespace, cache_pods, storage_mode))
+        if storage_mode and cache_pods:
+            checks.append(check_pvc_is_bound(namespace, cache_pods[0]))
+            checks.append(check_pvc_has_data(namespace, cache_pods[0], MP_KV_CACHE_DIR))
+    else:
+        # Other overlays retain their model-pod PVC and vLLM metric checks.
+        if storage_mode:
+            checks.append(check_pvc_is_bound(namespace, pods[0]))
+            checks.append(check_pvc_has_data(namespace, pods[0]))
 
-    # Metric checks: both counters should have moved on at least one pod.
-    vllm_version = v.get_vllm_version(namespace, pods[0])
-    if vllm_version is None:
-        v.error(f"Assuming vLLM < 0.24.0. (failed to get vllm version from pod {pods[0]})")
-        old_metrics = True
-        version_str = "<unknown>"
-    else:
-        old_metrics = vllm_version < (0, 24, 0)
-        version_str = ".".join(str(x) for x in vllm_version)
-    checks.append(v.Check(
-        name=f"vLLM version - {version_str}, kv-cache metrics (new/old)",
-        passed=True,
-        detail=f"{'old' if old_metrics else 'new'}",
-    ))
-    if old_metrics:
-        checks.append(metrics.check_per_pod("vllm:kv_offload_total_bytes_total", "max", ">", 0.0))
-    else:
-        checks.append(metrics.check_per_pod("vllm:kv_offload_store_bytes_total", "max", ">", 0.0))
-        # For now we dont reach this flow, no eviction from HBM is happening.
-        # checks.append(metrics.check_per_pod("vllm:kv_offload_load_bytes_total",  "max", ">", 0.0))
+        vllm_version = v.get_vllm_version(namespace, pods[0])
+        if vllm_version is None:
+            v.error(f"Assuming vLLM < 0.24.0. (failed to get vllm version from pod {pods[0]})")
+            old_metrics = True
+            version_str = "<unknown>"
+        else:
+            old_metrics = vllm_version < (0, 24, 0)
+            version_str = ".".join(str(x) for x in vllm_version)
+        checks.append(v.Check(
+            name=f"vLLM version - {version_str}, kv-cache metrics (new/old)",
+            passed=True,
+            detail=f"{'old' if old_metrics else 'new'}",
+        ))
+        if old_metrics:
+            checks.append(metrics.check_per_pod("vllm:kv_offload_total_bytes_total", "max", ">", 0.0))
+        else:
+            checks.append(metrics.check_per_pod("vllm:kv_offload_store_bytes_total", "max", ">", 0.0))
+            # Retrieval still needs an HBM eviction workload.
 
     # Smoke check.
     checks.append(metrics.check_aggregated("vllm:num_requests_running", "count", ">", 0))
