@@ -33,6 +33,17 @@ spec:
           args:
             - |
               set -euo pipefail
+              python3 - <<'PY'
+              from importlib.metadata import version
+
+              installed = version("lmcache")
+              if installed != "0.5.7.post1":
+                  raise RuntimeError(
+                      f"XPU MP requires LMCache 0.5.7.post1, found {installed}. "
+                      "Build docker/Dockerfile.xpu and select the rebuilt image "
+                      "in a site overlay for the model, cache and init containers."
+                  )
+              PY
               l2_args=()
               if [ -n "${LMCACHE_L2_ADAPTER:-}" ]; then
                 l2_args+=(--l2-adapter "${LMCACHE_L2_ADAPTER}")
@@ -42,6 +53,7 @@ spec:
               exec lmcache server \
                 --host 0.0.0.0 \
                 --port 5555 \
+                --http-host 0.0.0.0 \
                 --http-port 8080 \
                 --supported-transfer-mode engine_driven \
                 --shm-name "" \
@@ -60,7 +72,7 @@ spec:
           ports:
             - name: rpc
               containerPort: 5555
-            # LMCache 0.5.0's combined CLI serves health and /metrics here.
+            # The combined CLI serves health and /metrics here.
             - name: http
               containerPort: 8080
           resources:

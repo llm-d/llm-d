@@ -23,14 +23,23 @@ spec:
           command: ["python3", "-c"]
           args:
             - |
+              from importlib.metadata import version
               import time
               import urllib.error
               import urllib.request
 
+              installed = version("lmcache")
+              if installed != "0.5.7.post1":
+                  raise RuntimeError(
+                      f"XPU MP requires LMCache 0.5.7.post1, found {installed}. "
+                      "Select the rebuilt image in a site overlay."
+                  )
+
               url = "http://xpu-vllm-lmcache:8080/healthcheck"
+              opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
               while True:
                   try:
-                      with urllib.request.urlopen(url, timeout=5) as response:
+                      with opener.open(url, timeout=5) as response:
                           if response.status == 200:
                               break
                   except (OSError, urllib.error.URLError) as exc:
@@ -44,6 +53,7 @@ spec:
               exec vllm serve \
                 Qwen/Qwen3-8B \
                 --dtype bfloat16 \
+                --gpu-memory-utilization 0.90 \
                 --block-size 64 \
                 --tensor-parallel-size=1 \
                 --max-num-seq 128 \

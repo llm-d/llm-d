@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` |
-| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; MP runtime validation pending Intel capacity) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; local XPU checks passed; rebuilt image required; Kubernetes validation pending DiskPressure) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, TP=4) · SGLang: 2 replicas × 4 chips (`2x2x1`, TP=4) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 4 ranks) · `CONNECTOR=native`, `VARIANT=cpu` · nightlies run on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) · Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) · `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) · SGLang: serves `Qwen/Qwen3-32B`, 2 replicas × 4 chips (`2x2x1`, TP=8) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 8 ranks) · `CONNECTOR=native`, `VARIANT=cpu` |
@@ -55,7 +55,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - For `VARIANT=fs`, a storage system that provides ReadWriteMany PVCs (see [Filesystem tier](#filesystem-tier)). For `HOST_TYPE=multi-host` on TPU v7, the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/model-server-orchestration.md).
 
-- For Intel XPU with `CONNECTOR=lmcache-connector`, check the [MP node placement, memory budget, and image requirements](./modelserver/xpu/vllm/lmcache-connector/README.md). XPU MP runtime validation is pending Intel capacity.
+- For Intel XPU with `CONNECTOR=lmcache-connector`, build the LMCache 0.5.7.post1 image and select it through a site overlay; see the [MP placement, memory, and image requirements](./modelserver/xpu/vllm/lmcache-connector/README.md). Local XPU checks passed; Kubernetes runtime validation is pending node DiskPressure.
 
 - (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
@@ -90,6 +90,7 @@ export VARIANT=cpu # options: cpu, fs; offload tier: cpu = CPU RAM, fs = CPU RAM
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export HOST_TYPE=single-host # options: single-host, multi-host; multi-host: ACCELERATOR_TYPE=tpu/v7, MODEL_SERVER=vllm and VARIANT=cpu only
 export STORAGE_CLASS= # VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default
+export MODEL_SERVER_OVERLAY= # optional site overlay; required for xpu + lmcache-connector to select the rebuilt LMCache 0.5.7.post1 image
 export MODEL=Qwen/Qwen3-32B # set to the model your accelerator serves (table above); xpu + lmcache-connector: Qwen/Qwen3-8B, tpu/v7: Qwen/Qwen3.5-397B-A17B-FP8
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -293,8 +294,11 @@ kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/mooncake
 <!-- guide:deploy.modelserver start -->
 ```bash
 # only when HOST_TYPE=single-host:
+if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
+  : "${MODEL_SERVER_OVERLAY:?Set MODEL_SERVER_OVERLAY to a site overlay selecting the rebuilt LMCache 0.5.7.post1 image; see the XPU MP guide}"
+fi
 kubectl apply -n ${NAMESPACE} \
-  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+  -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/}"
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -585,7 +589,7 @@ To remove the deployed components:
 <!-- guide:cleanup.modelserver start -->
 ```bash
 # only when HOST_TYPE=single-host:
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
+kubectl delete -n ${NAMESPACE} -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}}"
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash

@@ -29,7 +29,7 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; MP runtime validation pending Intel capacity)"
+      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; local XPU checks passed; rebuilt image required; Kubernetes validation pending DiskPressure)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
@@ -86,6 +86,7 @@ env:
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
     HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7, MODEL_SERVER=vllm and VARIANT=cpu only"}
     STORAGE_CLASS: {default: "", comment: "VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default"}
+    MODEL_SERVER_OVERLAY: {default: "", comment: "optional site overlay; required for xpu + lmcache-connector to select the rebuilt LMCache 0.5.7.post1 image"}
 
     # ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector serves Qwen/Qwen3-8B,
     # and ACCELERATOR_TYPE=tpu/v7 serves Qwen/Qwen3.5-397B-A17B-FP8.
@@ -173,8 +174,11 @@ deploy:
   modelserver:
     - when: {HOST_TYPE: [single-host]}
       run: |
+        if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
+          : "${MODEL_SERVER_OVERLAY:?Set MODEL_SERVER_OVERLAY to a site overlay selecting the rebuilt LMCache 0.5.7.post1 image; see the XPU MP guide}"
+        fi
         kubectl apply -n ${NAMESPACE} \
-          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
+          -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/}"
     # skip_in ci: no nightly covers TPU multi-host (see the note above deploy:).
     - when: {HOST_TYPE: [multi-host]}
       skip_in: [ci]
@@ -317,7 +321,7 @@ verify:
 cleanup:
   modelserver:
     - when: {HOST_TYPE: [single-host]}
-      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
+      run: kubectl delete -n ${NAMESPACE} -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}}"
     - when: {HOST_TYPE: [multi-host]}
       skip_in: [ci]
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/native/cpu/multi-host

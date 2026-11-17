@@ -3,7 +3,9 @@
 The `cpu/base` and `fs/base` overlays use LMCache MP with one cache server per
 Intel node. This follows the [LMCache llm-d integration](https://docs.lmcache.ai/production/llm_d.html)
 and replaces the [deprecated in-process connector](https://docs.lmcache.ai/legacy/index.html).
-XPU runtime validation is **pending Intel capacity**.
+Kubernetes runtime validation is pending: the Intel node evicted the
+namespace-limited probe because of DiskPressure. Local validation uses the
+reserved Intel Arc Pro B60 at PCI `0000:58:00.0`.
 
 ```mermaid
 flowchart LR
@@ -16,7 +18,8 @@ flowchart LR
 ## Configuration
 
 The model server serves `Qwen/Qwen3-8B` with tensor parallelism 1 and one
-`gpu.intel.com` DRA device. Its external connector is `LMCacheMPConnector` from
+`gpu.intel.com` DRA device, BF16 weights, and an explicit 90% GPU memory budget.
+Its external connector is `LMCacheMPConnector` from
 `lmcache.integration.vllm.lmcache_mp_connector`. The connection JSON is in
 [`cpu/base/kv-transfer-config.json`](cpu/base/kv-transfer-config.json).
 
@@ -28,10 +31,12 @@ existing private `/dev/shm` volume for vLLM.
 
 The Service has `internalTrafficPolicy: Local`, so clients reach only a ready
 cache server on their own node. An init container waits for the local server's
-`/healthcheck` before starting vLLM. RPC uses port 5555. In the pinned
-LMCache 0.5.0 image, the combined `lmcache server` CLI serves both
+`/healthcheck` before starting vLLM. RPC uses port 5555. With LMCache
+0.5.7.post1, the combined `lmcache server` CLI serves both
 `/healthcheck` and `/metrics` on HTTP port 8080; it does not start a separate
-Prometheus listener on 9090.
+Prometheus listener on 9090. The overlay explicitly sets
+`--http-host 0.0.0.0`; the newer CLI's default loopback bind would prevent
+Kubernetes probes and other pods from reaching HTTP.
 
 Both the DaemonSet and model Deployment select
 `intel.feature.node.kubernetes.io/gpu: "true"`. Confirm that your Intel nodes
@@ -40,23 +45,31 @@ in a site overlay. Keep any required node affinity and tolerations consistent
 between them. The cache server runs on CPU and does not request an XPU DRA
 device.
 
-The model server, cache server, and wait container use the same image selected
-by the shared [XPU image component](../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d/kustomization.yaml).
-The current `ghcr.io/llm-d/llm-d-xpu:v1.0.0` image contains LMCache 0.5.0,
-vLLM 0.30.0, and PyTorch 2.13.0; the MP CLI, external connector, and native
-filesystem extension imports have been checked without an XPU device.
-Server and client must have identical LMCache versions, and the connector must
-be compatible with the image's vLLM/PyTorch build. Upgrade all three together.
-The inline wire format is version-dependent; for example, LMCache v0.5.0 uses
-pickle payloads. Both processes set `PYTHONHASHSEED=0`.
+The model server, cache server, and wait container must use the same rebuilt
+image containing **LMCache 0.5.7.post1**, vLLM 0.30.0, and PyTorch 2.13.0 XPU.
+[`docker/Dockerfile.xpu`](../../../../../../docker/Dockerfile.xpu) builds
+LMCache's SYCL and native filesystem extensions against the base image's
+PyTorch. The server and init container check the LMCache version at startup.
+
+The shared [XPU image component](../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d/kustomization.yaml)
+still selects `ghcr.io/llm-d/llm-d-xpu:v1.0.0`, which contains LMCache 0.5.0.
+That image **fails XPU MP inference**: its connector unconditionally creates
+`torch.xpu.Event(interprocess=True)`, which PyTorch XPU does not support.
+A deployment image override is required until an updated image is published.
+The local validation rebuild has not been published.
+
+Upgrade the server, model, and init images together. LMCache 0.5.7.post1 uses
+packed token IDs and a versioned MessagePack tensor envelope for inline
+transfers; it cannot communicate with the 0.5.0 client/server protocol.
+Both processes set `PYTHONHASHSEED=0`.
 
 ## Memory and placement
 
 [`cpu/base/lmcache-daemonset.yaml`](cpu/base/lmcache-daemonset.yaml) configures
 20 GiB of L1 cache per node, 256-token chunks, and LRU eviction at 80% usage
 with a 20% eviction ratio. The chunk size is a multiple of vLLM's 64-token
-block size. The CPU server preallocates L1 with `--no-l1-use-lazy`; LMCache
-0.5.0's lazy allocator requires CUDA.
+block size. The CPU server preallocates L1 with `--no-l1-use-lazy`, reserving
+the pool in the cache-server process.
 
 | Pod | CPU request / limit | Memory request | Memory limit |
 | --- | --- | --- | --- |
@@ -93,11 +106,40 @@ export MODEL=Qwen/Qwen3-8B
 ```
 
 For `fs`, provision `llm-d-kv-cache-storage` as a ReadWriteMany PVC first.
-Apply the selected overlay after adapting node placement:
+Build an image from this branch and make it available to every selected Intel
+node through your registry or the node's container runtime. Choose a tagged
+image reference:
 
 ```bash
-kubectl apply -n "${NAMESPACE}" \
-  -k "${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base"
+export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
+docker build -f "${REPO_ROOT}/docker/Dockerfile.xpu" \
+  -t "${LMCACHE_MP_IMAGE}" "${REPO_ROOT}"
+```
+
+Create a site overlay that replaces the image in all three containers. Set
+these variables after the root guide's environment setup. Add any required
+node selector or toleration patches to this site overlay, matching the model
+Deployment and cache DaemonSet:
+
+```bash
+export MODEL_SERVER_OVERLAY="$(mktemp -d)"
+cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - "$(realpath --relative-to="${MODEL_SERVER_OVERLAY}" "${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base")"
+images:
+  - name: ghcr.io/llm-d/llm-d-xpu
+    newName: "${LMCACHE_MP_IMAGE%:*}"
+    newTag: "${LMCACHE_MP_IMAGE##*:}"
+EOF
+```
+
+The root guide requires `MODEL_SERVER_OVERLAY` for XPU MP. Apply it after
+adapting node placement and ensuring the rebuilt image is available:
+
+```bash
+kubectl apply -n "${NAMESPACE}" -k "${MODEL_SERVER_OVERLAY}"
 kubectl rollout status -n "${NAMESPACE}" daemonset/xpu-vllm-lmcache
 kubectl rollout status -n "${NAMESPACE}" deployment/xpu-vllm-decode
 kubectl get pods -n "${NAMESPACE}" -o wide \
@@ -156,7 +198,7 @@ for pod in $(kubectl get pods -n "${NAMESPACE}" \
     -o jsonpath='{.items[*].metadata.name}'); do
   echo "== ${pod}"
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8080/proxy/metrics" \
-    | grep -E '^lmcache_mp_(l1_(write|read|memory_usage)|l2_(store_completed|load_completed))'
+    | grep -E '^lmcache_mp_(l1_(write|read|memory_usage)|l2_(store_completed|load_completed|prefetch_load_completed))'
 done
 ```
 
@@ -179,25 +221,33 @@ kubectl apply -n "${NAMESPACE}" \
 
 ### Completed local validation
 
-Both overlays render successfully and pass strict Kubernetes client-side
-validation. Guide consistency checks and all 35 verifier unit tests pass.
-CPU-only smoke tests using the pinned XPU image confirmed inline engine
-registration, L1 store and retrieval with identical tensor payloads, and
-health/metrics endpoints for both variants. The filesystem test also confirmed
-native direct-I/O stores and retrieval with identical payloads after restarting
-the server with an empty L1 and the same local filesystem directory.
+The rebuilt LMCache 0.5.7.post1 image passed real XPU transfers and Qwen3-8B
+inference on the reserved Intel Arc Pro B60. Both variants stored ten
+256-token chunks. After restarting only vLLM, each read all ten chunks,
+reported 2,560 external prefix hit tokens with zero local HBM prefix hits,
+and returned the identical deterministic completion.
 
-These tests used CPU tensors without an XPU device. They do not validate
-XPU transfers, vLLM inference, node-local Kubernetes routing, or the target RWX
-filesystem.
+The filesystem variant also passed after restarting both the cache server
+and vLLM while preserving disk files. With an empty L1, it loaded all ten
+chunks from disk and returned the same completion with 2,560 external hits.
+Direct I/O remained enabled on the local block filesystem.
+
+Separate BF16 fused paged-KV tests passed bitwise checks for both variants,
+including retrieval into different physical blocks. Both site overlays passed
+strict Kubernetes server-side dry-runs. Guide consistency checks and all
+35 verifier unit tests passed. See the [validation report](XPU_VALIDATION.md)
+for image identity, configuration, counters, and remaining checks.
 
 ### Runtime validation pending
 
 The available Kubernetes context is `shared-infra-context`, restricted to
-namespace `shared-infra`, with no Intel capacity available. No XPU deployment
-or end-to-end validation has been performed there.
+namespace `shared-infra`. A probe scheduled onto the Intel host was evicted
+for DiskPressure and then deleted. Local Docker validation does not cover
+Kubernetes DRA allocation, node-local Service routing, llm-d router
+integration, or the target RWX filesystem.
 
-Once Intel capacity is available, validate both overlays:
+Once the node can admit pods and the rebuilt image is available, validate
+both overlays:
 
 1. Confirm the Intel node label, DRA class, image versions, and memory budget;
    for `fs`, confirm a Bound RWX PVC and writable cache directory.
@@ -210,7 +260,8 @@ Once Intel capacity is available, validate both overlays:
    reads, and identical output. Warm HBM hits alone do not prove MP retrieval.
 4. For `fs`, prime and wait for completed L2 stores, then restart the cache
    server and vLLM while preserving the PVC. Repeat the prefix and require L2
-   loads, external prefix hits, and identical output.
+   loads (`lmcache_mp_l2_prefetch_load_completed_chunks_total`), external
+   prefix hits, and identical output.
 5. Measure store/load latency and peak memory under concurrency, and exercise
    coordinated server/model restarts before relying on the deployment.
 
