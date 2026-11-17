@@ -1,0 +1,13 @@
+## Router monitoring values for INFRA_PROVIDER=ocp (and any cluster with the
+## Prometheus Operator): identical to recipes/router/features/monitoring.values.yaml,
+## kept under this guide so the install command can select the file by provider.
+## Creates a ServiceMonitor for the EPP so OpenShift user-workload monitoring
+## (Thanos Querier) scrapes the flow-control metrics KEDA scales on.
+
+router:
+  monitoring:
+    interval: "10s"
+    prometheus:
+      enabled: true
+      auth:
+        enabled: false

@@ -11,6 +11,8 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-30B-A3B-Instruct-2507"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=4"
             - "--enable-prefix-caching"

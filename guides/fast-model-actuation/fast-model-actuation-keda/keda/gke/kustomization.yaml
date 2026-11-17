@@ -1,0 +1,40 @@
+# GKE overlay for the FMA + KEDA scale-from-zero autoscaling guide.
+#
+# On GKE the EPP is scraped by Google Cloud Managed Service for Prometheus
+# (GMP) managed collection -- the router chart's monitoring-gke values create
+# the PodMonitoring -- and KEDA queries it through the GMP standalone Prometheus
+# frontend, a stateless in-cluster proxy that authenticates to the Cloud
+# Monitoring API on the cluster's behalf. The frontend is shared cluster
+# infrastructure, like Thanos Querier on OpenShift or kube-prometheus-stack on
+# generic Kubernetes: deploy it once per cluster as described in the guide
+# (README, "GKE" note under step 6), and it answers plain in-cluster HTTP, so no
+# TriggerAuthentication is needed.
+#
+# Why not KEDA's `gcp` pod identity straight against monitoring.googleapis.com?
+# That trigger needs the GCP project ID baked into the ScaledObject, which a
+# kustomize overlay applied with `kubectl apply -k` cannot discover at apply
+# time. The frontend keeps the project out of the guide manifests.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+patches:
+  # Point the queue-depth trigger at the GMP frontend. GMP keeps the EPP's
+  # metric names and labels (inference_pool), so the base query is unchanged.
+  #
+  # Scope: the frontend answers for the whole GCP project (its metrics scope),
+  # and the base query matches on inference_pool alone. A second copy of this
+  # guide in the same project -- in another namespace or on another cluster --
+  # therefore adds its queue to this trigger. Run one copy per project at a
+  # time, or add GMP's `namespace` and `cluster` labels to the query. The
+  # overlay cannot add them itself: it is applied with `kubectl apply -n`, so it
+  # knows neither value.
+  - patch: |-
+      - op: replace
+        path: /spec/triggers/0/metadata/serverAddress
+        value: "http://frontend.llm-d-monitoring.svc.cluster.local:9090"
+    target:
+      kind: ScaledObject
+      name: fast-model-actuation-keda-queue

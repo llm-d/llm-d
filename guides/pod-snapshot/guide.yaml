@@ -118,11 +118,15 @@ verify:
           kubectl get podsnapshots -n ${NAMESPACE}
 
     # Scaling out after PodSnapshot is Ready schedules a new replica that GKE
-    # restores directly from GCS.
+    # restores directly from GCS. `rollout status` (rather than `wait pod -l`)
+    # waits for the second replica to exist and become Ready instead of returning
+    # immediately on the already-Ready Pod 1, and the 2400s timeout matches Pod 1
+    # so a Pod 2 that falls back to a cold start still finishes and reaches the
+    # validator's "Pod 2 did not restore" check.
     restore:
       - run: |
           kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=2
-          kubectl wait --for=condition=ready pod -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=600s
+          kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=2400s
           kubectl get events -n ${NAMESPACE} --field-selector reason=GKEPodSnapshotting --sort-by=.lastTimestamp
           kubectl logs -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --tail=20
 

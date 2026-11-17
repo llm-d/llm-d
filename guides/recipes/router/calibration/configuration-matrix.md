@@ -32,7 +32,7 @@ rows because the serving engine changes prefill throughput.
 | `hygon/sglang` | Hygon BW1000 64 GiB · SGLang | 0.5.12 (DTK 26.04) | 4 | Qwen3-32B | **10891** |
 | `tpu/v6/vllm` | Google TPU v6e · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **26290** |
 | `tpu/v7/vllm` | Google TPU v7x · vLLM     | tpu v0.22.0          | 8 | Qwen3-32B               | **27336** |
-| `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.11.3a7 | 1 | gpt-oss-120B          | **12582** |
+| `npu/vllm`  | Rebellions NPU · vLLM       | vllm-rbln 0.12.0 | 1 | gpt-oss-120B          | **12171** |
 | `xpu/vllm`    | Intel XPU · vLLM          | xpu v0.7.0           | 1 | Qwen3-0.6B              | 1970 ‡ |
 | `cpu/vllm`    | CPU · vLLM (AMX)          | cpu v0.6.0           | 1 | Llama-3.2-3B-Instruct   | **1970** |
 

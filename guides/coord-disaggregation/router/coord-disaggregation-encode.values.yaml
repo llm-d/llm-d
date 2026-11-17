@@ -28,12 +28,52 @@ router:
     # (which active-request-scorer consumes) is local to this EPP process, so multiple
     # replicas would each see only a fraction of the per-endpoint load.
     replicas: 1
+    # TODO: Remove this image override once an official release including
+    # disaggregatedset-rollout-screener (and, on decode, prefix-based-pd-decider)
+    # is published.
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: "main"
+    flags:
+      # disaggregatedset-rollout-screener is an Alpha plugin.
+      allow-experimental-plugins: true
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Pins all phases of a request to one DisaggregatedSet revision during a
+        # rollout. The screener does not read the InferencePool: it watches Pods
+        # through the manager cache (namespace-scoped, no label selector) and keeps
+        # the ones matching its own scope, so this role-scoped EPP still sees every
+        # role of the set. Each EPP is a single process, so the local coordination
+        # fallback covers the encode fan-out, and the forwarded
+        # x-llm-d-disagg-revision pins prefill to the same revision as decode.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
+              # Same x-session-id affinity as the decode EPP. A request that
+              # cascades here after the conditional-decode probe answered 412
+              # carries no x-llm-d-disagg-revision (a 412 never stamps one), so
+              # without affinity this EPP would draw at random and the session
+              # could leave the revision the decode EPP chose for the probe. One
+              # session key hashes to the same revision on every EPP while they
+              # see the same eligible revisions and shares; each EPP derives the
+              # shares from its own Pod events, so two can briefly disagree during
+              # a rollout step (llm-d-router#3931 carries the probe's revision
+              # across the 412 instead). No prefixCache: only the decode EPP has
+              # the index it reads. Later phases follow the revision this EPP's
+              # response stamps either way.
+              affinity:
+                mode: prefix
+                sources:
+                - header: x-session-id
         - type: inflight-load-producer
         - type: active-request-scorer
         - type: max-score-picker

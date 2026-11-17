@@ -1,0 +1,188 @@
+## Kimi-K3.1-Pro (NVIDIA GB300 GPU, vLLM, 3P1D P/D Disaggregated + Mooncake RDMA + Precise Prefix Cache Routing)
+## guide overrides for the llm-d router.
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+    - name: http-8000
+      port: 8000
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: in-flight token accounting and the in-memory ZMQ KV-event
+    # prefix-cache index are local to each EPP process.
+    replicas: 1
+    env:
+      - name: GOGC
+        value: "400"
+      - name: GOMEMLIMIT
+        value: 20GiB
+    resources:
+      requests:
+        cpu: "3"
+        memory: 8Gi
+      limits:
+        cpu: "12"
+        memory: 24Gi
+    flags:
+      v: 1
+      allow-experimental-plugins: true
+      health-checking: true
+      secure-serving: false
+      grpc-max-recv-msg-size: 32MiB
+      grpc-max-send-msg-size: 32MiB
+      plugin-state-staleness-threshold: 15m
+      refresh-metrics-interval: 250ms
+    pluginsConfigFile: kimi-k3-1-gpu-plugins.yaml
+    pluginsCustomConfig:
+      kimi-k3-1-gpu-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: metrics-data-source
+          parameters:
+            scheme: http
+            path: /metrics
+            insecureSkipVerify: true
+        - type: core-metrics-extractor
+          parameters:
+            engineConfigs:
+            - name: vllm
+              queuedRequestsSpec: vllm:num_requests_waiting
+              runningRequestsSpec: vllm:num_requests_running
+              kvUsageSpec: vllm:kv_cache_usage_perc
+              loraSpec: ''
+              cacheInfoSpec: ''
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: token-producer
+          parameters:
+            modelName: moonshotai/Kimi-K3.1-Pro
+            vllm:
+              prefillOnly: true
+              omitMMKwargs: true
+              timeout: 15s
+              mmTimeout: 15s
+              endpointDiscovery:
+                loadBalancer:
+                  type: round-robin
+                attemptTimeout: 5000ms
+                portRules:
+                - selector:
+                    matchLabels:
+                      llm-d.ai/role: prefill
+                      llm-d.ai/pool-member: "true"
+                  basePort: 8089
+        - type: endpoint-notification-source
+        - type: precise-prefix-cache-producer
+          parameters:
+            tokenProcessorConfig:
+              blockSizeTokens: 2048
+              hashSeed: "42"
+            speculativeIndexing: true
+            speculativeTTL: 30s
+            indexerConfig:
+              kvBlockIndexConfig:
+                enableMetrics: true
+                inMemoryConfig:
+                  size: 100000000
+                  podCacheSize: 128
+              kvCacheBackendConfigs:
+              - name: gpu
+                weight: 1.0
+              - name: cpu
+                weight: 0.9
+            kvEventsConfig:
+              topicFilter: kv@
+              concurrency: 16
+              engineType: vllm
+              discoverPods: true
+              podDiscoveryConfig:
+                podLabelSelector: llm-d.ai/guide=kimi-k3-1,llm-d.ai/role=prefill,llm-d.ai/pool-member=true
+                socketPort: 5557
+        - type: inflight-load-producer
+          parameters:
+            prefixMatchInfoProducerName: precise-prefix-cache-producer
+            addEstimatedOutputTokens: false
+            syncCrossReplicaState: false
+        - type: prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: precise-prefix-cache-producer
+        - type: active-request-scorer
+          parameters:
+            idleThreshold: 0
+            inFlightLoadProducerName: inflight-load-producer
+        - type: token-load-scorer
+          parameters:
+            queueThresholdTokens: 6000000
+            inFlightLoadProducerName: inflight-load-producer
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: max-score-picker
+        - type: utilization-detector
+          parameters:
+            queueDepthThreshold: 100000
+            kvCacheUtilThreshold: 1.0
+            headroom: 1.0
+            metricsStalenessThreshold: 5s
+            stalenessPolicy: ignore
+        dataLayer:
+          injectDefaults: false
+          sources:
+          - pluginRef: metrics-data-source
+            extractors:
+            - pluginRef: core-metrics-extractor
+          - pluginRef: endpoint-notification-source
+            extractors:
+            - pluginRef: precise-prefix-cache-producer
+        flowControl:
+          saturationDetector:
+            pluginRef: utilization-detector
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: utilization-detector
+          - pluginRef: prefix-cache-scorer
+            weight: 16
+          - pluginRef: active-request-scorer
+            weight: 4
+          - pluginRef: token-load-scorer
+            weight: 4
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: utilization-detector
+          - pluginRef: active-request-scorer
+            weight: 5
+          - pluginRef: queue-scorer
+            weight: 3
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 3
+          - pluginRef: max-score-picker
+
+  modelServers:
+    type: vllm
+    protocol: http
+    # Prefill leaders serve on :8000; Decode nodes expose 4 local DP ranks on :8000..:8003
+    # via the llm-d-router-disagg-sidecar (forwarding to vLLM on :8200..:8203).
+    targetPorts:
+      - number: 8000
+      - number: 8001
+      - number: 8002
+      - number: 8003
+    matchLabels:
+      llm-d.ai/guide: "kimi-k3-1"
+      llm-d.ai/accelerator-variant: "gpu"
+      llm-d.ai/pool-member: "true"

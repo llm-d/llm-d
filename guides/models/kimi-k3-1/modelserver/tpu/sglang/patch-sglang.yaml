@@ -1,0 +1,289 @@
+# Kimi-K3.1-Pro (moonshotai/Kimi-K3.1-Pro: MXFP4 experts, KDA + gated sparse MLA with a DSA
+# indexer, 1.56 TB) unified serving with SGLang on Torch TPU. One replica is one tpu7x 2x2x4
+# slice: 4 hosts x 4 chips = 32 TensorCores, one SGLang engine with TP=32 / EP=8 spread over
+# the 4 pods of a LeaderWorkerSet group (rank 0 serves HTTP; ranks 1-3 join it).
+#
+# Server flags and environment follow SGLang's own Kimi-K3.1 TPU recipe
+# (benchmark/tpu/recipe/configs/kimi_k3_1/server.py in the image), with a 480K context instead
+# of the recipe's 128K + 8K sizing. One replica's KV pool holds 532,352 tokens (measured; MLA
+# latents and DSA index keys are replicated on every rank), short of the model's 1M, and the
+# batch-64 decode kernel keeps a 64-sequence page table in its 1 MiB SMEM: at 523,264 tokens
+# (4,089 pages) the batch-64 compile ran out of SMEM by 51.6K (measured on tpu7x). 491,520 tokens
+# (3,841 pages) fits with ~10 KB to spare and keeps the recipe's 64-request batch and 128-token
+# pages.
+#
+# Tiered prefix cache: SGLang HiCache over TPU Sync (raiden) keeps evicted prefixes, both the
+# sparse-MLA / DSA pages and the KDA state slots, in a host-DRAM pool twice the HBM pool, and
+# loads them back on a later prefix hit instead of recomputing them. The HiCache settings follow
+# SGLang's GLM-5.3-Flash TPU recipe in the same image (glm_5_3_flash/server.py), the other model
+# on the split sparse-MLA pool plus recurrent state; the Kimi-K3.1 recipe itself has no host tier.
+#
+# Weights: the 1.56 TB checkpoint does not fit a TPU node's boot disk, so every pod mounts the
+# kimi-k3-1-models ReadOnlyMany volume (hydrated once from a GCS copy of the Hugging Face repo,
+# see the guide) at /models.
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: decode
+  annotations:
+    # One slice (node pool) per group.
+    leaderworkerset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool
+spec:
+  # Two endpoints, so prefix-aware routing has a choice.
+  replicas: 2
+  # TPU slices are fixed size: a surge group never schedules.
+  rolloutStrategy:
+    type: RollingUpdate
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 1
+  leaderWorkerTemplate:
+    size: 4
+    # The 4 pods are one engine: if any restarts, recreate the group.
+    restartPolicy: RecreateGroupOnPodRestart
+    leaderTemplate:
+      metadata:
+        labels:
+          # Only rank 0 serves the API, so only leaders are router endpoints.
+          llm-d.ai/inference-serving: "true"
+      spec:
+        # Same preStop + grace period as the graceful-shutdown component, on the leader only: it is
+        # the router endpoint, and a worker leaving recreates the whole group anyway.
+        terminationGracePeriodSeconds: 75
+        nodeSelector: &nodeSelector
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 2x2x4
+        containers:
+          - name: modelserver-leader
+            image: REPLACE_MODEL_SERVER_IMAGE
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sleep", "15"]
+            # Ranks 1-3 join rank 0's torch.distributed rendezvous on TCP 20000 (--dist-init-addr);
+            # allow pod-to-pod traffic on it within the group if you use NetworkPolicies.
+            # --tool-call-parser=kimi_k3 has no effect while --grammar-backend=none rejects `tools`
+            # requests on TPU; it stays so tool calling works without a manifest change later.
+            command: &command ["/bin/bash", "-c"]
+            args: &args
+              - |
+                set -euo pipefail
+                until LEADER_IP=$(getent ahostsv4 "${LWS_LEADER_ADDRESS}" | awk 'NR==1{print $1}') \
+                    && [ -n "${LEADER_IP}" ]; do
+                  echo "Waiting for ${LWS_LEADER_ADDRESS} to resolve..."; sleep 5
+                done
+                exec python3 -m sglang.launch_server \
+                  --model-path=/models/Kimi-K3.1-Pro \
+                  --served-model-name=moonshotai/Kimi-K3.1-Pro \
+                  --trust-remote-code \
+                  --host=0.0.0.0 \
+                  --port=8000 \
+                  --nnodes=4 \
+                  --node-rank="${LWS_WORKER_INDEX}" \
+                  --dist-init-addr="${LEADER_IP}:20000" \
+                  --device=tpu \
+                  --dtype=bfloat16 \
+                  --tp-size=32 \
+                  --ep-size=8 \
+                  --attention-backend=pallas_tpu_mla_sparse \
+                  --kv-cache-dtype=fp8_e4m3 \
+                  --page-size=128 \
+                  --context-length=491520 \
+                  --mem-fraction-static=0.85 \
+                  --max-total-tokens=4000000 \
+                  --max-running-requests=64 \
+                  --chunked-prefill-size=4096 \
+                  --max-prefill-tokens=4096 \
+                  --prefill-max-requests=8 \
+                  --tpu-compile-tokens 4096 \
+                  --tpu-compile-bs 1 2 4 8 16 32 64 \
+                  --enable-torch-compile \
+                  --torch-compile-max-bs=64 \
+                  --mamba-ssm-dtype=bfloat16 \
+                  --scheduler-recv-interval=16 \
+                  --weight-loader-disable-mmap \
+                  --grammar-backend=none \
+                  --reasoning-parser=kimi_k3 \
+                  --tool-call-parser=kimi_k3 \
+                  --enable-hierarchical-cache \
+                  --hicache-io-backend=raiden \
+                  --hicache-mem-layout=page_first_fused \
+                  --hicache-write-policy=write_through \
+                  --hicache-ratio=2 \
+                  --enable-cache-report \
+                  --enable-metrics \
+                  --watchdog-timeout=3600 \
+                  --skip-server-warmup
+            env: &env
+              - name: HF_HUB_OFFLINE
+                value: "1"
+              - name: TRANSFORMERS_OFFLINE
+                value: "1"
+              # Common TPU runtime env from SGLang's recipe base (benchmark/tpu/recipe/configs/base.py),
+              # copied as is: libtpu and the TPU runtime read different names for the diagnostic
+              # coordinator and telemetry interval switches, so both spellings are set.
+              - name: SGLANG_PLATFORM
+                value: tpu
+              - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+                value: "0"
+              - name: SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN
+                value: "1"
+              - name: SGLANG_TPU_PRELOAD_TELEMETRY_STUB
+                value: "1"
+              - name: SGLANG_TPU_OVERLAP_PROFILE
+                value: "1"
+              - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                value: "false"
+              - name: TPU_ENABLE_DIAGNOSTIC_COORDINATOR
+                value: "0"
+              - name: TPU_DISABLE_DIAGNOSTIC_COORDINATOR
+                value: "1"
+              - name: TPU_ENABLE_TELEMETRY
+                value: "0"
+              - name: TPU_ENABLE_TELEMETRY_HARVESTING
+                value: "0"
+              - name: ENABLE_TPU_TELEMETRY
+                value: "0"
+              - name: TPU_TELEMETRY_INTERVAL_SEC
+                value: "86400"
+              - name: TPU_TELEMETRY_INTERVAL_SECONDS
+                value: "86400"
+              - name: TPU_DIAGNOSTIC_HARVESTER_INTERVAL_SEC
+                value: "86400"
+              # Kimi-K3 per-op kernels (SGLang's kimi_k3 recipe).
+              - name: SGLANG_TPU_EAGER_MODE
+                value: DEFER_AND_FUSE
+              - name: SGLANG_TPU_FUSED_MOE_PERMUTE_DENSE_THRESHOLD
+                value: "512"
+              - name: SGLANG_TPU_K3_STATIC_FP8
+                value: moe_front,latent_up,kda_qkvg
+              - name: SGLANG_TPU_ENABLE_K3_HOST_SPLIT_GEMV
+                value: "1"
+              - name: SGLANG_TPU_ENABLE_TWOLEVEL_ALLREDUCE
+                value: "1"
+              - name: SGLANG_K3_MERGE_MOE_ALLREDUCE
+                value: "1"
+              - name: SGLANG_TPU_ENABLE_K3_ATTN_RES_KERNEL
+                value: "1"
+              - name: SGLANG_TPU_ENABLE_NN_MODULE_GUARD_FILTER
+                value: "1"
+              # Kimi-K3.1 additions (SGLang's kimi_k3_1 recipe): sparse-MLA q-block prefill,
+              # the DSA indexer top-k split across attention-TP ranks, text-only extend graphs,
+              # and the per-op decode switches.
+              - name: SGLANG_TPU_ENABLE_QBLOCK_SPARSE_MLA_PREFILL
+                value: "1"
+              - name: SGLANG_TPU_DSA_INDEXER_TOKEN_SPLIT
+                value: "1"
+              - name: SGLANG_TPU_VL_TEXT_ONLY_EXTEND
+                value: "1"
+              - name: SGLANG_SET_CPU_AFFINITY
+                value: "1"
+              - name: SGLANG_TPU_ASYNC_COPY_WORKER
+                value: "0"
+              - name: SGLANG_TPU_TWOLEVEL_ALLREDUCE_SPLIT_BARRIER
+                value: "1"
+              - name: SGLANG_TPU_K3_QKVG_PREFETCH
+                value: "1"
+              - name: SGLANG_TPU_K3_LATENT_UP_ATTN_RES
+                value: "1"
+              - name: SGLANG_TPU_K3_OPROJ_ROW
+                value: "1"
+              - name: SGLANG_TPU_DYNAMO_PARAMS_AS_GRAPH_ATTRS
+                value: "2"
+              - name: SGLANG_TPU_ALLOC_DECODE_FAST_PATH
+                value: "1"
+              - name: SGLANG_TPU_LOGITS_ONESHOT_GATHER
+                value: "1"
+              - name: SGLANG_TPU_DECODE_SKIP_GUARD_EVAL
+                value: "1"
+              - name: SGLANG_TPU_AOT_LEAN_RUNTIME_WRAPPER
+                value: "1"
+              - name: SGLANG_TPU_SPLIT_EXEC_DIRECT_CALL
+                value: "1"
+              - name: SGLANG_TPU_PALLAS_VMEM_RIGHTSIZE
+                value: "1"
+              - name: LIBTPU_INIT_ARGS
+                value: >-
+                  --xla_tpu_enable_async_collective_fusion=true
+                  --xla_tpu_overlap_compute_collective_tc=true
+                  --xla_tpu_enable_async_collective_fusion_multiple_steps=true
+                  --xla_tpu_enable_latency_hiding_scheduler=true
+                  --xla_latency_hiding_scheduler_rerun=10
+                  --xla_tpu_all_gather_collective_matmul_mode=post_spmd_conservative
+                  --xla_tpu_reduce_scatter_collective_matmul_mode=post_spmd_conservative
+                  --xla_tpu_enable_sparse_core_collective_offload_all_reduce=false
+                  --xla_tpu_enable_sparse_core_collective_offload_reduce_scatter=false
+                  --xla_tpu_buffer_assignment_enable_fast_merge_fallback=false
+                  --xla_tpu_offload_gather_to_sparsecore=true
+            ports:
+              - name: modelserver
+                containerPort: 8000
+                protocol: TCP
+            # Whole host (tpu7x: ~223 allocatable CPUs, ~918 GiB): SGLANG_SET_CPU_AFFINITY pins
+            # each of the 8 TP ranks' host threads, and the MXFP4 checkpoint is read into host
+            # memory without mmap (--weight-loader-disable-mmap). Request = limit so the pod is
+            # not evicted under node pressure.
+            resources: &resources
+              requests:
+                cpu: "200"
+                memory: 800Gi
+                google.com/tpu: "4"
+              limits:
+                memory: 800Gi
+                google.com/tpu: "4"
+            # A cold start reads the checkpoint and compiles every bucket: allow 2 hours.
+            startupProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              initialDelaySeconds: 60
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 240
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 5
+              timeoutSeconds: 5
+              failureThreshold: 3
+            volumeMounts: &volumeMounts
+              - mountPath: /dev/shm
+                name: dshm
+              # torch.compile and XLA caches.
+              - mountPath: /root/.cache
+                name: cache
+              - mountPath: /models
+                name: models
+                readOnly: true
+        volumes: &volumes
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 64Gi
+          - name: cache
+            emptyDir: {}
+          - name: models
+            persistentVolumeClaim:
+              claimName: kimi-k3-1-models
+              readOnly: true
+    workerTemplate:
+      spec:
+        terminationGracePeriodSeconds: 75
+        nodeSelector: *nodeSelector
+        containers:
+          - name: modelserver-worker
+            image: REPLACE_MODEL_SERVER_IMAGE
+            command: *command
+            args: *args
+            env: *env
+            resources: *resources
+            volumeMounts: *volumeMounts
+        volumes: *volumes

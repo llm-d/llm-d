@@ -32,7 +32,9 @@ jobs:
   # Quick check: do any image-related files have changes?
   # Runs immediately without approval — only reads the GitHub API diff,
   # does not execute PR code. Used to skip the approval gate when no
-  # images need building.
+  # images need building. The filters are the ones build-image.yaml uses
+  # to decide what to build, read from the base branch, so every path that
+  # can start a build also requires approval.
   needs-build-check:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
@@ -43,13 +45,18 @@ jobs:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
-          filters: |
-            images:
-              - 'docker/**'
+          filters: .github/filters/image-paths.yaml
       - name: Summarize
         id: check
+        env:
+          # JSON array of the filter names that matched, e.g. ["cpu","xpu"].
+          CHANGES: ${{ steps.filter.outputs.changes }}
         run: |
-          echo "any_image_changes=${{ steps.filter.outputs.images }}" >> $GITHUB_OUTPUT
+          if [ "$CHANGES" != "[]" ]; then
+            echo "any_image_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_image_changes=false" >> $GITHUB_OUTPUT
+          fi
 
   # Gate: require approval only when image-related files changed.
   # For pull_request_target (fork PRs): requires approval from a maintainer via
@@ -74,9 +81,11 @@ jobs:
 
   # Call the build-image workflow to build any changed images
   # Resolves build-image.yaml from main (pull_request_target), checks out PR code via ref.
+  # Runs only after a gate succeeded. A skipped gate must not start a build: the
+  # called workflow checks out PR code on self-hosted runners with registry secrets.
   build-images:
     needs: [needs-build-check, pr-gate, auto-gate]
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !cancelled() && (needs.pr-gate.result == 'success' || needs.auto-gate.result == 'success') }}
     uses: ./.github/workflows/build-image.yaml
     with:
       ref: ${{ github.event.pull_request.head.sha || '' }}

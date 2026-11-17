@@ -1,0 +1,112 @@
+# GKE A4X-MAX (NVIDIA GB300 NVL72) DRANET 8-NIC RoCEv2 ResourceClaimTemplate and optional
+# Mooncake RDMA DRAM donor DaemonSet (500 GB/node RDMA pool on spare CPU/GPU nodes).
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: kimi-k3-1-gpu-vllm-rdma-nic
+spec:
+  spec:
+    devices:
+      requests:
+        - name: nic
+          exactly:
+            allocationMode: ExactCount
+            count: 8
+            deviceClassName: mrdma.google.com
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kimi-k3-1-gpu-vllm-mooncake-donor
+spec:
+  selector:
+    matchLabels:
+      app: kimi-k3-1-mooncake-donor
+  template:
+    metadata:
+      labels:
+        app: kimi-k3-1-mooncake-donor
+    spec:
+      enableServiceLinks: false
+      nodeSelector:
+        llm-d.ai/mooncake-donor: "true"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: kubernetes.io/arch
+          operator: Equal
+          value: arm64
+          effect: NoSchedule
+      resourceClaims:
+        - name: rdma-nic
+          resourceClaimTemplateName: kimi-k3-1-gpu-vllm-rdma-nic
+      containers:
+        - name: mooncake-donor
+          image: REPLACE_MODEL_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+                - SYS_RAWIO
+                - NET_RAW
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              export LD_LIBRARY_PATH=/usr/local/cuda/compat:/usr/local/cuda-13.0/compat:${LD_LIBRARY_PATH:-}
+              exec mooncake_client \
+                --host="${POD_IP}" \
+                --port=50052 \
+                --global_segment_size=500GB \
+                --local_buffer_size=4GB \
+                --protocol=rdma \
+                --master_server_address=kimi-k3-1-gpu-vllm-mooncake-master:8700 \
+                --metadata_server=P2PHANDSHAKE \
+                --enable_offload=false \
+                --enable_http_server=true \
+                --http_port=9300 \
+                --threads=8
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: UCX_IB_ROCE_REACHABILITY_MODE
+              value: all
+            - name: UCX_IB_GID_INDEX
+              value: "3"
+            - name: UCX_IB_PCI_RELAXED_ORDERING
+              value: "y"
+            - name: UCX_CUDA_COPY_DMABUF
+              value: "y"
+            - name: UCX_CUDA_IPC_ENABLE_MNNVL
+              value: "y"
+            - name: UCX_MAX_RNDV_LANES
+              value: "8"
+            - name: UCX_MAX_EAGER_LANES
+              value: "8"
+            - name: UCX_WARN_UNUSED_ENV_VARS
+              value: "n"
+          ports:
+            - name: rpc
+              containerPort: 50052
+            - name: http
+              containerPort: 9300
+          resources:
+            requests:
+              cpu: "16"
+              memory: 520Gi
+            limits:
+              cpu: "32"
+              memory: 560Gi
+            claims:
+              - name: rdma-nic
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi

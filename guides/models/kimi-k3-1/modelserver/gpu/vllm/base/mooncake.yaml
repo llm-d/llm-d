@@ -1,0 +1,104 @@
+# Mooncake RDMA KV-cache store master service, deployment, and configuration for Kimi-K3.1-Pro 3P1D.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mooncake-store-config
+data:
+  mooncake_config.json: |
+    {
+      "metadata_server": "P2PHANDSHAKE",
+      "global_segment_size": "160GB",
+      "local_buffer_size": "4GB",
+      "protocol": "rdma",
+      "device_name": "",
+      "mode": "embedded",
+      "enable_offload": false,
+      "master_server_address": "kimi-k3-1-gpu-vllm-mooncake-master:8700"
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mooncake-master
+spec:
+  selector:
+    app: kimi-k3-1-mooncake-master
+  ports:
+    - name: rpc
+      port: 8700
+      targetPort: 8700
+      protocol: TCP
+    - name: http-meta
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: metrics
+      port: 8702
+      targetPort: 8702
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mooncake-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kimi-k3-1-mooncake-master
+  template:
+    metadata:
+      labels:
+        app: kimi-k3-1-mooncake-master
+    spec:
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: kubernetes.io/arch
+          operator: Equal
+          value: arm64
+          effect: NoSchedule
+      containers:
+        - name: mooncake-master
+          image: REPLACE_MODEL_SERVER_IMAGE
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/bash", "-c"]
+          args:
+            - >-
+              export LD_LIBRARY_PATH=/usr/local/cuda/compat:/usr/local/cuda-13.0/compat:${LD_LIBRARY_PATH:-} &&
+              exec mooncake_master
+              --port=8700
+              --enable_http_metadata_server=true
+              --http_metadata_server_port=8080
+              --rpc_thread_num=32
+              --enable_metric_reporting=true
+              --metrics_port=8702
+              --default_kv_lease_ttl=60000
+              --eviction_high_watermark_ratio=0.95
+              --eviction_ratio=0.10
+          ports:
+            - name: rpc
+              containerPort: 8700
+            - name: http-meta
+              containerPort: 8080
+            - name: metrics
+              containerPort: 8702
+          resources:
+            requests:
+              cpu: "8"
+              memory: 8Gi
+            limits:
+              cpu: "16"
+              memory: 16Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
