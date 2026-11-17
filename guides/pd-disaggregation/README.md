@@ -25,7 +25,7 @@ How the two pools are deployed depends on the accelerator:
 
 For why P/D disaggregation helps, how requests flow between the two pools, and tuning guidance, see [Disaggregated Serving](../../docs/architecture/disaggregation/pd-disaggregation.md).
 
-To manage load across the prefill and decode pools and prioritize competing requests, see [Flow control with prefill/decode](flow-control.md).
+To prioritize requests while managing load across the prefill and decode pools, see [Flow control with prefill/decode](flow-control.md).
 
 ## Supported Accelerators and Model Servers
 
