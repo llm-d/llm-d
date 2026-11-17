@@ -8,7 +8,7 @@ IMAGE_REGISTRY_ORG ?= llm-d
 IMAGE_REGISTRY_REPO ?= llm-d
 DOCKERFILE_DIR = docker
 
-# DEVICE, options: ['xpu']. CPU guides use upstream vLLM images directly.
+# DEVICE, options: ['xpu'].
 DEVICE ?= xpu
 
 ifeq ($(DEVICE), xpu)

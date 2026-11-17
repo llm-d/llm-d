@@ -70,8 +70,6 @@ This directory contains Kustomize Components that define the **default container
 
 llm-d is moving towards using upstream images for both `sglang` and `vLLM`. As llm-d originally supported only vLLM, `llm-d` image variants were produced to account for any feature gaps in development of vLLM. Some of these feature gaps still exist today. As a stop-gap measure, the `llm-d` community will continue to host its own images as applicable, until they can be deprecated and safely migrate to upstream images.
 
-CPU guides use the upstream `vllm/vllm-openai-cpu` release image directly. The CPU configurations for `optimized-baseline` and `precise-prefix-cache-routing` require neither NIXL nor UCX, so llm-d no longer builds a custom CPU image.
-
 ## Usage
 
 Include a component in your overlay's `kustomization.yaml`:

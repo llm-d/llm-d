@@ -56,8 +56,6 @@ This guide includes configurations for the following accelerator and model serve
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
 
-The CPU overlay uses the upstream [`vllm/vllm-openai-cpu:v0.34.0`](../recipes/modelserver/components/images/cpu-vllm/release/kustomization.yaml) image directly. This guide requires neither NIXL nor UCX.
-
 The MThreads **vLLM** overlay is a single-replica TP validation profile: one
 `Qwen/Qwen3-32B` vLLM server, tensor parallelism 8, and eight
 `mthreads.com/gpu` resources in the pod. It uses the standalone Router/EPP
