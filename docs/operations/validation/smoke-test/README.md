@@ -62,7 +62,7 @@ Run these commands from the repository root. The local script is sent to the pod
 over standard input; the pod does not need a copy of the repository.
 
 ```bash
-kubectl run llm-d-healthcheck --rm -i --restart=Never \
+kubectl run llm-d-healthcheck --rm -i --quiet --restart=Never \
   --namespace llm-d \
   --image=alpine:3.20 \
   --command -- sh -c '
@@ -75,7 +75,7 @@ kubectl run llm-d-healthcheck --rm -i --restart=Never \
 If you prefer **no jq**, drop it and provide `-m` explicitly:
 
 ```bash
-kubectl run llm-d-healthcheck --rm -i --restart=Never \
+kubectl run llm-d-healthcheck --rm -i --quiet --restart=Never \
   --namespace llm-d \
   --image=alpine:3.20 \
   --command -- sh -c '
