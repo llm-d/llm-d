@@ -201,6 +201,7 @@ EOF
   * Add automatically with `git commit -s`
   * See [PR_SIGNOFF.md](PR_SIGNOFF.md) for configuration details
   * Required for all contributions per [Developer Certificate of Origin](https://developercertificate.org/)
+* **Area labels**: Pull requests are labeled automatically by changed paths (`area/*` and `docs-only`), and both PR and issue descriptions accept `/area <name>` lines; see [`.github/area_taxonomy.md`](.github/area_taxonomy.md) for the full taxonomy.
 
 ## Code Organization and Ownership
 

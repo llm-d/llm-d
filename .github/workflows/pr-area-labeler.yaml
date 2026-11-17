@@ -1,0 +1,112 @@
+name: PR Area Labeler
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - main
+
+permissions: {}
+
+# A concurrency group keeps one running and one pending run, and a newly queued
+# run replaces the pending one. That is safe here because every event runs every
+# step and each step reads the PR's current files, labels, and body, so the
+# newest run always covers whatever a replaced run would have done.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  area-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      # Strips CommonMark §4.5 fenced code blocks and HTML comments so examples
+      # or hidden template instructions are not parsed as active directives.
+      STRIP_BLOCKS: |
+        s{
+          ^[ ]{0,3}(`{3,})[^`\n]* (?:\n(?:.*?\n)?[ ]{0,3}\1`*[ \t]*(?=\n|\z) | \n.*\z | \z)
+          | ^[ ]{0,3}(~{3,})[^\n]* (?:\n(?:.*?\n)?[ ]{0,3}\2~*[ \t]*(?=\n|\z) | \n.*\z | \z)
+          | ^[ ]{0,3}<!-- (?:-?>|.*?(?:-->|\z))
+          | <!-- (?:-?>|(?:(?!\n[ \t]*\n|<!--).)*?-->)
+        }{}gmsx
+    steps:
+      # pull_request_target checks out the base branch by default. Do not set
+      # `ref` to the PR head: this job holds a write token, and the label rules
+      # and script must come from main, not from the PR under evaluation.
+      - name: Check out label rules from the base branch
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github
+
+      # Labels are written one at a time (POST to add, DELETE to remove) rather
+      # than by replacing the PR's whole label set, so a label another workflow
+      # removes during this run (for example lgtm on a new push) stays removed.
+      - name: Apply path labels and sync docs-only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          esc() { local s=$1; s=${s//'%'/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}; printf '%s' "$s"; }
+
+          work=$(mktemp -d)
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$work/files"
+          gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name' > "$work/current"
+          yq -o=json '.' .github/labeler.yml > "$work/additive.json"
+          yq -o=json '.' .github/labeler-sync.yml > "$work/sync.json"
+
+          changes=$(python3 .github/scripts/area_labels.py \
+            --additive "$work/additive.json" --sync "$work/sync.json" \
+            --files "$work/files" --current "$work/current")
+          [ -z "$changes" ] && exit 0
+
+          existing=$(gh label list --repo "$REPO" --limit 500 --json name -q '.[].name')
+
+          while IFS=' ' read -r action label; do
+            if [ "$action" = "remove" ]; then
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --remove-label "$label" || \
+                echo "::warning::Failed to remove label '$(esc "$label")'"
+            elif ! grep -qxF -- "$label" <<< "$existing"; then
+              echo "::warning::Label '$(esc "$label")' does not exist in $REPO, skipping"
+            else
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$label" || \
+                echo "::warning::Failed to add label '$(esc "$label")'"
+            fi
+          done <<< "$changes"
+
+      - name: Add area labels from PR body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Escape percent sequences before echoing body-derived text into a
+          # ::warning:: so it cannot forge additional workflow commands.
+          esc() { local s=$1; s=${s//'%'/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}; printf '%s' "$s"; }
+
+          cleaned=$(printf '%s' "$PR_BODY" | tr -d '\r' | perl -0777 -pe "$STRIP_BLOCKS")
+          requested=$(
+            sed -n 's|^/area[[:space:]][[:space:]]*||p' <<< "$cleaned" | \
+              tr -s '[:space:]' '\n' | sed '/^$/d' | tr '[:upper:]' '[:lower:]' | \
+              sed 's|^area/||; s|^|area/|' | sort -u
+          )
+          [ -z "$requested" ] && exit 0
+
+          existing=$(gh label list --repo "$REPO" --limit 500 --json name -q '.[].name')
+          current=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name')
+
+          while IFS= read -r label; do
+            if ! grep -qxF -- "$label" <<< "$existing"; then
+              echo "::warning::Unknown label '$(esc "$label")', skipping"
+              continue
+            fi
+            if ! grep -qxF -- "$label" <<< "$current"; then
+              gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$label" || \
+                echo "::warning::Failed to add label '$(esc "$label")'"
+            fi
+          done <<< "$requested"
