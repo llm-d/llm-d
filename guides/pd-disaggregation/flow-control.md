@@ -1,8 +1,8 @@
 # Flow control with prefill/decode
 
-Flow control lets you prioritize requests while managing load across the prefill and decode pools. The Endpoint Picker checks saturation in both pools to decide when to dispatch requests. With the default settings, it holds requests in its queue when either pool reaches its saturation limit. Configured priorities determine which queued requests it dispatches first.
+Flow control lets you prioritize requests while managing load across the prefill and decode pools. With the default settings, the Endpoint Picker queues requests when either pool is saturated. It uses the configured priorities to choose which queued requests to dispatch as capacity becomes available.
 
-The steps below add flow control to the [P/D deployment](README.md), check its stage metrics, and configure request priorities.
+This guide adds flow control to the [P/D deployment](README.md), then walks through configuring priorities and checking the stage metrics.
 
 ## Enable flow control
 
@@ -17,7 +17,7 @@ featureGates:
 
 To read the metrics below, set `MONITORING=true` and select `MONITORING_VALUES` for your platform in the [router setup](README.md#1-deploy-the-llm-d-router) before installing or upgrading.
 
-For a new deployment, continue with the [P/D guide](README.md). For an existing deployment, upgrade from the same shell with the chart version and values used for the original install, including any extra overrides:
+For a new deployment, continue with the [P/D guide](README.md). For an existing deployment, restore the guide's environment variables and use the original chart version, values files, and `--set` overrides. Add any extra overrides to this command:
 
 ```bash
 helm upgrade ${GUIDE_NAME} ${ROUTER_STANDALONE_CHART} \
@@ -40,9 +40,27 @@ The default utilization detector uses a queue-depth threshold of `5` and a KV ca
 
 To disable flow control, remove the feature gate and repeat the upgrade.
 
+## Prioritize requests (optional)
+
+To assign different priorities, install the InferenceObjective CRD described in the flow-control guide's [prerequisites](../flow-control/README.md#prerequisites). Keep using the P/D deployment's environment variables for the commands below.
+
+Copy the [example objectives](../flow-control/objectives.yaml) to a file you can edit:
+
+```bash
+cp ${REPO_ROOT}/guides/flow-control/objectives.yaml ./pd-objectives.yaml
+```
+
+In each objective, set `spec.poolRef.name` to the value of `${GUIDE_NAME}`. Choose the objective names and `spec.priority` values for your deployment, and update the metadata labels to match. Apply the edited file in the P/D namespace:
+
+```bash
+kubectl apply -f ./pd-objectives.yaml -n ${NAMESPACE}
+```
+
+Send the objective's name in the `x-llm-d-inference-objective` request header. For production traffic, follow the flow-control guide's [client integration instructions](../flow-control/README.md#2-client-integration) to assign these headers at a trusted gateway.
+
 ## Check the stage metrics
 
-Query the metrics below in your configured Prometheus or [GKE Managed Prometheus](../../docs/operations/observability/setup.md).
+After sending requests, use the stage metrics to check how flow control responds to load. Query them in your configured Prometheus or [GKE Managed Prometheus](../../docs/operations/observability/setup.md).
 
 With the OSS Prometheus / OpenShift monitoring values, you can also read them directly:
 
@@ -59,10 +77,4 @@ The GKE monitoring values keep metrics authentication enabled; use the configure
 
 Read these metrics from the same Endpoint Picker. Match `pool_saturation` and `queue_size` by `inference_pool`. If a stage is missing, check the pods' `llm-d.ai/role` labels; unlabeled endpoints count as decode.
 
-On a test deployment, compare the same workload with flow control on and off. Watch stage saturation and queue size alongside client latency, completions, errors, and timeouts. Confirm that queued requests resume as saturation falls.
-
-## Prioritize requests (optional)
-
-Install the InferenceObjective CRD from the flow-control guide's [prerequisites](../flow-control/README.md#prerequisites), then adapt its [priority examples](../flow-control/README.md#use-case-1-multi-tenancy-model-as-a-service). Set each objective's `spec.poolRef.name` to this deployment's pool name and create it in `${NAMESPACE}`.
-
-Send the objective's name in the `x-llm-d-inference-objective` request header. For production traffic, follow the linked guide's instructions for assigning these headers at a trusted gateway.
+On a test deployment, compare the same workload with flow control on and off. Watch stage saturation and queue size alongside client latency, completions, errors, and timeouts. Confirm that queued requests dispatch and complete as saturation falls; a smaller queue can also mean requests timed out.
