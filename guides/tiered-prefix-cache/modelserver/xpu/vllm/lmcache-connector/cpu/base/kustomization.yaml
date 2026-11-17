@@ -2,8 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base
-  - lmcache-daemonset.yaml
-  - lmcache-service.yaml
+  - lmcache.yaml
 
 components:
   # Use the same LMCache installation for the MP server and the vLLM client.

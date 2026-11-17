@@ -66,7 +66,7 @@ Both processes set `PYTHONHASHSEED=0`.
 
 ## Memory and placement
 
-[`cpu/base/lmcache-daemonset.yaml`](cpu/base/lmcache-daemonset.yaml) configures
+The DaemonSet in [`cpu/base/lmcache.yaml`](cpu/base/lmcache.yaml) configures
 20 GiB of L1 cache per node, 256-token chunks, and LRU eviction at 80% usage
 with a 20% eviction ratio. The chunk size is a multiple of vLLM's 64-token
 block size. The CPU server preallocates L1 with `--no-l1-use-lazy`, reserving
