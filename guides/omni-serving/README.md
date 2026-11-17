@@ -15,7 +15,7 @@ This guide serves models whose output is not only text (speech, images, or both)
 The tasks fall into two shapes:
 
 - **An omni model: one checkpoint, many endpoints.** Qwen3-Omni takes text, images, audio, or video in and answers with text *and* speech from a multi-stage pipeline (thinker → talker → code2wav). One `InferencePool` fronts every OpenAI endpoint the checkpoint serves. The router's request parser understands the chat, speech, and image-generation request bodies, so a single router and pool serve all of them; when the pool shares a Kubernetes Gateway with other pools, exact-path `HTTPRoute` rules send the modality endpoints to it (see [Split endpoints across pools](#split-endpoints-across-pools-gateway-mode)).
-- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, FLUX.2-klein-4B, or Wan2.1) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas; 2 single-XPU replicas for XPU image tasks; or 1 two-XPU encode/generation pipeline for `text-to-video`.
+- **A single-endpoint generator: one model per pool.** A diffusion model (Qwen-Image, Qwen-Image-Edit, FLUX.2-klein-4B, or Wan2.1) or a dedicated TTS model answers one endpoint. Each `TASK` deploys its own pool: 3 single-GPU replicas; 2 single-XPU replicas for XPU image tasks; or 1 single-XPU aggregated pipeline for `text-to-video`.
 
 Either way the router **routes on load**.
 Diffusion models generate by iterative denoising rather than autoregressive token generation, and the Qwen3-Omni pipeline runs with prefix caching off, so prefix-cache and token-load scorers have no signal.
@@ -53,7 +53,7 @@ This guide includes configurations for the following accelerator and model serve
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM-Omni | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-Omni-30B-A3B-Instruct` | 🟡 community | 🟡 community | Served model is `TASK=omni`'s (others in the Overview table) · H100 80 GB reference · `omni`: 1 replica × 2 GPUs · `text-to-image`, `image-to-image`, `text-to-speech`: 3 replicas × 1 GPU · SGLang: `text-to-image` and `image-to-image` only |
-| Intel XPU | `xpu` | `Wan-AI/Wan2.1-T2V-1.3B-Diffusers` | 🟡 community | 🟡 community | SGLang: `text-to-image`, `image-to-image`, 2 replicas × 1 Arc Pro B60 · vLLM-Omni: `text-to-video`, Wan2.1 EG, 1 replica × 2 XPUs · DRA |
+| Intel XPU | `xpu` | `black-forest-labs/FLUX.2-klein-4B` | 🟡 community | 🟡 community | Default model is FLUX.2 for SGLang `text-to-image` and `image-to-image`, 2 replicas × 1 Arc Pro B60 · for vLLM-Omni `text-to-video`, set MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers, 1 aggregated replica × 1 XPU · DRA |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -62,11 +62,9 @@ This guide includes configurations for the following accelerator and model serve
 
 - Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), 2 Intel XPUs for the XPU image tasks (2 replicas × 1 XPU), or 2 Intel XPUs for `text-to-video` (1 replica: encode on the first XPU and generation on the second). Each XPU pod requests 64 GiB of host memory. Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
+- Ensure your cluster has enough accelerators for your configuration: 2 NVIDIA GPUs with 80 GB of HBM (e.g. H100) for `omni` (1 replica: thinker on the first GPU, talker and code2wav on the second), 3 for the other GPU tasks (3 replicas × 1 GPU), 2 Intel XPUs for the XPU image tasks (2 replicas × 1 XPU), or 1 Intel XPU for the aggregated `text-to-video` pipeline. Each XPU pod requests 64 GiB of host memory. Qwen-Image is a ~20B MMDiT plus a ~8B text encoder, about 57 GB in bf16, and fits one 80 GB GPU at full precision; Qwen3-TTS is small, so the H100 is a default there, not a requirement.
 
 - For the Intel XPU overlay, install the Intel GPU DRA driver and verify the `gpu.intel.com` `DeviceClass` is available; it requires the `resource.k8s.io/v1` API (Kubernetes 1.34+).
-
-- For `TASK=text-to-video`, make the `vllm-omni-xpu:latest` image available on every eligible node, either through a registry or by preloading it into the cluster runtime. The overlay uses `IfNotPresent` because no official published vLLM-Omni XPU image is currently referenced by this guide.
 
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
@@ -343,7 +341,7 @@ kubectl apply -n ${NAMESPACE} \
 <details>
 <summary><b>Text-to-Video</b></summary>
 
-Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllmomni`, `TASK=text-to-video`, `INFRA_PROVIDER=base`, and `MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers`. The overlay runs Wan2.1 as one vLLM-Omni encode/generation deployment on exactly 2 XPUs, using the [`wan2_2_eg.yaml`](https://github.com/vllm-project/vllm-omni/blob/main/vllm_omni/deploy/wan2_2_eg.yaml) topology. It uses a `Recreate` strategy so an update does not require four simultaneously available XPUs.
+Select `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllmomni`, `TASK=text-to-video`, `INFRA_PROVIDER=base`, and `MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers`. The overlay runs the 1.3B Wan2.1 model as one single-stage vLLM-Omni deployment on exactly 1 XPU, using the aggregated [`wan2_2.yaml`](https://github.com/vllm-project/vllm-omni/blob/main/vllm_omni/deploy/wan2_2.yaml) topology. It uses a `Recreate` strategy so an update does not require two simultaneously available XPUs.
 
 <!-- guide:deploy.modelserver.text-to-video start -->
 ```bash
@@ -546,9 +544,10 @@ kubectl run t2v-test --rm -i --restart=Never \
       -w "HTTP %{http_code}, %{size_download} bytes, %{content_type}\n" \
       -X POST "http://${IP}/v1/videos/sync" \
       -F "model=${MODEL}" \
-      -F "prompt=A fluffy orange tabby cat sitting on a wooden windowsill in warm morning sunlight, blinking slowly and gently turning its head toward the camera." \
-      -F "width=384" -F "height=384" -F "num_frames=33" \
-      -F "num_inference_steps=16" -F "guidance_scale=5.0" \
+      -F "prompt=A fixed wide camera shot of a bright red sports car racing rapidly from the far left side of the frame to the far right side, wheels spinning fast, dust billowing behind it, strong continuous motion across the entire scene." \
+      -F "negative_prompt=static image, frozen, still frame, no motion, blurry" \
+      -F "width=384" -F "height=384" -F "num_frames=49" \
+      -F "num_inference_steps=30" -F "guidance_scale=5.0" \
       -F "fps=16" -F "seed=123"
     echo "signature: $(od -An -j4 -N8 -c /tmp/wan.mp4 | tr -d " \\n")"'
 ```

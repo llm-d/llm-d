@@ -25,8 +25,8 @@ support:
       engines: {vllmomni: community, sglang: community}
     xpu:
       label: Intel XPU
-      notes: "SGLang: `text-to-image`, `image-to-image`, 2 replicas × 1 Arc Pro B60 · vLLM-Omni: `text-to-video`, Wan2.1 EG, 1 replica × 2 XPUs · DRA"
-      model: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+      notes: "Default model is FLUX.2 for SGLang `text-to-image` and `image-to-image`, 2 replicas × 1 Arc Pro B60 · for vLLM-Omni `text-to-video`, set MODEL=Wan-AI/Wan2.1-T2V-1.3B-Diffusers, 1 aggregated replica × 1 XPU · DRA"
+      model: black-forest-labs/FLUX.2-klein-4B
       providers:
         - {name: base, label: "Kubernetes (base)", engines: [vllmomni, sglang]}
       engines: {vllmomni: community, sglang: community}
@@ -239,9 +239,10 @@ verify:
                 -w "HTTP %{http_code}, %{size_download} bytes, %{content_type}\n" \
                 -X POST "http://${IP}/v1/videos/sync" \
                 -F "model=${MODEL}" \
-                -F "prompt=A fluffy orange tabby cat sitting on a wooden windowsill in warm morning sunlight, blinking slowly and gently turning its head toward the camera." \
-                -F "width=384" -F "height=384" -F "num_frames=33" \
-                -F "num_inference_steps=16" -F "guidance_scale=5.0" \
+                -F "prompt=A fixed wide camera shot of a bright red sports car racing rapidly from the far left side of the frame to the far right side, wheels spinning fast, dust billowing behind it, strong continuous motion across the entire scene." \
+                -F "negative_prompt=static image, frozen, still frame, no motion, blurry" \
+                -F "width=384" -F "height=384" -F "num_frames=49" \
+                -F "num_inference_steps=30" -F "guidance_scale=5.0" \
                 -F "fps=16" -F "seed=123"
               echo "signature: $(od -An -j4 -N8 -c /tmp/wan.mp4 | tr -d " \\n")"'
     pod_logs:
