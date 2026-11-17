@@ -1,0 +1,156 @@
+name: Apply area labels from issue body
+
+on:
+  # Later body edits do not run this workflow, so they cannot overwrite labels
+  # set during triage.
+  issues:
+    types: [opened]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  area-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      # Strips CommonMark §4.5 fenced code blocks and HTML comments so examples
+      # or hidden template instructions are not parsed as active directives.
+      STRIP_BLOCKS: |
+        s{
+          ^[ ]{0,3}(`{3,})[^`\n]* (?:\n(?:.*?\n)?[ ]{0,3}\1`*[ \t]*(?=\n|\z) | \n.*\z | \z)
+          | ^[ ]{0,3}(~{3,})[^\n]* (?:\n(?:.*?\n)?[ ]{0,3}\2~*[ \t]*(?=\n|\z) | \n.*\z | \z)
+          | ^[ ]{0,3}<!-- (?:-?>|.*?(?:-->|\z))
+          | <!-- (?:-?>|(?:(?!\n[ \t]*\n|<!--).)*?-->)
+        }{}gmsx
+    steps:
+      - name: Add area labels from issue body and form fields
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Escape percent sequences before echoing body-derived text into a
+          # ::warning:: so it cannot forge additional workflow commands.
+          esc() { local s=$1; s=${s//'%'/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}; printf '%s' "$s"; }
+
+          cleaned=$(printf '%s' "$ISSUE_BODY" | tr -d '\r' | perl -0777 -pe "$STRIP_BLOCKS")
+          current=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels -q '.labels[].name')
+
+          directives=$(
+            sed -n 's|^/area[[:space:]][[:space:]]*||p' <<< "$cleaned" | \
+              tr -s '[:space:]' '\n' | sed '/^$/d' | tr '[:upper:]' '[:lower:]' | \
+              sed 's|^area/||; s|^|area/|'
+          )
+
+          # Map .github/ISSUE_TEMPLATE/{bug,feature-request}.yml "(Feature )?Area" dropdown.
+          # Use a here-string rather than a pipe so early awk exit cannot trigger SIGPIPE (141)
+          # under bash -eo pipefail when issue bodies exceed 64 KB.
+          feature_area=$(awk '
+            /^### (Feature )?Area[[:space:]]*$/ { capture=1; next }
+            capture && /^### / { exit }
+            capture && /[^[:space:]]/ {
+              sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, "");
+              print; exit
+            }
+          ' <<< "$cleaned")
+          form_areas=""
+          case "$feature_area" in
+            "Optimized baseline"|"Inference Scheduling")
+              form_areas=$'area/router'
+              ;;
+            "Flow Control")
+              form_areas=$'area/router\narea/flowcontrol'
+              ;;
+            "Prefill/Decode Disaggregation"|"Wide Expert-Parallelism")
+              form_areas=$'area/disaggregation'
+              ;;
+            "KV Cache / Prefix Caching")
+              form_areas=$'area/kvcache'
+              ;;
+            "Autoscaling")
+              form_areas=$'area/autoscaling'
+              ;;
+            "Observability / Monitoring")
+              form_areas=$'area/observability'
+              ;;
+            "Batch / Async Inference")
+              form_areas=$'area/batch'
+              ;;
+            "Agentic Inference")
+              form_areas=$'area/agentic'
+              ;;
+            "Multimodal / Omni Serving")
+              form_areas=$'area/multimodal'
+              ;;
+            "Model Recipes")
+              form_areas=$'area/models'
+              ;;
+            "Reinforcement Learning")
+              form_areas=$'area/rl'
+              ;;
+            "Benchmarking")
+              form_areas=$'area/benchmarking'
+              ;;
+            "Container Image / Build")
+              form_areas=$'area/docker'
+              ;;
+            "Deployment / Helm Charts")
+              form_areas=$'area/infra'
+              ;;
+            "Documentation / Guides")
+              form_areas=$'area/docs\narea/guides'
+              ;;
+            "CI/CD")
+              form_areas=$'area/ci'
+              ;;
+          esac
+
+          # Map .github/ISSUE_TEMPLATE/hardware-platform-support.yml issues via
+          # rendered required headings (GitHub Issue Forms omit type: markdown blocks
+          # and drop nonexistent template labels), or via the hardware-support
+          # label when an issue is opened with it outside the form.
+          hw_areas=""
+          if { grep -q '^### Support Type[[:space:]]*$' <<< "$cleaned" && \
+               grep -q '^### Implementation Plan[[:space:]]*$' <<< "$cleaned"; } || \
+             grep -qxF -- "hardware-support" <<< "$current"; then
+            hw_areas="area/infra"
+            impl_plan=$(awk '
+              /^### Implementation Plan[[:space:]]*$/ { capture=1; next }
+              capture && /^### / { exit }
+              capture { print }
+            ' <<< "$cleaned")
+            if grep -qE '^- \[[xX]\] Documentation updates' <<< "$impl_plan"; then
+              hw_areas="${hw_areas}"$'\narea/docs'
+            fi
+            if grep -qE '^- \[[xX]\] Dockerfile changes' <<< "$impl_plan"; then
+              hw_areas="${hw_areas}"$'\narea/docker'
+            fi
+            if grep -qE '^- \[[xX]\] CI/CD integration' <<< "$impl_plan"; then
+              hw_areas="${hw_areas}"$'\narea/ci'
+            fi
+            if grep -qE '^- \[[xX]\] Well-lit path guide creation/update' <<< "$impl_plan"; then
+              hw_areas="${hw_areas}"$'\narea/guides'
+            fi
+          fi
+
+          requested=$(printf '%s\n%s\n%s\n' "$directives" "$form_areas" "$hw_areas" | sed '/^$/d' | sort -u)
+          [ -z "$requested" ] && exit 0
+
+          existing=$(gh label list --repo "$REPO" --limit 500 --json name -q '.[].name')
+
+          while IFS= read -r label; do
+            if ! grep -qxF -- "$label" <<< "$existing"; then
+              echo "::warning::Unknown label '$(esc "$label")', skipping"
+              continue
+            fi
+            if ! grep -qxF -- "$label" <<< "$current"; then
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$label" || \
+                echo "::warning::Failed to add label '$(esc "$label")'"
+            fi
+          done <<< "$requested"

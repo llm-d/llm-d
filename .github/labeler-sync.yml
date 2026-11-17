@@ -1,0 +1,20 @@
+# Synced path-based labels: added when the rule matches and removed when it no
+# longer does. Kept separate from .github/labeler.yml so docs-only is removed
+# when non-doc files are added to a PR without wiping manual area/* labels.
+# Evaluated by .github/scripts/area_labels.py (actions/labeler schema).
+#
+# NOTE: `any-glob-to-all-files` is true only when a SINGLE glob matches every
+# changed file. Collapsing the allowed doc/asset paths into one brace-expanded
+# glob lets multi-file docs PRs match while excluding .github/workflows/*.md
+# agentic workflows, OWNERS, release/README.md nightly matrices, and executable
+# scripts or manifests.
+
+docs-only:
+  - all:
+      - changed-files:
+          - any-glob-to-all-files:
+              - "{*.md,docs/**/*.{md,mdx,png,svg,gif},docs/menu-config.json,\
+                docs/well-lit-paths/guides.yaml,{proposals,guides}/**/*.{md,png,svg,gif},\
+                {helpers,scripts,docker}/**/*.md,.github/area_taxonomy.md,\
+                .github/workflows/README.md,.github/scripts/**/README.md,\
+                DCO,LICENSE,.markdownlint.json,_typos.toml}"
