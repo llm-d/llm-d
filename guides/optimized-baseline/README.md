@@ -72,13 +72,9 @@ the [MThreads SGLang overlay](./modelserver/mthreads/sglang/).
 
 The Enflame overlay is two replicas of `Qwen/Qwen3-32B` at tensor parallelism 4,
 one replica per four Enflame S60 GCUs, so an 8-GCU node holds the whole
-deployment. Cards are claimed through DRA (`gcu.gcu-dra.enflame.com`), not an
-extended resource. Set `ACCELERATOR_TYPE=enflame`, `MODEL_SERVER=vllm`, and
+deployment. Cards are claimed through DRA (`gcu.gcu-dra.enflame.com`). It is recommended to use with HAMi-DRA. Set `ACCELERATOR_TYPE=enflame`, `MODEL_SERVER=vllm`, and
 `MODEL=Qwen/Qwen3-32B`. The image is TopsRider 3.8.107 (`vllm` 0.20.2) and the
-host `enflame` driver must be the matching 1.9.2401 build. This profile is not
-covered by the default H100 `peakPrefillThroughput`; measure it on the target
-node before using the saturation gate. See
-[Enflame S60](../../docs/getting-started/accelerators.md#enflame-s60).
+host `enflame` driver must be the matching 1.9.2401 build.
 
 ## Prerequisites
 
