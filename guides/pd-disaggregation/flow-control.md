@@ -1,50 +1,47 @@
 # Flow control with prefill/decode
 
 This walkthrough configures [flow control](../flow-control/README.md) to prioritize traffic and manage load across the prefill and decode pools using a hybrid request/token detector. Request counts alone can understate pressure from large prompts; uncached prompt-token counts alone can understate pressure from long-running decode requests.
-The hybrid detector evaluates both signals, and the Endpoint Picker uses the higher of the prefill and decode saturation scores to control dispatch. [Request priorities](#configure-request-priorities) determine which queued requests receive dispatch opportunities first.
+The hybrid detector evaluates both signals, and the Endpoint Picker uses the higher of the prefill and decode saturation scores to control dispatch. [Request priorities](#3-configure-request-priorities) determine which queued requests receive dispatch opportunities first.
 
 The steps below add hybrid detection to the [P/D deployment](README.md), configure priorities, and verify saturation and queueing under both prefill-heavy and decode-heavy load.
 
-## Configure hybrid saturation detection
+## Prerequisites
 
-Choose per-endpoint request and token limits from measurements of your model, hardware, and workload. The [P/D detector comparison](https://github.com/alexagriffith/flow-control-benchmarks/tree/5297d328d37062a7ced5debe351d7293d10f34db/benchmark-data/rhaii-3.5-flow-control/pd-flow-control) used `64` requests and `80000` tokens for GPT-OSS 20B with one prefill pod and one decode pod on two H100s. Those values are benchmark-specific; measure limits for this guide's model and topology before deploying.
+Complete the [P/D guide prerequisites and environment setup](README.md#prerequisites). The deployment commands below use the same environment variables, chart version, and model servers.
 
-Edit `router.epp.pluginsCustomConfig.pd-config.yaml` in [`router/pd-disaggregation.values.yaml`](router/pd-disaggregation.values.yaml). If your accelerator values file also defines `pd-config.yaml`, edit the accelerator file: the last definition replaces the earlier configuration.
+## Installation Instructions
 
-Within `plugins`, update the existing `inflight-load-producer` entry and add the `pd-hybrid` detector below. Replace `<REQUEST_LIMIT>` and `<TOKEN_LIMIT>` with the positive integer limits you measured:
+### 1. Configure the Router
 
-```yaml
-- type: inflight-load-producer
-  parameters:
-    addEstimatedOutputTokens: false
-- name: pd-hybrid
-  type: concurrency-detector
-  parameters:
-    concurrencyMode: hybrid
-    inFlightLoadProducerName: inflight-load-producer
-    maxConcurrency: <REQUEST_LIMIT>
-    maxTokenConcurrency: <TOKEN_LIMIT>
+The [example router values](router/flow-control.values.yaml) enable flow control with a hybrid request/token detector and the shared P/D routing configuration. Copy the values file to configure your deployment:
+
+```bash
+cp ${REPO_ROOT}/guides/pd-disaggregation/router/flow-control.values.yaml ./pd-flow-control.values.yaml
+export FLOW_CONTROL_VALUES="$(pwd)/pd-flow-control.values.yaml"
 ```
+
+If your accelerator or deployment customizes `pd-config.yaml`, use the last values file that defines `pd-config.yaml` as the starting file instead. Within `router.epp.pluginsCustomConfig.pd-config.yaml`, copy `featureGates`, `flowControl`, and the `pd-hybrid` plugin from the example, and set `addEstimatedOutputTokens: false` on the existing `inflight-load-producer`. This preserves the accelerator's routing parameters; Helm replaces the complete `pd-config.yaml` string rather than merging individual plugins.
+
+In your local file, replace both placeholders with positive integer limits measured for your model, hardware, and workload:
+
+| Parameter | Placeholder | Per-endpoint limit |
+| --- | --- | --- |
+| `maxConcurrency` | `<REQUEST_LIMIT>` | In-flight requests |
+| `maxTokenConcurrency` | `<TOKEN_LIMIT>` | Uncached prompt tokens |
+
+The [P/D detector comparison](https://github.com/alexagriffith/flow-control-benchmarks/tree/5297d328d37062a7ced5debe351d7293d10f34db/benchmark-data/rhaii-3.5-flow-control/pd-flow-control) used `64` requests and `80000` tokens for GPT-OSS 20B with one prefill pod and one decode pod on two H100s. Those values are benchmark-specific; measure limits for this guide's model and topology before deploying.
 
 `addEstimatedOutputTokens: false` excludes output-token estimates from token accounting. The producer counts uncached prompt tokens, while decode request counters remain active until completion. For streaming responses, prompt-token counters are released at the first response chunk; non-streaming responses retain prompt-token accounting until completion. Both limits apply to every endpoint in this example; saturation is calculated separately for the prefill and decode pools. Calibrate with the cache behavior and response mode expected in production.
 
-Add the feature gate and detector reference at the same indentation as `apiVersion` and `kind`:
-
-```yaml
-featureGates:
-- flowControl
-flowControl:
-  saturationDetector:
-    pluginRef: pd-hybrid
-```
-
 The configuration loader adds the detector's endpoint filter to both scheduling profiles. The existing prefill and decode scorers still select workers from the eligible endpoints. The detector's default filter can fall back to all candidates when every candidate exceeds the limits; see the [concurrency detector's filtering behavior](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/flowcontrol/saturationdetector/concurrency#role-in-scheduling-the-traffic-shaper).
 
-## Deploy the configuration
+### 2. Deploy the Router
 
 To collect the stage metrics, set `MONITORING=true` and select `MONITORING_VALUES` for your platform in the [router setup](README.md#1-deploy-the-llm-d-router) before installing or upgrading.
 
-For a new deployment, continue with the [P/D guide](README.md). For an existing standalone router deployment, restore the guide's environment variables and use the original chart version, values files, and `--set` overrides. Add any extra overrides to this command:
+For a new deployment, follow the [P/D installation instructions](README.md#installation-instructions), adding `-f ${FLOW_CONTROL_VALUES}` after `${ACCELERATOR_VALUES}` in the router Helm command. Then deploy and verify the model servers as described in the P/D guide.
+
+For an existing standalone router deployment, use the original chart version, values files, and `--set` overrides, with the edited flow-control file last:
 
 ```bash
 helm upgrade ${GUIDE_NAME} ${ROUTER_STANDALONE_CHART} \
@@ -52,6 +49,7 @@ helm upgrade ${GUIDE_NAME} ${ROUTER_STANDALONE_CHART} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
   ${ACCELERATOR_VALUES} \
+  -f ${FLOW_CONTROL_VALUES} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 
@@ -65,9 +63,9 @@ kubectl logs deploy/${GUIDE_NAME}-epp -c epp -n ${NAMESPACE} \
 
 The default queue timeout is `60s`. A request that exceeds the queue timeout returns HTTP `429` when the pool has endpoints, or `503` when no endpoints are available. A shorter gateway or client timeout can end the request first.
 
-To stop queueing in the Endpoint Picker, remove the feature gate and repeat the upgrade. The hybrid detector still filters endpoints, and legacy admission can reject negative-priority requests with HTTP `429` when saturated. Restore the original `pd-config.yaml` to undo the entire configuration change.
+To stop queueing in the Endpoint Picker, remove the feature gate and repeat the upgrade. The hybrid detector still filters endpoints, and legacy admission can reject negative-priority requests with HTTP `429` when saturated. Remove `-f ${FLOW_CONTROL_VALUES}` and repeat the upgrade with the original values files to undo the entire configuration change.
 
-## Configure request priorities
+### 3. Configure Request Priorities
 
 To assign different priorities, install the InferenceObjective CRD using the P/D deployment's `ROUTER_RELEASE_URL`:
 
@@ -97,7 +95,7 @@ sum(llm_d_epp_flow_control_request_queue_duration_seconds_count{inference_pool="
 
 An increase confirms that requests were classified at the expected priority. If the expected series does not increase, check the header, objective name, namespace, and `spec.poolRef.name`. Classification alone does not demonstrate priority ordering under contention.
 
-## Verify saturation and queueing
+## Verification
 
 First complete the [P/D verification](README.md#verification) to confirm that requests use both pools and transfer KV data. Then query the metrics below in your configured Prometheus or [GKE Managed Prometheus](../../docs/operations/observability/setup.md).
 
