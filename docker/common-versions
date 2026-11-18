@@ -6,6 +6,11 @@
 # Official vLLM v0.30.0 release image.
 VLLM_XPU_BASE_IMAGE=vllm/vllm-openai-xpu:v0.30.0
 
+# Used by XPU vLLM-Omni image builds.
+VLLM_OMNI_REPOSITORY=vllm-project/vllm-omni
+VLLM_OMNI_REF=fb7ab70714a2f145d9d0e61c30b369852d1adf4e
+VLLM_OMNI_BASE_IMAGE=vllm/vllm-openai-xpu:v0.32.0
+
 # ============================================================================
 # SGLang XPU Version Configuration
 # ============================================================================
