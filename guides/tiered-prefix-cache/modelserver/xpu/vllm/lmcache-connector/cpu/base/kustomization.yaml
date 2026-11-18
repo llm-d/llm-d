@@ -4,17 +4,18 @@ resources:
   - ../../../base
   - lmcache.yaml
 
-components:
-  # Use the same LMCache installation for the MP server and the vLLM client.
-  - ../../../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
-
 replacements:
-  # The init container is added after the image component is evaluated.
+  # Reuse the image selected by the shared vLLM base for the cache and init.
   - source:
-      kind: DaemonSet
-      name: xpu-vllm-lmcache
-      fieldPath: spec.template.spec.containers.[name=lmcache].image
+      kind: Deployment
+      name: xpu-vllm-decode
+      fieldPath: spec.template.spec.containers.[name=modelserver].image
     targets:
+      - select:
+          kind: DaemonSet
+          name: xpu-vllm-lmcache
+        fieldPaths:
+          - spec.template.spec.containers.[name=lmcache].image
       - select:
           kind: Deployment
           name: xpu-vllm-decode
