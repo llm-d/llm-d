@@ -29,7 +29,7 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; local XPU checks passed; rebuilt image required; Kubernetes validation pending DiskPressure)"
+      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; local XPU checks passed; rebuilt image required; Kubernetes validation pending)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
@@ -158,6 +158,26 @@ deploy:
         # ReadWriteMany PVC for the filesystem tier, mounted at /mnt/files-storage
         envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 
+  xpu_lmcache_image:
+    - when: {ACCELERATOR_TYPE: [xpu], MODEL_SERVER: [vllm], CONNECTOR: [lmcache-connector]}
+      skip_in: [ci]
+      run: |
+        export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
+        docker build -f "${REPO_ROOT}/docker/Dockerfile.xpu" \
+          -t "${LMCACHE_MP_IMAGE}" "${REPO_ROOT}"
+
+        export MODEL_SERVER_OVERLAY="$(mktemp -d)"
+        cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        resources:
+          - "$(realpath --relative-to="${MODEL_SERVER_OVERLAY}" "${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base")"
+        images:
+          - name: ghcr.io/llm-d/llm-d-xpu
+            newName: "${LMCACHE_MP_IMAGE%:*}"
+            newTag: "${LMCACHE_MP_IMAGE##*:}"
+        EOF
+
   mooncake:
     # skip_in ci: no nightly covers MooncakeStore (see the note above deploy:).
     - when: {CONNECTOR: [mooncake-store]}
@@ -175,7 +195,7 @@ deploy:
     - when: {HOST_TYPE: [single-host]}
       run: |
         if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
-          : "${MODEL_SERVER_OVERLAY:?Set MODEL_SERVER_OVERLAY to a site overlay selecting the rebuilt LMCache 0.5.7.post1 image; see the XPU MP guide}"
+          : "${MODEL_SERVER_OVERLAY:?Set MODEL_SERVER_OVERLAY to a site overlay selecting the rebuilt LMCache 0.5.7.post1 image; see the Intel XPU LMCache MP section}"
         fi
         kubectl apply -n ${NAMESPACE} \
           -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/}"
@@ -257,7 +277,7 @@ verify:
                 -o jsonpath='{.items[*].metadata.name}'); do
               echo "== ${pod} (LMCache MP)"
               kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8080/proxy/metrics" \
-                | grep -E '^lmcache_mp_(l1_(write|read|memory_usage)|l2_(store_completed|load_completed))' || true
+                | grep -E '^lmcache_mp_(l1_(write|read|memory_usage)|l2_(store_completed|load_completed|prefetch_load_completed))' || true
             done
           fi
       - when: {MODEL_SERVER: [sglang]}
