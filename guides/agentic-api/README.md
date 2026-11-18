@@ -187,6 +187,18 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
+**(Rebellions NPU only) Wait for the model server**, which compiles the model on its first start, before the agentic-api rollout below checks it:
+
+<!-- guide:deploy.modelserver_ready[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# The first start compiles the model for the NPU before it serves
+kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
+  -l llm-d.ai/guide=agentic-api --timeout=120m
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver_ready[0] end -->
+
 ### 3. Deploy PostgreSQL
 
 <!-- guide:deploy.postgres start -->
@@ -211,27 +223,20 @@ kubectl rollout status -n ${NAMESPACE} deployment/agentic-api --timeout=120s
 
 ### 5. Wait for the Model Servers
 
-**NVIDIA GPU:**
+<!-- guide:deploy.ready start -->
+<!-- variants:start -->
+<details open data-when="ACCELERATOR_TYPE=gpu">
+<summary><b>NVIDIA GPU</b></summary>
 
-<!-- guide:deploy.ready[0] start -->
 ```bash
 # The model servers become Available once vLLM has loaded the model
 kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
   -l llm-d.ai/guide=optimized-baseline --timeout=30m
 ```
-<!-- guide:deploy.ready[0] end -->
 
-**Rebellions NPU:**
-
-<!-- guide:deploy.ready[1] start -->
-<!-- llm-d-cicd:skip start -->
-```bash
-# The first start compiles the model for the NPU before it serves
-kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
-  -l llm-d.ai/guide=agentic-api --timeout=120m
-```
-<!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.ready[1] end -->
+</details>
+<!-- variants:end -->
+<!-- guide:deploy.ready end -->
 
 ## Verification
 

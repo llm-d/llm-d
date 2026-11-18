@@ -114,6 +114,16 @@ deploy:
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
 
+  # The NPU model server compiles on first start, which outlasts the agentic-api
+  # rollout check below, so wait for it first.
+  modelserver_ready:
+    - when: {ACCELERATOR_TYPE: [npu]}
+      skip_in: [ci]
+      run: |
+        # The first start compiles the model for the NPU before it serves
+        kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
+          -l llm-d.ai/guide=agentic-api --timeout=120m
+
   postgres:
     - run: |
         kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/postgres.yaml
@@ -132,12 +142,6 @@ deploy:
         # The model servers become Available once vLLM has loaded the model
         kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
           -l llm-d.ai/guide=optimized-baseline --timeout=30m
-    - when: {ACCELERATOR_TYPE: [npu]}
-      skip_in: [ci]
-      run: |
-        # The first start compiles the model for the NPU before it serves
-        kubectl wait -n ${NAMESPACE} --for=condition=Available deployment \
-          -l llm-d.ai/guide=agentic-api --timeout=120m
 
 verify:
   endpoint:

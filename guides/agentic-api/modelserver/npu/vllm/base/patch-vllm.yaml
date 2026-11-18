@@ -19,12 +19,12 @@ spec:
       containers:
         - name: modelserver
           # vLLM runs one API server per data-parallel rank and hands rank i its own
-          # NPU; the external load balancer mode gives each rank a port from 8000
-          # upward, and the router addresses every rank as its own endpoint.
+          # NPU; the external load balancer mode gives each rank a port from --port upward.
           command: ["vllm", "serve"]
           args:
             - "MiniMaxAI/MiniMax-M2.7"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--port=8200"
             - "--data-parallel-size=4"
             - "--data-parallel-size-local=4"
             - "--data-parallel-multi-port-external-lb"
@@ -37,10 +37,15 @@ spec:
             - "--enable-auto-tool-choice"
             - "--tool-call-parser=minimax_m2"
             - "--reasoning-parser=minimax_m2"
+            # Drain in-flight requests on SIGTERM. Sized with the grace period in
+            # recipes/modelserver/components/graceful-shutdown; raise both together.
+            - "--shutdown-timeout=45"
           ports:
-            - {containerPort: 8001, name: rank1, protocol: TCP}
-            - {containerPort: 8002, name: rank2, protocol: TCP}
-            - {containerPort: 8003, name: rank3, protocol: TCP}
+            - $patch: replace
+            - {containerPort: 8200, name: modelserver, protocol: TCP}
+            - {containerPort: 8201, name: rank1, protocol: TCP}
+            - {containerPort: 8202, name: rank2, protocol: TCP}
+            - {containerPort: 8203, name: rank3, protocol: TCP}
           env:
             - name: HF_TOKEN
               valueFrom:
@@ -90,7 +95,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - 'for p in 8000 8001 8002 8003; do curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${p}/v1/models" || exit 1; done'
+                - 'for p in 8200 8201 8202 8203; do curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${p}/v1/models" || exit 1; done'
             periodSeconds: 5
             timeoutSeconds: 10
             failureThreshold: 3
