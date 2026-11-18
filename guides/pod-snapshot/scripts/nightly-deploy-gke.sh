@@ -14,11 +14,21 @@
 # from guides/pod-snapshot/guide.yaml via `scripts/guide.py emit`, the same
 # source the README is rendered from, so a guide change reaches the nightly
 # without a second edit; the script only adds a Deployment-level wait before
-# Pod 1's `kubectl wait pod -l` (see below), the CRD retry, and a pre-smoke-loop
+# Pod 1's `kubectl wait pod -l` (see below), the CRD retry and a pre-smoke-loop
 # `pods.json` snapshot. Before deploying, it empties the GCS snapshot bucket
 # (the snapshots outlive the reusable's fresh namespace) so Pod 1 always
 # performs a true cold start. It finishes with Pod 1 (cold start + snapshot)
 # and Pod 2 (restored from the snapshot) both Ready.
+#
+# The waits are blind to container failures (`kubectl wait` and `rollout
+# status` only look for Ready), so each one runs under wait_or_fail_fast, which
+# aborts as soon as a model server pod is in a state it will not recover from
+# (image pull or container start errors, a crash loop, a Failed pod) instead of
+# sitting out the 40-minute timeout. When the script exits non-zero it prints
+# the pods' describe output, the PodSnapshots and the namespace events, and
+# names any gVisor node that rebooted during the run; the reusable skips its
+# own describe step when the deploy script fails, so this is what puts the
+# failure reason in the step log.
 #
 # The threshold checks run afterwards, in the reusable's validate step:
 # e2e_validate_args: '--extra-validate pod-snapshot -- --engine <vllm|sglang>'
@@ -31,6 +41,8 @@
 #   OUTPUT_DIR       - Directory for emitted scripts and pods.json
 #                      (default: /tmp/pod-snapshot.ci)
 #   CRD_RETRY_DELAY  - Seconds between CRD apply retries (default: 10)
+#   POD_POLL_INTERVAL - Seconds between pod status checks during the waits
+#                      (default: 15)
 
 set -euo pipefail
 
@@ -55,7 +67,12 @@ GUIDE_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp/${GUIDE_NAME}.ci}"
 GCS_BUCKET="${GCS_BUCKET:-llm-d-scale-pod-snapshots-us-central1}"
 CRD_RETRY_DELAY="${CRD_RETRY_DELAY:-10}"
+POD_POLL_INTERVAL="${POD_POLL_INTERVAL:-15}"
 DEPLOYMENT="pod-snapshot-nvidia-gpu-${MODEL_SERVER}-decode"
+# The model server pods (Pod 1 and Pod 2); also what the emitted waits select.
+POD_SELECTOR="llm-d.ai/guide=${GUIDE_NAME}"
+# The model server overlays' nodeSelector.
+GVISOR_NODE_SELECTOR="sandbox.gke.io/runtime=gvisor"
 
 BUCKET_RE='^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$'
 
@@ -104,6 +121,96 @@ clear_bucket() {
   echo "  [OK] gs://${GCS_BUCKET} is empty."
 }
 
+# Prints "name=bootID" for every gVisor node. A node's bootID changes when it
+# reboots.
+node_boot_ids() {
+  kubectl get nodes -l "${GVISOR_NODE_SELECTOR}" \
+    -o jsonpath='{range .items[*]}{.metadata.name}={.status.nodeInfo.bootID}{"\n"}{end}'
+}
+
+# Names every gVisor node whose bootID differs from BOOT_IDS_BEFORE. A reboot
+# kills the node's pods, so the waits below time out and nothing in the pod
+# logs says why.
+report_rebooted_nodes() {
+  local after line
+  [[ -n "${BOOT_IDS_BEFORE}" ]] || return 0
+  after="$(node_boot_ids 2>/dev/null)" || return 0
+  while IFS= read -r line; do
+    grep -Fxq -- "${line}" <<<"${after}" \
+      || echo "ERROR: node ${line%%=*} rebooted or was replaced during this run, which kills its pods; check its serial console for a kernel panic." >&2
+  done <<<"${BOOT_IDS_BEFORE}"
+}
+
+# EXIT trap. The reusable skips its `kubectl describe pod` step when this
+# script exits non-zero, so on failure put the reason in the step log here.
+on_exit() {
+  local status=$?
+  [[ ${status} -ne 0 ]] || return 0
+  report_rebooted_nodes
+  echo "=== Namespace ${NAMESPACE} at failure (exit ${status}) ==="
+  kubectl get pods -n "${NAMESPACE}" -o wide || true
+  kubectl describe pods -l "${POD_SELECTOR}" -n "${NAMESPACE}" || true
+  kubectl get podsnapshots -n "${NAMESPACE}" -o wide || true
+  kubectl get events -n "${NAMESPACE}" --sort-by=.lastTimestamp | tail -n 40 || true
+}
+
+# Prints one line per model server pod that is in a state it will not recover
+# from; prints nothing when all is well or the status cannot be read.
+failed_pods() {
+  kubectl get pods -l "${POD_SELECTOR}" -n "${NAMESPACE}" -o json 2>/dev/null | python3 -c '
+import json, sys
+
+# Waiting reasons the kubelet never clears on its own.
+FATAL = {
+    "CrashLoopBackOff", "ErrImagePull", "ImagePullBackOff", "InvalidImageName",
+    "CreateContainerError", "CreateContainerConfigError", "StartError", "RunContainerError",
+}
+try:
+    pods = json.load(sys.stdin).get("items", [])
+except ValueError:
+    sys.exit(0)
+for pod in pods:
+    name = pod["metadata"]["name"]
+    status = pod.get("status", {})
+    if status.get("phase") == "Failed":
+        print(("%s: pod Failed: %s %s" % (name, status.get("reason", ""), status.get("message", ""))).rstrip())
+        continue
+    for c in status.get("initContainerStatuses", []) + status.get("containerStatuses", []):
+        waiting = (c.get("state") or {}).get("waiting") or {}
+        last = (c.get("lastState") or {}).get("terminated") or {}
+        # CrashLoopBackOff only says "back-off"; the cause is in the last exit.
+        last_exit = ""
+        if last:
+            last_exit = "; last exit %s (%s) %s" % (last.get("exitCode"), last.get("reason", ""), last.get("message", ""))
+        if waiting.get("reason") in FATAL:
+            print(("%s/%s: %s: %s%s" % (name, c["name"], waiting["reason"], waiting.get("message", ""), last_exit)).rstrip())
+        elif c.get("restartCount", 0) > 0:
+            # A model server that comes up once stays up: a restart is a crash.
+            print(("%s/%s: restarted %dx%s" % (name, c["name"], c["restartCount"], last_exit)).rstrip())
+'
+}
+
+# Runs a wait ("$@") in the background and, while it runs, polls the model
+# server pods; the moment one of them cannot recover, stops the wait and fails
+# with that pod's state instead of letting the wait sit out its timeout. Exits
+# with the wait's own status otherwise.
+wait_or_fail_fast() {
+  local pid failed
+  "$@" &
+  pid=$!
+  while kill -0 "${pid}" 2>/dev/null; do
+    failed="$(failed_pods)" || failed=""
+    if [[ -n "${failed}" ]]; then
+      pkill -TERM -P "${pid}" 2>/dev/null || true
+      kill -TERM "${pid}" 2>/dev/null || true
+      wait "${pid}" 2>/dev/null || true
+      die "a model server pod will not recover, stopping the wait:"$'\n'"${failed}"
+    fi
+    sleep "${POD_POLL_INTERVAL}"
+  done
+  wait "${pid}"
+}
+
 echo "=== Clearing gs://${GCS_BUCKET} so Pod 1 is a true cold start ==="
 # The reusable deletes and recreates the namespace before this script runs, so
 # there are no Deployments or PodSnapshot CRs to reset. Two things outlive a
@@ -114,6 +221,9 @@ echo "=== Clearing gs://${GCS_BUCKET} so Pod 1 is a true cold start ==="
 # restored from a stale snapshot anyway, check_thresholds.py's "Pod 1 cold
 # started" check fails the run.)
 clear_bucket
+
+BOOT_IDS_BEFORE="$(node_boot_ids)" || BOOT_IDS_BEFORE=""
+trap on_exit EXIT
 
 echo "=== Installing the GAIE InferencePool CRDs ==="
 # Run with -x so the log records the resolved URL (it comes from
@@ -158,13 +268,13 @@ emit env verify.tests.snapshot > "${SNAPSHOT_WAIT_SCRIPT}"
 # "exceeded its progress deadline" once the default progressDeadlineSeconds
 # (600s) passes without a Ready replica, and a cold start may legitimately take
 # longer (the validator allows up to 1800s end to end).
-kubectl wait --for=condition=Available "deployment/${DEPLOYMENT}" -n "${NAMESPACE}" --timeout=2400s
-bash "${SNAPSHOT_WAIT_SCRIPT}"
+wait_or_fail_fast kubectl wait --for=condition=Available "deployment/${DEPLOYMENT}" -n "${NAMESPACE}" --timeout=2400s
+wait_or_fail_fast bash "${SNAPSHOT_WAIT_SCRIPT}"
 
 echo "=== Scaling to 2 replicas and waiting for Pod 2 to restore from the snapshot ==="
 RESTORE_WAIT_SCRIPT="${OUTPUT_DIR}/wait-restore.sh"
 emit env verify.tests.restore > "${RESTORE_WAIT_SCRIPT}"
-bash "${RESTORE_WAIT_SCRIPT}"
+wait_or_fail_fast bash "${RESTORE_WAIT_SCRIPT}"
 
 echo "=== Deploy complete (emitted scripts in ${OUTPUT_DIR}) ==="
 # Snapshot the pod conditions before the reusable's 60s readiness delay and
