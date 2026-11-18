@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Verifier for the tiered-prefix-cache nightly.
+"""Post-benchmark verifier for tiered-prefix-cache.
 
 The scenario tiers vLLM's KV cache to a second layer so hot prefixes survive
-GPU eviction. The guide (in llm-d-infra/quickstart/) exercises two variants:
+GPU eviction. The guide (guides/tiered-prefix-cache/README.md) exercises two variants:
 
   - Storage offloading (VARIANT=fs): tier lives on a RWX PVC mounted at
     OFFLOAD_MOUNT. This verifier asserts the PVC is Bound and that
@@ -23,7 +23,8 @@ Metric checks (both variants):
   Both are `check_per_pod` with the default `combine=max`, so "any pod hit
   it" is enough — we don't require every replica to have been exercised.
 
-XPU LMCache MP pods are identified by `llm-d.ai/lmcache-mode=mp`.
+XPU LMCache MP pods are identified by both `llm-d.ai/accelerator-variant=xpu`
+and `llm-d.ai/lmcache-mode=mp`.
 Their offload counters are read from the node-local cache servers on port
 8080; filesystem checks inspect those servers' MP directory on the PVC.
 These checks prove stores, not retrieval after HBM eviction.
@@ -46,7 +47,7 @@ import verify_helpers as v  # noqa: E402
 OFFLOAD_MOUNT = "/mnt/files-storage"
 KV_CACHE_DIR = f"{OFFLOAD_MOUNT}/kv-cache"
 MP_KV_CACHE_DIR = f"{KV_CACHE_DIR}/mp"
-MP_CACHE_SELECTOR = (
+XPU_MP_CACHE_SELECTOR = (
     "app.kubernetes.io/name=lmcache,"
     "app.kubernetes.io/instance=tiered-prefix-cache-xpu"
 )
@@ -62,12 +63,13 @@ def is_storage_mode() -> bool:
     return os.environ.get("LLMDBENCH_CICD_OFFLOADING_TARGET", "").lower() == "fs"
 
 
-def is_lmcache_mp(namespace: str, pod: str) -> bool:
-    """Identify MP clients without depending on benchmark-specific env vars."""
+def is_xpu_lmcache_mp(namespace: str, pod: str) -> bool:
+    """Limit XPU cache-server checks to XPU MP clients using pod labels."""
     return v.kubectl([
         "get", "pod", pod, "-n", namespace, "-o",
-        r"jsonpath={.metadata.labels.llm-d\.ai/lmcache-mode}",
-    ]).strip() == "mp"
+        r'jsonpath={.metadata.labels.llm-d\.ai/accelerator-variant}{" "}'
+        r'{.metadata.labels.llm-d\.ai/lmcache-mode}',
+    ]).split() == ["xpu", "mp"]
 
 
 def prometheus_counter(text: str, name: str) -> float | None:
@@ -257,11 +259,11 @@ def main() -> int:
     if not pods:
         v.error(f"No model pods found in namespace {namespace}")
         return 1
-    if is_lmcache_mp(namespace, pods[0]):
+    if is_xpu_lmcache_mp(namespace, pods[0]):
         cache_pods = [
             name.removeprefix("pod/")
             for name in v.kubectl([
-                "get", "pod", "-n", namespace, "-l", MP_CACHE_SELECTOR, "-o", "name",
+                "get", "pod", "-n", namespace, "-l", XPU_MP_CACHE_SELECTOR, "-o", "name",
             ]).split()
         ]
         checks.extend(check_lmcache_mp_stores(namespace, cache_pods, storage_mode))
