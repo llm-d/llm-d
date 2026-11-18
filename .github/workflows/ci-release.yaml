@@ -386,13 +386,15 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Verify all expected images
+        env:
+          RELEASE_TAG: ${{ env.TAG }}
         run: |
-          TAG="${{ env.TAG }}"
+          TAG="$RELEASE_TAG"
           IMAGES=(
-            "${{ env.REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-xpu-sglang:${TAG}"
-            "${{ env.REGISTRY }}/llm-d/llm-d-rdma-tools:${TAG}"
+            "$REGISTRY/llm-d/llm-d-cpu:${TAG}"
+            "$REGISTRY/llm-d/llm-d-xpu:${TAG}"
+            "$REGISTRY/llm-d/llm-d-xpu-sglang:${TAG}"
+            "$REGISTRY/llm-d/llm-d-rdma-tools:${TAG}"
           )
 
           echo "## Release Image Verification for ${TAG}" >> $GITHUB_STEP_SUMMARY
