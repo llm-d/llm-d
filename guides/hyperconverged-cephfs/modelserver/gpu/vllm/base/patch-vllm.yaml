@@ -18,6 +18,7 @@ spec:
                 Qwen/Qwen3.6-35B-A3B \
                 --tensor-parallel-size=2 \
                 --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                --shutdown-timeout=45 \
                 --kv-transfer-config '{
                   "kv_connector": "OffloadingConnector",
                   "kv_role": "kv_both",
