@@ -15,7 +15,7 @@ ifeq ($(DEVICE), xpu)
 	DOCKERFILE ?= Dockerfile.xpu
 endif
 
-VERSION ?= v0.9.0
+VERSION ?= v1.0.0
 
 # New tag to use if you would like to use `make image-retag`
 NEW_TAG ?= sha256...
