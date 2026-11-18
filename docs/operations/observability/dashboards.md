@@ -76,3 +76,6 @@ For the metrics behind these panels, see [Model Server Metrics](./model-server-m
 1. Verify the Grafana datasource points to the correct Prometheus URL
 2. Check that metrics are flowing in Prometheus first (use the Prometheus UI)
 3. If using TLS, ensure the Grafana datasource is configured for HTTPS with the correct CA certificate
+
+If only **Scheduler Health** is empty, set **EPP scrape job** in the Failure & Saturation dashboard to a regex that matches your Prometheus `job` label. The default matches job names such as `gaie-optimized-baseline-epp` and `llm-d-epp`.
+For a setup with no `namespace` label on the EPP target, select **All** for `namespace` when the selector is populated.
