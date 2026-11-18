@@ -139,11 +139,12 @@ setup_env() {
   # OpenCost instances are installed on the same cluster.
   OPENCOST_RELEASE_NAME="opencost-${OPENCOST_NAMESPACE}"
 
-  # Create temp files and register a trap to clean them up on any exit.
+  # Create temp files and register a trap to clean them up on any exit,
+  # along with any Prometheus port-forward still running.
   OPENCOST_PRICING_JSON=$(mktemp)
   OPENCOST_VALUES_YAML=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '${OPENCOST_PRICING_JSON}' '${OPENCOST_VALUES_YAML}'" EXIT
+  trap "stop_prometheus_portforward; rm -f '${OPENCOST_PRICING_JSON}' '${OPENCOST_VALUES_YAML}'" EXIT
 }
 
 ### OPENCOST DETECTION ###
@@ -297,7 +298,7 @@ start_prometheus_portforward() {
       return 0
     fi
     sleep 1
-    (( i++ ))
+    i=$((i + 1))  # not (( i++ )): it returns 1 when i is 0, which exits under set -e
   done
   log_warn "Could not establish port-forward to Prometheus — config checks may fail."
 }
