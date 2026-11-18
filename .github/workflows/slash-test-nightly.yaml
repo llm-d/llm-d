@@ -155,7 +155,7 @@ jobs:
                   '- `cleanup=false` — keep the llm-d stack alive after the run (for debugging)',
                   '',
                   'Optional parameters (applied to `build-image` only):',
-                  '- `platforms=<list>` — platforms to build, comma-separated: cuda,xpu,sglang-xpu,all (default: `cuda`)',
+                  '- `platforms=<list>` — platforms to build, comma-separated: xpu,sglang-xpu,all (default: `xpu`)',
                   '',
                   '`/test-nightly help` shows this message; `/test-nightly list` lists the nightlies one per line;',
                   '`/test-nightly results` shows the status of every nightly triggered on this PR.',
