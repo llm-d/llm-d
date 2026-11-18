@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    spec:
+      securityContext:
+        fsGroup: 107
+        supplementalGroups:
+          - 107
+      resourceClaims:
+        - name: intel-decode-claim
+          resourceClaimTemplateName: intel-claim-template-decode
+      containers:
+        - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "stabilityai/stable-diffusion-xl-base-1.0"
+            - "--omni"
+            - "--port=8000"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=45"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+            - name: VLLM_OMNI_TARGET_DEVICE
+              value: xpu
+          resources:
+            requests:
+              cpu: "8"
+              memory: 32Gi
+            limits:
+              cpu: "16"
+              memory: 64Gi
+            claims:
+              - name: intel-decode-claim
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: torch-compile-cache
+              mountPath: /.cache
+            - name: triton-cache
+              mountPath: /.triton
+            - name: vllm-config
+              mountPath: /.config
+          startupProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+        - name: torch-compile-cache
+          emptyDir: {}
+        - name: triton-cache
+          emptyDir: {}
+        - name: vllm-config
+          emptyDir: {}
