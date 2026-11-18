@@ -1,0 +1,86 @@
+# In-cluster Hermes Fleet Driver client pod.
+#
+# Expects:
+#   - ConfigMap `hermes-fleet-driver-script` (created from scripts/hermes_fleet_driver.py)
+#   - ConfigMap `hermes-fleet-driver-config` (`LLMD_BASE_URL`, `MODEL_NAME`, `ATENET_ADDR`, `ATESPACE`)
+#   - Secret `hermes-api-key` (`HERMES_API_KEY`, >= 16 hex chars, never committed)
+#
+# Used via `kubectl exec` to wake and drive 1,000 Hermes Agent sandboxes through
+# `atenet-router` across the 3 `InferenceObjective` priority tiers, and to
+# scrape EPP Flow-Control metrics on `:9090/metrics`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hermes-fleet-driver
+  labels:
+    app: hermes-fleet-driver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-fleet-driver
+  labels:
+    app: hermes-fleet-driver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hermes-fleet-driver
+  template:
+    metadata:
+      labels:
+        app: hermes-fleet-driver
+    spec:
+      serviceAccountName: hermes-fleet-driver
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: driver
+          image: python:3.13-slim
+          command:
+            - sleep
+            - infinity
+          env:
+            - name: LLMD_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: hermes-fleet-driver-config
+                  key: LLMD_BASE_URL
+            - name: MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: hermes-fleet-driver-config
+                  key: MODEL_NAME
+            - name: ATENET_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: hermes-fleet-driver-config
+                  key: ATENET_ADDR
+            - name: ATESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: hermes-fleet-driver-config
+                  key: ATESPACE
+            - name: HERMES_KEY_FILE
+              value: /var/run/secrets/hermes/HERMES_API_KEY
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          volumeMounts:
+            - name: driver-script
+              mountPath: /opt/driver
+              readOnly: true
+            - name: hermes-key
+              mountPath: /var/run/secrets/hermes
+              readOnly: true
+      volumes:
+        - name: driver-script
+          configMap:
+            name: hermes-fleet-driver-script
+        - name: hermes-key
+          secret:
+            secretName: hermes-api-key
+            defaultMode: 0400

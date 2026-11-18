@@ -1,0 +1,43 @@
+# GKE Agent Substrate ActorTemplate ("hermes-dense") — registered via the ate API:
+#   kubectl ate create atespace agent-hermes
+#   envsubst < manifests/hermes-template.yaml.tmpl | kubectl ate create actor-template -f -
+#
+# Full memory + rootfs snapshots (`SNAPSHOT_CONTENT_SCOPE_FULL`) preserve each
+# agent's SQLite session store (`/data/.hermes`) across pause/resume cycles.
+metadata:
+  atespace: agent-hermes
+  name: hermes-dense
+workerSelector:
+  matchLabels:
+    workload: hermes
+containers:
+  - name: hermes
+    image: ${HERMES_IMAGE}
+    env:
+      - name: API_SERVER_KEY
+        value: "${HERMES_API_KEY}"
+      - name: MODEL_BASE_URL
+        value: "${LLMD_BASE_URL}"
+      - name: MODEL_NAME
+        value: "${MODEL_NAME}"
+      - name: MAX_TOKENS
+        value: "64"
+      - name: CONTEXT_LENGTH
+        value: "65536"
+    readyz:
+      httpGet:
+        path: /ready
+        port: 8081
+resources:
+  limits:
+    - name: cpu
+      quantity: "1"
+    - name: memory
+      quantity: 1Gi
+snapshotsConfig:
+  onPause: SNAPSHOT_CONTENT_SCOPE_FULL
+  onCommit: SNAPSHOT_CONTENT_SCOPE_FULL
+  storageLocation: gs://${SNAPSHOT_BUCKET}/agent-hermes/
+sandboxConfig:
+  sandboxClass: SANDBOX_CLASS_GVISOR
+  configName: gvisor-default
