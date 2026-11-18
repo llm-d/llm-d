@@ -46,6 +46,12 @@ def find_nixl_wheel_in_cache(cache_dir):
     return max(wheels)[1] if wheels else None
 
 
+def checkout_nixl_release(source_dir):
+    """Select the pinned NIXL tag without creating a branch on each build."""
+    run_command(['git', 'fetch', '--all'], cwd=source_dir)
+    run_command(['git', 'checkout', '--detach', 'tags/0.6.1'], cwd=source_dir)
+
+
 def install_system_dependencies():
     """Installs required system packages using apt-get if run as root."""
     if os.geteuid() != 0:
@@ -130,8 +136,7 @@ def build_and_install_prerequisites(args):
     if not os.path.exists(NIXL_DIR):
         run_command(['git', 'clone', NIXL_REPO_URL, NIXL_DIR])
 
-    run_command(['git', 'fetch', '--all'], cwd=NIXL_DIR)
-    run_command(['git', 'checkout', 'tags/0.6.1', '-b', 'release-0.6.1'], cwd=NIXL_DIR)
+    checkout_nixl_release(NIXL_DIR)
 
     build_env = os.environ.copy()
     build_env['PKG_CONFIG_PATH'] = os.path.join(ucx_install_path, 'lib', 'pkgconfig')
