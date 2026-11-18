@@ -128,7 +128,7 @@ The final release work involves creating a tag in the llm-d repo, which triggers
   - `quay.io/llm-d/llm-d-xpu:pr-123`
   - `quay.io/llm-d/llm-d-xpu:latest` (from the default branch)
 
-  The full list of platforms includes: `cuda`, `aws`, `cpu`, and `xpu`. See the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d) for
+  For the full list of platforms that llm-d has built and hosts, see the [llm-d packages](https://github.com/orgs/llm-d/packages?repo_name=llm-d).
    the complete list.
 
 The process involves creating a Release Candidate (RC) tag for a dry run of the release workflow, which is a method to test the process and identify necessary updates (such as removing the deprecated images build from the CI). We typically delete RC tags after testing, while the final release is drafted from a new tag using the collected release notes.
