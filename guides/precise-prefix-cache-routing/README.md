@@ -481,7 +481,7 @@ A served request only proves the stack is up. To confirm the routing mechanism t
 
 **Send 10 requests that share a ~2k-token prefix:**
 
-<!-- guide:verify.tests.shared_prefix start -->
+<!-- guide:verify.tests.shared_prefix[0] start -->
 ```bash
 # 10 requests that share a ~2k-token prefix and differ only in the last
 # sentence, 3 s apart: past the router's 2 s speculative-index TTL, so
@@ -499,7 +499,31 @@ kubectl run prefix-test --rm -i --restart=Never \
       sleep 3
     done'
 ```
-<!-- guide:verify.tests.shared_prefix end -->
+<!-- guide:verify.tests.shared_prefix[0] end -->
+
+**(Rebellions NPU only)** The runtime publishes KV-cache events for full 4096-token blocks only, so repeat the burst with a prefix longer than that:
+
+<!-- guide:verify.tests.shared_prefix[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# The NPU runtime publishes BlockStored only for full 4096-token blocks, so
+# a ~2k-token prefix never reaches the index; indexing at 512 tokens does not
+# lower that minimum. Repeat the burst with a ~6k-token prefix.
+kubectl run prefix-test-npu --rm -i --restart=Never \
+  --image=${CURL_TEST_IMAGE} \
+  --namespace="${NAMESPACE}" \
+  --env="IP=${IP}" \
+  --env="MODEL=${MODEL}" \
+  -- /bin/sh -c 'P=$(for i in $(seq 1 300); do printf "The llm-d router keeps a conversation on the server whose KV-cache events report its prefix. "; done)
+    for i in $(seq 1 10); do
+      curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+      sleep 3
+    done'
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.shared_prefix[1] end -->
 
 **Read the prefix-cache and request counters** of every model server pod:
 

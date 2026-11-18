@@ -19,14 +19,14 @@ spec:
       containers:
         - name: modelserver
           # vLLM runs one API server per data-parallel rank and hands rank i its own
-          # NPU; the external load balancer mode gives each rank a port from 8000
-          # upward, and the router addresses every rank as its own endpoint.
+          # NPU; the external load balancer mode gives each rank a port from --port upward.
           command: ["vllm", "serve"]
           args:
             - "MiniMaxAI/MiniMax-M2.7"
             # Serves /v1/*/render on the inference port for the router's token-producer.
             - "--enable-scale-out"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
+            - "--port=8200"
             - "--data-parallel-size=4"
             - "--data-parallel-size-local=4"
             - "--data-parallel-multi-port-external-lb"
@@ -39,14 +39,19 @@ spec:
             - "--enable-auto-tool-choice"
             - "--tool-call-parser=minimax_m2"
             - "--reasoning-parser=minimax_m2"
+            # Drain in-flight requests on SIGTERM. Sized with the grace period in
+            # recipes/modelserver/components/graceful-shutdown; raise both together.
+            - "--shutdown-timeout=45"
             # Every rank gets this config and adds its data-parallel rank to both ports, so
             # rank i binds 5556+i and 5560+i; the router dials the same offsets per endpoint.
             - "--kv-events-config"
             - '{"enable_kv_cache_events":true,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):8000@MiniMaxAI/MiniMax-M2.7"}'
           ports:
-            - {containerPort: 8001, name: rank1, protocol: TCP}
-            - {containerPort: 8002, name: rank2, protocol: TCP}
-            - {containerPort: 8003, name: rank3, protocol: TCP}
+            - $patch: replace
+            - {containerPort: 8200, name: modelserver, protocol: TCP}
+            - {containerPort: 8201, name: rank1, protocol: TCP}
+            - {containerPort: 8202, name: rank2, protocol: TCP}
+            - {containerPort: 8203, name: rank3, protocol: TCP}
             - {containerPort: 5556, name: kv-events, protocol: TCP}
             - {containerPort: 5557, name: kv-events-r1, protocol: TCP}
             - {containerPort: 5558, name: kv-events-r2, protocol: TCP}
@@ -114,7 +119,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - 'for p in 8000 8001 8002 8003; do curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${p}/v1/models" || exit 1; done'
+                - 'for p in 8200 8201 8202 8203; do curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${p}/v1/models" || exit 1; done'
             periodSeconds: 5
             timeoutSeconds: 10
             failureThreshold: 3

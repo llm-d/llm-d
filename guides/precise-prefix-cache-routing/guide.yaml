@@ -288,6 +288,24 @@ verify:
                   -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
                 sleep 3
               done'
+      - when: {ACCELERATOR_TYPE: [npu]}
+        skip_in: [ci]
+        run: |
+          # The NPU runtime publishes BlockStored only for full 4096-token blocks, so
+          # a ~2k-token prefix never reaches the index; indexing at 512 tokens does not
+          # lower that minimum. Repeat the burst with a ~6k-token prefix.
+          kubectl run prefix-test-npu --rm -i --restart=Never \
+            --image=${CURL_TEST_IMAGE} \
+            --namespace="${NAMESPACE}" \
+            --env="IP=${IP}" \
+            --env="MODEL=${MODEL}" \
+            -- /bin/sh -c 'P=$(for i in $(seq 1 300); do printf "The llm-d router keeps a conversation on the server whose KV-cache events report its prefix. "; done)
+              for i in $(seq 1 10); do
+                curl -sS -o /dev/null -w "request ${i}: HTTP %{http_code}\n" -X POST "http://${IP}/v1/completions" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"model\": \"${MODEL}\", \"prompt\": \"${P} Question ${i}: what is llm-d?\", \"max_tokens\": 16}"
+                sleep 3
+              done'
     pod_metrics:
       - run: |
           # Prefix-cache and request counters of every model server pod, read

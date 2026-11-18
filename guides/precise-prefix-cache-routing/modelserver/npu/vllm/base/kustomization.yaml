@@ -11,6 +11,10 @@ namePrefix: precise-prefix-cache-routing-npu-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/npu-vllm/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
+  - ../components/routing-sidecar
+  # Must follow routing-sidecar, which adds the container it resolves.
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
 
 labels:
   - pairs:
