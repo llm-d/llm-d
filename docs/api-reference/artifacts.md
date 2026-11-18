@@ -113,6 +113,7 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 | `ghcr.io/llm-d/llm-d-rocm` (deprecated) | - | AMD ROCm | RHEL UBI9 | amd64 |
 | `ghcr.io/llm-d/llm-d-xpu`               | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
 | `ghcr.io/llm-d/llm-d-xpu-sglang`        | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu` (deprecated)  | `v0.10.0` | CPU | RHEL UBI9 | amd64 |
 
 ## 4. Well-Lit Path Guides
 
