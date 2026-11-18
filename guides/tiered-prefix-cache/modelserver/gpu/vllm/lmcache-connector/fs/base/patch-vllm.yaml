@@ -33,10 +33,26 @@ spec:
               value: "{\"use_odirect\":\"True\"}"
             - name: LMCACHE_MAX_LOCAL_DISK_SIZE
               value: "1120.0"
+            # CPU tier of the in-process connector: GiB per tensor-parallel rank.
+            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
+              value: "100.0"
+            - name: PYTHONHASHSEED
+              value: "123"
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value: "/tmp/lmcache_prometheus"
+          resources:
+            limits:
+              memory: 500Gi
+            requests:
+              memory: 500Gi
           volumeMounts:
             - name: files-storage
               mountPath: /mnt/files-storage
+            - name: lmcache-prometheus-metrics
+              mountPath: /tmp/lmcache_prometheus
       volumes:
         - name: files-storage
           persistentVolumeClaim:
             claimName: llm-d-kv-cache-storage
+        - name: lmcache-prometheus-metrics
+          emptyDir: {}
