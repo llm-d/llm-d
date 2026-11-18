@@ -20,7 +20,7 @@ name: /test-nightly Slash Command
 #   cleanup=<bool>        Cleanup the llm-d stack after the run (default: true, set false for debugging)
 #
 # Optional parameters (passed to build-image nightly):
-#   platforms=<list>      Platforms to build (comma-separated: cuda,xpu,sglang-xpu,all; default: cuda)
+#   platforms=<list>      Platforms to build (comma-separated: xpu,sglang-xpu,all; default: xpu)
 #
 # Examples:
 #   /test-nightly pd-disaggregation-ibm-acc-gpu-vllm-x
