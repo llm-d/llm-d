@@ -1,20 +1,8 @@
-# Hybrid request/token example for the shared P/D router configuration.
-# Replace both limit placeholders with measured per-endpoint positive integers.
-# See ../flow-control.md before applying to an accelerator-specific configuration.
+# Hybrid request/token overlay for the shared P/D router configuration.
+# Layer after pd-disaggregation.values.yaml; replace both limit placeholders.
+# For accelerator-specific routing, follow ../flow-control.md.
 router:
-  extraServicePorts:
-    - name: http
-      port: 80
-      protocol: TCP
-      targetPort: 8081
-
   epp:
-    # Single EPP replica: the inflight-load-producer's in-flight token accounting
-    # (which the token-load-scorer and affinity filter consume) is local to each
-    # EPP process, so multiple replicas would each see only a fraction of the
-    # per-endpoint load and incorrectly gate the affinity filter.
-    replicas: 1
-    pluginsConfigFile: "pd-config.yaml"
     pluginsCustomConfig:
       pd-config.yaml: |
         apiVersion: llm-d.ai/v1
@@ -74,7 +62,3 @@ router:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
           - pluginRef: max-score-picker
-
-  modelServers:
-    matchLabels:
-      llm-d.ai/guide: "pd-disaggregation"
