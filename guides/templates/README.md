@@ -461,7 +461,8 @@ README.md: OK  (structure only — pass --yaml to resolve marker paths)
 
 On `guide.yaml`:
 
-- All top-level keys are known (`name`, `env`, `prerequisites`, `deploy`, `verify`, `benchmark`, `cleanup`, `support`)
+- All top-level keys are known (`name`, `env`, `prerequisites`, `deploy`, `verify`, `benchmark`, `cleanup`, `support`, `requirements`)
+- `requirements:`, when present, is a map whose only keys are `cluster` and `modelServer`, each a map. Their contents are validated by the tools that read them, not here
 - A `support:` matrix, when present, is consistent with the variables, `when:` filters, overlays and nightly workflows (see [Accelerators, model servers and llm-d.ai](#accelerators-model-servers-and-llm-dai))
 - No duplicate keys in any mapping — YAML silently keeps only the last value, which has already hidden one real bug
 - Every step is a map with a `run:` string
@@ -654,6 +655,10 @@ support:                        # optional — accelerator x model-server matrix
   engines: {<engine>: <label>}
   accelerators:
     <accelerator>: {label: <label>, model: <model>, notes: <one line>, providers: [<name> | {name, label, engines}], engines: {<engine>: validated|community|{status: unsupported, issue: <url>}}}
+
+requirements:                   # optional — what the guide needs before deploy
+  cluster: {…}                  # optional — contents owned by the cluster preflight check
+  modelServer: {…}              # optional — contents owned by the model-server capability check
 ```
 
 **Step shape**, valid in any step list:
