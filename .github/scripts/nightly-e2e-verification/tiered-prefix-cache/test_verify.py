@@ -202,22 +202,37 @@ class TestCheckPvcHasData(unittest.TestCase):
 
 
 class TestConnectorDispatch(unittest.TestCase):
-    def run_main(self, *, mp: bool, storage: bool):
+    def run_main(
+        self, *, mp: bool, storage: bool, accelerator: str = "xpu",
+        connector: str = "native", vllm_version: tuple[int, ...] | None = (0, 30, 0),
+    ):
         metrics = MagicMock()
         metrics.check_aggregated.return_value = verify.v.Check("Requests observed", True)
         metrics.check_per_pod.return_value = verify.v.Check("Native stores", True)
+
+        def kubectl(args, **kwargs):
+            if args[:3] == ["get", "pod", "model"]:
+                mode = "mp" if mp else ""
+                if "accelerator-variant" in args[-1]:
+                    return f"{accelerator} {mode}"
+                return mode
+            if "-l" in args:
+                return "pod/cache"
+            raise AssertionError(f"unexpected kubectl call: {args}")
+
         with (
             patch.dict(os.environ, {
                 "LLMDBENCH_CICD_NS": "ns",
                 "LLMDBENCH_CICD_OFFLOADING_TARGET": "fs" if storage else "cpu",
+                "LLMDBENCH_CICD_ACCELERATOR": accelerator,
+                "LLMDBENCH_CICD_CONNECTOR": connector,
             }, clear=True),
             patch("verify.shutil.which", return_value="/usr/bin/kubectl"),
             patch("verify.v.find_results_dirs", return_value=[Path("/results")]),
             patch("verify.v.MetricsSummary.load", return_value=metrics),
             patch("verify.v.get_model_pods", return_value=["model"]),
-            patch("verify.is_lmcache_mp", return_value=mp),
-            patch("verify.v.kubectl", return_value="pod/cache"),
-            patch("verify.v.get_vllm_version", return_value=(0, 30, 0)),
+            patch("verify.v.kubectl", side_effect=kubectl),
+            patch("verify.v.get_vllm_version", return_value=vllm_version),
             patch("verify.check_lmcache_mp_stores", return_value=[
                 verify.v.Check("MP stores", True),
             ]) as mp_stores,
@@ -225,6 +240,7 @@ class TestConnectorDispatch(unittest.TestCase):
             patch("verify.check_pvc_has_data", return_value=verify.v.Check("PVC data", True)) as pvc_data,
             patch("verify.v.verify_checks", side_effect=lambda env, metrics, checks: all(c.passed for c in checks)),
             patch("sys.stdout", io.StringIO()),
+            patch("sys.stderr", io.StringIO()),
         ):
             result = verify.main()
         return result, metrics, mp_stores, pvc_bound, pvc_data
@@ -261,6 +277,60 @@ class TestConnectorDispatch(unittest.TestCase):
         mp_stores.assert_not_called()
         pvc_bound.assert_called_once_with("ns", "model")
         pvc_data.assert_called_once_with("ns", "model")
+
+    def test_other_platform_mp_does_not_select_xpu_cache(self):
+        for accelerator in ("gpu", "amd", "tpu/v5p", "tpu/v6", "tpu/v7"):
+            with self.subTest(accelerator=accelerator):
+                result, metrics, mp_stores, _, _ = self.run_main(
+                    mp=True, storage=False, accelerator=accelerator,
+                    connector="lmcache-connector",
+                )
+                self.assertEqual(result, 0)
+                mp_stores.assert_not_called()
+                metrics.check_per_pod.assert_called_once_with(
+                    "vllm:kv_offload_store_bytes_total", "max", ">", 0.0,
+                )
+
+    def test_existing_platform_paths_preserve_metrics_and_pvc_checks(self):
+        overlays = (
+            ("gpu", "native"),
+            ("gpu", "lmcache-connector"),
+            ("gpu", "mooncake-store"),
+            ("amd", "native"),
+            ("amd", "lmcache-connector"),
+            ("xpu", "native"),
+            ("tpu/v5p", "native"),
+            ("tpu/v6", "native"),
+            ("tpu/v7", "native"),
+        )
+        for accelerator, connector in overlays:
+            for storage in (False, True):
+                for version in ((0, 23, 0), (0, 24, 0), (0, 34, 0), None):
+                    with self.subTest(
+                        accelerator=accelerator, connector=connector,
+                        storage=storage, version=version,
+                    ):
+                        result, metrics, mp_stores, pvc_bound, pvc_data = self.run_main(
+                            mp=False, storage=storage, accelerator=accelerator,
+                            connector=connector, vllm_version=version,
+                        )
+                        self.assertEqual(result, 0)
+                        mp_stores.assert_not_called()
+                        counter = (
+                            "vllm:kv_offload_total_bytes_total"
+                            if version is None or version < (0, 24, 0)
+                            else "vllm:kv_offload_store_bytes_total"
+                        )
+                        metrics.check_per_pod.assert_called_once_with(counter, "max", ">", 0.0)
+                        metrics.check_aggregated.assert_called_once_with(
+                            "vllm:num_requests_running", "count", ">", 0,
+                        )
+                        if storage:
+                            pvc_bound.assert_called_once_with("ns", "model")
+                            pvc_data.assert_called_once_with("ns", "model")
+                        else:
+                            pvc_bound.assert_not_called()
+                            pvc_data.assert_not_called()
 
 
 class TestMain(unittest.TestCase):
