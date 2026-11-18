@@ -1,0 +1,125 @@
+name: Nightly - Workload Autoscaling KEDA+EPP Queue E2E (GKE GPU)
+
+# Nightly regression test for the queue-based KEDA + EPP autoscaling path
+# (guides/workload-autoscaling/keda-epp/README.md) on the shared GKE e2e cluster,
+# H100 GPUs. GKE sibling of the AMD ROCm lane (same queue signal, same
+# scale-event validator), with Google Managed Prometheus as the metrics source:
+# the router's monitoring-gke values create a GMP PodMonitoring for the EPP and
+# KEDA queries GMP through its standalone Prometheus frontend.
+#
+# Cluster prerequisites (one-time, cluster admin): KEDA, and the GMP frontend in
+# llm-d-monitoring with Workload Identity granting it roles/monitoring.viewer --
+# see the GKE note in guides/fast-model-actuation/fast-model-actuation-keda/README.md.
+
+on:
+  schedule:
+    - cron: '0 15 * * *'  # 15:00 UTC daily (staggered from sibling GKE nightlies)
+  workflow_dispatch:
+    inputs:
+      # decode_pods, prefill_pods, harness, workload and verbose are accepted only
+      # because /test-nightly passes them to every non-WVA nightly. This lane ignores them.
+      decode_pods:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      harness:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'inference-perf'
+      workload:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'sanity_random.yaml'
+      verbose:
+        description: 'Unused on this path (accepted for /test-nightly compatibility)'
+        required: false
+        type: 'string'
+        default: 'false'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      dry_run:
+        description: 'Execute workflow in "dry-run" mode ("true", "false")'
+        required: false
+        default: 'false'
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: nightly-e2e-workload-autoscaling-keda-epp-gke-gpu
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
+    with:
+      guide_name: workload-autoscaling
+      namespace: llm-d-nightly-keda-epp-queue-gke-gpu
+      # <ROUTER_RELEASE>-epp from nightly-deploy-gke-keda-epp.sh
+      gateway_host: 'keda-epp-gke-epp'
+      # After the gateway smoke test, e2e-validate.sh hands off to
+      # e2e-validate-scale-event.sh: a concurrent burst must drive KEDA's
+      # scale-up decision (desiredReplicas -> 2) and then scale-down (-> 1).
+      e2e_validate_args: '--extra-validate scale-event'
+      custom_deploy_script: |
+        bash guides/workload-autoscaling/scripts/nightly-deploy-gke-keda-epp.sh
+      gke_cluster_name: llm-d-e2e-us-east5
+      gke_cluster_zone: us-east5
+      # One TP=2 decode replica at the ScaledObject floor; the second replica the
+      # validator asks for may stay Pending on a contended cluster (it asserts the
+      # HPA decision, not that the pod becomes Ready).
+      required_gpus: 2
+      recommended_gpus: 4
+      accelerator_type: H100
+      pod_wait_timeout: '40m'
+      pod_readiness_delay: 180
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ inputs.cleanup == 'false' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: keda-epp-queue-gke
+      badge_label: "VLLM GPU Queue"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
