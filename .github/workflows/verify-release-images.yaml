@@ -31,12 +31,20 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Verify all expected images
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          TAG="${{ inputs.tag }}"
+          TAG="$RELEASE_TAG"
+          if [[ ! "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "::error::Invalid release tag; use a valid Docker tag."
+            exit 2
+          fi
+
           IMAGES=(
-            "${{ env.PRODUCTION_REGISTRY }}/llm-d/llm-d-cpu:${TAG}"
-            "${{ env.PRODUCTION_REGISTRY }}/llm-d/llm-d-xpu:${TAG}"
-            "${{ env.PRODUCTION_REGISTRY }}/llm-d/llm-d-sglang-xpu:${TAG}"
+            "$PRODUCTION_REGISTRY/llm-d/llm-d-cpu:${TAG}"
+            "$PRODUCTION_REGISTRY/llm-d/llm-d-xpu:${TAG}"
+            "$PRODUCTION_REGISTRY/llm-d/llm-d-xpu-sglang:${TAG}"
+            "$PRODUCTION_REGISTRY/llm-d/llm-d-rdma-tools:${TAG}"
           )
 
           echo "## Release Image Verification for ${TAG}" >> $GITHUB_STEP_SUMMARY
