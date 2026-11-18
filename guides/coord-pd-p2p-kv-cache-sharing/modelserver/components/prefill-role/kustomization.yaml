@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Turns the decode Deployment into the prefill Deployment: same engine
+# configuration (so the P2P peer fingerprints match across roles and any pod
+# can pull from any other), renamed and relabeled llm-d.ai/role: prefill. The
+# ServiceAccount is dropped: the decode overlay next to this one applies the
+# same object.
+patches:
+  - target:
+      kind: ServiceAccount
+    patch: |-
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: coord-pd-p2p-kv-cache-sharing-sa
+      $patch: delete
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: coord-pd-p2p-kv-cache-sharing-prefill
+      - op: replace
+        path: /metadata/labels/llm-d.ai~1role
+        value: prefill
+      - op: replace
+        path: /spec/selector/matchLabels/llm-d.ai~1role
+        value: prefill
+      - op: replace
+        path: /spec/template/metadata/labels/llm-d.ai~1role
+        value: prefill

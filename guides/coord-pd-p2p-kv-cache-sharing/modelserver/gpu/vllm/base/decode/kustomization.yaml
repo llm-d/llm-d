@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The decode Deployment: gpt-oss-120b TP=1 with the OffloadingConnector CPU
+# tier and P2P tier, layered on the shared recipes/ modelserver base. No routing sidecar: behind
+# the Coordinator the EPP writes kv_transfer_params into the request body and
+# the Gateway forwards the body to the engine port 8200. The P2P tier and the
+# KV-events socket are pod-IP listeners. ../prefill derives the prefill
+# Deployment from this one.
+
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/default
+
+namePrefix: coord-pd-p2p-kv-cache-sharing-
+
+components:
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
+
+# Engine pin: vLLM v0.32.0 carries the OffloadingConnector P2P tier
+# (vllm#48021) and its fixes, and counts the prompt tokens served from a peer
+# (prompt_tokens_cached_by_source_total{source="p2p"}, vllm#56318), the
+# evidence this guide's Verification reads. It needs --enable-scale-out
+# (patch-vllm.yaml) for the render endpoint.
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: vllm/vllm-openai
+    newTag: v0.32.0
+
+labels:
+  - pairs:
+      llm-d.ai/model: gpt-oss-120b
+      llm-d.ai/guide: coord-pd-p2p-kv-cache-sharing
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+      llm-d.ai/engine-type: vllm
+    includeSelectors: true
+    includeTemplates: true
+
+patches:
+  # Engine port 8200, plus the P2P tier listener and the per-pod KV-event
+  # socket the router subscribes to.
+  - target:
+      kind: Deployment
+      name: decode
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8200
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: p2p
+          containerPort: 7777
+          protocol: TCP
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: kv-events
+          containerPort: 5556
+          protocol: TCP
+  - path: patch-vllm.yaml
