@@ -18,7 +18,6 @@ spec:
         app.kubernetes.io/instance: tiered-prefix-cache-xpu
         llm-d.ai/role: cache
     spec:
-      # Match the selector on the vLLM Deployment. Adapt both to your cluster.
       nodeSelector:
         intel.feature.node.kubernetes.io/gpu: "true"
       securityContext:
@@ -37,8 +36,7 @@ spec:
               if [ -n "${LMCACHE_L2_ADAPTER:-}" ]; then
                 l2_args+=(--l2-adapter "${LMCACHE_L2_ADAPTER}")
               fi
-              # An empty shm-name forces inline payloads instead of advertising
-              # a shared-memory pool that other pods cannot access.
+              # Use inline payloads because pods do not share the server's memory.
               exec lmcache server \
                 --host 0.0.0.0 \
                 --port 5555 \
@@ -61,7 +59,6 @@ spec:
           ports:
             - name: rpc
               containerPort: 5555
-            # The combined CLI serves health and /metrics here.
             - name: http
               containerPort: 8080
           resources:
@@ -96,7 +93,6 @@ kind: Service
 metadata:
   name: xpu-vllm-lmcache
 spec:
-  # A vLLM pod must connect to the server on its own node.
   internalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: lmcache

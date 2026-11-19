@@ -26,7 +26,6 @@ RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-P
 # Keep UMF available at runtime, when setvars.sh has not been sourced.
 ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
 
-# v0.5.7.post1 uses transfer-aware events for XPU MP transfers.
 ARG MAX_JOBS=8
 RUN source /opt/intel/oneapi/setvars.sh --force && \
     git clone --depth 1 https://github.com/LMCache/LMCache.git -b v0.5.7.post1 && \
