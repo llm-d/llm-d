@@ -9,8 +9,7 @@ components:
 
 labels:
   - pairs:
-      # The shared vLLM base already labels model pods with llm-d.ai/guide.
-      # Cache pods must not have it: the router uses it to find model servers.
+      # Cache pods omit llm-d.ai/guide so the router discovers only model servers.
       llm-d.ai/subguide: tiered-prefix-cache-xpu-lmcache
       llm-d.ai/model: Qwen3-8B
     includeSelectors: true

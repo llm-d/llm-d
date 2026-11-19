@@ -29,7 +29,7 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP: `Qwen/Qwen3-8B`, 1 XPU, server per node; Kubernetes validation pending)"
+      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP: `Qwen/Qwen3-8B`, 1 XPU, server per node)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
@@ -161,7 +161,6 @@ deploy:
     - when: {ACCELERATOR_TYPE: [xpu], MODEL_SERVER: [vllm], CONNECTOR: [lmcache-connector]}
       skip_in: [ci]
       run: |
-        # Replace with a published image built from docker/Dockerfile.xpu.
         export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
         export MODEL_SERVER_OVERLAY="$(mktemp -d)"
         cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
@@ -264,7 +263,6 @@ verify:
             kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
               | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
           done
-          # XPU LMCache MP exports its storage metrics on the cache servers.
           if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
             for pod in $(kubectl get pods -n ${NAMESPACE} \
                 -l app.kubernetes.io/name=lmcache,app.kubernetes.io/instance=tiered-prefix-cache-xpu \
@@ -291,7 +289,6 @@ verify:
           # Gate: the native OffloadingConnector writes every computed block to
           # the offload tier, so after the burst above the bytes stored, summed
           # over all model server pods, must be above zero.
-          # Enforce the condition for tooling that executes README bash blocks.
           if [ "${MODEL_SERVER}" = vllm ] && [ "${CONNECTOR}" = native ] && [ "${ACCELERATOR_TYPE#tpu/}" = "${ACCELERATOR_TYPE}" ]; then
             STORED=0
             for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do

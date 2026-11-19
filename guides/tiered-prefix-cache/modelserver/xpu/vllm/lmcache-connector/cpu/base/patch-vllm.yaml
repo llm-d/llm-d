@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: decode
 spec:
-  # Release the singleton model's XPU before starting its replacement.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -14,7 +13,6 @@ spec:
       labels:
         llm-d.ai/lmcache-mode: mp
     spec:
-      # Keep this in sync with the LMCache DaemonSet's node selector.
       nodeSelector:
         intel.feature.node.kubernetes.io/gpu: "true"
       containers:

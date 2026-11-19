@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` |
-| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP: `Qwen/Qwen3-8B`, 1 XPU, server per node; Kubernetes validation pending) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP: `Qwen/Qwen3-8B`, 1 XPU, server per node) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, TP=4) · SGLang: 2 replicas × 4 chips (`2x2x1`, TP=4) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 4 ranks) · `CONNECTOR=native`, `VARIANT=cpu` · nightlies run on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) · Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) · `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) · SGLang: serves `Qwen/Qwen3-32B`, 2 replicas × 4 chips (`2x2x1`, TP=8) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 8 ranks) · `CONNECTOR=native`, `VARIANT=cpu` |
@@ -275,7 +275,6 @@ Both containers need an image built from [docker/Dockerfile.xpu](../../docker/Do
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when ACCELERATOR_TYPE=xpu and MODEL_SERVER=vllm and CONNECTOR=lmcache-connector:
-# Replace with a published image built from docker/Dockerfile.xpu.
 export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
 export MODEL_SERVER_OVERLAY="$(mktemp -d)"
 cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
@@ -483,7 +482,6 @@ for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
     | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
 done
-# XPU LMCache MP exports its storage metrics on the cache servers.
 if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
   for pod in $(kubectl get pods -n ${NAMESPACE} \
       -l app.kubernetes.io/name=lmcache,app.kubernetes.io/instance=tiered-prefix-cache-xpu \
@@ -506,7 +504,6 @@ For `CONNECTOR=native` on GPU, AMD, and Intel XPU, **assert that blocks were off
 # Gate: the native OffloadingConnector writes every computed block to
 # the offload tier, so after the burst above the bytes stored, summed
 # over all model server pods, must be above zero.
-# Enforce the condition for tooling that executes README bash blocks.
 if [ "${MODEL_SERVER}" = vllm ] && [ "${CONNECTOR}" = native ] && [ "${ACCELERATOR_TYPE#tpu/}" = "${ACCELERATOR_TYPE}" ]; then
   STORED=0
   for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do

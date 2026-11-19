@@ -1,7 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Add filesystem L2 storage to the node-local MP server's CPU L1 tier.
   - ../../cpu/base
 
 patches:
