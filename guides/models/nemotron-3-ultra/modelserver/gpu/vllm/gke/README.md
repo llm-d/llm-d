@@ -63,11 +63,11 @@ gcloud container clusters get-credentials <CLUSTER_NAME> \
 kubectl create namespace <NAMESPACE>
 ```
 
-4. Grant one of the IAM roles for Cloud Storage to the `agentic-serving-gpu-vllm-sa` Kubernetes ServiceAccount created by the GKE Kustomize overlay:
+4. Grant one of the IAM roles for Cloud Storage to the `pd-disagg-vllm` Kubernetes ServiceAccount created by the GKE Kustomize overlay:
 
 ```bash
 gcloud storage buckets add-iam-policy-binding gs://llm-models \
-    --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/agentic-serving-gpu-vllm-sa" \
+    --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/pd-disagg-vllm" \
     --role "<ROLE_NAME>"
 ```
 

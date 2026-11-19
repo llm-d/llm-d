@@ -16,8 +16,6 @@ spec:
                 gke-gcsfuse/cpu-limit: "0"
                 gke-gcsfuse/ephemeral-storage-limit: "0"
             spec:
-              # Attach GKE service account linked to GCP IAM storage permissions
-              serviceAccountName: agentic-serving-gpu-vllm-sa
               containers:
                 - name: modelserver
                   command: ["vllm", "serve"]
