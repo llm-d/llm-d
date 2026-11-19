@@ -266,6 +266,20 @@ verify:
           echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
           awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
             || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
+    lmcache_mp:
+      # skip_in ci: keyed on CONNECTOR, so it renders as a plain fence that the
+      # README-parsing nightlies would run on every lane (see the note above deploy:).
+      - when: {ACCELERATOR_TYPE: [gpu], MODEL_SERVER: [vllm], CONNECTOR: [lmcache-connector], VARIANT: [cpu]}
+        skip_in: [ci]
+        run: |
+          # Counters of the LMCache MP server of every model server pod. The
+          # server listens on 127.0.0.1 inside the pod, so read them with
+          # kubectl exec instead of the API server proxy.
+          for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+            echo "== ${pod}"
+            kubectl exec -n ${NAMESPACE} ${pod} -c modelserver -- curl -s http://127.0.0.1:8080/metrics \
+              | grep -E '^lmcache_mp_(l1_(write|evicted)_chunks_total|l1_(memory_usage_bytes|usage_ratio)|num_finished_(stores|retrieves)_total|num_chunks_loaded_total)' || true
+          done
     shared_tier:
       - when: {MODEL_SERVER: [vllm], VARIANT: [fs], CONNECTOR: [native]}
         run: |

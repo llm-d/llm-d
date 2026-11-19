@@ -20,10 +20,10 @@ The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas 
 | `CONNECTOR` | Implementation | `VARIANT` | Model servers and accelerators |
 | --- | --- | --- | --- |
 | `native` (recommended) | vLLM [`OffloadingConnector`](https://vllm-project.github.io/2026/01/08/kv-offloading-connector.html) (`fs` adds a filesystem tier through `TieringOffloadingSpec`); SGLang HiCache; the vLLM TPU offload connector | `cpu`, `fs` (TPU v7: `cpu`, `fs`; TPU v6/v5p: `cpu`) | vLLM on NVIDIA GPU, AMD GPU, Intel XPU, Google TPU; SGLang on NVIDIA GPU, Google TPU v7 |
-| `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
+| `lmcache-connector` | [LMCache](https://lmcache.ai): on NVIDIA GPU with `VARIANT=cpu` in [multiprocess mode](#lmcache-multiprocess-mode) (one LMCache server per pod), in-process elsewhere | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
 | `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
 
-Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size` (GB per tensor-parallel rank): 200 on NVIDIA GPU (TP=2), 32 on TPU v7 (TP=8). LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank).
+Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size` (GB per tensor-parallel rank): 200 on NVIDIA GPU (TP=2), 32 on TPU v7 (TP=8). In-process LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank); LMCache in multiprocess mode uses `--l1-size-gb` (GiB for the whole pod).
 vLLM keeps its CPU tier in `/dev/shm`, so the tier counts toward the pod's memory limit. When you change the tier size, change the pod's memory request and limit, and the router's `lruCapacityPerServer` (see the note in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
 
 For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md).
@@ -149,7 +149,8 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 > | NVIDIA vLLM `native` (default) | 300 GiB | 19200 |
 > | NVIDIA vLLM `native`, `VARIANT=fs` | 100 GiB | 6400 |
 > | AMD or Intel XPU vLLM `native` | 100 GiB | 6400 |
-> | NVIDIA or AMD vLLM `lmcache-connector` | 100 GiB × 2 ranks | 12800 |
+> | NVIDIA vLLM `lmcache-connector` (multiprocess mode) | 250 GiB, of which 200 GiB hold blocks before eviction starts | 12800 |
+> | AMD vLLM `lmcache-connector`; NVIDIA vLLM `lmcache-connector`, `VARIANT=fs` (in-process) | 100 GiB × 2 ranks | 12800 |
 > | NVIDIA SGLang `native` (HiCache) | 200 GB × 2 ranks | 23800 |
 > | TPU v5p SGLang `native` (HiCache; fp8 KV) | 32 GB × 4 ranks | 15250 |
 > | TPU v7 SGLang `native` (HiCache; fp8 KV) | 32 GB × 8 ranks | 15250 |
@@ -277,6 +278,28 @@ kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/mooncake
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.mooncake end -->
+
+#### LMCache multiprocess mode
+
+With `ACCELERATOR_TYPE=gpu`, `CONNECTOR=lmcache-connector` and `VARIANT=cpu`, LMCache runs in [multiprocess (MP) mode](https://docs.lmcache.ai/mp/index.html): vLLM uses `LMCacheMPConnector`, and the CPU tier lives in a separate `lmcache server` process instead of inside each vLLM worker. The AMD and Intel XPU overlays and `VARIANT=fs` still run LMCache in-process (`LMCacheConnectorV1`); LMCache has removed that mode from its development branch, and moving the remaining overlays is tracked in [#3011](https://github.com/llm-d/llm-d/issues/3011).
+
+- **One MP server per pod, in the model server container.** The container command is [`launch-with-lmcache-mp.sh`](./modelserver/gpu/vllm/lmcache-connector/cpu/base/launch-with-lmcache-mp.sh): it starts `lmcache server` and `vllm serve`, and ends the container as soon as either of them exits. The kubelet then restarts both, so a running container always has its cache server.
+  The MP server copies blocks between its memory and the engine's GPU tensors, so it needs the engine's GPUs. A second container does not get them through `nvidia.com/gpu`: a request of its own is given other GPUs, and without one it sees no GPU or, depending on how the NVIDIA runtime is set up, every GPU of the node. Nothing is shared between replicas, and a container restart empties the CPU tier.
+- **Ports.** The MP server listens on `127.0.0.1` only: port 5555 for requests from vLLM (`lmcache.mp.port` in `--kv-transfer-config`) and port 8080 for HTTP (`/healthcheck`, `/status`, `/metrics`). Neither port has authentication and the HTTP API can clear the cache, so they are not exposed outside the pod.
+- **Readiness.** The probes are the ones of the other overlays and query vLLM. vLLM does not serve before its connector has reached the MP server, and it fails to start if the server never answers. A block that cannot be loaded from the CPU tier is recomputed (`kv_load_failure_policy: recompute`).
+- **Capacity.** `--l1-size-gb` in `LMCACHE_MP_SERVER_ARGS` is the CPU tier of the whole pod in GiB, shared by all tensor-parallel ranks, where in-process LMCache takes `LMCACHE_MAX_LOCAL_CPU_SIZE` per rank. The MP server starts evicting when 80% of the tier is in use (`--eviction-trigger-watermark`) and then drops the least recently used 20% of the chunks (`--eviction-ratio`). The overlay sets 250 GiB so that the tier holds 200 GiB of blocks before it evicts, as the in-process configuration did with 100 GiB on each of 2 ranks:
+
+  | | In-process (2 ranks) | Multiprocess |
+  | --- | --- | --- |
+  | Setting | `LMCACHE_MAX_LOCAL_CPU_SIZE=100.0` | `--l1-size-gb 250` |
+  | Host memory allocated for the tier | 2 × 100 GiB = 200 GiB | 250 GiB |
+  | Blocks held when eviction starts | 200 GiB | 250 GiB × 0.8 = 200 GiB |
+  | Blocks held after an eviction pass | 200 GiB | 200 GiB × 0.8 = 160 GiB |
+  | `lruCapacityPerServer` (16 MiB per router block) | 12800 | 200 GiB / 16 MiB = 12800 |
+
+  The MP server pins the whole tier within a few minutes of starting, whether or not it holds blocks, so the pod uses `--l1-size-gb` plus what vLLM and the MP server need themselves (the MP server about 1 GiB); the 500Gi memory request and limit leave 250 GiB for that. When you change `--l1-size-gb`, change the memory request and limit and the router's `lruCapacityPerServer` (`--l1-size-gb` × 0.8 / 16 MiB for Qwen3-32B) with it.
+  `lruCapacityPerServer` describes the tier when eviction starts; after an eviction pass the tier holds 20% less (10240 blocks here), so lower the value if the router's CPU index runs ahead of what the model servers report (see [Common failure modes](#common-failure-modes)).
+- **Other server flags.** `--max-workers` is the number of transfer threads of the MP server: keep it equal to `--tensor-parallel-size`. Keep `--worker-reap-timeout-seconds 0` too. By default the MP server drops the registration of an engine worker it has not heard from, a worker is silent until its first store or load, and vLLM does not register again: a replica left idle for an hour after it started would store nothing until its container restarts.
 
 #### Model servers
 
@@ -442,7 +465,7 @@ done
 ```
 <!-- guide:verify.tests.offload_metrics[0] end -->
 
-With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total` (and `lmcache:local_cache_usage` for LMCache).
+With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total` (and `lmcache:local_cache_usage` for in-process LMCache).
 
 For `CONNECTOR=native` on GPU, AMD, and Intel XPU, **assert that blocks were offloaded**; the step fails if the stored bytes are still zero:
 
@@ -462,6 +485,26 @@ awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
   || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
 ```
 <!-- guide:verify.tests.offload_gate end -->
+
+For `CONNECTOR=lmcache-connector` on NVIDIA GPU with `VARIANT=cpu` ([LMCache multiprocess mode](#lmcache-multiprocess-mode)), the LMCache MP server inside each pod keeps the store and load counters. **Read them with `kubectl exec`**:
+
+<!-- guide:verify.tests.lmcache_mp start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when ACCELERATOR_TYPE=gpu and MODEL_SERVER=vllm and CONNECTOR=lmcache-connector and VARIANT=cpu:
+# Counters of the LMCache MP server of every model server pod. The
+# server listens on 127.0.0.1 inside the pod, so read them with
+# kubectl exec instead of the API server proxy.
+for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+  echo "== ${pod}"
+  kubectl exec -n ${NAMESPACE} ${pod} -c modelserver -- curl -s http://127.0.0.1:8080/metrics \
+    | grep -E '^lmcache_mp_(l1_(write|evicted)_chunks_total|l1_(memory_usage_bytes|usage_ratio)|num_finished_(stores|retrieves)_total|num_chunks_loaded_total)' || true
+done
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.lmcache_mp end -->
+
+After the burst, `lmcache_mp_l1_write_chunks_total` counts the chunks written to the CPU tier (one per 256 tokens and tensor-parallel rank) and `lmcache_mp_l1_memory_usage_bytes` the bytes they occupy. `lmcache_mp_num_finished_retrieves_total` and `lmcache_mp_num_chunks_loaded_total` grow when a prefix that was evicted from HBM is requested again and loaded back from CPU RAM; `vllm:external_prefix_cache_hits_total` on the model server counts those tokens.
 
 </details>
 <details>
@@ -540,7 +583,8 @@ Offloading only pays off when blocks evicted from HBM are loaded back later inst
 | Router prefix index by tier (`llm_d_epp_prefix_indexer_size`, `llm_d_epp_prefix_indexer_hit_ratio`, split by `plugin_name`) | What the router believes each tier holds. The size gauge is the total across pods, so a full CPU index reads about pods × `lruCapacityPerServer` |
 | TTFT (`vllm:time_to_first_token_seconds`) | The user-facing payoff of this path. Compare against an HBM-only run at the same load before attributing a change to offloading |
 
-vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang:hicache_host_used_tokens` / `sglang:hicache_host_total_tokens`) and attributes hits by tier with `sglang:cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
+vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang:hicache_host_used_tokens` / `sglang:hicache_host_total_tokens`) and attributes hits by tier with `sglang:cached_tokens_total{cache_source="host"}`. In-process LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage` on the model server.
+LMCache in multiprocess mode reports occupancy as `lmcache_mp_l1_usage_ratio` and `lmcache_mp_l1_memory_usage_bytes` on the MP server's HTTP port, which listens on 127.0.0.1 inside the pod and is therefore not scraped by the model server `PodMonitor` (see [Verify KV-cache offloading](#3-verify-kv-cache-offloading)).
 
 ### Common failure modes
 

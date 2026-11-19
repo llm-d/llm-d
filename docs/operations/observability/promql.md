@@ -86,9 +86,9 @@ Queries for the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/
 | **EPP prefix hit ratio P90 by tier** | `histogram_quantile(0.90, sum by(le, plugin_name) (rate(llm_d_epp_prefix_indexer_hit_ratio_bucket[5m])))` |
 | **Host tier usage (SGLang HiCache)** | `sum by(pod) (sglang:hicache_host_used_tokens) / sum by(pod) (sglang:hicache_host_total_tokens)` |
 | **Share of prompt tokens served from host tier (SGLang HiCache)** | `sum(rate(sglang:cached_tokens_total{cache_source="host"}[5m])) / sum(rate(sglang:prompt_tokens_total[5m]))` |
-| **Retrieve hit rate (LMCache)** | `avg by(pod) (lmcache:retrieve_hit_rate)` |
+| **Retrieve hit rate (in-process LMCache)** | `avg by(pod) (lmcache:retrieve_hit_rate)` |
 
-`vllm:external_prefix_cache_hits_total` counts tokens the connector reports as available at scheduling time, before the load completes. `vllm:kv_offload_load_bytes_total` counts bytes actually loaded back to the GPU.
+`vllm:external_prefix_cache_hits_total` counts tokens the connector reports as available at scheduling time, before the load completes. `vllm:kv_offload_load_bytes_total` counts bytes actually loaded back to the GPU. LMCache in multiprocess mode exports no `lmcache:*` series on the model server: use the offload tier hit rate above, and see the [guide](../../../guides/tiered-prefix-cache/README.md#lmcache-multiprocess-mode) for the counters of the LMCache server.
 
 ### Prefill/Decode Disaggregation
 
