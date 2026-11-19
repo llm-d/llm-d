@@ -43,6 +43,13 @@ The configuration loader adds the detector's endpoint filter to both scheduling 
 
 ### 3. Deploy the Router
 
+Install the InferenceObjective CRD before upgrading the router. The Endpoint Picker discovers this API at startup and needs the objective watcher to resolve request priorities. Use the P/D deployment's `ROUTER_RELEASE_URL`:
+
+```bash
+kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
+kubectl wait --for=condition=Established crd/inferenceobjectives.llm-d.ai --timeout=60s
+```
+
 Upgrade the standalone router using the original chart version, values files, and `--set` overrides, with the edited flow-control file last:
 
 ```bash
@@ -69,12 +76,6 @@ To stop queueing in the Endpoint Picker, remove the feature gate and repeat the 
 
 ### 4. Configure Request Priorities
 
-To assign different priorities, install the InferenceObjective CRD using the P/D deployment's `ROUTER_RELEASE_URL`:
-
-```bash
-kubectl apply -f https://github.com/llm-d/llm-d-router/${ROUTER_RELEASE_URL}/manifests.yaml
-```
-
 Copy the [example objectives](../flow-control/objectives.yaml) to a file you can edit:
 
 ```bash
@@ -89,10 +90,11 @@ kubectl apply -f ./pd-objectives.yaml -n ${NAMESPACE}
 
 Send the objective's name in the `x-llm-d-inference-objective` request header. For production traffic, follow the flow-control guide's [client integration instructions](../flow-control/README.md#2-client-integration) to assign these headers at a trusted gateway.
 
-After sending requests with the objective header, compare the following counter in Prometheus before and after the requests. Replace `<pool-name>` with the value of `${GUIDE_NAME}` and `<priority>` with the objective's priority:
+On a test deployment, use a non-default priority with no other traffic at that priority. Compare the following counter in Prometheus before and after sending requests with the objective header.
+Select the Endpoint Picker's namespace and pod using your collector's target labels (`namespace` and `pod` below). Replace `<pool-name>` with `${GUIDE_NAME}`, `<priority>` with the objective's priority, and the target placeholders with the deployment's values. In a collector spanning clusters, also select the deployment's cluster. Repeat the check if the Endpoint Picker pod restarts.
 
 ```promql
-sum(llm_d_epp_flow_control_request_queue_duration_seconds_count{inference_pool="<pool-name>", priority="<priority>"})
+sum(llm_d_epp_flow_control_request_queue_duration_seconds_count{namespace="<namespace>", pod="<endpoint-picker-pod>", inference_pool="<pool-name>", priority="<priority>"})
 ```
 
 An increase confirms that requests were classified at the expected priority. If the expected series does not increase, check the header, objective name, namespace, and `spec.poolRef.name`. Classification alone does not demonstrate priority ordering under contention.
@@ -110,7 +112,8 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 
 The GKE monitoring values keep metrics authentication enabled; use the configured collector for GKE.
 
-- `llm_d_epp_flow_control_pool_saturation` exposes `prefill`, `decode`, and `effective` stage values. For each endpoint, the hybrid detector takes the higher of the request-count ratio and token-count ratio, then averages endpoint scores within each stage. Pending dispatch reservations account for requests, not tokens, so bursts of large prompts can push the token ratio above `1.0`. The `effective` score is the higher stage value. With the default usage-limit policy, dispatch pauses at `1.0` or above for every priority.
+- `llm_d_epp_flow_control_pool_saturation` exposes `prefill`, `decode`, and `effective` stage values. For each endpoint, the hybrid detector takes the higher of the request-count ratio and token-count ratio, then averages endpoint scores within each stage. Pending request reservations can raise the stage score before in-flight counters update. Tokens are not reserved, so bursts of large prompts can push the token ratio above `1.0`.
+  The `effective` score is the higher stage value. With the default usage-limit policy, dispatch pauses at `1.0` or above for every priority.
 - `llm_d_epp_flow_control_queue_size` counts requests waiting in the Endpoint Picker, separate from model-server queues. Per-flow series appear after traffic creates a flow.
 
 The `llm_d_epp_inflight_requests` and `llm_d_epp_inflight_tokens` metrics expose the two detector inputs. For each endpoint and namespace, sum the series with `producer_name="inflight-load-producer"` across `fairness_id` and `priority`. Divide request counts by your `maxConcurrency` and token counts by your `maxTokenConcurrency` to compare the two ratios. Match each `endpoint_name` to a pod in the same namespace, then read the pod's `llm-d.ai/role` label to identify the stage.
