@@ -33,17 +33,6 @@ spec:
           args:
             - |
               set -euo pipefail
-              python3 - <<'PY'
-              from importlib.metadata import version
-
-              installed = version("lmcache")
-              if installed != "0.5.7.post1":
-                  raise RuntimeError(
-                      f"XPU MP requires LMCache 0.5.7.post1, found {installed}. "
-                      "Build docker/Dockerfile.xpu and select the rebuilt image "
-                      "in a site overlay for the model, cache and init containers."
-                  )
-              PY
               l2_args=()
               if [ -n "${LMCACHE_L2_ADAPTER:-}" ]; then
                 l2_args+=(--l2-adapter "${LMCACHE_L2_ADAPTER}")
