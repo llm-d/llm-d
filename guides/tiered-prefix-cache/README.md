@@ -269,29 +269,9 @@ Both overlays use the [LMCache llm-d MP integration](https://docs.lmcache.ai/pro
 
 Match the model and cache node selectors to your Intel nodes, and ensure a ready cache server on each model node. The DaemonSet reserves its CPU pool even on selected nodes without model pods.
 
-Both containers need an image built from [docker/Dockerfile.xpu](../../docker/Dockerfile.xpu) with LMCache 0.5.7.post1; vLLM still needs LMCache's client connector and XPU transfer extension in MP mode. The default `ghcr.io/llm-d/llm-d-xpu:v1.0.0` contains LMCache 0.5.0. Until the default image is updated, select a published image available to your nodes through this site overlay, which replaces both container images:
+Both containers need an image built from [docker/Dockerfile.xpu](../../docker/Dockerfile.xpu) with LMCache 0.5.7.post1; vLLM still needs LMCache's client connector and XPU transfer extension in MP mode. Select the published image through `newName` and `newTag` in the [shared XPU image component](../recipes/modelserver/components/images/xpu-vllm/llm-d/kustomization.yaml), which sets both container images.
 
-<!-- guide:deploy.xpu_lmcache_image start -->
-<!-- llm-d-cicd:skip start -->
-```bash
-# only when ACCELERATOR_TYPE=xpu and MODEL_SERVER=vllm and CONNECTOR=lmcache-connector:
-export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
-export MODEL_SERVER_OVERLAY="$(mktemp -d)"
-cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - "$(realpath --relative-to="${MODEL_SERVER_OVERLAY}" "${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base")"
-images:
-  - name: ghcr.io/llm-d/llm-d-xpu
-    newName: "${LMCACHE_MP_IMAGE%:*}"
-    newTag: "${LMCACHE_MP_IMAGE##*:}"
-EOF
-```
-<!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.xpu_lmcache_image end -->
-
-The deployment and cleanup steps below use `MODEL_SERVER_OVERLAY`. After changing cache-server arguments or images, or switching tiers, wait for `daemonset/xpu-vllm-lmcache` to finish its rollout, then restart `deployment/xpu-vllm-decode` to reconnect clients. Cache-server restarts clear the CPU pool.
+After changing cache-server arguments or images, or switching tiers, wait for `daemonset/xpu-vllm-lmcache` to finish its rollout, then restart `deployment/xpu-vllm-decode` to reconnect clients. Cache-server restarts clear the CPU pool.
 
 For `VARIANT=fs`, the [filesystem patch](./modelserver/xpu/vllm/lmcache-connector/fs/base/patch-lmcache.yaml) mounts `llm-d-kv-cache-storage` on the cache servers at `/mnt/files-storage`, using `/mnt/files-storage/kv-cache/mp` for MP files. Legacy cache files are not migrated. Direct I/O is enabled, so the filesystem must support it. The 100 GiB LRU limit tracks files written by each server process; it does not cap total PVC usage, which needs storage-level capacity management.
 
@@ -324,7 +304,7 @@ kubectl apply -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/mooncake
 ```bash
 # only when HOST_TYPE=single-host:
 kubectl apply -n ${NAMESPACE} \
-  -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/}"
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
@@ -622,7 +602,7 @@ To remove the deployed components:
 <!-- guide:cleanup.modelserver start -->
 ```bash
 # only when HOST_TYPE=single-host:
-kubectl delete -n ${NAMESPACE} -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}}"
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
