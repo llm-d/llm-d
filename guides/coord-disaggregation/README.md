@@ -548,11 +548,13 @@ an SSL-Bump-configured Squid), then trust its CA in the Coordinator with
 [`multimedia-downloader/patch-coordinator-ca.yaml`](multimedia-downloader/patch-coordinator-ca.yaml).
 This requires the Coordinator from step 3 to already be deployed:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 kubectl patch deployment llm-d-coordinator -n ${NAMESPACE} \
     --type=strategic --patch-file ${REPO_ROOT}/guides/${GUIDE_NAME}/multimedia-downloader/patch-coordinator-ca.yaml
 kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 Without this step, `replace-media-urls` still works — it just fetches media directly
 instead of through a cache.
