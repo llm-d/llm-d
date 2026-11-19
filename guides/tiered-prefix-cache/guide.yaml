@@ -29,7 +29,7 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP serves `Qwen/Qwen3-8B` on 1 XPU with a server per node; local XPU checks passed; rebuilt image required; Kubernetes validation pending)"
+      notes: "Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP: `Qwen/Qwen3-8B`, 1 XPU, server per node; Kubernetes validation pending)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
@@ -86,7 +86,6 @@ env:
     INFRA_PROVIDER: {default: base, values: [base, gke, amd-ci]}
     HOST_TYPE: {default: single-host, values: [single-host, multi-host], comment: "multi-host: ACCELERATOR_TYPE=tpu/v7, MODEL_SERVER=vllm and VARIANT=cpu only"}
     STORAGE_CLASS: {default: "", comment: "VARIANT=fs only: StorageClass of the shared PVC, empty for the cluster default"}
-    MODEL_SERVER_OVERLAY: {default: "", comment: "optional site overlay; required for xpu + lmcache-connector to select the rebuilt LMCache 0.5.7.post1 image"}
 
     # ACCELERATOR_TYPE=xpu + CONNECTOR=lmcache-connector serves Qwen/Qwen3-8B,
     # and ACCELERATOR_TYPE=tpu/v7 serves Qwen/Qwen3.5-397B-A17B-FP8.
@@ -162,10 +161,8 @@ deploy:
     - when: {ACCELERATOR_TYPE: [xpu], MODEL_SERVER: [vllm], CONNECTOR: [lmcache-connector]}
       skip_in: [ci]
       run: |
+        # Replace with a published image built from docker/Dockerfile.xpu.
         export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
-        docker build -f "${REPO_ROOT}/docker/Dockerfile.xpu" \
-          -t "${LMCACHE_MP_IMAGE}" "${REPO_ROOT}"
-
         export MODEL_SERVER_OVERLAY="$(mktemp -d)"
         cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
         apiVersion: kustomize.config.k8s.io/v1beta1
@@ -194,9 +191,6 @@ deploy:
   modelserver:
     - when: {HOST_TYPE: [single-host]}
       run: |
-        if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
-          : "${MODEL_SERVER_OVERLAY:?Set MODEL_SERVER_OVERLAY to a site overlay selecting the rebuilt LMCache 0.5.7.post1 image; see the Intel XPU LMCache MP section}"
-        fi
         kubectl apply -n ${NAMESPACE} \
           -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/}"
     # skip_in ci: no nightly covers TPU multi-host (see the note above deploy:).
@@ -297,9 +291,8 @@ verify:
           # Gate: the native OffloadingConnector writes every computed block to
           # the offload tier, so after the burst above the bytes stored, summed
           # over all model server pods, must be above zero.
-          # The README-parsing nightlies do not interpret the "only when"
-          # comment, so also guard against running the native gate for LMCache.
-          if [ "${CONNECTOR}" = native ] && [ "${ACCELERATOR_TYPE#tpu/}" = "${ACCELERATOR_TYPE}" ]; then
+          # Enforce the condition for tooling that executes README bash blocks.
+          if [ "${MODEL_SERVER}" = vllm ] && [ "${CONNECTOR}" = native ] && [ "${ACCELERATOR_TYPE#tpu/}" = "${ACCELERATOR_TYPE}" ]; then
             STORED=0
             for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
               STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
