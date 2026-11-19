@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "SGLANG TPU",
-  "message": "cancelled",
-  "color": "lightgrey"
+  "message": "passing",
+  "color": "brightgreen"
 }
