@@ -14,10 +14,13 @@ patches:
           spec:
             containers:
               - name: modelserver
-                # Run the base's `vllm serve` args with the model ($1, a Hub ID)
-                # swapped for its copy on the node-local hostPath.
+                # Keep the base's launcher (it starts the LMCache MP server) and
+                # have it run the base's `vllm serve` args with the model ($1, a
+                # Hub ID) swapped for its copy on the node-local hostPath.
                 # --served-model-name keeps the API model name unchanged.
                 command:
+                  - /bin/bash
+                  - /etc/lmcache-mp/launch-with-lmcache-mp.sh
                   - /bin/bash
                   - -c
                   - exec vllm serve "/model-cache/models/$1" --served-model-name "$1" "${@:2}"

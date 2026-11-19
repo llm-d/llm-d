@@ -7,12 +7,18 @@ spec:
     spec:
       containers:
         - name: modelserver
-
+          # LMCache multiprocess (MP) mode: one LMCache MP server per pod, started
+          # next to vLLM in this container by the launcher. vLLM connects to it
+          # through LMCacheMPConnector on 127.0.0.1.
+          command: ["/bin/bash", "/etc/lmcache-mp/launch-with-lmcache-mp.sh", "vllm", "serve"]
           args:
             - "Qwen/Qwen3-32B"
             - "--tensor-parallel-size=2"
             - "--kv-transfer-config"
-            - '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}'
+            # kv_load_failure_policy=recompute: a block that cannot be loaded from
+            # the CPU tier is recomputed; vLLM's default is to fail the request.
+            # lmcache.mp.port must match LMCACHE_MP_PORT of the launcher (5555).
+            - '{"kv_connector":"LMCacheMPConnector","kv_role":"kv_both","kv_load_failure_policy":"recompute","kv_connector_extra_config":{"lmcache.mp.host":"tcp://127.0.0.1","lmcache.mp.port":5555}}'
             - "--max-num-seq=1024"
             - "--enable-auto-tool-choice"
             - "--tool-call-parser=hermes"
@@ -24,20 +30,34 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
-              value: "100.0"
+            # Flags of `lmcache server` (the launcher adds the loopback endpoints).
+            # --l1-size-gb is the CPU tier of the whole pod in GiB, shared by all
+            # tensor-parallel ranks. LMCache starts evicting when 80% of it is in
+            # use (--eviction-trigger-watermark), so 250 GiB holds 200 GiB of KV
+            # blocks: what the in-process connector held with 100 GiB per rank on
+            # 2 ranks. The server pins all 250 GiB, so keep the memory request and
+            # limit below, and the router's lruCapacityPerServer, in step with it.
+            # --max-workers: one transfer thread per tensor-parallel rank.
+            # --worker-reap-timeout-seconds 0: the server keeps the registration of
+            # an engine worker it has not heard from. A worker is silent until its
+            # first store or load, and by default a replica left idle for an hour
+            # would lose its registration, and with it the CPU tier, until the
+            # container restarts. The launcher ends the container when vLLM
+            # exits, so there is no dead worker to clean up after.
+            - name: LMCACHE_MP_SERVER_ARGS
+              value: "--l1-size-gb 250 --eviction-policy LRU --eviction-trigger-watermark 0.8 --eviction-ratio 0.2 --max-workers 2 --worker-reap-timeout-seconds 0"
             - name: PYTHONHASHSEED
               value: "123"
-            - name: PROMETHEUS_MULTIPROC_DIR
-              value: "/tmp/lmcache_prometheus"
           resources:
             limits:
               memory: 500Gi
             requests:
               memory: 500Gi
           volumeMounts:
-            - name: lmcache-prometheus-metrics
-              mountPath: /tmp/lmcache_prometheus
+            - name: lmcache-mp-launcher
+              mountPath: /etc/lmcache-mp
+              readOnly: true
       volumes:
-        - name: lmcache-prometheus-metrics
-          emptyDir: {}
+        - name: lmcache-mp-launcher
+          configMap:
+            name: lmcache-mp-launcher
