@@ -157,23 +157,6 @@ deploy:
         # ReadWriteMany PVC for the filesystem tier, mounted at /mnt/files-storage
         envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/pvc.yaml | kubectl apply -n ${NAMESPACE} -f -
 
-  xpu_lmcache_image:
-    - when: {ACCELERATOR_TYPE: [xpu], MODEL_SERVER: [vllm], CONNECTOR: [lmcache-connector]}
-      skip_in: [ci]
-      run: |
-        export LMCACHE_MP_IMAGE=registry.example.com/team/llm-d-xpu:lmcache-v0.5.7.post1
-        export MODEL_SERVER_OVERLAY="$(mktemp -d)"
-        cat > "${MODEL_SERVER_OVERLAY}/kustomization.yaml" <<EOF
-        apiVersion: kustomize.config.k8s.io/v1beta1
-        kind: Kustomization
-        resources:
-          - "$(realpath --relative-to="${MODEL_SERVER_OVERLAY}" "${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/xpu/vllm/lmcache-connector/${VARIANT}/base")"
-        images:
-          - name: ghcr.io/llm-d/llm-d-xpu
-            newName: "${LMCACHE_MP_IMAGE%:*}"
-            newTag: "${LMCACHE_MP_IMAGE##*:}"
-        EOF
-
   mooncake:
     # skip_in ci: no nightly covers MooncakeStore (see the note above deploy:).
     - when: {CONNECTOR: [mooncake-store]}
@@ -191,7 +174,7 @@ deploy:
     - when: {HOST_TYPE: [single-host]}
       run: |
         kubectl apply -n ${NAMESPACE} \
-          -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/}"
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}/
     # skip_in ci: no nightly covers TPU multi-host (see the note above deploy:).
     - when: {HOST_TYPE: [multi-host]}
       skip_in: [ci]
@@ -331,7 +314,7 @@ verify:
 cleanup:
   modelserver:
     - when: {HOST_TYPE: [single-host]}
-      run: kubectl delete -n ${NAMESPACE} -k "${MODEL_SERVER_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}}"
+      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${CONNECTOR}/${VARIANT}/${INFRA_PROVIDER}
     - when: {HOST_TYPE: [multi-host]}
       skip_in: [ci]
       run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/native/cpu/multi-host
