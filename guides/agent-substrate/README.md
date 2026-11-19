@@ -32,18 +32,29 @@ Measured across 1,000 stateful Hermes Agent sandboxes (`NousResearch/hermes-agen
 
 ### Validation on Agent Substrate v1.0.0
 
-Measured by running this guide at small scale: GKE `1.37`, Agent Substrate `v1.0.0`, **60 Hermes agents** on 60 gVisor workers across `3 × c3-standard-8` nodes, and the default model server (`2 × TP=2` `Qwen/Qwen3-32B`, `vLLM v0.31.0`) on one `a3-highgpu-8g` (H100) node. Model-server figures are deltas of `vLLM` `:8000/metrics` over the stated requests.
+Measured by running this guide on GKE `1.37` with Agent Substrate `v1.0.0`, the `llm-d` Router `v1.0.0` (`ROUTER_CHART_VERSION=v1.0.0`) and the default model server (`2 × TP=2` `Qwen/Qwen3-32B`, `vLLM v0.31.0`, native Host-DRAM offloading) on one 8 × H100 node. Model-server figures are deltas of `vLLM` `:8000/metrics` over the stated requests.
+
+**1,000 Hermes agents** on 1,080 gVisor workers across `18 × c4d-standard-16` nodes (the default sizing of this guide):
+
+| What | Result | How |
+| --- | --- | --- |
+| Burst, teach + recall (2,000 calls, concurrency 200) | `0` failed calls, recall `1,000 / 1,000`; prefix-cache hit rate `91.3%`, mean TTFT `166 ms` | [Drive 1,000 Hermes Agent Sandboxes End-to-End](#drive-1000-hermes-agent-sandboxes-end-to-end) |
+| Recall after suspending the whole fleet | `1,000 / 1,000`, `0` failed calls | [Suspend the Fleet and Verify Recall](#suspend-the-fleet-and-verify-recall-from-snapshots) |
+| Wake 1,000 suspended agents at once | all answering in `1.6 s` (p50 `424 ms`, p95 `738 ms`) | one trivial request per agent through `atenet-router` |
+| Routing, ~2,400-token private prefix per session (1,000 follow-up requests) | mean TTFT `1.8 s`, model latency `3.8 s`, `477 GB` of KV reloaded from Host DRAM with this guide's routing vs. `2.2 s`, `7.8 s`, `272 GB` with random routing | [Measure the Routing Effect](#measure-the-routing-effect) with `--context-words 2000` |
+| Priority tiers, burst at concurrency 400 | mean router queue time `0.0 s` (`100`), `7.9 s` (`0`), `9.2 s` (`-10`) | default `maxConcurrency: 128` |
+
+**60 Hermes agents** on `3 × c3-standard-8` nodes (the [Small-Scale Trial](#small-scale-trial)):
 
 | What | Result | How |
 | --- | --- | --- |
 | Recall after suspending the whole fleet | `60 / 60` | [Suspend the Fleet and Verify Recall](#suspend-the-fleet-and-verify-recall-from-snapshots) |
-| Wake 60 suspended agents at once | all answering in `3.3 s` (p50 `2.7 s`, p95 `2.9 s`) | one trivial request per agent through `atenet-router` |
 | Routing, sessions with a long private prefix (~6,000 prompt tokens, 180 follow-up requests) | prefix-cache hit rate `98.7%`, mean TTFT `97 ms` with this guide's routing vs. `73.1%`, `1,439 ms` with random routing | [Measure the Routing Effect](#measure-the-routing-effect) |
 | Routing, short prompts (~785 prompt tokens, 240 requests) | `91.2%`, `62 ms` vs. `87.0%`, `54 ms`: little difference, the shared system prompt dominates | same, without `--context-words` |
 | Priority tiers under saturation (`maxConcurrency: 4`, 60-agent burst) | mean router queue time `0.12 s` (`100`), `1.32 s` (`0`), `5.77 s` (`-10`); `premium-traffic` p50 turn `2.3 s` vs. `7.7 s` when every agent shares one tier | [Sizing `maxConcurrency`](#sizing-maxconcurrency) |
 
 > [!IMPORTANT]
-> The Agent Substrate steps ([Steps 4–7](#4-deploy-the-in-cluster-hermes-fleet-driver) and the fleet verification) are written for **Agent Substrate v1.0.0**. The guide was run end to end on GKE `1.37` with Agent Substrate `v1.0.0`, the Hermes image built from [`hermes/actor/`](./hermes/actor/), this guide's router values, and the default GPU model server (`2 × TP=2` `Qwen/Qwen3-32B` on H100 with native Host-DRAM offloading, `max_model_len=65536`), at up to **60 agents**.
+> The Agent Substrate steps ([Steps 4–7](#4-deploy-the-in-cluster-hermes-fleet-driver) and the fleet verification) are written for **Agent Substrate v1.0.0**. The guide was run end to end on GKE `1.37` with Agent Substrate `v1.0.0`, the Hermes image built from [`hermes/actor/`](./hermes/actor/), this guide's router values, and the default GPU model server (`2 × TP=2` `Qwen/Qwen3-32B` on H100 with native Host-DRAM offloading, `max_model_len=65536`), at **1,000 agents**.
 
 Agent Substrate resumes an actor when a request arrives for it, but suspends one only when asked. The idle-footprint figure above depends on the caller suspending each agent after its turn; in this guide, suspending the fleet is an explicit step in [Verification](#suspend-the-fleet-and-verify-recall-from-snapshots).
 
@@ -153,6 +164,12 @@ export MONITORING=false # options: false, true
 source ${REPO_ROOT}/guides/env.sh
 ```
 <!-- guide:env.source end -->
+
+`guides/env.sh` installs the latest development build of the `llm-d` Router chart by default. To install the release this guide was validated with, pin it before deploying the router:
+
+```bash
+export ROUTER_CHART_VERSION=v1.0.0
+```
 
 ### Install Gateway API Inference Extension and `llm-d` Router CRDs
 
@@ -343,7 +360,10 @@ gcloud container node-pools create hermes-c4d-pool \
   --node-taints=ate.dev/sandboxClass=hermes:NoSchedule
 ```
 
-Apply [`manifests/hermes-workerpool.yaml.tmpl`](./manifests/hermes-workerpool.yaml.tmpl) (`1,080` gVisor workers with `1536Mi` memory limit so the ~150 MiB checkpoint page cache never OOM-kills the gVisor sentry). `SUBSTRATE_WORKER_IMAGE` must be the worker image of the Agent Substrate release installed on the cluster:
+Apply [`manifests/hermes-workerpool.yaml.tmpl`](./manifests/hermes-workerpool.yaml.tmpl) (`1,080` gVisor workers with `1536Mi` memory limit so the ~150 MiB checkpoint page cache never OOM-kills the gVisor sentry). `SUBSTRATE_WORKER_IMAGE` must be the worker image of the Agent Substrate release installed on the cluster.
+
+> [!IMPORTANT]
+> **Every node that runs these workers must have the same CPU platform.** The golden snapshot is taken on whichever worker the seed sandbox lands on, and Agent Substrate restores a memory snapshot only onto workers whose CPU features cover the snapshot's. On other nodes it cold-boots the agent instead, which is far slower and, under a wake burst, can exceed the 30-second wakeup probe. Label and taint only one machine family for the pool (`pool=hermes`), and create the `ActorTemplate` after the pool is in place.
 
 <!-- guide:deploy.substrate_pool start -->
 <!-- llm-d-cicd:skip start -->
@@ -627,6 +647,19 @@ done
 | **Stateless clients without a session ID header** | [Optimized Baseline](../optimized-baseline/README.md) (`prefix-cache-affinity-filter` + `token-load-scorer`) | Uses calibrated `peakPrefillThroughput` gating ("sticky until saturated"). Do **not** combine `prefix-cache-affinity-filter` with weighted `prefix-cache-scorer` or `session-affinity-scorer`, as weighted affinity scorers override the filter's load-break fallback. |
 | **Deep variable-length agent loops competing in one batch tier** | Layer [`program-aware-fairness` (`turn-priority`)](../turn-priority-fairness/README.md) on `priority: -10` | Replaces `round-robin-fairness-policy` in the batch band so deeper multi-turn conversations finish and release KV blocks before newly started sessions enter the pool. |
 
+### Sizing the Host-DRAM Tier for Session Length
+
+A replica can only reuse a session's prefix from what it still holds: GPU memory first, then its Host-DRAM tier (`cpu_bytes_to_use`, `300 GiB` per replica by default). Once the fleet's combined session history outgrows both, evicted prefixes are recomputed. Measured with 1,000 agents and one follow-up turn per session:
+
+| Private context per session | Replicas | KV reloaded from Host DRAM | Mean TTFT |
+| --- | --- | --- | --- |
+| ~2,400 tokens | 2 | `477 GB` | `1.8 s` |
+| ~2,400 tokens | 4 | `549 GB` | `0.6 s` |
+| ~6,000 tokens | 2 | `0 GB` | `20.4 s` |
+| ~6,000 tokens | 4 | `605 GB` | `10.1 s` |
+
+Size replicas and `cpu_bytes_to_use` for `agents × expected session tokens`, or add the shared-filesystem tier from [Tiered Prefix Cache](../tiered-prefix-cache/README.md). Note that `vllm:prefix_cache_hits_total` counts only GPU-memory hits; read `vllm:kv_offload_total_bytes_total{transfer_type="CPU_to_GPU"}` to see what the Host-DRAM tier served.
+
 ### Sizing `maxConcurrency`
 
 [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) sets `maxConcurrency: 128` (`concurrencyMode: requests`) as a starting point for `2–4` vLLM replicas serving short-completion agent turns (`max_tokens: 48–64`). Re-derive `maxConcurrency` for your replica count, model size, and average prompt length using [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md).
@@ -643,6 +676,7 @@ Priority bands only separate traffic once requests queue in the EPP. To see the 
 - **Slow 1,000-agent wake (`> 5 s`) or `atenet-router` `HTTP 504`**: Verify that the golden snapshot (`GOLDEN TAG` in `kubectl ate get actor-templates -a ${ATESPACE}`) finished building *before* creating the 1,000 actors, and confirm `18+` `c4d-standard-16` nodes (`<= 60` agents/node) with `hyperdisk-balanced` boot disks so node I/O does not stall on concurrent snapshot reads. Do not retry `HTTP 504` responses from `atenet-router`, as a Hermes turn appends to SQLite and is non-idempotent.
 - **Agent turns fail and Hermes logs a name-resolution or connection error for the `llm-d` host**: The actor has no `EgressPolicy`, or its hostname is not the host in `MODEL_BASE_URL`. Check with `kubectl ate get egress-policy agent-0001 -a ${ATESPACE} -o yaml`.
 - **The fleet driver fails every call with a TLS or connection error**: Its SPIFFE ID is not on the router's ingress allowlist, or `ATENET_ADDR` is not `atenet-router.ate-system.svc:443` (the name the router's certificate is issued for).
+- **Agents end up `ACTOR_STATE_CRASHED` with `wakeup probe for "hermes" never returned 200 within 30s`**: The agents were resumed on nodes whose CPU platform differs from the node where the golden snapshot was taken (for example a mixed Intel/AMD pool), so they cold-booted instead of restoring memory. Keep the worker pool on one machine family, delete and recreate the `ActorTemplate` so the golden snapshot is rebuilt there, and `kubectl ate revert actor` (or recreate) the crashed agents.
 - **All tiers share the same latency under overload**: Verify `kubectl get inferenceobjectives -n ${NAMESPACE}` shows `premium-traffic`, `standard-traffic`, and `best-effort-traffic`, and confirm `maxConcurrency` is lower than your burst concurrency so requests queue inside EPP Flow Control rather than inside vLLM's internal scheduler.
 
 ---
