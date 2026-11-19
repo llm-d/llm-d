@@ -6,6 +6,7 @@ opencost:
       INFERENCE_MODEL_LABEL: "llm-d.ai/model"
       INFERENCE_SHARED_INFRA_LABEL: "llm-d.ai/inference-shared"
       INFERENCE_SHARED_INFRA_LABEL_VALUE: "true"
+      USE_CUSTOM_PROVIDER: "true"       # price every node with costModel below, also on a cloud
   prometheus:
     internal:
       enabled: true
@@ -23,4 +24,7 @@ opencost:
     enabled: true
   customPricing:
     enabled: true
-    configmapName: opencost-custom-pricing  # created by installer from interactive pricing prompt
+    configmapName: opencost-custom-pricing
+    createConfigmap: true               # the chart writes costModel into the ConfigMap, one key per price
+    provider: custom
+    costModel: {}                       # filled by installer from the confirmed pricing JSON
