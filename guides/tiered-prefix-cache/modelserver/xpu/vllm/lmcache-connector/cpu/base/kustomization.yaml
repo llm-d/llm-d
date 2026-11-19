@@ -4,18 +4,8 @@ resources:
   - ../../../base
   - lmcache.yaml
 
-replacements:
-  # Reuse the image selected by the shared vLLM base for the cache server.
-  - source:
-      kind: Deployment
-      name: xpu-vllm-decode
-      fieldPath: spec.template.spec.containers.[name=modelserver].image
-    targets:
-      - select:
-          kind: DaemonSet
-          name: xpu-vllm-lmcache
-        fieldPaths:
-          - spec.template.spec.containers.[name=lmcache].image
+components:
+  - ../../../../../../../recipes/modelserver/components/images/xpu-vllm/llm-d
 
 labels:
   - pairs:
