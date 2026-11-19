@@ -9,6 +9,11 @@ This helper waits for the local Hermes gateway, executes three synthetic turns
 carrying the `agent-warmup` marker (which `sitecustomize.py` answers in-process
 inside `httpx` so no GPU/TPU capacity is consumed and zero TCP sockets are
 frozen into the snapshot), and only then returns HTTP 200 on `:8081/ready`.
+
+If the gateway never becomes healthy or a warm-up turn keeps failing, the
+helper exits non-zero instead of reporting ready: a golden snapshot taken cold
+would silently cost every agent its first-turn latency, whereas a failed golden
+build is reported on the ActorTemplate.
 """
 
 from __future__ import annotations
@@ -26,6 +31,8 @@ GATEWAY = f"http://127.0.0.1:{int(os.environ.get('API_SERVER_PORT', '80'))}"
 READY_PORT = int(os.environ.get("READY_PORT", "8081"))
 KEY = os.environ["API_SERVER_KEY"]
 MARKER = "agent-warmup"
+# Tells sitecustomize.py that the warm-up is over (see its module docstring).
+DONE_FILE = os.environ.get("WARMUP_DONE_FILE", "/tmp/agent-warmup-done")
 
 READY = threading.Event()
 
@@ -70,9 +77,8 @@ def _turn(session_id: str, prompt: str) -> float:
 
 def _warm() -> None:
     if not _wait_health(time.time() + 300):
-        _log("gateway did not pass /health before deadline; opening /ready fallback")
-        READY.set()
-        return
+        _log("gateway did not pass /health before deadline; not reporting ready")
+        os._exit(1)
 
     turns = (
         (f"{MARKER}-a", "say OK"),
@@ -88,7 +94,12 @@ def _warm() -> None:
             except Exception as exc:
                 _log(f"{session_id} turn failed (attempt {attempt}): {exc}")
                 time.sleep(1)
+        else:
+            _log(f"{session_id} warm-up turn failed 3 times; not reporting ready")
+            os._exit(1)
 
+    with open(DONE_FILE, "w", encoding="utf-8"):
+        pass
     READY.set()
     _log(f"golden-snapshot warmup complete; serving 200 on :{READY_PORT}/ready")
 

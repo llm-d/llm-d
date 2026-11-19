@@ -22,8 +22,12 @@ env:
     ATESPACE: {default: "agent-hermes"}
     HERMES_AGENTS: {default: "1000"}
     HERMES_WORKER_REPLICAS: {default: "1080"}
-    SUBSTRATE_VERSION: {default: "v0.1.0-gke.1"}
-    SUBSTRATE_WORKER_IMAGE: {default: "us-docker.pkg.dev/gke-substrate-release/substrate/ateom-gvisor:v0.1.0-gke.1"}
+    # Keep the worker image at the Agent Substrate release installed on the cluster (v1.0.0 or later).
+    SUBSTRATE_VERSION: {default: "v1.0.0"}
+    SUBSTRATE_WORKER_IMAGE: {default: "ghcr.io/agent-substrate/substrate/ateworker-gvisor:${SUBSTRATE_VERSION}"}
+    # Host of the llm-d Router as the agents reach it. It is the host in the
+    # ActorTemplate's MODEL_BASE_URL and the only name each agent's EgressPolicy allows.
+    LLMD_HOST: {default: "${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local"}
 
     MONITORING: {default: "false", values: ["false", "true"]}
 
@@ -56,12 +60,12 @@ prerequisites:
           --namespace "${NAMESPACE}" \
           --dry-run=client -o yaml | kubectl apply -f -
     - run: |
-        # Ephemeral bearer key shared between the fleet driver and the 1,000 Hermes sandboxes.
-        HERMES_API_KEY=$(openssl rand -hex 24)
-        kubectl create secret generic hermes-api-key \
-          --from-literal="HERMES_API_KEY=${HERMES_API_KEY}" \
-          --namespace "${NAMESPACE}" \
-          --dry-run=client -o yaml | kubectl apply -f -
+        # Bearer key shared between the fleet driver and the 1,000 Hermes sandboxes.
+        # Created once: the ActorTemplate bakes the key in, so a re-run must not rotate it.
+        kubectl get secret hermes-api-key --namespace "${NAMESPACE}" >/dev/null 2>&1 \
+          || kubectl create secret generic hermes-api-key \
+            --from-literal="HERMES_API_KEY=$(openssl rand -hex 24)" \
+            --namespace "${NAMESPACE}"
 
 deploy:
   standalone:
@@ -110,9 +114,9 @@ deploy:
           --from-file=hermes_fleet_driver.py=${REPO_ROOT}/guides/${GUIDE_NAME}/scripts/hermes_fleet_driver.py \
           -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
         kubectl create configmap hermes-fleet-driver-config \
-          --from-literal=LLMD_BASE_URL="http://${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80/v1" \
+          --from-literal=LLMD_BASE_URL="http://${LLMD_HOST}:80/v1" \
           --from-literal=MODEL_NAME="${MODEL_NAME}" \
-          --from-literal=ATENET_ADDR="atenet-router.ate-system.svc.cluster.local:80" \
+          --from-literal=ATENET_ADDR="atenet-router.ate-system.svc:443" \
           --from-literal=ATESPACE="${ATESPACE}" \
           -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
         kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-driver.yaml -n ${NAMESPACE}
@@ -129,19 +133,18 @@ deploy:
   substrate_pool:
     - skip_in: [ci]
       run: |
-        envsubst '${HERMES_WORKER_REPLICAS} ${SUBSTRATE_WORKER_IMAGE} ${SUBSTRATE_VERSION}' \
+        envsubst '${ATESPACE} ${HERMES_WORKER_REPLICAS} ${SUBSTRATE_WORKER_IMAGE}' \
           < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-workerpool.yaml.tmpl \
           | kubectl apply -f -
 
   substrate_template:
     - skip_in: [ci]
       run: |
-        export SNAPSHOT_BUCKET="<your-gcs-snapshot-bucket>"
-        export LLMD_BASE_URL="http://${GUIDE_NAME}-epp.${NAMESPACE}.svc.cluster.local:80/v1"
+        export LLMD_BASE_URL="http://${LLMD_HOST}:80/v1"
         HERMES_API_KEY=$(kubectl get secret hermes-api-key -n ${NAMESPACE} -o jsonpath='{.data.HERMES_API_KEY}' | base64 -d)
         kubectl ate create atespace ${ATESPACE} || true
         HERMES_API_KEY="${HERMES_API_KEY}" \
-          envsubst '${HERMES_IMAGE} ${HERMES_API_KEY} ${LLMD_BASE_URL} ${MODEL_NAME} ${SNAPSHOT_BUCKET}' \
+          envsubst '${ATESPACE} ${HERMES_IMAGE} ${HERMES_API_KEY} ${LLMD_BASE_URL} ${MODEL_NAME}' \
           < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-template.yaml.tmpl \
           | kubectl ate create actor-template -f -
         unset HERMES_API_KEY
@@ -149,26 +152,42 @@ deploy:
   substrate_golden_wait:
     - skip_in: [ci]
       run: |
-        # Wait until GKE Agent Substrate captures the pre-warmed golden snapshot
+        # Wait until Agent Substrate captures the pre-warmed golden snapshot
         # before creating the 1,000 actors so every sandbox restores warm (~110 ms).
-        until kubectl ate get actor-template -a ${ATESPACE} hermes-dense -o json \
-          | python3 -c '
+        # A failed build (for example a warm-up turn that did not complete) is
+        # reported instead of waited on.
+        while :; do
+          GOLDEN=$(kubectl ate get actor-template -a ${ATESPACE} hermes-dense -o json \
+            | python3 -c '
         import json, sys
         d = json.load(sys.stdin)
         t = d.get("actorTemplates", [d])[0] if isinstance(d, dict) else d[0]
-        gs = ((t.get("status") or {}).get("goldenSnapshotStatus") or {}).get("goldenSnapshot") or {}
-        sys.exit(0 if gs.get("snapshotUri") else 1)
-        '; do
+        gs = (t.get("status") or {}).get("goldenSnapshotStatus") or {}
+        print("error: " + gs["errorMessage"] if gs.get("errorMessage") else "ready" if gs.get("goldenTag") else "pending")
+        ')
+          [ "${GOLDEN}" = "pending" ] || break
           echo "Waiting for hermes-dense golden snapshot..."
           sleep 5
         done
-        echo "Golden snapshot ready."
+        echo "Golden snapshot: ${GOLDEN}"
 
   substrate_actors:
     - skip_in: [ci]
       run: |
         seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
           | xargs -P 32 -I {} kubectl ate create actor -a ${ATESPACE} --template hermes-dense {}
+
+  substrate_egress:
+    - skip_in: [ci]
+      run: |
+        # Agent Substrate denies actor egress by default. Allow every agent to
+        # reach the llm-d Router host (and nothing else) before the first turn.
+        HERMES_EGRESS_POLICY=$(mktemp)
+        envsubst '${LLMD_HOST}' \
+          < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-egress-policy.yaml.tmpl > "${HERMES_EGRESS_POLICY}"
+        seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
+          | xargs -P 32 -I {} kubectl ate create egress-policy {} -a ${ATESPACE} -f "${HERMES_EGRESS_POLICY}"
+        rm -f "${HERMES_EGRESS_POLICY}"
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -206,26 +225,36 @@ verify:
         run: |
           # Wake all 1,000 Hermes sandboxes through atenet-router, teach each
           # agent a deterministic codename on Turn 1, and verify multi-tier
-          # stateful session recall on Turn 2.
+          # stateful session recall on Turn 2. Exits non-zero if calls fail or
+          # agents do not recall their codename.
           kubectl exec deploy/hermes-fleet-driver -n ${NAMESPACE} -- \
             python3 /opt/driver/hermes_fleet_driver.py \
               --agents ${HERMES_AGENTS} \
               --turns 2 \
               --concurrency 200
 
-    pause_resume_recall:
+    suspend_fleet:
       - skip_in: [ci]
         run: |
-          # Pause a cohort of Hermes sandboxes to gVisor memory+rootfs snapshots,
-          # then trigger another recall turn through atenet-router (auto-waking
-          # from snapshot) to verify SQLite session persistence and session-affinity KV hits.
-          seq -f "agent-%04g" 1 50 \
-            | xargs -P 25 -I {} kubectl ate pause actor -a ${ATESPACE} {}
+          # Agent Substrate resumes an actor on request but suspends one only when
+          # asked. Suspend the whole fleet: each agent is snapshotted (memory +
+          # rootfs) and its worker is released.
+          seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
+            | xargs -P 32 -I {} kubectl ate suspend actor -a ${ATESPACE} {} >/dev/null
+          echo "suspended actors: $(kubectl ate get actors -a ${ATESPACE} | grep -c ACTOR_STATE_SUSPENDED) / ${HERMES_AGENTS}"
+
+    resume_recall:
+      - skip_in: [ci]
+        run: |
+          # Ask every agent for its codename without teaching it again. Each
+          # request wakes its actor from the actor's own snapshot, so recall
+          # succeeds only if the SQLite session state survived the suspend.
           kubectl exec deploy/hermes-fleet-driver -n ${NAMESPACE} -- \
             python3 /opt/driver/hermes_fleet_driver.py \
-              --agents 50 \
-              --turns 2 \
-              --concurrency 50
+              --agents ${HERMES_AGENTS} \
+              --turns 1 \
+              --recall-only \
+              --concurrency 200
 
     metrics_rbac:
       - run: |
@@ -260,6 +289,8 @@ cleanup:
     run: |
       # Remove GKE Agent Substrate actors, ActorTemplate, atespace, and WorkerPool if deployed.
       if kubectl ate get atespace ${ATESPACE} >/dev/null 2>&1; then
+        seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
+          | xargs -P 32 -I {} kubectl ate delete egress-policy {} -a ${ATESPACE} || true
         seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
           | xargs -P 32 -I {} kubectl ate delete actor -a ${ATESPACE} {} || true
         kubectl ate delete actor-template -a ${ATESPACE} hermes-dense || true

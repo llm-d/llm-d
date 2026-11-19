@@ -6,7 +6,11 @@ chat completion via `httpx`. This lightweight `sitecustomize` hook lets Hermes
 sandboxes talk directly to the llm-d Router (`MODEL_BASE_URL`) with no proxy:
   1. Answers `agent-warmup` golden-snapshot turns in-process inside `httpx` so
      no GPU/TPU capacity is needed at snapshot build time and zero TCP sockets
-     are frozen into the gVisor checkpoint.
+     are frozen into the gVisor checkpoint. Session IDs starting with
+     `agent-warmup` are reserved for this. While the warm-up is still running
+     (until `warmup.py` writes `WARMUP_DONE_FILE`), any request whose body
+     carries the marker is answered the same way; afterwards a real
+     conversation that merely mentions the marker is sent to llm-d as usual.
   2. Captures validated inbound `X-Hermes-Session-Id` and
      `x-llm-d-inference-objective` headers on the `aiohttp` request context
      (including worker-thread handoffs via `run_in_executor`) and attaches them
@@ -28,6 +32,9 @@ import time
 
 _WARMUP_MARKER = "agent-warmup"
 _WARMUP_BYTES = _WARMUP_MARKER.encode("utf-8")
+# Written by warmup.py when the warm-up turns are done. It is part of the golden
+# snapshot's root filesystem, so it exists in every actor restored from it.
+_WARMUP_DONE_FILE = os.environ.get("WARMUP_DONE_FILE", "/tmp/agent-warmup-done")
 _SAFE_HEADER_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _FORWARDED_HEADERS = (
     "x-hermes-session-id",
@@ -175,7 +182,7 @@ def _prepare_or_short_circuit(httpx_mod, request):
 
     raw_body = request.read() if request.method == "POST" else b""
     if turn_headers.get("x-hermes-session-id", "").startswith(_WARMUP_MARKER) or (
-        raw_body and _WARMUP_BYTES in raw_body
+        raw_body and _WARMUP_BYTES in raw_body and not os.path.exists(_WARMUP_DONE_FILE)
     ):
         return request, _make_warmup_response(httpx_mod, request)
 

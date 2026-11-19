@@ -2,10 +2,11 @@
 #
 # Runs one Hermes Agent gateway (`NousResearch/hermes-agent`) per gVisor
 # sandbox on :80, keeps per-session SQLite state under /data/.hermes so full
-# gVisor memory+rootfs snapshots (`SNAPSHOT_CONTENT_SCOPE_FULL`) preserve multi-
+# gVisor memory+rootfs snapshots (`SNAPSHOT_FIDELITY_MEMORY`) preserve multi-
 # turn history across pause/resume cycles, and propagates `X-Hermes-Session-Id`
 # and `x-llm-d-inference-objective` onto outbound OpenAI API calls to llm-d.
-FROM python:3.13-slim
+# Pinned by digest for the same reason as HERMES_REF below.
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \

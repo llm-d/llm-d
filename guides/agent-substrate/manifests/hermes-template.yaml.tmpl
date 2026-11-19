@@ -1,11 +1,14 @@
-# GKE Agent Substrate ActorTemplate ("hermes-dense") — registered via the ate API:
+# Agent Substrate ActorTemplate ("hermes-dense"), in the Substrate v1.0.0 API.
+# It is a Substrate API resource, not a Kubernetes object:
 #   kubectl ate create atespace agent-hermes
 #   envsubst < manifests/hermes-template.yaml.tmpl | kubectl ate create actor-template -f -
 #
-# Full memory + rootfs snapshots (`SNAPSHOT_CONTENT_SCOPE_FULL`) preserve each
-# agent's SQLite session store (`/data/.hermes`) across pause/resume cycles.
+# `SNAPSHOT_FIDELITY_MEMORY` captures process memory and the container's root
+# filesystem writes on every suspend, which preserves each agent's SQLite
+# session store (`/data/.hermes`) across suspend/resume cycles. Snapshots are
+# stored under the snapshot location Substrate was installed with.
 metadata:
-  atespace: agent-hermes
+  atespace: ${ATESPACE}
   name: hermes-dense
 workerSelector:
   matchLabels:
@@ -24,20 +27,15 @@ containers:
         value: "64"
       - name: CONTEXT_LENGTH
         value: "65536"
-    readyz:
+    # Resume returns, and the golden snapshot is taken, only after this probe
+    # answers 200, which warmup.py does once the warm-up turns have completed.
+    wakeupProbe:
       httpGet:
         path: /ready
         port: 8081
 resources:
   limits:
-    - name: cpu
-      quantity: "1"
-    - name: memory
-      quantity: 1Gi
-snapshotsConfig:
-  onPause: SNAPSHOT_CONTENT_SCOPE_FULL
-  onCommit: SNAPSHOT_CONTENT_SCOPE_FULL
-  storageLocation: gs://${SNAPSHOT_BUCKET}/agent-hermes/
-sandboxConfig:
-  sandboxClass: SANDBOX_CLASS_GVISOR
-  configName: gvisor-default
+    cpuMillicores: 1000
+    memoryBytes: 1073741824 # 1Gi
+snapshotConfig:
+  preferredFidelity: SNAPSHOT_FIDELITY_MEMORY

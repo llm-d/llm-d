@@ -6,7 +6,15 @@ agents across `premium-traffic` (100), `standard-traffic` (0), and
 `best-effort-traffic` (-10) while passing `X-Hermes-Session-Id` and
 `x-llm-d-inference-objective` end-to-end through Hermes (`sitecustomize.py`) to
 the llm-d Router. Turn 1 assigns a deterministic codename; Turns 2+ verify
-stateful SQLite session recall across gVisor snapshot pause/resume cycles.
+stateful SQLite session recall. With `--recall-only` no turn teaches the
+codename, so a run after the agents were suspended passes only if each agent's
+session state survived its snapshot.
+
+The Agent Substrate router serves only TLS and requires a client certificate:
+the driver presents the pod certificate mounted at `ROUTER_CLIENT_BUNDLE` and
+verifies the router against `ROUTER_CA_FILE`.
+
+Exits 1 when the error rate or the recall rate of any turn misses its bound.
 """
 
 from __future__ import annotations
@@ -16,6 +24,8 @@ import concurrent.futures
 import json
 import os
 import pathlib
+import random
+import ssl
 import statistics
 import sys
 import time
@@ -34,6 +44,18 @@ CODE_NOUN = (
     "marmot", "puffin", "walrus", "ibis", "quokka", "narwhal", "ocelot", "orca",
 )
 TIERS = ("premium-traffic", "standard-traffic", "best-effort-traffic")
+NOTE_WORDS = (
+    "router", "replica", "prefill", "decode", "token", "queue", "batch", "kernel", "socket", "thread",
+    "buffer", "cursor", "shard", "index", "vector", "matrix", "packet", "frame", "block", "page",
+    "node", "pool", "probe", "trace", "span", "metric", "gauge", "label", "volume", "mount",
+    "image", "layer", "digest", "secret", "policy", "tunnel", "proxy", "header", "stream", "chunk",
+)
+
+
+def _notes(idx: int, gen: int, words: int) -> str:
+    """Deterministic filler that is unique per agent session, so each session carries its own long prefix."""
+    rng = random.Random(f"{idx}/{gen}")
+    return " ".join(rng.choice(NOTE_WORDS) for _ in range(words))
 
 
 def _validate_url(raw: str) -> str:
@@ -80,6 +102,10 @@ def _print_report(title: str, rows: list[dict[str, Any]]) -> None:
         print(f"{tier:<24} {len(t_rows):>7d} {len(t_rows) - len(ok):>5d} {p50:>8.1f}ms {_p95(e2es):>8.1f}ms {rec_str:>10}")
 
 
+def teach_expected(turn_num: int, recall_only: bool) -> bool:
+    return turn_num == 1 and not recall_only
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Drive Hermes Agent sandboxes on GKE Agent Substrate -> llm-d")
     ap.add_argument("--agents", type=int, default=1000, help="number of Hermes agent actors (agent-0001..N)")
@@ -88,7 +114,11 @@ def main() -> int:
     ap.add_argument("--premium-pct", type=int, default=10, help="percentage of agents assigned to premium-traffic")
     ap.add_argument("--standard-pct", type=int, default=30, help="percentage of agents assigned to standard-traffic")
     ap.add_argument("--generation", type=int, default=1, help="session generation suffix (agent-NNNN-g<gen>)")
-    ap.add_argument("--atenet-url", default="", help="atenet-router HTTP base URL")
+    ap.add_argument("--context-words", type=int, default=0, help="append this many words of per-session filler to the teach turn, to give every session a long private prefix (about 1.2 tokens per word)")
+    ap.add_argument("--recall-only", action="store_true", help="never teach the codename: every turn asks for it (use after suspending agents)")
+    ap.add_argument("--max-error-pct", type=float, default=1.0, help="exit 1 if more than this percentage of calls in a turn fail")
+    ap.add_argument("--min-recall-pct", type=float, default=99.0, help="exit 1 if fewer than this percentage of checked calls in a turn recall the codename")
+    ap.add_argument("--atenet-url", default="", help="atenet-router base URL (default: https://$ATENET_ADDR)")
     ap.add_argument("--atespace", default="", help="Agent Substrate atespace (default: agent-hermes)")
     ap.add_argument("--hermes-key-file", default="", help="path to HERMES_API_KEY file (>= 16 chars)")
     args = ap.parse_args()
@@ -103,8 +133,13 @@ def main() -> int:
         return 2
 
     atenet_url = _validate_url(
-        args.atenet_url or f"http://{os.environ.get('ATENET_ADDR', 'atenet-router.ate-system.svc.cluster.local:80')}"
+        args.atenet_url or f"https://{os.environ.get('ATENET_ADDR', 'atenet-router.ate-system.svc:443')}"
     )
+    tls = None
+    if atenet_url.startswith("https://"):
+        # The router's serving certificate is issued for atenet-router.ate-system.svc.
+        tls = ssl.create_default_context(cafile=os.environ.get("ROUTER_CA_FILE", "/run/router-client/router-ca.pem"))
+        tls.load_cert_chain(os.environ.get("ROUTER_CLIENT_BUNDLE", "/run/router-client/credential-bundle.pem"))
     atespace = args.atespace or os.environ.get("ATESPACE", "agent-hermes")
 
     def run_turn(idx: int, turn_num: int) -> dict[str, Any]:
@@ -112,10 +147,12 @@ def main() -> int:
         session_id = f"{name}-g{args.generation}"
         objective = _assign_tier(idx, args.agents, args.premium_pct, args.standard_pct)
         code = _codename(idx, args.generation)
+        teach = teach_expected(turn_num, args.recall_only)
         prompt = (
             f"hello from {name}. Your codename is {code}; remember it in your session history. "
             f"Reply with a one-sentence quip about Kubernetes and KV caches."
-            if turn_num == 1
+            + (f" Background notes for this session, no need to act on them: {_notes(idx, args.generation, args.context_words)}" if args.context_words > 0 else "")
+            if teach
             else f"hello again from {name} (turn {turn_num}). What is your codename? "
             f"State your codename first, then one short sentence on prefix caching."
         )
@@ -123,7 +160,6 @@ def main() -> int:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
-            "Host": f"{name}.{atespace}.actors.resources.substrate.ate.dev",
             "ate-target-actor": f"{atespace}/{name}",
             "X-Hermes-Session-Id": session_id,
             "x-llm-d-inference-objective": objective,
@@ -132,7 +168,7 @@ def main() -> int:
         for attempt in range(1, 5):
             req = urllib.request.Request(f"{atenet_url}/v1/chat/completions", data=body, headers=headers, method="POST")
             try:
-                with urllib.request.urlopen(req, timeout=90) as resp:
+                with urllib.request.urlopen(req, timeout=90, context=tls) as resp:
                     parsed = json.loads(resp.read().decode("utf-8"))
                 reply = parsed.get("choices", [{}])[0].get("message", {}).get("content", "")
                 norm = lambda s: "".join(ch for ch in s.lower() if "a" <= ch <= "z")
@@ -140,18 +176,22 @@ def main() -> int:
                     "objective": objective,
                     "ok": True,
                     "e2e_ms": (time.monotonic() - t0) * 1000.0,
-                    "recall_checked": turn_num > 1,
-                    "recall_ok": (norm(code) in norm(reply)) if turn_num > 1 else True,
+                    "recall_checked": not teach,
+                    "recall_ok": (norm(code) in norm(reply)) if not teach else True,
                 }
             except urllib.error.HTTPError as err:
                 # Never retry 4xx or 504 (Hermes may still append the turn to SQLite on a 504).
                 if err.code < 500 or err.code == 504:
                     break
                 time.sleep(0.2 * attempt)
-            except Exception:
+            except Exception as err:
+                # A timed-out turn may still complete inside Hermes; do not send it twice.
+                if isinstance(err, TimeoutError) or isinstance(getattr(err, "reason", None), TimeoutError):
+                    break
                 time.sleep(0.2 * attempt)
         return {"objective": objective, "ok": False, "e2e_ms": (time.monotonic() - t0) * 1000.0, "recall_checked": False, "recall_ok": False}
 
+    failed = False
     for turn_num in range(1, args.turns + 1):
         t_start = time.monotonic()
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as pool:
@@ -161,7 +201,20 @@ def main() -> int:
             f"(wall={time.monotonic() - t_start:.2f}s, concurrency={args.concurrency})",
             results,
         )
-    return 0
+        ok = [r for r in results if r["ok"]]
+        checked = [r for r in ok if r["recall_checked"]]
+        error_pct = 100.0 * (len(results) - len(ok)) / len(results) if results else 0.0
+        recall_pct = 100.0 * sum(1 for r in checked if r["recall_ok"]) / len(checked) if checked else 100.0
+        if error_pct > args.max_error_pct:
+            print(f"FAIL: turn {turn_num}: {error_pct:.2f}% of calls failed (limit {args.max_error_pct}%)", file=sys.stderr)
+            failed = True
+        if recall_pct < args.min_recall_pct:
+            print(f"FAIL: turn {turn_num}: recall {recall_pct:.2f}% (minimum {args.min_recall_pct}%)", file=sys.stderr)
+            failed = True
+        if not teach_expected(turn_num, args.recall_only) and not checked:
+            print(f"FAIL: turn {turn_num}: no successful call to check recall on", file=sys.stderr)
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

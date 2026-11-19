@@ -8,6 +8,13 @@
 # Used via `kubectl exec` to wake and drive 1,000 Hermes Agent sandboxes through
 # `atenet-router` across the 3 `InferenceObjective` priority tiers, and to
 # scrape EPP Flow-Control metrics on `:9090/metrics`.
+#
+# The Agent Substrate router serves only TLS and admits only clients whose
+# SPIFFE ID is on its ingress allowlist. The `router-client` volume gives this
+# pod a client certificate for
+#   spiffe://cluster.local/ns/<namespace>/sa/hermes-fleet-driver
+# and the CA that verifies the router; that ID must be on the allowlist
+# (`--ingress-allowed-spiffe-ids`, see the README prerequisites).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -76,6 +83,9 @@ spec:
             - name: hermes-key
               mountPath: /var/run/secrets/hermes
               readOnly: true
+            - name: router-client
+              mountPath: /run/router-client
+              readOnly: true
       volumes:
         - name: driver-script
           configMap:
@@ -84,3 +94,16 @@ spec:
           secret:
             secretName: hermes-api-key
             defaultMode: 0400
+        - name: router-client
+          projected:
+            sources:
+              - podCertificate:
+                  signerName: podidentity.podcert.ate.dev/identity
+                  keyType: ECDSAP256
+                  credentialBundlePath: credential-bundle.pem
+              - clusterTrustBundle:
+                  signerName: servicedns.podcert.ate.dev/identity
+                  labelSelector:
+                    matchLabels:
+                      podcert.ate.dev/canarying: live
+                  path: router-ca.pem
