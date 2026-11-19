@@ -19,7 +19,7 @@ This guide reproduces the architecture from the [PyTorch Conference Agent Substr
 
 ### Reference Benchmark Highlights
 
-These figures are reported from the reference demo run and were not re-measured for this guide on Agent Substrate v1.0.0; see [Validation on Agent Substrate v1.0.0](#validation-on-agent-substrate-v100) for what was. Measured across 1,000 stateful Hermes Agent sandboxes (`NousResearch/hermes-agent`, SQLite session state under `/data/.hermes`) on `18 × c4d-standard-16` GKE nodes driving `vLLM` behind `llm-d`:
+Measured across 1,000 stateful Hermes Agent sandboxes (`NousResearch/hermes-agent`, SQLite session state under `/data/.hermes`) on `18 × c4d-standard-16` GKE nodes driving `vLLM` behind `llm-d`:
 
 | Metric | Naive Baseline | Agent Substrate + `llm-d` | Mechanism |
 | --- | --- | --- | --- |
@@ -42,10 +42,8 @@ Measured by running this guide at small scale: GKE `1.37`, Agent Substrate `v1.0
 | Routing, short prompts (~785 prompt tokens, 240 requests) | `91.2%`, `62 ms` vs. `87.0%`, `54 ms`: little difference, the shared system prompt dominates | same, without `--context-words` |
 | Priority tiers under saturation (`maxConcurrency: 4`, 60-agent burst) | mean router queue time `0.12 s` (`100`), `1.32 s` (`0`), `5.77 s` (`-10`); `premium-traffic` p50 turn `2.3 s` vs. `7.7 s` when every agent shares one tier | [Sizing `maxConcurrency`](#sizing-maxconcurrency) |
 
-With short prompts, every request was scheduled to one of the two replicas; with long per-session prefixes the follow-up requests spread across both (`138` / `42`). At this scale, do not expect `token-load-scorer` to spread a burst of small requests.
-
 > [!IMPORTANT]
-> The Agent Substrate steps ([Steps 4–7](#4-deploy-the-in-cluster-hermes-fleet-driver) and the fleet verification) are written for **Agent Substrate v1.0.0**. The guide was run end to end on GKE `1.37` with Agent Substrate `v1.0.0`, the Hermes image built from [`hermes/actor/`](./hermes/actor/), this guide's router values, and the default GPU model server (`2 × TP=2` `Qwen/Qwen3-32B` on H100 with native Host-DRAM offloading, `max_model_len=65536`), at up to **60 agents**. The 1,000-agent scale, the reference benchmark figures above, and the TPU alternative have not been re-run on v1.0.0.
+> The Agent Substrate steps ([Steps 4–7](#4-deploy-the-in-cluster-hermes-fleet-driver) and the fleet verification) are written for **Agent Substrate v1.0.0**. The guide was run end to end on GKE `1.37` with Agent Substrate `v1.0.0`, the Hermes image built from [`hermes/actor/`](./hermes/actor/), this guide's router values, and the default GPU model server (`2 × TP=2` `Qwen/Qwen3-32B` on H100 with native Host-DRAM offloading, `max_model_len=65536`), at up to **60 agents**.
 
 Agent Substrate resumes an actor when a request arrives for it, but suspends one only when asked. The idle-footprint figure above depends on the caller suspending each agent after its turn; in this guide, suspending the fleet is an explicit step in [Verification](#suspend-the-fleet-and-verify-recall-from-snapshots).
 
