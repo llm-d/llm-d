@@ -5,7 +5,7 @@ resources:
   - lmcache.yaml
 
 replacements:
-  # Reuse the image selected by the shared vLLM base for the cache and init.
+  # Reuse the image selected by the shared vLLM base for the cache server.
   - source:
       kind: Deployment
       name: xpu-vllm-decode
@@ -16,11 +16,6 @@ replacements:
           name: xpu-vllm-lmcache
         fieldPaths:
           - spec.template.spec.containers.[name=lmcache].image
-      - select:
-          kind: Deployment
-          name: xpu-vllm-decode
-        fieldPaths:
-          - spec.template.spec.initContainers.[name=wait-for-lmcache].image
 
 labels:
   - pairs:

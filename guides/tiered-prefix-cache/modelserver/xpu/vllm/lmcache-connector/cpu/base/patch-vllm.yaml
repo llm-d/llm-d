@@ -17,34 +17,6 @@ spec:
       # Keep this in sync with the LMCache DaemonSet's node selector.
       nodeSelector:
         intel.feature.node.kubernetes.io/gpu: "true"
-      initContainers:
-        - name: wait-for-lmcache
-          image: REPLACE_MODEL_SERVER_IMAGE
-          command: ["python3", "-c"]
-          args:
-            - |
-              from importlib.metadata import version
-              import time
-              import urllib.error
-              import urllib.request
-
-              installed = version("lmcache")
-              if installed != "0.5.7.post1":
-                  raise RuntimeError(
-                      f"XPU MP requires LMCache 0.5.7.post1, found {installed}. "
-                      "Select the rebuilt image in a site overlay."
-                  )
-
-              url = "http://xpu-vllm-lmcache:8080/healthcheck"
-              opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-              while True:
-                  try:
-                      with opener.open(url, timeout=5) as response:
-                          if response.status == 200:
-                              break
-                  except (OSError, urllib.error.URLError) as exc:
-                      print(f"Waiting for node-local LMCache: {exc}", flush=True)
-                  time.sleep(5)
       containers:
         - name: modelserver
           command: ["/bin/bash", "-c"]
