@@ -1,0 +1,27 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: decode
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              initContainers:
+                - name: routing-proxy
+                  args:
+                    - --port=8000
+                    - --model-server-port=8200
+                    - --kv-connector=nixlv2
+                    - --zap-log-level=1
+                    - --secure-serving=false
+                    # Must match --tensor-parallel-size of the engines. No
+                    # --moriio-write-mode: READ mode needs the serial prefill-then-decode path.
+                    - --moriio-tp-size=8
+                  env:
+                    - name: POD_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
