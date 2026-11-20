@@ -1,0 +1,73 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# AMD-CI cluster: one Pollara AI NIC per GPU (net1..net8, amd.com/vnic), its MoRI
+# fabric settings, and the weights from a pre-filled RWX PVC in Hugging Face cache
+# layout. Include after the recipe model-cache component, whose volume this points
+# at the PVC; the PVC must hold models--amd--GLM-5.3-Flash-Quark-MXFP4 at the
+# pinned revision.
+patches:
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: any
+      spec:
+        roles:
+          - name: prefill
+            spec: &amd-ci
+              leaderWorkerTemplate:
+                workerTemplate:
+                  metadata:
+                    annotations:
+                      k8s.v1.cni.cncf.io/networks: |
+                        [
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net2"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net3"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net4"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net5"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net6"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net7"},
+                          {"name":"amd-host-device-nad","namespace":"default","interface":"net8"}
+                        ]
+                  spec:
+                    containers:
+                      - name: modelserver
+                        resources:
+                          limits:
+                            amd.com/vnic: "8"
+                          requests:
+                            amd.com/vnic: "8"
+                        env:
+                          # The weights are on the PVC: never reach the Hub.
+                          - name: HF_HUB_OFFLINE
+                            value: "1"
+                          - name: MORI_RDMA_SL
+                            value: "3"
+                          - name: MORI_RDMA_TC
+                            value: "104"
+                          - name: MORI_ENABLE_HOST_PROXY
+                            value: "1"
+                          - name: MORI_ENABLE_RAIL_ONLY
+                            value: "1"
+                          # Prefer DMABUF registration (avoids warnings when peermem is not available).
+                          - name: MORI_ENABLE_DMABUF_REG
+                            value: "1"
+                          - name: MORI_IO_RAIL_AFFINITY
+                            value: "1"
+                          - name: MORI_DISABLE_TOPO
+                            value: "1"
+                          - name: NCCL_IB_DISABLE
+                            value: "1"
+                          - name: NCCL_SOCKET_IFNAME
+                            value: eth0
+                          - name: GLOO_SOCKET_IFNAME
+                            value: eth0
+                    volumes:
+                      - name: model-cache
+                        persistentVolumeClaim:
+                          claimName: glm53-flash-mxfp4-model-pvc
+          - name: decode
+            spec: *amd-ci
