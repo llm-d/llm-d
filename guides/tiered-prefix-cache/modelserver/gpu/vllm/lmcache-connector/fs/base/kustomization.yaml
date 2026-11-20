@@ -1,8 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Use the CPU offloading base to form a tiered cache structure: HBM - CPU - storage.
-  - ../../cpu/base
+  # Built on the common vLLM base, not on ../../cpu/base: this overlay sets its
+  # own CPU tier (in-process LMCache) in patch-vllm.yaml to form the tiered
+  # cache structure HBM - CPU - storage.
+  - ../../../base
 
 labels:
   - pairs:
