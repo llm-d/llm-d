@@ -345,8 +345,8 @@ kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPAC
 ```
 <!-- guide:deploy.objectives end -->
 
-`v1alpha2` is the only version the current router release serves. Later releases deprecate it and
-use `llm-d.ai/v1`, where the pool reference is `poolRefs` (a list).
+The router CRDs must serve `llm-d.ai/v1`. In this API version, the pool reference is provided
+through `poolRefs`, a list.
 
 Clients then name that objective per request:
 
