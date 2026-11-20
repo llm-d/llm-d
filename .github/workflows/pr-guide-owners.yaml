@@ -1,0 +1,79 @@
+name: PR Guide Owners
+
+# Routes PRs touching guides/** to nearest-ancestor guides/**/OWNERS read from
+# the base branch. Collaborators are requested as reviewers via the GitHub API;
+# non-collaborators are mentioned once in an idempotent sticky comment.
+
+on:
+  pull_request_target:
+    types: [opened, ready_for_review, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - 'guides/**'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull request number to evaluate'
+        required: true
+        type: number
+      dry_run:
+        description: 'Only log actions without requesting reviewers or commenting'
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: pr-guide-owners-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  route-guide-owners:
+    if: >-
+      github.repository == 'llm-d/llm-d' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.pull_request.draft == false &&
+          github.event.pull_request.state == 'open'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout scripts and guide OWNERS from base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
+          sparse-checkout: |
+            guides/**/OWNERS
+            scripts/github_api.py
+            scripts/pr-guide-owners.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python3 -m pip install --disable-pip-version-check pyyaml
+
+      - name: Route guide owners
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --pr "$PR_NUMBER")
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python3 scripts/pr-guide-owners.py "${args[@]}"
