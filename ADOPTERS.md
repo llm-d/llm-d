@@ -33,6 +33,7 @@
 | User / Contributor | DigitalOcean | 2026 | [DigitalOcean](https://www.digitalocean.com/) | DigitalOcean uses llm-d for Dedicated and Serverless Inference endpoints and contributes actively to the project. |
 | User | Capital One | 2026 | [Capital One](https://www.capitalone.com/) | The Capital One model serving team are users of llm-d. |
 | User | Upwork | 2026 | [Upwork](https://www.upwork.com/) | The Upwork model serving team leverages llm-d for agentic coding and batch workloads. |
+| User | Vapi | 2026 | [Vapi](https://www.vapi.ai/) | The Vapi MLOps team is using llm-d to power their inference stack. |
 
 ## Adopter Types
 
