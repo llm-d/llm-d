@@ -269,7 +269,7 @@ Both overlays use the [LMCache llm-d MP integration](https://docs.lmcache.ai/pro
 
 Match the model and cache node selectors to your Intel nodes, and ensure a ready cache server on each model node. The DaemonSet reserves its CPU pool even on selected nodes without model pods.
 
-Both containers need an image built from [docker/Dockerfile.xpu](../../docker/Dockerfile.xpu) with LMCache 0.5.7.post1; vLLM still needs LMCache's client connector and XPU transfer extension in MP mode. Select the published image through `newName` and `newTag` in the [shared XPU image component](../recipes/modelserver/components/images/xpu-vllm/llm-d/kustomization.yaml), which sets both container images.
+The [shared XPU image component](../recipes/modelserver/components/images/xpu-vllm/llm-d/kustomization.yaml) selects `quay.io/llm-d/llm-d-xpu:sha-2937d5d` for both containers, including in the [CPU LMCache nightly workflow](../../.github/workflows/nightly-e2e-tiered-prefix-cache-intel-acc-xpu-vllm-lmcache.yaml). This image is built from [docker/Dockerfile.xpu](../../docker/Dockerfile.xpu) with LMCache 0.5.7.post1; vLLM still needs LMCache's client connector and XPU transfer extension in MP mode.
 
 After changing cache-server arguments or images, or switching tiers, wait for `daemonset/xpu-vllm-lmcache` to finish its rollout, then restart `deployment/xpu-vllm-decode` to reconnect clients. Cache-server restarts clear the CPU pool.
 
