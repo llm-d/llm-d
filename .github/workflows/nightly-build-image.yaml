@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: 'Platforms to build (comma-separated: cuda,xpu,sglang-xpu,cpu,all)'
+        description: 'Platforms to build (comma-separated: xpu,sglang-xpu,all)'
         required: false
-        default: 'cuda'
+        default: 'xpu'
         type: string
       pr_number:
         description: 'PR number (set automatically by /test-nightly)'

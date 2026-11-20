@@ -20,7 +20,6 @@ This directory contains Kustomize Components that define the **default container
 │   ├── nightly
 │   └── release
 ├── cpu-vllm
-│   ├── llm-d
 │   ├── nightly
 │   └── release
 ├── gpu-sglang

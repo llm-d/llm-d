@@ -8,16 +8,14 @@ IMAGE_REGISTRY_ORG ?= llm-d
 IMAGE_REGISTRY_REPO ?= llm-d
 DOCKERFILE_DIR = docker
 
-# DEVICE, options: ['xpu', 'cpu']
+# DEVICE, options: ['xpu'].
 DEVICE ?= xpu
 
 ifeq ($(DEVICE), xpu)
 	DOCKERFILE ?= Dockerfile.xpu
-else ifeq ($(DEVICE), cpu)
-	DOCKERFILE ?= Dockerfile.cpu
-endif # Maybe we break out version per image because they share no common bits --> independent release cycles
+endif
 
-VERSION ?= v0.9.0
+VERSION ?= v1.0.0
 
 # New tag to use if you would like to use `make image-retag`
 NEW_TAG ?= sha256...
