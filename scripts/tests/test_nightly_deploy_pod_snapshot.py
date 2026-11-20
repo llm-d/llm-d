@@ -4,15 +4,18 @@ The script is run against fake kubectl/helm/gcloud binaries that only log their
 argv (``kubectl kustomize`` is passed to the real kubectl, and manifests piped
 to ``kubectl apply -f -`` are kept), so the tests check which commands the
 guide.yaml emits produce for CI and in what order, what the CI-rendered
-manifests look like, and how the GCS bucket reset and the CRD retry behave.
+manifests look like, and how the GCS bucket reset, the CRD retry, the
+fail-fast pod watch around the waits and the failure dump behave.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -35,6 +38,25 @@ if [[ "${1:-}" == "apply" && "$*" == *"-f -"* ]]; then
 fi
 if [[ "${1:-}" == "apply" && "$*" == *"https://"* && "${FAKE_CRD_APPLY_FAIL:-0}" == "1" ]]; then
   exit 1
+fi
+# The cluster has no gVisor nodes unless a test names some.
+if [[ "${1:-} ${2:-}" == "get nodes" && "$*" == *"bootID"* ]]; then
+  cat "${FAKE_BOOT_IDS}" 2>/dev/null
+  exit 0
+fi
+# The model server pods, as the fail-fast watch and the final pods.json see them.
+if [[ "${1:-} ${2:-}" == "get pods" && "$*" == *"-o json"* ]]; then
+  cat "${FAKE_PODS_JSON}" 2>/dev/null || echo '{"items":[]}'
+  exit 0
+fi
+# A node reboots under Pod 1: its bootID changes and the Deployment wait fails.
+if [[ "${1:-}" == "wait" && "$*" == *"condition=Available"* && -n "${FAKE_BOOT_IDS_AFTER_POD1_WAIT:-}" ]]; then
+  printf '%s\\n' "${FAKE_BOOT_IDS_AFTER_POD1_WAIT}" > "${FAKE_BOOT_IDS}"
+  exit 1
+fi
+# A Pod 1 that takes a while: the watch must run alongside the Deployment wait.
+if [[ "${1:-}" == "wait" && "$*" == *"condition=Available"* && -n "${FAKE_POD1_WAIT_SECONDS:-}" ]]; then
+  sleep "${FAKE_POD1_WAIT_SECONDS}"
 fi
 """
 
@@ -78,11 +100,27 @@ def _run(tmp_path: Path, **extra_env: str) -> subprocess.CompletedProcess[str]:
         "CRD_RETRY_DELAY": "0",
         "FAKE_CALLS": str(tmp_path / "calls.log"),
         "FAKE_STDIN_APPLIED": str(tmp_path / "stdin-applied.yaml"),
+        "FAKE_BOOT_IDS": str(tmp_path / "boot-ids"),
+        "FAKE_PODS_JSON": str(tmp_path / "pods.json"),
+        "POD_POLL_INTERVAL": "0",
         "REAL_KUBECTL": real_kubectl,
     })
     env.pop("REPO_ROOT", None)
     env.update(extra_env)
     return subprocess.run(["bash", str(SCRIPT)], cwd=ROOT, env=env, text=True, capture_output=True, check=False)
+
+
+def _pods(tmp_path: Path, *statuses: dict) -> None:
+    """Writes the pod list the fake kubectl returns, one model server pod per status."""
+    items = [
+        {"metadata": {"name": f"pod-snapshot-nvidia-gpu-vllm-decode-{i}"}, "status": status}
+        for i, status in enumerate(statuses)
+    ]
+    (tmp_path / "pods.json").write_text(json.dumps({"items": items}))
+
+
+def _container(name: str = "modelserver", **status) -> dict:
+    return {"name": name, "restartCount": 0, "state": {"running": {}}, **status}
 
 
 def _calls(tmp_path: Path) -> list[str]:
@@ -156,9 +194,13 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path, model_serv
     guide_scale = _index(calls, f"kubectl scale deployment -l {selector} -n {NS} --replicas=2")
     guide_rollout = _index(calls, f"kubectl rollout status deployment -l {selector} -n {NS} --timeout=2400s")
     guide_logs = _index(calls, f"kubectl logs -l {selector} -n {NS} --tail=20")
-    pods_snap = _index(calls, f"kubectl get pods -l {selector} -n {NS} -o json")
+    # The fail-fast watch polls the same `get pods -o json` during the waits; the
+    # pods.json snapshot is the last one, after every wait.
+    pods_snap = max(i for i, c in enumerate(calls) if c == f"kubectl get pods -l {selector} -n {NS} -o json")
     assert (crd < router < snapshot_apply < ms_apply < pod1_guard < pod1_wait < snap_wait
             < guide_scale < guide_rollout < guide_logs < pods_snap)
+    # A clean run dumps nothing.
+    assert not any(c.startswith("kubectl describe") for c in calls)
 
     # Every step is emitted with the ci context (prerequisites.clone / .secrets are
     # skip_in: [ci]); the sections this script emits never contain them, so the
@@ -166,6 +208,84 @@ def test_happy_path_deploys_the_guide_from_guide_yaml(tmp_path: Path, model_serv
     emitted = sorted((tmp_path / "out").glob("*.sh"))
     assert [p.name for p in emitted] == ["crds.sh", "modelserver.sh", "router.sh", "snapshot.sh", "wait-restore.sh", "wait-snapshot.sh"]
     assert all("| context: ci |" in p.read_text() for p in emitted)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        pytest.param(
+            {"phase": "Running", "containerStatuses": [_container(
+                restartCount=12,
+                state={"waiting": {"reason": "CrashLoopBackOff", "message": "back-off 5m0s restarting failed container"}},
+                lastState={"terminated": {"exitCode": 128, "reason": "StartError",
+                                          "message": "failed to load /opt/sglang/bin/python3: exec format error"}},
+            )]},
+            "exec format error",
+            id="crash-loop",
+        ),
+        pytest.param(
+            {"phase": "Pending", "containerStatuses": [_container(
+                state={"waiting": {"reason": "ErrImagePull", "message": "manifest unknown"}},
+            )]},
+            "ErrImagePull",
+            id="image-pull",
+        ),
+        pytest.param(
+            {"phase": "Failed", "reason": "UnexpectedAdmissionError",
+             "message": "Allocate failed due to no healthy devices present"},
+            "no healthy devices",
+            id="pod-failed",
+        ),
+        pytest.param(
+            {"phase": "Running", "containerStatuses": [_container(
+                restartCount=1, lastState={"terminated": {"exitCode": 1, "reason": "Error"}},
+            )]},
+            "restarted 1x",
+            id="restarted",
+        ),
+    ],
+)
+def test_a_pod_that_cannot_recover_stops_the_wait(tmp_path: Path, status: dict, expected: str) -> None:
+    _pods(tmp_path, status)
+    started = time.monotonic()
+    # Without the watch this wait would take the whole 60s.
+    result = _run(tmp_path, FAKE_POD1_WAIT_SECONDS="60")
+    elapsed = time.monotonic() - started
+    assert result.returncode != 0
+    assert elapsed < 30, elapsed
+    assert "will not recover" in result.stderr and expected in result.stderr, result.stderr
+    calls = _calls(tmp_path)
+    # Stopped at the Pod 1 wait: Pod 2 is never attempted.
+    assert not any(c.startswith("kubectl scale") for c in calls)
+    # The failure dump puts the reason in the step log.
+    assert _index(calls, f"kubectl describe pods -l llm-d.ai/guide=pod-snapshot -n {NS}") > _index(
+        calls, "kubectl wait --for=condition=Available ")
+    assert any(c.startswith(f"kubectl get podsnapshots -n {NS}") for c in calls)
+
+
+def test_the_waits_tolerate_a_pod_that_is_still_starting(tmp_path: Path) -> None:
+    _pods(
+        tmp_path,
+        {"phase": "Pending", "initContainerStatuses": [_container("init", state={"waiting": {"reason": "PodInitializing"}})],
+         "containerStatuses": [_container(state={"waiting": {"reason": "ContainerCreating"}})]},
+        {"phase": "Running", "containerStatuses": [_container(ready=True)]},
+    )
+    result = _run(tmp_path, FAKE_POD1_WAIT_SECONDS="1")
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_failed_run_names_the_nodes_that_rebooted_and_dumps_the_namespace(tmp_path: Path) -> None:
+    (tmp_path / "boot-ids").write_text("gpu-a=boot-1\ngpu-b=boot-1\n")
+    result = _run(tmp_path, FAKE_BOOT_IDS_AFTER_POD1_WAIT="gpu-a=boot-2\ngpu-b=boot-1")
+    assert result.returncode != 0
+    rebooted = [line for line in result.stderr.splitlines() if "rebooted" in line]
+    assert len(rebooted) == 1, result.stderr
+    assert "node gpu-a " in rebooted[0]
+    calls = _calls(tmp_path)
+    failed_wait = _index(calls, "kubectl wait --for=condition=Available ")
+    assert failed_wait < _index(calls, f"kubectl describe pods -l llm-d.ai/guide=pod-snapshot -n {NS}")
+    assert failed_wait < _index(calls, f"kubectl get podsnapshots -n {NS} -o wide")
+    assert failed_wait < _index(calls, f"kubectl get events -n {NS} --sort-by=.lastTimestamp")
 
 
 def test_crd_install_gives_up_after_three_attempts(tmp_path: Path) -> None:
