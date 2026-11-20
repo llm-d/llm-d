@@ -1,0 +1,55 @@
+# One-time download of the pinned checkpoint into model-pvc, which the engines read with
+# HF_HUB_OFFLINE=1. Re-running skips files already present.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: download-glm-5-3
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: hf-download
+          image: python:3.12-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |-
+              set -euo pipefail
+              pip install --no-cache-dir --quiet "huggingface_hub[hf_xet]"
+              hf download "${MODEL}" --revision "${REVISION}" --quiet
+              S="${HF_HOME}/hub/models--${MODEL//\//--}/snapshots/${REVISION}"
+              # A download cut short by a volume quota still leaves config.json and some shards.
+              python3 -c "import json,os,sys; s=sys.argv[1]; \
+              w=set(json.load(open(os.path.join(s,'model.safetensors.index.json')))['weight_map'].values()); \
+              m=[f for f in w if not os.path.exists(os.path.join(s,f))]; \
+              print(f'{len(w)-len(m)}/{len(w)} shards in {s}'); sys.exit(1 if m else 0)" "${S}"
+          env:
+            - name: MODEL
+              value: amd/GLM-5.3-Quark-MXFP4-AttnFP8
+            - name: REVISION
+              value: bcd1ec31dc1fd474b9997dd2476c92687790b83d
+            - name: HF_HOME
+              value: /model-cache
+            - name: HF_XET_HIGH_PERFORMANCE
+              value: "1"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            requests:
+              cpu: "4"
+              memory: 16Gi
+            limits:
+              cpu: "8"
+              memory: 32Gi
+          volumeMounts:
+            - name: model-cache
+              mountPath: /model-cache
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-pvc

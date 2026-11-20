@@ -1,0 +1,13 @@
+# Model cache shared by every engine pod and read by the benchmark Job. storageClassName is
+# omitted so the PVC binds the cluster's default StorageClass, which must support ReadWriteMany.
+# The checkpoint is 141 safetensors shards, 410 GB.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Ti

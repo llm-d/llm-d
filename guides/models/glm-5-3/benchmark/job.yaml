@@ -1,0 +1,61 @@
+# One benchmark or gate run through the router, on CPU only, with the engine image as the client.
+# The run is defined by the optional ConfigMap glm-5-3-bench-run (MODE, RETAINED_TOKENS,
+# NEW_TOKENS, PROMPT_TOKENS, NUM_PROMPTS, CONCURRENCY, ROUNDS, GPUS, LAYOUT, METRICS_ENDPOINTS);
+# without it, bench.sh runs its defaults. Results persist on glm-5-3-bench.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: glm-5-3-bench
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bench
+          image: REPLACE_MODEL_SERVER_IMAGE
+          command: ["/bin/bash", "/scripts/bench.sh"]
+          envFrom:
+            - configMapRef:
+                name: glm-5-3-bench-run
+                optional: true
+          env:
+            # The router Service (<release>-epp, port 80 -> Envoy 8081).
+            - name: GATEWAY_URL
+              value: http://glm-5-3-epp
+            - name: MODEL
+              value: amd/GLM-5.3-Quark-MXFP4-AttnFP8
+            - name: TOKENIZER
+              value: /model-cache/hub/models--amd--GLM-5.3-Quark-MXFP4-AttnFP8/snapshots/bcd1ec31dc1fd474b9997dd2476c92687790b83d
+            # TODO: move to the merge commit once ROCm/MAD#304 merges.
+            - name: MAD_REF
+              value: 75144e267267d4831a22d91be019c7a74cc9db5b
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "16"
+              memory: 64Gi
+            limits:
+              memory: 96Gi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: results
+              mountPath: /results
+            - name: model-cache
+              mountPath: /model-cache
+              readOnly: true
+      volumes:
+        - name: scripts
+          configMap:
+            name: glm-5-3-bench-scripts
+        - name: results
+          persistentVolumeClaim:
+            claimName: glm-5-3-bench
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-pvc
+            readOnly: true

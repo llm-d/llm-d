@@ -1,0 +1,8 @@
+# Default: amd/GLM-5.3-Quark-MXFP4-AttnFP8 P/D on two MI355X nodes, one DP8/EP8 prefill pod and
+# one DP8/EP8 decode pod, MoRI-IO READ, MTP-3. Pair with router/glm-5-3.values.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base-pd
+components:
+  - ../../components/fabric

@@ -1,0 +1,9 @@
+# amd/GLM-5.3-Quark-MXFP4-AttnFP8 colocated on one MI355X node: two expert-parallel replicas
+# (2 pods x DP4/EP4, 8 rank endpoints), 2,048-token prefill chunks, MTP-3.
+# Pair with router/glm-5-3-colocated-ep.values.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base-colocated
+components:
+  - ../../components/fabric

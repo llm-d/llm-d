@@ -1,0 +1,15 @@
+# TODO: replace with a published ROCm vLLM image once the patches in the ROCm MAD recipe are
+# upstream (needs a tracking issue in llm-d/llm-d).
+#
+# Placeholder: set newName/newTag (or digest) to the image you build from the ROCm MAD Dockerfile
+# docker/vllm_disagg_inference.glmv5.3_quark_mxfp4_attnfp8.ubuntu.amd.Dockerfile, proposed in
+# https://github.com/ROCm/MAD/pull/304:
+# https://github.com/shikamd123/MAD/blob/glm53-mxfp4-llmd-vllm-dockerfile/docker/vllm_disagg_inference.glmv5.3_quark_mxfp4_attnfp8.ubuntu.amd.Dockerfile
+# The serving recipe for every layout is scripts/vllm_dissag/glm-5.3-quark-mxfp4-attnfp8.md on the
+# same branch.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: registry.example.com/vllm-disagg
+    newTag: glmv5.3_quark_mxfp4_attnfp8
