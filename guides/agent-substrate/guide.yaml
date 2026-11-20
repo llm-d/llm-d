@@ -126,7 +126,8 @@ deploy:
     - skip_in: [ci]
       run: |
         export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
-        docker build -t "${HERMES_IMAGE_REPO}:5ffbea8" ${REPO_ROOT}/guides/${GUIDE_NAME}/hermes/actor
+        # The worker nodes are x86-64; --platform keeps a build on an Arm machine usable.
+        docker build --platform linux/amd64 -t "${HERMES_IMAGE_REPO}:5ffbea8" ${REPO_ROOT}/guides/${GUIDE_NAME}/hermes/actor
         docker push "${HERMES_IMAGE_REPO}:5ffbea8"
         export HERMES_IMAGE="${HERMES_IMAGE_REPO}@$(gcloud artifacts docker images describe "${HERMES_IMAGE_REPO}:5ffbea8" --format='value(image_summary.digest)')"
 
@@ -176,6 +177,9 @@ deploy:
       run: |
         seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
           | xargs -P 32 -I {} kubectl ate create actor -a ${ATESPACE} --template hermes-dense {}
+        # Every agent must exist before continuing. New agents are listed as
+        # ACTOR_STATE_SUSPENDED until their first request.
+        echo "actors: $(kubectl ate get actors -a ${ATESPACE} 2>/dev/null | grep -c 'agent-') / ${HERMES_AGENTS}"
 
   substrate_egress:
     - skip_in: [ci]
@@ -187,6 +191,14 @@ deploy:
           < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-egress-policy.yaml.tmpl > "${HERMES_EGRESS_POLICY}"
         seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
           | xargs -P 32 -I {} kubectl ate create egress-policy {} -a ${ATESPACE} -f "${HERMES_EGRESS_POLICY}"
+        # A create can be lost to a transient connection error among the 1,000
+        # calls. Find agents left without a policy and create it for them.
+        HERMES_EGRESS_MISSING=$(seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
+          | xargs -P 32 -I {} sh -c "kubectl ate get egress-policy {} -a ${ATESPACE} 2>&1 | grep -q 'has no egress policy' && echo {} || true")
+        echo "agents without an egress policy: ${HERMES_EGRESS_MISSING:-none}"
+        for actor in ${HERMES_EGRESS_MISSING}; do
+          kubectl ate create egress-policy ${actor} -a ${ATESPACE} -f "${HERMES_EGRESS_POLICY}"
+        done
         rm -f "${HERMES_EGRESS_POLICY}"
 
   monitoring:

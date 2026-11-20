@@ -107,6 +107,7 @@ flowchart TD
 ## Prerequisites
 
 - **`kubectl`**, **`helm`** (`v3.14+`), **`kustomize`**, **`envsubst`** (`gettext`), **`openssl`**, and **`python3`** (`3.10+`).
+- **`docker`** and **`gcloud`** to build the Hermes actor image and push it to Artifact Registry ([Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image)).
 - **Accelerator capacity for `llm-d` model servers**:
   - **NVIDIA GPU (default below)**: `2+` replicas × `2× H100 / A100 80 GB` GPUs (`TP=2`) with `>= 320 GiB` host RAM per pod for native CPU KV offloading, **or**
   - **Google Cloud TPU v7x (Ironwood)**: `2+` replicas × `tpu7x` (`2x2x1`, `TP=8`) with `TPUOffloadConnector` Host-DRAM KV offloading (shown in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading)).
@@ -334,13 +335,14 @@ kubectl wait --for=condition=Available deployment/hermes-fleet-driver -n ${NAMES
 
 ### 5. Build the Pre-Warmed Hermes Agent Sandbox Image
 
-Build and push [`hermes/actor/`](./hermes/actor/) (`NousResearch/hermes-agent` pinned at commit `5ffbea8`, [`warmup.py`](./hermes/actor/warmup.py), and [`sitecustomize.py`](./hermes/actor/sitecustomize.py)), pinning `HERMES_IMAGE` by digest so every restored gVisor sandbox matches the golden snapshot:
+Build and push [`hermes/actor/`](./hermes/actor/) (`NousResearch/hermes-agent` pinned at commit `5ffbea8`, [`warmup.py`](./hermes/actor/warmup.py), and [`sitecustomize.py`](./hermes/actor/sitecustomize.py)), pinning `HERMES_IMAGE` by digest so every restored gVisor sandbox matches the golden snapshot. Docker must be able to push to the repository first (`gcloud auth configure-docker <region>-docker.pkg.dev`):
 
 <!-- guide:deploy.substrate_image start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
 export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
-docker build -t "${HERMES_IMAGE_REPO}:5ffbea8" ${REPO_ROOT}/guides/${GUIDE_NAME}/hermes/actor
+# The worker nodes are x86-64; --platform keeps a build on an Arm machine usable.
+docker build --platform linux/amd64 -t "${HERMES_IMAGE_REPO}:5ffbea8" ${REPO_ROOT}/guides/${GUIDE_NAME}/hermes/actor
 docker push "${HERMES_IMAGE_REPO}:5ffbea8"
 export HERMES_IMAGE="${HERMES_IMAGE_REPO}@$(gcloud artifacts docker images describe "${HERMES_IMAGE_REPO}:5ffbea8" --format='value(image_summary.digest)')"
 ```
@@ -428,6 +430,9 @@ Instantiate all 1,000 Hermes Agent actors (`agent-0001` through `agent-1000`):
 ```bash
 seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
   | xargs -P 32 -I {} kubectl ate create actor -a ${ATESPACE} --template hermes-dense {}
+# Every agent must exist before continuing. New agents are listed as
+# ACTOR_STATE_SUSPENDED until their first request.
+echo "actors: $(kubectl ate get actors -a ${ATESPACE} 2>/dev/null | grep -c 'agent-') / ${HERMES_AGENTS}"
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.substrate_actors end -->
@@ -444,6 +449,14 @@ envsubst '${LLMD_HOST}' \
   < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-egress-policy.yaml.tmpl > "${HERMES_EGRESS_POLICY}"
 seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
   | xargs -P 32 -I {} kubectl ate create egress-policy {} -a ${ATESPACE} -f "${HERMES_EGRESS_POLICY}"
+# A create can be lost to a transient connection error among the 1,000
+# calls. Find agents left without a policy and create it for them.
+HERMES_EGRESS_MISSING=$(seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
+  | xargs -P 32 -I {} sh -c "kubectl ate get egress-policy {} -a ${ATESPACE} 2>&1 | grep -q 'has no egress policy' && echo {} || true")
+echo "agents without an egress policy: ${HERMES_EGRESS_MISSING:-none}"
+for actor in ${HERMES_EGRESS_MISSING}; do
+  kubectl ate create egress-policy ${actor} -a ${ATESPACE} -f "${HERMES_EGRESS_POLICY}"
+done
 rm -f "${HERMES_EGRESS_POLICY}"
 ```
 <!-- llm-d-cicd:skip end -->
@@ -572,15 +585,36 @@ The driver's default prompts are short, so most of each prompt is the system pro
 # Teach turn: every session's private prefix is new everywhere.
 kubectl exec deploy/hermes-fleet-driver -n ${NAMESPACE} -- \
   python3 /opt/driver/hermes_fleet_driver.py \
-    --agents ${HERMES_AGENTS} --turns 1 --generation 2 --context-words 5000 --concurrency 200
+    --agents ${HERMES_AGENTS} --turns 1 --generation 2 --context-words 2000 --concurrency 200
 
-# Follow-up turns: each session resends its long prefix.
+# Follow-up turn: each session resends its long prefix.
 kubectl exec deploy/hermes-fleet-driver -n ${NAMESPACE} -- \
   python3 /opt/driver/hermes_fleet_driver.py \
-    --agents ${HERMES_AGENTS} --turns 3 --recall-only --generation 2 --context-words 5000 --concurrency 200
+    --agents ${HERMES_AGENTS} --turns 1 --recall-only --generation 2 --context-words 2000 --concurrency 200
 ```
 
-Read the prefix-cache counters below before and after the follow-up turns. For a baseline, install the router with [`router/agent-substrate.baseline-random.values.yaml`](./router/agent-substrate.baseline-random.values.yaml) in place of `ROUTER_VALUES` (same Flow Control and session identity, random model-server choice, no scorers), restart the EPP, and repeat with a new `--generation`. Reinstall with `ROUTER_VALUES` afterwards.
+Note the `wall=` time the driver prints for the follow-up turn, and read the prefix-cache counters below before and after it. Then measure the same two turns against a baseline that picks a model server at random: install the router with [`router/agent-substrate.baseline-random.values.yaml`](./router/agent-substrate.baseline-random.values.yaml) (same Flow Control and session identity, no scorers) and repeat with a new `--generation`:
+
+```bash
+helm upgrade --install ${GUIDE_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.baseline-random.values.yaml \
+    ${EXTRA_HELM_ARGS} \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=300s
+
+kubectl exec deploy/hermes-fleet-driver -n ${NAMESPACE} -- \
+  python3 /opt/driver/hermes_fleet_driver.py \
+    --agents ${HERMES_AGENTS} --turns 1 --generation 3 --context-words 2000 --concurrency 200
+kubectl exec deploy/hermes-fleet-driver -n ${NAMESPACE} -- \
+  python3 /opt/driver/hermes_fleet_driver.py \
+    --agents ${HERMES_AGENTS} --turns 1 --recall-only --generation 3 --context-words 2000 --concurrency 200
+```
+
+In the validation above, the follow-up turn across 1,000 agents took about `20 s` with this guide's routing and about `40 s` with random routing. Reinstall the router with `ROUTER_VALUES` afterwards ([Step 1](#1-deploy-the-llm-d-router)); a reinstall restarts the EPP and resets its metrics.
+
+Size `--context-words` to the fleet: `2000` (about 2,400 tokens per session) suits 1,000 agents on the default two replicas, and each pass takes a few minutes. With `5000` at that scale the sessions outgrow GPU memory and the Host-DRAM tier, so both routers recompute every prefix and show no difference (see [Sizing the Host-DRAM Tier for Session Length](#sizing-the-host-dram-tier-for-session-length)). In the [Small-Scale Trial](#small-scale-trial) with 60 agents, use `5000`.
 
 ### Inspect EPP Flow-Control, Session, and vLLM Prefix-Cache Metrics
 
