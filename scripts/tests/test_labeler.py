@@ -292,6 +292,10 @@ class LabelerTaxonomyTests(unittest.TestCase):
             {"area/docs", "area/ci", "docs-only"},
         )
         self.assertEqual(
+            self.evaluate_all([".github/workflows/README.md"]),
+            {"area/docs", "area/ci", "docs-only"},
+        )
+        self.assertEqual(
             self.evaluate_all(["guides/flow-control/README.md"]),
             {"area/guides", "area/router", "area/flowcontrol", "area/docs", "docs-only"},
         )
