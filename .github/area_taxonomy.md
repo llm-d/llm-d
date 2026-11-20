@@ -8,6 +8,7 @@ A change can span multiple areas. Every matching `area/*` label applies additive
 
 - A prose edit to `guides/flow-control/README.md` receives `area/guides`, `area/router`, `area/flowcontrol`, `area/docs`, and `docs-only`.
 - If a later commit on the same PR modifies `guides/flow-control/guide.yaml`, the workflow removes `docs-only` automatically while retaining the `area/*` labels.
+- An edit to `.github/area_taxonomy.md` or `.github/workflows/README.md` receives `area/ci` (everything under `.github/`), `area/docs`, and `docs-only`.
 
 ## How Labels Are Applied
 
@@ -54,4 +55,11 @@ The domain `area/*` labels route guides, documentation, proposals, and issues to
 
 `docs-only` applies automatically when every changed file in a PR matches documentation prose (including `.github/area_taxonomy.md`, `.github/workflows/README.md`, and `.github/scripts/**/README.md`), diagram assets (`.png`, `.svg`, `.gif`), `llm-d.ai` navigation metadata (`docs/menu-config.json`, `docs/well-lit-paths/guides.yaml`), license files (`DCO`, `LICENSE`), or prose linter configurations (`.markdownlint.json`, `_typos.toml`).
 
-Executable files under `.github/workflows/*.md` (agentic workflows), `.github/ISSUE_TEMPLATE/*`, `OWNERS` files, `release/README.md` nightly matrices, shell/Python scripts, Dockerfiles, and Kubernetes/Helm/Kustomize YAML manifests never match `docs-only`.
+A PR does not receive `docs-only` if it touches any of the following:
+
+- `.github/workflows/*.md` other than `README.md`. These are agentic workflow definitions that CI runs, not documentation.
+- `.github/ISSUE_TEMPLATE/*`
+- `OWNERS` files
+- `release/README.md`, which holds the generated nightly matrices
+- Shell scripts, Python scripts, and Dockerfiles
+- Kubernetes, Helm, and Kustomize YAML manifests
