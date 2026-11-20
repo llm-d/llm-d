@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# 1P1D, each role TP=8 + EP on one 8-GPU node, MoRI-IO in READ mode, CPU KV offloading
+# off. ../components/offloading-cpu turns it on (../base and ../amd-ci do).
+resources:
+  - ../../../../../../recipes/modelserver/base/single-host/pd-disaggregatedset/vllm
+
+nameSuffix: -glm-5-3-flash
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/amd-vllm/release
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
+
+# vLLM v0.34.0 is the last release that loads the Quark MXFP4 checkpoint (vLLM main
+# fails since vllm-project/vllm#66118); the amd-vllm release component is older.
+# TODO(vllm-project/vllm#68197): drop this override once the fix is released and the
+# amd-vllm component carries a tag that loads the checkpoint.
+images:
+  - name: docker.io/vllm/vllm-openai-rocm
+    digest: sha256:3cb773d23f063afa86291ef75773cdd486154ddea94c213300f4ed7cc42b7af1
+
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.3-Flash-Quark-MXFP4
+      llm-d.ai/guide: glm-5-3-flash
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+      llm-d.ai/engine-type: vllm
+    fields:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        kind: DisaggregatedSet
+        create: true
+
+patches:
+  - path: patch-prefill.yaml
+  - path: patch-decode.yaml
+  - path: patch-sidecar.yaml

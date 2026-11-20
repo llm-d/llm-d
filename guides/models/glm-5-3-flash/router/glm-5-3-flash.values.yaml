@@ -1,0 +1,70 @@
+## GLM-5.3-Flash 1P1D router values. Layer on top of: recipes/router/base.values.yaml
+##
+## The pd-disaggregation plugin chain, with the prefix index sized for the GPU and CPU
+## KV tiers of the prefill engine.
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica: the inflight-load-producer's in-flight token accounting
+    # (which the token-load-scorer and affinity filter consume) is local to each
+    # EPP process, so multiple replicas would each see only a fraction of the
+    # per-endpoint load and incorrectly gate the affinity filter.
+    replicas: 1
+    pluginsConfigFile: "pd-config.yaml"
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        # One index per engine covering both tiers, so autoTune (GPU blocks only) is
+        # off. vLLM's KV block is 640 tokens at TP=8 (one KDA state page).
+        #   GPU: ~3,850 blocks (KV_CACHE_MEMORY_BYTES=30e9)
+        #   CPU: ~8,750 blocks (KV_OFFLOAD_CPU_BYTES=512 GiB)
+        # Recompute if you change either, or the TP size; without offloading use 3850.
+        - type: approx-prefix-cache-producer
+          parameters:
+            autoTune: false
+            blockSizeTokens: 640
+            maxPrefixTokensToMatch: 262144
+            lruCapacityPerServer: 12600
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Estimate (a cold 63K-token prompt prefills in 1.47 s), not a calibrate.sh
+            # measurement; see guides/recipes/router/calibration.
+            peakPrefillThroughput: 43000
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        # Prefill does the prompt pass: keep prefix groups on cache-warm pods
+        # (affinity filter) and pick by queued prefill token load.
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "glm-5-3-flash"

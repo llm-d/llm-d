@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Native CPU KV offloading on the prefill role: the KV connector becomes
+# MultiConnector[OffloadingConnector, MoRIIOConnector (READ-mode producer)].
+#
+# KV_OFFLOAD_CPU_BYTES is the pool of the whole TP=8 engine (split across the ranks):
+# 512 GiB is about 5.6M tokens at ~98 KB/token, 2.3x the HBM KV at 30 GB per GPU. Blocks
+# are written through to CPU, so the pool only adds capacity once it exceeds HBM KV.
+#
+# On ROCm the pool is pinned host memory counted in the pod memory limit (384Gi + the
+# pool), capped by the amdgpu TTM limit (half of host RAM by default). When you change
+# the pool, change the memory below and lruCapacityPerServer in the router values.
+patches:
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: any
+      spec:
+        roles:
+          - name: prefill
+            spec:
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: modelserver
+                        env:
+                          - name: OFFLOADING_MODE
+                            value: "cpu"
+                          - name: KV_OFFLOAD_CPU_BYTES
+                            value: "549755813888"
+                        resources:
+                          limits:
+                            memory: 896Gi
+                          requests:
+                            memory: 896Gi
