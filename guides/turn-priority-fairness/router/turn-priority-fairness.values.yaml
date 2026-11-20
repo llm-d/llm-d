@@ -14,7 +14,7 @@ router:
     pluginsConfigFile: "turn-priority-plugins.yaml"
     pluginsCustomConfig:
       turn-priority-plugins.yaml: |
-        apiVersion: llm-d.ai/v1alpha1
+        apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         featureGates:
         - flowControl
