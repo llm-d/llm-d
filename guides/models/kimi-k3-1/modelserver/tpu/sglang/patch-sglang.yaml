@@ -5,12 +5,14 @@
 #
 # Server flags and environment follow SGLang's own Kimi-K3.1 TPU recipe
 # (benchmark/tpu/recipe/configs/kimi_k3_1/server.py in the image), with a 480K context instead
-# of the recipe's 128K + 8K sizing. One replica's KV pool holds 532,352 tokens (measured; MLA
-# latents and DSA index keys are replicated on every rank), short of the model's 1M, and the
-# batch-64 decode kernel keeps a 64-sequence page table in its 1 MiB SMEM: at 523,264 tokens
-# (4,089 pages) the batch-64 compile ran out of SMEM by 51.6K (measured on tpu7x). 491,520 tokens
-# (3,841 pages) fits with ~10 KB to spare and keeps the recipe's 64-request batch and 128-token
-# pages.
+# of the recipe's 128K + 8K sizing. --max-mamba-cache-size=384 sizes the KDA recurrent-state
+# pool for multi-turn agentic serving and gives the remaining HBM to the KV pool: 751,104 tokens
+# per replica (532,352 with the recipe's 708 slots). Each cached prefix also keeps a KDA state
+# snapshot, so keep enough slots for the concurrent sessions plus their cached prefixes; 384 was
+# validated at 16 concurrent sessions per replica. The batch-64 decode kernel keeps a 64-sequence
+# page table in its 1 MiB SMEM, which sets the context length: 491,520 tokens (3,841 pages) fits
+# with ~10 KB to spare and keeps the recipe's 64-request batch and 128-token pages; 523,264
+# tokens (4,089 pages) does not compile at batch 64 (measured on tpu7x).
 #
 # Tiered prefix cache: SGLang HiCache over TPU Sync (raiden) keeps evicted prefixes, both the
 # sparse-MLA / DSA pages and the KDA state slots, in a host-DRAM pool twice the HBM pool, and
@@ -100,8 +102,10 @@ spec:
                   --enable-torch-compile \
                   --torch-compile-max-bs=64 \
                   --mamba-ssm-dtype=bfloat16 \
+                  --max-mamba-cache-size=384 \
                   --scheduler-recv-interval=16 \
                   --weight-loader-disable-mmap \
+                  --weight-loader-drop-cache-after-load \
                   --grammar-backend=none \
                   --reasoning-parser=kimi_k3 \
                   --tool-call-parser=kimi_k3 \
@@ -120,8 +124,7 @@ spec:
               - name: TRANSFORMERS_OFFLINE
                 value: "1"
               # Common TPU runtime env from SGLang's recipe base (benchmark/tpu/recipe/configs/base.py),
-              # copied as is: libtpu and the TPU runtime read different names for the diagnostic
-              # coordinator and telemetry interval switches, so both spellings are set.
+              # limited to the names this image reads.
               - name: SGLANG_PLATFORM
                 value: tpu
               - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
@@ -130,24 +133,12 @@ spec:
                 value: "1"
               - name: SGLANG_TPU_PRELOAD_TELEMETRY_STUB
                 value: "1"
-              - name: SGLANG_TPU_OVERLAP_PROFILE
-                value: "1"
               - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
                 value: "false"
               - name: TPU_ENABLE_DIAGNOSTIC_COORDINATOR
                 value: "0"
               - name: TPU_DISABLE_DIAGNOSTIC_COORDINATOR
                 value: "1"
-              - name: TPU_ENABLE_TELEMETRY
-                value: "0"
-              - name: TPU_ENABLE_TELEMETRY_HARVESTING
-                value: "0"
-              - name: ENABLE_TPU_TELEMETRY
-                value: "0"
-              - name: TPU_TELEMETRY_INTERVAL_SEC
-                value: "86400"
-              - name: TPU_TELEMETRY_INTERVAL_SECONDS
-                value: "86400"
               - name: TPU_DIAGNOSTIC_HARVESTER_INTERVAL_SEC
                 value: "86400"
               # Kimi-K3 per-op kernels (SGLang's kimi_k3 recipe).
@@ -202,6 +193,10 @@ spec:
                 value: "1"
               - name: SGLANG_TPU_PALLAS_VMEM_RIGHTSIZE
                 value: "1"
+              # Skip the vision-encoder bucket compile at startup: this guide serves text only
+              # (SGLANG_TPU_VL_TEXT_ONLY_EXTEND=1), so the ViT graphs are never used.
+              - name: SGLANG_TPU_VIT_PRECOMPILE_SIZES
+                value: ""
               - name: LIBTPU_INIT_ARGS
                 value: >-
                   --xla_tpu_enable_async_collective_fusion=true
