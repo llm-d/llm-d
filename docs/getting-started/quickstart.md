@@ -8,6 +8,14 @@ For this quickstart, we will use the **Standalone Mode** deployment, which is th
 
 - Installed proper client tools (kubectl, helm).
 
+- Ensure your cluster has enough accelerators for the default configuration: **4 NVIDIA GPUs in total** (2 replicas × `--tensor-parallel-size=2`), with each replica's 2 GPUs on the same node. Each replica also requests 8 CPU and 96Gi of memory. The reference hardware is H100 80 GB. Check what your nodes expose:
+
+  ```bash
+  kubectl get nodes -o custom-columns='NAME:.metadata.name,GPUs:.status.allocatable.nvidia\.com/gpu'
+  ```
+
+  If your cluster has fewer resources, lower `replicas` and `--tensor-parallel-size` in [`patch-vllm.yaml`](../../guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml) before deploying. For non-NVIDIA hardware, see [Supported Accelerators and Model Servers](../../guides/optimized-baseline/README.md#supported-accelerators-and-model-servers) and the [accelerator support list](./accelerators.md) — some of those configurations serve a different model.
+
 - Checkout llm-d repo:
 
   ```bash
@@ -81,6 +89,9 @@ bash ${REPO_ROOT}/guides/scripts/wait-for-pods-ready.sh -l llm-d.ai/guide=optimi
 
 > [!NOTE]
 > Model server pods may take several minutes to start as they need to download the model weights.
+
+> [!TIP]
+> If the pods stay in `Pending`, the cluster could not schedule them. Run `kubectl describe pod -l llm-d.ai/guide=optimized-baseline -n ${NAMESPACE}` and look at the events: `Insufficient nvidia.com/gpu` means the cluster has fewer GPUs than the default 4-GPU configuration needs. See the accelerator prerequisite above.
 
 ## Verification
 
