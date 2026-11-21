@@ -21,7 +21,7 @@
 set -e
 
 # Configuration
-ENDPOINT="${ENDPOINT:-http://localhost:8000/v1}"
+ENDPOINT="${3:-${ENDPOINT:-http://localhost:8000/v1}}"
 CONCURRENT_WORKERS=${1:-6}
 DURATION_MINUTES=${2:-5}
 MODEL_NAME="${MODEL_NAME:-meta-llama/Llama-3.1-8B-Instruct}"
