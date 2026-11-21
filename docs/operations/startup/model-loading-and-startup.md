@@ -23,7 +23,7 @@ An optional Secret does not bypass authorization. Keep tokens out of manifests.
 
 ## Model Caches and Internal Registries
 
-Use node-local storage or a PVC to reuse model files, and an internal registry for a self-hosted source. None of these choices alone makes the deployment air-gapped.
+Use node-local storage or a PVC to reuse model files, and an internal registry for a self-hosted source. None of these choices alone makes the deployment air-gapped; see [Air-Gapped and Disconnected Clusters](../air-gapped-installation.md) for full offline deployment instructions.
 
 ### Node-Local Cache
 
