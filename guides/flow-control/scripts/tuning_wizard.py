@@ -295,6 +295,15 @@ def main():
     recommended_headroom = 0.0
     if bottleneck.startswith("Compute") and args.enable_prefix_caching:
         recommended_headroom = 0.1
+    # With headroom, the engine limit must cover the burst peak N_active * (1 + headroom)
+    # (docs/operations/traffic/flow-control-tuning.md, Step 4). Integer math, because
+    # 50 * 1.1 is 55.000000000000007 in floating point.
+    headroom_pct = round(recommended_headroom * 100)
+    engine_limit = -(-safe_active_batch * (100 + headroom_pct) // 100)
+    if run_memory and engine_limit > memory_limit:
+        print(f"\n[!] Headroom not recommended: the burst peak ({engine_limit}) exceeds the Memory Limit ({memory_limit}).")
+        recommended_headroom = 0.0
+        engine_limit = safe_active_batch
 
     print_header("CONFIGURATION SNIPPETS")
     print("1. Gateway Configuration (EndpointPickerConfig YAML):")
@@ -317,8 +326,10 @@ flowControl:
 
     print("2. Model Server Configuration (Engine Target):")
     print(f"   Target Active Concurrency per replica: {safe_active_batch}")
-    print(f"   Example for vLLM: vllm serve ... --max-num-seqs {safe_active_batch}")
-    print(f"   Example for TGI:  text-generation-launcher ... --max-concurrent-requests {safe_active_batch}\n")
+    if engine_limit > safe_active_batch:
+        print(f"   Peak Burst Concurrency (N_active x (1 + headroom)): {engine_limit}")
+    print(f"   Example for vLLM: vllm serve ... --max-num-seqs {engine_limit}")
+    print(f"   Example for TGI:  text-generation-launcher ... --max-concurrent-requests {engine_limit}\n")
 
     # CLI Reproducer
     if interactive:
