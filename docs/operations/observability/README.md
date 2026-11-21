@@ -17,6 +17,7 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 * [PromQL Query Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
 * [Configure Alerts](./alerting.md) — Apply the default EPP and Batch Gateway Prometheus alerting rules
 * [Trace Requests](./tracing.md) — Configure OpenTelemetry across vLLM, the routing proxy, and the EPP
+* [Query Logs by Trace ID](./logging.md) — Collect llm-d logs into Loki and find every line of one request
 * [Monitor GKE TPUs](./tpu.md) — Interpret TPU hardware metrics and troubleshoot missing data
 
 ## Runnable assets
