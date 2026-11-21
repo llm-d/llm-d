@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The predictor is EPP-side only; inherit the AMD SGLang deployment while
+# declaring the ROCm 10 image component explicitly for this guide.
+resources:
+  - ../../../../../optimized-baseline/modelserver/amd/sglang/base
+
+components:
+  - ../../../../../recipes/modelserver/components/images/amd-sglang/rocm10-mi355x

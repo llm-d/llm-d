@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/lmsysorg/sglang-rocm
+    newTag: v0.5.22-rocm10-mi30x-20261028
