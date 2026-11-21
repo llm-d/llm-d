@@ -409,6 +409,7 @@ since the screener and the decider are Alpha.
 
 1. *Deploy the llm-d Routers*:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export PROVIDER_NAME=istio # other: gke, na, agentgateway
 export ROUTER_RELEASES="${GUIDE_NAME}-encode ${GUIDE_NAME}-prefill ${GUIDE_NAME}-decode" # for Cleanup
@@ -423,6 +424,7 @@ for ROLE in encode prefill decode; do
       -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 done
 ```
+<!-- llm-d-cicd:skip end -->
 
 1. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
    `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
@@ -433,9 +435,11 @@ done
    `${GUIDE_NAME}-decode` — the InferencePool name matches the Helm release name). The
    same [!WARNING] about `x-llm-d-epp-profile` not being a trust boundary applies here too.
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
+<!-- llm-d-cicd:skip end -->
 
 > [!NOTE]
 > Same `base`/`gke` overlay split as the single-EPP variant's HTTPRoute, except the
