@@ -263,6 +263,26 @@ else
   FAILURES=$((FAILURES + 1))
 fi
 
+echo "routing sidecar dashboard requests exemplars on the stage p99 queries only"
+# The sidecar attaches trace exemplars to its encode, prefill and decode
+# duration histograms and to nothing else.
+SIDECAR_DASHBOARD="${REPOSITORY}/guides/recipes/observability/grafana/dashboards/llm-d-routing-sidecar.json"
+SIDECAR_TARGETS='[.. | objects | .targets? // empty | .[]]'
+if jq -e . "$SIDECAR_DASHBOARD" >/dev/null 2>&1; then
+  printf '  ok   sidecar dashboard is valid json\n'
+  for stage in encode prefill decode; do
+    check "${stage} p99 query requests exemplars" "1" \
+      "$(jq --arg m "llm_d_disagg_sidecar_${stage}_duration_seconds_bucket" \
+        "${SIDECAR_TARGETS} | map(select(.exemplar == true and (.expr | startswith(\"histogram_quantile(0.99,\")) and (.expr | contains(\$m)))) | length" \
+        "$SIDECAR_DASHBOARD")"
+  done
+  check "no other sidecar query requests exemplars" "3" \
+    "$(jq "${SIDECAR_TARGETS} | map(select(.exemplar == true)) | length" "$SIDECAR_DASHBOARD")"
+else
+  printf '  FAIL sidecar dashboard is not valid json\n'
+  FAILURES=$((FAILURES + 1))
+fi
+
 echo
 if ((FAILURES > 0)); then
   echo "${FAILURES} assertion(s) failed"

@@ -1,0 +1,649 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "llm-d routing sidecar metrics (llm_d_disagg_sidecar_* and moriio_dns_*) from the P/D decode pods: request mix, encode/prefill/decode latency with trace exemplars on p99, stage errors, tool-calling field outcomes and MoRI-IO peer DNS. Needs the sidecar's --metrics-port endpoint scraped.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Requests",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Requests on the inference API paths the sidecar intercepts, by api_type.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (api_type) (rate(llm_d_disagg_sidecar_requests_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "{{api_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Request Rate by API Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Requests the sidecar routed through disaggregation, by disagg_type (prefill-decode, encode-decode, encode-prefill-decode). Requests the EPP sent to decode only are not counted here.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (disagg_type) (rate(llm_d_disagg_sidecar_disagg_requests_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "{{disagg_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Disaggregated Requests by Type",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 4,
+      "panels": [],
+      "title": "Stage Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Prefill stage latency per decode pod, as seen by its sidecar. The p99 queries show trace exemplars when Prometheus stores them (--enable-feature=exemplar-storage) and the sidecar attaches them.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 10
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (pod, le) (rate(llm_d_disagg_sidecar_prefill_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum by (pod, le) (rate(llm_d_disagg_sidecar_prefill_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (pod, le) (rate(llm_d_disagg_sidecar_prefill_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p99",
+          "range": true,
+          "refId": "C",
+          "exemplar": true
+        }
+      ],
+      "title": "Prefill Duration (p50/p90/p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Decode stage latency per decode pod. Not sampled when prefill returns an error status, since decode then does not run or its output is discarded. The p99 queries show trace exemplars when Prometheus stores them (--enable-feature=exemplar-storage) and the sidecar attaches them.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 10
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (pod, le) (rate(llm_d_disagg_sidecar_decode_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum by (pod, le) (rate(llm_d_disagg_sidecar_decode_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (pod, le) (rate(llm_d_disagg_sidecar_decode_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p99",
+          "range": true,
+          "refId": "C",
+          "exemplar": true
+        }
+      ],
+      "title": "Decode Duration (p50/p90/p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Encode stage latency per decode pod. Only the encode-disaggregation (E/P/D, E/PD) guides record it. The p99 queries show trace exemplars when Prometheus stores them (--enable-feature=exemplar-storage) and the sidecar attaches them.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (pod, le) (rate(llm_d_disagg_sidecar_encode_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum by (pod, le) (rate(llm_d_disagg_sidecar_encode_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (pod, le) (rate(llm_d_disagg_sidecar_encode_duration_seconds_bucket{namespace=~\"$namespace\", pod=~\"$pod\"}[5m])))",
+          "legendFormat": "{{pod}} p99",
+          "range": true,
+          "refId": "C",
+          "exemplar": true
+        }
+      ],
+      "title": "Encode Duration (p50/p90/p99)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 8,
+      "panels": [],
+      "title": "Stage Errors",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Encode, prefill and decode stage errors, by stage.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (stage) (rate(llm_d_disagg_sidecar_request_errors_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "{{stage}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Stage Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Stage errors as a share of disaggregated requests, by stage. Stages only run on disaggregated requests, so decode-only traffic is left out of the denominator.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (stage) (rate(llm_d_disagg_sidecar_request_errors_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))\n  / ignoring(stage) group_left\nsum(rate(llm_d_disagg_sidecar_disagg_requests_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "{{stage}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Stage Error Ratio",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 11,
+      "panels": [],
+      "title": "Tool Calling and MoRI-IO DNS",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "How the sidecar handled the tools, tool_choice, parallel_tool_calls and response_format request fields, by field and status. Counted once per field and client request, only for requests that carry those fields.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (field, status) (rate(llm_d_disagg_sidecar_tool_calling_field_status_total{direction=\"request\", namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "{{field}} {{status}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Tool-Calling Request Field Outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Request-path re-resolution of MoRI-IO peer DNS names. These stay at zero unless the sidecar runs the MoRI-IO connector with DNS peer specs. A rise in IP changes usually means peer pods restarted; on a lookup failure the sidecar falls back to the last-known-good IP.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(moriio_dns_reresolve_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "re-resolved",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(moriio_dns_ip_changed_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "IP changed",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(moriio_dns_lookup_failures_total{namespace=~\"$namespace\", pod=~\"$pod\"}[5m]))",
+          "legendFormat": "lookup failed",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "MoRI-IO Peer DNS Re-resolution",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "llm-d",
+    "routing-sidecar"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "prometheus",
+          "value": "prometheus"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "datasource",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(llm_d_disagg_sidecar_decode_duration_seconds_count, namespace)",
+        "includeAll": true,
+        "label": "namespace",
+        "multi": true,
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(llm_d_disagg_sidecar_decode_duration_seconds_count, namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(llm_d_disagg_sidecar_decode_duration_seconds_count{namespace=~\"$namespace\"}, pod)",
+        "includeAll": true,
+        "label": "pod",
+        "multi": true,
+        "name": "pod",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(llm_d_disagg_sidecar_decode_duration_seconds_count{namespace=~\"$namespace\"}, pod)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "llm-d Routing Sidecar",
+  "uid": "llm-d-routing-sidecar",
+  "version": 1
+}
