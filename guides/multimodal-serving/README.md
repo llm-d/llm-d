@@ -219,7 +219,7 @@ export POD_SELECTOR=llm-d.ai/guide=aggregation
 export TOPOLOGY_DIR="${REPO_ROOT}/guides/${GUIDE_NAME}/e-disaggregation"
 export ROUTER_VALUES="${TOPOLOGY_DIR}/router/${MODEL_SERVER}/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${TOPOLOGY_DIR}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${TOPOLOGY}/${INFRA_PROVIDER}"
-export MONITORING_COMPONENT=monitoring-pd
+export MONITORING_COMPONENT=monitoring-epd
 # The pods the InferencePool selects (matchLabels in the router values)
 export POD_SELECTOR=llm-d.ai/guide=e-disaggregation
 ```

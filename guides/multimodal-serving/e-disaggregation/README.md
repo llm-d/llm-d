@@ -94,7 +94,7 @@ export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
 export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
-export MONITORING_COMPONENT="monitoring-pd"
+export MONITORING_COMPONENT="monitoring-epd"
 export ROUTER_INFERENCE_POOL_CREATE="true"
 ```
 
@@ -108,7 +108,7 @@ export MODEL_NAME="Qwen/Qwen3-VL-32B-Instruct"
 export INFRA_PROVIDER="gke" # base | coreweave | gke
 export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_PATH}/router/vllm/${TOPOLOGY}-disaggregation.values.yaml"
 export MODEL_SERVER_PATH="${REPO_ROOT}/guides/${GUIDE_PATH}/modelserver/gpu/vllm/${TOPOLOGY}/${INFRA_PROVIDER}"
-export MONITORING_COMPONENT="monitoring-pd"
+export MONITORING_COMPONENT="monitoring-epd"
 export ROUTER_INFERENCE_POOL_CREATE="true"
 ```
 
