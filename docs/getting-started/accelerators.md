@@ -40,18 +40,18 @@ NVIDIA GPUs are the default accelerator for all llm-d guides. Any NVIDIA GPU is 
 
 **CUDA Runtime and Driver Requirements**
 
-llm-d currently ships container images based on the **CUDA 12.9.1** runtime. A future release will move to **CUDA 13.0.2**.
+llm-d no longer builds its own CUDA images (`ghcr.io/llm-d/llm-d-cuda` is deprecated, see [#2338](https://github.com/llm-d/llm-d/issues/2338)). The NVIDIA GPU guides deploy the upstream model server images set in the [default image components](../../guides/recipes/modelserver/components/images/README.md), so the CUDA runtime, and with it the minimum driver, comes from the image you deploy. The current defaults, `vllm/vllm-openai` and `lmsysorg/sglang`, are built on **CUDA 13.0** for both amd64 and arm64. To check an image, read the `CUDA_VERSION` environment variable in its image config.
 
-CUDA 12.x and CUDA 13.x have non-overlapping driver compatibility ranges — a given driver version supports one major CUDA family, not both:
+| CUDA Version | Minimum Driver |
+| --- | --- |
+| CUDA 13.x | R580 or newer |
+| CUDA 12.x | R525 or newer |
 
-| CUDA Version | Minimum Driver | Maximum Driver |
-|---|---|---|
-| CUDA 12.9.1 (current) | 525.60.13 | < 580 |
-| CUDA 13.0.2 (planned) | 580.65.06 | N/A |
+Newer drivers keep running images built with older CUDA versions, so an R580+ driver runs both CUDA 12 and CUDA 13 images. See NVIDIA's [minor version compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html) table.
 
-> **Recommended driver version: 575.x** for current llm-d releases using CUDA 12.9.1. This provides the latest features and fixes within the CUDA 12.x compatible driver range.
->
-> When llm-d moves to CUDA 13.0.2, the minimum driver version will become **580.65.06**. Users should plan to upgrade their node drivers to 580+ ahead of this transition.
+On NVIDIA Data Center GPUs (and select NGC Server Ready RTX SKUs), CUDA 13 images can also run on some older driver branches through [CUDA forward compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html); check NVIDIA's table for the branches that are supported. The vLLM image ships the forward compatibility libraries but leaves them off by default; see [running vLLM on systems with older CUDA drivers](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/#running-on-systems-with-older-cuda-drivers) for how to enable them.
+
+Some guides list driver prerequisites of their own, for example the [GPU driver notes of the wide expert parallelism guide on GKE](../../guides/wide-ep/modelserver/gpu/vllm/gke/README.md#gpu-driver). Check the prerequisites of the guide you deploy.
 
 For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html).
 
