@@ -1,0 +1,14 @@
+## Router monitoring values for INFRA_PROVIDER=gke: identical to
+## recipes/router/features/monitoring-gke.values.yaml, kept under this guide so
+## the install command can select the file by provider. Creates an authenticated
+## Google Managed Prometheus PodMonitoring for the EPP (plus the metrics-reader
+## ServiceAccount, token Secret and RBAC for gmp-system) so GMP scrapes the
+## flow-control metrics KEDA scales on.
+
+router:
+  monitoring:
+    provider:
+      name: gmp
+    interval: "10s"
+    prometheus:
+      enabled: true

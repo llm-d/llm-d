@@ -49,7 +49,7 @@ jobs:
       - name: Summarize
         id: check
         env:
-          # JSON array of the filter names that matched, e.g. ["cpu","xpu"].
+          # JSON array of the filter names that matched, e.g. ["xpu","sglang-xpu"].
           CHANGES: ${{ steps.filter.outputs.changes }}
         run: |
           if [ "$CHANGES" != "[]" ]; then

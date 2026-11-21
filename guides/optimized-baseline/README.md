@@ -594,3 +594,16 @@ kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup.rest end -->
+
+## Tuning
+
+<!-- tabs:start group=engine -->
+<details>
+<summary><b>SGLang</b></summary>
+
+The NVIDIA GPU overlay enables SGLang's Rust HTTP frontend by default: the `SGLANG_RUST_SERVER=1` environment variable is set on the `modelserver` container in [patch-sglang.yaml](./modelserver/gpu/sglang/base/patch-sglang.yaml). It requires SGLang `v0.5.22` or newer. To fall back to the Python/uvicorn frontend, remove the environment variable from the patch.
+
+If you tune `--dp-size` beyond `1`, the frontend choice determines whether the EPP sees each DP rank as its own endpoint or only the pod as a whole; see [Data Parallelism (DP)](../../docs/architecture/model-servers/sglang.md#data-parallelism-dp) in the architecture docs.
+
+</details>
+<!-- tabs:end -->

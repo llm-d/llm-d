@@ -4,11 +4,11 @@ Each one of the [guides](../../guides) in `llm-d` (also known as "well-lit paths
 
 ## Container vulnerability scans
 
-Image builds attach a full Trivy JSON report for each image digest to their workflow run. The scheduled [dev image build](nightly-build-image.yaml) publishes the default branch's Code Scanning baseline for CPU, vLLM XPU, SGLang XPU, and RDMA tools. Pull request and manual build reports are available as workflow artifacts. Release scans report against the release tags.
+Image builds attach a full Trivy JSON report for each image digest to their workflow run. The scheduled [dev image build](nightly-build-image.yaml) publishes the default branch's Code Scanning baseline for vLLM XPU, vLLM-Omni XPU, SGLang XPU, and RDMA tools. Pull request and manual build reports are available as workflow artifacts. Release scans report against the release tags.
 
 The scheduled run also attaches `dependency-upgrades.csv`. Each row groups findings by image, package ecosystem, installed version, and the fixed versions reported by Trivy. The count uses distinct vulnerability IDs so repeated findings at multiple paths do not inflate an upgrade's ranking. The original reports include findings without an available fix.
 
-After GitHub shows a fresh baseline for all four images, use [Trivy tool status](https://github.com/llm-d/llm-d/security/code-scanning/tools/Trivy/status) to verify and remove retired configurations from the default branch. Review the old `build-image.yml` workflow, the previous PR and manual upload configurations, and the retired CUDA, ROCm, and HPU nightly configurations. [GitHub documents the removal procedure](https://docs.github.com/en/code-security/how-tos/manage-security-alerts/manage-code-scanning-alerts/resolve-alerts#removing-stale-configurations-and-alerts-from-a-branch).
+After GitHub shows a fresh baseline for all four images, use [Trivy tool status](https://github.com/llm-d/llm-d/security/code-scanning/tools/Trivy/status) to verify and remove retired configurations from the default branch. Review the old `build-image.yml` workflow, the previous PR and manual upload configurations, and the retired CPU, CUDA, ROCm, and HPU nightly configurations. [GitHub documents the removal procedure](https://docs.github.com/en/code-security/how-tos/manage-security-alerts/manage-code-scanning-alerts/resolve-alerts#removing-stale-configurations-and-alerts-from-a-branch).
 
 ## Components
 
@@ -67,7 +67,7 @@ workflow files:
 
 ## Slack notifications
 
-[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
+[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file (the nearest one at or above the workflow's `guide_path`, or `guides/<guide>/` when it has none) when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
 
 This replaces the old `/github subscribe` integration, which also fired on manual `workflow_dispatch` runs.
 
