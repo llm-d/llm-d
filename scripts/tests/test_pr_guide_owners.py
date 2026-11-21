@@ -1,6 +1,7 @@
 """Tests for scripts/pr-guide-owners.py and .github/workflows/pr-guide-owners.yaml."""
 
 import contextlib
+import http.client
 import importlib.util
 import io
 import sys
@@ -222,7 +223,14 @@ class RoutingBehaviorTests(unittest.TestCase):
             ],
         )
         self.assertIn("requested reviewers ['bob']", out)
-        self.assertIn("skipped non-collaborator or unrequestable guide owners: ext-alpha, ext-beta", out)
+        self.assertIn(
+            'skipped non-collaborator or unrequestable guide owner ext-alpha (422): {"message": "Review cannot be requested"}',
+            out,
+        )
+        self.assertIn(
+            'skipped non-collaborator or unrequestable guide owner ext-beta (422): {"message": "Review cannot be requested"}',
+            out,
+        )
 
     def test_422_does_not_consume_remaining_slots(self):
         _write_owners(self.root, "guides/slots", approvers=["ext-1", "collab-1", "collab-2"])
@@ -247,7 +255,10 @@ class RoutingBehaviorTests(unittest.TestCase):
                 ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["collab-1"]}),
             ],
         )
-        self.assertIn("skipped non-collaborator or unrequestable guide owners: ext-1", out)
+        self.assertIn(
+            'skipped non-collaborator or unrequestable guide owner ext-1 (422): {"message": "Review cannot be requested"}',
+            out,
+        )
         self.assertIn("capped reviewer requests at 15 total (skipping collab-2)", out)
 
     def test_rename_previous_filename_routes_source_guide(self):
@@ -435,11 +446,17 @@ class MainErrorPolicyTests(unittest.TestCase):
             ApiError(502, "GET", "/repos/llm-d/llm-d/pulls/42/files", "Bad Gateway"),
             ApiError(404, "GET", "/repos/llm-d/llm-d/pulls/42", '{"message": "Not Found"}'),
             urllib.error.URLError("timed out"),
+            http.client.RemoteDisconnected("Remote end closed connection"),
+            ConnectionResetError("Connection reset"),
         ]:
             rc, stdout, stderr = self._run_main_with_error(exc)
             self.assertEqual(rc, 0, f"Expected exit 0 for {exc!r}")
             self.assertEqual(stderr, "")
             self.assertIn("::warning::guide-owner routing skipped for PR #42", stdout)
+
+    def test_local_filesystem_oserrors_propagate_out_of_main(self):
+        with self.assertRaises(FileNotFoundError):
+            self._run_main_with_error(FileNotFoundError("missing guides dir"))
 
 
 class RepoStaticInvariantsTests(unittest.TestCase):

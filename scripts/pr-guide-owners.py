@@ -22,6 +22,7 @@ collaborator-read access locally.
 """
 
 import argparse
+import http.client
 import os
 import re
 import socket
@@ -157,18 +158,18 @@ def request_reviewers_individually(
     token: str,
     candidates: list[str],
     remaining_slots: int,
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[tuple[str, str]], list[str]]:
     """Request candidates one at a time up to remaining_slots.
 
-    Returns (requested, skipped_422, skipped_over_cap). HTTP 422 rejections do
-    not consume reviewer slots.
+    Returns (requested, skipped_422, skipped_over_cap) where skipped_422 holds
+    (login, reason) pairs. HTTP 422 rejections do not consume reviewer slots.
     """
     if remaining_slots <= 0:
         return [], [], list(candidates)
 
     path = f"/repos/{repo}/pulls/{pr_number}/requested_reviewers"
     requested: list[str] = []
-    skipped_422: list[str] = []
+    skipped_422: list[tuple[str, str]] = []
     for idx, login in enumerate(candidates):
         if len(requested) >= remaining_slots:
             return requested, skipped_422, candidates[idx:]
@@ -177,7 +178,8 @@ def request_reviewers_individually(
             requested.append(login)
         except ApiError as exc:
             if exc.status == 422:
-                skipped_422.append(login)
+                reason = str(exc).split(f" -> HTTP {exc.status}: ", 1)[-1]
+                skipped_422.append((login, reason))
             else:
                 raise
     return requested, skipped_422, []
@@ -297,10 +299,10 @@ def route_pr(
     )
     if requested:
         print(f"PR #{pr_number}: requested reviewers {requested}")
-    if skipped_422:
+    for login, reason in skipped_422:
         print(
-            f"PR #{pr_number}: skipped non-collaborator or unrequestable guide owners: "
-            f"{', '.join(skipped_422)}"
+            f"PR #{pr_number}: skipped non-collaborator or unrequestable guide owner "
+            f"{login} (422): {reason}"
         )
     if over_cap:
         print(
@@ -331,7 +333,13 @@ def main() -> int:
     socket.setdefaulttimeout(REQUEST_TIMEOUT_SECONDS)
     try:
         return route_pr(args.repo, args.pr, token, args.repo_root.resolve(), dry_run=args.dry_run)
-    except (ApiError, urllib.error.URLError, TimeoutError, OSError) as exc:
+    except (
+        ApiError,
+        urllib.error.URLError,
+        TimeoutError,
+        ConnectionError,
+        http.client.HTTPException,
+    ) as exc:
         if is_auth_failure(exc):
             print(f"error: guide-owner routing failed for PR #{args.pr}: {exc}", file=sys.stderr)
             return 1

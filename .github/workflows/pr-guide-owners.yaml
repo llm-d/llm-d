@@ -18,7 +18,7 @@ on:
         required: true
         type: number
       dry_run:
-        description: 'Only log actions without requesting reviewers or commenting'
+        description: 'Log actions only (queries /collaborators, which may 404 under GITHUB_TOKEN; prefer local dry-run with gh auth token)'
         required: false
         type: boolean
         default: true
