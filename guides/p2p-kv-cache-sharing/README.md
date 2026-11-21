@@ -72,7 +72,7 @@ SGLang has no equivalent of the `OffloadingConnector` P2P secondary tier, so thi
   - **Routing sidecar**: an llm-d routing sidecar that forwards the router's `kv_transfer_params.remote_kv_source` ([llm-d-router#3441](https://github.com/llm-d/llm-d-router/pull/3441)). An older sidecar builds the block itself from the source header instead of forwarding the router's block (see [Troubleshooting](#troubleshooting)).
   - **Router (EPP)**: an image with the `p2p-source-producer` plugin that writes `remote_kv_source` into the body and computes the P2P port from its `p2pConnectorPort` parameter (default `7777`) plus the endpoint's data parallel rank. The router values pin `main` until a release ships it. Upgrade the router before the sidecar (in the [P/D variant](#pd-variant-p2p-over-nixl-disaggregation), upgrade them together): a sidecar with llm-d-router#3441 behind an older router stops pulling.
 
-- (Optional) Install the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+- (Optional) [Set up monitoring](../../docs/operations/observability/setup.md) with OSS Prometheus, OpenShift monitoring, or GKE Managed Prometheus (GMP).
 
 ### Get the guide
 
@@ -97,6 +97,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=p2p-kv-cache-sharing
 export NAMESPACE=llm-d-p2p-kv-cache-sharing
 export MONITORING=false # options: false, true
+export MONITORING_BACKEND=prometheus # options: prometheus, gmp; prometheus: OSS/OpenShift; gmp: GKE Managed Prometheus
 export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, xpu
 export MODEL_SERVER=vllm # options: vllm
@@ -152,14 +153,38 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 
 The [router values](router/p2p-kv-cache-sharing.values.yaml) deploy the token-aware + P2P scheduling configuration: the precise prefix index, the `inflight-load-producer` and `token-load-scorer`, and the `p2p-source-producer` with `minCachedTokenDelta: 2048`. [When to use this path](#when-to-use-this-path) gives the affinity alternative. On Intel XPU, set the `token-producer` `modelName` to `MODEL` first (see the note in [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)).
 
-**(Optional) Enable Prometheus monitoring on the `llm-d` router** by defining the `helm` values file (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
+**(Optional) Enable monitoring on the `llm-d` router.** Set `MONITORING=true` and choose `MONITORING_BACKEND` in the environment above: `prometheus` for OSS Prometheus or OpenShift, or `gmp` for GKE Managed Prometheus. Choose the same backend for deployment and cleanup.
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
 export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+Use `MONITORING_BACKEND=gmp` with an existing GMP-enabled GKE cluster; a second Prometheus installation is not required. The router chart creates an authenticated `PodMonitoring` on port 9090 and the collector's credentials and RBAC. For Autopilot, also add `--set router.monitoring.provider.gmp.autopilot=true` to the router Helm command below.
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true and MONITORING_BACKEND=gmp:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+Verify the EPP resource with `kubectl get podmonitoring -n ${NAMESPACE}` and confirm collected data in Cloud Monitoring. See [Collect Metrics](../../docs/operations/observability/metrics.md#step-2-scrape-epp-metrics) for collector checks and authentication troubleshooting.
+
+</details>
+<!-- tabs:end -->
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -223,9 +248,11 @@ The `render/` overlay is a **Service with no pods of its own**: it selects the m
 
 **(Optional) Deploy the monitoring resources for model servers** (requires installing the monitoring stack mentioned in [Prerequisites](#prerequisites)):
 
+With `MONITORING_BACKEND=gmp`, skip the following Prometheus Operator `PodMonitor` command. Enable GKE [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) and verify that `PodMonitoring` resources cover the model servers. If automatic monitoring is disabled, configure explicit GMP resources as described in [Collect Metrics](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics). `PodMonitor` resources are not consumed by GMP.
+
 <!-- guide:deploy.monitoring start -->
 ```bash
-# only when MONITORING=true:
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -428,6 +455,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING_BACKEND=prometheus:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->

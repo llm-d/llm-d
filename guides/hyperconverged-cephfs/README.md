@@ -96,6 +96,8 @@ export HF_TOKEN=HF_TOKEN_PLACEHOLDER
 ```
 <!-- llm-d-cicd:skip end -->
 ```bash
+export MONITORING=false # options: false, true
+export MONITORING_BACKEND=prometheus # options: prometheus, gmp; prometheus: OSS/OpenShift; gmp: GKE Managed Prometheus
 export MONITORING_VALUES=
 export PROVIDER_NAME=none # options: none, gke, agentgateway, istio
 export MODEL=Qwen/Qwen3.6-35B-A3B
@@ -220,19 +222,38 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.val
 ```
 <!-- guide:deploy.router_values end -->
 
-- Optionally, enable Prometheus monitoring on the router. This requires the [monitoring stack](../../docs/operations/observability/setup.md) to be installed first:
+**(Optional) Enable monitoring on the `llm-d` router.** Set `MONITORING=true` and choose `MONITORING_BACKEND` in the environment above: `prometheus` for OSS Prometheus or OpenShift, or `gmp` for GKE Managed Prometheus. Choose the same backend for deployment and cleanup.
 
-<!-- guide:deploy.monitoring_values start -->
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+<!-- guide:deploy.monitoring_values.standard start -->
 ```bash
-#
-# Uncomment the below to enable Prometheus monitoring on the llm-d router
-#
-# Unlike the ROUTER_*_VALUES paths above, this variable carries its own
-# -f flag: it is empty by default, so the helm commands expand it as-is.
-#
-# export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring.values.yaml"
 ```
-<!-- guide:deploy.monitoring_values end -->
+<!-- guide:deploy.monitoring_values.standard end -->
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+Use `MONITORING_BACKEND=gmp` with an existing GMP-enabled GKE cluster; a second Prometheus installation is not required. The router chart creates an authenticated `PodMonitoring` on port 9090 and the collector's credentials and RBAC. For Autopilot, also add `--set router.monitoring.provider.gmp.autopilot=true` to the router Helm command below.
+
+<!-- guide:deploy.monitoring_values.gke start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+# only when MONITORING=true and MONITORING_BACKEND=gmp:
+export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitoring-gke.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.monitoring_values.gke end -->
+
+Verify the EPP resource with `kubectl get podmonitoring -n ${NAMESPACE}` and confirm collected data in Cloud Monitoring. See [Collect Metrics](../../docs/operations/observability/metrics.md#step-2-scrape-epp-metrics) for collector checks and authentication troubleshooting.
+
+</details>
+<!-- tabs:end -->
 
 #### Standalone Mode
 
@@ -285,8 +306,11 @@ kubectl apply -n ${NAMESPACE} \
 
 With the [monitoring stack](../../docs/operations/observability/setup.md) installed, deploy the monitoring resources for the model servers:
 
+With `MONITORING_BACKEND=gmp`, skip the following Prometheus Operator `PodMonitor` command. Enable GKE [automatic application monitoring](../../docs/infrastructure/providers/gke/README.md#monitoring--telemetry) and verify that `PodMonitoring` resources cover the model servers. If automatic monitoring is disabled, configure explicit GMP resources as described in [Collect Metrics](../../docs/operations/observability/metrics.md#step-1-scrape-model-server-metrics). `PodMonitor` resources are not consumed by GMP.
+
 <!-- guide:deploy.monitoring start -->
 ```bash
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
 ```
 <!-- guide:deploy.monitoring end -->
@@ -373,6 +397,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/base/ --ignore-not-found=true
 
+# only when MONITORING=true and MONITORING_BACKEND=prometheus:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 
 kubectl delete pvc llm-d-kv-cache-storage -n ${NAMESPACE} --ignore-not-found=true
