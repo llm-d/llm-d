@@ -3,8 +3,18 @@ kind: Deployment
 metadata:
   name: decode
 spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
+    metadata:
+      labels:
+        llm-d.ai/lmcache-mode: mp
     spec:
+      nodeSelector:
+        intel.feature.node.kubernetes.io/gpu: "true"
       containers:
         - name: modelserver
           command: ["/bin/bash", "-c"]
@@ -13,13 +23,23 @@ spec:
               exec vllm serve \
                 Qwen/Qwen3-8B \
                 --dtype bfloat16 \
+                --gpu-memory-utilization 0.90 \
                 --block-size 64 \
                 --tensor-parallel-size=1 \
                 --max-num-seq 128 \
                 --max-model-len 20480 \
                 --uvicorn-log-level warning \
                 --kv-transfer-config \
-                '{"kv_connector":"LMCacheConnectorV1","kv_role":"kv_both"}' \
+                '{
+                  "kv_connector": "LMCacheMPConnector",
+                  "kv_connector_module_path": "lmcache.integration.vllm.lmcache_mp_connector",
+                  "kv_role": "kv_both",
+                  "kv_connector_extra_config": {
+                    "lmcache.mp.host": "tcp://xpu-vllm-lmcache",
+                    "lmcache.mp.port": 5555,
+                    "lmcache.mp.mp_transfer_mode": "engine_driven"
+                  }
+                }' \
                 --shutdown-timeout=45
           env:
             - name: HF_TOKEN
@@ -27,15 +47,5 @@ spec:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            - name: LMCACHE_MAX_LOCAL_CPU_SIZE
-              value: "20"
             - name: PYTHONHASHSEED
-              value: "123"
-            - name: PROMETHEUS_MULTIPROC_DIR
-              value: "/tmp/lmcache_prometheus"
-          volumeMounts:
-            - name: lmcache-prometheus-metrics
-              mountPath: /tmp/lmcache_prometheus
-      volumes:
-        - name: lmcache-prometheus-metrics
-          emptyDir: {}
+              value: "0"

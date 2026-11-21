@@ -23,8 +23,8 @@ The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas 
 | `lmcache-connector` | [LMCache](https://lmcache.ai) | `cpu`, `fs` | vLLM on NVIDIA GPU, AMD GPU, Intel XPU |
 | `mooncake-store` | MooncakeStore (`cpu`: embedded CPU DRAM pool; `fs`: standalone [Mooncake Client](../../helpers/mooncake-client/) that owns a CPU DRAM + SSD pool) | `cpu`, `fs` | vLLM on NVIDIA GPU |
 
-Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size` (GB per tensor-parallel rank): 200 on NVIDIA GPU (TP=2), 32 on TPU v7 (TP=8). LMCache uses `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank).
-vLLM keeps its CPU tier in `/dev/shm`, so the tier counts toward the pod's memory limit. When you change the tier size, change the pod's memory request and limit, and the router's `lruCapacityPerServer` (see the note in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
+Use `native` unless you need a capability it does not provide yet. The NVIDIA vLLM native overlay gives each replica a 300 GiB CPU tier (`cpu_bytes_to_use`). The AMD, Intel XPU, and Torch TPU (`tpu/v6`, `tpu/v7` `cpu`) vLLM native overlays use 100 GiB (`cpu_bytes_to_use`; legacy `tpu/v5p` uses `TPU_OFFLOAD_NUM_CPU_CHUNKS`). SGLang uses `--hicache-size` (GB per tensor-parallel rank): 200 on NVIDIA GPU (TP=2), 32 on TPU v7 (TP=8). NVIDIA and AMD LMCache overlays use `LMCACHE_MAX_LOCAL_CPU_SIZE` (GiB per tensor-parallel rank). The [Intel XPU LMCache overlays](#intel-xpu-lmcache-mp) use MP mode with a separate server per node and a 20 GiB CPU pool shared by the node's model pods (`--l1-size-gb`).
+The vLLM native CPU tier resides in `/dev/shm` and counts toward the model pod's memory limit; the XPU LMCache MP tier counts toward the cache-server pod's limit. When you change the tier size, change its pod's memory request and limit, and the router's `lruCapacityPerServer` (see the note in [Deploy the llm-d Router](#1-deploy-the-llm-d-router)). Serving a model whose attention layers use different head dimensions (e.g. Gemma 4) with the vLLM native connector needs one extra flag; see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md#vllm-native-cpu-offloading).
 
 For why offloading helps, the storage tiers and when to add each, and how the CPU and filesystem tiers work, see [KV-Cache Offloading](../../docs/architecture/kv-management/kv-offloader.md).
 
@@ -37,7 +37,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (`mooncake-store`: `base`) · SGLang: `CONNECTOR=native` (HiCache) |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) · `CONNECTOR`: `native`, `lmcache-connector` |
-| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (the `lmcache-connector` overlay serves `Qwen/Qwen3-8B` on 1 XPU) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-32B` | ✅ validated | — | Intel B60 · 1 replica × TP=4 via DRA · `CONNECTOR`: `native`, `lmcache-connector` (LMCache MP: `Qwen/Qwen3-8B`, 1 XPU, server per node) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, TP=4) · SGLang: 2 replicas × 4 chips (`2x2x1`, TP=4) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 4 ranks) · `CONNECTOR=native`, `VARIANT=cpu` · nightlies run on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) · Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) · `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) · SGLang: serves `Qwen/Qwen3-32B`, 2 replicas × 4 chips (`2x2x1`, TP=8) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 8 ranks) · `CONNECTOR=native`, `VARIANT=cpu` |
@@ -54,6 +54,8 @@ This guide includes configurations for the following accelerator and model serve
 - Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
 - For `VARIANT=fs`, a storage system that provides ReadWriteMany PVCs (see [Filesystem tier](#filesystem-tier)). For `HOST_TYPE=multi-host` on TPU v7, the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/model-server-orchestration.md).
+
+- For Intel XPU with `CONNECTOR=lmcache-connector`, use an image with LMCache 0.5.7.post1; see [Intel XPU LMCache MP](#intel-xpu-lmcache-mp).
 
 - (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
@@ -153,7 +155,9 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 > | NVIDIA SGLang `native` (HiCache) | 200 GB × 2 ranks | 23800 |
 > | TPU v5p SGLang `native` (HiCache; fp8 KV) | 32 GB × 4 ranks | 15250 |
 > | TPU v7 SGLang `native` (HiCache; fp8 KV) | 32 GB × 8 ranks | 15250 |
-> | Intel XPU vLLM `lmcache-connector` (Qwen3-8B, 144 KiB per token) | 20 GiB | 2275 |
+> | Intel XPU vLLM `lmcache-connector` MP (Qwen3-8B, 144 KiB per token) | 20 GiB per node | 2275 with one pod per node |
+>
+> XPU LMCache MP shares its CPU pool among all model pods on a node. If several pods share it, divide the node's capacity among them when setting `lruCapacityPerServer`; the router tracks each pod separately.
 >
 > For SGLang HiCache every TP rank holds the same tokens, so the capacity is the per-rank host pool the engine logs at startup (`Allocating kv hierarchical KV host pool: <tokens> tokens`) divided by 64. On TPU the `page_first_fused` host layout stores 32 KiB per token per rank for Qwen3-32B (976,576 tokens per 32 GB rank), twice the fp8 device footprint, which is why the TPU rows hold fewer blocks than the tier bytes suggest.
 >
@@ -255,7 +259,21 @@ Validated with [Google Cloud Managed Lustre](./manifests/backends/lustre/README.
 
 </details>
 
-The connectors do not evict data from the shared tier. Capacity is managed by the storage system or by an external controller; a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache).
+The native connectors do not evict data from the shared tier. Capacity is managed by the storage system or by an external controller; a reference PVC evictor is available in the [llm-d-kv-cache repository](https://github.com/llm-d/llm-d-kv-cache). For XPU LMCache MP filesystem configuration and eviction, see [Intel XPU LMCache MP](#intel-xpu-lmcache-mp).
+
+#### Intel XPU LMCache MP
+
+Set `ACCELERATOR_TYPE=xpu`, `MODEL_SERVER=vllm`, `CONNECTOR=lmcache-connector`, `MODEL=Qwen/Qwen3-8B`, and `INFRA_PROVIDER=base` in the environment setup above. Choose `VARIANT=cpu` or `fs`; for `fs`, provision the RWX PVC first as described in [Filesystem tier](#filesystem-tier).
+
+Both overlays use the [LMCache llm-d MP integration](https://docs.lmcache.ai/production/llm_d.html), replacing the [deprecated in-process connector](https://docs.lmcache.ai/legacy/index.html). The [cache DaemonSet and Service](./modelserver/xpu/vllm/lmcache-connector/cpu/base/lmcache.yaml) provide a 20 GiB CPU pool per Intel node. Each model pod connects to its node's server through `internalTrafficPolicy: Local`, using inline ZMQ transfers.
+
+Match the model and cache node selectors to your Intel nodes, and ensure a ready cache server on each model node. The DaemonSet reserves its CPU pool even on selected nodes without model pods.
+
+In MP mode, the vLLM container still needs LMCache's client connector and XPU transfer extension. These dependencies are installed by [docker/Dockerfile.xpu](../../docker/Dockerfile.xpu).
+
+After changing cache-server arguments or images, or switching tiers, wait for `daemonset/xpu-vllm-lmcache` to finish its rollout, then restart `deployment/xpu-vllm-decode` to reconnect clients. Cache-server restarts clear the CPU pool.
+
+For `VARIANT=fs`, the [filesystem patch](./modelserver/xpu/vllm/lmcache-connector/fs/base/patch-lmcache.yaml) mounts `llm-d-kv-cache-storage` on the cache servers at `/mnt/files-storage`, using `/mnt/files-storage/kv-cache/mp` for MP files. Legacy cache files are not migrated. Direct I/O is enabled, so the filesystem must support it. The 100 GiB LRU limit tracks files written by each server process; it does not cap total PVC usage, which needs storage-level capacity management.
 
 #### MooncakeStore
 
@@ -336,6 +354,11 @@ The ROCm native CPU overlay raises vLLM's Triton swap threshold so CPU-to-GPU lo
 ```bash
 # only when MONITORING=true:
 kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring
+
+# only when MONITORING=true and ACCELERATOR_TYPE=xpu and MODEL_SERVER=vllm and CONNECTOR=lmcache-connector:
+if [ "${MONITORING}" = true ] && [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${MODEL_SERVER}" = vllm ] && [ "${CONNECTOR}" = lmcache-connector ]; then
+  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/lmcache-connector/monitoring
+fi
 ```
 <!-- guide:deploy.monitoring end -->
 
@@ -439,10 +462,19 @@ for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} \
   kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
     | grep -E '^(vllm:(kv_offload_(store|load)_bytes_total|external_prefix_cache_(hits|queries)_total)|lmcache:(local_cache_usage|retrieve_hit_rate))' || true
 done
+if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${CONNECTOR}" = lmcache-connector ]; then
+  for pod in $(kubectl get pods -n ${NAMESPACE} \
+      -l app.kubernetes.io/name=lmcache,app.kubernetes.io/instance=tiered-prefix-cache-xpu \
+      -o jsonpath='{.items[*].metadata.name}'); do
+    echo "== ${pod} (LMCache MP)"
+    kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8080/proxy/metrics" \
+      | grep -E '^lmcache_mp_(l1_(write|read|memory_usage)|l2_(store_completed|load_completed|prefetch_load_completed))' || true
+  done
+fi
 ```
 <!-- guide:verify.tests.offload_metrics[0] end -->
 
-With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total` (and `lmcache:local_cache_usage` for LMCache).
+With `CONNECTOR=native`, `vllm:kv_offload_store_bytes_total` is above zero (the prefix blocks were written to the CPU tier) and `vllm:external_prefix_cache_queries_total` counts the prompt tokens looked up in the offload tier. On the TPU, LMCache, and MooncakeStore connectors, look at `vllm:external_prefix_cache_queries_total`. NVIDIA and AMD LMCache overlays also report `lmcache:local_cache_usage` on the model pod. XPU LMCache MP reports `lmcache_mp_l1_write_chunks_total` on the cache server's HTTP port 8080; `VARIANT=fs` also reports `lmcache_mp_l2_store_completed_objects_chunks_total`. The burst should make the store counters positive. Retrieval needs a separate [XPU MP check](#intel-xpu-lmcache-mp-retrieval).
 
 For `CONNECTOR=native` on GPU, AMD, and Intel XPU, **assert that blocks were offloaded**; the step fails if the stored bytes are still zero:
 
@@ -452,14 +484,16 @@ For `CONNECTOR=native` on GPU, AMD, and Intel XPU, **assert that blocks were off
 # Gate: the native OffloadingConnector writes every computed block to
 # the offload tier, so after the burst above the bytes stored, summed
 # over all model server pods, must be above zero.
-STORED=0
-for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
-  STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
-    | awk -v s="${STORED}" '/^vllm:kv_offload_store_bytes_total/ {s += $NF} END {print s + 0}')
-done
-echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
-awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
-  || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
+if [ "${MODEL_SERVER}" = vllm ] && [ "${CONNECTOR}" = native ] && [ "${ACCELERATOR_TYPE#tpu/}" = "${ACCELERATOR_TYPE}" ]; then
+  STORED=0
+  for pod in $(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].metadata.name}'); do
+    STORED=$(kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/pods/${pod}:8000/proxy/metrics" \
+      | awk -v s="${STORED}" '/^vllm:kv_offload_store_bytes_total/ {s += $NF} END {print s + 0}')
+  done
+  echo "vllm:kv_offload_store_bytes_total (all pods): ${STORED}"
+  awk -v s="${STORED}" 'BEGIN {exit !(s > 0)}' \
+    || { echo "no KV-cache blocks were written to the offload tier: the connector is not active" >&2; false; }
+fi
 ```
 <!-- guide:verify.tests.offload_gate end -->
 
@@ -523,6 +557,16 @@ fi
 
 If the store counters stay at zero, the connector is not active: check that the pod started with the expected `--kv-transfer-config` (or the `--hicache-*` flags on SGLang) and see [Common failure modes](#common-failure-modes). Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
+#### Intel XPU LMCache MP retrieval
+
+Keep the test model pod on the same Intel node across restarts:
+
+1. Prime a previously uncached long prefix through the router with temperature 0 and a fixed seed. Wait for positive `lmcache_mp_l1_write_chunks_total`; for `fs`, also wait for `lmcache_mp_l2_store_completed_objects_chunks_total`.
+2. Keep the cache server running and restart only vLLM to clear HBM. Repeat the request and require increases in `lmcache_mp_l1_read_chunks_total` and `vllm:external_prefix_cache_hits_total`, with identical output.
+3. For `fs`, restart both servers while preserving the PVC, then repeat the request. Require `lmcache_mp_l2_prefetch_load_completed_chunks_total` and external prefix hits to increase, with identical output.
+
+The [offload-counter command](#3-verify-kv-cache-offloading) reads MP counters from cache-server port 8080. `MONITORING=true` also installs the [cache-server PodMonitor](./modelserver/xpu/vllm/lmcache-connector/monitoring/).
+
 ## Observability & Troubleshooting
 
 Once monitoring is enabled, use the signals below to operate tiered prefix caching under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not create real HBM eviction or steady-state offload traffic). Metric definitions are in the [metric reference](../../docs/operations/observability/model-server-metrics.md#vllm-kv-offloading-metrics) and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#tiered-prefix-cache).
@@ -540,7 +584,7 @@ Offloading only pays off when blocks evicted from HBM are loaded back later inst
 | Router prefix index by tier (`llm_d_epp_prefix_indexer_size`, `llm_d_epp_prefix_indexer_hit_ratio`, split by `plugin_name`) | What the router believes each tier holds. The size gauge is the total across pods, so a full CPU index reads about pods × `lruCapacityPerServer` |
 | TTFT (`vllm:time_to_first_token_seconds`) | The user-facing payoff of this path. Compare against an HBM-only run at the same load before attributing a change to offloading |
 
-vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang:hicache_host_used_tokens` / `sglang:hicache_host_total_tokens`) and attributes hits by tier with `sglang:cached_tokens_total{cache_source="host"}`. LMCache reports `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`.
+vLLM does not export how full the CPU tier is, which is why `lruCapacityPerServer` on the CPU producer is set by hand; `vllm:kv_offload_cpu_cache_usage_perc` is the share of the CPU tier pinned by in-flight transfers, not its occupancy. SGLang HiCache does export occupancy (`sglang:hicache_host_used_tokens` / `sglang:hicache_host_total_tokens`) and attributes hits by tier with `sglang:cached_tokens_total{cache_source="host"}`. NVIDIA and AMD LMCache overlays report `lmcache:retrieve_hit_rate` and `lmcache:local_cache_usage`. XPU LMCache MP exports `lmcache_mp_*` metrics from the cache servers, including L1 occupancy and L1/L2 store and read counters; its optional PodMonitor scrapes HTTP port 8080.
 
 ### Common failure modes
 
@@ -592,6 +636,11 @@ kubectl delete -k ${REPO_ROOT}/helpers/mooncake-master-store/base/ --ignore-not-
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
+
+# only when ACCELERATOR_TYPE=xpu and MODEL_SERVER=vllm and CONNECTOR=lmcache-connector:
+if [ "${ACCELERATOR_TYPE}" = xpu ] && [ "${MODEL_SERVER}" = vllm ] && [ "${CONNECTOR}" = lmcache-connector ]; then
+  kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/xpu/vllm/lmcache-connector/monitoring --ignore-not-found=true
+fi
 ```
 <!-- llm-d-cicd:skip start -->
 ```bash
