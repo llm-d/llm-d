@@ -252,7 +252,7 @@ MARKER_PAIR = re.compile(
 ANY_START = re.compile(r"<!--\s*guide:(\S+)\s+start\s*-->")
 ANY_END = re.compile(r"<!--\s*guide:(\S+)\s+end\s*-->")
 
-BASH_FENCE = re.compile(r"```bash\n.*?\n```", re.DOTALL)
+BASH_FENCE = re.compile(r"```bash\n(?:.*?\n)?```", re.DOTALL)
 CICD_SKIP_MARKER = re.compile(r"<!--\s*llm-d-cicd:skip\s+(?:start|end)\s*-->")
 CICD_SKIP_START = "<!-- llm-d-cicd:skip start -->"
 CICD_SKIP_END = "<!-- llm-d-cicd:skip end -->"
