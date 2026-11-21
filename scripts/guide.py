@@ -305,7 +305,14 @@ def _line_of(text: str, offset: int) -> int:
 # --------------------------------------------------------------------------
 
 TOP_REQUIRED = {"name", "env", "deploy"}
-TOP_OPTIONAL = {"_lists", "prerequisites", "verify", "benchmark", "cleanup", "support"}
+TOP_OPTIONAL = {
+    "_lists", "prerequisites", "verify", "benchmark", "cleanup", "support", "requirements",
+}
+# `requirements:` declares what a guide needs before it is deployed. Only the
+# container shape is checked here; each sub-key's contents belong to the tool
+# that reads it (cluster: the preflight check proposed in #2639, modelServer:
+# the capability contract proposed in #2636).
+REQUIREMENTS_KEYS = {"cluster", "modelServer"}
 STEP_KEYS = {"run", "when", "skip_in"}
 ENV_KEYS = {"static", "source", "derive"}
 ENV_VAR_KEYS = {"default", "values", "sensitive", "comment"}
@@ -533,6 +540,17 @@ def _check_benchmark(node: Any, modes: list[str], declared: set[str], f: Finding
                 )
     if "execute" in node:
         _check_step_list(node["execute"], "benchmark.execute", declared, f)
+
+
+def _check_requirements(node: Any, f: Findings) -> None:
+    if not isinstance(node, dict):
+        f.error("requirements: must be a map")
+        return
+    for k, v in node.items():
+        if k not in REQUIREMENTS_KEYS:
+            f.error(f"requirements: unknown key {k!r} (allowed: {sorted(REQUIREMENTS_KEYS)})")
+        elif not isinstance(v, dict):
+            f.error(f"requirements.{k}: must be a map")
 
 
 def _declared_values(guide: Any, var: str) -> list[str]:
@@ -980,6 +998,8 @@ def check_yaml(guide: Any) -> Findings:
         _check_step_list(guide["cleanup"], "cleanup", declared, f)
     if "support" in guide:
         _check_support(guide, f)
+    if "requirements" in guide:
+        _check_requirements(guide["requirements"], f)
 
     return f
 

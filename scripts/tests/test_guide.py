@@ -252,6 +252,26 @@ def test_unhashable_yaml_key_is_reported_as_finding():
     assert "unhashable" in finding.message
 
 
+def test_requirements_block_is_accepted():
+    data = _minimal(requirements={"cluster": {"crds": ["a.example.io"]}, "modelServer": {}})
+    assert guide.Guide.from_text(yaml_text=yaml.safe_dump(data)).check_yaml().ok()
+
+
+@pytest.mark.parametrize(
+    "requirements, message",
+    [
+        (["cluster"], "requirements: must be a map"),
+        ({"network": {}}, "requirements: unknown key 'network'"),
+        ({"cluster": ["crds"]}, "requirements.cluster: must be a map"),
+        ({"modelServer": None}, "requirements.modelServer: must be a map"),
+    ],
+)
+def test_malformed_requirements_fail_validation(requirements, message):
+    data = _minimal(requirements=requirements)
+    findings = guide.Guide.from_text(yaml_text=yaml.safe_dump(data)).check_yaml()
+    assert any(message in str(f) for f in findings)
+
+
 def test_cli_refuses_invalid_yaml(tmp_path, capsys):
     bad_yaml = "name: broken\nenv: {static: {}}\n"  # missing required deploy
     bad = tmp_path / "guide.yaml"
