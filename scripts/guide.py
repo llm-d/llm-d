@@ -980,8 +980,26 @@ def check_yaml(guide: Any) -> Findings:
         _check_step_list(guide["cleanup"], "cleanup", declared, f)
     if "support" in guide:
         _check_support(guide, f)
+    _check_when_values(guide, f)
 
     return f
+
+
+def _check_when_values(guide: dict, f: Findings) -> None:
+    """A `when:` value outside its variable's declared `values:` never matches a
+    value --var accepts, so every emit would silently drop the step."""
+    for section in STEP_SECTIONS:
+        for path, step in _iter_steps(guide.get(section), section):
+            when = step.get("when")
+            if not isinstance(when, dict):
+                continue
+            for var, allowed in when.items():
+                vocab = _declared_values(guide, var)
+                if not vocab or not isinstance(allowed, list):
+                    continue
+                bad = [v for v in allowed if not _in_values(v, vocab)]
+                if bad:
+                    f.error(f"{path}: 'when:.{var}' value(s) {bad} not in declared values {vocab}")
 
 
 # --------------------------------------------------------------------------
