@@ -42,6 +42,8 @@ components:
 
 See [`guides/recipes/modelserver/components/monitoring/`](../../../guides/recipes/modelserver/components/monitoring/) for details (for TensorRT-LLM, set `path: /prometheus/metrics` on the `PodMonitor` endpoint).
 
+In the prefill/decode guides, the decode `PodMonitor` also scrapes the routing sidecar's own metrics (`llm_d_disagg_sidecar_*`: prefill, decode and encode duration, and errors per stage) from its `sc-metrics` port, `9095`, which the guides turn on with `--metrics-port`.
+
 Verify the `PodMonitor` resources exist:
 
 ```bash
