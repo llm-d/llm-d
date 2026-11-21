@@ -1,7 +1,7 @@
 # Serve 1,000+ Stateful Agent Sandboxes with GKE Agent Substrate and llm-d
 
 > [!NOTE]
-> **Tier:** 1 (Experimental) · **Gaps to Tier 2:** the Agent Substrate manifests are templates applied with `envsubst` and `kubectl ate`, with no kustomize overlay covered by the dry-run CI job · **Reference Demo:** [PyTorch Conference `ai-on-gke/llm-d-demo`](https://github.com/ai-on-gke/llm-d-demo)
+> **Tier:** 1 (Experimental) · **Gaps to Tier 2:** the Agent Substrate manifests are templates applied with `envsubst` and `kubectl ate`, with no kustomize overlay covered by the dry-run CI job · **Reference Demo:** [PyTorch Conference demo, `llm-d-incubation/llm-d-demos`](https://github.com/llm-d-incubation/llm-d-demos/tree/main/demos/agentic-serving-fleet)
 > **Validated Reference Stack:** 1,000 [Hermes Agent](https://github.com/NousResearch/hermes-agent) gVisor sandboxes on GKE Agent Substrate (`18 × c4d-standard-16` CPU nodes) backed by `llm-d` Router + `vLLM` with Host-DRAM KV offloading on NVIDIA GPUs or Cloud TPU v7x (Ironwood).
 
 ## Overview
@@ -15,7 +15,7 @@ Running 1,000 stateful agents against a naive Kubernetes deployment hits four co
 3. **1,000-agent wake-storm hotspots**: Scraped Prometheus queue gauges lag behind millisecond-scale bursts. Without real-time in-flight prompt token accounting, a sudden 1,000-agent wake storm piles onto a single replica with a warm system prompt and blows up Time to First Token (TTFT).
 4. **Cross-tier head-of-line blocking**: Background batch swarms and runaway tool loops flood model server queues, starving latency-sensitive interactive user sessions.
 
-This guide reproduces the architecture from the [PyTorch Conference Agent Substrate × `llm-d` demo](https://github.com/ai-on-gke/llm-d-demo) end to end, pairing **GKE Agent Substrate** (sub-second gVisor memory + rootfs snapshots for 1,000 stateful **Hermes Agents**) with **`llm-d` session-aware routing, prefix-cache and token-load balancing, Host-DRAM KV tiering, and multi-tier priority Flow Control**.
+This guide reproduces the architecture from the [PyTorch Conference Agent Substrate × `llm-d` demo](https://github.com/llm-d-incubation/llm-d-demos/tree/main/demos/agentic-serving-fleet) end to end, pairing **GKE Agent Substrate** (sub-second gVisor memory + rootfs snapshots for 1,000 stateful **Hermes Agents**) with **`llm-d` session-aware routing, prefix-cache and token-load balancing, Host-DRAM KV tiering, and multi-tier priority Flow Control**.
 
 ### Reference Benchmark Highlights
 
