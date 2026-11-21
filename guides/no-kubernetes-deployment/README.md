@@ -64,7 +64,7 @@ or pulled from `ghcr.io/llm-d/llm-d-router-endpoint-picker`.
 export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 source ${REPO_ROOT}/guides/env.sh
 export ENVOY_IMAGE=docker.io/envoyproxy/envoy:distroless-v1.33.2
-export VLLM_IMAGE=vllm/vllm-openai:v0.19.1
+export VLLM_IMAGE=vllm/vllm-openai:v0.31.0
 export MODEL=Qwen/Qwen3-32B
 ```
 
@@ -96,10 +96,15 @@ modelserver patch
 ([`guides/optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml`](../optimized-baseline/modelserver/gpu/vllm/base/patch-vllm.yaml));
 `--shm-size=20g` reproduces the 20 GiB `/dev/shm` `emptyDir` from the
 recipe (required for NCCL when `--tensor-parallel-size > 1`).
+`--stop-timeout=60` makes `docker stop` wait for vLLM's `--shutdown-timeout=45`
+drain before it sends SIGKILL (Docker's default is 10 seconds): the same
+45-second drain plus 15-second teardown buffer that the graceful-shutdown
+component budgets, without its preStop sleep, which Docker has no equivalent for.
 
 ```bash
 docker run -d --name vllm-0 --gpus '"device=0,1"' \
     --shm-size=20g \
+    --stop-timeout=60 \
     -p 8000:8000 \
     -e "HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}" \
     -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
@@ -107,7 +112,11 @@ docker run -d --name vllm-0 --gpus '"device=0,1"' \
     "${VLLM_IMAGE}" \
     serve "${MODEL}" \
     --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
-    --tensor-parallel-size=2
+    --tensor-parallel-size=2 \
+    --enable-auto-tool-choice \
+    --tool-call-parser=hermes \
+    --reasoning-parser=qwen3 \
+    --shutdown-timeout=45
 ```
 
 The optimized-baseline pod also sets resource requests/limits
