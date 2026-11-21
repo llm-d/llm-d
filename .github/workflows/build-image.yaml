@@ -105,7 +105,7 @@ jobs:
       xpu: ${{ steps.force.outputs.xpu || steps.platforms-input.outputs.xpu || steps.filter.outputs.xpu }}
       xpu-omni: ${{ steps.force.outputs['xpu-omni'] || steps.platforms-input.outputs['xpu-omni'] || steps.filter.outputs['xpu-omni'] }}
       sglang-xpu: ${{ steps.force.outputs.sglang-xpu || steps.platforms-input.outputs.sglang-xpu || steps.filter.outputs.sglang-xpu }}
-      rdma-tools: ${{ steps.filter.outputs.rdma-tools }}
+      rdma-tools: ${{ github.event_name == 'schedule' || steps.filter.outputs.rdma-tools == 'true' }}
     steps:
       - name: Force all platforms
         if: inputs.force_build == true
@@ -183,7 +183,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=raw,value=sha-${{ steps.short-sha.outputs.short_sha }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name != 'schedule' && github.ref_name == github.event.repository.default_branch }}
 
       - name: Build & Push
         id: build-and-push
@@ -204,28 +204,32 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rdma-tools@${{ steps.build-and-push.outputs.digest }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
+          format: json
+          output: trivy-results.json
           scanners: vuln
           timeout: 30m
         env:
           TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
-      - name: Upload Trivy scan results to GitHub Security tab
+      - name: Save Trivy report
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-rdma-tools-amd64
+          path: trivy-results.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
+
+      - name: Convert nightly Trivy report to SARIF
+        if: github.event_name == 'schedule'
+        run: trivy convert --format sarif --output trivy-results.sarif trivy-results.json
+
+      - name: Publish nightly vulnerability baseline
+        if: github.event_name == 'schedule'
         uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
 
       - name: Install cosign
         if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
@@ -306,10 +310,9 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu:${{ steps.set-tag.outputs.tag }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
+          image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu@${{ steps.build-and-push.outputs.digest }}
+          format: json
+          output: trivy-results.json
           scanners: vuln # skip secrets/config/license analyzers
           timeout: 30m
           skip-dirs: /root/.cache/uv
@@ -317,19 +320,24 @@ jobs:
           TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
-      - name: Upload Trivy scan results to GitHub Security tab
+      - name: Save Trivy report
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-xpu-amd64
+          path: trivy-results.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
+
+      - name: Convert nightly Trivy report to SARIF
+        if: github.event_name == 'schedule'
+        run: trivy convert --format sarif --output trivy-results.sarif trivy-results.json
+
+      - name: Publish nightly vulnerability baseline
+        if: github.event_name == 'schedule'
         uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
 
       - name: Install cosign
         if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
@@ -409,9 +417,8 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-omni@${{ steps.build-and-push.outputs.digest }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
+          format: json
+          output: trivy-results.json
           scanners: vuln
           timeout: 30m
           skip-dirs: /root/.cache/uv
@@ -419,7 +426,21 @@ jobs:
           TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
-      - name: Upload Trivy scan results to GitHub Security tab
+      - name: Save Trivy report
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-xpu-omni-amd64
+          path: trivy-results.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
+
+      - name: Convert nightly Trivy report to SARIF
+        if: github.event_name == 'schedule'
+        run: trivy convert --format sarif --output trivy-results.sarif trivy-results.json
+
+      - name: Publish nightly vulnerability baseline
+        if: github.event_name == 'schedule'
         uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: "trivy-results.sarif"
@@ -552,9 +573,8 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-xpu-sglang@${{ steps.build-and-push.outputs.digest }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
+          format: json
+          output: trivy-results.json
           scanners: vuln
           timeout: 30m
           skip-dirs: /root/.cache/uv
@@ -562,20 +582,25 @@ jobs:
           TRIVY_USERNAME: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_USER || secrets.GHCR_USER }}
           TRIVY_PASSWORD: ${{ needs.resolve-registry.outputs.is_pr == 'true' && secrets.QUAY_TOKEN || secrets.GHCR_TOKEN }}
 
-      - name: Upload Trivy scan results to GitHub Security tab
+      - name: Save Trivy report
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-xpu-sglang-amd64
+          path: trivy-results.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
+
+      - name: Convert nightly Trivy report to SARIF
+        if: github.event_name == 'schedule'
+        run: trivy convert --format sarif --output trivy-results.sarif trivy-results.json
+
+      - name: Publish nightly vulnerability baseline
+        if: github.event_name == 'schedule'
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: "trivy-results.sarif"
           category: trivy-xpu-sglang
-
-      - name: Display vulnerability summary
-        run: |
-          echo "=== Vulnerability Scan Summary ==="
-          if [ -f trivy-results.sarif ]; then
-            echo "Scan completed. Check the Security tab for detailed results."
-          else
-            echo "No vulnerabilities found or scan failed."
-          fi
 
       - name: Install cosign
         if: ${{ needs.resolve-registry.outputs.is_pr == 'false' && steps.build-and-push.outputs.digest != '' }}
