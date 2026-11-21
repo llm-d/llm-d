@@ -1,0 +1,169 @@
+name: multi-cluster-routing
+
+env:
+  static:
+    BRANCH: main
+    REPO_ROOT: $(realpath $(git rev-parse --show-toplevel))
+
+    GUIDE_NAME: multi-cluster-routing
+    # Kubernetes contexts: the hub and cluster A share one Kubernetes cluster, cluster B
+    # runs in another. Left at the current context, everything lands in one cluster
+    # (see the appendix).
+    CTX_HUB: {default: "$(kubectl config current-context)"}
+    CTX_B: {default: "$(kubectl config current-context)"}
+    # Namespaces. NS_HUB may be the same as NS_A.
+    NS_A: {default: llm-d-mc-a}
+    NS_B: {default: llm-d-mc-b}
+    NS_HUB: {default: llm-d-mc-hub}
+
+    # How the hub ranks clusters: "load" scrapes each cluster's KV-cache and queue
+    # metrics; "latency" learns each cluster's TTFT from the hub's own traffic.
+    HUB_SCORER: {default: load, values: [load, latency]}
+    LEAF_VALUES: {default: ""}
+
+    # How the hub reaches cluster B: "clusterip" when cluster B is a namespace of the
+    # hub's cluster (the defaults: one cluster), "loadbalancer" when cluster B is a
+    # separate Kubernetes cluster (the tested setup; see Step 3).
+    CLUSTER_B_ACCESS: {default: clusterip, values: [clusterip, loadbalancer]}
+    # With "loadbalancer": the source addresses cluster B accepts, i.e. the hub
+    # cluster's outbound traffic as cluster B sees it (for example 203.0.113.14/31),
+    # and the provider annotations that make the load balancer internal or public.
+    HUB_EGRESS_CIDR: {default: ""}
+    CLUSTER_B_LB_ANNOTATIONS: {default: "{}"}
+
+    HF_TOKEN: {default: HF_TOKEN_PLACEHOLDER, sensitive: true}
+
+    MODEL: {default: "Qwen/Qwen3-32B"}
+
+    # VERIFICATION
+    CURL_TEST_IMAGE: {default: "cfmanteiga/alpine-bash-curl-jq:latest"}
+
+  source: ["${REPO_ROOT}/guides/env.sh"]
+
+prerequisites:
+  clone:
+    - skip_in: [ci]
+      run: |
+        export BRANCH=main
+        git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANCH}
+
+  gaie:
+    - run: |
+        # GAIE_URL is automatically calculated from GAIE_VERSION at ${REPO_ROOT}/guides/env.sh
+        for ctx in ${CTX_HUB} ${CTX_B}; do
+          kubectl --context ${ctx} apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/${GAIE_URL}/v1-manifests.yaml
+        done
+  namespace:
+    - run: |
+        for ns in ${NS_A} ${NS_HUB}; do
+          kubectl --context ${CTX_HUB} create namespace ${ns} --dry-run=client -o yaml | kubectl --context ${CTX_HUB} apply -f -
+        done
+        kubectl --context ${CTX_B} create namespace ${NS_B} --dry-run=client -o yaml | kubectl --context ${CTX_B} apply -f -
+  secrets:
+    - skip_in: [ci]
+      run: |
+        kubectl --context ${CTX_HUB} create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NS_A}" \
+          --dry-run=client -o yaml | kubectl --context ${CTX_HUB} apply -f -
+        kubectl --context ${CTX_B} create secret generic llm-d-hf-token \
+          --from-literal="HF_TOKEN=${HF_TOKEN}" \
+          --namespace "${NS_B}" \
+          --dry-run=client -o yaml | kubectl --context ${CTX_B} apply -f -
+
+deploy:
+  clusters:
+    - when: {HUB_SCORER: [load]}
+      run: |
+        # Lets the hub read each cluster router's /metrics. The variable carries its own -f flag.
+        export LEAF_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/leaf.values.yaml"
+    - run: |
+        helm install optimized-baseline ${ROUTER_STANDALONE_CHART} --kube-context ${CTX_HUB} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+          ${LEAF_VALUES} \
+          -n ${NS_A} --version ${ROUTER_CHART_VERSION}
+        helm install optimized-baseline ${ROUTER_STANDALONE_CHART} --kube-context ${CTX_B} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/optimized-baseline/router/optimized-baseline.values.yaml \
+          ${LEAF_VALUES} \
+          -n ${NS_B} --version ${ROUTER_CHART_VERSION}
+
+  modelserver:
+    - run: |
+        kubectl --context ${CTX_HUB} apply -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/
+        kubectl --context ${CTX_B} apply -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/
+        kubectl --context ${CTX_HUB} rollout status deployment/optimized-baseline-nvidia-gpu-vllm-decode -n ${NS_A} --timeout=30m
+        kubectl --context ${CTX_B} rollout status deployment/optimized-baseline-nvidia-gpu-vllm-decode -n ${NS_B} --timeout=30m
+
+  expose:
+    - when: {CLUSTER_B_ACCESS: [loadbalancer]}
+      run: |
+        : "${HUB_EGRESS_CIDR:?set HUB_EGRESS_CIDR to the source addresses cluster B sees from the hub cluster}"
+        envsubst '${HUB_EGRESS_CIDR} ${CLUSTER_B_LB_ANNOTATIONS}' < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/cluster-b-lb.yaml \
+          | kubectl --context ${CTX_B} apply -n ${NS_B} -f -
+        # Wait up to 5 minutes for the load balancer's IP
+        for _ in $(seq 60); do
+          LB_IP=$(kubectl --context ${CTX_B} get service cluster-b-lb -n ${NS_B} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          [ -n "${LB_IP}" ] && break
+          sleep 5
+        done
+        echo "cluster B load balancer IP: ${LB_IP:-none after 5 minutes (a load balancer that publishes only a hostname is not supported)}"
+
+  cluster_list:
+    - run: CLUSTER_A_IP=$(kubectl --context ${CTX_HUB} get svc optimized-baseline-epp -n ${NS_A} -o jsonpath='{.spec.clusterIP}')
+    - when: {CLUSTER_B_ACCESS: [loadbalancer]}
+      run: CLUSTER_B_IP=$(kubectl --context ${CTX_B} get svc cluster-b-lb -n ${NS_B} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+    - when: {CLUSTER_B_ACCESS: [clusterip]}
+      run: CLUSTER_B_IP=$(kubectl --context ${CTX_B} get svc optimized-baseline-epp -n ${NS_B} -o jsonpath='{.spec.clusterIP}')
+    - run: |
+        export CLUSTER_A_IP CLUSTER_B_IP
+        : "${CLUSTER_A_IP:?cluster A router Service has no clusterIP - did Step 1 run in ${NS_A}?}"
+        : "${CLUSTER_B_IP:?cluster B has no address - did Steps 1 and 3 run in ${NS_B}?}"
+        envsubst '${CLUSTER_A_IP} ${CLUSTER_B_IP}' < ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/clusters.yaml \
+          | kubectl --context ${CTX_HUB} apply -n ${NS_HUB} -f -
+
+  standalone:
+    - run: |
+        helm install mc-hub ${ROUTER_STANDALONE_CHART} --kube-context ${CTX_HUB} \
+          -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/hub.values.yaml \
+          -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/hub-${HUB_SCORER}.values.yaml \
+          -n ${NS_HUB} --version ${ROUTER_CHART_VERSION}
+        kubectl --context ${CTX_HUB} rollout status deployment/mc-hub-epp -n ${NS_HUB} --timeout=5m
+
+verify:
+  endpoint:
+    standalone:
+      - run: export IP=$(kubectl --context ${CTX_HUB} get service mc-hub-epp -n ${NS_HUB} -o jsonpath='{.spec.clusterIP}')
+  tests:
+    - run: |
+        kubectl --context ${CTX_HUB} run curl-test --rm -i --restart=Never \
+          --image=${CURL_TEST_IMAGE} \
+          --namespace="${NS_HUB}" \
+          --env="IP=${IP}" \
+          --env="MODEL=${MODEL}" \
+          -- /bin/sh -c 'set -o pipefail; curl -sS --fail -X POST "http://${IP}/v1/completions" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"How are you today?\"}" | jq -e ".choices[0].text"'
+    - skip_in: [ci]
+      run: |
+        # See how the hub splits traffic across the clusters
+        kubectl --context ${CTX_HUB} port-forward -n ${NS_HUB} svc/mc-hub-epp 8000:80 &
+        PF_PID=$!
+        trap 'kill ${PF_PID} 2>/dev/null' EXIT
+        python3 ${REPO_ROOT}/guides/${GUIDE_NAME}/verify.py --base-url http://127.0.0.1:8000 \
+          --scorer ${HUB_SCORER} --cluster a=${NS_A}@${CTX_HUB} --cluster b=${NS_B}@${CTX_B}
+        kill ${PF_PID}
+
+cleanup:
+  - run: |
+      helm uninstall mc-hub --kube-context ${CTX_HUB} -n ${NS_HUB} --ignore-not-found
+      kubectl --context ${CTX_HUB} delete configmap mc-hub-clusters -n ${NS_HUB} --ignore-not-found=true
+      kubectl --context ${CTX_B} delete service cluster-b-lb -n ${NS_B} --ignore-not-found=true
+      kubectl --context ${CTX_HUB} delete -n ${NS_A} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-a/ --ignore-not-found=true
+      kubectl --context ${CTX_B} delete -n ${NS_B} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/cluster-b/ --ignore-not-found=true
+      helm uninstall optimized-baseline --kube-context ${CTX_HUB} -n ${NS_A} --ignore-not-found
+      helm uninstall optimized-baseline --kube-context ${CTX_B} -n ${NS_B} --ignore-not-found
+  - skip_in: [ci]
+    run: |
+      for ns in ${NS_A} ${NS_HUB}; do kubectl --context ${CTX_HUB} delete namespace ${ns} --ignore-not-found=true; done
+      kubectl --context ${CTX_B} delete namespace ${NS_B} --ignore-not-found=true
