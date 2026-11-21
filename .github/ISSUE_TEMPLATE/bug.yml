@@ -46,6 +46,12 @@ body:
         - Wide Expert-Parallelism
         - Autoscaling
         - Observability / Monitoring
+        - Batch / Async Inference
+        - Agentic Inference
+        - Multimodal / Omni Serving
+        - Model Recipes
+        - Reinforcement Learning
+        - Benchmarking
         - Container Image / Build
         - Deployment / Helm Charts
         - Documentation / Guides
