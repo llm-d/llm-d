@@ -41,7 +41,7 @@ data:
         num_conversations: ${CONCURRENCY_LEVEL}
         shared_system_prompt_len: 3000
         # Sized so sessions grow across 20 turns up to ~460K tokens without Turn-0 truncation,
-        # and active KV exceeds the 532K/replica HBM pool to exercise the 1.06M/replica HiCache tier.
+        # and active KV exceeds the 751K/replica HBM pool to exercise the HiCache host tier.
         dynamic_system_prompt_len:
           type: lognormal
           min: 32000
