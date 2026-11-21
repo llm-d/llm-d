@@ -4,8 +4,8 @@ platform/<INFRA_PROVIDER> is what the guides apply (README step 5). `ocp` must
 be a passthrough of modelserver/; `gke` must carry exactly the GKE component's
 adaptations: no nvidia RuntimeClass, a privileged launcher with the host driver
 tree and /dev mounted, the GPU taint toleration, and the GKE GPU node label on
-the LauncherPopulationPolicy. Both FMA guides compose the same GKE component;
-each is covered here once it has a platform/gke overlay.
+the LauncherPopulationPolicy. Both FMA guides compose the same GKE component
+and are covered here.
 """
 
 from pathlib import Path
@@ -16,15 +16,9 @@ import pytest
 import yaml
 
 FMA_DIR = Path(__file__).resolve().parents[2] / "guides/fast-model-actuation"
-# TODO: drop the is_dir() filter once both guides have platform/ overlays on
-# main. The overlays land in separate PRs that both carry this file.
 GUIDES = {
-    name: path
-    for name, path in {
-        "fma": FMA_DIR,
-        "fma-keda": FMA_DIR / "fast-model-actuation-keda",
-    }.items()
-    if (path / "platform/gke").is_dir()
+    "fma": FMA_DIR,
+    "fma-keda": FMA_DIR / "fast-model-actuation-keda",
 }
 
 
