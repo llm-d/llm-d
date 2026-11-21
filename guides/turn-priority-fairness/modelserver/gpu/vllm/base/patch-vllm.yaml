@@ -22,6 +22,7 @@ spec:
             - "--gpu-memory-utilization=0.95"
             - "--prefix-caching-hash-algo=sha256_cbor"
             - '--kv-transfer-config={"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"num_cpu_blocks":1280,"cpu_bytes_to_use":549755813888,"block_size":256}}'
+            - "--shutdown-timeout=45"
           env:
             - name: HF_TOKEN
               valueFrom:
