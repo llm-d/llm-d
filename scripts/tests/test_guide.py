@@ -181,6 +181,46 @@ def test_when_filter_uses_default_and_override():
     assert "echo gke-only" in overridden and "echo base-only" not in overridden
 
 
+_BOOL_GUIDE = """
+name: test-guide
+env:
+  static:
+    MONITORING: {default: "false", values: %s}
+deploy:
+  - run: echo always
+  - when: {MONITORING: [true]}
+    run: echo monitoring
+"""
+
+
+def test_unquoted_yaml_boolean_values_accept_string_default():
+    # `values: [false, true]` parses as Python bools; the default is a string.
+    data = yaml.safe_load(_BOOL_GUIDE % "[false, true]")
+    findings = guide.check_yaml(data)
+    assert findings.ok(), findings.errors
+    out = guide.emit_script(data, ["deploy"], {"MONITORING": "true"})
+    assert "echo monitoring" in out
+
+
+def test_unquoted_yaml_boolean_in_when_matches_override():
+    # check passes with quoted values, so an unquoted `when:` list must not
+    # silently drop the gated step from the emitted script.
+    data = yaml.safe_load(_BOOL_GUIDE % '["false", "true"]')
+    assert guide.check_yaml(data).ok()
+    assert "echo monitoring" not in guide.emit_script(data, ["deploy"])
+    out = guide.emit_script(data, ["deploy"], {"MONITORING": "true"})
+    assert "echo monitoring" in out
+
+
+def test_unquoted_yaml_booleans_render_as_yaml_spells_them():
+    # The README must offer values that `--var` accepts, not str(True).
+    data = yaml.safe_load(_BOOL_GUIDE % "[false, true]")
+    assert "options: false, true" in guide.render_path(data, "env.static")
+    assert "# only when MONITORING=true:" in guide.render_path(data, "deploy")
+    with pytest.raises(guide.GuideError, match=r"\['false', 'true'\]"):
+        guide.emit_script(data, ["deploy"], {"MONITORING": "True"})
+
+
 def test_when_on_sensitive_var_without_override_is_an_error():
     # Branch selection must never key off the README placeholder default.
     data = _minimal(
