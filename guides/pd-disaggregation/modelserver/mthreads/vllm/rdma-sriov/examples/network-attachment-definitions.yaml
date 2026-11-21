@@ -1,0 +1,18 @@
+# Example SR-IOV VF networks for the RDMA variant.
+#
+# Replace the VF PCI addresses, the subnet and the per-NAD addresses with
+# values from your node. The pod's RDMA device (see device_name in the
+# deployment patches) must belong to the VF injected by its NAD.
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: mthreads-sriov-vf0
+spec:
+  config: '{"cniVersion":"1.0.0","name":"mthreads-sriov-vf0","type":"sriov","deviceID":"0000:98:00.2","ipam":{"type":"host-local","subnet":"172.100.5.0/24","rangeStart":"172.100.5.100","rangeEnd":"172.100.5.100"}}'
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: mthreads-sriov-vf1
+spec:
+  config: '{"cniVersion":"1.0.0","name":"mthreads-sriov-vf1","type":"sriov","deviceID":"0000:98:00.3","ipam":{"type":"host-local","subnet":"172.100.5.0/24","rangeStart":"172.100.5.101","rangeEnd":"172.100.5.101"}}'
