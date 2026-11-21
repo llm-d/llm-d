@@ -1,8 +1,8 @@
 name: PR Guide Owners
 
 # Routes PRs touching guides/** to nearest-ancestor guides/**/OWNERS read from
-# the base branch. Collaborators are requested as reviewers via the GitHub API;
-# non-collaborators are mentioned once in an idempotent sticky comment.
+# the base branch. Eligible owners are requested as PR reviewers via the GitHub
+# API; non-collaborators and unrequestable logins (422) are logged and skipped.
 
 on:
   pull_request_target:
@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      issues: write
+      issues: read
       pull-requests: write
     steps:
       - name: Checkout scripts and guide OWNERS from base branch
@@ -64,7 +64,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: python3 -m pip install --disable-pip-version-check pyyaml
+        run: python3 -m pip install --disable-pip-version-check 'pyyaml==6.*'
 
       - name: Route guide owners
         env:

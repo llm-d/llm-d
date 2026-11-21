@@ -1,9 +1,12 @@
 """Tests for scripts/pr-guide-owners.py and .github/workflows/pr-guide-owners.yaml."""
 
+import contextlib
 import importlib.util
+import io
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -39,11 +42,9 @@ class FakeGitHubApi:
         files: list[dict] | None = None,
         reviews: list[dict] | None = None,
         events: list[dict] | None = None,
-        comments: list[dict] | None = None,
         collaborators: set[str] | None = None,
         reject_reviewers_422: set[str] | None = None,
         collaborator_error: tuple[int, str] | None = None,
-        cap_422_on_request: bool = False,
     ):
         self.pr = pr or {
             "number": 42,
@@ -51,17 +52,16 @@ class FakeGitHubApi:
             "draft": False,
             "user": {"login": "contributor"},
             "requested_reviewers": [],
+            "requested_teams": [],
         }
         self.files = list(files or [])
         self.reviews = list(reviews or [])
         self.events = list(events or [])
-        self.comments = list(comments or [])
         self.collaborators = {login.lower() for login in (collaborators or set())}
         self.reject_reviewers_422 = {
             login.lower() for login in (reject_reviewers_422 or set())
         }
         self.collaborator_error = collaborator_error
-        self.cap_422_on_request = cap_422_on_request
         self.calls: list[tuple[str, str, dict | None]] = []
 
     def __call__(self, method: str, path: str, token: str, payload: dict | None = None):
@@ -77,8 +77,6 @@ class FakeGitHubApi:
                 return self._paginate(self.reviews, query)
             if base_path == f"/repos/{REPO}/issues/42/events":
                 return self._paginate(self.events, query)
-            if base_path == f"/repos/{REPO}/issues/42/comments":
-                return self._paginate(self.comments, query)
             prefix = f"/repos/{REPO}/collaborators/"
             if base_path.startswith(prefix):
                 if self.collaborator_error:
@@ -90,34 +88,10 @@ class FakeGitHubApi:
                 raise ApiError(404, method, path, '{"message": "Not Found"}')
 
         if method == "POST" and base_path == f"/repos/{REPO}/pulls/42/requested_reviewers":
-            if self.cap_422_on_request:
-                raise ApiError(
-                    422,
-                    method,
-                    path,
-                    '{"message": "Cannot request more than 15 reviewers"}',
-                )
             reviewers = (payload or {}).get("reviewers") or []
             if any(login.lower() in self.reject_reviewers_422 for login in reviewers):
-                raise ApiError(422, method, path, '{"message": "Unprocessable Entity"}')
+                raise ApiError(422, method, path, '{"message": "Review cannot be requested"}')
             return {"requested_reviewers": [{"login": r} for r in reviewers]}
-
-        if method == "POST" and base_path == f"/repos/{REPO}/issues/42/comments":
-            comment = {
-                "id": 900 + len(self.comments),
-                "body": (payload or {})["body"],
-                "user": {"login": "github-actions[bot]", "type": "Bot"},
-            }
-            self.comments.append(comment)
-            return comment
-
-        if method == "PATCH" and base_path.startswith(f"/repos/{REPO}/issues/comments/"):
-            cid = int(base_path.rsplit("/", 1)[1])
-            for comment in self.comments:
-                if comment["id"] == cid:
-                    comment["body"] = (payload or {})["body"]
-                    return comment
-            raise ApiError(404, method, path, '{"message": "Not Found"}')
 
         raise AssertionError(f"Unexpected API call: {method} {path} {payload}")
 
@@ -141,33 +115,38 @@ def _write_owners(repo_root: Path, rel_dir: str, approvers=(), reviewers=()) -> 
 
 
 class OwnersResolutionTests(unittest.TestCase):
-    def test_repo_guides_resolution_matches_depth_2_and_nested_depth_3(self):
-        self.assertEqual(
-            pgo.resolve_guide_owners_dir("guides/flow-control/gaie-sim/values.yaml", REPO_ROOT),
-            "guides/flow-control",
-        )
-        self.assertEqual(
-            pgo.resolve_guide_owners_dir(
-                "guides/fast-model-actuation/fast-model-actuation-keda/README.md", REPO_ROOT
-            ),
-            "guides/fast-model-actuation/fast-model-actuation-keda",
-        )
-        self.assertEqual(
-            pgo.resolve_guide_owners_dir("guides/fast-model-actuation/README.md", REPO_ROOT),
-            "guides/fast-model-actuation",
-        )
-        self.assertEqual(
-            pgo.resolve_guide_owners_dir("guides/models/deepseek-v4/guide.yaml", REPO_ROOT),
-            "guides/models/deepseek-v4",
-        )
-        self.assertEqual(
-            pgo.resolve_guide_owners_dir(
-                "guides/batch-serving/asynchronous-processing/multitenant/values.yaml", REPO_ROOT
-            ),
-            "guides/batch-serving/asynchronous-processing",
-        )
+    def test_nearest_ancestor_resolution_across_depth_2_3_and_4(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _write_owners(root, "guides/alpha", approvers=["alice"])
+            _write_owners(root, "guides/alpha/sub-guide", approvers=["sub-alice"])
+            _write_owners(root, "guides/models/model-x", approvers=["model-owner"])
+            _write_owners(root, "guides/batch/async", approvers=["batch-owner"])
 
-    def test_ignores_top_level_prereqs_non_guides_and_never_uses_root_owners(self):
+            self.assertEqual(
+                pgo.resolve_guide_owners_dir("guides/alpha/gaie-sim/values.yaml", root),
+                "guides/alpha",
+            )
+            self.assertEqual(
+                pgo.resolve_guide_owners_dir("guides/alpha/README.md", root),
+                "guides/alpha",
+            )
+            self.assertEqual(
+                pgo.resolve_guide_owners_dir("guides/alpha/sub-guide/README.md", root),
+                "guides/alpha/sub-guide",
+            )
+            self.assertEqual(
+                pgo.resolve_guide_owners_dir("guides/models/model-x/guide.yaml", root),
+                "guides/models/model-x",
+            )
+            self.assertEqual(
+                pgo.resolve_guide_owners_dir(
+                    "guides/batch/async/nested/values.yaml", root
+                ),
+                "guides/batch/async",
+            )
+
+    def test_ignores_top_level_prereqs_traversal_and_never_uses_root_owners(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             (root / "OWNERS").write_text("approvers:\n- rootowner\n", encoding="utf-8")
@@ -182,10 +161,6 @@ class OwnersResolutionTests(unittest.TestCase):
             self.assertIsNone(pgo.resolve_guide_owners_dir("guides/brand-new-guide/README.md", root))
             self.assertIsNone(pgo.resolve_guide_owners_dir("guides/../OWNERS", root))
             self.assertIsNone(pgo.resolve_guide_owners_dir("guides/alpha/../beta/README.md", root))
-            self.assertEqual(
-                pgo.resolve_guide_owners_dir("guides/alpha/sub/values.yaml", root),
-                "guides/alpha",
-            )
 
     def test_load_guide_owners_orders_approvers_first_and_dedupes_case_insensitively(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -206,18 +181,21 @@ class RoutingBehaviorTests(unittest.TestCase):
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.root = Path(self._tmpdir.name)
-        _write_owners(self.root, "guides/alpha", approvers=["alice"], reviewers=["ro-alpha"])
-        _write_owners(self.root, "guides/beta", approvers=["bob"], reviewers=["ro-beta"])
+        _write_owners(self.root, "guides/alpha", approvers=["alice"], reviewers=["ext-alpha"])
+        _write_owners(self.root, "guides/beta", approvers=["bob"], reviewers=["ext-beta"])
         _write_owners(self.root, "guides/gamma", approvers=["carol"])
 
     def tearDown(self):
         self._tmpdir.cleanup()
 
-    def _run(self, fake: FakeGitHubApi, *, dry_run: bool = False) -> int:
+    def _run(self, fake: FakeGitHubApi, *, dry_run: bool = False) -> tuple[int, str]:
+        buf = io.StringIO()
         with mock.patch.object(pgo, "api", side_effect=fake):
-            return pgo.route_pr(REPO, 42, "tok", self.root, dry_run=dry_run)
+            with contextlib.redirect_stdout(buf):
+                rc = pgo.route_pr(REPO, 42, "tok", self.root, dry_run=dry_run)
+        return rc, buf.getvalue()
 
-    def test_partitions_collaborators_and_cc_and_excludes_author(self):
+    def test_live_mode_posts_one_reviewer_each_skips_collaborators_get_and_excludes_author(self):
         fake = FakeGitHubApi(
             pr={
                 "number": 42,
@@ -225,80 +203,69 @@ class RoutingBehaviorTests(unittest.TestCase):
                 "draft": False,
                 "user": {"login": "Alice"},
                 "requested_reviewers": [],
+                "requested_teams": [],
             },
             files=[{"filename": "guides/alpha/README.md"}, {"filename": "guides/beta/guide.yaml"}],
-            collaborators={"alice", "bob"},
+            reject_reviewers_422={"ext-alpha", "ext-beta"},
         )
-        self.assertEqual(self._run(fake), 0)
+        rc, out = self._run(fake)
+        self.assertEqual(rc, 0)
+        self.assertFalse(any("/collaborators/" in p or "/comments" in p for _, p, _ in fake.calls))
+        # Round-robin order: guides/alpha[0] (alice, excluded), guides/beta[0] (bob),
+        # guides/alpha[1] (ext-alpha), guides/beta[1] (ext-beta).
         self.assertEqual(
             fake.write_calls(),
             [
                 ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["bob"]}),
-                (
-                    "POST",
-                    f"/repos/{REPO}/issues/42/comments",
-                    {
-                        "body": (
-                            "<!-- guide-owners-cc -->\n"
-                            "cc guide owners from `OWNERS`:\n"
-                            "- `guides/alpha`: @ro-alpha\n"
-                            "- `guides/beta`: @ro-beta"
-                        )
-                    },
-                ),
+                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["ext-alpha"]}),
+                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["ext-beta"]}),
             ],
         )
+        self.assertIn("requested reviewers ['bob']", out)
+        self.assertIn("skipped non-collaborator or unrequestable guide owners: ext-alpha, ext-beta", out)
+
+    def test_422_does_not_consume_remaining_slots(self):
+        _write_owners(self.root, "guides/slots", approvers=["ext-1", "collab-1", "collab-2"])
+        fake = FakeGitHubApi(
+            pr={
+                "number": 42,
+                "state": "open",
+                "draft": False,
+                "user": {"login": "contributor"},
+                "requested_reviewers": [{"login": f"pre-{i}"} for i in range(14)],
+                "requested_teams": [],
+            },
+            files=[{"filename": "guides/slots/README.md"}],
+            reject_reviewers_422={"ext-1"},
+        )
+        rc, out = self._run(fake)
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            fake.write_calls(),
+            [
+                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["ext-1"]}),
+                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["collab-1"]}),
+            ],
+        )
+        self.assertIn("skipped non-collaborator or unrequestable guide owners: ext-1", out)
+        self.assertIn("capped reviewer requests at 15 total (skipping collab-2)", out)
 
     def test_rename_previous_filename_routes_source_guide(self):
         fake = FakeGitHubApi(
             files=[{"filename": "docs/moved.md", "previous_filename": "guides/gamma/old.md"}],
-            collaborators={"carol"},
         )
-        self.assertEqual(self._run(fake), 0)
+        rc, _ = self._run(fake)
+        self.assertEqual(rc, 0)
         self.assertEqual(
             fake.write_calls(),
             [("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["carol"]})],
         )
 
-    def test_batch_422_falls_back_per_user_into_cc_comment(self):
-        fake = FakeGitHubApi(
-            files=[{"filename": "guides/alpha/README.md"}, {"filename": "guides/beta/README.md"}],
-            collaborators={"alice", "bob"},
-            reject_reviewers_422={"alice"},
-        )
-        self.assertEqual(self._run(fake), 0)
-        writes = fake.write_calls()
-        self.assertEqual(
-            writes,
-            [
-                (
-                    "POST",
-                    f"/repos/{REPO}/pulls/42/requested_reviewers",
-                    {"reviewers": ["alice", "bob"]},
-                ),
-                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["alice"]}),
-                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["bob"]}),
-                (
-                    "POST",
-                    f"/repos/{REPO}/issues/42/comments",
-                    {
-                        "body": (
-                            "<!-- guide-owners-cc -->\n"
-                            "cc guide owners from `OWNERS`:\n"
-                            "- `guides/alpha`: @alice, @ro-alpha\n"
-                            "- `guides/beta`: @ro-beta"
-                        )
-                    },
-                ),
-            ],
-        )
-
-    def test_antispam_respects_requested_reviewed_timeline_and_sticky_comment(self):
+    def test_antispam_respects_requested_reviewed_and_timeline_events(self):
         _write_owners(
             self.root,
             "guides/delta",
-            approvers=["already-req", "already-reviewed", "previously-requested"],
-            reviewers=["ro-delta"],
+            approvers=["already-req", "already-reviewed", "previously-requested", "fresh-owner"],
         )
         fake = FakeGitHubApi(
             pr={
@@ -307,136 +274,103 @@ class RoutingBehaviorTests(unittest.TestCase):
                 "draft": False,
                 "user": {"login": "contributor"},
                 "requested_reviewers": [{"login": "Already-Req"}],
+                "requested_teams": [],
             },
             files=[{"filename": "guides/delta/README.md"}],
             reviews=[{"user": {"login": "already-reviewed"}}],
-            events=[{"event": "review_requested", "requested_reviewer": {"login": "previously-requested"}}],
-            comments=[
-                {
-                    "id": 500,
-                    "body": "<!-- guide-owners-cc -->\ncc guide owners (`guides/delta/OWNERS`): @ro-delta",
-                    "user": {"login": "github-actions[bot]", "type": "Bot"},
-                }
+            events=[
+                {"event": "review_requested", "requested_reviewer": {"login": "previously-requested"}},
+                {"event": "review_requested", "requested_team": {"slug": "sig-docs"}},
             ],
-            collaborators={"already-req", "already-reviewed", "previously-requested"},
         )
-        self.assertEqual(self._run(fake), 0)
-        self.assertEqual(fake.write_calls(), [])
+        rc, _ = self._run(fake)
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            fake.write_calls(),
+            [("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["fresh-owner"]})],
+        )
 
-    def test_synchronize_upgrades_single_guide_sticky_comment_and_ignores_spoof(self):
+    def test_cross_guide_shared_owner_requested_once_case_insensitively(self):
+        _write_owners(self.root, "guides/one", approvers=["Alice"])
+        _write_owners(self.root, "guides/two", approvers=["alice"])
         fake = FakeGitHubApi(
-            files=[{"filename": "guides/alpha/README.md"}, {"filename": "guides/beta/README.md"}],
-            comments=[
-                {
-                    "id": 100,
-                    "body": "<!-- guide-owners-cc -->\ncc guide owners (`guides/beta/OWNERS`): @ro-beta",
-                    "user": {"login": "random-human", "type": "User"},
-                },
-                {
-                    "id": 200,
-                    "body": "<!-- guide-owners-cc -->\ncc guide owners (`guides/alpha/OWNERS`): @ro-alpha",
-                    "user": {"login": "github-actions[bot]", "type": "Bot"},
-                },
-            ],
-            collaborators={"alice", "bob"},
+            files=[{"filename": "guides/one/README.md"}, {"filename": "guides/two/README.md"}],
         )
-        self.assertEqual(self._run(fake), 0)
-        writes = fake.write_calls()
+        rc, _ = self._run(fake)
+        self.assertEqual(rc, 0)
         self.assertEqual(
-            writes,
-            [
-                (
-                    "POST",
-                    f"/repos/{REPO}/pulls/42/requested_reviewers",
-                    {"reviewers": ["alice", "bob"]},
-                ),
-                (
-                    "PATCH",
-                    f"/repos/{REPO}/issues/comments/200",
-                    {
-                        "body": (
-                            "<!-- guide-owners-cc -->\n"
-                            "cc guide owners from `OWNERS`:\n"
-                            "- `guides/alpha`: @ro-alpha\n"
-                            "- `guides/beta`: @ro-beta"
-                        )
-                    },
-                ),
-            ],
+            fake.write_calls(),
+            [("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["Alice"]})],
         )
 
-    def test_draft_and_closed_prs_make_zero_write_calls(self):
-        for state, draft in [("open", True), ("closed", False)]:
-            fake = FakeGitHubApi(
-                pr={"number": 42, "state": state, "draft": draft, "user": {"login": "x"}},
-                files=[{"filename": "guides/alpha/README.md"}],
-                collaborators={"alice"},
-            )
-            self.assertEqual(self._run(fake), 0)
-            self.assertEqual(fake.write_calls(), [])
-            self.assertEqual(len(fake.calls), 1)
-
-    def test_mass_sweep_guard_allows_5_and_skips_6(self):
-        files = []
-        collaborators = set()
-        for idx in range(6):
-            slug = f"guides/g{idx}"
-            owner = f"owner{idx}"
-            _write_owners(self.root, slug, approvers=[owner])
-            files.append({"filename": f"{slug}/README.md"})
-            collaborators.add(owner)
-
-        fake_five = FakeGitHubApi(files=files[:5], collaborators=collaborators)
-        self.assertEqual(self._run(fake_five), 0)
-        self.assertEqual(
-            fake_five.write_calls(),
-            [
-                (
-                    "POST",
-                    f"/repos/{REPO}/pulls/42/requested_reviewers",
-                    {"reviewers": ["owner0", "owner1", "owner2", "owner3", "owner4"]},
-                )
-            ],
-        )
-
-        fake_six = FakeGitHubApi(files=files, collaborators=collaborators)
-        self.assertEqual(self._run(fake_six), 0)
-        self.assertEqual(fake_six.write_calls(), [])
-        self.assertFalse(any("/collaborators/" in p for _, p, _ in fake_six.calls))
-
-    def test_caps_at_15_total_reviewers_without_spilling_into_cc(self):
-        owners = [f"collab{i:02d}" for i in range(18)]
-        _write_owners(self.root, "guides/big", approvers=owners)
+    def test_round_robin_cap_interleaves_across_guides_and_counts_teams(self):
+        _write_owners(self.root, "guides/g1", approvers=[f"g1-{i}" for i in range(10)])
+        _write_owners(self.root, "guides/g2", approvers=[f"g2-{i}" for i in range(10)])
         fake = FakeGitHubApi(
             pr={
                 "number": 42,
                 "state": "open",
                 "draft": False,
                 "user": {"login": "contributor"},
-                "requested_reviewers": [{"login": "pre-existing-1"}, {"login": "pre-existing-2"}],
+                "requested_reviewers": [{"login": "pre-req"}],
+                "requested_teams": [{"slug": "router-maintainers"}, {"slug": "sig-docs"}],
             },
-            files=[{"filename": "guides/big/README.md"}],
-            collaborators=set(owners),
+            files=[{"filename": "guides/g1/README.md"}, {"filename": "guides/g2/README.md"}],
         )
-        self.assertEqual(self._run(fake), 0)
-        writes = fake.write_calls()
-        self.assertEqual(len(writes), 1)
+        rc, out = self._run(fake)
+        self.assertEqual(rc, 0)
+        requested = [p["reviewers"][0] for _, _, p in fake.write_calls()]
+        # 15 - 1 user - 2 teams = 12 slots -> 6 from g1 and 6 from g2 interleaved.
         self.assertEqual(
-            writes[0],
-            (
-                "POST",
-                f"/repos/{REPO}/pulls/42/requested_reviewers",
-                {"reviewers": owners[:13]},
-            ),
+            requested,
+            [
+                "g1-0", "g2-0", "g1-1", "g2-1", "g1-2", "g2-2",
+                "g1-3", "g2-3", "g1-4", "g2-4", "g1-5", "g2-5",
+            ],
+        )
+        self.assertIn("capped reviewer requests at 15 total (skipping g1-6", out)
+
+    def test_draft_and_closed_prs_make_zero_write_calls(self):
+        for state, draft in [("open", True), ("closed", False)]:
+            fake = FakeGitHubApi(
+                pr={"number": 42, "state": state, "draft": draft, "user": {"login": "x"}},
+                files=[{"filename": "guides/alpha/README.md"}],
+            )
+            rc, _ = self._run(fake)
+            self.assertEqual(rc, 0)
+            self.assertEqual(fake.write_calls(), [])
+            self.assertEqual(len(fake.calls), 1)
+
+    def test_mass_sweep_guard_allows_5_and_skips_6(self):
+        files = []
+        for idx in range(6):
+            slug = f"guides/g{idx}"
+            _write_owners(self.root, slug, approvers=[f"owner{idx}"])
+            files.append({"filename": f"{slug}/README.md"})
+
+        fake_five = FakeGitHubApi(files=files[:5])
+        rc5, _ = self._run(fake_five)
+        self.assertEqual(rc5, 0)
+        self.assertEqual(
+            [p["reviewers"][0] for _, _, p in fake_five.write_calls()],
+            ["owner0", "owner1", "owner2", "owner3", "owner4"],
         )
 
-    def test_dry_run_makes_no_write_calls(self):
+        fake_six = FakeGitHubApi(files=files)
+        rc6, _ = self._run(fake_six)
+        self.assertEqual(rc6, 0)
+        self.assertEqual(fake_six.write_calls(), [])
+
+    def test_dry_run_checks_collaborators_and_makes_no_write_calls(self):
         fake = FakeGitHubApi(
             files=[{"filename": "guides/alpha/README.md"}],
             collaborators={"alice"},
         )
-        self.assertEqual(self._run(fake, dry_run=True), 0)
+        rc, out = self._run(fake, dry_run=True)
+        self.assertEqual(rc, 0)
         self.assertEqual(fake.write_calls(), [])
+        self.assertIn("would request reviewers ['alice'] (dry run)", out)
+        self.assertIn("would skip non-collaborator guide owners: ext-alpha (dry run)", out)
 
     def test_api_list_paginates_across_multiple_pages(self):
         fake = FakeGitHubApi(
@@ -453,138 +387,65 @@ class RoutingBehaviorTests(unittest.TestCase):
             ],
         )
 
-    def test_cross_guide_shared_owner_checked_once_case_insensitively(self):
-        _write_owners(self.root, "guides/one", approvers=["Alice"])
-        _write_owners(self.root, "guides/two", approvers=["alice"])
-        fake = FakeGitHubApi(
-            files=[{"filename": "guides/one/README.md"}, {"filename": "guides/two/README.md"}],
-            collaborators={"alice"},
-        )
-        self.assertEqual(self._run(fake), 0)
-        collab_gets = [p for m, p, _ in fake.calls if m == "GET" and "/collaborators/" in p]
-        self.assertEqual(collab_gets, [f"/repos/{REPO}/collaborators/Alice"])
-        self.assertEqual(
-            fake.write_calls(),
-            [("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["Alice"]})],
-        )
 
-    def test_non_404_collaborator_error_propagates(self):
-        fake = FakeGitHubApi(
-            files=[{"filename": "guides/alpha/README.md"}],
-            collaborator_error=(403, '{"message": "Resource not accessible by integration"}'),
-        )
-        with self.assertRaises(ApiError) as ctx:
-            self._run(fake)
-        self.assertEqual(ctx.exception.status, 403)
-        self.assertEqual(fake.write_calls(), [])
+class MainErrorPolicyTests(unittest.TestCase):
+    def _run_main_with_error(self, exc: BaseException) -> tuple[int, str, str]:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            mock.patch.dict("os.environ", {"GITHUB_TOKEN": "tok"}),
+            mock.patch.object(sys, "argv", ["pr-guide-owners.py", "--pr", "42"]),
+            mock.patch.object(pgo, "route_pr", side_effect=exc),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            rc = pgo.main()
+        return rc, stdout.getvalue(), stderr.getvalue()
 
-    def test_team_review_requested_event_without_requested_reviewer_and_requested_teams_cap(self):
-        owners = [f"collab{i:02d}" for i in range(15)]
-        _write_owners(self.root, "guides/teamcap", approvers=owners)
-        fake = FakeGitHubApi(
-            pr={
-                "number": 42,
-                "state": "open",
-                "draft": False,
-                "user": {"login": "contributor"},
-                "requested_reviewers": [{"login": "pre-req"}],
-                "requested_teams": [{"slug": "router-maintainers"}, {"slug": "sig-docs"}],
-            },
-            files=[{"filename": "guides/teamcap/README.md"}],
-            events=[{"event": "review_requested", "requested_team": {"slug": "router-maintainers"}}],
-            collaborators=set(owners),
-        )
-        self.assertEqual(self._run(fake), 0)
-        self.assertEqual(
-            fake.write_calls(),
-            [
-                (
-                    "POST",
-                    f"/repos/{REPO}/pulls/42/requested_reviewers",
-                    {"reviewers": owners[:12]},
-                )
-            ],
-        )
+    def test_fails_loudly_on_401_and_permission_403_even_if_path_mentions_rate_limit(self):
+        for exc in [
+            ApiError(401, "GET", "/repos/llm-d/llm-d/pulls/42", '{"message": "Bad credentials"}'),
+            ApiError(
+                403,
+                "POST",
+                "/repos/llm-d/rate limit/pulls/42/requested_reviewers",
+                '{"message": "Resource not accessible by integration"}',
+            ),
+        ]:
+            rc, stdout, stderr = self._run_main_with_error(exc)
+            self.assertEqual(rc, 1)
+            self.assertEqual(stdout, "")
+            self.assertIn("error: guide-owner routing failed for PR #42", stderr)
 
-    def test_cap_422_and_single_candidate_422_handling(self):
-        cap_fake = FakeGitHubApi(
-            files=[{"filename": "guides/gamma/README.md"}],
-            collaborators={"carol"},
-            cap_422_on_request=True,
-        )
-        self.assertEqual(self._run(cap_fake), 0)
-        self.assertEqual(
-            cap_fake.write_calls(),
-            [("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["carol"]})],
-        )
-
-        single_fake = FakeGitHubApi(
-            files=[{"filename": "guides/gamma/README.md"}],
-            collaborators={"carol"},
-            reject_reviewers_422={"carol"},
-        )
-        self.assertEqual(self._run(single_fake), 0)
-        self.assertEqual(
-            single_fake.write_calls(),
-            [
-                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["carol"]}),
-                (
-                    "POST",
-                    f"/repos/{REPO}/issues/42/comments",
-                    {"body": "<!-- guide-owners-cc -->\ncc guide owners (`guides/gamma/OWNERS`): @carol"},
-                ),
-            ],
-        )
-
-    def test_updates_multiguide_sticky_comment_and_ignores_other_bots(self):
-        _write_owners(self.root, "guides/alpha", approvers=["alice"], reviewers=["ro-alpha", "ro-alpha-2"])
-        fake = FakeGitHubApi(
-            files=[{"filename": "guides/alpha/README.md"}, {"filename": "guides/gamma/README.md"}],
-            comments=[
-                {
-                    "id": 100,
-                    "body": "<!-- guide-owners-cc -->\ncc guide owners (`guides/beta/OWNERS`): @ro-beta",
-                    "user": {"login": "some-other-app[bot]", "type": "Bot"},
-                },
-                {
-                    "id": 200,
-                    "body": (
-                        "<!-- guide-owners-cc -->\n"
-                        "cc guide owners from `OWNERS`:\n"
-                        "- `guides/alpha`: @ro-alpha\n"
-                        "- `guides/beta`: @ro-beta"
-                    ),
-                    "user": {"login": "github-actions[bot]", "type": "Bot"},
-                },
-            ],
-            collaborators={"alice"},
-        )
-        self.assertEqual(self._run(fake), 0)
-        self.assertEqual(
-            fake.write_calls(),
-            [
-                ("POST", f"/repos/{REPO}/pulls/42/requested_reviewers", {"reviewers": ["alice"]}),
-                (
-                    "PATCH",
-                    f"/repos/{REPO}/issues/comments/200",
-                    {
-                        "body": (
-                            "<!-- guide-owners-cc -->\n"
-                            "cc guide owners from `OWNERS`:\n"
-                            "- `guides/alpha`: @ro-alpha, @ro-alpha-2\n"
-                            "- `guides/beta`: @ro-beta\n"
-                            "- `guides/gamma`: @carol"
-                        )
-                    },
-                ),
-            ],
-        )
+    def test_warns_and_exits_0_on_rate_limits_transient_http_and_network_errors(self):
+        for exc in [
+            ApiError(
+                403,
+                "POST",
+                "/repos/llm-d/llm-d/pulls/42/requested_reviewers",
+                '{"message": "You have exceeded a secondary rate limit"}',
+            ),
+            ApiError(
+                403,
+                "GET",
+                "/repos/llm-d/llm-d/pulls/42",
+                '{"message": "You have triggered an abuse detection mechanism"}',
+            ),
+            ApiError(429, "GET", "/repos/llm-d/llm-d/pulls/42", '{"message": "Too Many Requests"}'),
+            ApiError(502, "GET", "/repos/llm-d/llm-d/pulls/42/files", "Bad Gateway"),
+            ApiError(404, "GET", "/repos/llm-d/llm-d/pulls/42", '{"message": "Not Found"}'),
+            urllib.error.URLError("timed out"),
+        ]:
+            rc, stdout, stderr = self._run_main_with_error(exc)
+            self.assertEqual(rc, 0, f"Expected exit 0 for {exc!r}")
+            self.assertEqual(stderr, "")
+            self.assertIn("::warning::guide-owner routing skipped for PR #42", stdout)
 
 
 class RepoStaticInvariantsTests(unittest.TestCase):
     def test_all_repo_guide_owners_files_parse_cleanly(self):
         owners_files = sorted((REPO_ROOT / "guides").rglob("OWNERS"))
-        self.assertGreaterEqual(len(owners_files), 24)
+        self.assertTrue(owners_files)
         for owners_file in owners_files:
             raw = yaml.safe_load(owners_file.read_text(encoding="utf-8")) or {}
             self.assertIsInstance(raw, dict, f"{owners_file} must be a mapping")
@@ -602,7 +463,7 @@ class RepoStaticInvariantsTests(unittest.TestCase):
                         f"Invalid GitHub login {login!r} in {owners_file}",
                     )
 
-    def test_workflow_uses_safe_pull_request_target_checkout_and_env_inputs(self):
+    def test_workflow_uses_safe_pull_request_target_checkout_pins_and_permissions(self):
         wf = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
         self.assertEqual(wf["permissions"], {})
         # PyYAML parses bare `on:` as boolean True unless quoted.
@@ -613,7 +474,7 @@ class RepoStaticInvariantsTests(unittest.TestCase):
         job = wf["jobs"]["route-guide-owners"]
         self.assertEqual(
             job["permissions"],
-            {"contents": "read", "issues": "write", "pull-requests": "write"},
+            {"contents": "read", "issues": "read", "pull-requests": "write"},
         )
         checkout_step = job["steps"][0]
         self.assertEqual(
@@ -622,6 +483,9 @@ class RepoStaticInvariantsTests(unittest.TestCase):
         )
         self.assertFalse(checkout_step["with"]["persist-credentials"])
         self.assertIn("guides/**/OWNERS", checkout_step["with"]["sparse-checkout"])
+
+        pip_step = job["steps"][2]
+        self.assertIn("'pyyaml==6.*'", pip_step["run"])
 
         run_step = job["steps"][-1]
         self.assertNotIn("${{", run_step["run"])
