@@ -1,0 +1,11 @@
+setup,rate,requests,e2e_mean_ms,ttft_mean_ms,tpot_mean_ms,log
+epd,0.2,128,3553.12,1802.2,38.08,epd/r0.2-t128-in128-out128-img4/log1.log
+epd,0.5,128,5586.73,2324.49,73.57,epd/r0.5-t128-in128-out128-img4/log1.log
+epd,0.8,128,9477.12,3282.15,117.95,epd/r0.8-t128-in128-out128-img4/log1.log
+epd,1.0,128,9770.01,3724.52,115.04,epd/r1-t120-in128-out128-img4/log1.log
+epd,2.0,128,9900.23,3490.71,121.2,epd/r2-t128-in128-out128-img4/log1.log
+e-pd,0.2,128,3636.29,1986.1,30.02,e-pd/r0.2-t128-in128-out128-img4/log1.log
+e-pd,0.5,128,4913.06,2227.64,49.77,e-pd/r0.5-t128-in128-out128-img4/log1.log
+e-pd,0.8,128,8124.2,3203.22,91.53,e-pd/r0.8-t128-in128-out128-img4/log1.log
+e-pd,1.0,128,9008.59,3715.49,97.2,e-pd/r1-t128-in128-out128-img4/log1.log
+e-pd,2.0,128,8948.57,3655.07,96.55,e-pd/r2-t128-in128-out128-img4/log1.log
