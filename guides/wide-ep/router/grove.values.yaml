@@ -1,0 +1,51 @@
+# Grove orchestrator (INFRA_PROVIDER=grove/*). Layer after wide-ep.values.yaml in place of
+# gpu.values.yaml. The Grove pods expose the same eight DP rank ports as the DisaggregatedSet,
+# so targetPorts carry over; only the plugin config changes.
+router:
+  epp:
+    # The plugin config is one string, so it is restated in full; only the rollout screener's
+    # scope and label keys differ. Grove pods carry no DisaggregatedSet revision or role labels
+    # (and the screener drops pods without a revision), so it reads the guide's own labels:
+    # llm-d.ai/role, and llm-d.ai/revision, which the PodCliqueSet sets on both cliques (bump it
+    # there on incompatible changes). The scope is the app.kubernetes.io/part-of label Grove sets
+    # on every pod of the PodCliqueSet.
+    pluginsCustomConfig:
+      wide-ep-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        # Pin each request to a single llm-d.ai/revision during rollouts
+        # so prefill and decode never pair across revisions.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "app.kubernetes.io/part-of=wide-ep-grove"
+            revisionGating:
+              revisionLabelKey: llm-d.ai/revision
+              roleLabelKey: llm-d.ai/role
+              mode: max-role
+              requiredRoles: [prefill, decode]
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: prefix-cache-scorer
+        - type: queue-scorer
+        - type: active-request-scorer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-scorer
+            weight: 3
+          - pluginRef: queue-scorer
+            weight: 2
+          - pluginRef: active-request-scorer
+            weight: 2
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer

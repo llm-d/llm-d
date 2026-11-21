@@ -1,0 +1,32 @@
+# Grove alternative to ../../base: one PodCliqueSet managing the prefill and
+# decode roles. Requires the Grove operator (PodCliqueSet CRD and controller).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - podcliqueset.yaml
+  - serviceAccount.yaml
+
+components:
+  - ../../../../../../recipes/modelserver/components/images/gpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
+
+# Keep in sync with ../../base/kustomization.yaml so both orchestrators run the
+# same vLLM image.
+# TODO(#2339): Remove override once gpu-vllm/release is bumped to v0.30.0+ (required for DeepEP v2 + NCCL GIN).
+images:
+  - name: docker.io/vllm/vllm-openai
+    newName: docker.io/vllm/vllm-openai
+    newTag: v0.30.0
+
+labels:
+  - pairs:
+      llm-d.ai/model: DeepSeek-R1-0528
+      llm-d.ai/guide: wide-ep
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: nvidia
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true

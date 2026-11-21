@@ -2,6 +2,8 @@
 
 This overlay configures GKE-specific settings for DP-aware WideEP scheduling on H200 nodes with RoCE RDMA networking, allocated through DRA (GKE managed DRANET).
 
+The [`grove/gke`](../grove/gke/kustomization.yaml) overlay applies the same patches to the Grove `PodCliqueSet`, so the patches and cluster prerequisites below apply to it too. Its topology affinity groups pods by `grove.io/podclique` instead of the LWS group label.
+
 ## Summary of GKE-Specific Patches
 
 | Patch | Description |

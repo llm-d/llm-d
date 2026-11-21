@@ -61,6 +61,7 @@ The [Model Server Orchestration](model-server-orchestration/README.md) layer pro
 
 - **[LeaderWorkerSet (LWS)](model-server-orchestration/leaderworkerset.md)**: Kubernetes SIG workload controller for deploying multi-node accelerator pod groups with leader-worker topology, gang scheduling, and all-or-nothing restart semantics.
 - **[DisaggregatedSet](model-server-orchestration/disaggregatedset.md)**: Workload controller orchestrating multi-role disaggregated serving topologies (such as prefill and decode) as synchronized, versioned slices.
+- **[Grove](model-server-orchestration/grove.md)**: Alternative orchestrator that runs a multi-role, multi-node serving system as one `PodCliqueSet`, with hierarchical gang scheduling and topology-aware placement; supported for wide expert parallelism on NVIDIA GPU.
 
 See [Model Server Orchestration](model-server-orchestration/README.md) for full details.
 

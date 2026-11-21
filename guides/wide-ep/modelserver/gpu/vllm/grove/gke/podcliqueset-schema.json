@@ -1,0 +1,100 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "PodCliqueSet strategic-merge-patch schema for kustomize",
+    "version": "v1alpha1"
+  },
+  "definitions": {
+    "io.grove.v1alpha1.PodCliqueSet": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "type": "object",
+          "properties": {
+            "template": {
+              "type": "object",
+              "properties": {
+                "cliques": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/io.grove.v1alpha1.PodCliqueTemplateSpec"
+                  },
+                  "x-kubernetes-patch-merge-key": "name",
+                  "x-kubernetes-patch-strategy": "merge"
+                }
+              }
+            }
+          }
+        }
+      },
+      "x-kubernetes-group-version-kind": [
+        {
+          "group": "grove.io",
+          "kind": "PodCliqueSet",
+          "version": "v1alpha1"
+        }
+      ]
+    },
+    "io.grove.v1alpha1.PodCliqueTemplateSpec": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "spec": {
+          "type": "object",
+          "properties": {
+            "podSpec": {
+              "$ref": "#/definitions/io.grove.v1alpha1.PodSpec"
+            }
+          }
+        }
+      }
+    },
+    "io.grove.v1alpha1.PodSpec": {
+      "type": "object",
+      "properties": {
+        "containers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.grove.v1alpha1.Container"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge,retainKeys"
+        }
+      }
+    },
+    "io.grove.v1alpha1.Container": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "x-kubernetes-patch-merge-key": "name",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "volumeMounts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "x-kubernetes-patch-merge-key": "mountPath",
+          "x-kubernetes-patch-strategy": "merge"
+        }
+      }
+    }
+  }
+}
