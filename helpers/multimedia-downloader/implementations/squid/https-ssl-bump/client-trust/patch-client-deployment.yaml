@@ -1,0 +1,55 @@
+# Strategic merge patch that adds Squid CA trust and proxy env vars to a client
+# Deployment. It is applied by the client-trust Component (see kustomization.yaml
+# in this directory).
+#
+# The init container builds a CA bundle (the Alpine image's system CAs plus the
+# Squid CA) on a dedicated volume. The bundle is handed to clients through SSL_CERT_FILE
+# (OpenSSL, Python ssl/aiohttp, Go), REQUESTS_CA_BUNDLE (Python requests) and
+# CURL_CA_BUNDLE (curl). It is mounted at its own path so the image's own
+# /etc/ssl/certs directory stays untouched.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client                       # overridden by the Component's patch target
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: install-ca-cert
+        image: alpine:3.21
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cat /etc/ssl/certs/ca-certificates.crt /squid-ca/squid-ca-cert.pem > /shared-certs/ca-certificates.crt
+        volumeMounts:
+        - name: squid-ca-cert
+          mountPath: /squid-ca
+          readOnly: true
+        - name: shared-certs
+          mountPath: /shared-certs
+      containers:
+      - name: app
+        env:
+        - name: HTTP_PROXY
+          value: "http://multimedia-downloader:80"
+        - name: HTTPS_PROXY
+          value: "http://multimedia-downloader:80"
+        - name: NO_PROXY
+          value: "localhost,127.0.0.1,.svc,.cluster.local"
+        - name: SSL_CERT_FILE
+          value: "/etc/squid-ca/ca-certificates.crt"
+        - name: REQUESTS_CA_BUNDLE
+          value: "/etc/squid-ca/ca-certificates.crt"
+        - name: CURL_CA_BUNDLE
+          value: "/etc/squid-ca/ca-certificates.crt"
+        volumeMounts:
+        - name: shared-certs
+          mountPath: /etc/squid-ca
+          readOnly: true
+      volumes:
+      - name: squid-ca-cert
+        secret:
+          secretName: squid-ca-public-cert
+      - name: shared-certs
+        emptyDir: {}
