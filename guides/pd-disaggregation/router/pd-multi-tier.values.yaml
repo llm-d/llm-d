@@ -1,0 +1,82 @@
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # The precise prefix index and the in-flight token accounting are local to
+    # one EPP process; multiple replicas would each see a fraction of the pool.
+    replicas: 1
+    pluginsConfigFile: "pd-multi-tier.yaml"
+    pluginsCustomConfig:
+      pd-multi-tier.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: token-producer
+          parameters:
+            modelName: openai/gpt-oss-120b
+            vllm:
+              url: http://pd-multi-tier-render:8000
+        - type: endpoint-notification-source
+        - type: precise-prefix-cache-producer
+          parameters:
+            indexerConfig:
+              kvBlockIndexConfig:
+                inMemoryConfig:
+                  # 8 prefills x (GPU + CPU) plus 2 GPU-only decoders need 18
+                  # holders per block; leave two entries of headroom.
+                  podCacheSize: 20
+              kvCacheBackendConfigs:
+              - name: gpu
+                weight: 1.0
+              - name: cpu
+                weight: 0.4
+            tokenProcessorConfig:
+              # Must equal the engines' --block-size.
+              blockSizeTokens: 128
+            speculativeIndexing: true
+            kvEventsConfig:
+              topicFilter: "kv@"
+              discoverPods: true
+              podDiscoveryConfig:
+                socketPort: 5557
+        - type: inflight-load-producer
+          parameters:
+            prefixMatchInfoProducerName: precise-prefix-cache-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            prefixMatchInfoProducerName: precise-prefix-cache-producer
+            inFlightLoadProducerName: inflight-load-producer
+            # Re-measure for the Multi Tier topology with
+            # guides/recipes/router/calibration/calibrate.sh.
+            peakPrefillThroughput: 33821
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        dataLayer:
+          sources:
+          - pluginRef: endpoint-notification-source
+            extractors:
+            - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
