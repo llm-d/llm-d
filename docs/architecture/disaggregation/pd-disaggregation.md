@@ -111,6 +111,11 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 * `decode` → decode-capable pods
 * `prefill-decode` → pods capable of both prefill and decode
 
+The guides label monolithic (single-stage) model servers `prefill-decode`, since they run both phases. A pod labeled `decode` is treated as decode-only: with `addEstimatedOutputTokens: true`, the `inflight-load-producer` charges it only the estimated output when a prefill worker takes the prompt.
+
+> [!NOTE]
+> Monolithic guide deployments created before this change carry `llm-d.ai/role: decode`, including in the Deployment's selector. A Deployment's selector is immutable, so `kubectl apply` of the updated manifests fails with `field is immutable`: delete the model server Deployment (for example `kubectl delete deployment -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode`) and apply again.
+
 > [!NOTE]
 > To use a different label key, replace the role-specific filters with named `label-selector-filter` plugins in the `prefill` and `decode` profiles. Apply the same labels to the model-server Pods and keep the profile names `prefill` and `decode`; the `disagg-profile-handler` uses those names when it selects the profile.
 

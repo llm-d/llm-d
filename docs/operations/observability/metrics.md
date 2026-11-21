@@ -86,7 +86,7 @@ spec:
   selector:
     matchLabels:
       llm-d.ai/guide: optimized-baseline
-      llm-d.ai/role: decode
+      llm-d.ai/role: prefill-decode
   endpoints:
     - port: modelserver
       path: /prometheus/metrics
@@ -189,7 +189,7 @@ For ready-to-run queries, see the [PromQL Query Reference](./promql.md).
 3. Confirm pods expose metrics:
 
    ```bash
-   MODEL_POD=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/role=decode -o jsonpath='{.items[0].metadata.name}')
+   MODEL_POD=$(kubectl get pods -n ${NAMESPACE} -l 'llm-d.ai/role in (decode,prefill-decode)' -o jsonpath='{.items[0].metadata.name}')
    kubectl port-forward -n ${NAMESPACE} ${MODEL_POD} 8000:8000
    curl http://localhost:8000/metrics | head -20
    ```

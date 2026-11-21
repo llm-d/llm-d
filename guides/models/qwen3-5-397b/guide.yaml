@@ -115,7 +115,7 @@ deploy:
             -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}-disaggregated/
 
   monitoring:
-    # PodMonitors for the prefill and decode model servers (unified pods are role=decode)
+    # PodMonitors for the prefill and decode model servers (unified pods are role=prefill-decode)
     - when: {MONITORING: ["true"]}
       run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd
 

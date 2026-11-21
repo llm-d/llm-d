@@ -170,7 +170,7 @@ eviction round trip (up to about 0.5 s on H100s).
 | `EPP_HOST` | `$GATEWAY_HOST` or `llm-d-router-epp` | EPP service for the final metrics scrape |
 | `HARNESS_CPU` / `HARNESS_MEMORY` / `HARNESS_MEMORY_LIMIT` | `2` / `2Gi` / `4Gi` | harness pod resources (small so a mixed group's two pods schedule together) |
 | `SAMPLE_INTERVAL_S` | `5` | cluster metrics sampling period |
-| `VLLM_SELECTOR` / `VLLM_PORT` | `llm-d.ai/guide=async-multitenant,llm-d.ai/role=decode` / `8000` | model server pods and Deployments (the guide's step 1) the validator inspects and the sampler scrapes |
+| `VLLM_SELECTOR` / `VLLM_PORT` | `llm-d.ai/guide=async-multitenant,llm-d.ai/role=prefill-decode` / `8000` | model server pods and Deployments (the guide's step 1) the validator inspects and the sampler scrapes |
 | `DRY_RUN_REQUESTS` / `DRY_RUN_ASYNC_DURATION` | `10` / `45` | sizes for `--dry-run` |
 | `SKIP_INSTALL` | unset | reuse an existing clone at `$WORKDIR/llm-d-benchmark` |
 | `BENCH_REPO` / `BENCH_REF` | upstream / `main` | llm-d-benchmark source to install, e.g. a fork carrying profile changes |

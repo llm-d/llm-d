@@ -353,7 +353,7 @@ The default overlay deploys 2 replicas. Scale down to one so you can watch the P
 
 ```bash
 kubectl scale deploy -n ${NAMESPACE} \
-    -l llm-d.ai/guide=modelexpress-p2p,llm-d.ai/role=decode \
+    -l llm-d.ai/guide=modelexpress-p2p,llm-d.ai/role=prefill-decode \
     --replicas=1
 ```
 

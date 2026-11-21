@@ -405,7 +405,7 @@ def get_model_pods(namespace: str) -> list[str]:
 
     pods = _bare(kubectl([
         "get", "pod", "-n", namespace,
-        "-l", "llm-d.ai/role in (decode,prefill)", "-o", "name",
+        "-l", "llm-d.ai/role in (decode,prefill,prefill-decode)", "-o", "name",
     ]).split())
     if not pods:
         pods = _bare(kubectl([
