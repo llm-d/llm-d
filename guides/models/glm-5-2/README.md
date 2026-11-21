@@ -49,20 +49,20 @@ The default deployment is the latency-leaning Pareto configuration from the blog
 **`p3w2d1w2`** — 3 DEP16 prefill replicas and 1 DEP16 decode replica, 8 nodes / 64 GPUs —
 with MTP and tiered KV offloading enabled.
 
-| Parameter                | Value                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| Model                    | [zai-org/GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8)            |
-| Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
-| Serving topology         | P/D disaggregated — 3 prefill replicas + 1 decode replica, each TP=1, DP=16, EP=16 (DEP16, 2 nodes) |
-| DP model                 | Supervisor (`--data-parallel-multi-port-external-lb`)                        |
-| All-to-all               | `deepep_high_throughput` (prefill), `deepep_low_latency` with IBGDA + NVSHMEM (decode) |
-| MoE backend              | DeepGemm                                                                     |
-| KV transfer              | NixlConnector                                                                |
-| KV cache offloading      | CPU + NVMe tiered on prefill (`offloading-tiered` component)                 |
-| MTP speculative decoding | On (3 draft tokens)                                                          |
-| `gpu-memory-utilization` | 0.935 (prefill), 0.95 (decode)                                               |
+| Parameter                | Value                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Model                    | [zai-org/GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8)                                                    |
+| Accelerator              | NVIDIA H200 (8 GPUs per node)                                                                                        |
+| Serving topology         | P/D disaggregated — 3 prefill replicas + 1 decode replica, each TP=1, DP=16, EP=16 (DEP16, 2 nodes)                  |
+| DP model                 | Supervisor (`--data-parallel-multi-port-external-lb`)                                                                |
+| All-to-all               | `deepep_high_throughput` (prefill), `deepep_low_latency` with IBGDA + NVSHMEM (decode)                               |
+| MoE backend              | DeepGemm                                                                                                             |
+| KV transfer              | NixlConnector                                                                                                        |
+| KV cache offloading      | CPU + NVMe tiered on prefill (`offloading-tiered` component)                                                         |
+| MTP speculative decoding | On (3 draft tokens)                                                                                                  |
+| `gpu-memory-utilization` | 0.935 (prefill), 0.95 (decode)                                                                                       |
 | Routing                  | GPU+CPU prefix-cache affinity + token load ([`glm-5.2-overrides.values.yaml`](router/glm-5.2-overrides.values.yaml)) |
-| Reasoning / tool-call    | glm45 / glm47                                                                |
+| Reasoning / tool-call    | glm45 / glm47                                                                                                        |
 
 If your SLO target is throughput rather than TTFT, `p2w2d2w2` (2 prefill + 2 decode, also
 64 GPUs) is the second Pareto point measured in the blog post. The full topology range — from
@@ -75,20 +75,20 @@ the 2-node `p1w1d1w1` for functional validation up to the 10-node `p3w2d2w2` —
 
 `DEPLOYMENT=default` deploys `p1w1d1w1`: 1 DEP8 prefill node and 1 DEP8 decode node (2 nodes / 16 GPUs). Each SGLang topology enables MTP and HiCache (host-memory KV cache) on prefill. For decode across 2 nodes, select a different topology in [Scaling and Alternative Topologies](#scaling-and-alternative-topologies).
 
-| Parameter                | Value                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| Model                    | [zai-org/GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8)            |
-| Accelerator              | NVIDIA H200 (8 GPUs per node)                                                |
-| Serving topology         | P/D disaggregated: 1 prefill replica (DEP8, 1 node) + 1 decode replica (DEP8, 1 node), attention TP=1, DP=EP |
-| DP model                 | Rust frontend, one HTTP listener per DP rank (`SGLANG_RUST_SERVER=1`)         |
-| All-to-all               | DeepEP v2 hybrid on both roles (`--moe-a2a-backend deepep_v2 --deepep-v2-mode hybrid`) |
-| MoE backend              | SGLang default (`--moe-runner-backend auto`)                                 |
-| KV transfer              | Mooncake (NIXL failed under long-context load on GKE RoCE)                   |
+| Parameter                | Value                                                                                                                                                 |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model                    | [zai-org/GLM-5.2-FP8](https://huggingface.co/zai-org/GLM-5.2-FP8)                                                                                     |
+| Accelerator              | NVIDIA H200 (8 GPUs per node)                                                                                                                         |
+| Serving topology         | P/D disaggregated: 1 prefill replica (DEP8, 1 node) + 1 decode replica (DEP8, 1 node), attention TP=1, DP=EP                                          |
+| DP model                 | Rust frontend, one HTTP listener per DP rank (`SGLANG_RUST_SERVER=1`)                                                                                 |
+| All-to-all               | DeepEP v2 hybrid on both roles (`--moe-a2a-backend deepep_v2 --deepep-v2-mode hybrid`)                                                                |
+| MoE backend              | SGLang default (`--moe-runner-backend auto`)                                                                                                          |
+| KV transfer              | Mooncake (NIXL failed under long-context load on GKE RoCE)                                                                                            |
 | KV cache offloading      | HiCache host tier on prefill, 100 GB per rank with direct PCIe DMA (`hicache`, in every SGLang topology); optional shared-storage tier (`hicache-fs`) |
-| MTP speculative decoding | On (EAGLE, 3 steps)                                                          |
-| `mem-fraction-static`    | 0.90 on prefill (2,048-token chunk per rank) and 0.945 on decode for 1-node DEP8; 0.85 on multi-node DEP16 |
-| Routing                  | GPU+CPU (HiCache) prefix-cache affinity + token load ([`sglang.values.yaml`](router/sglang.values.yaml)) |
-| Reasoning / tool-call    | glm45 / glm47                                                                |
+| MTP speculative decoding | On (EAGLE, 3 steps)                                                                                                                                   |
+| `mem-fraction-static`    | 0.90 on prefill (2,048-token chunk per rank) and 0.945 on decode for 1-node DEP8; 0.85 on multi-node DEP16                                            |
+| Routing                  | GPU+CPU (HiCache) prefix-cache affinity + token load ([`sglang.values.yaml`](router/sglang.values.yaml))                                              |
+| Reasoning / tool-call    | glm45 / glm47                                                                                                                                         |
 
 </details>
 <!-- tabs:end -->
@@ -479,18 +479,18 @@ Every topology below is a Kustomize overlay under `modelserver/gpu/${MODEL_SERVE
 set `DEPLOYMENT` to its name and apply it with the [model server step](#2-deploy-the-model-server).
 vLLM ships every topology; SGLang ships the ones marked in the SGLang column.
 
-| Deployment | Prefill                    | Decode                        | Nodes / GPUs | SGLang |
-| ---------- | -------------------------- | ----------------------------- | ------------ | ------ |
-| `p1w1d1w1` | 1 replica, 1 node, DEP8    | 1 replica, 1 node, DEP8      | 2 / 16       | ✓      |
-| `p1w1d1w2` | 1 replica, 1 node, DEP8    | 1 replica, 2 nodes, DEP16    | 3 / 24       | ✓      |
-| `p1w2d1w2` | 1 replica, 2 nodes, DEP16  | 1 replica, 2 nodes, DEP16    | 4 / 32       | ✓      |
-| `p2w1d1w1` | 2 replicas, 1 node, DEP8   | 1 replica, 1 node, DEP8      | 3 / 24       |        |
-| `p2w1d1w1-precise` | 2 replicas, 1 node, DEP8 (`kv-events` + `render`) | 1 replica, 1 node, DEP8 (`kv-events`) | 3 / 24 | |
-| `p2w1d1w2` | 2 replicas, 1 node, DEP8   | 1 replica, 2 nodes, DEP16    | 4 / 32       | ✓      |
-| `p2w2d1w2` | 2 replicas, 2 nodes, DEP16 | 1 replica, 2 nodes, DEP16    | 6 / 48       |        |
-| `p2w2d2w2` | 2 replicas, 2 nodes, DEP16 | 2 replicas, 2 nodes, DEP16   | 8 / 64       | ✓      |
-| `p3w2d1w2` | 3 replicas, 2 nodes, DEP16 | 1 replica, 2 nodes, DEP16    | 8 / 64       |        |
-| `p3w2d2w2` | 3 replicas, 2 nodes, DEP16 | 2 replicas, 2 nodes, DEP16   | 10 / 80      |        |
+| Deployment         | Prefill                                           | Decode                                | Nodes / GPUs | SGLang |
+| ------------------ | ------------------------------------------------- | ------------------------------------- | ------------ | ------ |
+| `p1w1d1w1`         | 1 replica, 1 node, DEP8                           | 1 replica, 1 node, DEP8               | 2 / 16       | ✓      |
+| `p1w1d1w2`         | 1 replica, 1 node, DEP8                           | 1 replica, 2 nodes, DEP16             | 3 / 24       | ✓      |
+| `p1w2d1w2`         | 1 replica, 2 nodes, DEP16                         | 1 replica, 2 nodes, DEP16             | 4 / 32       | ✓      |
+| `p2w1d1w1`         | 2 replicas, 1 node, DEP8                          | 1 replica, 1 node, DEP8               | 3 / 24       |        |
+| `p2w1d1w1-precise` | 2 replicas, 1 node, DEP8 (`kv-events` + `render`) | 1 replica, 1 node, DEP8 (`kv-events`) | 3 / 24       |        |
+| `p2w1d1w2`         | 2 replicas, 1 node, DEP8                          | 1 replica, 2 nodes, DEP16             | 4 / 32       | ✓      |
+| `p2w2d1w2`         | 2 replicas, 2 nodes, DEP16                        | 1 replica, 2 nodes, DEP16             | 6 / 48       |        |
+| `p2w2d2w2`         | 2 replicas, 2 nodes, DEP16                        | 2 replicas, 2 nodes, DEP16            | 8 / 64       | ✓      |
+| `p3w2d1w2`         | 3 replicas, 2 nodes, DEP16                        | 1 replica, 2 nodes, DEP16             | 8 / 64       |        |
+| `p3w2d2w2`         | 3 replicas, 2 nodes, DEP16                        | 2 replicas, 2 nodes, DEP16            | 10 / 80      |        |
 
 > [!NOTE]
 > The alternatives are to be hardened until the coming llm-d release.
@@ -639,12 +639,12 @@ prompts.
 
 Both prefill and decode configure IB for multi-node communication:
 
-| Variable                  | Value  | Purpose                                          |
-| ------------------------- | ------ | ------------------------------------------------ |
-| `NCCL_IB_HCA`            | `ibp`  | Filter IB HCAs for NCCL collectives              |
-| `NVSHMEM_HCA_PREFIX`      | `ibp`  | Filter IB HCAs for NVSHMEM (decode low-latency)  |
+| Variable                   | Value   | Purpose                                         |
+| -------------------------- | ------- | ----------------------------------------------- |
+| `NCCL_IB_HCA`              | `ibp`   | Filter IB HCAs for NCCL collectives             |
+| `NVSHMEM_HCA_PREFIX`       | `ibp`   | Filter IB HCAs for NVSHMEM (decode low-latency) |
 | `NVSHMEM_REMOTE_TRANSPORT` | `ibgda` | GPUDirect Async for NVSHMEM                     |
-| `rdma/ib`                 | `8`    | Request 8 RDMA/IB devices per pod                |
+| `rdma/ib`                  | `8`     | Request 8 RDMA/IB devices per pod               |
 
 ### KV Cache Evictor
 
