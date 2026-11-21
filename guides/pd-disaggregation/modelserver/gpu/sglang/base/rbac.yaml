@@ -1,0 +1,25 @@
+# The routing sidecar's SSRF allowlist lists and watches the InferencePool and
+# its pods so it accepts only prefill targets that belong to the pool.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pd-disagg-sglang-sidecar-allowlist
+rules:
+  - apiGroups: ["inference.networking.k8s.io"]
+    resources: ["inferencepools"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pd-disagg-sglang-sidecar-allowlist
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pd-disagg-sglang-sidecar-allowlist
+subjects:
+  - kind: ServiceAccount
+    name: pd-disagg-sglang
