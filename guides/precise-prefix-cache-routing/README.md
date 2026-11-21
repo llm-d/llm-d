@@ -32,7 +32,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM |
-| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
+| CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | 🟡 community | x86 with AMX (Sapphire Rapids+) · 2 replicas × 64 cores / 64 GiB (SGLang uses the dedicated render pool) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -41,7 +41,7 @@ This guide includes configurations for the following accelerator and model serve
 > The router and the model servers must agree on two things:
 >
 > - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together. **TPU v6e** is the exception: `--block-size=64` runs out of SMEM on Torch TPU, so the `tpu/v6` overlay sets `--block-size=256` and [`router/tpu-v6e.values.yaml`](router/tpu-v6e.values.yaml) sets `blockSizeTokens: 256` to match.
-> - **Model.** The `token-producer` `modelName` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values is `Qwen/Qwen3-32B`. On an accelerator that serves another model (e.g. Intel XPU's `Qwen/Qwen3-0.6B`), set it to `MODEL` in the values file you're deploying before installing the router: with vLLM the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
+> - **Model.** The `token-producer` `modelName` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values is `Qwen/Qwen3-32B`. On an accelerator that serves another model (e.g. Intel XPU's `Qwen/Qwen3-0.6B` or CPU's `meta-llama/Llama-3.2-3B-Instruct`), set it to `MODEL` in the values file you're deploying before installing the router: with vLLM the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 
 For wide-EP LWS deployments (multi-port DP model servers), use the precise prefix-cache routing mode in the [GLM-5.2 guide](../models/glm-5-2/README.md#installation-instructions) instead of the manifests here.
 
@@ -286,6 +286,20 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sg
 <!-- guide:deploy.render[1] end -->
 
 Same standalone render pool as `render/standalone/`, but patched to tokenize `Qwen/Qwen3-0.6B` (the model served by the XPU overlay) instead of `Qwen/Qwen3-32B`.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=cpu;MODEL_SERVER=sglang">
+<summary><b>CPU · SGLang</b></summary>
+
+<!-- guide:deploy.render[2] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/cpu-sglang/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.render[2] end -->
+
+Same standalone render pool as `render/standalone/`, but patched to tokenize `meta-llama/Llama-3.2-3B-Instruct` (the model served by the CPU overlay) instead of `Qwen/Qwen3-32B`. The model is gated: the render pods read `HF_TOKEN` from the `llm-d-hf-token` secret.
 
 </details>
 <!-- tabs:end -->
@@ -621,6 +635,16 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/stand
 <!-- llm-d-cicd:skip start -->
 ```bash
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
+```
+<!-- llm-d-cicd:skip end -->
+
+</details>
+<details data-when="ACCELERATOR_TYPE=cpu;MODEL_SERVER=sglang">
+<summary><b>CPU · SGLang</b></summary>
+
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/cpu-sglang/
 ```
 <!-- llm-d-cicd:skip end -->
 
