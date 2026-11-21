@@ -1,0 +1,105 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Cache the Hugging Face model weights on the node instead of in each pod, so
+# the weights are downloaded once per node rather than once per replica. Any
+# overlay whose pods share a node and download their own copy can include this
+# component, whatever the platform or model modality.
+#
+# It sets HF_HOME, the download timeout and HF_HUB_DISABLE_XET on the model
+# server container and mounts /var/cache/huggingface there as a
+# DirectoryOrCreate hostPath.
+#
+# The patches assume the model server is containers/0. For a DisaggregatedSet
+# they patch roles/0 and roles/1 only, the prefill and decode roles of the
+# common 1P/1D topology. Any other role, and any LeaderWorkerSet, must set these
+# fields itself; an overlay with a third role carries a patch for it.
+
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /root/.cache/huggingface
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+      # Xet CDN rate-limits concurrent downloads (429) when all pods pull the model at once
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /root/.cache/huggingface
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      - op: add
+        path: /spec/roles/0/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
+        value:
+          name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /root/.cache/huggingface
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
+        value:
+          name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate

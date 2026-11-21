@@ -4,6 +4,7 @@ resources:
   - ../base
 components:
   - ../../../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../../../recipes/modelserver/components/hf-node-cache
 patches:
   # Disable GKE's built-in NCCL tuner plugin (the disable-gke-nccl-tuner-patch component
   # only covers Deployment and LeaderWorkerSet).
@@ -28,3 +29,37 @@ patches:
             spec: *env
           - name: decode
             spec: *env
+
+  # The hf-node-cache component covers roles/0 and roles/1 of a DisaggregatedSet,
+  # here encode and prefill. This overlay has a third role, decode, so carry the
+  # same settings for it here.
+  - target:
+      kind: DisaggregatedSet
+    patch: |-
+      - op: add
+        path: /spec/roles/2/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HOME
+          value: /root/.cache/huggingface
+      - op: add
+        path: /spec/roles/2/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DOWNLOAD_TIMEOUT
+          value: "60"
+      - op: add
+        path: /spec/roles/2/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/-
+        value:
+          name: HF_HUB_DISABLE_XET
+          value: "1"
+      - op: add
+        path: /spec/roles/2/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts/-
+        value:
+          mountPath: /root/.cache/huggingface
+          name: huggingface-cache
+      - op: add
+        path: /spec/roles/2/spec/leaderWorkerTemplate/workerTemplate/spec/volumes/-
+        value:
+          name: huggingface-cache
+          hostPath:
+            path: /var/cache/huggingface
+            type: DirectoryOrCreate

@@ -8,6 +8,7 @@ components:
   # Shared GKE RDMA DRA resource claim template (pcieRoot rail alignment)
   - ../../../components/gke-rdma
   - ../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../../../../../recipes/modelserver/components/hf-node-cache
 
 patches:
   - path: patch.yaml
