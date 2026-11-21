@@ -97,12 +97,18 @@ canonical example:
 |---|---|---|---|
 | EPP Flow Control queue size | Unfulfilled demand | `AverageValue` | Target aggregate queued requests per model server replica |
 | Running requests | Active concurrency | `AverageValue` | Target in-flight requests per model server replica |
+| Pool saturation ratio | Maximum endpoint saturation in the pool | `Value` | Compare the pool-wide ratio directly to the target; it is not divided by replicas |
 
 Each `AverageValue` threshold is a per-replica target. For each metric, the HPA
 calculates a desired count from the aggregate value and target; roughly, the
 aggregate must exceed `threshold × current replicas` to scale beyond the
-current count. When all configured metrics are available, Kubernetes uses the
-largest desired replica count.
+current count. A `Value` target compares the metric directly with the target
+and proposes approximately `ceil(current replicas × current metric / target)`
+before replica bounds and scaling behavior are applied.
+For the saturation overlay, the query takes the maximum endpoint ratio in the
+pool, so `0.7` is a pool-wide threshold, not a per-replica allowance. When all
+configured metrics are available, Kubernetes uses the largest desired replica
+count.
 
 The SLO-aware path is the exception: it collapses its triggers into a single
 `scalingModifiers` formula whose output *is* the desired replica count, against
@@ -113,6 +119,9 @@ arithmetically rather than raced against each other.
 per-replica load you are willing to carry before adding capacity: lower it to
 react earlier and hold more headroom (more replicas, higher cost), raise it to
 pack each replica harder before scaling (fewer replicas, more queueing risk).
+For a `Value` trigger, tune the aggregate metric target directly: a lower
+pool-saturation ratio adds capacity earlier, while a higher ratio allows the
+pool to run more saturated before scaling.
 The replica bounds frame that range: `minReplicaCount` is the warm floor that
 keeps a keep-warm replica up and damps flap, and `maxReplicaCount` is the
 ceiling the HPA silently caps at, so set it high enough to absorb peak demand.
