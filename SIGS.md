@@ -286,6 +286,12 @@ SIGs operate within the broader llm-d project governance framework defined in [P
 - **Slack Channel**: [#sig-agentic-inference](https://llm-d.slack.com/archives/C0ALHNZJCFJ)
 - **Meeting Recordings and Docs**: [Public Google Drive](https://drive.google.com/drive/folders/1f4Cg-yMgw2_lU3btyuuY_roz6N0kR7iu)
 
+### SIG Security
+
+For general security questions and discussion, join `#sig-security` in the [llm-d Slack workspace](https://llm-d.ai/slack). To report a suspected vulnerability privately, follow the [security policy](SECURITY.md).
+
+There are currently no scheduled SIG Security meetings.
+
 ## Getting Involved
 
 ### Joining a SIG
