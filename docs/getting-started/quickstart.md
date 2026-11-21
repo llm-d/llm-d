@@ -98,7 +98,7 @@ Open a temporary interactive shell inside the cluster to send a request:
 
 ```bash
 kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     -- /bin/bash
