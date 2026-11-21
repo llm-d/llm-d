@@ -46,6 +46,7 @@ llm-d-batch-gateway-processor                     1      30s
 llm-d-batch-gateway-gc                            1      30s
 llm-d-async-processor                             1      30s
 llm-d-tpu-overview                                1      30s
+llm-d-inference-payload-processor                  1      30s
 ```
 
 Or import individual dashboard JSON files manually from `guides/recipes/observability/grafana/dashboards/`:
@@ -64,8 +65,11 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
 | `llm-d-batch-gateway-gc.json` | Batch Gateway GC reconciler cycles, orphan recovery, and errors |
 | `llm-d-async-processor.json` | Async Processor request rate and outcomes, inference latency and queue residence time, deadline proximity, broker backlog and in-process queue depth per queue, plus dispatch budget, gate decisions, in-flight requests against the worker limit, and what metric gates last read |
+| `llm-d-inference-payload-processor.json` | IPP processing rate, model-selection attempts and latency, plugin latency, body-field failures, TTFT by model, and build identity |
 
 The three Batch Gateway dashboards are only useful if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md), and the Async Processor dashboard only if you deployed the [asynchronous processing guide](../../../guides/batch-serving/asynchronous-processing/README.md) with the chart's `ap.podMonitor.enabled=true`; each has a `namespace` variable to select the namespace it runs in.
+
+The IPP dashboard applies to existing IPP deployments with authenticated metrics already collected into Prometheus. See [Inference Payload Processor Metrics](./ipp-metrics.md#scrape-prerequisites) for the endpoint, authentication, and target-label requirements.
 
 For the metrics behind these panels, see [Model Server Metrics](./model-server-metrics.md), [Router (EPP) Metrics](./router-metrics.md), [Batch Gateway Metrics](./batch-gateway-metrics.md), [Async Processor metrics](https://github.com/llm-d/llm-d-async/blob/main/README.md#prometheus-metrics), and [Track Inference Cost](./inference-cost.md).
 

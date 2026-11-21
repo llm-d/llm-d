@@ -13,6 +13,7 @@ Monitor and debug llm-d deployments with Prometheus metrics, Grafana dashboards,
 * [Model Server Metrics](./model-server-metrics.md) — vLLM and SGLang metric reference
 * [Router (EPP) Metrics](./router-metrics.md) — llm-d Router Endpoint Picker metric reference
 * [Batch Gateway Metrics](./batch-gateway-metrics.md) — Batch Gateway metric reference
+* [Inference Payload Processor Metrics](./ipp-metrics.md) — IPP processing, model-selection, and plugin metrics for existing IPP deployments
 * [Track Inference Cost](./inference-cost.md) — Per-model cost attribution with OpenCost
 * [PromQL Query Reference](./promql.md) — Ready-to-use queries for dashboards and alerting
 * [Configure Alerts](./alerting.md) — Apply the default EPP and Batch Gateway Prometheus alerting rules
