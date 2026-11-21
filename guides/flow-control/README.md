@@ -359,7 +359,7 @@ Without the `${GUIDE_NAME}-metrics-reader` grant (when metrics auth is enabled),
 
 ```bash
 kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="NAMESPACE=$NAMESPACE" \
