@@ -9,6 +9,7 @@ Run from the repo root:
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -299,6 +300,65 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
     rc = guide.main([command, str(tmp_path), "--yaml", str(tmp_path / "guide.yaml")])
     assert rc == 2
     assert "not both" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# GLM-5.2 router values
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "model_server,accelerator,routing,deployment,expected",
+    [
+        (
+            "vllm",
+            "gpu",
+            "approximate",
+            path.parent.name,
+            "glm-5.2-overrides.values.yaml"
+            if any(
+                "offloading-" in component
+                for component in yaml.safe_load(path.read_text()).get("components", [])
+            )
+            else "glm-5-2.values.yaml",
+        )
+        for path in sorted(
+            (GUIDES_DIR / "models/glm-5-2/modelserver/gpu/vllm/deployments")
+            .glob("*/kustomization.yaml")
+        )
+    ]
+    + [
+        ("sglang", "gpu", "approximate", "default", "sglang.values.yaml"),
+        ("vllm", "gpu", "precise", "default", "precise-routing.values.yaml"),
+        ("vllm", "tpu", "approximate", "default", "glm-5-2-tpu.values.yaml"),
+    ],
+)
+def test_glm_router_values_match_storage_tiers(
+    monkeypatch, model_server, accelerator, routing, deployment, expected
+):
+    directory = GUIDES_DIR / "models/glm-5-2"
+    data = yaml.safe_load((directory / "guide.yaml").read_text())
+    monkeypatch.setenv("REPO_ROOT", str(REPO_ROOT))
+    monkeypatch.setenv("GUIDE_NAME", "glm-5-2")
+    monkeypatch.setenv("DEPLOYMENT", deployment)
+    section = "tpu" if accelerator == "tpu" else routing
+    script = guide.emit_script(
+        data,
+        [f"deploy.router_values.{section}"],
+        {
+            "MODEL_SERVER": model_server,
+            "ACCELERATOR_TYPE": accelerator,
+            "ROUTING": routing,
+            "DEPLOYMENT": deployment,
+        },
+    )
+    result = subprocess.run(
+        ["bash", "-c", script + '\nprintf "%s\\n" "$ROUTER_OVERRIDES_VALUES"\n'],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout.strip() == str(directory / "router" / expected)
 
 
 # --------------------------------------------------------------------------

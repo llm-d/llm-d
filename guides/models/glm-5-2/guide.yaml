@@ -89,11 +89,13 @@ deploy:
     approximate:
       - when: {MODEL_SERVER: [vllm], ACCELERATOR_TYPE: [gpu]}
         run: |
-          # Paths to values files: the wide-EP router values, then the GLM-5.2
-          # GPU+CPU prefix-cache affinity overrides on top
+          # Raw topologies use a GPU-only prefix index. Only default adds offloading.
           export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
           export ROUTER_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
-          export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+          export ROUTER_OVERRIDES_VALUES="${ROUTER_VALUES}"
+          if [ "${DEPLOYMENT}" = "default" ]; then
+            export ROUTER_OVERRIDES_VALUES="${REPO_ROOT}/guides/models/${GUIDE_NAME}/router/glm-5.2-overrides.values.yaml"
+          fi
       - when: {MODEL_SERVER: [sglang]}
         run: |
           # Paths to values files: the wide-EP router values, then the SGLang
