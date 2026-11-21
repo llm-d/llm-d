@@ -1,0 +1,99 @@
+# All components share the host network.
+admin:
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 18086
+
+static_resources:
+  listeners:
+    - name: inference
+      address:
+        socket_address:
+          address: 127.0.0.1
+          port_value: 18080
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: inference
+                preserve_external_request_id: true
+                route_config:
+                  name: inference
+                  virtual_hosts:
+                    - name: inference
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: original_destination_cluster
+                            timeout: 120s
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          status: "%RESPONSE_CODE%"
+                          selected: "%REQ(X-GATEWAY-DESTINATION-ENDPOINT)%"
+                          upstream: "%UPSTREAM_HOST%"
+                          flags: "%RESPONSE_FLAGS%"
+                http_filters:
+                  - name: envoy.filters.http.ext_proc
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: ext_proc
+                          authority: localhost:18083
+                        timeout: 10s
+                      processing_mode:
+                        request_header_mode: SEND
+                        response_header_mode: SEND
+                        request_body_mode: FULL_DUPLEX_STREAMED
+                        response_body_mode: FULL_DUPLEX_STREAMED
+                        request_trailer_mode: SEND
+                        response_trailer_mode: SEND
+                      message_timeout: 120s
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: original_destination_cluster
+      type: ORIGINAL_DST
+      connect_timeout: 5s
+      lb_policy: CLUSTER_PROVIDED
+      original_dst_lb_config:
+        use_http_header: true
+        http_header_name: x-gateway-destination-endpoint
+    - name: ext_proc
+      type: STATIC
+      connect_timeout: 5s
+      health_checks:
+        - timeout: 2s
+          interval: 2s
+          unhealthy_threshold: 2
+          healthy_threshold: 1
+          grpc_health_check:
+            service_name: envoy.service.ext_proc.v3.ExternalProcessor
+      common_lb_config:
+        healthy_panic_threshold:
+          value: 0
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: ext_proc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 18083
