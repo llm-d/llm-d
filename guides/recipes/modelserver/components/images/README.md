@@ -36,6 +36,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── biren-vllm
 │   └── release
+├── enflame-vllm
+│   └── release
 ├── metax-vllm
 │   └── release
 ├── mthreads-sglang
