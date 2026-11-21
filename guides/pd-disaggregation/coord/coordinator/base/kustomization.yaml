@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Coordinator and the HTTPRoutes that put it in front of the router, for
+# Gateway providers other than GKE (istio, agentgateway). Pipe the build
+# through envsubst: configmap.yaml references ${GATEWAY_ADDRESS}.
+resources:
+- configmap.yaml
+- deployment.yaml
+- httproute.yaml
+
+components:
+- ../../../../recipes/modelserver/components/images/coordinator/release

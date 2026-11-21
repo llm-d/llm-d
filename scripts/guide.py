@@ -798,6 +798,15 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 
+def _modelserver_root(guide_dir: Path) -> Path:
+    """The guide's ``modelserver/`` directory. A guide split into modes that
+    share one set of overlays (``guides/pd-disaggregation/{sidecar,coord}``)
+    has none of its own and uses its parent's."""
+    own = guide_dir / "modelserver"
+    shared = guide_dir.parent / "modelserver"
+    return shared if not own.is_dir() and shared.is_dir() else own
+
+
 def _check_provider_overlays(guide: dict, guide_dir: Path) -> Findings:
     """Every provider the site can select — each (accelerator, engine
     supported on it, provider allowing that engine) — must have at least one
@@ -805,10 +814,13 @@ def _check_provider_overlays(guide: dict, guide_dir: Path) -> Findings:
     ``/<provider>``. Suffix match, because some guides nest extra levels
     (``<connector>/<tier>/<provider>``) and providers may contain ``/``
     (``gke/a4x``). Every ``modelserver/`` directory in the guide counts, so
-    guides split by topology (``<topology>/modelserver/...``) are covered."""
+    guides split by topology (``<topology>/modelserver/...``) are covered, as
+    is a shared parent ``modelserver/`` (see :func:`_modelserver_root`)."""
     f = Findings()
     accels = guide["support"].get("accelerators")
     ms_dirs = sorted(p for p in guide_dir.rglob("modelserver") if p.is_dir())
+    if not ms_dirs and _modelserver_root(guide_dir).is_dir():
+        ms_dirs = [_modelserver_root(guide_dir)]
     for accel in accels if isinstance(accels, dict) else {}:
         for prov in support_providers(guide, str(accel)):
             name = prov["name"].strip("/")
@@ -855,7 +867,7 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
         return f
     engine_values = set(_declared_values(guide, ENGINE_VAR))
 
-    ms_dir = guide_dir / "modelserver"
+    ms_dir = _modelserver_root(guide_dir)
     if ms_dir.is_dir():
         for accel, spec in accels.items():
             cells = spec.get("engines") if isinstance(spec, dict) else None
@@ -2084,8 +2096,11 @@ def _manifest_pillar(name: str) -> str | None:
 def check_manifest(data: Any, repo_root: Path) -> Findings:
     """Validate the llm-d.ai publish manifest: every guide directory exists
     with a ``README.md`` (and a ``guide.yaml``, except in Operations
-    sections), slugs are unique across sections, child pages exist, and
-    titles are present."""
+    sections and on landing pages), slugs are unique across sections, child
+    pages exist, and titles are present. A landing page is an entry whose
+    child pages are all ``<subdir>/README.md`` of guides with their own
+    ``guide.yaml`` (``guides/pd-disaggregation`` with ``sidecar/`` and
+    ``coord/``): its own README only links them."""
     f = Findings()
     if not isinstance(data, dict) or not isinstance(data.get("sections"), dict):
         f.error("manifest: must be a map with `sections:`")
@@ -2141,7 +2156,16 @@ def check_manifest(data: Any, repo_root: Path) -> Findings:
                 f.error(f"{gp}.dir: {d} is already published by {seen_dirs[d]}")
             seen_dirs[d] = gp
             gdir = repo_root / d
-            for req in required:
+            pages = entry.get("pages") or []
+            landing = bool(pages) and all(
+                isinstance(pg, dict)
+                and isinstance(pg.get("from"), str)
+                and Path(pg["from"]).name == GUIDE_MD
+                and len(Path(pg["from"]).parts) > 1
+                and (gdir / Path(pg["from"]).parent / GUIDE_YAML).is_file()
+                for pg in pages
+            )
+            for req in ((GUIDE_MD,) if landing else required):
                 if not (gdir / req).is_file():
                     f.error(f"{gp}.dir: {d}/{req} does not exist")
             if "position" in entry and not isinstance(entry["position"], int):

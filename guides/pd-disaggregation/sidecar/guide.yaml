@@ -124,7 +124,7 @@ env:
 
     ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
-    # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
+    # The overlay is guides/pd-disaggregation/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     # The leaf selects the platform and, where an accelerator offers multiple
     # connectors, includes it in the value (cks-mooncake: MooncakeConnector on
     # GPU; nixl/* or moriio/* on AMD; rdma: NIXL over RDMA on Intel XPU).
@@ -185,7 +185,7 @@ deploy:
     - run: |
         # Paths to values files
         export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
-        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+        export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/router/${GUIDE_NAME}.values.yaml"
 
   # guide.py only treats ACCELERATOR_TYPE / MODEL_SERVER filters as variants,
   # so this MONITORING step renders as a plain fence; skip_in: [ci] keeps the
@@ -208,13 +208,13 @@ deploy:
   accelerator_values:
     - when: {ACCELERATOR_TYPE: [npu]}
       skip_in: [ci]
-      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.values.yaml"
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/router/npu.rbln.values.yaml"
     # TPU7x prefill runs --block-size=4352 with a 262k context on Qwen3.5-397B; the
     # shared values are sized for the gpt-oss-120b H200 fleet. SGLang on TPU7x serves
     # gpt-oss-120b with 64-token pages and keeps the shared values.
     - when: {ACCELERATOR_TYPE: ["tpu/v7"], MODEL_SERVER: [vllm]}
       skip_in: [ci]
-      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/sidecar/router/tpu-v7.values.yaml"
 
   standalone:
     - run: |

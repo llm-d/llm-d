@@ -45,7 +45,7 @@ router:
       allow-experimental-plugins: true
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
-      # prefill/decode scorers below match guides/pd-disaggregation/router/pd-disaggregation.values.yaml:
+      # prefill/decode scorers below match guides/pd-disaggregation/sidecar/router/pd-disaggregation.values.yaml:
       # prefix-cache-affinity-filter + token-load-scorer for prefill (keep prefix groups
       # on cache-warm pods, then pick by queued token load), active-request-scorer for
       # decode (pick the least-busy endpoint). pd-disaggregation has no encode role to

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Coordinator on GKE Gateway. The router chart already attaches a
+# HealthCheckPolicy and a 300s GCPBackendPolicy to the InferencePool when
+# provider.name=gke, so these cover the Coordinator Service only.
+resources:
+- ../base
+- healthcheckpolicy.yaml
+- gcpbackendpolicy.yaml
+
+patches:
+# GKE Gateway does not implement the HTTPRoute `timeouts` field; the timeout
+# comes from the GCPBackendPolicies instead.
+- target:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+  patch: |-
+    - op: remove
+      path: /spec/rules/0/timeouts

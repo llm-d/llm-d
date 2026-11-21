@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Adds llm-d-routing-sidecar to the decode role of ../../common: the sidecar
+# takes port 8000, which the InferencePool targets, and vLLM moves to 8200
+# (MODELSERVER_PORT, which the decode start script passes to --port).
+# The sidecar image comes from the images/routing-sidecar component, which the
+# including kustomization must list after this one.
+#
+# The `test` operations pin role 1 to decode, container 0 to the vLLM server,
+# and the first env var and port to MODELSERVER_PORT and the vLLM HTTP port, so
+# a reordered base fails the build instead of patching the wrong field.
+patches:
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+      name: pd-disagg-tpu-vllm
+    patch: |-
+      - op: test
+        path: /spec/roles/1/name
+        value: decode
+      - op: test
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/name
+        value: modelserver
+      - op: test
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/0/name
+        value: MODELSERVER_PORT
+      - op: test
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/ports/0/name
+        value: modelserver
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env/0/value
+        value: "8200"
+      - op: replace
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/ports/0/containerPort
+        value: 8200
+      - op: add
+        path: /spec/roles/1/spec/leaderWorkerTemplate/workerTemplate/spec/initContainers
+        value:
+          - name: routing-proxy
+            image: REPLACE_ROUTING_SIDECAR_IMAGE
+            imagePullPolicy: Always
+            args:
+              - --port=8000
+              - --kv-connector=nixlv2
+              - --zap-log-level=1
+              - --secure-serving=false
+            ports:
+              - name: sidecar
+                containerPort: 8000
+                protocol: TCP
+            resources: {}
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true

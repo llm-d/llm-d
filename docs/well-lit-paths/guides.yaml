@@ -34,10 +34,20 @@ sections:
         slug: enable-p2p-prefix-cache-sharing
         title: Enable P2P Prefix Cache Sharing
         position: 5
+      # One P/D guide: guides/pd-disaggregation/README.md is a landing page
+      # (no guide.yaml) that compares the two ways to drive P/D; each is a
+      # child page with its own guide.yaml.
       - dir: guides/pd-disaggregation
         slug: pd-disaggregation
         title: Deploy Prefill/Decode Disaggregation
         position: 6
+        pages:
+          - from: sidecar/README.md
+            to: sidecar
+            title: With the Routing Sidecar
+          - from: coord/README.md
+            to: coordinator
+            title: With the Coordinator (Experimental)
       - dir: guides/wide-ep
         slug: wide-expert-parallelism
         title: Scale MoE Models with Wide Expert Parallelism
