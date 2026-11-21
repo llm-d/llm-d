@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        # The proxy listens on [port, port+data-parallel-size-1] and forwards each to the
+        # vLLM rank on the matching port from 8200, so the router addresses a rank directly.
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --model-server-port=8200
+            - --data-parallel-size=4
+            - --zap-log-level=1
+            - --secure-serving=false
+          image: REPLACE_ROUTING_SIDECAR_IMAGE
+          imagePullPolicy: Always
+          ports:
+            - {containerPort: 8000, name: sidecar, protocol: TCP}
+            - {containerPort: 8001, name: sidecar-rank1, protocol: TCP}
+            - {containerPort: 8002, name: sidecar-rank2, protocol: TCP}
+            - {containerPort: 8003, name: sidecar-rank3, protocol: TCP}
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

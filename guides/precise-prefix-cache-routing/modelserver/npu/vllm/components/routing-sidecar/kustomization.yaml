@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# The routing sidecar in front of the four data-parallel ranks: the engine listens
+# on 8200-8203 behind it, the pd base port layout. List
+# recipes/modelserver/components/images/routing-sidecar after this component to
+# resolve REPLACE_ROUTING_SIDECAR_IMAGE.
+patches:
+  - path: patch-sidecar.yaml
+    target:
+      kind: Deployment
+      name: decode

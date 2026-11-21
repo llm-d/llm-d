@@ -1,0 +1,118 @@
+# Rebellions NPU overrides for precise-prefix-cache-routing.values.yaml. Apply
+# after it; everything not named here is inherited. Named for the RBLN runtime
+# rather than for NPUs in general, since the reuse unit below is that runtime's.
+router:
+  epp:
+    pluginsCustomConfig:
+      precise-prefix-cache-routing-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+          - type: token-producer
+            parameters:
+              # Must match the model the overlay deploys: the render call lands
+              # on the model servers themselves, so a mismatch is rejected
+              # rather than silently producing token IDs from the wrong
+              # tokenizer.
+              modelName: MiniMaxAI/MiniMax-M2.7
+              vllm:
+                # Render on the Ready InferencePool endpoints, on their
+                # inference port (no portRules), round-robin.
+                endpointDiscovery:
+                  # Cap each attempt so a pod that is busy serving cannot use
+                  # the whole render budget (vllm.timeout, 5s, for completions;
+                  # vllm.mmTimeout, 30s, for chat, Messages and Responses) and
+                  # leave no time for the retry on another endpoint. Raise it
+                  # for multimodal prompts, whose render downloads images.
+                  attemptTimeout: 2s
+                # How /v1/messages (Anthropic) and /v1/responses requests are
+                # tokenized. `auto` (default) probes the render endpoint once and
+                # uses vLLM's native /v1/messages/render or /v1/responses/render
+                # when it exists, else falls back to `legacy`: a translation to
+                # chat-completions rendering that is deprecated and does not
+                # guarantee token parity with the model server. `native` fails
+                # instead of falling back. vLLM 0.30 serves both endpoints;
+                # vLLM 0.29 (TPU overlays) serves Messages only.
+                messagesRenderMode: auto
+                responsesRenderMode: auto
+          - type: endpoint-notification-source
+          - type: precise-prefix-cache-producer
+            parameters:
+              tokenProcessorConfig:
+                # The runtime reuses prefixes in 512-token sub-blocks of each 4096-token
+                # block; the index splits each 4096-token stored block into this unit.
+                blockSizeTokens: 512
+                # Block keys are internal to the index and need not match
+                # vLLM's hashes. xxh64 hashes a prompt about 8x faster than the
+                # cbor-fnv default (llm-d/llm-d-router#2237). The algorithm
+                # must stay the same for the index's whole lifetime: with a
+                # persisted or shared index (e.g. the Redis backend), change it
+                # only together with an index flush and engine cache reset, or
+                # every precise lookup misses. This guide's index is in memory
+                # and rebuilt when the router restarts.
+                hashAlgorithm: xxh64
+              speculativeIndexing: true
+              indexerConfig:
+                kvBlockIndexConfig:
+                  enableMetrics: true
+              kvEventsConfig:
+                engineType: "vllm"
+                topicFilter: "kv@"
+                concurrency: 8
+                discoverPods: true
+                # OpenTelemetry spans for KV-event receive/process/decode. Off by
+                # default: events arrive at many times the request rate and would
+                # crowd request traces out of a shared sampler. Needs router
+                # tracing enabled (recipes/router/features/tracing.values.yaml).
+                # tracing: true
+                podDiscoveryConfig:
+                  socketPort: 5556
+                  # Replay buffered events on connect and after a sequence gap.
+                  # Every vLLM overlay binds this ZMQ ROUTER socket
+                  # (KV_EVENTS_REPLAY_ENDPOINT); the SGLang values drop it.
+                  # The NPU overlay's four ranks take 5556-5559 for events.
+                  replaySocketPort: 5560
+                  # Subscribe only to pool members that publish KV events, e.g.
+                  # prefill pods in a P/D pool. Empty (default) matches every pod.
+                  # podLabelSelector: "llm-d.ai/role=prefill"
+                  # EXPERIMENTAL: warm the index from a vLLM KV-event snapshot
+                  # instead of a full replay. Requires vllm-project/vllm#57789
+                  # (unreleased); upgrade the router before setting
+                  # `snapshot_endpoint` on vLLM, or the router cannot decode
+                  # the engine's event batches.
+                  # snapshotSocketPort: <port>
+          - type: inflight-load-producer
+            parameters:
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+          - type: prefix-cache-affinity-filter
+            parameters:
+              # Exact resident-block fractions from KV-cache events, not the
+              # approximate producer.
+              prefixMatchInfoProducerName: precise-prefix-cache-producer
+              # Per-rank throughput on RBLN-CR13 with rbln-serve 0.12.0, 512-token prompts,
+              # all four ranks saturated at once (one rank alone reaches about 4790).
+              peakPrefillThroughput: 3995
+          - type: token-load-scorer
+        dataLayer: # metrics-data-source + core-metrics-extractor injected by default
+          sources:
+            - pluginRef: endpoint-notification-source
+              extractors:
+                - pluginRef: precise-prefix-cache-producer
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: prefix-cache-affinity-filter
+              - pluginRef: token-load-scorer
+
+  modelServers:
+    # The model server runs one API server per data-parallel rank, so all four rank
+    # ports must be listed. Without this the router sends every request to rank 0.
+    targetPorts:
+      - number: 8000
+      - number: 8001
+      - number: 8002
+      - number: 8003
+    matchLabels:
+      llm-d.ai/guide: "precise-prefix-cache-routing"
+      llm-d.ai/accelerator-variant: "npu"
+      llm-d.ai/accelerator-vendor: "rebellions"
