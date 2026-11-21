@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha2
+apiVersion: llm-d.ai/v1
 kind: InferenceObjective
 metadata:
   name: premium-traffic
@@ -8,10 +8,10 @@ metadata:
     llm-d.ai/model: "Qwen3-32B"
 spec:
   priority: 100
-  poolRef:
-    name: flow-control
+  poolRefs:
+    - name: flow-control
 ---
-apiVersion: llm-d.ai/v1alpha2
+apiVersion: llm-d.ai/v1
 kind: InferenceObjective
 metadata:
   name: standard-traffic
@@ -21,10 +21,10 @@ metadata:
     llm-d.ai/model: "Qwen3-32B"
 spec:
   priority: 0
-  poolRef:
-    name: flow-control
+  poolRefs:
+    - name: flow-control
 ---
-apiVersion: llm-d.ai/v1alpha2
+apiVersion: llm-d.ai/v1
 kind: InferenceObjective
 metadata:
   name: best-effort-traffic
@@ -34,5 +34,5 @@ metadata:
     llm-d.ai/model: "Qwen3-32B"
 spec:
   priority: -10
-  poolRef:
-    name: flow-control
+  poolRefs:
+    - name: flow-control
