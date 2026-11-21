@@ -104,6 +104,10 @@ Share async queues across teams with reserved quotas, tier-priority dispatch, an
 
 Deploy LiteLLM Proxy or Kong AI Gateway to route traffic seamlessly between self-hosted llm-d inference stacks and external cloud provider LLM APIs. See [Integrations](integrations/README.md) for the architecture and integration modes.
 
+### [Serve Stateful Agent Sandboxes (Agent Substrate)](../../guides/agent-substrate/README.md)
+
+Scale 1,000+ stateful Hermes Agent gVisor sandboxes on GKE Agent Substrate with sub-second snapshot wake-ups, session-aware KV cache routing (`X-Hermes-Session-Id`), real-time token-load balancing, Host-DRAM KV offloading, and multi-tier priority Flow Control.
+
 ## Size and Scale llm-d Components
 
 Sizing, high availability, and scaling guidance for running individual llm-d components in production.

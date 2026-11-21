@@ -1,0 +1,29 @@
+# Hermes configuration rendered at startup from ActorTemplate environment vars.
+#
+# - Shared system prompt (`AGENTS.md`) gives all 1,000 agents an identical
+#   prefix (~700 tokens) so llm-d prefix-cache routing serves Turn 1 from memory.
+# - `context_length` must be >= 65536 (Hermes refuses models below 64k context).
+# - `compression.enabled: false` avoids extra background summarization calls.
+model:
+  default: ${MODEL_NAME}
+  provider: custom
+  max_tokens: ${MAX_TOKENS}
+  context_length: ${CONTEXT_LENGTH}
+providers:
+  custom:
+    base_url: ${MODEL_BASE_URL}
+terminal:
+  backend: local
+platform_toolsets:
+  api_server: []
+approvals:
+  mode: "off"
+compression:
+  enabled: false
+plugins:
+  enabled: []
+gateway:
+  api_server:
+    enabled: true
+    host: 0.0.0.0
+    port: 80
