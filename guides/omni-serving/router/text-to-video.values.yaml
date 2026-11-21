@@ -1,0 +1,36 @@
+## omni-serving guide overrides for the llm-d router, TASK=text-to-video (/v1/videos/sync).
+## Layer on top of: recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  inferencePool:
+    failureMode: FailOpen
+
+  epp:
+    pluginsConfigFile: "t2v.yaml"
+    pluginsCustomConfig:
+      t2v.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - name: activeRequest
+          type: active-request-scorer
+        - name: maxScore
+          type: max-score-picker
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: activeRequest
+          - pluginRef: maxScore
+        dataLayer:
+          injectDefaults: false
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "omni-serving"
+    protocol: http

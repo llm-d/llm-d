@@ -28,16 +28,22 @@ spec:
               hostIPC: true
               volumes:
                 - name: ucx-kernel-config
-                  configMap:
-                    name: ucx-kernel-config
+                  emptyDir: {}
+              initContainers:
+                # UCX < 1.23 detects DMABUF only via /boot/config-$(uname -r),
+                # which these nodes do not expose to pods. Write it for the
+                # running kernel so node kernel upgrades need no change here.
+                - name: ucx-kernel-config
+                  image: docker.io/library/busybox:1.37
+                  command: ["sh", "-c", "printf 'CONFIG_DMABUF_MOVE_NOTIFY=y\\nCONFIG_PCI_P2PDMA=y\\n' > /boot/config-$(uname -r)"]
+                  volumeMounts:
+                    - name: ucx-kernel-config
+                      mountPath: /boot
               containers:
                 - name: modelserver
                   volumeMounts:
-                    # This system does not expose /boot information.
-                    # Provide it for UCX to detect DMABUF support.
                     - name: ucx-kernel-config
-                      mountPath: /boot/config-6.8.0-124-generic
-                      subPath: config-6.8.0-124-generic
+                      mountPath: /boot
                       readOnly: true
                   resources:
                     limits:
@@ -67,14 +73,19 @@ spec:
               hostIPC: true
               volumes:
                 - name: ucx-kernel-config
-                  configMap:
-                    name: ucx-kernel-config
+                  emptyDir: {}
+              initContainers:
+                - name: ucx-kernel-config
+                  image: docker.io/library/busybox:1.37
+                  command: ["sh", "-c", "printf 'CONFIG_DMABUF_MOVE_NOTIFY=y\\nCONFIG_PCI_P2PDMA=y\\n' > /boot/config-$(uname -r)"]
+                  volumeMounts:
+                    - name: ucx-kernel-config
+                      mountPath: /boot
               containers:
                 - name: modelserver
                   volumeMounts:
                     - name: ucx-kernel-config
-                      mountPath: /boot/config-6.8.0-124-generic
-                      subPath: config-6.8.0-124-generic
+                      mountPath: /boot
                       readOnly: true
                   resources:
                     limits:

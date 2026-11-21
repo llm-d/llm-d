@@ -1,0 +1,9 @@
+# GKE platform overlay: the guide's model-server manifests plus the GKE
+# component (privileged launcher with host driver mounts, GKE node labels and
+# taint toleration). Selected by INFRA_PROVIDER=gke in the guide; see ../ocp for OpenShift.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../modelserver
+components:
+  - ../../components/gke
