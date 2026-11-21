@@ -223,6 +223,79 @@ target Deployment's measured cold-start time (the 300s default was validated aga
 a ~240s Qwen3-8B TP1 cold start). Windows need no extra dependencies, but they are
 blunt: they delay all scale-up equally, not just startup-driven overshoot.
 
+### Prefix-Affinity Routing and Scale-Out
+
+On the `inflight` path the EPP runs the optimized-baseline scheduler:
+`prefix-cache-affinity-filter` then `token-load-scorer`. Under a burst on a shared
+prefix, this can leave new replicas idle: KEDA adds them, they become `Ready`, and the
+router sends them nothing while the original replicas run a full batch.
+
+Four things combine to cause it:
+
+1. The filter keeps only endpoints whose cached prefix covers at least
+   `affinityThreshold` (0.8) of the prompt. A new replica has cached nothing, so it is
+   non-sticky for every request.
+2. The filter breaks stickiness only when the best sticky endpoint's estimated TTFT
+   exceeds the best non-sticky endpoint's by more than `maxTTFTPenaltyMs` (18000 by
+   default). With `ttftSource: prefillThroughput` the estimate is in-flight uncached
+   prompt tokens / `peakPrefillThroughput`. Requests that are decoding count as zero,
+   and so does every cached prompt token.
+3. The model server admits up to `--max-num-seqs` requests into its running batch (256
+   in vLLM by default). A burst below that limit never queues, so the estimate stays
+   near zero while TPOT grows with the batch. Requests queued past the limit add only
+   their uncached tokens, which are few when the prefix is shared.
+4. `token-load-scorer` adds the request's own uncached tokens per endpoint, so even
+   when the filter keeps all endpoints, a cold replica is charged the whole prompt.
+
+To make new replicas take load, use one of these:
+
+- **Predicted-latency routing.** The
+  [predicted-latency path](../../../guides/predicted-latency-routing/README.md) runs the
+  same filter with `ttftSource: latencyPredictor` and scores endpoints on predicted
+  TTFT and TPOT, which a full decode batch raises. It needs no change to the model
+  servers. In the measurement below it moved load onto new replicas as soon as they
+  were `Ready`, with the lowest TTFT of the configurations that keep the affinity
+  filter, both before and after scale-out.
+- **Optimized-baseline with a bounded batch.** Keep the optimized-baseline scheduler
+  and make the gate see the pressure:
+  - Bound each replica's batch with `--max-num-seqs`, which turns TPOT pressure into a
+    model-server queue. Choose the batch size whose TPOT you accept, and set the KEDA
+    in-flight threshold for that per-replica concurrency; otherwise KEDA adds replicas
+    the router does not need.
+  - Use an EPP whose TTFT estimate includes model-server queue wait
+    ([llm-d-router#3421](https://github.com/llm-d/llm-d-router/pull/3421) adds waiting
+    requests / completions per second). Uncached tokens alone under-count a queue of
+    requests that share a cached prefix. Without it, the cap can make things worse:
+    when whole prompts repeat, each queued request adds almost no uncached tokens, the
+    filter never spills, and the queue on the sticky replica grows (TTFT p90 53s, new
+    replicas still idle, in a repeated-prompt run of the setup below).
+  - Set `maxTTFTPenaltyMs` to your TTFT budget (for example `2000`). Once queue wait is
+    in the estimate, the penalty is the queueing delay you tolerate before the filter
+    spills to a colder replica; at the default 18000 the original replicas keep
+    requests until queue wait approaches 18s.
+
+  The cap has a cost: until new replicas are `Ready`, requests queue instead of
+  joining a larger batch, so TTFT during the scale-up is higher (p50 about 30s at a cap
+  of 64 below) and ITL is lower.
+- **Load-only routing.** When the shared prefixes are few enough that every replica
+  soon caches all of them, `token-load-scorer` without the affinity filter also avoids
+  the problem and loses little prefix reuse (88.0% engine prefix-cache hit rate against
+  88.7% with the filter in the measurement below).
+
+Measured on A100 80GB, Qwen3-30B-A3B at TP1, vLLM v0.32.0, llm-d router v1.0.0, 2 to 8
+replicas on the `inflight` signal, a burst of 512 concurrent requests sharing 8
+prefixes of 1,600 tokens plus a unique 200-token suffix, 300 output tokens. TTFT and
+ITL are for the window after all 8 replicas were `Ready`; the scale-up column is the
+window between the burst and the eighth replica becoming `Ready`:
+
+| Configuration | New replicas' share of requests (even split 75%) | TTFT p50 / p90 | ITL p50 | TTFT p50 during scale-up |
+| --- | --- | --- | --- | --- |
+| optimized-baseline defaults | 0% | 6.8s / 22.7s | 82ms | 6.0s |
+| predicted-latency routing (2 runs) | 74%, 73% | 0.18-0.19s / 0.25-0.27s | 38-40ms | 0.5-0.6s |
+| optimized-baseline, `--max-num-seqs=64`, `maxTTFTPenaltyMs: 2000` | 55% | 10.1s / 13.9s | 34ms | 30s |
+| the same with llm-d-router#3421 (2 runs) | 72%, 73% | 0.35s / 5.8-7.0s | 35ms | 30s |
+| load-only routing (no affinity filter) | 75% | 0.15s / 0.18s | 39ms | 0.7s |
+
 ### Sharing a Contended Accelerator Budget
 
 Each `ScaledObject` scales its own Deployment against its own signal, so two

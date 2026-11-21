@@ -545,6 +545,20 @@ decision. Inspect pod events, scheduling status, image or model download
 progress, and model-server logs. Model startup delay is distinct from a
 Prometheus or HPA metric failure.
 
+### New replicas are Ready but receive no requests
+
+If new replicas pass readiness but their request counters stay at zero while the
+original replicas run a full batch, the `prefix-cache-affinity-filter` is keeping
+requests on the replicas that hold the prefix cache. Check the filter's decisions:
+
+```promql
+sum by (outcome) (increase(llm_d_epp_prefix_cache_affinity_filter_decisions_total{namespace="${NAMESPACE}"}[5m]))
+```
+
+Almost all `sticky` and no `load_override` during the burst confirms it. See
+[Prefix-Affinity Routing and Scale-Out](../../../docs/architecture/autoscaling/keda-epp.md#prefix-affinity-routing-and-scale-out)
+for the cause and the configuration that lets new replicas take load.
+
 ### Deployment does not scale
 
 Check whether another HPA or controller targets the same Deployment. This can
