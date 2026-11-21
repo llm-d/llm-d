@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "guides/recipes/router/calibration/calibration-peak-throughput.yaml"
 TOKEN = {"choices": [{"text": "hello", "finish_reason": None}]}
 ERROR = {"error": {"message": "synthetic backend failure", "code": 500}}
+EOF = None  # ends the response without data: [DONE]
 
 
 @pytest.mark.parametrize(
@@ -25,8 +26,9 @@ ERROR = {"error": {"message": "synthetic backend failure", "code": 500}}
         ([ERROR], False, "synthetic backend failure"),
         ([TOKEN, ERROR], False, "synthetic backend failure"),
         ([], False, "no streamed chunk received"),
+        ([TOKEN, EOF], False, "stream ended before [DONE]"),
     ],
-    ids=["token", "error-first", "error-after-token", "done-only"],
+    ids=["token", "error-first", "error-after-token", "done-only", "eof-after-token"],
 )
 def test_calibration_stream(events, succeeds, diagnostic) -> None:
     configmap = next(
@@ -45,6 +47,8 @@ def test_calibration_stream(events, succeeds, diagnostic) -> None:
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
             for event in events:
+                if event is EOF:
+                    return
                 self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
             self.wfile.write(b"data: [DONE]\n\n")
 
