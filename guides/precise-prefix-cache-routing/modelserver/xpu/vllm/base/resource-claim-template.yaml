@@ -8,7 +8,7 @@ spec:
   spec:
     devices:
       requests:
-      - name: intel
-        exactly:
-          deviceClassName: gpu.intel.com
-          count: 1
+        - name: intel
+          exactly:
+            deviceClassName: gpu.intel.com
+            count: 1
