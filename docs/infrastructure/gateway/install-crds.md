@@ -10,7 +10,7 @@ Before deploying any Gateway provider, you must install the Gateway API and Gate
 > its bundled schema shortly afterwards. The release GKE manages can trail the one the guides pin (`latest` via
 > `guides/env.sh`); see
 > [GKE Inference Gateway](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/deploy-gke-inference-gateway)
-> for what GKE manages. A newer upstream apply does not override the addon.
+> for what GKE manages.
 
 ## Option 1: Using the Installation Script
 
