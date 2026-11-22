@@ -1,9 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
-# Graceful shutdown for vLLM model server Deployments, LeaderWorkerSets and
-# DisaggregatedSets, so rolling updates, scale-down and node drains do not fail
-# in-flight requests. Uses the same preStop + drain pattern as KServe's vLLM
-# presets. See docs/operations/lifecycle/graceful-shutdown.md.
+# Graceful shutdown for vLLM and SGLang model server Deployments,
+# LeaderWorkerSets and DisaggregatedSets, so rolling updates, scale-down and
+# node drains do not fail in-flight requests. Uses the same preStop + drain
+# pattern as KServe's vLLM presets. See
+# docs/operations/lifecycle/graceful-shutdown.md.
+#
+# SGLang drains on SIGTERM without a flag and has no drain deadline of its own:
+# it waits for every in-flight request, so terminationGracePeriodSeconds is the
+# only bound and SIGKILL at t=75s ends a drain still running. The timeline and
+# the --shutdown-timeout rule below apply to vLLM.
 #
 # What happens when a pod is deleted:
 #   t=0s    Pod is Terminating and leaves the InferencePool; the preStop sleep starts

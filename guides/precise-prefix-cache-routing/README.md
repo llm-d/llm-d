@@ -241,7 +241,7 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
-The vLLM model server overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
+The vLLM model server overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). The SGLang overlays use the same component; SGLang drains on `SIGTERM` without a flag, for up to 60s before `SIGKILL`. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
 
 ### 3. Render (Tokenizer) Endpoints
 

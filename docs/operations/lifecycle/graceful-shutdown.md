@@ -11,8 +11,8 @@ Handling termination gracefully spans **two layers**:
 
 1. **Routing layer** (Router / Endpoint Picker) — stop sending *new* requests to
    the terminating pod, and drain any requests still queued in the scheduler.
-2. **Model server layer** (vLLM) — let *in-flight* inference requests finish (or
-   drain for a bounded window) before the process exits.
+2. **Model server layer** (vLLM, SGLang) — let *in-flight* inference requests
+   finish (or drain for a bounded window) before the process exits.
 
 This guide covers graceful shutdown for **general (non-disaggregated) serving**.
 For prefill/decode disaggregation, where in-flight requests span multiple servers
@@ -56,6 +56,23 @@ or dropped:
 > (plus a small buffer for the `preStop` hook and process cleanup). Otherwise
 > Kubernetes sends `SIGKILL` before the drain completes, and the graceful window
 > is never fully used.
+
+## Draining the Model Server (SGLang)
+
+SGLang drains on `SIGTERM` without any flag:
+
+- It stops reporting ready (`/health`, `/health_generate` and `/ready` return
+  `503`) and keeps serving the requests already in flight.
+- It checks every 5 seconds and exits once no requests remain.
+- It has no drain deadline of its own. `terminationGracePeriodSeconds` is the
+  only bound: a drain still running when the grace period ends is cut by
+  `SIGKILL`.
+
+`SGL_FORCE_SHUTDOWN=1` makes SGLang exit on `SIGTERM` without draining.
+
+The same rule about shell launchers applies: when SGLang is started from
+`/bin/bash -c`, start it with `exec python3 -m sglang.launch_server ...` so the
+signal reaches SGLang.
 
 ## Request Cancellation on Client Disconnect
 
@@ -147,6 +164,12 @@ than the example above. Third-party vendor images with unverified vLLM versions
 (Biren, Iluvatar, MetaX, Moore Threads, and Rebellions NPU) do not set
 `--shutdown-timeout` yet (tracked in
 [llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)).
+
+The SGLang model server overlays of the optimized-baseline,
+precise-prefix-cache-routing and predicted-latency-routing guides (NVIDIA GPU,
+AMD, Intel XPU, and Google TPU, with their `gke` and `amd-ci` variants) use the
+same component. SGLang needs no flag, so these overlays drain for up to 60s
+(75s grace period minus the 15s `preStop` sleep) before `SIGKILL`.
 
 | Setting | Value | Where it is set |
 | --- | --- | --- |
