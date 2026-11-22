@@ -146,7 +146,7 @@ optimized-baseline   1m
 The coordinator serves `llm_d_coordinator_*` metrics on its own listener, separate from the serving port (`server.listen_addr`, default `:8080`). The metrics listener is configured by `server.metrics_port` in the coordinator config file: it defaults to `9090`, serves `/metrics` over plain HTTP unless `server.metrics_cert_dir` enables TLS on it, and is disabled when `server.metrics_port` is non-positive.
 
 The `PodMonitor` and `PodMonitoring` examples below select the coordinator pods by label and scrape the named container port `metrics`. The [coordinator disaggregation](../../../guides/coord-disaggregation/README.md) and [multitenant](../../../guides/batch-serving/asynchronous-processing/multitenant/README.md) guides already declare that port and ship both resources,
-so apply the guide's own monitoring directory instead of the examples here: `coordinator/monitoring` for coord-disaggregation, `manifests/monitoring` for multitenant, or that directory's `gmp-podmonitoring.yaml` when Managed Prometheus is in use. If your own coordinator Deployment only declares the serving port, add the metrics port first:
+so apply the guide's own monitoring resources instead of the examples here: `coordinator/monitoring` for coord-disaggregation and `manifests/monitoring` for multitenant. On GKE, apply `coordinator/monitoring/gmp-podmonitoring.yaml` for coord-disaggregation and `manifests/gmp-podmonitoring.yaml` for multitenant. If your own coordinator Deployment only declares the serving port, add the metrics port first:
 
 ```yaml
 ports:
@@ -224,23 +224,23 @@ Confirm the target is `UP` in Prometheus, then send a request and query `llm_d_c
 
 ## Step 4: Scrape Disaggregation Sidecar Metrics
 
-The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` metrics at `/metrics`, but its metrics listener is **disabled by default**. Enable it with `--metrics-port` on the `routing-proxy` container and use a port that is free in the pod, for example `9091`:
+The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` metrics at `/metrics`, but its metrics listener is **disabled by default**. The guides enable it with `--metrics-port=9095` on the `routing-proxy` container and name the port `sc-metrics`:
 
 ```yaml
 - name: routing-proxy
   args:
     - --port=8000
-    - --metrics-port=9091
+    - --metrics-port=9095
   ports:
-    - name: sidecar-metrics
-      containerPort: 9091
+    - name: sc-metrics
+      containerPort: 9095
       protocol: TCP
 ```
 
 `--metrics-port` is independent of the proxy serving port (`--port`) and of `--secure-serving`; `0` disables the endpoint. The metrics listener serves plain HTTP unless `--metrics-cert-dir` is set.
 
 > [!NOTE]
-> Of the guides that deploy the sidecar, only the Wide-EP AMD overlay enables the metrics listener today: it passes `--metrics-port=9095` and names the port `sc-metrics` in [`guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml`](../../../guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml), so its scrape endpoint uses `port: sc-metrics`. Every other guide leaves `--metrics-port` unset; add the flag and a named port to the overlay you deploy before creating the scrape resource below.
+> The guides that deploy the sidecar, including the Wide-EP AMD overlay in [`guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml`](../../../guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml), use `--metrics-port=9095` with the port name `sc-metrics`. Keep the same port and name so the scrape resources below match the pods the guides deploy. If an overlay you deploy leaves `--metrics-port` unset, add the flag and a matching named port before creating the scrape resource below.
 
 The sidecar runs next to the model server in the same pod, so select the pod by its shared label and scrape only the named sidecar metrics port:
 
@@ -261,7 +261,7 @@ spec:
     matchLabels:
       llm-d.ai/inference-serving: "true"
   podMetricsEndpoints:
-    - port: sidecar-metrics
+    - port: sc-metrics
       path: /metrics
       interval: 30s
 ```
@@ -290,7 +290,7 @@ spec:
     matchLabels:
       llm-d.ai/inference-serving: "true"
   endpoints:
-    - port: sidecar-metrics
+    - port: sc-metrics
       path: /metrics
       interval: 30s
 ```
