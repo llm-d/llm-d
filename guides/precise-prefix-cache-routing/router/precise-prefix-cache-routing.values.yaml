@@ -101,8 +101,8 @@ router:
                 podDiscoveryConfig:
                   socketPort: 5556
                   # Replay buffered events on connect and after a sequence gap.
-                  # Every vLLM and SGLang overlay binds this ZMQ ROUTER socket
-                  # (KV_EVENTS_REPLAY_ENDPOINT).
+                  # Every vLLM overlay and the NVIDIA GPU SGLang overlays bind
+                  # this ZMQ ROUTER socket (KV_EVENTS_REPLAY_ENDPOINT).
                   replaySocketPort: 5559
                   # Subscribe only to pool members that publish KV events, e.g.
                   # prefill pods in a P/D pool. Empty (default) matches every pod.

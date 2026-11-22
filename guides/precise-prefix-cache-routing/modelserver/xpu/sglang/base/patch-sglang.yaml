@@ -34,13 +34,10 @@ spec:
                 --tensor-parallel-size=1 \
                 --enable-metrics \
                 --page-size=64 \
-                --kv-events-config '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
+                --kv-events-config '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-0.6B"}'
           ports:
             - containerPort: 5556
               name: kv-events
-              protocol: TCP
-            - containerPort: 5559
-              name: kv-replay
               protocol: TCP
           env:
             - name: HF_TOKEN
@@ -64,8 +61,6 @@ spec:
               value: "8000"
             - name: KV_EVENTS_ENDPOINT
               value: "tcp://*:5556"
-            - name: KV_EVENTS_REPLAY_ENDPOINT
-              value: "tcp://*:5559"
           resources:
             requests:
               cpu: "4"
