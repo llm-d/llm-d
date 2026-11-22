@@ -302,6 +302,34 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 ```
 <!-- guide:verify.tests.router_metrics end -->
 
+## Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate wide expert parallelism. This section covers what is specific to this path. Metric definitions are in the [model server](../../docs/operations/observability/model-server-metrics.md) and [router](../../docs/operations/observability/router-metrics.md) metric references, and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#wide-expert-parallelism).
+
+These signals describe the NVIDIA GPU deployment, the one the bundled monitoring overlay scrapes. Attention runs data parallel, so every DP rank is its own engine with its own KV cache, and the overlay scrapes each rank as a separate target. Prometheus labels those targets with `endpoint` set to the port name (`rank0` to `rank7`), and with `job` set to `<namespace>/prefill` or `<namespace>/decode` after the two PodMonitors. A pool-wide average hides a single hot rank, so read these per rank within a role rather than per pod. The AMD and Intel XPU overlays expose a single `modelserver` port and are not covered by the overlay, so the per-rank and per-role queries below return no data on those deployments.
+
+### Key metrics for this path
+
+| Signal | Why it matters for wide EP | Where to look |
+|--------|----------------------------|---------------|
+| Active requests per rank (`vllm:num_requests_running` by `pod`, `endpoint`) | DP-aware routing should keep the ranks in a role close together. One busy rank beside idle siblings means requests are not spreading across ranks | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| KV cache utilization per rank (`vllm:kv_cache_usage_perc` by `endpoint`) | Each rank holds its own KV cache, with no replication across the DP group, so one rank can start preempting while the others still have room | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| Requests scheduled per rank port (`llm_d_epp_scheduler_attempts_total` by `port`) | The EPP picks a rank port per request, so skew here while the engines look even points at routing rather than the model servers | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| Prefill and decode balance (`vllm:num_requests_running` by `job`) | One `DisaggregatedSet` versions both roles, but they saturate independently, and which one saturates decides whose replicas to raise | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| KV transfer health (`vllm:nixl_xfer_time_seconds`, `vllm:nixl_num_failed_transfers`) | Decode pulls KV from prefill across nodes over NIXL. Failures or a rising tail show up as higher TTFT while the engines themselves look healthy | [Model server metrics → vLLM NIXL](../../docs/operations/observability/model-server-metrics.md#vllm-nixl-kv-transfer-metrics) |
+| Rollout gating (`llm_d_epp_disaggregatedset_revision_gating_share`, `llm_d_epp_disaggregatedset_strict_revision_no_match_total`) | The gating share tracks how much traffic a revision takes during a rollout, and the no-match counter surfaces strict selectors that fail closed | [Router metrics → Disaggregation & Rollout](../../docs/operations/observability/router-metrics.md#disaggregation--rollout) |
+
+> Expert dispatch and combine (DeepEP on NVIDIA, MoRI-EP on AMD) do not emit Prometheus metrics. Fabric problems surface at startup in the model server logs rather than in a series, so when workers never become ready, start with the RDMA requirements in [Prerequisites](#prerequisites).
+
+### Common failure modes
+
+* **One rank hot while its siblings are idle**: requests are not spreading across the DP group. Compare the per-rank spread with requests scheduled per rank port. If the EPP is spreading evenly and the engines are not, the imbalance is in the work each rank received, not in routing.
+* **One role saturated while the other is idle**: the roles saturate independently even though a single `DisaggregatedSet` manages both, so raise replicas for the saturated role rather than for both.
+* **TTFT high while per-rank load and KV cache look healthy**: suspect the KV transfer between the roles. Check failed NIXL transfers and transfer time before changing the engines.
+* **Fewer than eight metrics endpoints on an NVIDIA GPU pod**: the overlay was not applied, or `MONITORING` was left `false`. It replaces the single `modelserver` endpoint with `rank0` to `rank7`, so without it each pod reports one rank and the per-rank spread is invisible. On AMD and Intel XPU the overlay matches no ports at all, which is expected.
+
+The bundled [alerting rules](../../docs/operations/observability/alerting.md) do not cover the per-rank signals above.
+
 ## Cleanup
 
 To remove the deployed components:
