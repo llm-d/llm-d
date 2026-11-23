@@ -10,7 +10,7 @@ components:
 images:
   - name: ghcr.io/llm-d/llm-d-xpu
     newName: quay.io/llm-d/llm-d-xpu
-    newTag: sha-2937d5d
+    newTag: sha-a961526
 
 labels:
   - pairs:
