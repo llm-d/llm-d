@@ -31,6 +31,8 @@ For integration into the well-lit paths our standard for contribution is higher,
 > [!NOTE]
 > We aim to increase our requirements to have active CI coverage for all hardware guide variants in a future release.
 
+<!-- -->
+
 > [!NOTE]
 > The community can assist but is not responsible for keeping hardware guide variants updated. We reserve the right to remove stale examples and documentation with regard to hardware support.
 
@@ -38,7 +40,7 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 NVIDIA GPUs are the default accelerator for all llm-d guides. Any NVIDIA GPU is supported, with the specific capabilities determined by the inference container image used. No special cluster configuration is required beyond the NVIDIA device plugin or DRA driver.
 
-**CUDA Runtime and Driver Requirements**
+### CUDA Runtime and Driver Requirements
 
 llm-d no longer builds its own CUDA images (`ghcr.io/llm-d/llm-d-cuda` is deprecated, see [#2338](https://github.com/llm-d/llm-d/issues/2338)). The NVIDIA GPU guides deploy the upstream model server images set in the [default image components](../../guides/recipes/modelserver/components/images/README.md), so the CUDA runtime, and with it the minimum driver, comes from the image you deploy. The current defaults, `vllm/vllm-openai` and `lmsysorg/sglang`, are built on **CUDA 13.0** for both amd64 and arm64. To check an image, read the `CUDA_VERSION` environment variable in its image config.
 
@@ -83,7 +85,9 @@ The RDMA overlay (`modelserver/xpu/vllm/rdma/`) reuses the standard XPU vLLM bas
 
 ## Iluvatar
 
-Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). Each board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board); with ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards and vLLM parallel sizes count CUDA devices (2 per board). The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The P/D overlay serves `Qwen/Qwen3-32B` on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode). The optimized-baseline overlay serves `deepseek-ai/DeepSeek-V4-Flash` on 4 boards / 8 CUDA devices (DP=8 + EP).
+Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). Each board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board); with ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards and vLLM parallel sizes count CUDA devices (2 per board).
+
+The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The P/D overlay serves `Qwen/Qwen3-32B` on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode). The optimized-baseline overlay serves `deepseek-ai/DeepSeek-V4-Flash` on 4 boards / 8 CUDA devices (DP=8 + EP).
 
 **UCX transport (required for P/D):**
 
@@ -114,12 +118,12 @@ Biren 166M GPUs are supported for community-contributed well-lit paths. The devi
 Moore Threads MTT S5000 GPUs are supported for community-contributed well-lit
 paths. The device plugin must expose `mthreads.com/gpu`.
 
-**vLLM**
+### vLLM
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
 - **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
 
-**SGLang**
+### SGLang
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/sglang/base`](../../guides/optimized-baseline/modelserver/mthreads/sglang/base/) — Prefill and Decode in one process (`--tp 8 --ep 8`).
 - **P/D disaggregation** (two 8-GPU nodes): [`guides/pd-disaggregation/modelserver/mthreads/sglang/base`](../../guides/pd-disaggregation/modelserver/mthreads/sglang/base/) — 1P+1D, each TP=8, Mooncake KV transfer.
