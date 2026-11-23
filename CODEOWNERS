@@ -1,0 +1,41 @@
+# See https://docs.github.com/articles/about-code-owners for the file format.
+#
+# Order matters: for any path, the last matching pattern wins (its owners
+# fully replace, not extend, the owners of earlier matches). Each path's
+# owners are auto-requested for review on a touching PR and required by the
+# `merge-to-main` ruleset. An owner needs write access to the repository to
+# count.
+#
+# Project leadership and the approvers team are recorded in /MAINTAINERS.md.
+
+# Default: every path falls back to the approvers team. Each guide below
+# also lists the team so its members can approve, while named owners are
+# auto-requested for review on their guide.
+*                                                    @llm-d/llm-d-approvers
+
+# Guides: the owners of a guide are the code owners of its README.md. The
+# nightly automation (slash-test-nightly.yaml, notify-slack-nightly.py)
+# resolves guide owners from these entries.
+/guides/agentic-api/                                 @franciscojavierarceo @jtechapps @roytman @llm-d/llm-d-approvers
+/guides/batch-serving/asynchronous-processing/       @jtechapps @shimib @llm-d/llm-d-approvers
+/guides/batch-serving/batch-gateway/                 @lioraron @llm-d/llm-d-approvers
+/guides/coord-disaggregation/                        @roytman @revit13 @llm-d/llm-d-approvers
+/guides/fast-model-actuation/                        @aavarghese @diegocastanibm @dumb0002 @jimcadden @MikeSpreitzer @rubambiza @waltforme @llm-d/llm-d-approvers
+/guides/flow-control/                                @LukeAVanDrie @RishabhSaini @llm-d/llm-d-approvers
+/guides/hyperconverged-cephfs/                       @albertoperdomo2 @rdoddaia @llm-d/llm-d-approvers
+/guides/modelexpress-p2p/                            @wseaton @llm-d/llm-d-approvers
+/guides/models/deepseek-v4/                          @robertgshaw2-redhat @tlrmchlsmth @llm-d/llm-d-approvers
+/guides/models/glm-5-2/                              @robertgshaw2-redhat @tlrmchlsmth @llm-d/llm-d-approvers
+/guides/no-kubernetes-deployment/                    @ezrasilvera @llm-d/llm-d-approvers
+/guides/optimized-baseline/                          @liu-cong @vMaroon @llm-d/llm-d-approvers
+/guides/p2p-kv-cache-sharing/                        @niliguy @llm-d/llm-d-approvers
+/guides/pd-disaggregation/                           @tlrmchlsmth @llm-d/llm-d-approvers
+/guides/pod-snapshot/                                @RyanRosario @nicolexin @llm-d/llm-d-approvers
+/guides/precise-prefix-cache-routing/                @vMaroon @liu-cong @llm-d/llm-d-approvers
+/guides/predicted-latency-routing/                   @kaushikmitr @llm-d/llm-d-approvers
+/guides/recipes/                                     @ahg-g @robertgshaw2-redhat @liu-cong @Gregory-Pereira @llm-d/llm-d-approvers
+/guides/rollouts/                                    @ahg-g @llm-d/llm-d-approvers
+/guides/tiered-prefix-cache/                         @kfirtoledo @liu-cong @vMaroon @llm-d/llm-d-approvers
+/guides/turn-priority-fairness/                      @ruocco @animeshtrivedi @llm-d/llm-d-approvers
+/guides/wide-ep/                                     @robertgshaw2-redhat @tlrmchlsmth @llm-d/llm-d-approvers
+/guides/workload-autoscaling/                        @lionelvillard @asm582 @mamy-CS @llm-d/llm-d-approvers

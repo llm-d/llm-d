@@ -42,7 +42,7 @@ the decision.
 
 Any component the project takes on, core or ecosystem, needs:
 
-- an owning team named in `OWNERS` that commits to maintaining it,
+- an owning team named in `CODEOWNERS` or `OWNERS` that commits to maintaining it,
 - documentation for users, and a guide or well-lit path where it makes sense,
 - working CI, tests, and the standard project linting and sign-off,
 - a real use case or a clear gap it fills, and
