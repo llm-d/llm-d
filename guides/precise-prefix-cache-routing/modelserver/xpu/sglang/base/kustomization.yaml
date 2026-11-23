@@ -8,6 +8,7 @@ namePrefix: precise-prefix-cache-routing-xpu-sglang-
 
 components:
   - ../../../../../recipes/modelserver/components/images/xpu-sglang/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

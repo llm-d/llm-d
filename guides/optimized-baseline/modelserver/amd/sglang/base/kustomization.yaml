@@ -7,6 +7,7 @@ namePrefix: optimized-baseline-rocm-sglang-
 
 components:
   - ../../../../../recipes/modelserver/components/images/amd-sglang/rocm724-mi35x
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

@@ -7,6 +7,7 @@ namePrefix: optimized-baseline-tpu-v6-sglang-
 
 components:
   - ../../../../../../recipes/modelserver/components/images/tpu-sglang/release
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:
