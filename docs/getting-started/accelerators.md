@@ -10,7 +10,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
 | Biren | 166M | FengSibo (@fengsibo, <fengsiboacer@gmail.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
-| Enflame | GCU | Mengxuan Li(@archlitchi, <mengxuan.li@dynamia.ai>) |
+| Enflame | GCU | Da Ma(@sea10094, <sea10094@gmail.com>), Mengxuan Li(@archlitchi, <mengxuan.li@dynamia.ai>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
