@@ -130,8 +130,8 @@ The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold r
 
 When a request arrives, the sidecar inspects a routing header set by the proxy:
 
-| Header | Purpose |
-|---|---|
+| Header                        | Purpose                                                            |
+|-------------------------------|--------------------------------------------------------------------|
 | `x-llm-d-prefiller-host-port` | One or more prefill pod addresses (comma-separated or multi-value) |
 
 Based on which headers are present, the sidecar selects one of two execution paths:
@@ -160,11 +160,11 @@ vLLM and SGLang both support multiple KV transfer engines - in llm-d we currentl
 
 NIXL provides a standardized API for transferring memory between remote instances offering multiple backends (e.g. UCX, UCCL, libfabric) each of which support multiple underlying transports (NVLink, RoCE, IB, EFA, etc).
 
-|             | IB | RoCE | TCP-X | EFA |
-|-------------|:--:|:----:|:-----:|:---:|
-| **UCX**     | ✓  |  ✓   |       |     |
-| **UCCL**    | ✓  |  ✓   |   ✓   |  ✓  |
-| **libfabric**|   |      |       |  ✓  |
+|               | IB | RoCE | TCP-X | EFA |
+|---------------|:--:|:----:|:-----:|:---:|
+| **UCX**       | ✓  |  ✓   |       |     |
+| **UCCL**      | ✓  |  ✓   |   ✓   |  ✓  |
+| **libfabric** |    |      |       |  ✓  |
 
 > [!NOTE]
 > UCX also supports transfer via TCP and NVLINK. TCP is extremely slow and is targeted for local development. NVLINK transfer is used for local development and cannot be used in Kubernetes deployments as it cannot cross pod boundaries.
