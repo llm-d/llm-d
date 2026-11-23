@@ -917,8 +917,7 @@ kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/objectives
 kubectl delete -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/redis
 # --ignore-not-found does not handle an unregistered monitoring API.
-MONITORING_RESOURCES=$(kubectl api-resources --api-group=monitoring.coreos.com -o name)
-if grep -qx 'podmonitors.monitoring.coreos.com' <<< "${MONITORING_RESOURCES}"; then
+if kubectl get --raw /apis/monitoring.coreos.com/v1 2>/dev/null | grep '"name":"podmonitors"' >/dev/null; then
   kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
 fi
 ```
@@ -932,8 +931,7 @@ fi
 ```bash
 # only when QUEUE_BACKEND=pubsub:
 kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml --ignore-not-found
-GMP_RESOURCES=$(kubectl api-resources --api-group=monitoring.googleapis.com -o name)
-if grep -qx 'podmonitorings.monitoring.googleapis.com' <<< "${GMP_RESOURCES}"; then
+if kubectl get --raw /apis/monitoring.googleapis.com/v1 2>/dev/null | grep '"name":"podmonitorings"' >/dev/null; then
   kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-podmonitoring.yaml --ignore-not-found
 fi
 gcloud monitoring dashboards list --project ${PROJECT_ID} --filter='displayName:"Async Processor"' \
