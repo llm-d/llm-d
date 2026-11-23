@@ -224,7 +224,7 @@ Confirm the target is `UP` in Prometheus, then send a request and query `llm_d_c
 
 ## Step 4: Scrape Disaggregation Sidecar Metrics
 
-The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` metrics at `/metrics`, but its metrics listener is **disabled by default**. Enable it with `--metrics-port` on the `routing-proxy` container, using port `9095` and the port name `sc-metrics`, matching the guides:
+The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` metrics at `/metrics`, but its metrics listener is **disabled by default**. Enable it with `--metrics-port` on the `routing-proxy` container. Use port `9095` and the port name `sc-metrics`, the values the Wide-EP AMD overlay uses:
 
 ```yaml
 - name: routing-proxy
@@ -240,7 +240,7 @@ The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` m
 `--metrics-port` is independent of the proxy serving port (`--port`) and of `--secure-serving`; `0` disables the endpoint. The metrics listener serves plain HTTP unless `--metrics-cert-dir` is set.
 
 > [!NOTE]
-> The Wide-EP AMD overlay enables the listener at `--metrics-port=9095` with the port name `sc-metrics` in [`guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml`](../../../guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml). Keep those values so the scrape resources below match the pods the guides deploy. If an overlay you deploy leaves `--metrics-port` unset, add the flag and a matching named port before creating the scrape resource below.
+> The Wide-EP AMD overlay enables the listener at `--metrics-port=9095` with the port name `sc-metrics` in [`guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml`](../../../guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml). Keep those values so the scrape resources below match that overlay's pods. The other P/D guides do not set `--metrics-port` yet, so add the flag and a matching named port before creating the scrape resource below.
 
 The sidecar runs next to the model server in the same pod, so select the pod by its shared label and scrape only the named sidecar metrics port:
 
