@@ -13,6 +13,7 @@ spec:
           args:
             - "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
             - "--port=8000"
+            - "--shutdown-timeout=45"
             - "--trust-remote-code"
             - "--tensor-parallel-size=8"
             - "--gpu-memory-utilization=0.85"
