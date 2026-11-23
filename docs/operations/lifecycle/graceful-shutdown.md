@@ -187,7 +187,7 @@ Expected behavior with `--shutdown-timeout` set:
 
 ## Troubleshooting
 
-**In-flight requests still fail on scale-down / rollout**
+### In-flight requests still fail on scale-down / rollout
 
 - Confirm `--shutdown-timeout` is set; without it vLLM aborts immediately.
 - Confirm `terminationGracePeriodSeconds > --shutdown-timeout`; otherwise
@@ -196,7 +196,7 @@ Expected behavior with `--shutdown-timeout` set:
   start it with `exec vllm serve ...`. Otherwise `SIGTERM` goes to the shell
   running as PID 1, which ignores it, and vLLM never starts draining.
 
-**Clients see hard errors instead of retries during shutdown**
+### Clients see hard errors instead of retries during shutdown
 
 - Ensure clients/gateway treat `503` as retryable — the EPP drains queued
   requests with a retryable `503`, not a fatal error.
