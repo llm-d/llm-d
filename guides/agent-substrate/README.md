@@ -1,8 +1,8 @@
-# Serve 1,000+ Stateful Agent Sandboxes with GKE Agent Substrate and llm-d
+# Serve 1,000+ Stateful Agent Sandboxes with Agent Substrate and llm-d
 
 > [!NOTE]
 > **Tier:** 1 (Experimental) · **Gaps to Tier 2:** the Agent Substrate manifests are templates applied with `envsubst` and `kubectl ate`, with no kustomize overlay covered by the dry-run CI job · **Reference Demo:** [PyTorch Conference demo, `llm-d-incubation/llm-d-demos`](https://github.com/llm-d-incubation/llm-d-demos/tree/main/demos/agentic-serving-fleet)
-> **Validated Reference Stack:** 1,000 [Hermes Agent](https://github.com/NousResearch/hermes-agent) gVisor sandboxes on GKE Agent Substrate (`18 × c4d-standard-16` CPU nodes) backed by `llm-d` Router + `vLLM` with Host-DRAM KV offloading on NVIDIA GPUs or Cloud TPU v7x (Ironwood).
+> **Validated Reference Stack:** 1,000 [Hermes Agent](https://github.com/NousResearch/hermes-agent) gVisor sandboxes on Agent Substrate (GKE, `18 × c4d-standard-16` CPU nodes) backed by `llm-d` Router + `vLLM` with Host-DRAM KV offloading on NVIDIA GPUs or Cloud TPU v7x (Ironwood).
 
 ## Overview
 
@@ -15,7 +15,7 @@ Running 1,000 stateful agents against a naive Kubernetes deployment hits four co
 3. **1,000-agent wake-storm hotspots**: Scraped Prometheus queue gauges lag behind millisecond-scale bursts. Without real-time in-flight prompt token accounting, a sudden 1,000-agent wake storm piles onto a single replica with a warm system prompt and blows up Time to First Token (TTFT).
 4. **Cross-tier head-of-line blocking**: Background batch swarms and runaway tool loops flood model server queues, starving latency-sensitive interactive user sessions.
 
-This guide reproduces the architecture from the [PyTorch Conference Agent Substrate × `llm-d` demo](https://github.com/llm-d-incubation/llm-d-demos/tree/main/demos/agentic-serving-fleet) end to end, pairing **GKE Agent Substrate** (sub-second gVisor memory + rootfs snapshots for 1,000 stateful **Hermes Agents**) with **`llm-d` session-aware routing, prefix-cache and token-load balancing, Host-DRAM KV tiering, and multi-tier priority Flow Control**.
+This guide reproduces the architecture from the [PyTorch Conference Agent Substrate × `llm-d` demo](https://github.com/llm-d-incubation/llm-d-demos/tree/main/demos/agentic-serving-fleet) end to end, pairing **[Agent Substrate](https://github.com/agent-substrate/substrate)** (sub-second gVisor memory + rootfs snapshots for 1,000 stateful **Hermes Agents**) with **`llm-d` session-aware routing, prefix-cache and token-load balancing, Host-DRAM KV tiering, and multi-tier priority Flow Control**.
 
 ### Reference Benchmark Highlights
 
@@ -62,27 +62,12 @@ Agent Substrate resumes an actor when a request arrives for it, but suspends one
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    Driver["Hermes Fleet Driver<br/>(1,000 Sessions · 3 Traffic Tiers)"] -->|"POST /v1/chat/completions<br/>X-Hermes-Session-Id: agent-NNNN-g1<br/>x-llm-d-inference-objective: <tier>"| Atenet["GKE Agent Substrate<br/>atenet-router (:443, mTLS)"]
-
-    subgraph Substrate["GKE Agent Substrate (18 x c4d-standard-16 · 1,080 gVisor Workers)"]
-        Atenet -->|"Auto-wake from golden / per-actor snapshot"| H1["Hermes Agent 0001..0100<br/>(premium-traffic · SQLite /data)"]
-        Atenet -->|"Auto-wake from golden / per-actor snapshot"| H2["Hermes Agent 0101..0400<br/>(standard-traffic · SQLite /data)"]
-        Atenet -->|"Auto-wake from golden / per-actor snapshot"| H3["Hermes Agent 0401..1000<br/>(best-effort-traffic · SQLite /data)"]
-    end
-
-    H1 & H2 & H3 -->|"OpenAI /v1/chat/completions<br/>Forwards X-Hermes-Session-Id +<br/>x-llm-d-inference-objective (sitecustomize.py)"| EPP["llm-d Router (EPP)"]
-
-    subgraph Router["llm-d Endpoint Picker (EPP)"]
-        Identity["1. agent-identity<br/>(x-hermes-session-id -> FairnessID)"] --> FC["2. Flow Control Admission<br/>Bands: 100 (Premium) · 0 (Standard) · -10 (Best-Effort)<br/>round-robin-fairness-policy per Hermes session"]
-        FC --> Sched["3. Composite Scheduling Profile<br/>prefix-cache-scorer (w=3) + session-affinity-scorer (w=2)<br/>+ token-load-scorer (w=2) + kv-cache-utilization-scorer (w=1)"]
-    end
-
-    EPP --- Identity
-    Sched --> V1["vLLM Replica 1<br/>HBM + Host DRAM KV Offload"]
-    Sched --> V2["vLLM Replica 2..N<br/>HBM + Host DRAM KV Offload"]
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)">
+    <img src="../../docs/assets/agent-substrate.svg" alt="Stateful agent sandboxes on Agent Substrate with llm-d">
+  </picture>
+</p>
 
 ### How the Optimizations Fit Together
 
@@ -107,15 +92,15 @@ flowchart TD
 ## Prerequisites
 
 - **`kubectl`**, **`helm`** (`v3.14+`), **`kustomize`**, **`envsubst`** (`gettext`), **`openssl`**, and **`python3`** (`3.10+`).
-- **`docker`** and **`gcloud`** to build the Hermes actor image and push it to Artifact Registry ([Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image)).
+- **`docker`** to build the Hermes actor image and push it to a registry your cluster can pull from ([Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image)). The example commands use Artifact Registry and **`gcloud`**.
 - **Accelerator capacity for `llm-d` model servers**:
   - **NVIDIA GPU (default below)**: `2+` replicas × `2× H100 / A100 80 GB` GPUs (`TP=2`) with `>= 320 GiB` host RAM per pod for native CPU KV offloading, **or**
-  - **Google Cloud TPU v7x (Ironwood)**: `3` replicas, each on one `tpu7x` `2x2x1` slice (`4` chips, `850Gi` host RAM per pod), with `TPURaidenOffloadingConnector` Host-DRAM KV offloading (see [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading)).
-- **For the full 1,000-sandbox GKE Agent Substrate deployment** ([Steps 5–7](#5-build-the-pre-warmed-hermes-agent-sandbox-image)):
-  - A GKE cluster (`1.37+`) with **Agent Substrate `v1.0.0` or later** installed, for example with [`substrate-gke`](https://github.com/ai-on-gke/substrate-gke) (`ate-system` control plane, `atenet-router`, and the gVisor sandbox class), and the `kubectl-ate` plugin built from the same release.
+  - **Google Cloud TPU v7x (Ironwood), on GKE**: `3` replicas, each on one `tpu7x` `2x2x1` slice (`4` chips, `850Gi` host RAM per pod), with `TPURaidenOffloadingConnector` Host-DRAM KV offloading (see [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading)).
+- **For the full 1,000-sandbox Agent Substrate deployment** ([Steps 5–7](#5-build-the-pre-warmed-hermes-agent-sandbox-image)):
+  - A Kubernetes cluster with **[Agent Substrate](https://github.com/agent-substrate/substrate) `v1.0.0` or later** installed (`ate-system` control plane, `atenet-router`, and the gVisor sandbox class), and the `kubectl-ate` plugin built from the same release. On GKE (`1.37+`), install it with [`substrate-gke`](https://github.com/ai-on-gke/substrate-gke).
   - The fleet driver's identity, `spiffe://cluster.local/ns/llm-d-agent-substrate/sa/hermes-fleet-driver`, on the Agent Substrate router's ingress allowlist (`--ingress-allowed-spiffe-ids` / `ATE_INGRESS_ALLOWED_SPIFFE_IDS`). The router serves only TLS and admits only listed clients. Each `ate-setup` deploy replaces the list, so include the IDs already on it; see [Reaching actors through the ingress router](https://github.com/ai-on-gke/substrate-gke#reaching-actors-through-the-ingress-router).
-  - Dedicated CPU node pool for the 1,000 Hermes sandboxes: `18 × c4d-standard-16` (`16 vCPU`, `64 GB` RAM, `100 GB` `hyperdisk-balanced`), labeled `pool=hermes` and tainted `ate.dev/sandboxClass=hermes:NoSchedule`.
-  - An Artifact Registry repository (`HERMES_IMAGE_REPO`) for the digest-pinned Hermes actor image. Snapshots are stored under the snapshot location Agent Substrate was installed with.
+  - Dedicated CPU nodes for the 1,000 Hermes sandboxes: `18` nodes with `16 vCPU`, `64 GB` RAM and a fast `100 GB` boot disk each (on GKE, `c4d-standard-16` with `hyperdisk-balanced`), labeled `pool=hermes` and tainted `ate.dev/sandboxClass=hermes:NoSchedule`.
+  - A container image repository (`HERMES_IMAGE_REPO`) for the digest-pinned Hermes actor image. Snapshots are stored under the snapshot location Agent Substrate was installed with.
 
 ### Small-Scale Trial
 
@@ -147,7 +132,7 @@ export REPO_ROOT=$(realpath $(git rev-parse --show-toplevel))
 export GUIDE_NAME=agent-substrate
 export NAMESPACE=llm-d-agent-substrate
 export MODEL_NAME=Qwen/Qwen3-32B
-export INFRA_PROVIDER=gke # options: base, gke
+export INFRA_PROVIDER=base # options: base, gke
 export ROUTER_VALUES=${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml
 export EXTRA_HELM_ARGS=
 export ATESPACE=agent-hermes
@@ -224,12 +209,7 @@ kubectl get secret hermes-api-key --namespace "${NAMESPACE}" >/dev/null 2>&1 \
 
 [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) layers `agent-identity` (`x-hermes-session-id`), `session-affinity-scorer`, `approx-prefix-cache-producer`, `inflight-load-producer`, `prefix-cache-scorer`, `token-load-scorer`, and 3-band `flowControl` onto [`recipes/router/base.values.yaml`](../recipes/router/base.values.yaml).
 
-Deploy the router in **one** of two modes ([how they differ](../../docs/architecture/router/proxy.md)):
-
-- **Standalone Mode** is the default and fits agents that run in the same cluster as `llm-d`: the sandboxes reach the router's Envoy sidecar through a `ClusterIP` Service, and no Gateway API infrastructure is needed.
-- **Gateway Mode** puts a Kubernetes Gateway in front of the router. Choose it when the fleet needs a managed L7 front door such as the [GKE Inference Gateway](../../docs/infrastructure/gateway/gke.md), when one Gateway is shared with other routes, or when agents and clients call from outside the cluster.
-
-#### Standalone Mode (In-Cluster EPP + Envoy Sidecar, Recommended for Same-Cluster Agent Substrate)
+Deploy the router in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router: agents in the same cluster reach it through a `ClusterIP` Service, and no Gateway API infrastructure is needed. To put a Kubernetes Gateway in front instead (a managed L7 front door such as the [GKE Inference Gateway](../../docs/infrastructure/gateway/gke.md), a Gateway shared with other routes, or callers outside the cluster), see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
 ```bash
@@ -242,35 +222,13 @@ helm upgrade --install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-#### Gateway Mode (Kubernetes Gateway API Front Door)
-
-First deploy a Kubernetes Gateway named `llm-d-inference-gateway` in `${NAMESPACE}` by following one of the [gateway guides](../../docs/infrastructure/gateway/README.md) (for GKE, [GKE Gateway](../../docs/infrastructure/gateway/gke.md)). Then install the router with an `HTTPRoute` bound to that Gateway:
-
-<!-- guide:deploy.gateway start -->
-```bash
-export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
-helm upgrade --install ${GUIDE_NAME} \
-    ${ROUTER_GATEWAY_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-    -f ${ROUTER_VALUES} \
-    ${EXTRA_HELM_ARGS} \
-    --set provider.name=${PROVIDER_NAME} \
-    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-```
-<!-- guide:deploy.gateway end -->
-
-A new route can take several minutes to be programmed; until then the Gateway answers `404`, so wait for a successful [smoke check](#smoke-check-llm-d-session-and-priority-headers) before driving the fleet.
-
-Agent Substrate egress policies match host names, not IP addresses. Before [Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver), point a DNS name at the Gateway's address (a DNS record, or inside the cluster a selector-less `Service` whose endpoint is that address) and `export LLMD_HOST=<that name>`: Steps 4, 6 and 7 write `LLMD_HOST` into the driver configuration, the `ActorTemplate` and every agent's `EgressPolicy`.
-
 ### 2. Deploy the Model Server with Host-DRAM KV Offloading
 
 Hermes Agent requires a model context window of at least `64k` tokens. Deploy **one** of the two accelerator options below. Both reuse a [Tiered Prefix Cache](../tiered-prefix-cache/README.md) overlay that keeps evicted KV blocks in Host DRAM, relabeled for `agent-substrate`.
 
 #### NVIDIA GPU (Default)
 
-Render the native CPU KV-offloading overlay (`2 × TP=2` `Qwen/Qwen3-32B`) and set a `64k` context window (`--max-model-len=65536`):
+Render the native CPU KV-offloading overlay (`2 × TP=2` `Qwen/Qwen3-32B`) and set a `64k` context window (`--max-model-len=65536`). `INFRA_PROVIDER` selects the overlay: `base` (the default) for any Kubernetes cluster, or `gke` on GKE:
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -284,9 +242,9 @@ kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/n
 ```
 <!-- guide:deploy.modelserver end -->
 
-#### Google Cloud TPU v7x (Ironwood)
+#### Google Cloud TPU v7x (Ironwood) on GKE
 
-On GKE Cloud TPU v7x, render the `tpu/v7` overlay instead (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-gke-agent-substrate-workerpool-and-actortemplate)):
+On GKE Cloud TPU v7x, render the `tpu/v7` overlay instead (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
 
 ```bash
 export MODEL_NAME=Qwen/Qwen3.5-397B-A17B-FP8
@@ -351,7 +309,7 @@ kubectl wait --for=condition=Available deployment/hermes-fleet-driver -n ${NAMES
 
 ### 5. Build the Pre-Warmed Hermes Agent Sandbox Image
 
-Build and push [`hermes/actor/`](./hermes/actor/) (`NousResearch/hermes-agent` pinned at commit `5ffbea8`, [`warmup.py`](./hermes/actor/warmup.py), and [`sitecustomize.py`](./hermes/actor/sitecustomize.py)), pinning `HERMES_IMAGE` by digest so every restored gVisor sandbox matches the golden snapshot. Docker must be able to push to the repository first (`gcloud auth configure-docker <region>-docker.pkg.dev`):
+Build and push [`hermes/actor/`](./hermes/actor/) (`NousResearch/hermes-agent` pinned at commit `5ffbea8`, [`warmup.py`](./hermes/actor/warmup.py), and [`sitecustomize.py`](./hermes/actor/sitecustomize.py)), pinning `HERMES_IMAGE` by digest so every restored gVisor sandbox matches the golden snapshot. The example uses Artifact Registry, where Docker must be able to push first (`gcloud auth configure-docker <region>-docker.pkg.dev`); with another registry, set `HERMES_IMAGE` to the pushed image's digest reference (`<repository>@sha256:<digest>`):
 
 <!-- guide:deploy.substrate_image start -->
 <!-- llm-d-cicd:skip start -->
@@ -365,9 +323,9 @@ export HERMES_IMAGE="${HERMES_IMAGE_REPO}@$(gcloud artifacts docker images descr
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.substrate_image end -->
 
-### 6. Deploy the GKE Agent Substrate `WorkerPool` and `ActorTemplate`
+### 6. Deploy the Agent Substrate `WorkerPool` and `ActorTemplate`
 
-Provision the `18 × c4d-standard-16` node pool if not already present:
+Provision the dedicated sandbox nodes if they are not already present. On GKE:
 
 ```bash
 gcloud container node-pools create hermes-c4d-pool \
@@ -478,29 +436,17 @@ rm -f "${HERMES_EGRESS_POLICY}"
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.substrate_egress end -->
 
-In Gateway Mode, set `LLMD_HOST` to a DNS name for the gateway before creating the `ActorTemplate` and the policies; `EgressPolicy` hostnames do not accept IP addresses.
-
 ---
 
 ## Verification
 
 ### Resolve the `llm-d` Endpoint
 
-#### Standalone Mode
-
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
 export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
 ```
 <!-- guide:verify.endpoint.standalone end -->
-
-#### Gateway Mode
-
-<!-- guide:verify.endpoint.gateway start -->
-```bash
-export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
-```
-<!-- guide:verify.endpoint.gateway end -->
 
 ### Check Router Flow-Control Initialization
 
@@ -738,7 +684,7 @@ Remove the 1,000 Agent Substrate actors and their egress policies, `ActorTemplat
 <!-- guide:cleanup start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-# Remove GKE Agent Substrate actors, ActorTemplate, atespace, and WorkerPool if deployed.
+# Remove Agent Substrate actors, ActorTemplate, atespace, and WorkerPool if deployed.
 if kubectl ate get atespace ${ATESPACE} >/dev/null 2>&1; then
   seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
     | xargs -P 32 -I {} kubectl ate delete egress-policy {} -a ${ATESPACE} || true
@@ -781,4 +727,4 @@ kubectl delete namespace ${NAMESPACE} --ignore-not-found=true
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
 
-The `hermes-c4d-pool` node pool created in Step 6 is not removed by these commands; delete it with `gcloud container node-pools delete` if you no longer need it.
+The sandbox node pool created in Step 6 is not removed by these commands; delete it if you no longer need it (on GKE, `gcloud container node-pools delete hermes-c4d-pool`).

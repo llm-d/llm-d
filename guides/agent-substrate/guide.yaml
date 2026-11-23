@@ -10,7 +10,7 @@ env:
     NAMESPACE: llm-d-agent-substrate
 
     MODEL_NAME: {default: "Qwen/Qwen3-32B"}
-    INFRA_PROVIDER: {default: gke, values: [base, gke]}
+    INFRA_PROVIDER: {default: base, values: [base, gke]}
 
     # Router values combine X-Hermes-Session-Id session awareness,
     # approximate prefix-cache + in-flight token-load scoring, and 3-tier
@@ -18,7 +18,7 @@ env:
     ROUTER_VALUES: {default: "${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"}
     EXTRA_HELM_ARGS: {default: ""}
 
-    # GKE Agent Substrate fleet sizing (18 x c4d-standard-16 -> 60 workers/node = 1,080 workers for 1,000 agents).
+    # Agent Substrate fleet sizing (18 nodes x 60 workers = 1,080 workers for 1,000 agents).
     ATESPACE: {default: "agent-hermes"}
     HERMES_AGENTS: {default: "1000"}
     HERMES_WORKER_REPLICAS: {default: "1080"}
@@ -75,18 +75,6 @@ deploy:
             -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
             -f ${ROUTER_VALUES} \
             ${EXTRA_HELM_ARGS} \
-            -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
-
-  gateway:
-    - run: |
-        export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
-        helm upgrade --install ${GUIDE_NAME} \
-            ${ROUTER_GATEWAY_CHART} \
-            -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-            -f ${REPO_ROOT}/guides/recipes/router/features/httproute-flags.yaml \
-            -f ${ROUTER_VALUES} \
-            ${EXTRA_HELM_ARGS} \
-            --set provider.name=${PROVIDER_NAME} \
             -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
   modelserver:
@@ -209,8 +197,6 @@ verify:
   endpoint:
     standalone:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
-    gateway:
-      - run: export IP=$(kubectl get gateway llm-d-inference-gateway -n ${NAMESPACE} -o jsonpath='{.status.addresses[0].value}')
 
   tests:
     router_ready:
@@ -299,7 +285,7 @@ verify:
 cleanup:
   - skip_in: [ci]
     run: |
-      # Remove GKE Agent Substrate actors, ActorTemplate, atespace, and WorkerPool if deployed.
+      # Remove Agent Substrate actors, ActorTemplate, atespace, and WorkerPool if deployed.
       if kubectl ate get atespace ${ATESPACE} >/dev/null 2>&1; then
         seq -f "agent-%04g" 1 ${HERMES_AGENTS} \
           | xargs -P 32 -I {} kubectl ate delete egress-policy {} -a ${ATESPACE} || true
