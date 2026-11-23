@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  # Two replicas already take every S60 on an 8-GCU node. A rolling update
+  # would need four more cards for the surge pod.
+  strategy:
+    type: Recreate
+  # 30s + 10s * 360 startup checks. The default 600s deadline marks the
+  # Deployment failed while Qwen3-32B is still downloading.
+  progressDeadlineSeconds: 3900
+  template:
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: modelserver
+          imagePullPolicy: IfNotPresent
+          command: ["vllm", "serve"]
+          args:
+            - Qwen/Qwen3-32B
+            - --served-model-name=Qwen/Qwen3-32B
+            - --host=0.0.0.0
+            - --port=8000
+            - --dtype=float16
+            - --trust-remote-code
+            - --max-model-len=4096
+            - --tensor-parallel-size=4
+            - --gpu-memory-utilization=0.85
+            - --max-num-batched-tokens=2048
+            - --block-size=64
+            # TopsRider 3.8.107 does not capture CUDA graphs on S60.
+            - --enforce-eager
+            - --disable-access-log-for-endpoints=/health,/metrics,/v1/models
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+          resources:
+            requests:
+              cpu: "16"
+              memory: 96Gi
+            limits:
+              memory: 192Gi
+            claims:
+              - name: gcu
+          securityContext:
+            capabilities:
+              add: [IPC_LOCK]
+            seccompProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 360
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: modelserver
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+      resourceClaims:
+        - name: gcu
+          resourceClaimTemplateName: gcu-claim-template-decode
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
