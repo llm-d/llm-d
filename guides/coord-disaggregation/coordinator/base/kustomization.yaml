@@ -12,6 +12,6 @@ resources:
 components:
 - ../../../recipes/modelserver/components/images/coordinator/release
 
-# patch-pd-only.yaml is deliberately not listed here: it's applied with
-# `kubectl patch` after the deploy, not built into either overlay. See the PD-only
-# note in ../../README.md's Installation Instructions.
+# The PD-only pipeline is the ../pd-only and ../pd-only-gke overlays, which add
+# ../components/pd-only to this base and to ../gke. See the PD-only note in
+# ../../README.md's Installation Instructions.

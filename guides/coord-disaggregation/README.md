@@ -249,9 +249,12 @@ architectures tie.
 > pays off:
 >
 > * Step 1: drop `encode` from the rollout screener's `revisionGating.requiredRoles`
->   (`[prefill, decode]`) in
->   [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml), or in
->   the prefill and decode files for the 3-EPP topology (the encode release is not needed).
+>   (`[prefill, decode]`). For the single-EPP topology, add
+>   `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-pd-only.values.yaml` after
+>   the guide's values file in the `helm install`:
+>   [`router/coord-disaggregation-pd-only.values.yaml`](router/coord-disaggregation-pd-only.values.yaml)
+>   repeats the plugin config with only that list changed. For the 3-EPP topology, edit it
+>   in the prefill and decode files (the encode release is not needed).
 >   The screener only offers a revision that has a Ready pod of every required role, so
 >   with `encode` listed and no encode pods it drops every endpoint and the EPP answers
 >   `503` on each request. The `encode` scheduling profile itself needs no change: with no
@@ -266,17 +269,18 @@ architectures tie.
 >       -p '[{"op":"replace","path":"/spec/roles/0/spec/replicas","value":0}]' # roles/0 is encode
 >   ```
 >
-> * Step 3: after deploying the Coordinator (either overlay — this patch is
->   provider-independent), apply
->   [`coordinator/base/patch-pd-only.yaml`](coordinator/base/patch-pd-only.yaml) to drop
->   the `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
->   only `conditional-decode`, `prefill`, and `decode`), then restart the coordinator
->   Deployment:
+> * Step 3: after the provider `case`, before building the overlay, switch to its PD-only
+>   variant: `pd-only` instead of `base`, `pd-only-gke` instead of `gke`. Each adds
+>   [`coordinator/components/pd-only`](coordinator/components/pd-only/kustomization.yaml),
+>   which drops the `replace-media-urls`, `render`, and `encode` steps from
+>   `pipeline.steps` (keeping only `conditional-decode`, `prefill`, and `decode`). Cleanup
+>   rebuilds the same overlay, so it needs no change:
 >
 >   ```bash
->   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
->       --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/base/patch-pd-only.yaml)"
->   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
+>   case "${COORDINATOR_OVERLAY}" in
+>     gke) export COORDINATOR_OVERLAY=pd-only-gke ;;
+>     *)   export COORDINATOR_OVERLAY=pd-only ;;
+>   esac
 >   ```
 >
 > * Step 4: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.

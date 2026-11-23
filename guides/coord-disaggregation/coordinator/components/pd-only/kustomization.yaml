@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# The PD-only Coordinator pipeline (conditional-decode -> prefill -> decode), shared
+# by the pd-only and pd-only-gke overlays. See the PD-only note in
+# ../../../README.md's Installation Instructions.
+patches:
+  - path: patch-pd-only.yaml
