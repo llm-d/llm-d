@@ -10,7 +10,7 @@ Serving batch and offline inference workloads alongside real-time, interactive t
 
 `llm-d` addresses these challenges by offering two complementary paths for batch and asynchronous processing that integrate directly with the llm-d Router:
 
-1. **[Batch Gateway](./batch-gateway/README.md)**: An enterprise-grade, fully managed **OpenAI-compatible Batch API** for formal job submission, file storage, status tracking, and multi-tenant batch management.
+1. **[Batch Gateway](./batch-gateway/README.md)**: An **OpenAI-compatible Batch API** for job submission, file storage, status tracking, and tenant-scoped batch management.
 2. **[Asynchronous Processing](./asynchronous-processing/README.md)**: A lightweight, queue-based dispatch mechanism (using Redis Sorted Sets or GCP Pub/Sub) featuring **dynamic dispatch gating** based on live model server saturation metrics (KV cache pressure, queue depth).
 
 For the broader architectural context and design principles, see the [Batch Architecture documentation](../../docs/architecture/batch/README.md).
@@ -19,7 +19,7 @@ For the broader architectural context and design principles, see the [Batch Arch
 
 ## Guide Index
 
-- **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with pluggable metadata storage (PostgreSQL/Redis), file storage (S3/RWX PVC), and a batch processor that dispatches requests to the llm-d Router.
+- **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with PostgreSQL-backed job data, filesystem or S3 file storage, and a processor that dispatches requests to the llm-d Router. Redis or Valkey is only needed for optional async dispatch.
 - **[Asynchronous Processing Guide](./asynchronous-processing/README.md)**: Deploy the lightweight Async Processor to consume requests from a message queue (GCP Pub/Sub or a Redis Sorted Set) with metric-based dispatch gating.
   - **[Multi-Tenant Async Processing](./asynchronous-processing/multitenant/README.md)**: Advanced multi-tenant setup with team quotas, tier-priority dispatch, and saturation back-off across inference pools.
 
@@ -61,10 +61,10 @@ Batch Gateway and Async Processor can be deployed together. In a composite deplo
 | Dimension | Batch Gateway | Async Processor |
 | :--- | :--- | :--- |
 | **Primary Interface** | OpenAI-compatible REST API (`/v1/batches`, `/v1/files`) | Message Queue (Redis Sorted Set, GCP Pub/Sub) |
-| **Unit of Work** | Batch job containing up to 50,000+ requests in a JSONL file | Individual messages / streaming request queue |
-| **Flow Control** | Downstream rate-limiting and router integration | Dynamic dispatch gating (Prometheus saturation, KV-cache pressure, budget) |
-| **State & Storage** | Database (PostgreSQL/Redis) + Object/File Storage (S3 / RWX PVC) | Message broker (Redis / Pub/Sub) |
-| **Multi-Tenancy** | Tenant-scoped jobs, files, and header pass-through authentication | Worker pools, priority tiers, and per-team quota allocation |
+| **Unit of Work** | Batch job containing up to 50,000 JSONL request lines by default | Individual messages / streaming request queue |
+| **Flow Control** | Built-in AIMD concurrency; optional llm-d-async dispatch gates | Dynamic dispatch gating (Prometheus saturation, KV-cache pressure, budget) |
+| **State & Storage** | PostgreSQL + filesystem or S3; optional Redis/Valkey queue for async dispatch | Message broker (Redis / Pub/Sub) |
+| **Multi-Tenancy** | Tenant-scoped data; a trusted auth proxy supplies tenant identity | Worker pools, priority tiers, and per-team quota allocation |
 | **Client Interaction** | File upload &rarr; Job creation &rarr; Polling &rarr; Result download | Publish message to queue &rarr; Listen on result topic/queue |
 | **Deployment Complexity** | Moderate (API server, processor, GC, database, shared storage) | Low (Async processor daemon + message queue) |
 | **Typical Use Cases** | Offline evaluations, daily dataset scoring, multi-tenant batch service | Background task processing, microservice pipelines, slack capacity filling |

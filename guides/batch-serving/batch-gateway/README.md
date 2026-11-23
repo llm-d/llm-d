@@ -1,6 +1,6 @@
-# [Experimental] Batch Gateway
+# Batch Gateway
 
-[Batch Gateway](https://github.com/llm-d/llm-d-batch-gateway) provides an OpenAI-compatible Batch API for submitting, tracking, and managing large-scale batch inference jobs. It is designed to efficiently process batch workloads alongside interactive workloads on shared infrastructure.
+[Batch Gateway](https://github.com/llm-d/llm-d-batch-gateway) provides an OpenAI-compatible Batch API for submitting, tracking, and managing large-scale batch inference jobs. The Batch Processor sends requests to an inference gateway over HTTP by default. It can optionally dispatch through [llm-d-async](https://github.com/llm-d/llm-d-async) for queue-based processing.
 
 ## Overview
 
@@ -11,14 +11,14 @@
 - Your clients expect an **OpenAI-compatible Batch API** (`/v1/batches`, `/v1/files`) for job submission, tracking and management.
 - You need **multi-tenant isolation** — each tenant's jobs, files, and results are separated.
 
-For queue-based asynchronous inference of individual requests, see the complementary [Asynchronous Processing](../asynchronous-processing/README.md) path. For components, data flow, and the processing pipeline, see the [Batch Gateway Architecture](../../../docs/architecture/batch/batch-gateway.md).
+For queue-based dispatch of individual requests through llm-d-async, see the [Asynchronous Processing](../asynchronous-processing/README.md) guide. For components, data flow, and the processing pipeline, see the [Batch Gateway Architecture](../../../docs/architecture/batch/batch-gateway.md).
 
 ### Key Features
 
-- **Process large-scale batch jobs**: Process batch jobs with up to 50,000 (configurable) inference requests per job, with progress tracking and job management capabilities.
+- **Process large-scale batch jobs**: Accept up to 50,000 JSONL request lines per input file by default. Set `apiserver.config.fileAPI.maxLineCount` to change the limit.
 - **Provide an OpenAI-compatible Batch API**: Full schema parity with OpenAI's `/v1/batches` and `/v1/files` endpoints.
-- **Optimize resource utilization**: Enables batch and interactive workloads to coexist on shared infrastructure. Integrates with flow control mechanisms to adjust the batch dispatch rate based on downstream metrics.
-- **Multi-tenant isolation**: Per-tenant data isolation with pluggable authentication and authorization.
+- **Optimize resource utilization**: Built-in AIMD concurrency control adjusts dispatch to backend responses. For metrics-driven dispatch gates, use the optional llm-d-async integration.
+- **Multi-tenant isolation**: Jobs, files, and results are scoped to a tenant identified by a trusted request header.
 
 ### Components
 
@@ -28,26 +28,29 @@ For queue-based asynchronous inference of individual requests, see the complemen
 
 ### Storage Layer
 
-Batch Gateway uses pluggable storage backends. Each function is backed by a single plug-in, chosen at deployment time:
+PostgreSQL stores job and file metadata, the job priority queue, events, and status. Select file storage separately; async inference queues are used only when `dispatchMode=async`:
 
-| Function | Available plug-ins |
+| Function | Available backends |
 | -------- | ------------------ |
-| Jobs and files metadata | PostgreSQL, Redis/Valkey (development/test only) |
-| Priority queue, events, status updates | Redis/Valkey |
-| File storage (input/output) | S3, Filesystem |
+| Job and file metadata, job priority queue, events, status | PostgreSQL |
+| Input and output files | Shared filesystem (RWX PVC), S3-compatible storage |
+| Async inference request/result queue (`dispatchMode=async`) | Redis/Valkey sorted sets |
 
 ## Prerequisites
 
 Before installing Batch Gateway, ensure you have:
 
-1. **Kubernetes cluster**: A running Kubernetes cluster (v1.25+).
-   - For local development, you can use `Kind` or `Minikube`.
-   - For production, `OpenShift`, `GKE` or `AKS` are supported.
-2. **Helm**: 3.0+
-3. **llm-d Inference Stack**: Batch Gateway requires an existing [optimized baseline](../../optimized-baseline/README.md) stack to dispatch requests to.
-4. **PostgreSQL**: 12+ for metadata storage. Redis/Valkey are available as an alternative for development/test only.
-5. **Redis/Valkey**: Redis 6+ or Valkey 8+ for priority queue, events, and status updates.
-6. **S3 or Filesystem**: For batch input and output file storage.
+1. **Kubernetes and Helm**: A cluster that meets the requirements of the llm-d inference stack you deploy, and Helm 3.0 or later.
+2. **llm-d Inference Stack**: An existing [optimized baseline](../../optimized-baseline/README.md) or another llm-d Router deployment.
+3. **PostgreSQL 12 or later**: Required for job and file metadata, the job priority queue, events, and status. The Batch Gateway chart does not install PostgreSQL.
+4. **File storage**: Use a shared `ReadWriteMany` PVC with the filesystem backend, or configure S3-compatible storage.
+5. **Optional async queue**: Redis 6 or Valkey 8 is needed only when using `dispatchMode=async`.
+
+### Tenant identity and authentication
+
+`X-MaaS-Username` scopes requests to a tenant. Without it, Batch Gateway v1.0.0 uses the `default` tenant. The API server does not authenticate callers; production deployments need a trusted authentication proxy to set the tenant header. See the component's [security guide](https://github.com/llm-d/llm-d-batch-gateway/blob/v1.0.0/docs/guides/security.md).
+
+The direct port-forward examples below use the default tenant for local, trusted-cluster use. For a production deployment with authentication, authorization, and TLS, follow the component's [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/v1.0.0/docs/guides/deploy-k8s.md).
 
 ### Get the guide
 
@@ -70,15 +73,16 @@ kubectl create namespace ${NAMESPACE}
 
 ### Step 2: Create the Secrets
 
-Batch Gateway requires a Kubernetes Secret with database and storage credentials:
+The chart expects an existing PostgreSQL database and does not install one. Replace the example URL with the address and credentials for your PostgreSQL service:
 
 ```bash
 kubectl create secret generic batch-gateway-secrets -n ${NAMESPACE} \
-  --from-literal=redis-url="redis://redis-master.redis.svc.cluster.local:6379/0" \
   --from-literal=postgresql-url="postgresql://user:password@postgresql.postgresql.svc.cluster.local:5432/batchgateway"
 ```
 
-> **Note**: `s3-secret-access-key` is only required when using the S3 file storage backend (`global.fileClient.type=s3`). This guide uses the filesystem backend, so it is omitted. Add `--from-literal=s3-secret-access-key="<your-s3-secret-key>"` if you deploy with S3.
+For async dispatch, also add a `redis-url` key to this Secret. The default synchronous dispatch mode does not need Redis.
+
+This guide uses the filesystem backend, so it does not need S3 credentials. For S3 storage, set `global.fileClient.type=s3`, provide the bucket, region, and access key ID, and add `s3-secret-access-key` to the Secret.
 
 ### Step 3: Configure the llm-d Router URL
 
@@ -94,7 +98,7 @@ export INFERENCE_GW_URL="http://optimized-baseline-epp.llm-d-optimized-baseline.
 
 ### Step 4: Create the File Storage PVC
 
-This guide uses the filesystem storage backend (`global.fileClient.type` defaults to `fs`). Both the API server and the processor mount the same volume, so it must support `ReadWriteMany` (RWX). Create the PVC referenced by the deploy step:
+This guide uses the filesystem storage backend (`global.fileClient.type` defaults to `fs`). The API server, processor, and garbage collector share the same PVC, so it must support `ReadWriteMany` (RWX). Create the PVC referenced by the deploy step:
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f - <<EOF
@@ -111,7 +115,7 @@ spec:
 EOF
 ```
 
-> **Note**: `ReadWriteMany` requires an RWX-capable storage class (e.g. NFS, CephFS). If your cluster only provides `ReadWriteOnce`, use the S3 file storage backend instead (`global.fileClient.type=s3`).
+> **Note**: `ReadWriteMany` requires an RWX-capable storage class (e.g. NFS, CephFS). If your cluster only provides `ReadWriteOnce`, use S3-compatible object storage instead.
 
 ### Step 5: Deploy
 
@@ -119,17 +123,7 @@ EOF
 
 ```bash
 helm install batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
-  -n ${NAMESPACE} \
-  --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
-  --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
-  --set global.fileClient.fs.pvcName="batch-gateway-pvc"
-```
-
-**From Source** (a checkout of [llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway)):
-
-```bash
-git clone https://github.com/llm-d/llm-d-batch-gateway.git
-helm install batch-gateway llm-d-batch-gateway/charts/batch-gateway \
+  --version 1.0.0 \
   -n ${NAMESPACE} \
   --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
   --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
@@ -140,7 +134,7 @@ helm install batch-gateway llm-d-batch-gateway/charts/batch-gateway \
 
 ## Detailed Deployment Guide
 
-For a production deployment with authentication, authorization, and TLS on Kubernetes, see the [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/deploy-k8s.md) (Istio + Kuadrant + cert-manager).
+For a production deployment with authentication, authorization, and TLS on Kubernetes, see the [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/v1.0.0/docs/guides/deploy-k8s.md) (Istio + Kuadrant + cert-manager).
 
 ## Verification
 
@@ -202,6 +196,8 @@ curl -X POST http://localhost:8000/v1/batches \
 curl http://localhost:8000/v1/batches/<batch-id> | jq '{status, request_counts}'
 ```
 
+Batch status can be `validating`, `in_progress`, `finalizing`, `completed`, `failed`, `expired`, or `cancelled`.
+
 ### Download Results
 
 Once the job status is `completed`, retrieve the output file:
@@ -224,6 +220,7 @@ Optional. Requires Prometheus and Grafana — see [Observability Setup](../../..
    ```bash
    helm upgrade batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
      -n ${NAMESPACE} --reuse-values \
+     --version 1.0.0 \
      --set processor.podMonitor.enabled=true \
      --set gc.podMonitor.enabled=true \
      --set apiserver.serviceMonitor.enabled=true
