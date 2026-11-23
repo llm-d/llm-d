@@ -110,7 +110,7 @@ flowchart TD
 - **`docker`** and **`gcloud`** to build the Hermes actor image and push it to Artifact Registry ([Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image)).
 - **Accelerator capacity for `llm-d` model servers**:
   - **NVIDIA GPU (default below)**: `2+` replicas × `2× H100 / A100 80 GB` GPUs (`TP=2`) with `>= 320 GiB` host RAM per pod for native CPU KV offloading, **or**
-  - **Google Cloud TPU v7x (Ironwood)**: `2+` replicas × `tpu7x` (`2x2x1`, `TP=8`) with `TPUOffloadConnector` Host-DRAM KV offloading (shown in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading)).
+  - **Google Cloud TPU v7x (Ironwood)**: `3` replicas, each on one `tpu7x` `2x2x1` slice (`4` chips, `850Gi` host RAM per pod), with `TPURaidenOffloadingConnector` Host-DRAM KV offloading (see [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading)).
 - **For the full 1,000-sandbox GKE Agent Substrate deployment** ([Steps 5–7](#5-build-the-pre-warmed-hermes-agent-sandbox-image)):
   - A GKE cluster (`1.37+`) with **Agent Substrate `v1.0.0` or later** installed, for example with [`substrate-gke`](https://github.com/ai-on-gke/substrate-gke) (`ate-system` control plane, `atenet-router`, and the gVisor sandbox class), and the `kubectl-ate` plugin built from the same release.
   - The fleet driver's identity, `spiffe://cluster.local/ns/llm-d-agent-substrate/sa/hermes-fleet-driver`, on the Agent Substrate router's ingress allowlist (`--ingress-allowed-spiffe-ids` / `ATE_INGRESS_ALLOWED_SPIFFE_IDS`). The router serves only TLS and admits only listed clients. Each `ate-setup` deploy replaces the list, so include the IDs already on it; see [Reaching actors through the ingress router](https://github.com/ai-on-gke/substrate-gke#reaching-actors-through-the-ingress-router).
@@ -224,6 +224,11 @@ kubectl get secret hermes-api-key --namespace "${NAMESPACE}" >/dev/null 2>&1 \
 
 [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) layers `agent-identity` (`x-hermes-session-id`), `session-affinity-scorer`, `approx-prefix-cache-producer`, `inflight-load-producer`, `prefix-cache-scorer`, `token-load-scorer`, and 3-band `flowControl` onto [`recipes/router/base.values.yaml`](../recipes/router/base.values.yaml).
 
+Deploy the router in **one** of two modes ([how they differ](../../docs/architecture/router/proxy.md)):
+
+- **Standalone Mode** is the default and fits agents that run in the same cluster as `llm-d`: the sandboxes reach the router's Envoy sidecar through a `ClusterIP` Service, and no Gateway API infrastructure is needed.
+- **Gateway Mode** puts a Kubernetes Gateway in front of the router. Choose it when the fleet needs a managed L7 front door such as the [GKE Inference Gateway](../../docs/infrastructure/gateway/gke.md), when one Gateway is shared with other routes, or when agents and clients call from outside the cluster.
+
 #### Standalone Mode (In-Cluster EPP + Envoy Sidecar, Recommended for Same-Cluster Agent Substrate)
 
 <!-- guide:deploy.standalone start -->
@@ -239,6 +244,8 @@ helm upgrade --install ${GUIDE_NAME} \
 
 #### Gateway Mode (Kubernetes Gateway API Front Door)
 
+First deploy a Kubernetes Gateway named `llm-d-inference-gateway` in `${NAMESPACE}` by following one of the [gateway guides](../../docs/infrastructure/gateway/README.md) (for GKE, [GKE Gateway](../../docs/infrastructure/gateway/gke.md)). Then install the router with an `HTTPRoute` bound to that Gateway:
+
 <!-- guide:deploy.gateway start -->
 ```bash
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
@@ -253,9 +260,17 @@ helm upgrade --install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.gateway end -->
 
+A new route can take several minutes to be programmed; until then the Gateway answers `404`, so wait for a successful [smoke check](#smoke-check-llm-d-session-and-priority-headers) before driving the fleet.
+
+Agent Substrate egress policies match host names, not IP addresses. Before [Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver), point a DNS name at the Gateway's address (a DNS record, or inside the cluster a selector-less `Service` whose endpoint is that address) and `export LLMD_HOST=<that name>`: Steps 4, 6 and 7 write `LLMD_HOST` into the driver configuration, the `ActorTemplate` and every agent's `EgressPolicy`.
+
 ### 2. Deploy the Model Server with Host-DRAM KV Offloading
 
-Hermes Agent requires a model context window of at least `64k` tokens (`--max-model-len=65536`). Render the [Tiered Prefix Cache](../tiered-prefix-cache/README.md) native CPU KV-offloading overlay, relabel it for `agent-substrate`, and set a `64k` context window:
+Hermes Agent requires a model context window of at least `64k` tokens. Deploy **one** of the two accelerator options below. Both reuse a [Tiered Prefix Cache](../tiered-prefix-cache/README.md) overlay that keeps evicted KV blocks in Host DRAM, relabeled for `agent-substrate`.
+
+#### NVIDIA GPU (Default)
+
+Render the native CPU KV-offloading overlay (`2 × TP=2` `Qwen/Qwen3-32B`) and set a `64k` context window (`--max-model-len=65536`):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -269,10 +284,9 @@ kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/n
 ```
 <!-- guide:deploy.modelserver end -->
 
-<details>
-<summary><b>Alternative: Cloud TPU v7x (Ironwood) with <code>TPUOffloadConnector</code></b></summary>
+#### Google Cloud TPU v7x (Ironwood)
 
-To deploy on GKE Cloud TPU v7x (`TPUOffloadConnector` streaming evicted KV blocks between HBM and Host DRAM), render the `tpu/v7` tiered-prefix-cache overlay instead. That overlay serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override; set `MODEL_NAME` to match before deploying the driver and the `ActorTemplate`:
+On GKE Cloud TPU v7x, render the `tpu/v7` overlay instead (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-gke-agent-substrate-workerpool-and-actortemplate)):
 
 ```bash
 export MODEL_NAME=Qwen/Qwen3.5-397B-A17B-FP8
@@ -281,7 +295,9 @@ kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vll
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 
-</details>
+These engines cache in `4,352`-token blocks (`--block-size=4352`), while [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) leaves `approx-prefix-cache-producer` at its defaults. To match them, set `blockSizeTokens: 4352` and `maxPrefixTokensToMatch: 262144` on that plugin, as [`tiered-prefix-cache/router/single-host/tpu-v7.values.yaml`](../tiered-prefix-cache/router/single-host/tpu-v7.values.yaml) does.
+
+#### Wait for the Router and Model Servers
 
 Wait for both the EPP deployment and the model server replicas to report `Available`:
 
@@ -744,6 +760,11 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE} --ignore-not-found=true
 
 kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/ \
+  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+
+# Remove the Cloud TPU v7x model server if that option was deployed (no-op otherwise).
+kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
   | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
 

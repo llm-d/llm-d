@@ -319,6 +319,11 @@ cleanup:
       kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/ \
         | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
         | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+  - run: |
+      # Remove the Cloud TPU v7x model server if that option was deployed (no-op otherwise).
+      kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
+        | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
+        | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
   - when: {MONITORING: ["true"]}
     run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
   - run: |
