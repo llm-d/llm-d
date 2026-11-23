@@ -332,6 +332,28 @@ def test_cli_refuses_invalid_yaml(tmp_path, capsys):
     assert any("missing required key 'deploy'" in str(f) for f in findings)
 
 
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        # Resolves, but to a string that render cannot fill.
+        ("name", "don't know how to render node of type str"),
+        # Does not resolve at all; same message as before render was added.
+        ("nope", "path 'nope' not found in YAML"),
+    ],
+)
+def test_check_md_reports_markers_that_render_rejects(path, expected):
+    md = f"# Probe\n\n<!-- guide:{path} start -->\n```bash\necho x\n```\n<!-- guide:{path} end -->\n"
+    g = guide.Guide.from_text(yaml_text=yaml.safe_dump(_minimal()), md_text=md)
+    findings = list(g.check())
+    assert len(findings) == 1, findings
+    (f,) = findings
+    assert f.source == "md" and f.line == 3
+    assert f.message == f"guide:{path} — {expected}"
+    # check now agrees with render about this marker.
+    with pytest.raises(guide.GuideError):
+        guide.render_md(g.data, md)
+
+
 def test_cli_emits_to_stdout(tmp_path, capsys):
     ok = tmp_path / "guide.yaml"
     ok.write_text(

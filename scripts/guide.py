@@ -1090,9 +1090,10 @@ def check_md(text: str, guide: Any = None) -> Findings:
 
     Without ``guide``, checks everything intrinsic to the markdown: marker
     pairing and body well-formedness. Pass ``guide`` to additionally resolve
-    every ``guide:<path>`` against the YAML — the one check that cannot be made
-    from the markdown alone. Callers that skip it should say so; see
-    ``resolves_paths``.
+    and render every ``guide:<path>`` against the YAML — the one check that
+    cannot be made from the markdown alone. Rendering catches a path that
+    resolves to a node ``render`` cannot fill (e.g. ``guide:name``). Callers
+    that skip it should say so; see ``resolves_paths``.
     """
     f = check_markers(text)
     if not f.ok():
@@ -1104,9 +1105,10 @@ def check_md(text: str, guide: Any = None) -> Findings:
         path = m.group("path")
         line = _line_of(text, m.start())
         if guide is not None:
-            found, _value, msg = resolve_path(guide, path)
-            if not found:
-                f.error(f"guide:{path} — {msg}", source="md", line=line)
+            try:
+                render_path(guide, path)
+            except GuideError as exc:
+                f.error(f"guide:{path} — {exc}", source="md", line=line)
         if path in MARKDOWN_PATHS:
             continue
         if not _is_valid_body(m.group("body")):
