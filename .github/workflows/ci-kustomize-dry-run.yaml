@@ -152,6 +152,9 @@ jobs:
             echo "precise-prefix-cache-routing: router (${name})"
             echo "========================================"
             echo "--- helm template ---"
+            # engine_values holds a "-f <path>" pair, or nothing for the default
+            # render, so it has to split into separate arguments.
+            # shellcheck disable=SC2086
             if ! helm template precise-prefix-cache-routing \
               "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
               -f guides/recipes/router/base.values.yaml \

@@ -7,6 +7,9 @@
 # Uses MXFP8 quantization for attention/expert projections, nvfp4_ds_mla KV cache, ReplaySSM
 # (--use-replayssm), DSpark EAGLE3 speculative decoding (5 tokens), and MultiConnector
 # (NixlConnector kv_consumer + MooncakeStoreConnector kv_consumer).
+# The vLLM arguments pass JSON objects as single values, so the lines carrying
+# them cannot be wrapped without changing the command.
+# yamllint disable rule:line-length
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
