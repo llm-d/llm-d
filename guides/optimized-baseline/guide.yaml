@@ -98,7 +98,7 @@ support:
       engines: {vllm: community}
     enflame:
       label: Enflame GCU
-      notes: "S60 · 2 replicas × TP=4 (8 GCUs) · DRA · TopsRider 3.8.107 · float16, eager"
+      notes: "S60 · 2 replicas × TP=4 (8 GCUs, one replica per 4 GCUs)"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}

@@ -51,7 +51,7 @@ This guide includes configurations for the following accelerator and model serve
 | Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
 | MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | — | 2 replicas × TP=8 (16 GPUs) |
 | Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
-| Enflame GCU | `enflame` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | S60 · 2 replicas × TP=4 (8 GCUs) · DRA · TopsRider 3.8.107 · float16, eager |
+| Enflame GCU | `enflame` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | S60 · 2 replicas × TP=4 (8 GCUs, one replica per 4 GCUs) |
 | Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -70,10 +70,10 @@ The MThreads **SGLang** overlay colocates prefill and decode for
 `DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
 the [MThreads SGLang overlay](./modelserver/mthreads/sglang/).
 
-The Enflame overlay is two replicas of `Qwen/Qwen3-32B` at tensor parallelism 4,
-one replica per four Enflame S60 GCUs, so an 8-GCU node holds the whole
-deployment. Cards are claimed through DRA (`gcu.gcu-dra.enflame.com`). It is recommended to use with HAMi-DRA. Set `ACCELERATOR_TYPE=enflame`, `MODEL_SERVER=vllm`, and
-`MODEL=Qwen/Qwen3-32B`. The image is TopsRider 3.8.107 (`vllm` 0.20.2) and the
+The Enflame overlay serves `Qwen/Qwen3-32B` with vLLM. Cards are claimed through
+DRA (`gcu.gcu-dra.enflame.com`). It is recommended to use with HAMi-DRA. Set
+`ACCELERATOR_TYPE=enflame`, `MODEL_SERVER=vllm`, and `MODEL=Qwen/Qwen3-32B`. The
+image is TopsRider 3.8.107 (`vllm` 0.20.2), running float16 in eager mode, and the
 host `enflame` driver must be the matching 1.9.2401 build.
 
 ## Prerequisites
