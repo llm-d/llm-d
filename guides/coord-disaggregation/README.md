@@ -582,6 +582,16 @@ instead of through a cache.
   kubectl apply -n ${NAMESPACE} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring/gmp-podmonitoring.yaml
   ```
 
+* To scrape the vLLM model servers' metrics (`vllm:*`), apply one `PodMonitor` per role
+  (encode, prefill, decode), built from
+  [`modelserver/monitoring`](modelserver/monitoring/kustomization.yaml). They read Prometheus
+  Operator resources, so they apply to the OSS stack and OpenShift; this guide does not ship
+  Managed Prometheus `PodMonitoring` resources for the model servers.
+
+  ```bash
+  kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/monitoring
+  ```
+
 ## Verification
 
 ### 1. Get the IP of the Entrypoint
@@ -929,6 +939,7 @@ kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ |
 
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/${COORDINATOR_OVERLAY}/ | envsubst | kubectl delete -n ${NAMESPACE} --ignore-not-found -f -
 kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring
+kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/monitoring
 kubectl delete -n ${NAMESPACE} --ignore-not-found -f ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/monitoring/gmp-podmonitoring.yaml # GKE Managed Prometheus only
 
 kubectl delete -n ${NAMESPACE} --ignore-not-found -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/
