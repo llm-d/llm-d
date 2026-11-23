@@ -55,7 +55,7 @@ This guide includes configurations for the following accelerator and model serve
 
 - For `VARIANT=fs`, a storage system that provides ReadWriteMany PVCs (see [Filesystem tier](#filesystem-tier)). For `HOST_TYPE=multi-host` on TPU v7, the [LeaderWorkerSet (LWS) controller](../../docs/infrastructure/model-server-orchestration.md).
 
-- For Intel XPU with `CONNECTOR=lmcache-connector`, use an image with LMCache 0.5.7.post1; see [Intel XPU LMCache MP](#intel-xpu-lmcache-mp).
+- For Intel XPU with `CONNECTOR=lmcache-connector`, use an image with [LMCache 0.5.8](https://github.com/LMCache/LMCache/releases/tag/v0.5.8) (see [Intel XPU LMCache MP](#intel-xpu-lmcache-mp)).
 
 - (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 

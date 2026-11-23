@@ -28,7 +28,7 @@ ENV LD_LIBRARY_PATH=/opt/intel/oneapi/umf/latest/lib:${LD_LIBRARY_PATH}
 
 ARG MAX_JOBS=8
 RUN source /opt/intel/oneapi/setvars.sh --force && \
-    git clone --depth 1 https://github.com/LMCache/LMCache.git -b v0.5.7.post1 && \
+    git clone --depth 1 https://github.com/LMCache/LMCache.git -b v0.5.8 && \
     cd LMCache && pip install -r requirements/build.txt && \
     BUILD_WITH_SYCL=1 uv pip install --no-build-isolation -e .
 ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
