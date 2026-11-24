@@ -198,7 +198,7 @@ jobs:
         # Pinned by SHA: this is a third-party action in a job that holds
         # SLACK_BOT_TOKEN. Dependabot already tracks github-actions and will
         # propose bumps.
-        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d  # v4.0.0
+        uses: slackapi/slack-github-action@0bc3581177d9a0f8d555e07689384b376528e8fa  # v4.1.0
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
