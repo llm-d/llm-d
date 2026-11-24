@@ -203,6 +203,7 @@ area/agentic:
   - changed-files:
       - any-glob-to-any-file:
           - "guides/agentic-api/**"
+          - "guides/agent-substrate/**"
           - "guides/turn-priority-fairness/**"
 
 # Multimodal and Omni model serving guides and topologies
