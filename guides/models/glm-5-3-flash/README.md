@@ -14,7 +14,7 @@ where a session returns to a long prefix after every tool call. The configuratio
 - **Hybrid-model support end to end.** GLM-5.3-Flash has 34 KDA (linear attention) layers and 11
   DSA layers (MLA with a sparse indexer and a short tail ring), MXFP4 (Quark) experts and a bf16
   KV cache. Prefix caching, the CPU tier and the MoRI-IO transfer all carry the MLA and indexer
-  KV, the KDA state and the DSA tail on vLLM v0.34.0.
+  KV, the KDA state and the DSA tail.
 
 The guide composes the [P/D disaggregation](../../pd-disaggregation/README.md) and
 [tiered prefix cache](../../tiered-prefix-cache/README.md) foundations. These manifests were
@@ -31,15 +31,16 @@ needs your cluster's NIC attachments (see [Prerequisites](#prerequisites)).
 | Model | [amd/GLM-5.3-Flash-Quark-MXFP4](https://huggingface.co/amd/GLM-5.3-Flash-Quark-MXFP4) (MXFP4 experts, bf16 attention and KV; 34 KDA + 11 DSA layers) |
 | Accelerator | AMD Instinct MI355X (gfx950), 2 nodes × 8 GPUs |
 | Serving topology | P/D disaggregated: 1 prefill + 1 decode, each TP=8 with expert parallelism on one node. The TP must match on both roles so MoRI-IO can split the KDA state |
-| Image | `vllm/vllm-openai-rocm:v0.34.0`, pinned by digest: the last release that loads the Quark MXFP4 checkpoint. vLLM main fails since [vllm#66118](https://github.com/vllm-project/vllm/pull/66118) (fix: [vllm#68197](https://github.com/vllm-project/vllm/pull/68197)) |
+| Image | `vllm/vllm-openai-rocm:nightly-eff4de9be3c901c6ad12cb651de64e4b10ced219`, pinned by digest: a ROCm nightly of vLLM main that loads the Quark MXFP4 checkpoint and carries [vllm#65685](https://github.com/vllm-project/vllm/pull/65685) (one MoRI-IO memory region per GPU). No release carries both yet |
+| Text only | `--language-model-only` on both roles: the guide serves text. Recent vLLM builds the multimodal processor on a P/D KV consumer unless this is set (`--limit-mm-per-prompt` with zero limits is not enough), and for this model that processor needs the Rust frontend |
 | KV transfer | `MoRIIOConnector` in READ mode (`read_mode: "true"`): prefill is the producer, decode pulls the KV. WRITE mode rejects this model's DSA tail ring, so the routing sidecar runs without `--moriio-write-mode` (serial prefill-then-decode) and with `--moriio-tp-size=8`. Both roles set `VLLM_SSM_CONV_STATE_LAYOUT=DS`: MoRI-IO moves the KDA conv state only in the dim-first layout |
 | Prefix caching | `--enable-prefix-caching`: vLLM keeps the KDA state in `align` mode and raises the KV block to 640 tokens at TP=8, so prefixes are reused and offloaded in 640-token blocks |
-| HBM for KV | `--kv-cache-memory-bytes` = 30 GB per GPU (`KV_CACHE_MEMORY_BYTES`), about 2.5M tokens per engine. Kept explicit because Pollara AI NICs cannot register more than 2 GB of contiguous memory; a smaller HBM tier also makes the CPU tier useful at lower load |
-| KV cache offload | Prefill `MultiConnector` = [`OffloadingConnector` (`cpu_bytes_to_use` = 512 GiB per engine), `MoRIIOConnector` producer]. Offloads all KV groups, including the KDA state. On/off with the `offloading-cpu` component; see [CPU KV Offloading](#cpu-kv-offloading) |
-| Context and batch | `--max-model-len 262144`, `--max-num-seqs 64`: agentic coding sessions reach 100K-250K tokens. The model supports 1M positions; AMD's model card documents 64K ([Known Limitations](#known-limitations)) |
-| Kernels | `--attention-backend ROCM_AITER_MLA_SPARSE`, `--sparse-indexer-topk-backend aiter`, `VLLM_ROCM_USE_AITER=1`, `VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS=1`, `VLLM_ROCM_USE_AITER_TRITON_SPARSE_MLA=1`, `--tokenizer-mode glm5_next`: the ROCm path of the vLLM GLM-5.3-Flash recipe, which uses the AITER top-k kernel on MI355X for traffic of 64K tokens and more |
+| HBM for KV | `--kv-cache-memory-bytes` = 125 GB per GPU (`KV_CACHE_MEMORY_BYTES`), about 10.4M tokens per engine (11.7 KB per token per GPU; TP=8 keeps a full MLA copy on every GPU). Kept explicit and at this size because amdgpu counts the VRAM that MoRI-IO registers with the AI NIC twice: 2 x KV plus about 28 GiB must fit in the 288 GiB of a GPU, so the default `--gpu-memory-utilization` runs out of memory at the first transfer ([Known Limitations](#known-limitations)) |
+| KV cache offload | Prefill `MultiConnector` = [`OffloadingConnector` (`cpu_bytes_to_use` = 1.2 TB per engine, about 12.9M tokens, 1.24x the HBM KV), `MoRIIOConnector` producer]. Offloads all KV groups, including the KDA state. On/off with the `offloading-cpu` component; see [CPU KV Offloading](#cpu-kv-offloading) |
+| Context and batch | `--max-model-len 1048576`, `--max-num-seqs 64`: recorded agentic coding sessions peak at 225K tokens (median) and 693K (p90). A 956K-token prompt answers correctly cold and after restore from the CPU tier. AMD's model card documents 64K ([Known Limitations](#known-limitations)) |
+| Kernels | `--attention-backend ROCM_AITER_MLA_SPARSE`, `--sparse-indexer-topk-backend aiter`, `VLLM_ROCM_USE_AITER=1`, `VLLM_ROCM_USE_AITER_TRITON_SPARSE_MLA=1`, `--tokenizer-mode glm5_next`: the ROCm path of the vLLM GLM-5.3-Flash recipe, which uses the AITER top-k kernel on MI355X for traffic of 64K tokens and more |
 | Parsers | `--tool-call-parser glm47`, `--reasoning-parser glm47`, `--enable-auto-tool-choice` |
-| Router | P/D plugin chain; approximate prefix index on 640-token blocks sized for the GPU + CPU tiers (`lruCapacityPerServer: 12600`), in [`router/glm-5-3-flash.values.yaml`](router/glm-5-3-flash.values.yaml) |
+| Router | P/D plugin chain; approximate prefix index on 640-token blocks sized for the GPU + CPU tiers (`lruCapacityPerServer: 36300`, `maxPrefixTokensToMatch: 1048576`), in [`router/glm-5-3-flash.values.yaml`](router/glm-5-3-flash.values.yaml) |
 
 ## Supported Accelerators and Model Servers
 
@@ -48,7 +49,7 @@ This guide includes configurations for the following accelerator and model serve
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | Notes |
 | --- | --- | --- | --- | --- |
-| AMD Instinct MI355X | `amd` | `amd/GLM-5.3-Flash-Quark-MXFP4` | 🟡 community | 2 nodes / 16 GPUs: 1P (TP=8 + EP) + 1D (TP=8 + EP) · MoRI-IO KV transfer (READ mode) over RDMA · native CPU KV offloading on prefill (512 GiB per engine) · vLLM v0.34.0 · `INFRA_PROVIDER`: `base`, `amd-ci` |
+| AMD Instinct MI355X | `amd` | `amd/GLM-5.3-Flash-Quark-MXFP4` | 🟡 community | 2 nodes / 16 GPUs: 1P (TP=8 + EP) + 1D (TP=8 + EP) · MoRI-IO KV transfer (READ mode) over RDMA · 125 GB KV per GPU, 1M context · native CPU KV offloading on prefill (1.2 TB per engine) · vLLM ROCm nightly (main eff4de9be) · `INFRA_PROVIDER`: `base`, `amd-ci` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -62,9 +63,12 @@ This guide includes configurations for the following accelerator and model serve
   overlay is a worked example for AMD Pollara AI NICs (`amd-host-device-nad` Multus attachments
   `net1`..`net8`, `amd.com/vnic: 8`, MoRI fabric settings) in
   [`components/amd-ci`](modelserver/amd/vllm/components/amd-ci/kustomization.yaml).
-- Host memory: the prefill pod requests 896 GiB (384 GiB for the engine plus the 512 GiB pinned CPU
-  KV pool), the decode pod 384 GiB. The amdgpu driver pins at most its TTM page limit, half of host
-  RAM by default (`/sys/module/ttm/parameters/pages_limit`).
+- Host memory: the prefill pod requests 1600 GiB (384 GiB for the engine plus the 1.2 TB pinned CPU
+  KV pool, about 1.4 TiB of pod memory in practice), the decode pod 384 GiB. The amdgpu driver pins
+  at most its TTM page limit, half of host RAM by default (`/sys/module/ttm/parameters/pages_limit`),
+  so the prefill node needs about 3 TiB of RAM at the default pool size. On smaller hosts shrink the
+  pool and `KV_CACHE_MEMORY_BYTES` together, keeping the pool larger than the HBM KV
+  (see [CPU KV Offloading](#cpu-kv-offloading)).
 - [LeaderWorkerSet](https://lws.sigs.k8s.io/) with the `DisaggregatedSet` controller (installed below).
 - `INFRA_PROVIDER=amd-ci` only: a ReadWriteMany PVC `glm53-flash-mxfp4-model-pvc` in the target
   namespace that holds the checkpoint in Hugging Face cache layout
@@ -208,9 +212,9 @@ kubectl apply -n ${NAMESPACE} \
 ```
 <!-- guide:deploy.modelserver end -->
 
-The engines take about 13 minutes to start on a cold node: the weights load in about 90 s from a
-local cache, the rest is AITER kernel compilation. The first request also compiles kernels for its
-shape.
+The engines take 12 to 24 minutes to start on a cold node: the weights load in about 90 s from a
+local cache, pinning the 1.2 TB pool takes about a minute, the rest is AITER kernel compilation. The
+first request also compiles kernels for its shape.
 
 (Optional) Deploy the monitoring resources for the model servers:
 
@@ -306,7 +310,7 @@ tokens pulled from prefill over MoRI-IO. On the prefill pod, `vllm:kv_offload_st
 grows as computed blocks are written to the CPU tier, and `vllm:prefix_cache_hits_total` counts the
 repeats served from HBM. `vllm:kv_offload_load_bytes_total` and
 `vllm:prompt_tokens_cached_by_source_total{source="host"}` only grow once a prefix has been evicted
-from HBM and comes back, which takes more traffic than this test (about 2.5M tokens of distinct
+from HBM and comes back, which takes more traffic than this test (about 10.4M tokens of distinct
 prompts at the default HBM size).
 
 ## CPU KV Offloading
@@ -318,42 +322,51 @@ those blocks from CPU instead of recomputing them, then decode pulls the full KV
 usual. Decode does not offload.
 
 The CPU tier only helps when it holds more than HBM does, because write-through makes the pool
-first duplicate HBM. The defaults give about 2.5M tokens of HBM KV (30 GB per GPU) and about 5.6M
-tokens of CPU KV (512 GiB per engine at about 98 KB per token: MLA latent, indexer keys and KDA state).
+first duplicate HBM. The defaults give about 10.4M tokens of HBM KV (125 GB per GPU) and about 12.9M
+tokens of CPU KV (1.2 TB per engine at 93.4 KB per token: MLA latent, indexer keys and KDA state,
+replicated on the 8 TP ranks). A pool smaller than the HBM KV stores everything and serves nothing.
 
 | Knob | Where | Default |
 | --- | --- | --- |
 | On/off | [`components/offloading-cpu`](modelserver/amd/vllm/components/offloading-cpu/kustomization.yaml) sets `OFFLOADING_MODE=cpu` on prefill; leave the component out for MoRI-IO only | on (`base`, `amd-ci`) |
-| CPU pool per engine | `KV_OFFLOAD_CPU_BYTES` (prefill) | 549755813888 (512 GiB), split across the 8 ranks |
-| Prefill memory | `resources` of the prefill container in the same component | 896Gi = 384Gi + the pool |
-| HBM for KV per GPU | `KV_CACHE_MEMORY_BYTES` (both roles) | 30000000000 |
-| Router prefix index | `lruCapacityPerServer` in [`router/glm-5-3-flash.values.yaml`](router/glm-5-3-flash.values.yaml) | 12600 blocks of 640 tokens (GPU + CPU); 3850 without offloading |
+| CPU pool per engine | `KV_OFFLOAD_CPU_BYTES` (prefill) | 1200000000000 (1.2 TB), split across the 8 ranks |
+| Pinned allocation rounding | `PYTORCH_ALLOC_CONF=pinned_max_round_threshold_mb:1024` (prefill, same component) | set. Without it PyTorch rounds each rank's pinned pool up to a power of two (150 GB becomes 256 GiB, 2 TiB in total) and the pod is killed during startup |
+| Prefill memory | `resources` of the prefill container in the same component | 1600Gi = 384Gi + the pool |
+| HBM for KV per GPU | `KV_CACHE_MEMORY_BYTES` (both roles) | 125000000000 |
+| Router prefix index | `lruCapacityPerServer` in [`router/glm-5-3-flash.values.yaml`](router/glm-5-3-flash.values.yaml) | 36300 blocks of 640 tokens (GPU + CPU); 16200 without offloading |
 
 On ROCm the pool is a pinned allocation per rank, not a `/dev/shm` region, so it counts toward the
 pod memory limit but not the `/dev/shm` size. Change the pool, the memory and the router value together.
 
-On vLLM v0.34.0 with ROCm, reloads from the CPU tier and stores to it run at the host-to-device
-link rate (about 56 GB/s per GPU), except the first reload after startup (about 2.7 GB/s per GPU).
-Through the router, a 63K-token prompt restored from the CPU tier had a time to first token of
-0.30 s against 1.4 s to recompute it, the same as a hit in GPU memory; at 232K tokens it was
-0.72-0.76 s against 5.1 s.
+Reloads from the CPU tier and stores to it run at the host-to-device link rate (about 56 GB/s per
+GPU), except the first reload after startup (3 to 14 GB/s per GPU). Through the router, a 63K-token
+prompt restored from the CPU tier had a time to first token of 0.30 s against 1.4 s to recompute it,
+the same as a hit in GPU memory; at 232K tokens it was 0.72-0.76 s against 5.1 s; at 956K tokens
+2.5-2.9 s against 26-27 s.
 
 ## Known Limitations
 
-- **vLLM version:** use v0.34.0. Images built from vLLM main after 2026-11-16 fail to load this
-  checkpoint until [vllm#68197](https://github.com/vllm-project/vllm/pull/68197) merges.
+- **vLLM version:** the guide pins a ROCm nightly until a release carries
+  [vllm#65685](https://github.com/vllm-project/vllm/pull/65685). v0.34.0 also works, with at most
+  30 GB of KV per GPU; builds of vLLM main from 2026-11-16 to 2026-11-18 fail to load this checkpoint.
 - **MoRI-IO WRITE mode** (and the sidecar's `--moriio-write-mode` / `--moriio-parallel-dispatch`)
   is not supported for this model; READ mode serializes prefill and decode.
 - **Prefill and decode TP must match** (the KDA state is split by TP).
 - **Attention data parallelism (DP=8, TP=1)** is not supported yet: with one API server per rank,
   every rank binds the same MoRI-IO handshake port, and the routing sidecar picks the DP rank
   without regard to the prefix cache.
-- **Context length:** the default of 262,144 tokens was checked with 232K- and 248K-token prompts
-  (correct answers, CPU restore included); AMD's model card documents 64K. Lower `MAX_MODEL_LEN`
-  on both roles if your traffic is shorter.
+- **Context length:** the default of 1,048,576 tokens was checked with 232K-, 248K- and 956K-token
+  prompts (correct answers, CPU restore included); AMD's model card documents 64K. Lower
+  `MAX_MODEL_LEN` on both roles and `maxPrefixTokensToMatch` in the router values together if your
+  traffic is shorter.
 - **MTP speculative decoding** is not enabled; it is untested with MoRI-IO READ mode on this model.
-- **HBM size:** 30 GB of KV per GPU is the size validated with MoRI-IO on Pollara; larger values
-  have not been validated against the 2 GB registration limit yet.
+- **HBM size:** 125 GB of KV per GPU is the largest size that runs. At about 139 GiB per GPU
+  (`--gpu-memory-utilization 0.58`) decode runs out of GPU memory when it registers its KV cache,
+  because the amdgpu driver (6.14) counts registered VRAM twice (fixed in `amdgpu-dkms`
+  6.19.14.31400101). With v0.34.0 the limit is 30 GB per GPU.
+- **Pinned host memory:** the pool must stay under the amdgpu TTM limit and needs
+  `PYTORCH_ALLOC_CONF=pinned_max_round_threshold_mb:1024` on prefill (see
+  [CPU KV Offloading](#cpu-kv-offloading)).
 
 ## Benchmarking
 

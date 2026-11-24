@@ -26,7 +26,7 @@ spec:
                         --port 8200 \
                         --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                         --tokenizer-mode glm5_next \
-                        --limit-mm-per-prompt '{"image":0,"video":0}' \
+                        --language-model-only \
                         --attention-backend ROCM_AITER_MLA_SPARSE \
                         --sparse-indexer-topk-backend aiter \
                         --tensor-parallel-size 8 \
@@ -49,18 +49,16 @@ spec:
                           key: HF_TOKEN
                           optional: true
                     - name: MAX_MODEL_LEN
-                      value: "262144"
+                      value: "1048576"
                     - name: MAX_NUM_SEQS
                       value: "64"
-                    # See the prefill role: explicit HBM for KV per GPU (Pollara limit).
+                    # See the prefill role: explicit HBM for KV per GPU (MoRI-IO registration).
                     - name: KV_CACHE_MEMORY_BYTES
-                      value: "30000000000"
+                      value: "125000000000"
                     # MoRI-IO needs the KDA conv state in the dim-first layout.
                     - name: VLLM_SSM_CONV_STATE_LAYOUT
                       value: "DS"
                     - name: VLLM_ROCM_USE_AITER
-                      value: "1"
-                    - name: VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS
                       value: "1"
                     - name: VLLM_ROCM_USE_AITER_TRITON_SPARSE_MLA
                       value: "1"

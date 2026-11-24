@@ -12,13 +12,15 @@ components:
   - ../../../../../../recipes/modelserver/components/images/routing-sidecar/nightly
   - ../../../../../../recipes/modelserver/components/graceful-shutdown
 
-# vLLM v0.34.0 is the last release that loads the Quark MXFP4 checkpoint (vLLM main
-# fails since vllm-project/vllm#66118); the amd-vllm release component is older.
-# TODO(vllm-project/vllm#68197): drop this override once the fix is released and the
-# amd-vllm component carries a tag that loads the checkpoint.
+# ROCm nightly of vLLM main at eff4de9be (tag nightly-eff4de9be3c9...): it loads the Quark
+# MXFP4 checkpoint and carries vllm-project/vllm#65685 (one MoRI-IO memory region per GPU).
+# v0.34.0 also runs this guide but limits the KV cache to about 30 GB per GPU with MoRI-IO;
+# the amd-vllm release component is older.
+# TODO(vllm-project/vllm#65685): move to the first release that carries this fix and drop
+# this override once the amd-vllm component does.
 images:
   - name: docker.io/vllm/vllm-openai-rocm
-    digest: sha256:3cb773d23f063afa86291ef75773cdd486154ddea94c213300f4ed7cc42b7af1
+    digest: sha256:a0a24828553413f18f172f9452c2e300c20e80a8fb9ee847a89d2d9448358970
 
 labels:
   - pairs:

@@ -30,20 +30,22 @@ router:
         - type: decode-filter
         # One index per engine covering both tiers, so autoTune (GPU blocks only) is
         # off. vLLM's KV block is 640 tokens at TP=8 (one KDA state page).
-        #   GPU: ~3,850 blocks (KV_CACHE_MEMORY_BYTES=30e9)
-        #   CPU: ~8,750 blocks (KV_OFFLOAD_CPU_BYTES=512 GiB)
-        # Recompute if you change either, or the TP size; without offloading use 3850.
+        #   GPU: ~16,200 blocks (KV_CACHE_MEMORY_BYTES=125e9, 10.4M tokens)
+        #   CPU: ~20,100 blocks (KV_OFFLOAD_CPU_BYTES=1.2e12, 12.9M tokens)
+        # Recompute if you change either, or the TP size; without offloading use 16200.
+        # maxPrefixTokensToMatch follows MAX_MODEL_LEN.
         - type: approx-prefix-cache-producer
           parameters:
             autoTune: false
             blockSizeTokens: 640
-            maxPrefixTokensToMatch: 262144
-            lruCapacityPerServer: 12600
+            maxPrefixTokensToMatch: 1048576
+            lruCapacityPerServer: 36300
         - type: inflight-load-producer
         - type: prefix-cache-affinity-filter
           parameters:
-            # Estimate (a cold 63K-token prompt prefills in 1.47 s), not a calibrate.sh
-            # measurement; see guides/recipes/router/calibration.
+            # Single-prompt recompute rate measured end to end through the router
+            # (about 46K tokens/s on cold 63K- and 232K-token prompts, 36K at 956K),
+            # not a calibrate.sh measurement; see guides/recipes/router/calibration.
             peakPrefillThroughput: 43000
         - type: token-load-scorer
         - type: active-request-scorer

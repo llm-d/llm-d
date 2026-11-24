@@ -13,8 +13,8 @@ support:
       label: AMD Instinct MI355X
       notes: >-
         2 nodes / 16 GPUs: 1P (TP=8 + EP) + 1D (TP=8 + EP) · MoRI-IO KV transfer (READ mode) over RDMA ·
-        native CPU KV offloading on prefill (512 GiB per engine) · vLLM v0.34.0 ·
-        `INFRA_PROVIDER`: `base`, `amd-ci`
+        125 GB KV per GPU, 1M context · native CPU KV offloading on prefill (1.2 TB per engine) ·
+        vLLM ROCm nightly (main eff4de9be) · `INFRA_PROVIDER`: `base`, `amd-ci`
       model: amd/GLM-5.3-Flash-Quark-MXFP4
       providers:
         - {name: base, label: "Kubernetes (base)"}

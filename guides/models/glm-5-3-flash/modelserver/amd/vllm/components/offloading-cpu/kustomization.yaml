@@ -3,13 +3,17 @@ kind: Component
 # Native CPU KV offloading on the prefill role: the KV connector becomes
 # MultiConnector[OffloadingConnector, MoRIIOConnector (READ-mode producer)].
 #
-# KV_OFFLOAD_CPU_BYTES is the pool of the whole TP=8 engine (split across the ranks):
-# 512 GiB is about 5.6M tokens at ~98 KB/token, 2.3x the HBM KV at 30 GB per GPU. Blocks
-# are written through to CPU, so the pool only adds capacity once it exceeds HBM KV.
+# KV_OFFLOAD_CPU_BYTES is the pool of the whole TP=8 engine (split across the ranks).
+# Blocks are written through to CPU, so the pool only adds capacity once it exceeds the
+# HBM KV: 1.2 TB is about 12.9M tokens at 93.4 KB/token (TP=8 replicates the MLA KV on
+# every rank), 1.24x the 10.4M tokens of HBM KV at KV_CACHE_MEMORY_BYTES=125e9.
 #
-# On ROCm the pool is pinned host memory counted in the pod memory limit (384Gi + the
-# pool), capped by the amdgpu TTM limit (half of host RAM by default). When you change
-# the pool, change the memory below and lruCapacityPerServer in the router values.
+# On ROCm the pool is pinned host memory per rank, counted in the pod memory limit
+# (384Gi for the engine + the pool, rounded up) and capped by the amdgpu TTM limit (half
+# of host RAM by default). PyTorch rounds each rank's pinned allocation up to a power of
+# two unless pinned_max_round_threshold_mb is set: without it 1.2 TB pins 2 TiB and the
+# pod is killed during startup. When you change the pool, change the memory below and
+# lruCapacityPerServer in the router values.
 patches:
   - target:
       kind: DisaggregatedSet
@@ -31,9 +35,11 @@ patches:
                           - name: OFFLOADING_MODE
                             value: "cpu"
                           - name: KV_OFFLOAD_CPU_BYTES
-                            value: "549755813888"
+                            value: "1200000000000"
+                          - name: PYTORCH_ALLOC_CONF
+                            value: "pinned_max_round_threshold_mb:1024"
                         resources:
                           limits:
-                            memory: 896Gi
+                            memory: 1600Gi
                           requests:
-                            memory: 896Gi
+                            memory: 1600Gi

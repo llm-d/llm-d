@@ -35,7 +35,7 @@ spec:
                         --port 8000 \
                         --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                         --tokenizer-mode glm5_next \
-                        --limit-mm-per-prompt '{"image":0,"video":0}' \
+                        --language-model-only \
                         --attention-backend ROCM_AITER_MLA_SPARSE \
                         --sparse-indexer-topk-backend aiter \
                         --tensor-parallel-size 8 \
@@ -58,26 +58,25 @@ spec:
                           key: HF_TOKEN
                           optional: true
                     - name: MAX_MODEL_LEN
-                      value: "262144"
+                      value: "1048576"
                     - name: MAX_NUM_SEQS
                       value: "64"
-                    # HBM for KV per GPU. Keep it explicit: Pollara AI NICs cannot
-                    # register more than 2 GB of contiguous memory, and MoRI-IO
-                    # registration also counts against HBM. 30 GB per GPU holds about
-                    # 2.5M tokens per TP=8 engine (about 12 KB/token/GPU).
+                    # HBM for KV per GPU. Keep it explicit: amdgpu (6.14) counts the VRAM
+                    # that MoRI-IO registers with the AI NIC twice, so 2 x KV plus ~28 GiB
+                    # must fit in 288 GiB. 125 GB per GPU is the largest size that runs
+                    # (about 10.4M tokens per TP=8 engine, 11.7 KB/token/GPU); 139 GiB
+                    # runs out of memory at the first transfer.
                     - name: KV_CACHE_MEMORY_BYTES
-                      value: "30000000000"
-                    # off | cpu. ../../components/offloading-cpu sets cpu.
+                      value: "125000000000"
+                    # off | cpu. ../../components/offloading-cpu sets cpu and the pool.
                     - name: OFFLOADING_MODE
                       value: "off"
                     - name: KV_OFFLOAD_CPU_BYTES
-                      value: "549755813888"
+                      value: "1200000000000"
                     # MoRI-IO needs the KDA conv state in the dim-first layout.
                     - name: VLLM_SSM_CONV_STATE_LAYOUT
                       value: "DS"
                     - name: VLLM_ROCM_USE_AITER
-                      value: "1"
-                    - name: VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS
                       value: "1"
                     - name: VLLM_ROCM_USE_AITER_TRITON_SPARSE_MLA
                       value: "1"
