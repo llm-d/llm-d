@@ -18,7 +18,7 @@ and never modifies scheduling or serving behavior.
 
 ```bash
 helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
-  --version 1.6.0 \
+  --version 1.7.0 \
   --namespace k8s-aibom-system --create-namespace
 ```
 
@@ -49,6 +49,14 @@ templates extracted under `spec.roles[i]` locators and the
 `LeaderWorkerSet`, StatefulSets and pods it materializes rolled up into
 that document rather than inventoried separately. Plain
 `LeaderWorkerSet` deployments get the same treatment.
+
+From v1.7.0 each document also records which `InferencePool` its
+workload sits behind. When the workload's pod template labels match a
+pool's selector in the same namespace, the pool, and its endpoint
+picker when one is set, appear on the document as a routing fact. This
+reads Gateway API Inference Extension `v1` pools, needs no restart when
+the CRD is installed later, and records membership only: it attributes
+no traffic to the workload.
 
 The BOM records the served model identity (from vLLM `--model` args or
 `HF_MODEL_ID`, confidence `declared`), the serving runtime and version
