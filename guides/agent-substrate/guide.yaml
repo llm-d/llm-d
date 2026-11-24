@@ -113,11 +113,20 @@ deploy:
   substrate_image:
     - skip_in: [ci]
       run: |
-        export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
-        # The worker nodes are x86-64; --platform keeps a build on an Arm machine usable.
+        export HERMES_IMAGE_REPO="<registry>/<repository>/agent-hermes"
+        # The sandbox nodes are x86-64; --platform keeps a build on an Arm machine usable.
         docker build --platform linux/amd64 -t "${HERMES_IMAGE_REPO}:5ffbea8" ${REPO_ROOT}/guides/${GUIDE_NAME}/hermes/actor
         docker push "${HERMES_IMAGE_REPO}:5ffbea8"
-        export HERMES_IMAGE="${HERMES_IMAGE_REPO}@$(gcloud artifacts docker images describe "${HERMES_IMAGE_REPO}:5ffbea8" --format='value(image_summary.digest)')"
+        # The pushed image's digest reference: <repository>@sha256:<digest>
+        export HERMES_IMAGE="$(docker inspect --format='{{index .RepoDigests 0}}' "${HERMES_IMAGE_REPO}:5ffbea8")"
+
+  substrate_nodes:
+    - skip_in: [ci]
+      run: |
+        # Repeat the label for every node that will host Hermes sandboxes
+        # (18 nodes for 1,000 agents), then taint them all.
+        kubectl label nodes "<node-name>" pool=hermes
+        kubectl taint nodes -l pool=hermes ate.dev/sandboxClass=hermes:NoSchedule
 
   substrate_pool:
     - skip_in: [ci]
@@ -303,11 +312,6 @@ cleanup:
   - run: kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE} --ignore-not-found=true
   - run: |
       kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/ \
-        | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-        | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
-  - run: |
-      # Remove the Cloud TPU v7x model server if that option was deployed (no-op otherwise).
-      kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
         | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
         | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
   - when: {MONITORING: ["true"]}

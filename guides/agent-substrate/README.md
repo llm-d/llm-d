@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Tier:** 1 (Experimental) · **Gaps to Tier 2:** the Agent Substrate manifests are templates applied with `envsubst` and `kubectl ate`, with no kustomize overlay covered by the dry-run CI job · **Reference Demo:** [PyTorch Conference demo, `llm-d-incubation/llm-d-demos`](https://github.com/llm-d-incubation/llm-d-demos/tree/main/demos/agentic-serving-fleet)
-> **Validated Reference Stack:** 1,000 [Hermes Agent](https://github.com/NousResearch/hermes-agent) gVisor sandboxes on Agent Substrate (GKE, `18 × c4d-standard-16` CPU nodes) backed by `llm-d` Router + `vLLM` with Host-DRAM KV offloading on NVIDIA GPUs or Cloud TPU v7x (Ironwood).
+> **Validated Reference Stack:** 1,000 [Hermes Agent](https://github.com/NousResearch/hermes-agent) gVisor sandboxes on Agent Substrate (`18` CPU nodes, `16 vCPU` each) backed by `llm-d` Router + `vLLM` with Host-DRAM KV offloading.
 
 ## Overview
 
@@ -19,7 +19,7 @@ This guide reproduces the architecture from the [PyTorch Conference Agent Substr
 
 ### Reference Benchmark Highlights
 
-Measured across 1,000 stateful Hermes Agent sandboxes (`NousResearch/hermes-agent`, SQLite session state under `/data/.hermes`) on `18 × c4d-standard-16` GKE nodes driving `vLLM` behind `llm-d`:
+Measured across 1,000 stateful Hermes Agent sandboxes (`NousResearch/hermes-agent`, SQLite session state under `/data/.hermes`) on `18` CPU nodes (`16 vCPU`, `62 GB` each) driving `vLLM` behind `llm-d`:
 
 | Metric | Naive Baseline | Agent Substrate + `llm-d` | Mechanism |
 | --- | --- | --- | --- |
@@ -32,9 +32,9 @@ Measured across 1,000 stateful Hermes Agent sandboxes (`NousResearch/hermes-agen
 
 ### Validation on Agent Substrate v1.0.0
 
-Measured by running this guide on GKE `1.37` with Agent Substrate `v1.0.0`, the `llm-d` Router `v1.0.0` (`ROUTER_CHART_VERSION=v1.0.0`) and the default model server (`2 × TP=2` `Qwen/Qwen3-32B`, `vLLM v0.31.0`, native Host-DRAM offloading) on one 8 × H100 node. Model-server figures are deltas of `vLLM` `:8000/metrics` over the stated requests.
+Measured by running this guide with Agent Substrate `v1.0.0`, the `llm-d` Router `v1.0.0` (`ROUTER_CHART_VERSION=v1.0.0`) and the default model server (`2 × TP=2` `Qwen/Qwen3-32B`, `vLLM v0.31.0`, native Host-DRAM offloading) on one 8 × H100 node. Model-server figures are deltas of `vLLM` `:8000/metrics` over the stated requests. The test cluster ran on GKE `1.37` (see [Running on GKE](#running-on-gke)).
 
-**1,000 Hermes agents** on 1,080 gVisor workers across `18 × c4d-standard-16` nodes (the default sizing of this guide):
+**1,000 Hermes agents** on 1,080 gVisor workers across `18` nodes of `16 vCPU` and `62 GB` each (the default sizing of this guide):
 
 | What | Result | How |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ Measured by running this guide on GKE `1.37` with Agent Substrate `v1.0.0`, the 
 | Routing, ~2,400-token private prefix per session (1,000 follow-up requests) | mean TTFT `1.8 s`, model latency `3.8 s`, `477 GB` of KV reloaded from Host DRAM with this guide's routing vs. `2.2 s`, `7.8 s`, `272 GB` with random routing | [Measure the Routing Effect](#measure-the-routing-effect) with `--context-words 2000` |
 | Priority tiers, burst at concurrency 400 | mean router queue time `0.0 s` (`100`), `7.9 s` (`0`), `9.2 s` (`-10`) | default `maxConcurrency: 128` |
 
-**60 Hermes agents** on `3 × c3-standard-8` nodes (the [Small-Scale Trial](#small-scale-trial)):
+**60 Hermes agents** on `3` nodes of `8 vCPU` and `32 GB` each (the [Small-Scale Trial](#small-scale-trial)):
 
 | What | Result | How |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ Measured by running this guide on GKE `1.37` with Agent Substrate `v1.0.0`, the 
 | Priority tiers under saturation (`maxConcurrency: 4`, 60-agent burst) | mean router queue time `0.12 s` (`100`), `1.32 s` (`0`), `5.77 s` (`-10`); `premium-traffic` p50 turn `2.3 s` vs. `7.7 s` when every agent shares one tier | [Sizing `maxConcurrency`](#sizing-maxconcurrency) |
 
 > [!IMPORTANT]
-> The Agent Substrate steps ([Steps 4–7](#4-deploy-the-in-cluster-hermes-fleet-driver) and the fleet verification) are written for **Agent Substrate v1.0.0**. The guide was run end to end on GKE `1.37` with Agent Substrate `v1.0.0`, the Hermes image built from [`hermes/actor/`](./hermes/actor/), this guide's router values, and the default GPU model server (`2 × TP=2` `Qwen/Qwen3-32B` on H100 with native Host-DRAM offloading, `max_model_len=65536`), at **1,000 agents**.
+> The Agent Substrate steps ([Steps 4–7](#4-deploy-the-in-cluster-hermes-fleet-driver) and the fleet verification) are written for **Agent Substrate v1.0.0**. The guide was run end to end with Agent Substrate `v1.0.0`, the Hermes image built from [`hermes/actor/`](./hermes/actor/), this guide's router values, and the default GPU model server (`2 × TP=2` `Qwen/Qwen3-32B` on H100 with native Host-DRAM offloading, `max_model_len=65536`), at **1,000 agents**.
 
 Agent Substrate resumes an actor when a request arrives for it, but suspends one only when asked. The idle-footprint figure above depends on the caller suspending each agent after its turn; in this guide, suspending the fleet is an explicit step in [Verification](#suspend-the-fleet-and-verify-recall-from-snapshots).
 
@@ -92,19 +92,19 @@ Agent Substrate resumes an actor when a request arrives for it, but suspends one
 ## Prerequisites
 
 - **`kubectl`**, **`helm`** (`v3.14+`), **`kustomize`**, **`envsubst`** (`gettext`), **`openssl`**, and **`python3`** (`3.10+`).
-- **`docker`** to build the Hermes actor image and push it to a registry your cluster can pull from ([Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image)). The example commands use Artifact Registry and **`gcloud`**.
-- **Accelerator capacity for `llm-d` model servers**:
-  - **NVIDIA GPU (default below)**: `2+` replicas × `2× H100 / A100 80 GB` GPUs (`TP=2`) with `>= 320 GiB` host RAM per pod for native CPU KV offloading, **or**
-  - **Google Cloud TPU v7x (Ironwood), on GKE**: `3` replicas, each on one `tpu7x` `2x2x1` slice (`4` chips, `850Gi` host RAM per pod), with `TPURaidenOffloadingConnector` Host-DRAM KV offloading (see [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading)).
+- **`docker`** to build the Hermes actor image and push it to a registry your cluster can pull from ([Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image)).
+- **Accelerator capacity for `llm-d` model servers**: `2+` replicas × `2× H100 / A100 80 GB` GPUs (`TP=2`) with `>= 320 GiB` host RAM per pod for native CPU KV offloading.
 - **For the full 1,000-sandbox Agent Substrate deployment** ([Steps 5–7](#5-build-the-pre-warmed-hermes-agent-sandbox-image)):
-  - A Kubernetes cluster with **[Agent Substrate](https://github.com/agent-substrate/substrate) `v1.0.0` or later** installed (`ate-system` control plane, `atenet-router`, and the gVisor sandbox class), and the `kubectl-ate` plugin built from the same release. On GKE (`1.37+`), install it with [`substrate-gke`](https://github.com/ai-on-gke/substrate-gke).
+  - A Kubernetes cluster with **[Agent Substrate](https://github.com/agent-substrate/substrate) `v1.0.0` or later** installed (`ate-system` control plane, `atenet-router`, and the gVisor sandbox class), and the `kubectl-ate` plugin built from the same release.
   - The fleet driver's identity, `spiffe://cluster.local/ns/llm-d-agent-substrate/sa/hermes-fleet-driver`, on the Agent Substrate router's ingress allowlist (`--ingress-allowed-spiffe-ids` / `ATE_INGRESS_ALLOWED_SPIFFE_IDS`). The router serves only TLS and admits only listed clients. Each `ate-setup` deploy replaces the list, so include the IDs already on it; see [Reaching actors through the ingress router](https://github.com/ai-on-gke/substrate-gke#reaching-actors-through-the-ingress-router).
-  - Dedicated CPU nodes for the 1,000 Hermes sandboxes: `18` nodes with `16 vCPU`, `64 GB` RAM and a fast `100 GB` boot disk each (on GKE, `c4d-standard-16` with `hyperdisk-balanced`), labeled `pool=hermes` and tainted `ate.dev/sandboxClass=hermes:NoSchedule`.
+  - Dedicated CPU nodes for the 1,000 Hermes sandboxes: `18` nodes with `16 vCPU`, `62 GB` RAM and a fast `100 GB` boot disk each, all on the same CPU platform, labeled `pool=hermes` and tainted `ate.dev/sandboxClass=hermes:NoSchedule`.
   - A container image repository (`HERMES_IMAGE_REPO`) for the digest-pinned Hermes actor image. Snapshots are stored under the snapshot location Agent Substrate was installed with.
+
+On GKE, [Running on GKE](#running-on-gke) has the matching commands for these prerequisites.
 
 ### Small-Scale Trial
 
-The defaults below size the guide for 1,000 agents. To try it first on a small cluster, keep every step the same and change only the sizing: a few general-purpose nodes labeled `pool=hermes` in place of the `18 × c4d-standard-16` pool (the taint is optional), and
+The defaults below size the guide for 1,000 agents. To try it first on a small cluster, keep every step the same and change only the sizing: a few general-purpose nodes labeled `pool=hermes` in place of the 18 dedicated nodes (the taint is optional), and
 
 ```bash
 export HERMES_AGENTS=60
@@ -224,11 +224,7 @@ helm upgrade --install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server with Host-DRAM KV Offloading
 
-Hermes Agent requires a model context window of at least `64k` tokens. Deploy **one** of the two accelerator options below. Both reuse a [Tiered Prefix Cache](../tiered-prefix-cache/README.md) overlay that keeps evicted KV blocks in Host DRAM, relabeled for `agent-substrate`.
-
-#### NVIDIA GPU (Default)
-
-Render the native CPU KV-offloading overlay (`2 × TP=2` `Qwen/Qwen3-32B`) and set a `64k` context window (`--max-model-len=65536`). `INFRA_PROVIDER` selects the overlay: `base` (the default) for any Kubernetes cluster, or `gke` on GKE:
+Hermes Agent requires a model context window of at least `64k` tokens. Render the [Tiered Prefix Cache](../tiered-prefix-cache/README.md) native CPU KV-offloading overlay (`2 × TP=2` `Qwen/Qwen3-32B`, evicted KV blocks kept in Host DRAM), relabel it for `agent-substrate`, and set a `64k` context window (`--max-model-len=65536`):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
@@ -241,21 +237,6 @@ kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/n
   | kubectl apply -n ${NAMESPACE} -f -
 ```
 <!-- guide:deploy.modelserver end -->
-
-#### Google Cloud TPU v7x (Ironwood) on GKE
-
-On GKE Cloud TPU v7x, render the `tpu/v7` overlay instead (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
-
-```bash
-export MODEL_NAME=Qwen/Qwen3.5-397B-A17B-FP8
-kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
-  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-  | kubectl apply -n ${NAMESPACE} -f -
-```
-
-These engines cache in `4,352`-token blocks (`--block-size=4352`), while [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) leaves `approx-prefix-cache-producer` at its defaults. To match them, set `blockSizeTokens: 4352` and `maxPrefixTokensToMatch: 262144` on that plugin, as [`tiered-prefix-cache/router/single-host/tpu-v7.values.yaml`](../tiered-prefix-cache/router/single-host/tpu-v7.values.yaml) does.
-
-#### Wait for the Router and Model Servers
 
 Wait for both the EPP deployment and the model server replicas to report `Available`:
 
@@ -309,32 +290,35 @@ kubectl wait --for=condition=Available deployment/hermes-fleet-driver -n ${NAMES
 
 ### 5. Build the Pre-Warmed Hermes Agent Sandbox Image
 
-Build and push [`hermes/actor/`](./hermes/actor/) (`NousResearch/hermes-agent` pinned at commit `5ffbea8`, [`warmup.py`](./hermes/actor/warmup.py), and [`sitecustomize.py`](./hermes/actor/sitecustomize.py)), pinning `HERMES_IMAGE` by digest so every restored gVisor sandbox matches the golden snapshot. The example uses Artifact Registry, where Docker must be able to push first (`gcloud auth configure-docker <region>-docker.pkg.dev`); with another registry, set `HERMES_IMAGE` to the pushed image's digest reference (`<repository>@sha256:<digest>`):
+Build and push [`hermes/actor/`](./hermes/actor/) (`NousResearch/hermes-agent` pinned at commit `5ffbea8`, [`warmup.py`](./hermes/actor/warmup.py), and [`sitecustomize.py`](./hermes/actor/sitecustomize.py)), pinning `HERMES_IMAGE` by digest so every restored gVisor sandbox matches the golden snapshot. Log Docker in to your registry first:
 
 <!-- guide:deploy.substrate_image start -->
 <!-- llm-d-cicd:skip start -->
 ```bash
-export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
-# The worker nodes are x86-64; --platform keeps a build on an Arm machine usable.
+export HERMES_IMAGE_REPO="<registry>/<repository>/agent-hermes"
+# The sandbox nodes are x86-64; --platform keeps a build on an Arm machine usable.
 docker build --platform linux/amd64 -t "${HERMES_IMAGE_REPO}:5ffbea8" ${REPO_ROOT}/guides/${GUIDE_NAME}/hermes/actor
 docker push "${HERMES_IMAGE_REPO}:5ffbea8"
-export HERMES_IMAGE="${HERMES_IMAGE_REPO}@$(gcloud artifacts docker images describe "${HERMES_IMAGE_REPO}:5ffbea8" --format='value(image_summary.digest)')"
+# The pushed image's digest reference: <repository>@sha256:<digest>
+export HERMES_IMAGE="$(docker inspect --format='{{index .RepoDigests 0}}' "${HERMES_IMAGE_REPO}:5ffbea8")"
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.substrate_image end -->
 
 ### 6. Deploy the Agent Substrate `WorkerPool` and `ActorTemplate`
 
-Provision the dedicated sandbox nodes if they are not already present. On GKE:
+Dedicate the sandbox nodes to the Hermes workers: label them `pool=hermes` and taint them so nothing else is scheduled there.
 
+<!-- guide:deploy.substrate_nodes start -->
+<!-- llm-d-cicd:skip start -->
 ```bash
-gcloud container node-pools create hermes-c4d-pool \
-  --cluster="<your-gke-cluster>" --zone="<zone>" --project="<project>" \
-  --machine-type=c4d-standard-16 --num-nodes=18 \
-  --disk-type=hyperdisk-balanced --disk-size=100 \
-  --node-labels=pool=hermes \
-  --node-taints=ate.dev/sandboxClass=hermes:NoSchedule
+# Repeat the label for every node that will host Hermes sandboxes
+# (18 nodes for 1,000 agents), then taint them all.
+kubectl label nodes "<node-name>" pool=hermes
+kubectl taint nodes -l pool=hermes ate.dev/sandboxClass=hermes:NoSchedule
 ```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.substrate_nodes end -->
 
 Apply [`manifests/hermes-workerpool.yaml.tmpl`](./manifests/hermes-workerpool.yaml.tmpl) (`1,080` gVisor workers with `1536Mi` memory limit so the ~150 MiB checkpoint page cache never OOM-kills the gVisor sentry). `SUBSTRATE_WORKER_IMAGE` must be the worker image of the Agent Substrate release installed on the cluster.
 
@@ -664,12 +648,71 @@ Priority bands only separate traffic once requests queue in the EPP. To see the 
 
 ---
 
+## Running on GKE
+
+The results in [Validation on Agent Substrate v1.0.0](#validation-on-agent-substrate-v100) were measured on GKE `1.37`, with `c4d-standard-16` sandbox nodes on `hyperdisk-balanced` boot disks. These are the GKE forms of the steps above.
+
+### Agent Substrate and the Model Server Overlay
+
+Install Agent Substrate with [`substrate-gke`](https://github.com/ai-on-gke/substrate-gke), and select the GKE model-server overlay before [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading):
+
+```bash
+export INFRA_PROVIDER=gke
+```
+
+### Sandbox Node Pool
+
+Create the sandbox nodes already labeled and tainted, in place of the `kubectl label` and `kubectl taint` commands in [Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate):
+
+```bash
+gcloud container node-pools create hermes-c4d-pool \
+  --cluster="<your-gke-cluster>" --zone="<zone>" --project="<project>" \
+  --machine-type=c4d-standard-16 --num-nodes=18 \
+  --disk-type=hyperdisk-balanced --disk-size=100 \
+  --node-labels=pool=hermes \
+  --node-taints=ate.dev/sandboxClass=hermes:NoSchedule
+```
+
+Delete the pool with `gcloud container node-pools delete hermes-c4d-pool` when you no longer need it.
+
+### Hermes Image in Artifact Registry
+
+In [Step 5](#5-build-the-pre-warmed-hermes-agent-sandbox-image), let Docker push to Artifact Registry and name the repository accordingly:
+
+```bash
+gcloud auth configure-docker <region>-docker.pkg.dev
+export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
+```
+
+### Cloud TPU v7x (Ironwood) Model Servers
+
+In place of the NVIDIA GPU model servers in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading), GKE can serve the fleet from Cloud TPU v7x. Render the `tpu/v7` overlay (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
+
+```bash
+export MODEL_NAME=Qwen/Qwen3.5-397B-A17B-FP8
+kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
+  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
+  | kubectl apply -n ${NAMESPACE} -f -
+```
+
+These engines cache in `4,352`-token blocks (`--block-size=4352`), while [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) leaves `approx-prefix-cache-producer` at its defaults. To match them, set `blockSizeTokens: 4352` and `maxPrefixTokensToMatch: 262144` on that plugin, as [`tiered-prefix-cache/router/single-host/tpu-v7.values.yaml`](../tiered-prefix-cache/router/single-host/tpu-v7.values.yaml) does.
+
+Remove these model servers during [Cleanup](#cleanup) with:
+
+```bash
+kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
+  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
+  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+```
+
+---
+
 ## Troubleshooting
 
 - **EPP pod fails to start with `has Alpha stability level, but command line flag --allow-experimental-plugins is not set`**: Ensure `router.epp.flags.allow-experimental-plugins: true` is present in your Helm values (included in [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml)).
 - **Hermes Agent refuses to start or errors with context length `< 64k`**: Hermes enforces `context_length >= 65536`. Confirm both `CONTEXT_LENGTH: "65536"` on the `ActorTemplate` and `--max-model-len=65536` on the `vLLM` Deployment.
 - **gVisor workers OOM-killed during `SuspendActor`**: Check `dmesg` or pod `Last State: OOMKilled` on `hermes-workerpool`. Suspending a warm Hermes sandbox writes a `~150 MiB` checkpoint whose page cache is charged to the worker and sandbox cgroups; keep `ActorTemplate` memory at `1Gi` and `WorkerPool` memory limit at `1536Mi`.
-- **Slow 1,000-agent wake (`> 5 s`) or `atenet-router` `HTTP 504`**: Verify that the golden snapshot (`GOLDEN TAG` in `kubectl ate get actor-templates -a ${ATESPACE}`) finished building *before* creating the 1,000 actors, and confirm `18+` `c4d-standard-16` nodes (`<= 60` agents/node) with `hyperdisk-balanced` boot disks so node I/O does not stall on concurrent snapshot reads. Do not retry `HTTP 504` responses from `atenet-router`, as a Hermes turn appends to SQLite and is non-idempotent.
+- **Slow 1,000-agent wake (`> 5 s`) or `atenet-router` `HTTP 504`**: Verify that the golden snapshot (`GOLDEN TAG` in `kubectl ate get actor-templates -a ${ATESPACE}`) finished building *before* creating the 1,000 actors, and confirm `18+` sandbox nodes (`<= 60` agents/node) with fast boot disks so node I/O does not stall on concurrent snapshot reads. Do not retry `HTTP 504` responses from `atenet-router`, as a Hermes turn appends to SQLite and is non-idempotent.
 - **Agent turns fail and Hermes logs a name-resolution or connection error for the `llm-d` host**: The actor has no `EgressPolicy`, or its hostname is not the host in `MODEL_BASE_URL`. Check with `kubectl ate get egress-policy agent-0001 -a ${ATESPACE} -o yaml`.
 - **The fleet driver fails every call with a TLS or connection error**: Its SPIFFE ID is not on the router's ingress allowlist, or `ATENET_ADDR` is not `atenet-router.ate-system.svc:443` (the name the router's certificate is issued for).
 - **Agents end up `ACTOR_STATE_CRASHED` with `wakeup probe for "hermes" never returned 200 within 30s`**: The agents were resumed on nodes whose CPU platform differs from the node where the golden snapshot was taken (for example a mixed Intel/AMD pool), so they cold-booted instead of restoring memory. Keep the worker pool on one machine family, delete and recreate the `ActorTemplate` so the golden snapshot is rebuilt there, and `kubectl ate revert actor` (or recreate) the crashed agents.
@@ -709,11 +752,6 @@ kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/n
   | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
   | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
 
-# Remove the Cloud TPU v7x model server if that option was deployed (no-op otherwise).
-kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
-  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
-
 # only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
 
@@ -727,4 +765,9 @@ kubectl delete namespace ${NAMESPACE} --ignore-not-found=true
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup end -->
 
-The sandbox node pool created in Step 6 is not removed by these commands; delete it if you no longer need it (on GKE, `gcloud container node-pools delete hermes-c4d-pool`).
+The sandbox nodes keep the label and taint from Step 6. Remove them if the nodes are to be reused:
+
+```bash
+kubectl taint nodes -l pool=hermes ate.dev/sandboxClass=hermes:NoSchedule-
+kubectl label nodes -l pool=hermes pool-
+```
