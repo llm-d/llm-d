@@ -27,4 +27,7 @@ opencost:
     configmapName: opencost-custom-pricing
     createConfigmap: true               # the chart writes costModel into the ConfigMap, one key per price
     provider: custom
-    costModel: {}                       # filled by installer from the confirmed pricing JSON
+    # required: the installer fills this from the prices you confirm. If you apply this
+    # file directly (helm install -f), set CPU, RAM, GPU and the other prices here first;
+    # left empty, the chart charges its own default prices with no error.
+    costModel: {}

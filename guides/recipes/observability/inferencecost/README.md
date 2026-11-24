@@ -105,7 +105,7 @@ The installer:
 
 ### Pricing config format
 
-The installer writes a ConfigMap (`opencost-custom-pricing`) from the prices you confirm. To prepare one in advance:
+The installer passes the prices you confirm to the OpenCost chart, which writes the `opencost-custom-pricing` ConfigMap. These confirmed prices now replace the cloud pricing API on GKE, EKS and AKS too (`USE_CUSTOM_PROVIDER=true`), so after an upgrade your costs follow the prices you confirmed rather than the cloud's public price list. To prepare a pricing file in advance:
 
 ```json
 {
@@ -156,7 +156,7 @@ If the metrics are empty, generate some traffic first (the module requires at le
 kubectl port-forward -n llm-d-monitoring svc/opencost-llm-d-monitoring 9090:9090
 ```
 
-Open http://localhost:9090. The **Allocation** view shows cost broken down by `llm-d.ai/model` label. The inference cost gauges appear in Prometheus under the `llm_*` prefix.
+Open <http://localhost:9090>. The **Allocation** view shows cost broken down by `llm-d.ai/model` label. The inference cost gauges appear in Prometheus under the `llm_*` prefix.
 
 ### Query the REST API
 
