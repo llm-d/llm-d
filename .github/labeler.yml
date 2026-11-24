@@ -1,0 +1,238 @@
+# Path-based area/* labels. .github/labeler.yml is the canonical source for
+# additive path globs. See .github/area_taxonomy.md for /area directives,
+# Issue Form mappings, additive overlap rules, and the synced docs-only label.
+#
+# Evaluated by .github/scripts/area_labels.py using the actions/labeler schema.
+# Supported glob syntax: `*`, `?`, whole-segment `**`, and `{a,b}` braces.
+
+# --- Structural areas ---
+
+# Well-lit path, model, and operations deployment guides
+area/guides:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/**"
+
+# Website documentation, architecture docs, and markdown READMEs
+# (excludes .github/workflows/*.md agentic workflows and release/README.md)
+area/docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.md"
+          - "docs/**/*.md"
+          - "docs/**/*.mdx"
+          - "docs/**/*.png"
+          - "docs/**/*.svg"
+          - "docs/**/*.gif"
+          - "docs/menu-config.json"
+          - "docs/well-lit-paths/guides.yaml"
+          - "proposals/**/*.md"
+          - "proposals/**/*.png"
+          - "proposals/**/*.svg"
+          - "proposals/**/*.gif"
+          - "guides/**/*.md"
+          - "guides/**/*.png"
+          - "guides/**/*.svg"
+          - "guides/**/*.gif"
+          - "helpers/**/*.md"
+          - "scripts/**/*.md"
+          - "docker/**/*.md"
+          - ".github/area_taxonomy.md"
+          - ".github/workflows/README.md"
+          - ".github/scripts/**/README.md"
+          - "DCO"
+          - "LICENSE"
+
+# Design proposals and project RFCs
+area/proposals:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "proposals/**"
+
+# Shared K8s/Gateway recipes, cloud providers, RDMA/storage infra, orchestration, and helpers
+area/infra:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/recipes/**"
+          - "guides/no-kubernetes-deployment/**"
+          - "guides/rollouts/**"
+          - "docs/infrastructure/**"
+          - "docs/operations/lifecycle/**"
+          - "docs/architecture/model-server-orchestration/**"
+          - "docs/architecture/model-servers/**"
+          - "helpers/**"
+          - "proposals/inference-resilience-operator.md"
+          - "proposals/modelservice.md"
+          - "proposals/non-kubernetes-mode.md"
+
+# Container image Dockerfiles, build scripts, constraints, and upstream patches
+area/docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docker/**"
+          - "patches/**"
+          - ".dockerignore"
+          - ".hadolint.yaml"
+
+# CI/CD workflows, E2E/release matrices, repo scripts, git hooks, and linters
+area/ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "scripts/**"
+          - "hooks/**"
+          - "release/**"
+          - "Makefile"
+          - "OWNERS"
+          - ".editorconfig"
+          - ".gitattributes"
+          - ".gitignore"
+          - ".markdownlint.json"
+          - ".pre-commit-config.yaml"
+          - ".prowlabels.yaml"
+          - "_typos.toml"
+
+# --- SIG & domain areas ---
+
+# SIG Router & SIG Inference Payload Processor: request routing, baseline, latency, multi-model
+area/router:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/optimized-baseline/**"
+          - "guides/predicted-latency-routing/**"
+          - "guides/flow-control/**"
+          - "guides/turn-priority-fairness/**"
+          - "guides/multi-model-routing/**"
+          - "guides/rollouts/**"
+          - "guides/no-kubernetes-deployment/**"
+          - "guides/workload-autoscaling/multi-inference-pool/**"
+          - "guides/recipes/router/**"
+          - "docs/architecture/router/**"
+          - "docs/operations/traffic/**"
+          - "docs/operations/components/router.md"
+          - "docs/operations/integrations/**"
+          - "docs/infrastructure/no-kubernetes-deployment.md"
+          - "docs/api-reference/**"
+          - "proposals/llm-d-inference-payload-processor.md"
+          - "proposals/non-kubernetes-mode.md"
+
+# SIG Router: flow control, queuing, and multi-tenant fairness
+area/flowcontrol:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/flow-control/**"
+          - "guides/turn-priority-fairness/**"
+          - "docs/architecture/router/flow-control.md"
+          - "docs/operations/traffic/flow-control-tuning.md"
+
+# SIG KV-Disaggregation: prefix cache routing, tiered offload, and P2P KV sharing
+area/kvcache:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/precise-prefix-cache-routing/**"
+          - "guides/tiered-prefix-cache/**"
+          - "guides/p2p-kv-cache-sharing/**"
+          - "guides/hyperconverged-cephfs/**"
+          - "docs/architecture/kv-management/**"
+          - "helpers/mooncake-client/**"
+          - "helpers/mooncake-master-store/**"
+
+# SIG PD-Disaggregation: P/D, Coordinator E/P/D, and Wide Expert Parallelism
+area/disaggregation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/pd-disaggregation/**"
+          - "guides/coord-disaggregation/**"
+          - "guides/wide-ep/**"
+          - "guides/multimodal-serving/e-disaggregation/**"
+          - "guides/recipes/modelserver/**/pd-disaggregatedset/**"
+          - "guides/recipes/modelserver/components/disaggregatedset-schema/**"
+          - "docs/architecture/disaggregation/**"
+          - "docs/architecture/model-server-orchestration/disaggregatedset.md"
+          - "docs/operations/disaggregation/**"
+          - "proposals/coordinator.md"
+          - "proposals/inference-resilience-operator.md"
+
+# SIG Autoscaling: KEDA/WVA autoscaling, fast model actuation, and pod snapshots
+area/autoscaling:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/workload-autoscaling/**"
+          - "guides/fast-model-actuation/**"
+          - "guides/pod-snapshot/**"
+          - "guides/modelexpress-p2p/**"
+          - "guides/recipes/autoscaling/**"
+          - "docker/scripts/snapshot/**"
+          - "docs/architecture/autoscaling/**"
+          - "docs/operations/startup/**"
+          - "proposals/autoscaler.md"
+          - "proposals/diagrams/autoscaler.png"
+          - "proposals/llm-d-planner.md"
+
+# SIG Observability: Prometheus, Grafana dashboards, alerting, tracing, and ML-BOM
+area/observability:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/operations/observability/**"
+          - "docs/**/monitoring/**"
+          - "guides/runtime-inventory/**"
+          - "guides/recipes/observability/**"
+          - "guides/recipes/modelserver/components/monitoring/**"
+          - "guides/recipes/modelserver/components/monitoring-pd/**"
+          - "guides/**/monitoring*"
+          - "guides/**/monitoring*/**"
+          - "guides/**/tracing*"
+          - "guides/**/tracing*/**"
+          - "helpers/**/monitoring/**"
+          - "proposals/distributed-tracing.md"
+          - "proposals/observability-integration.md"
+
+# SIG Batch Inference: batch gateway and asynchronous processing
+area/batch:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/batch-serving/**"
+          - "docs/architecture/batch/**"
+          - "docs/operations/components/async-processor.md"
+          - ".github/scripts/e2e/async-multitenant/**"
+          - "proposals/batch-gateway.md"
+          - "proposals/llm-d-async.md"
+
+# SIG Agentic Inference: stateful Responses API and multi-turn fairness
+area/agentic:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/agentic-api/**"
+          - "guides/turn-priority-fairness/**"
+
+# Multimodal and Omni model serving guides and topologies
+area/multimodal:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/multimodal-serving/**"
+          - "guides/omni-serving/**"
+
+# Benchmarked SOTA model serving recipes
+area/models:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/models/**"
+
+# SIG RL: reinforcement learning rollout integration
+area/rl:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "guides/rl/**"
+          - "proposals/rl-time-slicing-platform.md"
+          - "proposals/non-kubernetes-mode.md"
+
+# SIG Benchmarking: performance validation, smoke tests, and perf analysis
+area/benchmarking:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/operations/validation/**"
+          - "helpers/interactive-pod/**"
+          - "guides/**/benchmark*"
+          - "guides/**/benchmark*/**"
+          - "proposals/llm-d-perf-simulator.md"
+          - "proposals/prism-performance-analysis.md"
