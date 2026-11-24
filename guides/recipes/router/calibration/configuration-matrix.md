@@ -63,7 +63,9 @@ rows because the serving engine changes prefill throughput.
   does not borrow a proxy: the closest measured value (gpt-oss-120B on H100 at TP=1, 39065, from
   the since-retired `gpu/vllm/gpt-oss` overlay) is an H100 MXFP4 number and applying it here would open the saturation gate when it should stay shut.
 - **12767** — measured for the multimodal-serving `amd/vllm` overlays (Qwen3-VL-32B-Instruct,
-  MI355X, TP=2) at `CHUNK_SIZE=16384`; the guide layers it on with `amd.<values file>`.
+  MI355X, TP=2) at `CHUNK_SIZE=16384`, the vLLM ROCm image's `--max-num-batched-tokens` on
+  this setup (12766 on the `nightly-81198e97…` image used by the MoRI-IO overlays).
+  The guide layers it over the shared router values with `amd.<values file>`.
 - **‡ proxy, not measured** — these paths are not yet calibrated, so they borrow the closest
   measured value as a starting point: the **AMD** paths use the same-engine H100 values
   (`amd/vllm` ← `gpu/vllm` 15928, `amd/sglang` ← `gpu/sglang` 30720), and **XPU** uses the

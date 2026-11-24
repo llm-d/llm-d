@@ -26,10 +26,11 @@ support:
       engines: {vllm: validated}
     amd:
       label: AMD GPU
-      notes: "Instinct MI355X (288 GB HBM) · aggregated only · 8 replicas × TP=2 (16 GPUs) · `INFRA_PROVIDER=base`"
+      notes: "Instinct MI355X (288 GB HBM) · aggregated 8 × TP=2 (16 GPUs), `INFRA_PROVIDER=base` · E/PD (2E + 8PD) and E/P/D (2E + 6P + 2D) over MoRI-IO, `INFRA_PROVIDER=moriio/base`: needs `ec_transport=moriio` and `huge=within_size` `/dev/shm`"
       model: Qwen/Qwen3-VL-32B-Instruct
       providers:
         - {name: base, label: "Kubernetes (base)"}
+        - {name: moriio/base, label: "MoRI-IO (E/PD and E/P/D)"}
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
@@ -67,7 +68,8 @@ env:
     MODEL_SERVER: {default: vllm, values: [vllm]}
     # The overlay is <topology dir>/modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/[<TOPOLOGY>/]<INFRA_PROVIDER>/
     # (see the Notes column for the providers each accelerator supports).
-    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave]}
+    # moriio/*: AMD E/PD and E/P/D only (TOPOLOGY=e-pd or e-p-d); moriio/amd-ci adds the CI model cache and NIC attachments.
+    INFRA_PROVIDER: {default: base, values: [base, gke, coreweave, moriio/base, moriio/amd-ci]}
 
     MODEL: {default: "Qwen/Qwen3-VL-32B-Instruct", comment: "the model the overlays serve (table above)"}
 
