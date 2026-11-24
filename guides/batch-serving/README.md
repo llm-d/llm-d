@@ -19,7 +19,7 @@ For the broader architectural context and design principles, see the [Batch Arch
 
 ## Guide Index
 
-- **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with PostgreSQL-backed job data, filesystem or S3 file storage, and a processor that dispatches requests to the llm-d Router. Redis or Valkey is only needed for optional async dispatch.
+- **[Batch Gateway Guide](./batch-gateway/README.md)**: Deploy an OpenAI-compatible batch API (`/v1/batches`, `/v1/files`) with PostgreSQL-backed job data, filesystem/S3/GCS file storage, and a processor that dispatches requests to the llm-d Router. Async dispatch uses Redis/Valkey by default or the experimental PostgreSQL SQL transport.
 - **[Asynchronous Processing Guide](./asynchronous-processing/README.md)**: Deploy the lightweight Async Processor to consume requests from a message queue (GCP Pub/Sub or a Redis Sorted Set) with metric-based dispatch gating.
   - **[Multi-Tenant Async Processing](./asynchronous-processing/multitenant/README.md)**: Advanced multi-tenant setup with team quotas, tier-priority dispatch, and saturation back-off across inference pools.
 
@@ -63,7 +63,7 @@ Batch Gateway and Async Processor can be deployed together. In a composite deplo
 | **Primary Interface** | OpenAI-compatible REST API (`/v1/batches`, `/v1/files`) | Message Queue (Redis Sorted Set, GCP Pub/Sub) |
 | **Unit of Work** | Batch job containing up to 50,000 JSONL request lines by default | Individual messages / streaming request queue |
 | **Flow Control** | Built-in AIMD concurrency; optional llm-d-async dispatch gates | Dynamic dispatch gating (Prometheus saturation, KV-cache pressure, budget) |
-| **State & Storage** | PostgreSQL + filesystem or S3; optional Redis/Valkey queue for async dispatch | Message broker (Redis / Pub/Sub) |
+| **State & Storage** | PostgreSQL + filesystem, S3, or GCS; optional Redis/Valkey or experimental PostgreSQL async queues | Message broker (Redis / Pub/Sub) |
 | **Multi-Tenancy** | Tenant-scoped data; a trusted auth proxy supplies tenant identity | Worker pools, priority tiers, and per-team quota allocation |
 | **Client Interaction** | File upload &rarr; Job creation &rarr; Polling &rarr; Result download | Publish message to queue &rarr; Listen on result topic/queue |
 | **Deployment Complexity** | Moderate (API server, processor, GC, database, shared storage) | Low (Async processor daemon + message queue) |

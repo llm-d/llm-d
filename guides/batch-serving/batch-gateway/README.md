@@ -33,8 +33,9 @@ PostgreSQL stores job and file metadata, the job priority queue, events, and sta
 | Function | Available backends |
 | -------- | ------------------ |
 | Job and file metadata, job priority queue, events, status | PostgreSQL |
-| Input and output files | Shared filesystem (RWX PVC), S3-compatible storage |
-| Async inference request/result queue (`dispatchMode=async`) | Redis/Valkey sorted sets |
+| Input and output files | Shared filesystem (RWX PVC), S3-compatible storage, GCS |
+| Async inference request queue (`dispatchMode=async`) | Redis/Valkey sorted set by default, or experimental PostgreSQL SQL transport |
+| Async inference result queue (`dispatchMode=async`) | Redis/Valkey list by default, or experimental PostgreSQL SQL transport |
 
 ## Prerequisites
 
@@ -43,14 +44,14 @@ Before installing Batch Gateway, ensure you have:
 1. **Kubernetes and Helm**: A cluster that meets the requirements of the llm-d inference stack you deploy, and Helm 3.0 or later.
 2. **llm-d Inference Stack**: An existing [optimized baseline](../../optimized-baseline/README.md) or another llm-d Router deployment.
 3. **PostgreSQL 12 or later**: Required for job and file metadata, the job priority queue, events, and status. The Batch Gateway chart does not install PostgreSQL.
-4. **File storage**: Use a shared `ReadWriteMany` PVC with the filesystem backend, or configure S3-compatible storage.
-5. **Optional async queue**: Redis 6 or Valkey 8 is needed only when using `dispatchMode=async`.
+4. **File storage**: Use a shared `ReadWriteMany` PVC, S3-compatible storage, or GCS. See the component's [GCS storage guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/gcs-storage.md) for native GCS setup.
+5. **Optional async queue**: Redis 6 or Valkey 8 is needed for the default `redis-sortedset` transport. The experimental SQL transport uses PostgreSQL and requires compatible Batch Gateway and llm-d-async `main` versions.
 
 ### Tenant identity and authentication
 
-`X-MaaS-Username` scopes requests to a tenant. Without it, Batch Gateway v1.0.0 uses the `default` tenant. The API server does not authenticate callers; production deployments need a trusted authentication proxy to set the tenant header. See the component's [security guide](https://github.com/llm-d/llm-d-batch-gateway/blob/v1.0.0/docs/guides/security.md).
+By default, the API server requires the `X-MaaS-Username` tenant header and returns `401` when it is missing. The API server does not authenticate credentials; production deployments need a trusted authentication proxy to set this header. For this local demo, the install command enables `apiserver.config.allowAnonymousTenant` so requests without a header use the `default` tenant. Never enable this field in production. See the component's [security guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/security.md).
 
-The direct port-forward examples below use the default tenant for local, trusted-cluster use. For a production deployment with authentication, authorization, and TLS, follow the component's [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/v1.0.0/docs/guides/deploy-k8s.md).
+For a production deployment with authentication, authorization, and TLS, follow the component's [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/deploy-k8s.md).
 
 ### Get the guide
 
@@ -80,9 +81,9 @@ kubectl create secret generic batch-gateway-secrets -n ${NAMESPACE} \
   --from-literal=postgresql-url="postgresql://user:password@postgresql.postgresql.svc.cluster.local:5432/batchgateway"
 ```
 
-For async dispatch, also add a `redis-url` key to this Secret. The default synchronous dispatch mode does not need Redis.
+For async dispatch with the default Redis transport, also add a `redis-url` key to this Secret. The experimental SQL transport uses the PostgreSQL URL and does not need Redis. The default synchronous dispatch mode needs neither async queue.
 
-This guide uses the filesystem backend, so it does not need S3 credentials. For S3 storage, set `global.fileClient.type=s3`, provide the bucket, region, and access key ID, and add `s3-secret-access-key` to the Secret.
+This guide uses the filesystem backend, so it does not need object-store credentials. For S3, set `global.fileClient.type=s3`, provide the bucket, region, and access key ID, and add `s3-secret-access-key` to the Secret. Native GCS uses Application Default Credentials; see the [GCS storage guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/gcs-storage.md).
 
 ### Step 3: Configure the llm-d Router URL
 
@@ -115,26 +116,29 @@ spec:
 EOF
 ```
 
-> **Note**: `ReadWriteMany` requires an RWX-capable storage class (e.g. NFS, CephFS). If your cluster only provides `ReadWriteOnce`, use S3-compatible object storage instead.
+> **Note**: `ReadWriteMany` requires an RWX-capable storage class (e.g. NFS, CephFS). If your cluster only provides `ReadWriteOnce`, use S3-compatible or GCS object storage instead.
 
 ### Step 5: Deploy
 
-**From OCI Registry:**
+**From current component source (`main`):**
 
 ```bash
-helm install batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
-  --version 1.0.0 \
+git clone --branch main --depth 1 https://github.com/llm-d/llm-d-batch-gateway.git
+helm install batch-gateway llm-d-batch-gateway/charts/batch-gateway \
   -n ${NAMESPACE} \
   --set processor.config.globalInferenceGateway.url="${INFERENCE_GW_URL}" \
+  --set apiserver.config.allowAnonymousTenant=true \
   --set "apiserver.config.batchAPI.passThroughHeaders={Authorization}" \
   --set global.fileClient.fs.pvcName="batch-gateway-pvc"
 ```
+
+This uses the component's `main` chart and its `latest` images. `apiserver.config.allowAnonymousTenant` is only for this local demo.
 
 > **Note**: `passThroughHeaders` should include any authentication headers (e.g., `Authorization`) that the llm-d Router expects. The processor forwards these headers when dispatching individual inference requests.
 
 ## Detailed Deployment Guide
 
-For a production deployment with authentication, authorization, and TLS on Kubernetes, see the [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/v1.0.0/docs/guides/deploy-k8s.md) (Istio + Kuadrant + cert-manager).
+For a production deployment with authentication, authorization, and TLS on Kubernetes, see the [Kubernetes deployment guide](https://github.com/llm-d/llm-d-batch-gateway/blob/main/docs/guides/deploy-k8s.md) (Istio + Kuadrant + cert-manager).
 
 ## Verification
 
@@ -196,7 +200,7 @@ curl -X POST http://localhost:8000/v1/batches \
 curl http://localhost:8000/v1/batches/<batch-id> | jq '{status, request_counts}'
 ```
 
-Batch status can be `validating`, `in_progress`, `finalizing`, `completed`, `failed`, `expired`, or `cancelled`.
+Batch status can be `validating`, `in_progress`, `cancelling`, `finalizing`, `completed`, `failed`, `expired`, or `cancelled`. `cancelling` is non-terminal; poll until `cancelled`.
 
 ### Download Results
 
@@ -218,9 +222,8 @@ Optional. Requires Prometheus and Grafana — see [Observability Setup](../../..
 1. Enable metrics scraping in the chart, so Prometheus discovers the three components:
 
    ```bash
-   helm upgrade batch-gateway oci://ghcr.io/llm-d/charts/batch-gateway \
+   helm upgrade batch-gateway llm-d-batch-gateway/charts/batch-gateway \
      -n ${NAMESPACE} --reuse-values \
-     --version 1.0.0 \
      --set processor.podMonitor.enabled=true \
      --set gc.podMonitor.enabled=true \
      --set apiserver.serviceMonitor.enabled=true

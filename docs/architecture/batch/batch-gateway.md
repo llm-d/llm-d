@@ -23,7 +23,7 @@ The API server exposes OpenAI-compatible REST endpoints:
 - `POST /v1/batches/{id}/cancel` — Cancel a running job.
 - `GET /v1/batches` — List batch jobs.
 
-The API server validates input-file constraints. PostgreSQL stores job and file metadata, the job priority queue, events, and status. Input and output files use the configured filesystem or S3-compatible backend. With `dispatchMode=async`, the processor also uses an llm-d-async request/result queue backed by Redis/Valkey sorted sets.
+The API server validates input-file constraints. PostgreSQL stores job and file metadata, the job priority queue, events, and status. Input and output files use the configured filesystem, S3-compatible, or GCS backend. With `dispatchMode=async`, llm-d-async uses a Redis/Valkey sorted set for inference requests and a list for results, or the experimental PostgreSQL SQL transport for both queues.
 
 ## Batch Processor
 
@@ -53,8 +53,9 @@ PostgreSQL stores core job state; file storage and optional async request queues
 | Function | Options | Notes |
 | -------- | ------- | ----- |
 | Job and file metadata, job priority queue, events, status | PostgreSQL | Required core database |
-| Async inference request/result queue | Redis/Valkey sorted sets | Used only with `dispatchMode=async` |
-| File storage | Shared filesystem (RWX PVC), S3-compatible storage | Select the backend through the Helm values |
+| Async inference request queue | Redis/Valkey sorted set or PostgreSQL SQL transport | Used only with `dispatchMode=async`; SQL is experimental |
+| Async inference result queue | Redis/Valkey list or PostgreSQL SQL transport | Used only with `dispatchMode=async`; SQL is experimental |
+| File storage | Shared filesystem (RWX PVC), S3-compatible storage, GCS | Select the backend through the Helm values |
 
 ## Garbage Collector
 
@@ -69,7 +70,7 @@ It limits concurrent deletions to avoid database pressure.
 
 Batch Gateway delegates authentication and authorization to an upstream gateway or auth proxy:
 
-- By default, the API server reads tenant identity from the `X-MaaS-Username` header. It does not authenticate credentials; a trusted auth proxy must authenticate callers and inject this header.
+- By default, the API server requires the `X-MaaS-Username` tenant header and returns `401` if it is missing. It does not authenticate credentials; a trusted auth proxy must authenticate callers and inject this header. Setting `apiserver.config.allowAnonymousTenant=true` maps missing headers to the `default` tenant for local development only.
 - Do not expose the API server directly to clients. Direct access bypasses the authentication proxy and lets callers choose the tenant header.
 - All data queries are filtered by tenant ID. Cross-tenant access is rejected.
 - The processor forwards selected request headers with each inference request, so the llm-d Router can authenticate and authorize the end user per request.
