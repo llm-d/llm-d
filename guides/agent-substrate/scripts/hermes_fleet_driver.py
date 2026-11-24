@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Multi-tier traffic driver for 1,000 Hermes Agent sandboxes on GKE Agent Substrate.
+"""Multi-tier traffic driver for 1,000 Hermes Agent sandboxes on Agent Substrate.
 
 Wakes and drives `agent-0001..agent-NNNN` through `atenet-router`, partitioning
 agents across `premium-traffic` (100), `standard-traffic` (0), and
@@ -106,8 +106,63 @@ def teach_expected(turn_num: int, recall_only: bool) -> bool:
     return turn_num == 1 and not recall_only
 
 
+def _post_turn(url: str, body: bytes, headers: dict[str, str], tls, *, opener=urllib.request.urlopen, sleep=time.sleep, attempts: int = 4) -> str | None:
+    """POST one agent turn and return the body of the HTTP 200 response, or None.
+
+    Only failures that cannot have completed the turn are retried: connection
+    errors and 5xx other than 504. A 4xx, a 504 or a timeout is not retried
+    (Hermes may still append the turn to SQLite), and once a 200 response has
+    arrived the turn is never sent again, whatever its body contains.
+    """
+    for attempt in range(1, attempts + 1):
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        try:
+            resp = opener(req, timeout=90, context=tls)
+        except urllib.error.HTTPError as err:
+            if err.code < 500 or err.code == 504:
+                break
+            sleep(0.2 * attempt)
+            continue
+        except Exception as err:
+            if isinstance(err, TimeoutError) or isinstance(getattr(err, "reason", None), TimeoutError):
+                break
+            sleep(0.2 * attempt)
+            continue
+        try:
+            with resp:
+                return resp.read().decode("utf-8")
+        except Exception:
+            return None
+    return None
+
+
+def _reply_text(raw: str) -> str | None:
+    """The assistant reply in an OpenAI chat-completion body.
+
+    Returns "" for a valid response without text (`"choices": []` or
+    `"content": null`) and None when the body is not a JSON object.
+    """
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    choices = parsed.get("choices") or [{}]
+    first = choices[0] if isinstance(choices[0], dict) else {}
+    message = first.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    return content if isinstance(content, str) else ""
+
+
+def _recalled(code: str, reply: str) -> bool:
+    """True when the reply contains the codename, ignoring case, spacing and punctuation."""
+    norm = lambda s: "".join(ch for ch in s.lower() if "a" <= ch <= "z")
+    return norm(code) in norm(reply)
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Drive Hermes Agent sandboxes on GKE Agent Substrate -> llm-d")
+    ap = argparse.ArgumentParser(description="Drive Hermes Agent sandboxes on Agent Substrate -> llm-d")
     ap.add_argument("--agents", type=int, default=1000, help="number of Hermes agent actors (agent-0001..N)")
     ap.add_argument("--turns", type=int, default=2, help="turns per agent (turn 1 teaches codename, turns 2+ check recall)")
     ap.add_argument("--concurrency", type=int, default=200, help="concurrent agent turns in flight")
@@ -165,31 +220,17 @@ def main() -> int:
             "x-llm-d-inference-objective": objective,
         }
         t0 = time.monotonic()
-        for attempt in range(1, 5):
-            req = urllib.request.Request(f"{atenet_url}/v1/chat/completions", data=body, headers=headers, method="POST")
-            try:
-                with urllib.request.urlopen(req, timeout=90, context=tls) as resp:
-                    parsed = json.loads(resp.read().decode("utf-8"))
-                reply = parsed.get("choices", [{}])[0].get("message", {}).get("content", "")
-                norm = lambda s: "".join(ch for ch in s.lower() if "a" <= ch <= "z")
-                return {
-                    "objective": objective,
-                    "ok": True,
-                    "e2e_ms": (time.monotonic() - t0) * 1000.0,
-                    "recall_checked": not teach,
-                    "recall_ok": (norm(code) in norm(reply)) if not teach else True,
-                }
-            except urllib.error.HTTPError as err:
-                # Never retry 4xx or 504 (Hermes may still append the turn to SQLite on a 504).
-                if err.code < 500 or err.code == 504:
-                    break
-                time.sleep(0.2 * attempt)
-            except Exception as err:
-                # A timed-out turn may still complete inside Hermes; do not send it twice.
-                if isinstance(err, TimeoutError) or isinstance(getattr(err, "reason", None), TimeoutError):
-                    break
-                time.sleep(0.2 * attempt)
-        return {"objective": objective, "ok": False, "e2e_ms": (time.monotonic() - t0) * 1000.0, "recall_checked": False, "recall_ok": False}
+        raw = _post_turn(f"{atenet_url}/v1/chat/completions", body, headers, tls)
+        reply = _reply_text(raw) if raw is not None else None
+        if reply is None:
+            return {"objective": objective, "ok": False, "e2e_ms": (time.monotonic() - t0) * 1000.0, "recall_checked": False, "recall_ok": False}
+        return {
+            "objective": objective,
+            "ok": True,
+            "e2e_ms": (time.monotonic() - t0) * 1000.0,
+            "recall_checked": not teach,
+            "recall_ok": _recalled(code, reply) if not teach else True,
+        }
 
     failed = False
     for turn_num in range(1, args.turns + 1):

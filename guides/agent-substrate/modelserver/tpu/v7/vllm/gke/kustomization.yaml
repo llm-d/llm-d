@@ -1,0 +1,13 @@
+# Cloud TPU v7x (Ironwood) model server for the agent-substrate guide:
+# tiered-prefix-cache's tpu/v7 overlay (Qwen/Qwen3.5-397B-A17B-FP8, 262k context),
+# labeled for this guide.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../../tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke
+
+labels:
+  - pairs:
+      llm-d.ai/guide: agent-substrate
+    includeSelectors: true
+    includeTemplates: true

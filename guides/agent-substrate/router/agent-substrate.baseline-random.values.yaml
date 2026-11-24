@@ -14,8 +14,8 @@ router:
       targetPort: 8081
 
   epp:
-    # Single EPP replica keeps in-memory session bindings, approximate prefix
-    # index, and in-flight token counters coherent across the 1,000-agent fleet.
+    # Single EPP replica keeps the in-flight token counters and flow-control
+    # queues coherent across the 1,000-agent fleet.
     replicas: 1
     flags:
       # Required for the Alpha `agent-identity` request-header plugin.
@@ -32,20 +32,10 @@ router:
             parameters:
               additionalSessionHeaders:
                 - x-hermes-session-id
-          - type: approx-prefix-cache-producer
+          # Consumed by concurrency-detector. No prefix-cache or session plugins:
+          # every top-level plugin runs on each request even when the scheduling
+          # profile omits it, which would add router work to the baseline.
           - type: inflight-load-producer
-          - type: session-affinity-scorer
-            parameters:
-              strategy: session_id
-              sessionIdConfig:
-                sources:
-                  - header: x-hermes-session-id
-                  - attribute: agent-identity
-                evictionTtlSeconds: 900
-                evictionSweepSeconds: 30
-          - type: prefix-cache-scorer
-          - type: token-load-scorer
-          - type: kv-cache-utilization-scorer
           - type: random-picker
           - type: round-robin-fairness-policy
           - type: fcfs-ordering-policy

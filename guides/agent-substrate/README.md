@@ -224,17 +224,13 @@ helm upgrade --install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server with Host-DRAM KV Offloading
 
-Hermes Agent requires a model context window of at least `64k` tokens. Render the [Tiered Prefix Cache](../tiered-prefix-cache/README.md) native CPU KV-offloading overlay (`2 × TP=2` `Qwen/Qwen3-32B`, evicted KV blocks kept in Host DRAM), relabel it for `agent-substrate`, and set a `64k` context window (`--max-model-len=65536`):
+Hermes Agent requires a model context window of at least `64k` tokens. Apply this guide's model-server overlay ([`modelserver/gpu/vllm/`](./modelserver/gpu/vllm/)): the [Tiered Prefix Cache](../tiered-prefix-cache/README.md) native CPU KV-offloading model server (`2 × TP=2` `Qwen/Qwen3-32B`, evicted KV blocks kept in Host DRAM), labeled for `agent-substrate` and patched to a `64k` context window (`--max-model-len=65536`):
 
 <!-- guide:deploy.modelserver start -->
 ```bash
-# Render tiered-prefix-cache's native Host-DRAM KV offloading overlay,
-# relabel to this guide, and enable a 64k context window (required by Hermes Agent).
-ROPE_OVERRIDE='{"rope_scaling":{"rope_type":"yarn","factor":2.0,"original_max_position_embeddings":32768},"max_position_embeddings":65536}'
-kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/ \
-  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-  | sed "s|--shutdown-timeout=45|--max-model-len=65536 --hf-overrides '${ROPE_OVERRIDE}' --shutdown-timeout=45|g" \
-  | kubectl apply -n ${NAMESPACE} -f -
+# tiered-prefix-cache's native Host-DRAM KV offloading model server, labeled for
+# this guide and patched to a 64k context window (required by Hermes Agent).
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
 ```
 <!-- guide:deploy.modelserver end -->
 
@@ -273,6 +269,7 @@ kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPAC
 Deploy [`manifests/hermes-driver.yaml`](./manifests/hermes-driver.yaml) and [`scripts/hermes_fleet_driver.py`](./scripts/hermes_fleet_driver.py), an in-cluster client pod that wakes and drives the 1,000 Hermes sandboxes through `atenet-router` across the three `InferenceObjective` priority tiers:
 
 <!-- guide:deploy.driver start -->
+<!-- llm-d-cicd:skip start -->
 ```bash
 kubectl create configmap hermes-fleet-driver-script \
   --from-file=hermes_fleet_driver.py=${REPO_ROOT}/guides/${GUIDE_NAME}/scripts/hermes_fleet_driver.py \
@@ -286,6 +283,7 @@ kubectl create configmap hermes-fleet-driver-config \
 kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/manifests/hermes-driver.yaml -n ${NAMESPACE}
 kubectl wait --for=condition=Available deployment/hermes-fleet-driver -n ${NAMESPACE} --timeout=180s
 ```
+<!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.driver end -->
 
 ### 5. Build the Pre-Warmed Hermes Agent Sandbox Image
@@ -686,13 +684,11 @@ export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
 
 ### Cloud TPU v7x (Ironwood) Model Servers
 
-In place of the NVIDIA GPU model servers in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading), GKE can serve the fleet from Cloud TPU v7x. Render the `tpu/v7` overlay (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
+In place of the NVIDIA GPU model servers in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading), GKE can serve the fleet from Cloud TPU v7x. Apply the [`modelserver/tpu/v7/vllm/gke/`](./modelserver/tpu/v7/vllm/gke/) overlay (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
 
 ```bash
 export MODEL_NAME=Qwen/Qwen3.5-397B-A17B-FP8
-kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
-  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-  | kubectl apply -n ${NAMESPACE} -f -
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gke/
 ```
 
 These engines cache in `4,352`-token blocks (`--block-size=4352`), while [`router/agent-substrate.values.yaml`](./router/agent-substrate.values.yaml) leaves `approx-prefix-cache-producer` at its defaults. To match them, set `blockSizeTokens: 4352` and `maxPrefixTokensToMatch: 262144` on that plugin, as [`tiered-prefix-cache/router/single-host/tpu-v7.values.yaml`](../tiered-prefix-cache/router/single-host/tpu-v7.values.yaml) does.
@@ -700,9 +696,7 @@ These engines cache in `4,352`-token blocks (`--block-size=4352`), while [`route
 Remove these model servers during [Cleanup](#cleanup) with:
 
 ```bash
-kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/tpu/v7/vllm/native/cpu/gke/ \
-  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gke/ --ignore-not-found=true
 ```
 
 ---
@@ -748,9 +742,7 @@ helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
 kubectl delete -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPACE} --ignore-not-found=true
 
-kubectl kustomize ${REPO_ROOT}/guides/tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/${INFRA_PROVIDER}/ \
-  | sed "s/tiered-prefix-cache/${GUIDE_NAME}/g" \
-  | kubectl delete -n ${NAMESPACE} -f - --ignore-not-found=true
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/ --ignore-not-found=true
 
 # only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true

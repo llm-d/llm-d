@@ -1,4 +1,4 @@
-apiVersion: llm-d.ai/v1alpha2
+apiVersion: llm-d.ai/v1
 kind: InferenceObjective
 metadata:
   name: premium-traffic
@@ -7,10 +7,10 @@ metadata:
     llm-d.ai/inference-serving: "true"
 spec:
   priority: 100
-  poolRef:
-    name: agent-substrate
+  poolRefs:
+    - name: agent-substrate
 ---
-apiVersion: llm-d.ai/v1alpha2
+apiVersion: llm-d.ai/v1
 kind: InferenceObjective
 metadata:
   name: standard-traffic
@@ -19,10 +19,10 @@ metadata:
     llm-d.ai/inference-serving: "true"
 spec:
   priority: 0
-  poolRef:
-    name: agent-substrate
+  poolRefs:
+    - name: agent-substrate
 ---
-apiVersion: llm-d.ai/v1alpha2
+apiVersion: llm-d.ai/v1
 kind: InferenceObjective
 metadata:
   name: best-effort-traffic
@@ -31,5 +31,5 @@ metadata:
     llm-d.ai/inference-serving: "true"
 spec:
   priority: -10
-  poolRef:
-    name: agent-substrate
+  poolRefs:
+    - name: agent-substrate

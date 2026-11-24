@@ -28,6 +28,7 @@ import functools
 import json
 import os
 import re
+import sys
 import time
 
 _WARMUP_MARKER = "agent-warmup"
@@ -91,7 +92,7 @@ def _install_aiohttp_hook() -> None:
     aiohttp.web.Application.__init__ = _wrapped_init  # type: ignore[assignment]
 
 
-def _make_warmup_response(httpx_mod, request):
+def _make_warmup_response(httpx_mod, request, raw_body: bytes = b""):
     now = int(time.time())
     default_model = os.environ.get("MODEL_NAME", "Qwen/Qwen3-32B")
     if request.method == "GET" and request.url.path.endswith("/models"):
@@ -115,7 +116,7 @@ def _make_warmup_response(httpx_mod, request):
     stream = False
     model = default_model
     try:
-        parsed = json.loads(request.read().decode("utf-8"))
+        parsed = json.loads(raw_body.decode("utf-8"))
         if isinstance(parsed, dict):
             stream = bool(parsed.get("stream"))
             model = str(parsed.get("model") or default_model)
@@ -174,17 +175,18 @@ def _make_warmup_response(httpx_mod, request):
     )
 
 
-def _prepare_or_short_circuit(httpx_mod, request):
+def _prepare_or_short_circuit(httpx_mod, request, raw_body: bytes):
+    """`raw_body` is the request body the caller already read: `request.read()`
+    on the sync path, `await request.aread()` on the async path."""
     turn_headers = _TURN_HEADERS.get()
     for k, v in turn_headers.items():
         if k not in request.headers:
             request.headers[k] = v
 
-    raw_body = request.read() if request.method == "POST" else b""
     if turn_headers.get("x-hermes-session-id", "").startswith(_WARMUP_MARKER) or (
         raw_body and _WARMUP_BYTES in raw_body and not os.path.exists(_WARMUP_DONE_FILE)
     ):
-        return request, _make_warmup_response(httpx_mod, request)
+        return request, _make_warmup_response(httpx_mod, request, raw_body)
 
     if request.method == "POST" and request.url.path.endswith("/chat/completions"):
         try:
@@ -222,14 +224,18 @@ def _install_httpx_hook() -> None:
 
     @functools.wraps(orig_send)
     def _wrapped_send(self, request, *args, **kwargs):
-        request, warmup_resp = _prepare_or_short_circuit(httpx, request)
+        raw_body = request.read() if request.method == "POST" else b""
+        request, warmup_resp = _prepare_or_short_circuit(httpx, request, raw_body)
         if warmup_resp is not None:
             return warmup_resp
         return orig_send(self, request, *args, **kwargs)
 
     @functools.wraps(orig_async_send)
     async def _wrapped_async_send(self, request, *args, **kwargs):
-        request, warmup_resp = _prepare_or_short_circuit(httpx, request)
+        # An async caller may pass an AsyncByteStream, which the synchronous
+        # request.read() refuses to read.
+        raw_body = await request.aread() if request.method == "POST" else b""
+        request, warmup_resp = _prepare_or_short_circuit(httpx, request, raw_body)
         if warmup_resp is not None:
             return warmup_resp
         return await orig_async_send(self, request, *args, **kwargs)
@@ -238,10 +244,17 @@ def _install_httpx_hook() -> None:
     httpx.AsyncClient.send = _wrapped_async_send  # type: ignore[assignment]
 
 
-try:
-    _install_context_executor_propagation()
-    _install_aiohttp_hook()
-    _install_httpx_hook()
-except Exception:
-    # Never interfere with non-gateway Python invocations inside the container.
-    pass
+for _installer in (
+    _install_context_executor_propagation,
+    _install_aiohttp_hook,
+    _install_httpx_hook,
+):
+    try:
+        _installer()
+    except ModuleNotFoundError:
+        # Not a gateway process: aiohttp or httpx is not installed here.
+        pass
+    except Exception as exc:
+        # Never interfere with the process, but do not hide a hook that failed to
+        # install: without it the session and tier headers stop reaching llm-d.
+        print(f"[llmd-sitecustomize] hook setup failed: {exc}", file=sys.stderr, flush=True)

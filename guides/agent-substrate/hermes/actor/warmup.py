@@ -116,9 +116,17 @@ class _ReadyHandler(http.server.BaseHTTPRequestHandler):
 
 def main() -> None:
     gateway_pid = int(sys.argv[1])
-    signal.signal(signal.SIGTERM, lambda *_: os.kill(gateway_pid, signal.SIGTERM))
+
+    def _forward_sigterm(*_) -> None:
+        # The gateway may already have exited when SIGTERM arrives.
+        try:
+            os.kill(gateway_pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    signal.signal(signal.SIGTERM, _forward_sigterm)
     threading.Thread(target=_warm, daemon=True).start()
-    # Inside the isolated gVisor actor container, GKE Agent Substrate probes
+    # Inside the isolated gVisor actor container, Agent Substrate probes
     # container port 8081 from the worker network namespace.
     srv = http.server.ThreadingHTTPServer(("0.0.0.0", READY_PORT), _ReadyHandler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
