@@ -373,17 +373,67 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("model", ["nemotron-3-ultra", "qwen3-5-397b"])
+@pytest.mark.parametrize(
+    ("guide_relpath", "monitoring_path", "extra_vars", "expect_when_enabled"),
+    [
+        (
+            "models/nemotron-3-ultra",
+            "${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd",
+            {},
+            True,
+        ),
+        (
+            "models/qwen3-5-397b",
+            "${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd",
+            {},
+            True,
+        ),
+        (
+            "models/deepseek-v4",
+            "${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring",
+            {},
+            True,
+        ),
+        (
+            "models/glm-5-2",
+            "${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring",
+            {"ACCELERATOR_TYPE": "gpu"},
+            True,
+        ),
+        (
+            "models/glm-5-2",
+            "${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring",
+            {"ACCELERATOR_TYPE": "tpu"},
+            False,
+        ),
+        (
+            "models/kimi-k3-1",
+            "${REPO_ROOT}/guides/recipes/modelserver/components/monitoring",
+            {},
+            True,
+        ),
+        (
+            "wide-ep",
+            "${REPO_ROOT}/guides/${GUIDE_NAME}/monitoring",
+            {},
+            True,
+        ),
+    ],
+)
 @pytest.mark.parametrize("monitoring", [None, "false", "true"])
-def test_model_monitoring_cleanup_matches_deployment(model, monitoring):
-    model_guide = guide.Guide.load(GUIDES_DIR / "models" / model)
-    variables = {} if monitoring is None else {"MONITORING": monitoring}
-    deploy = model_guide.emit(["deploy.monitoring"], variables=variables)
-    cleanup = model_guide.emit(["cleanup"], variables=variables)
-    monitoring_path = "${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd"
+def test_model_monitoring_cleanup_matches_deployment(
+    guide_relpath, monitoring_path, extra_vars, expect_when_enabled, monitoring
+):
+    target_guide = guide.Guide.load(GUIDES_DIR / guide_relpath)
+    variables = dict(extra_vars)
+    if monitoring is not None:
+        variables["MONITORING"] = monitoring
+    deploy = target_guide.emit(["deploy.monitoring"], variables=variables)
+    cleanup = target_guide.emit(["cleanup"], variables=variables)
+    expected = (monitoring == "true") and expect_when_enabled
 
-    assert (monitoring_path in deploy) == (monitoring == "true")
-    assert (monitoring_path in cleanup) == (monitoring == "true")
+    assert (monitoring_path in deploy) == expected
+    assert (monitoring_path in cleanup) == expected
     assert "helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}" in cleanup
     assert "kubectl delete namespace ${NAMESPACE}" in cleanup
 

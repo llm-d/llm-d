@@ -821,6 +821,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/model
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING=true and ACCELERATOR_TYPE=gpu:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
