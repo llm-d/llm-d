@@ -142,7 +142,7 @@ All listed overlays were rendered offline with Kustomize. The last column record
 | Both guides | `cpu`, `tpu/v5p`, `tpu/v6`, `tpu/v7` | `base`, `gke` | Startup with tracing unverified |
 | Both guides | `amd`, `xpu` | `base` | Startup with tracing unverified |
 | Optimized Baseline | `amd` | `amd-ci` | Startup with tracing unverified |
-| Optimized Baseline | `npu`, `metax`, `mthreads` | `base` | Startup with tracing unverified |
+| Optimized Baseline | `npu`, `metax`, `mthreads`, `enflame` | `base` | Startup with tracing unverified |
 
 These overlays configure containers that execute `vllm serve` directly. OpenShift GPU (`gpu/vllm/ocp`), Biren, and Iluvatar use wrapper launchers and require separate configuration, as do TPU dynamic-slice LeaderWorkerSets, DisaggregatedSets, routing proxies, and other serving engines.
 
