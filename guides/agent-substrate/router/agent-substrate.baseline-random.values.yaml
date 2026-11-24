@@ -1,0 +1,81 @@
+## Random-routing baseline for the agent-substrate guide.
+## Layer on top of: recipes/router/base.values.yaml (instead of agent-substrate.values.yaml)
+##
+## Identical to agent-substrate.values.yaml (same agent-identity fairness IDs and
+## 3-band Flow Control) except that the scheduling profile picks a model server at
+## random and uses no scorers. It exists only so the effect of the guide's routing
+## can be measured against a baseline; see "Measure the Routing Effect" in the README.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica keeps the in-flight token counters and flow-control
+    # queues coherent across the 1,000-agent fleet.
+    replicas: 1
+    flags:
+      # Required for the Alpha `agent-identity` request-header plugin.
+      allow-experimental-plugins: true
+    pluginsConfigFile: "agent-substrate-plugins.yaml"
+    pluginsCustomConfig:
+      agent-substrate-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+          - flowControl
+        plugins:
+          - type: agent-identity
+            parameters:
+              additionalSessionHeaders:
+                - x-hermes-session-id
+          # Consumed by concurrency-detector. No prefix-cache or session plugins:
+          # every top-level plugin runs on each request even when the scheduling
+          # profile omits it, which would add router work to the baseline.
+          - type: inflight-load-producer
+          - type: random-picker
+          - type: round-robin-fairness-policy
+          - type: fcfs-ordering-policy
+          - type: concurrency-detector
+            parameters:
+              # Tune per fleet with docs/operations/traffic/flow-control-tuning.md.
+              maxConcurrency: 128
+              concurrencyMode: requests
+              headroom: 0.0
+
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: random-picker
+
+        flowControl:
+          enableEviction: true
+          maxBytes: "10Gi"
+          maxRequests: "2k"
+          defaultRequestTTL: "120s"
+          saturationDetector:
+            pluginRef: concurrency-detector
+          priorityBands:
+            # Interactive / Pro user-facing Hermes agents
+            - priority: 100
+              maxRequests: "1k"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            # Standard multi-turn Hermes agents
+            - priority: 0
+              maxRequests: "500"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            # Background / best-effort batch swarm agents (queued last, shed first)
+            - priority: -10
+              maxRequests: "200"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "agent-substrate"
+      llm-d.ai/role: "decode"

@@ -177,4 +177,12 @@ sections:
         position: 4
   # operations/lifecycle has only docs pages: graceful-shutdown, readiness-probes.
   # operations/disaggregation has only docs pages: vllm, sglang, disaggregatedset.
-  # operations/integrations has only docs pages: litellm, kong.
+  operations-integrations:
+    target: operations/integrations
+    guides:
+      # position 1: docs/operations/integrations/litellm.md
+      # position 2: docs/operations/integrations/kong.md
+      - dir: guides/agent-substrate
+        slug: agent-substrate
+        title: Serve Stateful Agent Sandboxes (Agent Substrate)
+        position: 3

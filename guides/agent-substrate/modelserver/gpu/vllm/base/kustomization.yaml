@@ -1,0 +1,15 @@
+# Model server for the agent-substrate guide: tiered-prefix-cache's native
+# Host-DRAM KV offloading overlay (2 x TP=2 Qwen/Qwen3-32B), labeled for this
+# guide and patched to the 64k context window Hermes Agent requires.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../tiered-prefix-cache/modelserver/gpu/vllm/native/cpu/base
+
+labels:
+  - pairs:
+      llm-d.ai/guide: agent-substrate
+    includeSelectors: true
+    includeTemplates: true
+patches:
+  - path: patch-vllm.yaml

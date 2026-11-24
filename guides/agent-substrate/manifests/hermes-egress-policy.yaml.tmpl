@@ -1,0 +1,14 @@
+# EgressPolicy for one Hermes actor. Agent Substrate denies all actor egress by
+# default, including DNS for names no rule covers, so without this policy the
+# agent can neither resolve nor reach the llm-d Router.
+#
+# Applied once per actor with
+#   kubectl ate create egress-policy <actor> -a <atespace> -f -
+# after ${LLMD_HOST} is substituted. It allows cleartext HTTP to that one host
+# on port 80 and nothing else; ${LLMD_HOST} must be the host in the
+# ActorTemplate's MODEL_BASE_URL. Hostnames must be DNS names, not IPs.
+rules:
+  - http:
+      hostnames: ["${LLMD_HOST}"]
+      ports:
+        numbers: [80]

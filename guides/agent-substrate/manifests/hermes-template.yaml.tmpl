@@ -1,0 +1,41 @@
+# Agent Substrate ActorTemplate ("hermes-dense"), in the Substrate v1.0.0 API.
+# It is a Substrate API resource, not a Kubernetes object:
+#   kubectl ate create atespace agent-hermes
+#   envsubst < manifests/hermes-template.yaml.tmpl | kubectl ate create actor-template -f -
+#
+# `SNAPSHOT_FIDELITY_MEMORY` captures process memory and the container's root
+# filesystem writes on every suspend, which preserves each agent's SQLite
+# session store (`/data/.hermes`) across suspend/resume cycles. Snapshots are
+# stored under the snapshot location Substrate was installed with.
+metadata:
+  atespace: ${ATESPACE}
+  name: hermes-dense
+workerSelector:
+  matchLabels:
+    workload: hermes
+containers:
+  - name: hermes
+    image: ${HERMES_IMAGE}
+    env:
+      - name: API_SERVER_KEY
+        value: "${HERMES_API_KEY}"
+      - name: MODEL_BASE_URL
+        value: "${LLMD_BASE_URL}"
+      - name: MODEL_NAME
+        value: "${MODEL_NAME}"
+      - name: MAX_TOKENS
+        value: "64"
+      - name: CONTEXT_LENGTH
+        value: "65536"
+    # Resume returns, and the golden snapshot is taken, only after this probe
+    # answers 200, which warmup.py does once the warm-up turns have completed.
+    wakeupProbe:
+      httpGet:
+        path: /ready
+        port: 8081
+resources:
+  limits:
+    cpuMillicores: 1000
+    memoryBytes: 1073741824 # 1Gi
+snapshotConfig:
+  preferredFidelity: SNAPSHOT_FIDELITY_MEMORY

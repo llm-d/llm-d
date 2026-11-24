@@ -1,0 +1,113 @@
+## agent-substrate guide overrides for the llm-d Router.
+## Layer on top of: recipes/router/base.values.yaml
+##
+## Combines three capabilities needed by 1,000+ stateful Hermes Agent sandboxes:
+##   1. Session awareness for X-Hermes-Session-Id:
+##      - `agent-identity` extracts `x-hermes-session-id` before flow-control
+##        admission so every Hermes session gets its own per-session FairnessID
+##        queue without clients needing to set `x-llm-d-inference-fairness-id`.
+##      - `session-affinity-scorer` (`strategy: session_id`) binds each active
+##        Hermes session to the replica that served its prior turns for 15m,
+##        keeping resumed agents pinned to the pod holding their HBM or local
+##        Host-DRAM offloaded KV cache across gVisor pause/resume cycles.
+##   2. Prefix-cache + real-time token-load routing:
+##      - `approx-prefix-cache-producer` + `prefix-cache-scorer` steer cold Turn-1
+##        requests onto replicas with a warm shared Hermes system prompt (`AGENTS.md`).
+##      - `inflight-load-producer` + `token-load-scorer` account for in-flight
+##        uncached prefill tokens immediately (rather than waiting on scraped
+##        queue gauges), spreading 1,000-agent wake storms across replicas.
+##   3. Multi-tier Flow Control (`featureGates: [flowControl]`):
+##      - Priority bands `100` (`premium-traffic`), `0` (`standard-traffic`), and
+##        `-10` (`best-effort-traffic`) isolate interactive agents from background
+##        swarm bursts when pool concurrency reaches `maxConcurrency`, with
+##        `round-robin-fairness-policy` interleaving sessions fairly in each band.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    # Single EPP replica keeps in-memory session bindings, approximate prefix
+    # index, and in-flight token counters coherent across the 1,000-agent fleet.
+    replicas: 1
+    flags:
+      # Required for the Alpha `agent-identity` request-header plugin.
+      allow-experimental-plugins: true
+    pluginsConfigFile: "agent-substrate-plugins.yaml"
+    pluginsCustomConfig:
+      agent-substrate-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+          - flowControl
+        plugins:
+          - type: agent-identity
+            parameters:
+              additionalSessionHeaders:
+                - x-hermes-session-id
+          - type: approx-prefix-cache-producer
+          - type: inflight-load-producer
+          - type: session-affinity-scorer
+            parameters:
+              strategy: session_id
+              sessionIdConfig:
+                sources:
+                  - header: x-hermes-session-id
+                  - attribute: agent-identity
+                evictionTtlSeconds: 900
+                evictionSweepSeconds: 30
+          - type: prefix-cache-scorer
+          - type: token-load-scorer
+          - type: kv-cache-utilization-scorer
+          - type: round-robin-fairness-policy
+          - type: fcfs-ordering-policy
+          - type: concurrency-detector
+            parameters:
+              # Tune per fleet with docs/operations/traffic/flow-control-tuning.md.
+              maxConcurrency: 128
+              concurrencyMode: requests
+              headroom: 0.0
+
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: prefix-cache-scorer
+                weight: 3
+              - pluginRef: session-affinity-scorer
+                weight: 2
+              - pluginRef: token-load-scorer
+                weight: 2
+              - pluginRef: kv-cache-utilization-scorer
+                weight: 1
+
+        flowControl:
+          enableEviction: true
+          maxBytes: "10Gi"
+          maxRequests: "2k"
+          defaultRequestTTL: "120s"
+          saturationDetector:
+            pluginRef: concurrency-detector
+          priorityBands:
+            # Interactive / Pro user-facing Hermes agents
+            - priority: 100
+              maxRequests: "1k"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            # Standard multi-turn Hermes agents
+            - priority: 0
+              maxRequests: "500"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            # Background / best-effort batch swarm agents (queued last, shed first)
+            - priority: -10
+              maxRequests: "200"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "agent-substrate"
+      llm-d.ai/role: "decode"

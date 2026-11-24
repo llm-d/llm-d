@@ -1,0 +1,35 @@
+apiVersion: llm-d.ai/v1
+kind: InferenceObjective
+metadata:
+  name: premium-traffic
+  labels:
+    llm-d.ai/guide: "agent-substrate"
+    llm-d.ai/inference-serving: "true"
+spec:
+  priority: 100
+  poolRefs:
+    - name: agent-substrate
+---
+apiVersion: llm-d.ai/v1
+kind: InferenceObjective
+metadata:
+  name: standard-traffic
+  labels:
+    llm-d.ai/guide: "agent-substrate"
+    llm-d.ai/inference-serving: "true"
+spec:
+  priority: 0
+  poolRefs:
+    - name: agent-substrate
+---
+apiVersion: llm-d.ai/v1
+kind: InferenceObjective
+metadata:
+  name: best-effort-traffic
+  labels:
+    llm-d.ai/guide: "agent-substrate"
+    llm-d.ai/inference-serving: "true"
+spec:
+  priority: -10
+  poolRefs:
+    - name: agent-substrate

@@ -3,6 +3,7 @@
 Layer additional APIs and gateways on top of a running **llm-d** deployment:
 
 - **AI gateways** ([LiteLLM](./litellm.md), [Kong AI Gateway](./kong.md)), described below.
+- **Stateful agent sandboxes** on GKE Agent Substrate (1,000+ Hermes Agents with session-aware routing and multi-tier Flow Control): [Serve Stateful Agent Sandboxes (Agent Substrate)](../../../guides/agent-substrate/README.md).
 - **The stateful OpenAI Responses API** for agentic clients and coding harnesses is a well-lit path of its own: [Serve the Stateful OpenAI Responses API](../../../guides/agentic-api/README.md).
 
 ## AI Gateways
