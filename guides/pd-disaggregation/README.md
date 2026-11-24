@@ -41,6 +41,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | TPU7x sub-slices via dynamic slicing + Kueue · `DisaggregatedSet` with 1P + 1D, one `2x2x1` sub-slice each · TPUConnectorHMA |
 | Iluvatar GPU | `iluvatar` | `Qwen/Qwen3-32B` | 🟡 community | — | BI-V150 · 1P + 1D, 2 boards each (TP=4) · IluNixlConnector |
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
+| Hygon HCU | `hygon` | `Qwen3-32B` | — | 🟡 community | BW1000 64 GiB · SGLang 1P (TP=4) + 1D (TP=4) · Mooncake over RoCE |
 | Biren GPU | `biren` | `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8` | 🟡 community | — | 166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v) |
 | Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | MTT S5000 · vLLM 1P TP=4 + 1D TP=4, Mooncake TCP; SGLang 1P+1D TP=8, Mooncake RDMA |
 | Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector |
@@ -64,7 +65,7 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | IluNixlConnector | `iluvatar/vllm/base` | UCX with CUDA-aware transports | Iluvatar's fork of NixlConnector. See the [Iluvatar tab](#2-deploy-the-model-server). |
 | NixlConnector | `biren/vllm/base` | RDMA (`UCX_TLS=rc_v`) | Biren 166M, `kv_buffer_device=cpu`. See the [Biren tab](#2-deploy-the-model-server). |
 | MooncakeConnector | `mthreads/vllm/base` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires the same TP on prefill and decode. See the [Moore Threads tab](#2-deploy-the-model-server). |
-| SGLang mooncake | `mthreads/sglang/base` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
+| SGLang mooncake | `mthreads/sglang/base`, `hygon/sglang/base` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
 | SGLang raiden | `tpu/v7/sglang` | TCP over DCN via tpu-sync | SGLang `--disaggregation-transfer-backend raiden` on Torch TPU; the decode pulls each chunk's pages as the prefill commits them. See the [Google TPU tab](#2-deploy-the-model-server). |
 
 NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production.
@@ -129,7 +130,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 | `amd` | `nixl/base`, `nixl/oci`, `nixl/tensorwave`, `moriio/base` |
 | `xpu` | `base`, `rdma` (SGLang: `base`) |
 | `tpu/v5p`, `tpu/v6`, `tpu/v7`, `tpu/v7-dynamic-slice` | `gke` |
-| `iluvatar`, `metax`, `biren`, `mthreads`, `npu` | `base` |
+| `iluvatar`, `metax`, `hygon`, `biren`, `mthreads`, `npu` | `base` |
 
 - `base`: generic Kubernetes cluster.
 - `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see the platform table in [Prerequisites](#prerequisites)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
@@ -149,7 +150,7 @@ export NAMESPACE=llm-d-pd-disaggregation
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, biren, mthreads, npu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, hygon, biren, mthreads, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, nixl/base, nixl/amd-ci, nixl/oci, nixl/tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma; valid values per accelerator: table above
 export MODEL=openai/gpt-oss-120b # set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B
@@ -302,7 +303,7 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
-**Apply the Kustomize overlay** for your accelerator and model server. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`, with the routing sidecar in front of the engine): the `prefill` and `decode` roles of a `DisaggregatedSet` on NVIDIA GPU and TPU7x dynamic sub-slices, two `Deployments` elsewhere. See [Configure the environment](#configure-the-environment) for the `INFRA_PROVIDER` values of each accelerator.
+**Apply the Kustomize overlay** for your accelerator and model server. Each overlay deploys a prefill role (pods labeled `llm-d.ai/role=prefill`) and a decode role (`llm-d.ai/role=decode`, with the routing sidecar in front of the engine): the `prefill` and `decode` roles of a `DisaggregatedSet`. See [Configure the environment](#configure-the-environment) for the `INFRA_PROVIDER` values of each accelerator.
 
 <!-- tabs:start group=modelserver -->
 <details open>
@@ -473,6 +474,35 @@ The `metax` overlay runs vLLM on MetaX C500X over `NixlConnector` and the llm-d 
 **Known issues:**
 
 - Qwen3 chat completions may emit a `<think>` channel unless the client sets `chat_template_kwargs.enable_thinking=false`.
+
+</details>
+<details data-when="ACCELERATOR_TYPE=hygon">
+<summary><b>Hygon</b></summary>
+
+<!-- guide:deploy.modelserver.hygon[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.hygon[0] end -->
+
+The `hygon` overlay runs SGLang on Hygon BW1000 HCU (64&nbsp;GiB) with Mooncake KV transfer over RoCE. Prefill and decode are the two roles of one `DisaggregatedSet` (`pd-disagg-hygon-sglang`), each `TP=4`. Both load `Qwen/Qwen3-32B` (`--model-path`) and serve it as `Qwen3-32B`. Set `ACCELERATOR_TYPE=hygon`, `MODEL_SERVER=sglang`, `INFRA_PROVIDER=base`, and `MODEL=Qwen3-32B`. The InferencePool selects both roles by `llm-d.ai/guide=pd-disaggregation` and routes by `llm-d.ai/role`.
+
+**Requirements:**
+
+- The HAMi scheduler and the [Hygon HCU device plugin](https://github.com/HYGON-AI/k8s-hcu-device-plugin) `v3.0.2` or newer. Older plugins fail `Allocate` for pods with init containers, such as the decode pod's routing sidecar.
+- An RDMA device plugin exposing `rdma/hca_shared_devices_a`, and Multus `NetworkAttachmentDefinition`s `roce-rail-1` through `roce-rail-8` in namespace `default` so each pod has an address on every RoCE NIC. See [RDMA: Hygon HCU](../../docs/infrastructure/rdma/README.md#hygon-hcu) for the rail objects and how to check them.
+- Image `harbor.sourcefind.cn:5443/hcu/admin/base/sglang:0.5.12-ubuntu22.04-dtk2604-py3.10` (DTK 26.04). Air-gapped sites can retag it.
+- Pods get `IPC_LOCK`, `SYS_RESOURCE`, and `SYS_ADMIN` so Mooncake can pin memory. Prefill and decode are anti-affined onto different nodes.
+
+**Configuration notes:**
+
+- Both roles use `--disaggregation-transfer-backend mooncake` and bootstrap port `8998`. `NCCL_IB_HCA` is `mlx5_0` through `mlx5_7`; change it if the HCAs are named differently. `NCCL_IB_DISABLE=1` keeps intra-node tensor-parallel collectives on the socket path. Mooncake still uses those HCAs through `--disaggregation-ib-device`.
+- Prefill sets `--chunked-prefill-size 8192`. The overlay uses the shared [`pd-disaggregation.values.yaml`](./router/pd-disaggregation.values.yaml). A calibration run on this topology (Qwen3-32B, 1 prefill + 1 decode, each TP=4) measured 8690 (`CHUNK_SIZE=8192`, median TTFT 0.9427s). With one prefill replica that gate does not change which pod is picked.
+- Decode listens on port `8200` behind the routing sidecar (`--kv-connector=sglang`) on port `8000`. The sidecar runs as a native sidecar init container, as in the other `DisaggregatedSet` overlays.
+- `USE_DCU_CUSTOM_ALLREDUCE=1` and `SGLANG_USE_LIGHTOP=1` are the DTK SGLang defaults used on this image. CUDA graphs stay off (`--disable-cuda-graph`).
 
 </details>
 <details data-when="ACCELERATOR_TYPE=biren">
@@ -735,7 +765,7 @@ In a P/D deployment the prefill and decode pools scale and fail independently, a
 ### Key metrics for this path
 
 | Signal | Why it matters for P/D | Where to look |
-|--------|------------------------|---------------|
+| -------- | ------------------------ | --------------- |
 | Prefill worker utilization (`vllm:num_requests_running{pod=~".*prefill.*"}`) | Prefill is short and bursty. Sustained saturation here means prompts queue before decode can even start, inflating TTFT | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
 | Decode KV cache utilization (`vllm:kv_cache_usage_perc{pod=~".*decode.*"}`) | Decode holds KV for the full generation. Above ~0.9 the decode pool preempts or rejects, so decode — not prefill — is usually the scaling bottleneck | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
 | P/D decision ratio (`llm_d_epp_disagg_decision_total`) | Confirms the router is actually splitting prefill and decode (`decision_type="prefill-decode"`). A ratio drifting toward `decode-only` means requests are falling back to aggregated serving | [PromQL → Prefill/Decode](../../docs/operations/observability/promql.md#prefilldecode-disaggregation) |
