@@ -20,3 +20,8 @@
 | `stern`            | 1.30+                    | [stern - installation](https://github.com/stern/stern?tab=readme-ov-file#installation)           |                                                                |
 | `helm diff` plugin | v3.10.0+                 | [helm diff installation docs](https://github.com/databus23/helm-diff?tab=readme-ov-file#install) |                                                                |
 | `timeout`          | -                        | Part of `coreutils` package                                                                      | Required for benchmark scripts                                 |
+
+## GKE-managed Gateway API CRDs
+
+On GKE with the Gateway API enabled, check who owns the CRDs before applying them; see
+[Installing Gateway API CRDs](../../docs/infrastructure/gateway/install-crds.md).
