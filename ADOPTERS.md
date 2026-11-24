@@ -20,6 +20,7 @@
 | Contributor | Moreh | 2025 | [Moreh](https://moreh.io) | Moreh contributes to llm-d, actively improving KV-cache management and vLLM rendering, along with P/D disaggregation for distributed inference. |
 | Contributor | Rebellions | 2025 | [Rebellions](https://rebellions.ai) | Rebellions contributes to llm-d, enabling support for the NPU accelerator to bring high-performance, energy-efficient AI inference to the platform. |
 | Contributor | Mooncake | 2026 | [Mooncake](https://github.com/kvcache-ai/Mooncake) | Mooncake is integrated with llm-d to support distributed KV cache pooling and prefill/decode disaggregation for large-scale inference. |
+| Contributor | Parasail | 2026 | [Parasail](https://www.parasail.io) | Parasail contributes to llm-d, reducing router memory use for large request bodies, and runs llm-d in production for its serverless inference endpoints. |
 | University Supporter | University of California, Berkeley (Sky Computing Lab) | 2025 | [Sky Computing Lab](https://sky.cs.berkeley.edu) | The Sky Computing Lab at UC Berkeley, originators of vLLM, are founding academic supporters of llm-d. |
 | University Supporter | University of Chicago (LMCache Lab) | 2025 | [LMCache Lab](https://lmcache.ai) | The LMCache Lab at the University of Chicago, originators of LMCache, are founding academic supporters of llm-d. |
 | User | Tesla | 2025 | [Tesla](https://www.tesla.com/) | The Tesla ML Platform team are users of llm-d. |
@@ -33,6 +34,7 @@
 | User / Contributor | DigitalOcean | 2026 | [DigitalOcean](https://www.digitalocean.com/) | DigitalOcean uses llm-d for Dedicated and Serverless Inference endpoints and contributes actively to the project. |
 | User | Capital One | 2026 | [Capital One](https://www.capitalone.com/) | The Capital One model serving team are users of llm-d. |
 | User | Upwork | 2026 | [Upwork](https://www.upwork.com/) | The Upwork model serving team leverages llm-d for agentic coding and batch workloads. |
+| User | Vapi | 2026 | [Vapi](https://www.vapi.ai/) | The Vapi MLOps team is using llm-d to power their inference stack. |
 
 ## Adopter Types
 

@@ -217,22 +217,44 @@ def resolve_owner_mentions(workflow_file: str, *, json_output: bool = False) -> 
         return []
 
     scenario = None
+    guide_path = None
     for line in workflow_path.read_text(encoding="utf-8").splitlines():
-        if re.match(r"^\s*standup_scenario:", line):
+        if not scenario and re.match(r"^\s*standup_scenario:", line):
             match = re.search(r"\|\|\s*['\"]([^'\"]+)['\"]", line)
             if match:
                 scenario = match.group(1)
-                break
-        if re.match(r"^\s*guide_name:", line):
+        if not scenario and re.match(r"^\s*guide_name:", line):
             match = re.match(r"^\s*guide_name:\s*['\"]?([^'\"\s]+)", line)
             if match:
                 scenario = match.group(1)
-                break
-    if not scenario:
+        if not guide_path and re.match(r"^\s*guide_path:", line):
+            match = re.match(r"^\s*guide_path:\s*['\"]?([^'\"\s]+)", line)
+            if match:
+                guide_path = match.group(1)
+
+    # A bespoke e2e lane names its guide directory in `guide_path` (its
+    # `guide_name` is only a label, e.g. async-multitenant for
+    # guides/batch-serving/asynchronous-processing/multitenant), so prefer it.
+    guides_root = (REPO_ROOT / "guides").resolve()
+    if guide_path:
+        guide_dir = (REPO_ROOT / guide_path).resolve()
+    elif scenario:
+        guide_dir = (guides_root / scenario).resolve()
+    else:
+        return []
+    if not guide_dir.is_relative_to(guides_root):
         return []
 
-    owners_path = REPO_ROOT / "guides" / scenario / "OWNERS"
-    if not owners_path.is_file():
+    # Nested guides may share an OWNERS file with their parent directory, so use
+    # the nearest one at or above the guide, stopping at guides/ itself.
+    owners_path = None
+    for directory in (guide_dir, *guide_dir.parents):
+        if directory == guides_root:
+            break
+        if (directory / "OWNERS").is_file():
+            owners_path = directory / "OWNERS"
+            break
+    if not owners_path:
         return []
     with owners_path.open(encoding="utf-8") as fh:
         owners = yaml.safe_load(fh) or {}

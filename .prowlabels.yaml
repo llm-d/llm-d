@@ -1,4 +1,24 @@
 # Labels for labeling issues and pull requests using GitHub prow action.
+area:
+  - 'agentic'
+  - 'autoscaling'
+  - 'batch'
+  - 'benchmarking'
+  - 'ci'
+  - 'disaggregation'
+  - 'docker'
+  - 'docs'
+  - 'flowcontrol'
+  - 'guides'
+  - 'infra'
+  - 'kvcache'
+  - 'models'
+  - 'multimodal'
+  - 'observability'
+  - 'proposals'
+  - 'rl'
+  - 'router'
+
 kind:
   - 'bug'
   - 'security'

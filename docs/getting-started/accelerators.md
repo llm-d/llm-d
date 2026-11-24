@@ -10,6 +10,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | --- | --- | --- |
 | AMD | ROCm | Kenny Roche (<Kenny.Roche@amd.com>), Vincent Cave (<Vincent.Cave@amd.com>) |
 | Biren | 166M | FengSibo (@fengsibo, <fengsiboacer@gmail.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
+| Enflame | GCU | Da Ma(@sea10094, <sea10094@gmail.com>), Mengxuan Li(@archlitchi, <mengxuan.li@dynamia.ai>) |
 | CPU | x86_64 | Hongming Zheng (@ZhengHongming888, <hongming.zheng@intel.com>) |
 | Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
@@ -31,6 +32,8 @@ For integration into the well-lit paths our standard for contribution is higher,
 > [!NOTE]
 > We aim to increase our requirements to have active CI coverage for all hardware guide variants in a future release.
 
+<!-- -->
+
 > [!NOTE]
 > The community can assist but is not responsible for keeping hardware guide variants updated. We reserve the right to remove stale examples and documentation with regard to hardware support.
 
@@ -38,20 +41,20 @@ For integration into the well-lit paths our standard for contribution is higher,
 
 NVIDIA GPUs are the default accelerator for all llm-d guides. Any NVIDIA GPU is supported, with the specific capabilities determined by the inference container image used. No special cluster configuration is required beyond the NVIDIA device plugin or DRA driver.
 
-**CUDA Runtime and Driver Requirements**
+### CUDA Runtime and Driver Requirements
 
-llm-d currently ships container images based on the **CUDA 12.9.1** runtime. A future release will move to **CUDA 13.0.2**.
+llm-d no longer builds its own CUDA images (`ghcr.io/llm-d/llm-d-cuda` is deprecated, see [#2338](https://github.com/llm-d/llm-d/issues/2338)). The NVIDIA GPU guides deploy the upstream model server images set in the [default image components](../../guides/recipes/modelserver/components/images/README.md), so the CUDA runtime, and with it the minimum driver, comes from the image you deploy. The current defaults, `vllm/vllm-openai` and `lmsysorg/sglang`, are built on **CUDA 13.0** for both amd64 and arm64. To check an image, read the `CUDA_VERSION` environment variable in its image config.
 
-CUDA 12.x and CUDA 13.x have non-overlapping driver compatibility ranges — a given driver version supports one major CUDA family, not both:
+| CUDA Version | Minimum Driver |
+| --- | --- |
+| CUDA 13.x | R580 or newer |
+| CUDA 12.x | R525 or newer |
 
-| CUDA Version | Minimum Driver | Maximum Driver |
-|---|---|---|
-| CUDA 12.9.1 (current) | 525.60.13 | < 580 |
-| CUDA 13.0.2 (planned) | 580.65.06 | N/A |
+Newer drivers keep running images built with older CUDA versions, so an R580+ driver runs both CUDA 12 and CUDA 13 images. See NVIDIA's [minor version compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html) table.
 
-> **Recommended driver version: 575.x** for current llm-d releases using CUDA 12.9.1. This provides the latest features and fixes within the CUDA 12.x compatible driver range.
->
-> When llm-d moves to CUDA 13.0.2, the minimum driver version will become **580.65.06**. Users should plan to upgrade their node drivers to 580+ ahead of this transition.
+On NVIDIA Data Center GPUs (and select NGC Server Ready RTX SKUs), CUDA 13 images can also run on some older driver branches through [CUDA forward compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/forward-compatibility.html); check NVIDIA's table for the branches that are supported. The vLLM image ships the forward compatibility libraries but leaves them off by default; see [running vLLM on systems with older CUDA drivers](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/#running-on-systems-with-older-cuda-drivers) for how to enable them.
+
+Some guides list driver prerequisites of their own, for example the [GPU driver notes of the wide expert parallelism guide on GKE](../../guides/wide-ep/modelserver/gpu/vllm/gke/README.md#gpu-driver). Check the prerequisites of the guide you deploy.
 
 For the full CUDA/driver compatibility matrix, see the [CUDA Toolkit Release Notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html).
 
@@ -83,7 +86,9 @@ The RDMA overlay (`modelserver/xpu/vllm/rdma/`) reuses the standard XPU vLLM bas
 
 ## Iluvatar
 
-Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). Each board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board); with ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards and vLLM parallel sizes count CUDA devices (2 per board). The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The P/D overlay serves `Qwen/Qwen3-32B` on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode). The optimized-baseline overlay serves `deepseek-ai/DeepSeek-V4-Flash` on 4 boards / 8 CUDA devices (DP=8 + EP).
+Iluvatar BI-V150 GPUs are supported via the CoreX runtime (Iluvatar's CUDA-compatible stack) with a vLLM fork and a vendor-specific NIXL connector (`IluNixlConnector`). Each board is dual-die (32&nbsp;GiB per die, 64&nbsp;GiB per board); with ix-device-plugin `splitboard: false`, `iluvatar.com/gpu` counts boards and vLLM parallel sizes count CUDA devices (2 per board).
+
+The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The P/D overlay serves `Qwen/Qwen3-32B` on 4 boards / 8 CUDA devices (1× TP=4 prefill + 1× TP=4 decode). The optimized-baseline overlay serves `deepseek-ai/DeepSeek-V4-Flash` on 4 boards / 8 CUDA devices (DP=8 + EP).
 
 **UCX transport (required for P/D):**
 
@@ -102,6 +107,11 @@ Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefi
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
 
+## Enflame S60
+
+Enflame S60 GCUs are supported for a community optimized-baseline path. The engine is vLLM 0.20.2 from the TopsRider 3.8.107
+S60 image (`registry-egc.enflame-tech.com/enflame/topsrider3.8.107_image_s60:v1.0`). The Enflame DRA driver must publish DeviceClass `gcu.gcu-dra.enflame.com`. 
+
 ## Biren 166M
 
 Biren 166M GPUs are supported for community-contributed well-lit paths. The device plugin must expose `birentech.com/gpu`; the P/D overlay also requests InfiniBand through an RDMA device plugin (`rdma/ib`):
@@ -114,12 +124,12 @@ Biren 166M GPUs are supported for community-contributed well-lit paths. The devi
 Moore Threads MTT S5000 GPUs are supported for community-contributed well-lit
 paths. The device plugin must expose `mthreads.com/gpu`.
 
-**vLLM**
+### vLLM
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/vllm/base`](../../guides/optimized-baseline/modelserver/mthreads/vllm/base/) — Qwen3-32B, TP=8.
 - **P/D disaggregation** (one 8-GPU node): [`guides/pd-disaggregation/modelserver/mthreads/vllm/base`](../../guides/pd-disaggregation/modelserver/mthreads/vllm/base/) — 1P TP=4 + 1D TP=4, vLLM `MooncakeConnector` over TCP/MUSA.
 
-**SGLang**
+### SGLang
 
 - **Colocated** (one 8-GPU node): [`guides/optimized-baseline/modelserver/mthreads/sglang/base`](../../guides/optimized-baseline/modelserver/mthreads/sglang/base/) — Prefill and Decode in one process (`--tp 8 --ep 8`).
 - **P/D disaggregation** (two 8-GPU nodes): [`guides/pd-disaggregation/modelserver/mthreads/sglang/base`](../../guides/pd-disaggregation/modelserver/mthreads/sglang/base/) — 1P+1D, each TP=8, Mooncake KV transfer.

@@ -3,5 +3,5 @@ kind: Component
 
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/library/birensupa-smartinfer-vllm
-    newTag: 26.08.25831-pd-ready
+    newName: developer-registry.birentech.com/software-stack-prod/birensupa-smartinfer-vllm
+    newTag: 26.10.rc1-py310-pt2.9.0-vllm0.16.0-br1xx

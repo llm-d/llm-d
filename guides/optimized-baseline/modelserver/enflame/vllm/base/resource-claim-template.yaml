@@ -1,0 +1,20 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gcu-claim-template-decode
+  labels:
+    llm-d.ai/role: decode
+spec:
+  spec:
+    devices:
+      requests:
+        - name: gcu
+          exactly:
+            deviceClassName: gcu.gcu-dra.enflame.com
+            allocationMode: ExactCount
+            count: 4
+            # One DeviceClass lists every GCU the DRA driver publishes. Keep the
+            # claim on S60, the card this overlay was brought up on.
+            selectors:
+              - cel:
+                  expression: device.attributes["gcu-dra.enflame.com"].productName == "Enflame S60"

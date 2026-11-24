@@ -409,6 +409,7 @@ since the screener and the decider are Alpha.
 
 1. *Deploy the llm-d Routers*:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 export PROVIDER_NAME=istio # other: gke, na, agentgateway
 export ROUTER_RELEASES="${GUIDE_NAME}-encode ${GUIDE_NAME}-prefill ${GUIDE_NAME}-decode" # for Cleanup
@@ -423,6 +424,7 @@ for ROLE in encode prefill decode; do
       -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 done
 ```
+<!-- llm-d-cicd:skip end -->
 
 1. *Deploy the shared HTTPRoute*. Same reasoning as the single-EPP variant's
    `httpRoute.create: false` (each release disables its own auto-created HTTPRoute for
@@ -433,9 +435,11 @@ done
    `${GUIDE_NAME}-decode` — the InferencePool name matches the Helm release name). The
    same [!WARNING] about `x-llm-d-epp-profile` not being a trust boundary applies here too.
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ | envsubst | kubectl apply -n ${NAMESPACE} -f -
 ```
+<!-- llm-d-cicd:skip end -->
 
 > [!NOTE]
 > Same `base`/`gke` overlay split as the single-EPP variant's HTTPRoute, except the
@@ -548,11 +552,13 @@ an SSL-Bump-configured Squid), then trust its CA in the Coordinator with
 [`multimedia-downloader/patch-coordinator-ca.yaml`](multimedia-downloader/patch-coordinator-ca.yaml).
 This requires the Coordinator from step 3 to already be deployed:
 
+<!-- llm-d-cicd:skip start -->
 ```bash
 kubectl patch deployment llm-d-coordinator -n ${NAMESPACE} \
     --type=strategic --patch-file ${REPO_ROOT}/guides/${GUIDE_NAME}/multimedia-downloader/patch-coordinator-ca.yaml
 kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
 ```
+<!-- llm-d-cicd:skip end -->
 
 Without this step, `replace-media-urls` still works — it just fetches media directly
 instead of through a cache.
@@ -591,7 +597,7 @@ export PORT=80
 
 ```bash
 kubectl run curl-debug --rm -it \
-    --image=cfmanteiga/alpine-bash-curl-jq \
+    --image=${CURL_TEST_IMAGE} \
     --namespace="$NAMESPACE" \
     --env="IP=$IP" \
     --env="PORT=$PORT" \

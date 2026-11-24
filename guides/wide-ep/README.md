@@ -25,7 +25,7 @@ This guide includes configurations for the following accelerator and model serve
 | --- | --- | --- | --- | --- |
 | NVIDIA GPU | `gpu` | `deepseek-ai/DeepSeek-R1-0528` | ✅ validated | Default. 32× H200 · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · DeepEP + NIXL · `INFRA_PROVIDER`: `base`, `gke`, `coreweave` |
 | AMD GPU | `amd` | `deepseek-ai/DeepSeek-V3` | ✅ validated | 32× MI355X · `DisaggregatedSet`: prefill DP16 + decode DP16, 2 nodes each · MoRI-EP + MoRI-IO · `INFRA_PROVIDER`: `base`, `amd-ci` |
-| Intel XPU | `xpu` | `deepseek-ai/DeepSeek-V2-Lite-Chat` | ✅ validated | 4 XPUs via DRA · `LeaderWorkerSet`: prefill TP2 + decode TP2 with EP · NIXL · `INFRA_PROVIDER`: `base` |
+| Intel XPU | `xpu` | `Qwen/Qwen3-235B-A22B` | ✅ validated | 16 XPUs via DRA · aggregated `LeaderWorkerSet`: 2 pods × TP8, DP2/EP across pods · XCCL over RDMA · `INFRA_PROVIDER`: `base` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -39,7 +39,7 @@ This guide includes configurations for the following accelerator and model serve
 
 The AMD decode routing sidecar reaches its MoRI-IO peers by their `LeaderWorkerSet` pod DNS names, built from the pod's `disaggregatedset.x-k8s.io/revision` label, so no extra Services are needed. The peer list is fixed to this 2P2D shape (one two-pod group per role) and resolved once at startup: changing `replicas` or `size` means editing it and redeploying. This is a temporary workaround until multi-pod peer discovery is supported.
 
-**Intel XPU** (DeepSeek-V2-Lite-Chat): prefill and decode each run TP2 with expert parallelism on 4 XPUs in total, with the `allgather_reducescatter` all-to-all backend, NIXL KV transfer (`kv_buffer_device=xpu`), and the `tcp,ze_copy` UCX transport for the validated non-RDMA configuration.
+**Intel XPU** (Qwen3-235B-A22B): one aggregated `LeaderWorkerSet` runs two TP8 pods across two nodes, with data and expert parallelism across all 16 XPUs.
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ export MONITORING_VALUES=
 export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu
 export MODEL_SERVER=vllm # options: vllm
 export ACCELERATOR=${ACCELERATOR_TYPE} # keep equal to ACCELERATOR_TYPE
-export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci; valid values per accelerator: table above
+export INFRA_PROVIDER=base # options: base, gke, coreweave, amd-ci, xpu-ci; valid values per accelerator: table above
 export MODEL=deepseek-ai/DeepSeek-R1-0528 # set to the model your accelerator serves (table above)
 source ${REPO_ROOT}/guides/env.sh # defines GAIE_VERSION, ROUTER_CHART_VERSION, router chart URLs, and CURL_TEST_IMAGE
 ```
@@ -239,9 +239,9 @@ These checks confirm that requests are spread across DP ranks and that every req
 <!-- guide:verify.tests.dp_requests start -->
 ```bash
 # 32 requests, 8 at a time, each with a distinct ~1k-token prompt (no shared
-# prefix, so prefix-cache affinity does not pin them to one DP rank): each is
-# prefilled on a prefill DP rank, and its KV cache is transferred to a decode
-# DP rank
+# prefix, so prefix-cache affinity does not pin them to one DP rank). NVIDIA
+# and AMD transfer KV from a prefill rank to a decode rank; Intel XPU serves
+# each request on one of the aggregated DP/EP ranks.
 kubectl run dp-test --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
@@ -264,10 +264,13 @@ kubectl run dp-test --rm -i --restart=Never \
 # Requests and connector (KV transfer) prefix-cache hits per DP rank, read from
 # every running model server pod through the Kubernetes API server proxy (no
 # port-forward needed). NVIDIA GPU runs one API server per DP rank (prefill on
-# ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD and
-# Intel XPU serve all of a pod's ranks on one port (prefill 8000, decode 8200)
-for role in prefill decode; do
-  first=8000; [ "${role}" = decode ] && first=8200
+# ports 8000-8007, decode on 8200-8207 behind the routing sidecar); AMD serves
+# all ranks of each role on one port, while aggregated Intel XPU uses the
+# decode role label for CI compatibility and port 8200 only.
+roles="prefill decode"
+[ "${ACCELERATOR_TYPE}" = xpu ] && roles=decode
+for role in ${roles}; do
+  first=8000; [ "${role}" = prefill ] || first=8200
   ports=${first}; [ "${ACCELERATOR_TYPE}" = gpu ] && ports=$(seq ${first} $((first + 7)))
   pods=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=${role} \
     --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}')
@@ -301,6 +304,34 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
   | grep -E '^llm_d_epp_disagg_decision_total' || true
 ```
 <!-- guide:verify.tests.router_metrics end -->
+
+## Observability & Troubleshooting
+
+Once monitoring is enabled, use the signals below to operate wide expert parallelism. This section covers what is specific to this path. Metric definitions are in the [model server](../../docs/operations/observability/model-server-metrics.md) and [router](../../docs/operations/observability/router-metrics.md) metric references, and queries are in the [PromQL reference](../../docs/operations/observability/promql.md#wide-expert-parallelism).
+
+These signals describe the NVIDIA GPU deployment, the one the bundled monitoring overlay scrapes. Attention runs data parallel, so every DP rank is its own engine with its own KV cache, and the overlay scrapes each rank as a separate target. Prometheus labels those targets with `endpoint` set to the port name (`rank0` to `rank7`), and with `job` set to `<namespace>/prefill` or `<namespace>/decode` after the two PodMonitors. A pool-wide average hides a single hot rank, so read these per rank within a role rather than per pod. The AMD and Intel XPU overlays expose a single `modelserver` port and are not covered by the overlay, so the per-rank and per-role queries below return no data on those deployments.
+
+### Key metrics for this path
+
+| Signal | Why it matters for wide EP | Where to look |
+|--------|----------------------------|---------------|
+| Active requests per rank (`vllm:num_requests_running` by `pod`, `endpoint`) | DP-aware routing should keep the ranks in a role close together. One busy rank beside idle siblings means requests are not spreading across ranks | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| KV cache utilization per rank (`vllm:kv_cache_usage_perc` by `endpoint`) | Each rank holds its own KV cache, with no replication across the DP group, so one rank can start preempting while the others still have room | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| Requests scheduled per rank port (`llm_d_epp_scheduler_attempts_total` by `port`) | The EPP picks a rank port per request, so skew here while the engines look even points at routing rather than the model servers | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| Prefill and decode balance (`vllm:num_requests_running` by `job`) | One `DisaggregatedSet` versions both roles, but they saturate independently, and which one saturates decides whose replicas to raise | [PromQL → Wide Expert Parallelism](../../docs/operations/observability/promql.md#wide-expert-parallelism) |
+| KV transfer health (`vllm:nixl_xfer_time_seconds`, `vllm:nixl_num_failed_transfers`) | Decode pulls KV from prefill across nodes over NIXL. Failures or a rising tail show up as higher TTFT while the engines themselves look healthy | [Model server metrics → vLLM NIXL](../../docs/operations/observability/model-server-metrics.md#vllm-nixl-kv-transfer-metrics) |
+| Rollout gating (`llm_d_epp_disaggregatedset_revision_gating_share`, `llm_d_epp_disaggregatedset_strict_revision_no_match_total`) | The gating share tracks how much traffic a revision takes during a rollout, and the no-match counter surfaces strict selectors that fail closed | [Router metrics → Disaggregation & Rollout](../../docs/operations/observability/router-metrics.md#disaggregation--rollout) |
+
+> Expert dispatch and combine (DeepEP on NVIDIA, MoRI-EP on AMD) do not emit Prometheus metrics. Fabric problems surface at startup in the model server logs rather than in a series, so when workers never become ready, start with the RDMA requirements in [Prerequisites](#prerequisites).
+
+### Common failure modes
+
+* **One rank hot while its siblings are idle**: requests are not spreading across the DP group. Compare the per-rank spread with requests scheduled per rank port. If the EPP is spreading evenly and the engines are not, the imbalance is in the work each rank received, not in routing.
+* **One role saturated while the other is idle**: the roles saturate independently even though a single `DisaggregatedSet` manages both, so raise replicas for the saturated role rather than for both.
+* **TTFT high while per-rank load and KV cache look healthy**: suspect the KV transfer between the roles. Check failed NIXL transfers and transfer time before changing the engines.
+* **Fewer than eight metrics endpoints on an NVIDIA GPU pod**: the overlay was not applied, or `MONITORING` was left `false`. It replaces the single `modelserver` endpoint with `rank0` to `rank7`, so without it each pod reports one rank and the per-rank spread is invisible. On AMD and Intel XPU the overlay matches no ports at all, which is expected.
+
+The bundled [alerting rules](../../docs/operations/observability/alerting.md) do not cover the per-rank signals above.
 
 ## Cleanup
 

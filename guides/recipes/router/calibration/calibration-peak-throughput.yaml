@@ -77,6 +77,7 @@ data:
         )
         start = time.monotonic()
         first_chunk_ttft = None
+        done = False
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 for line in resp:
@@ -84,6 +85,7 @@ data:
                         continue
                     payload = line.strip()[5:].strip()
                     if payload == b"[DONE]":
+                        done = True
                         break
                     event = json.loads(payload)
                     if isinstance(event, dict) and "error" in event:
@@ -98,6 +100,8 @@ data:
                 "build may not accept token-ID arrays in `prompt`; substitute a "
                 "deterministic text prompt of exactly CHUNK_SIZE tokens instead."
             ) from e
+        if not done:
+            raise RuntimeError("completions stream ended before [DONE]")
         # Keep the first-chunk timing, but consume the stream so a later error
         # cannot turn a failed request into a successful calibration sample.
         if first_chunk_ttft is not None:

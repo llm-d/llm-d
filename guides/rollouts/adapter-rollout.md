@@ -22,7 +22,9 @@ In this guide, we use vLLM's native `lora_filesystem_resolver` to load adapters 
 
 ### vLLM Configuration
 
-Add the following environment variables to your vLLM container:
+Pass `--enable-lora` to `vllm serve` to enable the engine's LoRA support, then
+add the following environment variables to your vLLM container. The runtime
+updating flag and filesystem resolver do not enable LoRA support on their own.
 
 ```yaml
 env:
@@ -141,6 +143,8 @@ Response:
 ```
 
 ## Step 2: Gradual Rollout
+
+At each weight change, use the [rollout observability and troubleshooting checklist](./README.md#observability--troubleshooting) to compare adapter rewrite decisions, response model names, errors, and latency before promoting the new version.
 
 Now that `small-segment-lora-v2` is loaded (from the Prerequisites step), we can begin splitting traffic. Traffic splitting allows you to divide incoming traffic for a single model name across different adapters. This is critical for A/B testing or gradual updates.
 You want to direct 90% of `small-segment-lora` traffic to the stable `small-segment-lora-v1` and 10% to the new `small-segment-lora-v2`.

@@ -59,7 +59,7 @@ workflow files:
 
 ## Slack notifications
 
-[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
+[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file (the nearest one at or above the workflow's `guide_path`, or `guides/<guide>/` when it has none) when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
 
 This replaces the old `/github subscribe` integration, which also fired on manual `workflow_dispatch` runs.
 
@@ -167,7 +167,8 @@ There are two main possibilities to trigger a nightly test job.
 
 Every PR that touches content published on [llm-d.ai](https://llm-d.ai) gets a preview of the site built with that PR's content. That means `docs/**`, `guides/**`, and the community pages mirrored from the repo root (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SIGS.md`). Two workflows split the work:
 
-* [`ci-site-preview.yaml`](ci-site-preview.yaml) ("CI Site Preview") runs on `pull_request`. It checks out the PR (merged into `main`) and [`llm-d/llm-d.github.io`](https://github.com/llm-d/llm-d.github.io)@`main`. It then runs the site's normal build against the PR checkout: `npm ci`, `make llmd-site`, `LLMD_REPO=<pr checkout> ./bin/llmd-site sync main` and `./bin/llmd-site build`. The static site is uploaded as the `site-preview` artifact (kept 7 days), together with a small `site-preview-meta` artifact holding the PR number and head SHA. The run's job summary explains how to view the artifact.
+* [`ci-site-preview.yaml`](ci-site-preview.yaml) ("CI Site Preview") runs on `pull_request`. It checks out the PR (merged into `main`) and [`llm-d/llm-d.github.io`](https://github.com/llm-d/llm-d.github.io)@`main`. It then runs the site's normal build against the PR checkout: `npm ci`, `make llmd-site`, `LLMD_REPO=<pr checkout> ./bin/llmd-site sync main` and `./bin/llmd-site build`.
+  The static site is uploaded as the `site-preview` artifact (kept 7 days), together with a small `site-preview-meta` artifact holding the PR number and head SHA. The run's job summary explains how to view the artifact.
 * [`site-preview-deploy.yaml`](site-preview-deploy.yaml) runs on `workflow_run` after a successful "CI Site Preview" run for a PR. It publishes the artifact to Netlify when configured. It also keeps one sticky comment on the PR, updated on every push, that links to the preview, or to the artifact when Netlify is not configured.
 
 PR content shows up under the **dev** docs version (`/docs/dev/...`), the same place `main` is published. "Edit this page" and source links point at `llm-d/llm-d@main`.
@@ -209,3 +210,7 @@ npx serve build    # then open http://localhost:3000/docs/dev
 ```
 
 To view a CI preview, download the `site-preview` artifact from the run, unzip it into `build/`, and serve it the same way. `python3 -m http.server -d build` also works, but only for URLs ending in `.html`.
+
+## Area and `docs-only` labeling
+
+Pull requests and issues are labeled automatically by path ([`pr-area-labeler.yaml`](pr-area-labeler.yaml)), from `/area <name>` directives and Issue Form fields ([`pr-area-labeler.yaml`](pr-area-labeler.yaml) and [`issue-area-label.yaml`](issue-area-label.yaml)), and via `/area <name>` comment commands ([`prow-github.yaml`](prow-github.yaml)). See [`.github/area_taxonomy.md`](../area_taxonomy.md) for the full `area/*` and `docs-only` taxonomy.

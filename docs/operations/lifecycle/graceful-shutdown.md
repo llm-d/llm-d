@@ -143,10 +143,9 @@ Guidance:
 The mainline vLLM model server overlays across the guides (including NVIDIA GPU,
 AMD, CPU, Intel XPU, and Google TPU, along with their `gke`, `aws`, and `amd-ci`
 `INFRA_PROVIDER` variants) ship with this pattern, using a shorter drain window
-than the example above. Third-party vendor images with unverified vLLM versions
-(Biren, Iluvatar, MetaX, Moore Threads, and Rebellions NPU) do not set
-`--shutdown-timeout` yet (tracked in
-[llm-d#1525](https://github.com/llm-d/llm-d/issues/1525)).
+than the example above. The MetaX and Moore Threads vLLM overlays ship with it
+too. Third-party vendor images with unverified vLLM versions (Biren, Enflame,
+Iluvatar, and Rebellions NPU) do not set `--shutdown-timeout` yet.
 
 | Setting | Value | Where it is set |
 | --- | --- | --- |
@@ -187,7 +186,7 @@ Expected behavior with `--shutdown-timeout` set:
 
 ## Troubleshooting
 
-**In-flight requests still fail on scale-down / rollout**
+### In-flight requests still fail on scale-down / rollout
 
 - Confirm `--shutdown-timeout` is set; without it vLLM aborts immediately.
 - Confirm `terminationGracePeriodSeconds > --shutdown-timeout`; otherwise
@@ -196,7 +195,7 @@ Expected behavior with `--shutdown-timeout` set:
   start it with `exec vllm serve ...`. Otherwise `SIGTERM` goes to the shell
   running as PID 1, which ignores it, and vLLM never starts draining.
 
-**Clients see hard errors instead of retries during shutdown**
+### Clients see hard errors instead of retries during shutdown
 
 - Ensure clients/gateway treat `503` as retryable — the EPP drains queued
   requests with a retryable `503`, not a fatal error.
