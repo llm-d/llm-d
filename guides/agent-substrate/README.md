@@ -684,7 +684,9 @@ export HERMES_IMAGE_REPO="<region>-docker.pkg.dev/<project>/<repo>/agent-hermes"
 
 ### Cloud TPU v7x (Ironwood) Model Servers
 
-In place of the NVIDIA GPU model servers in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading), GKE can serve the fleet from Cloud TPU v7x. Apply the [`modelserver/tpu/v7/vllm/gke/`](./modelserver/tpu/v7/vllm/gke/) overlay (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM). It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
+In place of the NVIDIA GPU model servers in [Step 2](#2-deploy-the-model-server-with-host-dram-kv-offloading), GKE can serve the fleet from Cloud TPU v7x. Apply the [`modelserver/tpu/v7/vllm/gke/`](./modelserver/tpu/v7/vllm/gke/) overlay (`TPURaidenOffloadingConnector` moves evicted KV blocks between HBM and Host DRAM).
+
+It runs `3` replicas, each on one `tpu7x` `2x2x1` slice, and serves `Qwen/Qwen3.5-397B-A17B-FP8` with a `262,144`-token context window, so it needs no context override. Set `MODEL_NAME` to match before deploying the driver ([Step 4](#4-deploy-the-in-cluster-hermes-fleet-driver)) and the `ActorTemplate` ([Step 6](#6-deploy-the-agent-substrate-workerpool-and-actortemplate)):
 
 ```bash
 export MODEL_NAME=Qwen/Qwen3.5-397B-A17B-FP8
