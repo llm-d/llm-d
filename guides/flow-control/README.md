@@ -620,7 +620,7 @@ kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=30
 
 #### 2. Verify Cascade Mitigation Under Overload
 
-This verification reproduces the `#4042` pod-crash lifecycle on the guide's default **2 replicas (4 GPUs)**: warm two distinct long prefixes across the two pods (`Prefix A` on Pod 1, `Prefix B` on Pod 2), force-delete one pod so its prefix turns into real `no_match` cold misses during the outage, and drive mixed traffic both **during the outage** and **immediately after the replacement pod comes back Ready** (1 warm survivor + 1 cold recreated pod).
+This verification reproduces the pod-crash lifecycle on the guide's default **2 replicas (4 GPUs)**: warm two distinct long prefixes across the two pods (`Prefix A` on Pod 1, `Prefix B` on Pod 2), force-delete one pod so its prefix turns into real `no_match` cold misses during the outage, and drive mixed traffic both **during the outage** and **immediately after the replacement pod comes back Ready** (1 warm survivor + 1 cold recreated pod).
 
 > [!NOTE]
 >
