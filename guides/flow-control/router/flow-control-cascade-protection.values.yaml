@@ -1,0 +1,100 @@
+## Cascade-protection flow-control overrides for the llm-d router (Use Case 3).
+## Pairs prefix-cache-affinity-filter + token-load-scorer with EPP Flow Control
+## to prevent cascading load_override storms under partial endpoint failures
+## (see https://github.com/llm-d/llm-d-router/issues/4042).
+## Layer on top of: guides/recipes/router/base.values.yaml
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+    # No metrics entry here: the chart always exposes http-metrics:9090 on the
+    # EPP Service, so declaring it again produces a duplicate-port conflict
+    # that fails the install.
+  epp:
+    # Optional (Experimental): uncomment the flag below and the
+    # prefix-cache-aware-admitter plugin stanza to enable cache-aware cold-miss
+    # shedding on negative-priority traffic (requires llm-d-router PR #3465).
+    # flags:
+    #   allow-experimental-plugins: true
+    pluginsConfigFile: "cascade-protection-plugins.yaml"
+    pluginsCustomConfig:
+      cascade-protection-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+          - flowControl
+        plugins:
+          - type: approx-prefix-cache-producer
+          - type: inflight-load-producer
+            parameters:
+              prefixMatchInfoProducerName: approx-prefix-cache-producer
+          # Optional (Experimental): fast-fails cold sheddable requests
+          # (priority < 0, e.g. best-effort-traffic) with HTTP 429 once pool
+          # saturation reaches shedThreshold, preserving warm KV caches during
+          # pod outages. Requires allow-experimental-plugins: true above.
+          # - type: prefix-cache-aware-admitter
+          #   parameters:
+          #     saturationDetectorRef: utilization-detector
+          #     shedThreshold: 0.85
+          #     minHitRatio: 0.60
+          #     prefixMatchInfoProducerName: approx-prefix-cache-producer
+          #     inFlightLoadProducerName: inflight-load-producer
+          - type: prefix-cache-affinity-filter
+            parameters:
+              prefixMatchInfoProducerName: approx-prefix-cache-producer
+              affinityThreshold: 0.80
+              # Calibrated for Qwen3-32B on H100/H200 TP=2; recalibrate for
+              # other models/hardware with guides/recipes/router/calibration.
+              peakPrefillThroughput: 15928
+              maxTTFTPenaltyMs: 5000
+          - type: token-load-scorer
+          - type: max-score-picker
+          - type: round-robin-fairness-policy
+          - type: fcfs-ordering-policy
+          - type: utilization-detector
+            parameters:
+              queueDepthThreshold: 8
+              kvCacheUtilThreshold: 0.85
+              metricsStalenessThreshold: "2s"
+              headroom: 0.0
+
+        schedulingProfiles:
+          - name: default
+            plugins:
+              - pluginRef: prefix-cache-affinity-filter
+              - pluginRef: token-load-scorer
+              - pluginRef: max-score-picker
+
+        flowControl:
+          saturationDetector:
+            pluginRef: utilization-detector
+          # Zero-shedding buffering defaults: hold excess traffic in EPP memory
+          # so vLLM waiting queues stay bounded without cache-blind 429 drops.
+          # Set defaultRequestTTL (e.g. "60s") below your client timeout if you
+          # want Flow Control to evict stale queued requests.
+          maxBytes: 0
+          maxRequests: 0
+          defaultRequestTTL: "0s"
+          priorityBands:
+            - priority: 100
+              maxBytes: "10Gi"
+              maxRequests: "50000"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            - priority: 0
+              maxBytes: "10Gi"
+              maxRequests: "50000"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+            - priority: -10
+              maxBytes: "10Gi"
+              maxRequests: "50000"
+              fairnessPolicyRef: round-robin-fairness-policy
+              orderingPolicyRef: fcfs-ordering-policy
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "flow-control"
