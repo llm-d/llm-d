@@ -700,19 +700,6 @@ Once [llm-d-router#3465](https://github.com/llm-d/llm-d-router/pull/3465) (`pref
     | grep llm_d_epp_prefix_cache_aware_admitter_decisions_total
   ```
 
-#### Reference Benchmark Results (8 × TP=2 H200, 4-of-8 Pod Crash)
-
-To illustrate the effect at production scale, the table below summarizes a controlled 8-replica H200 benchmark (`Qwen/Qwen3-32B`, `vLLM v0.31.0`, ZMQ precise prefix-cache routing, `12k` shared system prompt + `1.2k` question + `300` output tokens, `253` groups ≈ `73.3%` KV occupancy, sustained `20 QPS` for `12 min` = `14,400` requests, `120s` client timeout, `4/8` vLLM pods force-deleted at `+150s` for `~170s`):
-
-| Configuration | Completed (`200 OK`) | `120s` Timeouts | Fast-Fail `429` | Post-`T_ready` `load_override` | Outage / Late Hit Rate | Peak GPU Wait / EPP Queue | Full Stage 1 TTFT (`p50 / p90`) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Flow Control OFF** (`maxTTFTPenaltyMs: 5000`) | `4,575` (`31.8%`) | `9,796` | `0` | `1,042` | `60.5%` / `51.6%` | `2,319` / — | `0.15s` / `67.0s` |
-| **Zero-Shedding Flow Control ON** | `12,606` (`87.5%`) | `1,775` | `0` | `0` | `65.0%` / `93.7%` | `150` / `2,115` | `35.1s` / `64.2s` |
-| **Flow Control ON + `#3465` Admitter** (`priority < 0`) | `13,465` (`93.5%`) | `0` | `918` | `0` | `90.9%` / `93.1%` | `35` / `115` | `0.34s` / `2.22s` |
-
-* **Flow Control alone** breaks the `#4042` cascade (`2.76×` completions, `0` post-recovery `load_override`s, `99.9%` final-2m completion) with zero `HTTP 429`s.
-* **Adding `prefix-cache-aware-admitter`** sheds `918` cold misses strictly while saturated (`S >= 0.85`), preserving `90.9%` outage hit rate, eliminating all `1,775` remaining timeouts (`-100%`), increasing net `200 OK` completions by `+859`, and reducing median TTFT by `103×`.
-
 ## Production Tuning: Deriving `maxConcurrency`
 
 > [!IMPORTANT]
