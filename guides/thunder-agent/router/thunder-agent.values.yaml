@@ -42,6 +42,15 @@ router:
           defaultPriorityBand:
             fairnessPolicyRef: thunder-agent
 
+  proxy:
+    # Raise standalone Envoy ext_proc message_timeout above forceAdmitTimeout.
+    extProcMessageTimeout: "2400s"
+
   modelServers:
     matchLabels:
       llm-d.ai/guide: "thunder-agent"
+
+provider:
+  gke:
+    # Raise GKE GCPBackendPolicy timeoutSec above forceAdmitTimeout.
+    backendTimeoutSec: 2400

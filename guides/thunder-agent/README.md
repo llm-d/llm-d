@@ -151,6 +151,8 @@ Router settings in [`router/thunder-agent.values.yaml`](./router/thunder-agent.v
 | `forceAdmitTimeout` | `30m` | Force-admits a waiting queue head after 30 minutes. |
 | `defaultRequestTTL` | `0s` | Disables TTL queue drops so held turns wait for admission. |
 | `additionalSessionHeaders` | `[x-session-id]` | Session header read during verification and benchmarking. |
+| `router.proxy.extProcMessageTimeout` | `2400s` | Raises standalone Envoy `ext_proc` `message_timeout` above `forceAdmitTimeout`. |
+| `provider.gke.backendTimeoutSec` | `2400` | Raises GKE `GCPBackendPolicy` `timeoutSec` above `forceAdmitTimeout`. |
 
 ### Supported Hardware Backends
 
@@ -166,7 +168,7 @@ per-pod capacity from the model server, so it adapts to your accelerator and mod
 | Capacity and `usableCapacityRatio` | Size admission control to the **GPU KV pool** (`usableCapacityRatio: 1.0`, the default), never the CPU offload tier. Setting capacity to 2x or 4x the GPU pool lets admitted sessions evict each other from HBM. GPU prefix hits then fall under 4% and median TTFT returns to model server queue wait. |
 | `idleGracePeriod` | Match a typical tool-call gap (`10s` here). Too short a period pauses sessions during their tool calls. Their room goes to other sessions, so the returning turn must fit its pod again and can wait in the queue. Longer periods (`30s`, the plugin default) hold idle footprints across tool calls under contention, cutting throughput by 7% to 10% and raising TTFT p99. |
 | `forceAdmitTimeout` | Keep long (`30m`, as in the benchmark). Short timeouts (`60s`, or `5m`, the plugin default) force-admit held sessions early and remove the throughput gain. |
-| `defaultRequestTTL` and timeouts | Keep `defaultRequestTTL` at `0s` (or higher than `forceAdmitTimeout`) to avoid HTTP 429 drops. Set proxy, route, and client timeouts higher than `forceAdmitTimeout`. The charts default to 1000 s for the standalone Envoy `ext_proc` `message_timeout` and 300 s for the GKE `GCPBackendPolicy`. [Deploy the Router](#1-deploy-the-router) raises both to 2400 s. |
+| `defaultRequestTTL` and timeouts | Keep `defaultRequestTTL` at `0s` (or higher than `forceAdmitTimeout`) to avoid HTTP 429 drops. Set proxy, route, and client timeouts higher than `forceAdmitTimeout`. The charts default to 1000 s for the standalone Envoy `ext_proc` `message_timeout` and 300 s for the GKE `GCPBackendPolicy`. [`router/thunder-agent.values.yaml`](./router/thunder-agent.values.yaml) raises both to 2400 s (`router.proxy.extProcMessageTimeout` and `provider.gke.backendTimeoutSec`). |
 
 ## Prerequisites
 
@@ -258,18 +260,6 @@ helm upgrade --install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-Raise the Envoy `ext_proc` `message_timeout` above `forceAdmitTimeout`, so Envoy keeps waiting
-for the admission decision. A later `helm upgrade` resets it, so run this step again after one:
-
-<!-- guide:deploy.standalone_timeout start -->
-```bash
-kubectl get configmap envoy -n ${NAMESPACE} -o yaml \
-    | sed 's/message_timeout: 1000s/message_timeout: 2400s/' \
-    | kubectl apply -f -
-kubectl rollout restart deploy/${GUIDE_NAME}-epp -n ${NAMESPACE}
-```
-<!-- guide:deploy.standalone_timeout end -->
-
 <details>
 <summary><b>Gateway Mode</b></summary>
 
@@ -286,16 +276,6 @@ helm upgrade --install ${GUIDE_NAME} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.gateway end -->
-
-On GKE, raise the backend timeout of the `GCPBackendPolicy` above `forceAdmitTimeout`. A later
-`helm upgrade` resets it too:
-
-<!-- guide:deploy.gateway_timeout start -->
-```bash
-kubectl patch gcpbackendpolicy ${GUIDE_NAME} -n ${NAMESPACE} --type merge \
-    -p '{"spec":{"default":{"timeoutSec":2400}}}'
-```
-<!-- guide:deploy.gateway_timeout end -->
 
 </details>
 
