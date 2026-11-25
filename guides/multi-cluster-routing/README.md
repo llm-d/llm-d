@@ -4,12 +4,12 @@ Route requests across several llm-d deployments ("clusters") that serve the same
 cluster as one endpoint and sends each request to the cluster its scorers rank best; that cluster's own router then
 picks the pod. What "best" means is up to the scorers you configure on the hub. The clusters can differ in model
 server, hardware, and size. This guide deploys a tested example across two Kubernetes clusters: two copies of the
-[Optimized Baseline](../optimized-baseline/README.md), with a choice of two hub policies: cluster load, or the
-latency the hub observes.
+[Optimized Baseline](../optimized-baseline/README.md), with a choice of three hub policies: cluster load, the
+latency the hub observes, or session affinity with failover for agentic and multi-turn traffic.
 
 > [!NOTE]
 > Experimental: the multicluster plugins are Alpha. The cluster list is static and maintained by hand; cluster
-> registration, health checks, and failover are not part of this setup.
+> registration is not part of this setup.
 
 ## Overview
 
@@ -24,17 +24,7 @@ flowchart LR
 
 The hub runs the same scheduling framework as any llm-d router, over clusters instead of pods: it reads the cluster
 list, collects per-cluster metrics if its scorers use them, scores the clusters, and picks one. The routing policy is
-the choice of scorers:
-
-- **Load** (`HUB_SCORER=load`, the default): KV-cache utilization and queue depth, scraped from each cluster
-  router. The hub prefers the cluster that reports the lower utilization and the shorter queue; clusters that report
-  the same values, such as idle ones, score the same, whatever their size.
-- **Observed latency** (`HUB_SCORER=latency`): the latency-observation scorer predicts each cluster's
-  time-to-first-token from the responses the hub already receives. It scrapes nothing from the clusters, and unlike
-  [Predicted Latency-Based Routing](../predicted-latency-routing/README.md) it needs no predictor model.
-- **Cache and session affinity**: the multicluster prefix-cache scorer and session-affinity filter keep related
-  requests on the same cluster.
-- **Other policies** need a scorer that implements them.
+the choice of plugins, set with `HUB_SCORER`.
 
 Each cluster must provide:
 
@@ -42,10 +32,67 @@ Each cluster must provide:
    Service; in another one, a load balancer in front of the router that publishes an IP (Step 3). The multicluster
    plugins accept hostnames, but the router chart's Envoy forwards to the chosen cluster by `IP:port`, so with the
    standard chart a hostname fails with `503 no healthy upstream`.
-2. **If the hub's scorers read cluster metrics** (`HUB_SCORER=load`): its router's `/metrics` without a
+2. **If the hub reads cluster metrics** (`HUB_SCORER=load` or `agentic-session`): its router's `/metrics` without a
    token, via [`router/leaf.values.yaml`](router/leaf.values.yaml). The hub does not send a token, so with auth on
    it sees no load.
 3. **The same model name** as the other clusters.
+
+## Choose a hub routing policy
+
+For agentic and multi-turn workloads, use `agentic-session`.
+
+| Use case | `HUB_SCORER` | The hub picks a cluster by | Reads cluster metrics |
+| --- | --- | --- | --- |
+| Independent requests | `load` (default) | lowest KV-cache utilization and queue depth | yes |
+| No metrics access | `latency` | time to first token it observes | no |
+| Agentic and multi-turn serving | `agentic-session` | session affinity across clusters; spills over only when the cluster is full, to the cluster the TTFT and KV-cache scorers pick, and fails over when it is down | yes |
+
+### Independent requests (`load`)
+
+- **When:** each request is independent and the hub can read every cluster's metrics. The simplest policy.
+- **How:** scores clusters on the KV-cache utilization and queue depth each cluster router publishes, and sends each
+  request to the least loaded one.
+- **Limit:** clusters that report the same values, such as idle ones, score the same whatever their size, and turns
+  of one conversation can land on different clusters.
+
+### No metrics access (`latency`)
+
+- **When:** the hub cannot read the clusters' metrics, for example clusters run by another team.
+- **How:** the latency-observation scorer predicts each cluster's time to first token from the responses the hub
+  already relays. Unlike [Predicted Latency-Based Routing](../predicted-latency-routing/README.md) it needs no
+  predictor model.
+- **Limit:** learns only from streamed responses.
+
+### Agentic and multi-turn serving (`agentic-session`)
+
+- **When:** multi-turn or agentic traffic, where moving a conversation to another cluster loses its prefix cache.
+- **How:** the
+  [rendezvous filter](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/scheduling/filter/rendezvous/README.md)
+  provides the following. Unlike the session-affinity filter, it moves a session off a full or down cluster.
+  - **Session stickiness:** each session stays on one cluster, chosen by a hash weighted by each cluster's ready
+    pods, so a larger cluster takes more sessions and load spreads evenly across pods.
+  - **Spill over:** a session moves only when its cluster is full, to the cluster the TTFT and KV-cache scorers
+    pick, and stays there until it is idle for 30 minutes (`stickTtlSeconds`).
+  - **Failover:** a cluster whose metrics stop arriving for 30 s counts as down, and its sessions move to the
+    other clusters, so the clusters back each other up.
+  - **Tenant affinity (optional):** pin a tenant to a specific cluster, for example to give a key tenant dedicated
+    or faster hardware, or to keep its shared prompts in one cluster's cache. List tenants
+    (`x-llm-d-inference-fairness-id`) in the cluster's `pins` label in `clusters.yaml`, comma separated. Their
+    sessions go to that cluster while it has room, and spill over like any other when it is full.
+- **When a cluster counts as full:** when requests of the same or higher priority wait more than 10 s
+  (`maxWaitSeconds`) in that cluster's flow control. Lower-priority backlogs are ignored, so a high-priority
+  session stays even while low-priority work queues. A cluster without flow control is full when its average vLLM
+  queue per pod reaches 4 (`maxQueue`). Priorities come from the hub's `--objectives-file` (commented out in
+  [`router/hub-agentic-session.values.yaml`](router/hub-agentic-session.values.yaml)); without it, every request
+  counts as priority 0.
+- **Check:** Step 6's `verify.py` also sends multi-turn sessions and fails if a session lands on more than one
+  cluster. To see where each session went, run the hub with `router.epp.flags.v: 4` and look for
+  `Rendezvous - picked endpoint` in its log.
+- **Limit:** affinity needs a session header (`x-session-id`, `x-session-affinity` or `x-claude-code-session-id`)
+  or chat messages, whose prefix up to the first user message identifies the session.
+
+Other policies, such as the multicluster prefix-cache scorer or session-affinity filter, need their own
+configuration.
 
 ## Configuration
 
@@ -54,7 +101,7 @@ Each cluster must provide:
 | Clusters | 2 Kubernetes clusters: the hub and cluster A in one, cluster B in another | Any number; or namespaces of one Kubernetes cluster ([appendix](#appendix-one-kubernetes-cluster)) |
 | Each cluster | Optimized Baseline, Qwen3-32B, TP=2 | Any llm-d router and model server |
 | Model-server replicas | 1 in cluster A and 2 in cluster B (6 GPUs total) | Any |
-| Hub scorer (`HUB_SCORER`) | `load`: KV-cache utilization and queue depth, or `latency`: observed time-to-first-token | Any scorer that ranks cluster endpoints: the multicluster prefix-cache or session-affinity plugins, or your own |
+| Hub scorer (`HUB_SCORER`) | `load`: KV-cache utilization and queue depth, `latency`: observed time-to-first-token, or `agentic-session`: one cluster per session, by ready pods, failing over on load | Any scorer that ranks cluster endpoints: the multicluster prefix-cache or session-affinity plugins, or your own |
 | Reaching cluster B | A load balancer limited to the hub cluster's source addresses, plain HTTP (internal where the clusters share a network) | TLS or mutual TLS in front of the router, or private connectivity between the clusters |
 
 ## Prerequisites
@@ -86,7 +133,7 @@ export CTX_B=$(kubectl config current-context)
 export NS_A=llm-d-mc-a
 export NS_B=llm-d-mc-b
 export NS_HUB=llm-d-mc-hub
-export HUB_SCORER=load # options: load, latency
+export HUB_SCORER=load # options: load, latency, agentic-session
 export LEAF_VALUES=
 export CLUSTER_B_ACCESS=clusterip # options: clusterip, loadbalancer
 export HUB_EGRESS_CIDR=
@@ -170,7 +217,7 @@ the hub can read its metrics. With `HUB_SCORER=latency`, the cluster routers nee
 
 <!-- guide:deploy.clusters start -->
 ```bash
-# only when HUB_SCORER=load:
+# only when HUB_SCORER=load or agentic-session:
 # Lets the hub read each cluster router's /metrics. The variable carries its own -f flag.
 export LEAF_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/leaf.values.yaml"
 
@@ -331,14 +378,22 @@ Each run was the Step 6 `verify.py` command with `--prompt-words 3000`: 200 stre
 
 Both scorers sent most requests to cluster B, which has more replicas.
 
+The `agentic-session` policy was tested on:
+
+- **3 h of multi-tenant production agentic traffic, against a hub without it:** sessions kept their prefix
+  cache. Time to first token fell from 3.0 to 1.1 s at the median and from 72 to 39 s at p99, and the
+  prefix-cache hit rate rose from 34 to 42% to 52 to 73%.
+- **A controlled run with clusters of 5, 2 and 2 pods:** sessions split 56 / 23 / 21%. Restarting a pod moved no
+  session, and taking a cluster down moved only that cluster's sessions.
+
 ## Known Constraints
 
-- **The latency scorer needs streamed traffic**: it learns only from streamed responses, so with non-streamed requests every cluster scores the same.
+- **The latency scorer needs streamed traffic** (`latency`, and the spill pick of `agentic-session`): it learns only from streamed responses, so with non-streamed requests every cluster scores the same.
 - **Cluster B is reached over plain HTTP**, accepted only from the hub cluster's source addresses. That is enough for a
   test; across untrusted networks, use an internal load balancer on a private network, or put TLS or mutual TLS in
   front of the router. The router chart's Envoy cannot open TLS to a remote cluster today.
 - **Addresses must be IPs** with the standard router chart: cluster B's load balancer must publish an IP, so providers that publish only a hostname (AWS) are not supported yet. If cluster A's router Service or cluster B's load balancer is recreated, re-run Step 4.
-- **With the load policy, cluster metrics are unauthenticated** (`leaf.values.yaml`). Keep the metrics port reachable only from the hub: the LoadBalancer's source range does this for cluster B; restrict port 9090 in the hub's cluster with a NetworkPolicy.
+- **With the load and agentic-session policies, cluster metrics are unauthenticated** (`leaf.values.yaml`). Keep the metrics port reachable only from the hub: the LoadBalancer's source range does this for cluster B; restrict port 9090 in the hub's cluster with a NetworkPolicy.
 - **Hub config changes need a restart**: after a `helm upgrade` of the hub, run `kubectl --context ${CTX_HUB} rollout restart deployment/mc-hub-epp -n ${NS_HUB}`. The cluster list is the exception: the hub reloads it.
 
 ## Cleanup

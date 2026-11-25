@@ -11,8 +11,9 @@ A cluster in another kubeconfig context is named NAME=NAMESPACE@CONTEXT, for
 example --cluster b=${NS_B}@other-cluster.
 
 [1/3] Waits for the hub to answer GET /v1/models and lists each cluster's Ready
-      model-server pods. With --scorer load, also checks that each cluster
-      router serves its load metrics to a caller without a token, as the hub is.
+      model-server pods. With --scorer load or agentic-session, also checks that each
+      cluster router serves the metrics the hub reads to a caller without a
+      token, as the hub is.
       The check runs inside each cluster, so it does not cover the network path
       from the hub to a cluster in another Kubernetes cluster.
 [2/3] Sends --requests streamed chat completions through the hub, --concurrency
@@ -25,6 +26,9 @@ example --cluster b=${NS_B}@other-cluster.
       the model-server replicas. The split is reported, not judged: how closely
       it follows capacity depends on the scorer, on the prompt sizes, on how busy
       the clusters are, and on the hardware behind each replica.
+      With --sessions N (default 10 with --scorer agentic-session), then sends N
+      multi-turn sessions one at a time and fails if any session's turns were
+      served by more than one cluster.
 
 Exit codes: 0 pass, 1 verification failure, 2 usage error, 3 unexpected error.
 """
@@ -50,6 +54,8 @@ SUCCESS_TOTAL = re.compile(r"^vllm:request_success_total\{[^}]*\}\s+([0-9.eE+-]+
 
 # The pool averages the load scorer reads from each cluster router.
 LOAD_METRICS = ("llm_d_epp_average_kv_cache_utilization", "llm_d_epp_average_queue_size")
+# The rendezvous filter also weighs each cluster by its ready pods.
+RENDEZVOUS_METRICS = LOAD_METRICS + ("llm_d_epp_ready_endpoints",)
 
 # Common words of about one token each, for --prompt-words.
 FILLER_WORDS = ("the of and to in is was for on that with as by at from his her an which be this are had not but "
@@ -77,13 +83,14 @@ def http_json(url, timeout=10):
         return 0, {"error": f"{type(error).__name__}: {error}"}
 
 
-def http_stream(url, body, timeout=600):
+def http_stream(url, body, timeout=600, headers=None):
     """POST a streaming request and read it to the end.
 
     Returns (status, error text, seconds to the first streamed chunk or None).
     """
     request = urllib.request.Request(
-        url, data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"}
+        url, data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json", **(headers or {})}
     )
     started = time.perf_counter()
     first = None
@@ -154,7 +161,7 @@ def ready_pods(kube, namespace, selector):
     return pods
 
 
-def check_router_metrics(kube, namespace, pod, service, port):
+def check_router_metrics(kube, namespace, pod, service, port, names):
     """Fail unless the cluster router serves the load metrics to a caller without a token.
 
     Fetched from inside the cluster with no credentials, as the hub fetches them.
@@ -168,9 +175,9 @@ def check_router_metrics(kube, namespace, pod, service, port):
              f"install it with router/leaf.values.yaml")
     if status != 200:
         fail(f"cannot read the router's /metrics in {namespace} at {ip}:{port}: HTTP {status} {body.strip()[:200]}")
-    missing = [name for name in LOAD_METRICS if name not in body]
+    missing = [name for name in names if name not in body]
     if missing:
-        fail(f"the router in {namespace} does not publish {', '.join(missing)}, which the load scorer reads")
+        fail(f"the router in {namespace} does not publish {', '.join(missing)}, which the hub reads")
 
 
 def completed_requests(kube, namespace, pod, port):
@@ -217,6 +224,29 @@ def per_cluster(before, after):
     return totals
 
 
+def run_sessions(args, base, model, clusters, pods):
+    """Send multi-turn sessions one at a time; return those served by more than one cluster.
+
+    One at a time, so each session's change in the clusters' counters is its own.
+    """
+    run = uuid.uuid4().hex[:8]
+    split = []
+    for index in range(args.sessions):
+        session_id = f"verify-{run}-{index}"
+        messages = [{"role": "user", "content": f"Session {run}-{index}: plan a small change, step by step."}]
+        before = snapshot(clusters, pods, args.metrics_port)
+        for turn in range(args.turns):
+            body = {"model": model, "messages": messages, "max_tokens": 32, "stream": True}
+            status, error, _ = http_stream(f"{base}/v1/chat/completions", body, headers={"x-session-id": session_id})
+            if status != 200:
+                fail(f"session {session_id} turn {turn + 1}: HTTP {status} {error[:200]}")
+            messages += [{"role": "assistant", "content": f"Step {turn + 1} done."}, {"role": "user", "content": "Continue."}]
+        served = per_cluster(before, snapshot(clusters, pods, args.metrics_port))
+        if len([name for name, count in served.items() if count > 0.5]) != 1:
+            split.append((session_id, served))
+    return split
+
+
 def parse_clusters(parser, specs, kubectl_bin):
     clusters = []
     for spec in specs:
@@ -237,8 +267,9 @@ def main():
     parser.add_argument("--cluster", action="append", required=True, metavar="NAME=NAMESPACE[@CONTEXT]",
                         help="a cluster the hub routes to; repeat for each (at least two). Add @CONTEXT for a "
                              "cluster in another kubeconfig context")
-    parser.add_argument("--scorer", choices=["load", "latency"], default="load",
-                        help="the hub's HUB_SCORER; with load, first check that the hub can read each cluster's load")
+    parser.add_argument("--scorer", choices=["load", "latency", "agentic-session"], default="load",
+                        help="the hub's HUB_SCORER; with load or agentic-session, first check that the hub can read "
+                             "each cluster's metrics")
     parser.add_argument("--router-service", default="optimized-baseline-epp",
                         help="each cluster router's Service, whose metrics the load scorer reads")
     parser.add_argument("--router-metrics-port", type=int, default=9090, help="the cluster routers' metrics port")
@@ -254,6 +285,10 @@ def main():
     parser.add_argument("--prompt-words", type=int, default=0,
                         help="filler words, about one token each, to add to every prompt, so that prefill outweighs "
                              "network delay (default 0: a one-line prompt)")
+    parser.add_argument("--sessions", type=int, default=None,
+                        help="multi-turn sessions to send one at a time, checking that each stays on one cluster "
+                             "(default 10 with --scorer agentic-session, else 0)")
+    parser.add_argument("--turns", type=int, default=4, help="turns per session")
     parser.add_argument("--wait", type=int, default=30,
                         help="seconds to wait for the hub to answer, for example while a port-forward starts")
     parser.add_argument("--kubectl", default="kubectl", help="kubectl binary (use oc on OpenShift)")
@@ -282,9 +317,10 @@ def main():
         if not pods[cluster.name]:
             fail(f"cluster {cluster.name} ({cluster.where}) has no Ready pods matching {args.selector}")
         print(f"  OK  cluster {cluster.name} ({cluster.where}): {len(pods[cluster.name])} Ready model-server pod(s)")
-        if args.scorer == "load":
+        if args.scorer in ("load", "agentic-session"):
             check_router_metrics(cluster.kube, cluster.namespace, next(iter(pods[cluster.name])),
-                                 args.router_service, args.router_metrics_port)
+                                 args.router_service, args.router_metrics_port,
+                                 RENDEZVOUS_METRICS if args.scorer == "agentic-session" else LOAD_METRICS)
             print(f"  OK  cluster {cluster.name}: router serves its load metrics without a token")
 
     print(f"\n[2/3] Sending {args.requests} streamed requests, {args.concurrency} at a time")
@@ -354,6 +390,16 @@ def main():
     if abs(sum(served.values()) - args.requests) > 0.1 * args.requests:
         print(f"  NOTE the model servers counted {sum(served.values()):.0f} completed requests, not {args.requests}: "
               f"other traffic reached them, or model-server pods changed during the run")
+    sessions = args.sessions if args.sessions is not None else (10 if args.scorer == "agentic-session" else 0)
+    if sessions:
+        args.sessions = sessions
+        print(f"\n[+] Sending {sessions} sessions of {args.turns} turns, one at a time")
+        split = run_sessions(args, base, model, clusters, pods_after)
+        for session_id, served in split[:3]:
+            print(f"  {session_id}: " + ", ".join(f"{name} {count:.0f}" for name, count in served.items()))
+        if split:
+            fail(f"{len(split)}/{sessions} sessions were served by more than one cluster")
+        print("  OK  every session stayed on one cluster")
     print(f"\nPASS all {args.requests} requests succeeded through the hub and every cluster served some of them.")
 
 

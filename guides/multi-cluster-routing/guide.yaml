@@ -17,8 +17,9 @@ env:
     NS_HUB: {default: llm-d-mc-hub}
 
     # How the hub ranks clusters: "load" scrapes each cluster's KV-cache and queue
-    # metrics; "latency" learns each cluster's TTFT from the hub's own traffic.
-    HUB_SCORER: {default: load, values: [load, latency]}
+    # metrics; "latency" learns each cluster's TTFT from the hub's own traffic;
+    # "agentic-session" keeps each session on one cluster and fails over on load.
+    HUB_SCORER: {default: load, values: [load, latency, agentic-session]}
     LEAF_VALUES: {default: ""}
 
     # How the hub reaches cluster B: "clusterip" when cluster B is a namespace of the
@@ -73,7 +74,7 @@ prerequisites:
 
 deploy:
   clusters:
-    - when: {HUB_SCORER: [load]}
+    - when: {HUB_SCORER: [load, agentic-session]}
       run: |
         # Lets the hub read each cluster router's /metrics. The variable carries its own -f flag.
         export LEAF_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/leaf.values.yaml"
