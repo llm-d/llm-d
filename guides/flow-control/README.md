@@ -584,6 +584,13 @@ Enabling **EPP Flow Control** breaks this feedback loop by holding excess reques
 
 ```mermaid
 flowchart LR
+   subgraph On["Flow Control ON (Cascade Broken)"]
+        direction LR
+        E2["Excess Held in EPP Queue"] --> G2["Bounded vLLM GPU Queue"]
+        G2 --> O2["Bounded, Self-Damping load_override"]
+        O2 --> W2["Cache Recovers & Queue Drains"]
+    end
+
     subgraph Off["Flow Control OFF (Cascade Loop)"]
         direction LR
         Q1["Deep vLLM Waiting Queue"] --> O1["Runaway load_override"]
@@ -591,12 +598,6 @@ flowchart LR
         C1 --> Q1
     end
 
-    subgraph On["Flow Control ON (Cascade Broken)"]
-        direction LR
-        E2["Excess Held in EPP Queue"] --> G2["Bounded vLLM GPU Queue"]
-        G2 --> O2["Bounded, Self-Damping load_override"]
-        O2 --> W2["Cache Recovers & Queue Drains"]
-    end
 ```
 
 #### 1. Deploy the Cascade-Protection Router Profile
