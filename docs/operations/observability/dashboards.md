@@ -39,6 +39,7 @@ llm-d-sglang-overview                             1      30s
 llm-d-failure-saturation-dashboard                1      30s
 llm-d-diagnostic-drilldown-dashboard              1      30s
 llm-d-router                                      1      30s
+llm-d-router-fairness-ids                         1      30s
 llm-d-performance-kv-cache                        1      30s
 llm-d-kv-cache-index                              1      30s
 llm-d-pd-coordinator-metrics                      1      30s
@@ -62,12 +63,15 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-kv-cache-index.json` | KV-cache index throughput, hit rate, lookup and tokenization latency, and KV-events subscriber health for precise prefix-cache routing |
 | `llm-d-pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
 | `llm-d-router.json` | llm-d Router (EPP) metrics: inference pool, inference objective, and flow control |
+| `llm-d-router-fairness-ids.json` | One row per router (EPP) fairness ID, a tenant or a session: requests, TTFT, prompt, uncached and cached tokens, and errors |
 | `llm-d-batch-gateway-apiserver.json` | Batch Gateway API server request rate, latency, and in-flight requests |
 | `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
 | `llm-d-batch-gateway-gc.json` | Batch Gateway GC reconciler cycles, orphan recovery, and errors |
 | `llm-d-async-processor.json` | Async Processor request rate and outcomes, inference latency and queue residence time, deadline proximity, broker backlog and in-process queue depth per queue, plus dispatch budget, gate decisions, in-flight requests against the worker limit, and what metric gates last read |
 
 The three Batch Gateway dashboards are only useful if you deployed the [Batch Gateway guide](../../../guides/batch-serving/batch-gateway/README.md), and the Async Processor dashboard only if you deployed the [asynchronous processing guide](../../../guides/batch-serving/asynchronous-processing/README.md) with the chart's `ap.podMonitor.enabled=true`; each has a `namespace` variable to select the namespace it runs in.
+
+In the Router Fairness IDs dashboard, a row is whatever sets the fairness ID: a tenant or a session from the `x-llm-d-inference-fairness-id` header, a session from the `agent-identity` or `agent-lineage` plugin, or `<tenant>/<session>` with `requestHandler.composeFairnessIDs`. Requests without a fairness ID share the row `default-flow`, and requests over the EPP flag `--fairness-id-metric-label-limit` (default 1000) share the row `other`. The cached token columns need the model server to report cached tokens (vLLM `--enable-prompt-tokens-details`).
 
 The KV-Cache Index dashboard is only populated when the router runs the `precise-prefix-cache-producer`, as in the [precise prefix cache routing guide](../../../guides/precise-prefix-cache-routing/README.md). The series are listed under [KV-Cache Index & Events](./router-metrics.md#kv-cache-index--events-precise-prefix-cache).
 
