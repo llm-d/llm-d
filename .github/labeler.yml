@@ -102,6 +102,7 @@ area/router:
           - "guides/predicted-latency-routing/**"
           - "guides/flow-control/**"
           - "guides/turn-priority-fairness/**"
+          - "guides/thunder-agent/**"
           - "guides/multi-model-routing/**"
           - "guides/rollouts/**"
           - "guides/no-kubernetes-deployment/**"
@@ -122,6 +123,7 @@ area/flowcontrol:
       - any-glob-to-any-file:
           - "guides/flow-control/**"
           - "guides/turn-priority-fairness/**"
+          - "guides/thunder-agent/**"
           - "docs/architecture/router/flow-control.md"
           - "docs/operations/traffic/flow-control-tuning.md"
 
@@ -205,6 +207,7 @@ area/agentic:
           - "guides/agentic-api/**"
           - "guides/agent-substrate/**"
           - "guides/turn-priority-fairness/**"
+          - "guides/thunder-agent/**"
 
 # Multimodal and Omni model serving guides and topologies
 area/multimodal:
