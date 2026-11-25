@@ -139,6 +139,7 @@ jobs:
 
       - name: Dry-run router (precise-prefix-cache-routing)
         run: |
+          # shellcheck disable=SC2086  # engine_values is intentionally word-split
           CHART_VERSION=v0
           failed=0
           for engine_values in "" "-f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.sglang.values.yaml"; do
