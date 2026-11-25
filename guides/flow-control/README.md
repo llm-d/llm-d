@@ -619,68 +619,73 @@ kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=30
 
 #### 2. Verify `load_override` Suppression Under Overload
 
-Confirm that `prefix-cache-affinity-filter` and Flow Control are both active and that queuing absorbs saturation without triggering a `load_override` storm:
+To test `load_override` suppression, keep **both model server replicas running** (`>= 2` Ready pods are required because `prefix-cache-affinity-filter` short-circuits to `not_applicable` when `len(endpoints) <= 1`). The test warms a long shared prefix on one pod (`sticky`) while the second pod remains cold (`nonSticky`), then fires a concurrent burst with unique suffixes whose aggregate uncached prefill (`> 80k` tokens) would otherwise exceed `maxTTFTPenaltyMs` (`5000 ms`):
 
-1. **Apply [objectives.yaml](./objectives.yaml)** (if not already applied in Use Case 1) and open the `curl-debug` shell from [Proof of Queuing](#3-proof-of-queuing).
+1. **Apply [objectives.yaml](./objectives.yaml)** (if not already applied in Use Case 1), confirm both model server replicas are Ready (`kubectl get pods -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}`), and open the `curl-debug` shell from [Proof of Queuing](#3-proof-of-queuing).
 
-2. **Build a long shared-prefix payload** inside the `curl-debug` pod (~4k+ shared prefix tokens so prefill cost is non-trivial):
+2. **Prepare a long shared prefix (~9k–10k tokens) and 60 unique-suffix burst payloads** inside the `curl-debug` pod. Each request shares the same ~88% prefix (above `affinityThreshold: 0.80`) plus a unique ~1,500-token question suffix (`60 × ~1,500 ≈ 90k` uncached tokens):
 
     ```bash
-    SHARED_PREFIX=$(awk 'BEGIN{s=""; for(i=0;i<3000;i++) s=s" context" (i%500); print s}')
-    jq -n --arg m "${MODEL_NAME}" --arg p "${SHARED_PREFIX} Summarize the context above." \
-      '{model: $m, prompt: $p, max_tokens: 200, ignore_eos: true}' > prefix_payload.json
+    awk 'BEGIN{for(i=1;i<=5000;i++) printf "context%d ", i%1000}' > /tmp/shared_prefix.txt
+
+    jq -Rs --arg m "${MODEL_NAME}" \
+      '{model: $m, prompt: (. + "Warmup question."), max_tokens: 16, ignore_eos: true}' \
+      /tmp/shared_prefix.txt > /tmp/warmup.json
+
+    for i in $(seq 1 60); do
+      SUF=$(awk -v id="$i" 'BEGIN{for(j=1;j<=700;j++) printf "q%d_%d ", id, j}')
+      jq -Rs --arg m "${MODEL_NAME}" --arg suf "$SUF" \
+        '{model: $m, prompt: (. + $suf), max_tokens: 300, ignore_eos: true}' \
+        /tmp/shared_prefix.txt > "/tmp/req_${i}.json"
+    done
     ```
 
-3. **Warm the prefix cache**, then drive concurrent requests while scaling the pool from 2 replicas down to 1 (simulating a 50% capacity loss). First send a warmup request from `curl-debug`:
+3. **Warm the shared prefix on one pod**, so `approx-prefix-cache-producer` marks one replica warm (`sticky`) while the second replica stays cold (`nonSticky`):
 
     ```bash
     curl -s -o /dev/null -w "%{http_code}\n" --max-time 120 -X POST \
       -H "Content-Type: application/json" \
       -H "x-llm-d-inference-fairness-id: tenant-a" \
       -H "x-llm-d-inference-objective: standard-traffic" \
-      -d @prefix_payload.json http://${IP}/v1/completions   # expect: 200
+      -d @/tmp/warmup.json http://${IP}/v1/completions   # expect: 200
     ```
 
-    From your **host terminal**, temporarily scale to 1 replica and wait for the scale-down to settle:
+4. **Fire all 60 concurrent requests and observe EPP metrics.** Without Flow Control, all 60 requests would pile onto the warm pod immediately (`> 5s` estimated TTFT penalty vs. the idle cold pod) and trigger `load_override`. With Flow Control enabled, `utilization-detector` buffers the overflow in the EPP queue before the warm pod's prefill backlog reaches `maxTTFTPenaltyMs`:
 
     ```bash
-    export ORIG_REPLICAS=$(kubectl get deployment -l llm-d.ai/guide=${GUIDE_NAME} \
-        -n ${NAMESPACE} -o jsonpath='{.items[0].spec.replicas}')
-    kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=1
-    until [ "$(kubectl get deployment -l llm-d.ai/guide=${GUIDE_NAME} \
-        -n ${NAMESPACE} -o jsonpath='{.items[0].status.readyReplicas}')" = "1" ]; do
-      sleep 5
-    done
-    ```
-
-    Back in `curl-debug`, send a concurrent burst sharing the same prefix and inspect both the Flow Control queue and `prefix-cache-affinity-filter` decision counters:
-
-    ```bash
-    for i in $(seq 1 30); do
-      curl -s -o /dev/null --max-time 180 -X POST \
+    for i in $(seq 1 60); do
+      curl -s -o /dev/null --max-time 300 -X POST \
         -H "Content-Type: application/json" \
         -H "x-llm-d-inference-fairness-id: tenant-a" \
         -H "x-llm-d-inference-objective: standard-traffic" \
-        -d @prefix_payload.json http://${IP}/v1/completions &
+        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions &
     done
 
     TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-    for i in $(seq 1 15); do
-      curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
-        | grep -E 'llm_d_epp_(flow_control_queue_size|prefix_cache_affinity_filter_decisions_total)'
-      sleep 2
+    PEAK_Q=0
+    for i in $(seq 1 20); do
+      Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+        | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
+      [ "$Q" -gt "$PEAK_Q" ] && PEAK_Q=$Q
+      sleep 1
     done
+    echo "peak flow-control queue depth: ${PEAK_Q} (expected > 0)"
+
+    curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+      | grep llm_d_epp_prefix_cache_affinity_filter_decisions_total
     wait
     ```
 
-    Expect `llm_d_epp_flow_control_queue_size` to absorb excess requests while `llm_d_epp_prefix_cache_affinity_filter_decisions_total{outcome="sticky"}` dominates and `outcome="load_override"` stays at `0` (or bounded).
+    Expect `peak flow-control queue depth > 0` while `llm_d_epp_prefix_cache_affinity_filter_decisions_total{outcome="sticky"}` climbs across the burst and `outcome="load_override"` stays at `0` (or absent).
 
-4. **Restore replicas** from your host terminal (and restore [router/flow-control.values.yaml](./router/flow-control.values.yaml) if returning to the default guide profile):
+5. **Clean up temporary payloads and exit `curl-debug`:**
 
     ```bash
-    kubectl scale deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --replicas=${ORIG_REPLICAS}
-    kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+    rm -f /tmp/shared_prefix.txt /tmp/warmup.json /tmp/req_*.json
+    exit
     ```
+
+    *(If returning to the default guide profile afterward, re-run the [Deploy the Router](#1-deploy-the-router) command with `${ROUTER_VALUES}`.)*
 
 #### 3. Optional: Cache-Aware Cold-Miss Shedding with `prefix-cache-aware-admitter` (Experimental)
 
