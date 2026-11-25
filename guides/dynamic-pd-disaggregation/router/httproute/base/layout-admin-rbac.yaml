@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dynamic-pd-layout-admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dynamic-pd-layout-admin
+rules:
+  - nonResourceURLs:
+      - /v1/layout/show
+    verbs: [get]
+  - nonResourceURLs:
+      - /v1/layout/change
+    verbs: [post]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dynamic-pd-layout-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dynamic-pd-layout-admin
+subjects:
+  - kind: ServiceAccount
+    name: dynamic-pd-layout-admin
+    namespace: llm-d-dynamic-pd-disaggregation
