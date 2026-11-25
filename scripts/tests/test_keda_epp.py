@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -37,11 +38,49 @@ envsubst() { cat; }
         assert "apply -f -" in calls.read_text()
 
 
+@pytest.mark.parametrize("platform", ["k8s", "ocp"])
+@pytest.mark.parametrize(("scaledobject_name", "hpa_name"), [
+    ("optimized-baseline-keda-epp", "keda-hpa-optimized-baseline"),
+    ("custom-scaledobject", "custom-hpa"),
+])
+def test_inflight_resource_names(platform, scaledobject_name, hpa_name):
+    kubectl = shutil.which("kubectl")
+    if not kubectl or not shutil.which("envsubst"):
+        pytest.skip("kubectl and envsubst are required to render the inflight overlays")
+
+    env = {
+        **os.environ,
+        "NAMESPACE": "inflight-test",
+        "TARGET_DEPLOYMENT": "test-decode",
+        "SCALEDOBJECT_NAME": scaledobject_name,
+        "HPA_NAME": hpa_name,
+        "OVERLAY_ROOT": str(GUIDE.parent / "optimized-baseline"),
+        "REAL_KUBECTL": kubectl,
+    }
+    apply_step = DATA["deploy"][f"apply_{platform}_inflight"][0]
+    cleanup_step = next(step for step in DATA["cleanup"] if step["when"] == apply_step["when"])
+    stub = """kubectl() {
+    case "$1" in
+        kustomize) "$REAL_KUBECTL" "$@" ;;
+        apply|delete) cat ;;
+        *) return 1 ;;
+    esac
+}
+"""
+    for step in (apply_step, cleanup_step):
+        result = subprocess.run(
+            ["bash", "-eo", "pipefail", "-c", stub + step["run"]],
+            env=env, capture_output=True, text=True, timeout=15,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        obj = next(doc for doc in yaml.safe_load_all(result.stdout) if doc and doc.get("kind") == "ScaledObject")
+        assert obj["metadata"]["name"] == scaledobject_name
+        assert obj["spec"]["advanced"]["horizontalPodAutoscalerConfig"]["name"] == hpa_name
+
+
 @pytest.mark.parametrize("platform", ["ocp", "amd", "gke"])
 def test_nightly_renders_scaledobject(tmp_path, platform):
     """Run the deploy script through real kustomize, without a cluster."""
-    import shutil
-
     kubectl = shutil.which("kubectl")
     if not kubectl:
         pytest.skip("kubectl is required for the kustomize render regression")

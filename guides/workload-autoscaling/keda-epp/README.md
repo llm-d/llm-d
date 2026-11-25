@@ -242,7 +242,7 @@ Pick one signal, set the matching environment variables, and apply the leaf over
 below. Do not apply two `ScaledObject`s to one Deployment.
 
 | `SIGNAL` | Leaf overlay | Use when |
-|---|---|---|
+| --- | --- | --- |
 | `inflight` (default, recommended) | `overlays/{k8s,ocp}/inflight` | Simplest path; no Flow Control; nightly-covered; scales on EPP in-flight requests, emitted by the stock optimized-baseline EPP. |
 | `queue` | `overlays/{k8s,ocp}/queue` | Requires Flow Control; mature; portable startup smoothing. |
 | `saturation` (experimental) | `overlays/{k8s,ocp}/saturation` | Requires Flow Control; scale before requests queue; validate thresholds first. |
@@ -260,7 +260,7 @@ The checked-in `ScaledObject` provides the following default configuration for
 this guide:
 
 | Parameter | Value |
-|---|---|
+| --- | --- |
 | Target Deployment | `optimized-baseline-nvidia-gpu-vllm-decode` |
 | Minimum replicas | 1 |
 | Maximum replicas | 8 (inflight / queue) / 10 (saturation) |
@@ -294,9 +294,9 @@ Review the ScaledObject for your platform and signal before applying. Each overl
 carries a full
 [`scaledobject.yaml`](optimized-baseline/overlays/k8s/queue/scaledobject.yaml) (the
 link points at the generic-Kubernetes queue overlay). The namespace, target
-deployment, and the PromQL label selectors are rendered from the environment
-variables in the export block above by `envsubst` at apply time, so the fields to
-review and adjust directly in the YAML are:
+deployment, ScaledObject and HPA names, and PromQL label selectors come from the
+environment variables in the export block above. The apply commands use
+`envsubst` to render those values. Review these fields directly in the YAML.
 
 - Prometheus `serverAddress` (the bundled kube-prometheus-stack on generic
   Kubernetes; the OCP overlays point it at Thanos Querier)
@@ -334,7 +334,8 @@ In-flight-load signal (default, recommended; no Flow Control):
 <!-- guide:deploy.apply_k8s_inflight start -->
 ```bash
 # only when SIGNAL=inflight and ENV=existing:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+: "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+  kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_k8s_inflight end -->
 
@@ -369,7 +370,8 @@ In-flight-load signal (default, recommended; no Flow Control):
 <!-- guide:deploy.apply_ocp_inflight start -->
 ```bash
 # only when SIGNAL=inflight and ENV=ocp:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+: "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+  kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
 ```
 <!-- guide:deploy.apply_ocp_inflight end -->
 
@@ -567,10 +569,12 @@ available, and the generated HPA has no scaling-limited conditions.
 <!-- guide:cleanup start -->
 ```bash
 # only when SIGNAL=inflight and ENV=existing:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+: "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+  kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=inflight and ENV=ocp:
-kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+: "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+  kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
 
 # only when SIGNAL=queue and ENV=existing:
 kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
