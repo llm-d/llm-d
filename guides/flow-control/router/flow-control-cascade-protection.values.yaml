@@ -6,13 +6,13 @@
 
 router:
   extraServicePorts:
+    # No metrics entry here: the chart always exposes http-metrics:9090 on the
+    # EPP Service, so declaring it again produces a duplicate-port conflict
+    # that fails the install.
     - name: http
       port: 80
       protocol: TCP
       targetPort: 8081
-    # No metrics entry here: the chart always exposes http-metrics:9090 on the
-    # EPP Service, so declaring it again produces a duplicate-port conflict
-    # that fails the install.
   epp:
     # Optional (Experimental): uncomment the flag below and the
     # prefix-cache-aware-admitter plugin stanza to enable cache-aware cold-miss

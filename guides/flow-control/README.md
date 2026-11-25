@@ -184,7 +184,7 @@ each of the EPP and Envoy containers, so 8 vCPU and 16 GiB per pod. A pod stuck 
 with `Insufficient cpu` needs a node with the pod's full CPU request allocatable.
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -222,7 +222,7 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 <!-- guide:deploy.modelserver end -->
 
 <details>
-<summary><h4>AMD ROCm</h4></summary>
+<summary><b>AMD ROCm</b></summary>
 
 Flow Control also runs on the Optimized Baseline guide's AMD vLLM model server
 (2 replicas, TP=2, `Qwen/Qwen3-32B` on AMD Instinct MI355X). Render the AMD
@@ -239,9 +239,10 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/${
 </details>
 
 <details>
-<summary><h4>Intel XPU</h4></summary>
+<summary><b>Intel XPU</b></summary>
 
-Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Data Center GPU Max 1550+ per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-XPU-per-pod, so it does not carry the GPU path's TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead. Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
+Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Data Center GPU Max 1550+ per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-XPU-per-pod, so it does not carry the GPU path's TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead.
+Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
 
 ```bash
 export MODEL_NAME="Qwen/Qwen3-0.6B"
@@ -282,7 +283,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
@@ -335,7 +336,9 @@ echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the valu
 ```
 <!-- guide:verify.tests.max_concurrency end -->
 
-**Grant read access to the EPP metrics endpoint.** By default (`router.monitoring.prometheus.auth.enabled: true`), the EPP authenticates every metrics scrape against the Kubernetes API: a `TokenReview` on the caller's bearer token, then a `SubjectAccessReview` on the `/metrics` URL (note: if you enabled `monitoring.values.yaml` in [Step 1](#1-deploy-the-router), it sets `--metrics-endpoint-auth=false`, making the RBAC grants below a harmless no-op). While the Helm chart grants the EPP's service account (`${GUIDE_NAME}-epp`) permission to run those reviews, it only adds the `/metrics` reader rule when `router.monitoring.prometheus.enabled` is set (which also creates a `ServiceMonitor`), and binds it to `${GUIDE_NAME}-epp` rather than `default`. Grant the debug pod's `default` service account permission to read `/metrics` (and bind `system:auth-delegator` to `${GUIDE_NAME}-epp` as a fallback if chart RBAC was disabled):
+**Grant read access to the EPP metrics endpoint.** By default (`router.monitoring.prometheus.auth.enabled: true`), the EPP authenticates every metrics scrape against the Kubernetes API: a `TokenReview` on the caller's bearer token, then a `SubjectAccessReview` on the `/metrics` URL (note: if you enabled `monitoring.values.yaml` in [Step 1](#1-deploy-the-router), it sets `--metrics-endpoint-auth=false`, making the RBAC grants below a harmless no-op).
+While the Helm chart grants the EPP's service account (`${GUIDE_NAME}-epp`) permission to run those reviews, it only adds the `/metrics` reader rule when `router.monitoring.prometheus.enabled` is set (which also creates a `ServiceMonitor`), and binds it to `${GUIDE_NAME}-epp` rather than `default`.
+Grant the debug pod's `default` service account permission to read `/metrics` (and bind `system:auth-delegator` to `${GUIDE_NAME}-epp` as a fallback if chart RBAC was disabled):
 
 <!-- guide:verify.tests.metrics_rbac start -->
 ```bash
@@ -431,7 +434,8 @@ curl -X POST http://${IP}/v1/completions \
 > [!WARNING]
 > **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector.
 >
-> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/api-reference/epp-http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule. After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
+> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/api-reference/epp-http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule.
+> After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
 
 #### 3. Verify the Classification
 
@@ -791,8 +795,12 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
+<!-- -->
+
 > [!WARNING]
 > Benchmarking flow-control's QoS differentiation and fairness behaviors requires a specialized multi-tenant load harness that does NOT yet ship in `llm-d-benchmark` or `inference-perf`. The command below exercises the stack under load and validates the end-to-end path, but it does NOT measure QoS slicing across priority classes or tenant isolation. A dedicated `guide_flow-control_1.yaml` will be added upstream once multi-tenant load shaping is supported.
+
+<!-- -->
 
 > [!TIP]
 > To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a `sanity_*.yaml` profile (e.g. `sanity_random.yaml`) as described in [`docs/operations/validation/benchmark.md` → Available workload profiles](../../docs/operations/validation/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
