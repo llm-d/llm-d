@@ -179,6 +179,7 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ needs.resolve-registry.outputs.registry }}/${{ github.repository }}-rdma-tools
+          # Nightly RDMA builds scan by digest and keep the existing latest tag cadence.
           tags: |
             type=ref,event=branch
             type=ref,event=pr
