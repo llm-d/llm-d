@@ -139,7 +139,6 @@ jobs:
 
       - name: Dry-run router (precise-prefix-cache-routing)
         run: |
-          # shellcheck disable=SC2086  # engine_values is intentionally word-split
           CHART_VERSION=v0
           failed=0
           for engine_values in "" "-f guides/precise-prefix-cache-routing/router/precise-prefix-cache-routing.sglang.values.yaml"; do
@@ -150,6 +149,7 @@ jobs:
             echo "precise-prefix-cache-routing: router (${name})"
             echo "========================================"
             echo "--- helm template ---"
+            # shellcheck disable=SC2086
             if ! helm template precise-prefix-cache-routing \
               "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
               -f guides/recipes/router/base.values.yaml \
