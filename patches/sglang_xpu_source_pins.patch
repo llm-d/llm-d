@@ -14,7 +14,7 @@ diff --git a/docker/xpu.Dockerfile b/docker/xpu.Dockerfile
  
  USER root
  
-@@ -76,10 +77,31 @@ WORKDIR /sgl-workspace
+@@ -76,10 +77,34 @@ WORKDIR /sgl-workspace
 -RUN pip install --no-cache-dir torch==2.13.0+xpu torchvision==0.28.0+xpu torchaudio==2.11.0+xpu --index-url https://download.pytorch.org/whl/xpu && \
 +# Keep Cargo downloads used for Python builds out of the image.
 +RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
@@ -24,6 +24,7 @@ diff --git a/docker/xpu.Dockerfile b/docker/xpu.Dockerfile
  
 -RUN echo "Cloning ${SG_LANG_BRANCH} from ${SG_LANG_REPO}" && \
 -    git clone --branch ${SG_LANG_BRANCH} --single-branch ${SG_LANG_REPO} sglang && \
++# Use MoviePy's upstream Pillow compatibility fix until it ships in a release.
 +RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
 +    --mount=type=cache,target=/root/.cargo/git,sharing=locked \
 +    echo "Cloning ${SG_LANG_REPO} at ${SG_LANG_COMMIT:-${SG_LANG_BRANCH}}" && \
@@ -49,9 +50,11 @@ diff --git a/docker/xpu.Dockerfile b/docker/xpu.Dockerfile
 +    fi && \
      cp pyproject_xpu.toml pyproject.toml && \
 -    pip install --no-cache-dir ".[dev,diffusion]" --extra-index-url https://download.pytorch.org/whl/xpu && \
-+    pip install --no-cache-dir ".[dev,diffusion]" "pillow>=13.0.0" --extra-index-url https://download.pytorch.org/whl/xpu && \
++    pip install --no-cache-dir ".[dev,diffusion]" "pillow>=13.0.0" \
++        "moviepy @ git+https://github.com/Zulko/moviepy.git@c5b2423c66d2a6ca804c2d2c4a6c38ebaecf58b6" \
++        --extra-index-url https://download.pytorch.org/whl/xpu && \
      pip install --no-cache-dir --no-deps xgrammar==0.1.33
-@@ -97,4 +119,45 @@ ARG TORCH_MEMORY_SAVER_REF=a5c99f11b18eb
+@@ -97,4 +122,45 @@ ARG TORCH_MEMORY_SAVER_REF=a5c99f11b18eb
  RUN TMS_PLATFORM=xpu pip install --no-cache-dir --no-build-isolation \
      git+https://github.com/fzyzcjy/torch_memory_saver.git@${TORCH_MEMORY_SAVER_REF}
  
