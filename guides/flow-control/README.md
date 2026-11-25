@@ -11,7 +11,7 @@ Flow Control enables intelligent request queuing at the llm-d Router level. Trad
   * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid).
   * Certain requests have **different SLOs** than others (e.g. batch vs online).
   * Certain tenants are more active than others, so **fairness** between them matters.
-* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource and prevents prefix-cache cascading overload during partial outages (see [Use Case 3](#use-case-3-prefix-cache-cascade-protection)).
+* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource and prevents prefix-cache cascading overload during partial outages.
 
 ### How it Works
 
@@ -622,77 +622,134 @@ kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=30
 
 #### 2. Verify Cascade Mitigation Under Overload
 
-To verify that Flow Control absorbs overload without letting `load_override` spiral into a cascade, keep **both model server replicas running** (`>= 2` Ready pods are required because `prefix-cache-affinity-filter` short-circuits to `not_applicable` when `len(endpoints) <= 1`). The test warms a long shared prefix on one pod (`sticky`) while the second pod remains cold (`nonSticky`), fires a concurrent burst whose aggregate uncached prefill (`~90k` tokens) exceeds `maxTTFTPenaltyMs` (`5000 ms`), and verifies that the burst queues upstream, keeps `load_override` bounded, and drains cleanly back to sticky steady state:
+This verification reproduces the `#4042` pod-crash lifecycle on the guide's default **2 replicas (4 GPUs)**: warm two distinct long prefixes across the two pods (`Prefix A` on Pod 1, `Prefix B` on Pod 2), force-delete one pod so its prefix turns into real `no_match` cold misses during the outage, and drive mixed traffic both **during the outage** and **immediately after the replacement pod comes back Ready** (1 warm survivor + 1 cold recreated pod).
+
+> [!NOTE]
+>
+> On larger clusters (e.g., `4` or `8` replicas), force-deleting half of the model server pods reproduces the same failure mode at stronger multi-pod overload ratios.
 
 1. **Apply [objectives.yaml](./objectives.yaml)** (if not already applied in Use Case 1), confirm both model server replicas are Ready (`kubectl get pods -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}`), and open the `curl-debug` shell from [Proof of Queuing](#3-proof-of-queuing).
 
-2. **Prepare a long shared prefix (~9k–10k tokens) and 60 unique-suffix burst payloads** inside the `curl-debug` pod. Each request shares the same ~88% prefix (above `affinityThreshold: 0.80`) plus a unique ~1,500-token question suffix (`60 × ~1,500 ≈ 90k` uncached tokens):
+2. **Prepare two distinct long shared prefixes (~9k–10k tokens each) and mixed burst payloads** inside `curl-debug`. Each burst request shares ~88% of either `Prefix A` or `Prefix B` (above `affinityThreshold: 0.80`) plus a unique ~1,500-token question suffix:
 
     ```bash
-    awk 'BEGIN{for(i=1;i<=5000;i++) printf "context%d ", i%1000}' > /tmp/shared_prefix.txt
+    awk 'BEGIN{for(i=1;i<=5000;i++) printf "alpha%d ", i%1000}' > /tmp/prefix_a.txt
+    awk 'BEGIN{for(i=1;i<=5000;i++) printf "beta%d ", i%1000}' > /tmp/prefix_b.txt
 
     jq -Rs --arg m "${MODEL_NAME}" \
-      '{model: $m, prompt: (. + "Warmup question."), max_tokens: 16, ignore_eos: true}' \
-      /tmp/shared_prefix.txt > /tmp/warmup.json
+      '{model: $m, prompt: (. + "Warmup A."), max_tokens: 100, ignore_eos: true}' \
+      /tmp/prefix_a.txt > /tmp/warmup_a.json
+    jq -Rs --arg m "${MODEL_NAME}" \
+      '{model: $m, prompt: (. + "Warmup B."), max_tokens: 100, ignore_eos: true}' \
+      /tmp/prefix_b.txt > /tmp/warmup_b.json
 
     for i in $(seq 1 60); do
+      PREF=/tmp/prefix_a.txt
+      [ $((i % 2)) -eq 0 ] && PREF=/tmp/prefix_b.txt
       SUF=$(awk -v id="$i" 'BEGIN{for(j=1;j<=700;j++) printf "q%d_%d ", id, j}')
       jq -Rs --arg m "${MODEL_NAME}" --arg suf "$SUF" \
         '{model: $m, prompt: (. + $suf), max_tokens: 300, ignore_eos: true}' \
-        /tmp/shared_prefix.txt > "/tmp/req_${i}.json"
+        "${PREF}" > "/tmp/req_${i}.json"
     done
     ```
 
-3. **Warm the shared prefix on one pod**, so `approx-prefix-cache-producer` marks one replica warm (`sticky`) while the second replica stays cold (`nonSticky`):
+3. **Warm both pods concurrently** so `token-load-scorer` places `Prefix A` on one replica and `Prefix B` on the other (launching `warmup_b` slightly after `warmup_a` while the first pod is busy prefilling):
 
     ```bash
-    curl -s -o /dev/null -w "%{http_code}\n" --max-time 120 -X POST \
+    curl -s -o /dev/null -w "warmup_a: %{http_code}\n" --max-time 120 -X POST \
       -H "Content-Type: application/json" \
       -H "x-llm-d-inference-fairness-id: tenant-a" \
       -H "x-llm-d-inference-objective: standard-traffic" \
-      -d @/tmp/warmup.json http://${IP}/v1/completions   # expect: 200
+      -d @/tmp/warmup_a.json http://${IP}/v1/completions &
+    sleep 0.5
+    curl -s -o /dev/null -w "warmup_b: %{http_code}\n" --max-time 120 -X POST \
+      -H "Content-Type: application/json" \
+      -H "x-llm-d-inference-fairness-id: tenant-a" \
+      -H "x-llm-d-inference-objective: standard-traffic" \
+      -d @/tmp/warmup_b.json http://${IP}/v1/completions &
+    wait
     ```
 
-4. **Fire all 60 concurrent requests, then verify clean recovery.** Flow Control buffers the excess burst in the EPP queue rather than dumping all 60 requests into the warm pod's local waiting queue. Once the burst completes, check that all requests returned `200`, the queue drained back to `0`, and `load_override` stayed bounded:
+4. **Force-delete 1 of the 2 model server pods** from your **host terminal** to trigger a 50% capacity crash (Kubernetes immediately starts a cold replacement pod):
 
     ```bash
-    : > /tmp/codes.txt
+    VICTIM_POD=$(kubectl get pods -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} \
+        -o jsonpath='{.items[0].metadata.name}')
+    echo "Deleting pod: ${VICTIM_POD}"
+    kubectl delete pod "${VICTIM_POD}" -n "${NAMESPACE}" --grace-period=0 --force
+    ```
+
+5. **Wave 1 (Outage) — drive mixed `Prefix A` + `Prefix B` load while only 1 pod is Ready.** Back in `curl-debug`, send 30 concurrent mixed requests while the replacement pod is still booting. Half match the surviving pod's warm prefix and half become real `no_match` cold misses for the crashed pod's prefix, causing EPP Flow Control to buffer the surge upstream:
+
+    ```bash
+    : > /tmp/codes_outage.txt
+    for i in $(seq 1 30); do
+      curl -s -o /dev/null -w "%{http_code}\n" --max-time 300 -X POST \
+        -H "Content-Type: application/json" \
+        -H "x-llm-d-inference-fairness-id: tenant-a" \
+        -H "x-llm-d-inference-objective: standard-traffic" \
+        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions >> /tmp/codes_outage.txt &
+    done
+
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    PEAK_OUTAGE=0
+    for i in $(seq 1 20); do
+      Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+        | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
+      [ "$Q" -gt "$PEAK_OUTAGE" ] && PEAK_OUTAGE=$Q
+      sleep 1
+    done
+    wait
+    echo "Wave 1 (outage) HTTP summary:" && sort /tmp/codes_outage.txt | uniq -c
+    echo "Wave 1 peak flow-control queue depth: ${PEAK_OUTAGE} (expected > 0)"
+    ```
+
+6. **Wait for the replacement pod to become Ready** from your **host terminal** (now the cluster has 1 warm surviving pod + 1 cold recreated pod):
+
+    ```bash
+    kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+    ```
+
+7. **Wave 2 (Post-Recovery) — verify cascade mitigation and clean drain.** Back in `curl-debug`, fire all 60 mixed requests across the warm survivor + cold recreated pod and inspect queue drain and affinity decisions:
+
+    ```bash
+    : > /tmp/codes_recovery.txt
     for i in $(seq 1 60); do
       curl -s -o /dev/null -w "%{http_code}\n" --max-time 300 -X POST \
         -H "Content-Type: application/json" \
         -H "x-llm-d-inference-fairness-id: tenant-a" \
         -H "x-llm-d-inference-objective: standard-traffic" \
-        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions >> /tmp/codes.txt &
+        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions >> /tmp/codes_recovery.txt &
     done
 
     TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-    PEAK_Q=0
+    PEAK_REC=0
     for i in $(seq 1 20); do
       Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
         | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
-      [ "$Q" -gt "$PEAK_Q" ] && PEAK_Q=$Q
+      [ "$Q" -gt "$PEAK_REC" ] && PEAK_REC=$Q
       sleep 1
     done
     wait
 
     END_Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
       | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
-    echo "HTTP status summary:" && sort /tmp/codes.txt | uniq -c
-    echo "flow-control queue depth: peak=${PEAK_Q} (expected > 0), drained=${END_Q} (expected 0)"
+    echo "Wave 2 (post-recovery) HTTP summary:" && sort /tmp/codes_recovery.txt | uniq -c
+    echo "Wave 2 flow-control queue depth: peak=${PEAK_REC}, drained=${END_Q} (expected 0)"
 
     curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
       | grep llm_d_epp_prefix_cache_affinity_filter_decisions_total
     ```
 
-    A healthy, non-cascading result shows:
+    A healthy, non-cascading recovery shows:
 
-    * **Upstream absorption and clean drain:** `peak > 0` during the burst, returning to `drained=0` afterward with all `60` requests returning `200`.
-    * **Bounded, non-cascading overrides:** `outcome="sticky"` dominates, and `outcome="load_override"` remains small or `0` — stopping immediately once the burst drains rather than spiraling into sustained overrides. Even if a few bounded overrides spill onto the idle second pod, Flow Control caps concurrency so the second pod warms cleanly without KV thrashing.
+    * **Upstream absorption and clean drain:** Flow Control absorbs the outage and recovery bursts (`PEAK_OUTAGE > 0`), drains cleanly back to `drained=0`, and completes all requests with `200`.
+    * **Bounded, self-damping overrides:** `outcome="sticky"` dominates post-recovery, while `outcome="load_override"` remains small or `0` and stops growing once the burst drains — even if a few bounded overrides spill onto the newly recreated cold pod, Flow Control caps concurrency so the cold pod warms cleanly without KV thrashing.
 
-5. **Clean up temporary payloads and exit `curl-debug`:**
+8. **Clean up temporary payloads and exit `curl-debug`:**
 
     ```bash
-    rm -f /tmp/shared_prefix.txt /tmp/warmup.json /tmp/req_*.json /tmp/codes.txt
+    rm -f /tmp/prefix_a.txt /tmp/prefix_b.txt /tmp/warmup_*.json /tmp/req_*.json /tmp/codes_*.txt
     exit
     ```
 
@@ -708,7 +765,7 @@ Once [llm-d-router#3465](https://github.com/llm-d/llm-d-router/pull/3465) (`pref
 * **How it interacts with `objectives.yaml`:** `prefix-cache-aware-admitter` only evaluates **sheddable** traffic (`priority < 0`) once pool saturation reaches `shedThreshold` (`0.85`). With [objectives.yaml](./objectives.yaml):
   * `premium-traffic` (`priority: 100`) and `standard-traffic` (`priority: 0`) are **never shed** by the admitter.
   * `best-effort-traffic` (`priority: -10`) is admitted when at least one live pod holds `>= 60%` of its prompt in KV cache (`outcome="admitted_hot"`), and fast-failed with `HTTP 429` (`x-llm-d-request-dropped-reason: rejected-saturated`, `outcome="shed_cold"`) when cold — preventing cold prefills from thrashing surviving KV caches.
-* **Verify admitter decisions** from `curl-debug` by checking the counter after sending cold and warm `best-effort-traffic` requests under saturation:
+* **Verify admitter decisions** by repeating **Wave 1 (Outage)** above with `-H "x-llm-d-inference-objective: best-effort-traffic"`: cold requests targeting the crashed pod's prefix increment `outcome="shed_cold"` (`HTTP 429`) once saturation crosses `0.85`, while warm requests targeting the surviving pod's prefix increment `outcome="admitted_hot"` (`HTTP 200`):
 
   ```bash
   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
