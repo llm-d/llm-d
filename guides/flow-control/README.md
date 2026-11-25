@@ -572,9 +572,7 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 
 ### Use Case 3: Prefix-Cache Cascade Protection
 
-In normal operation, `prefix-cache-affinity-filter`'s `load_override` escape valve is an intentional hotspot protection mechanism: if a warm pod's estimated prefill wait exceeds `maxTTFTPenaltyMs` (default `5000 ms`) relative to a less-loaded pod, routing spills over to relieve the hotspot and warm additional replicas.
-
-However, on long-context, prefix-cache-heavy workloads (`90%+` cache hit rate) where warm cluster throughput exceeds cold prefill capacity by `3×–5×`, operating in the bistable window (`Q_cold < Q_test < Q_warm`) during a transient failure such as a partial pod crash can turn `load_override` into a self-sustaining cascading overload ([llm-d-router#4042](https://github.com/llm-d/llm-d-router/issues/4042)):
+On long-context, prefix-cache-heavy workloads (`90%+` cache hit rate) where warm cluster throughput exceeds cold prefill capacity by `3×–5×`, operating in the bistable window (`Q_cold < Q_test < Q_warm`) during a transient failure such as a partial pod crash can turn `prefix-cache-affinity-filter`'s `load_override` (triggered past `maxTTFTPenaltyMs`, default `5000 ms`) into a self-sustaining cascading overload ([llm-d-router#4042](https://github.com/llm-d/llm-d-router/issues/4042)):
 
 1. Without Flow Control, excess requests spill directly into surviving vLLM pods' local waiting queues.
 2. Deep per-pod waiting queues continuously breach `maxTTFTPenaltyMs`, firing sustained `load_override` storms onto newly recreated cold pods.
