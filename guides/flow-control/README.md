@@ -572,19 +572,21 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
 
 ### Use Case 3: Prefix-Cache Cascade Protection
 
-On long-context, prefix-cache-heavy workloads (`90%+` cache hit rate), sticky prefix-cache routing (`prefix-cache-affinity-filter` + `token-load-scorer`) multiplies warm cluster throughput by `3×–5×` relative to cold prefill capacity. However, when offered load sits between cold capacity and warm capacity (`Q_cold < Q_test < Q_warm`), a transient failure such as a partial pod crash can trigger a self-sustaining cascading overload ([llm-d-router#4042](https://github.com/llm-d/llm-d-router/issues/4042)):
+In normal operation, `prefix-cache-affinity-filter`'s `load_override` escape valve is an intentional hotspot protection mechanism: if a warm pod's estimated prefill wait exceeds `maxTTFTPenaltyMs` (default `5000 ms`) relative to a less-loaded pod, routing spills over to relieve the hotspot and warm additional replicas.
+
+However, on long-context, prefix-cache-heavy workloads (`90%+` cache hit rate) where warm cluster throughput exceeds cold prefill capacity by `3×–5×`, operating in the bistable window (`Q_cold < Q_test < Q_warm`) during a transient failure such as a partial pod crash can turn `load_override` into a self-sustaining cascading overload ([llm-d-router#4042](https://github.com/llm-d/llm-d-router/issues/4042)):
 
 1. Without Flow Control, excess requests spill directly into surviving vLLM pods' local waiting queues.
-2. Once a surviving pod's estimated prefill wait exceeds `maxTTFTPenaltyMs` (default `5000 ms`), `prefix-cache-affinity-filter` fires `load_override` and redirects warm-prefix traffic onto newly recreated cold pods.
-3. Unbounded cold prefills thrash KV caches across the entire pool, depressing throughput below `Q_test` and locking the cluster into permanent `load_override` saturation even after all pods recover.
+2. Deep per-pod waiting queues continuously breach `maxTTFTPenaltyMs`, firing sustained `load_override` storms onto newly recreated cold pods.
+3. Unbounded cold prefills thrash KV caches across the entire pool, depressing cluster throughput below `Q_test` and locking the pool into runaway `load_override` saturation even after all pods recover.
 
-Enabling **EPP Flow Control** breaks this feedback loop by holding excess requests upstream in EPP memory, capping per-pod vLLM waiting queues so `load_override` stays bounded (or zero) and warm prefix caches remain intact:
+Enabling **EPP Flow Control** breaks this feedback loop by holding excess requests upstream in EPP memory. Because per-pod vLLM waiting queues stay bounded, any `load_override` that fires during a transient spike remains **bounded and self-damping** — cold pods digest those prefills cleanly without KV thrashing, and the cluster recovers instead of cascading:
 
 ```mermaid
 flowchart LR
     subgraph Off["Flow Control OFF (Cascade Loop)"]
         direction LR
-        Q1["Deep vLLM Waiting Queue"] --> O1["Sustained load_override"]
+        Q1["Deep vLLM Waiting Queue"] --> O1["Runaway load_override"]
         O1 --> C1["Cold Prefill Flood & KV Eviction"]
         C1 --> Q1
     end
@@ -592,8 +594,8 @@ flowchart LR
     subgraph On["Flow Control ON (Cascade Broken)"]
         direction LR
         E2["Excess Held in EPP Queue"] --> G2["Bounded vLLM GPU Queue"]
-        G2 --> O2["load_override Eliminated"]
-        O2 --> W2["Prefix Cache Stays Warm"]
+        G2 --> O2["Bounded, Self-Damping load_override"]
+        O2 --> W2["Cache Recovers & Queue Drains"]
     end
 ```
 
@@ -617,9 +619,9 @@ kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=30
 > * [router/flow-control-cascade-protection.values.yaml](./router/flow-control-cascade-protection.values.yaml) uses `approx-prefix-cache-producer` so it works directly with this guide's default model servers (no ZMQ KV-event configuration required). For ZMQ-backed exact KV-block tracking, apply the same `flowControl` section on top of the [Precise Prefix Cache Routing](../precise-prefix-cache-routing/README.md) guide.
 > * This profile uses `utilization-detector` (`queueDepthThreshold: 8`, `kvCacheUtilThreshold: 0.85`) with zero-shedding buffering defaults (`defaultRequestTTL: "0s"`, generous band limits) so Flow Control bounds GPU queues without cache-blind drops. For production deployments, see [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md) to evaluate `concurrency-detector` (`concurrencyMode: hybrid`) and set `defaultRequestTTL` below your client timeout.
 
-#### 2. Verify `load_override` Suppression Under Overload
+#### 2. Verify Cascade Mitigation Under Overload
 
-To test `load_override` suppression, keep **both model server replicas running** (`>= 2` Ready pods are required because `prefix-cache-affinity-filter` short-circuits to `not_applicable` when `len(endpoints) <= 1`). The test warms a long shared prefix on one pod (`sticky`) while the second pod remains cold (`nonSticky`), then fires a concurrent burst with unique suffixes whose aggregate uncached prefill (`> 80k` tokens) would otherwise exceed `maxTTFTPenaltyMs` (`5000 ms`):
+To verify that Flow Control absorbs overload without letting `load_override` spiral into a cascade, keep **both model server replicas running** (`>= 2` Ready pods are required because `prefix-cache-affinity-filter` short-circuits to `not_applicable` when `len(endpoints) <= 1`). The test warms a long shared prefix on one pod (`sticky`) while the second pod remains cold (`nonSticky`), fires a concurrent burst whose aggregate uncached prefill (`~90k` tokens) exceeds `maxTTFTPenaltyMs` (`5000 ms`), and verifies that the burst queues upstream, keeps `load_override` bounded, and drains cleanly back to sticky steady state:
 
 1. **Apply [objectives.yaml](./objectives.yaml)** (if not already applied in Use Case 1), confirm both model server replicas are Ready (`kubectl get pods -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}`), and open the `curl-debug` shell from [Proof of Queuing](#3-proof-of-queuing).
 
@@ -650,15 +652,16 @@ To test `load_override` suppression, keep **both model server replicas running**
       -d @/tmp/warmup.json http://${IP}/v1/completions   # expect: 200
     ```
 
-4. **Fire all 60 concurrent requests and observe EPP metrics.** Without Flow Control, all 60 requests would pile onto the warm pod immediately (`> 5s` estimated TTFT penalty vs. the idle cold pod) and trigger `load_override`. With Flow Control enabled, `utilization-detector` buffers the overflow in the EPP queue before the warm pod's prefill backlog reaches `maxTTFTPenaltyMs`:
+4. **Fire all 60 concurrent requests, then verify clean recovery.** Flow Control buffers the excess burst in the EPP queue rather than dumping all 60 requests into the warm pod's local waiting queue. Once the burst completes, check that all requests returned `200`, the queue drained back to `0`, and `load_override` stayed bounded:
 
     ```bash
+    : > /tmp/codes.txt
     for i in $(seq 1 60); do
-      curl -s -o /dev/null --max-time 300 -X POST \
+      curl -s -o /dev/null -w "%{http_code}\n" --max-time 300 -X POST \
         -H "Content-Type: application/json" \
         -H "x-llm-d-inference-fairness-id: tenant-a" \
         -H "x-llm-d-inference-objective: standard-traffic" \
-        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions &
+        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions >> /tmp/codes.txt &
     done
 
     TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -669,19 +672,26 @@ To test `load_override` suppression, keep **both model server replicas running**
       [ "$Q" -gt "$PEAK_Q" ] && PEAK_Q=$Q
       sleep 1
     done
-    echo "peak flow-control queue depth: ${PEAK_Q} (expected > 0)"
+    wait
+
+    END_Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+      | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
+    echo "HTTP status summary:" && sort /tmp/codes.txt | uniq -c
+    echo "flow-control queue depth: peak=${PEAK_Q} (expected > 0), drained=${END_Q} (expected 0)"
 
     curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
       | grep llm_d_epp_prefix_cache_affinity_filter_decisions_total
-    wait
     ```
 
-    Expect `peak flow-control queue depth > 0` while `llm_d_epp_prefix_cache_affinity_filter_decisions_total{outcome="sticky"}` climbs across the burst and `outcome="load_override"` stays at `0` (or absent).
+    A healthy, non-cascading result shows:
+
+    * **Upstream absorption and clean drain:** `peak > 0` during the burst, returning to `drained=0` afterward with all `60` requests returning `200`.
+    * **Bounded, non-cascading overrides:** `outcome="sticky"` dominates, and `outcome="load_override"` remains small or `0` — stopping immediately once the burst drains rather than spiraling into sustained overrides. Even if a few bounded overrides spill onto the idle second pod, Flow Control caps concurrency so the second pod warms cleanly without KV thrashing.
 
 5. **Clean up temporary payloads and exit `curl-debug`:**
 
     ```bash
-    rm -f /tmp/shared_prefix.txt /tmp/warmup.json /tmp/req_*.json
+    rm -f /tmp/shared_prefix.txt /tmp/warmup.json /tmp/req_*.json /tmp/codes.txt
     exit
     ```
 
@@ -689,7 +699,7 @@ To test `load_override` suppression, keep **both model server replicas running**
 
 #### 3. Optional: Cache-Aware Cold-Miss Shedding with `prefix-cache-aware-admitter` (Experimental)
 
-Flow Control alone breaks the post-recovery cascade (`0` post-recovery `load_override`s), but during a severe outage cold misses (requests whose cached home pod crashed) still enter surviving pods, evicting warm KV blocks and building an EPP queue backlog.
+Flow Control alone breaks the post-recovery cascade (keeping `load_override` bounded and self-damping), but during a severe outage cold misses (requests whose cached home pod crashed) still enter surviving pods, evicting warm KV blocks and building an EPP queue backlog.
 
 Once [llm-d-router#3465](https://github.com/llm-d/llm-d-router/pull/3465) (`prefix-cache-aware-admitter`, **Alpha**) is available in your router image, you can layer cache-aware load shedding directly on top of Flow Control:
 
