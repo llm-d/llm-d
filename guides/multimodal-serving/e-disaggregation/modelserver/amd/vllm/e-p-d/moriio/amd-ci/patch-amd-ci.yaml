@@ -1,0 +1,49 @@
+# AMD CI overlay for E/P/D multimodal disaggregation over MoRI-IO.
+# Gives every role the RDMA NICs MoRI-IO uses for the embeddings and the KV cache, and the
+# persistent model cache. GPU count is inherited from base. Every role is TP=2, so each pod
+# takes one vnic (and one network attachment) per GPU: 2.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: encode
+      spec: &amd-ci
+        leaderWorkerTemplate:
+          workerTemplate:
+            metadata:
+              annotations:
+                k8s.v1.cni.cncf.io/networks: |
+                  [
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net1"},
+                    {"name":"amd-host-device-nad","namespace":"default","interface":"net2"}
+                  ]
+            spec:
+              hostIPC: true
+              containers:
+                - name: modelserver
+                  securityContext:
+                    # RDMA pins memory for queue pairs; without it registration fails with
+                    # "Please set max locked memory (ulimit -l) to 'unlimited'".
+                    capabilities:
+                      add: ["IPC_LOCK"]
+                  resources:
+                    limits:
+                      amd.com/vnic: "2"
+                    requests:
+                      amd.com/vnic: "2"
+                  env:
+                    - name: HF_HOME
+                      value: /model-cache
+                  volumeMounts:
+                    - mountPath: /model-cache
+                      name: model-cache
+              volumes:
+                - name: model-cache
+                  persistentVolumeClaim:
+                    claimName: model-pvc
+    - name: prefill
+      spec: *amd-ci
+    - name: decode
+      spec: *amd-ci

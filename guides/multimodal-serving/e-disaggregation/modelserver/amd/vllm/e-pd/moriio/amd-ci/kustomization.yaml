@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Persistent model cache (RWX PVC `model-pvc`, created ahead of time in the
+# namespace) so pods do not each download the weights from HuggingFace. It is
+# patched into every role in patch-amd-ci.yaml: the shared model-cache component
+# covers only the decode role here, not Encode.
+resources:
+  - ../base
+patches:
+  - path: patch-amd-ci.yaml
