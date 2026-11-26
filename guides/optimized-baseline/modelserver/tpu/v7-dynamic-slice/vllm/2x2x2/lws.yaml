@@ -54,21 +54,29 @@ spec:
                 bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader \
                   --ray_cluster_size=${LWS_GROUP_SIZE} --ray_init_timeout=1800
 
+                # Qwen3-Coder emits XML tool calls (qwen3_xml) and does not think,
+                # so no reasoning parser is set here.
                 exec vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
                   --max-model-len=262144 \
                   --max-num-batched-tokens=8192 \
                   --max-num-seqs=64 \
                   --tensor-parallel-size=16 \
+                  --enable-auto-tool-choice \
+                  --tool-call-parser=qwen3_xml \
                   --kv-cache-dtype=fp8 \
                   --language-model-only \
                   --gpu-memory-utilization=0.80 \
                   --async-scheduling \
                   --enable-expert-parallel \
+                  --enable-ep-weight-filter \
                   --block-size=256 \
                   --port=8000 \
                   --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                   --shutdown-timeout=45
             env:
+              # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+              - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                value: "1"
               - name: POD_IP
                 valueFrom:
                   fieldRef:
@@ -193,6 +201,9 @@ spec:
                 exec bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker \
                   --ray_address=${LWS_LEADER_ADDRESS} --ray_init_timeout=1800
             env:
+              # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+              - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                value: "1"
               - name: POD_IP
                 valueFrom:
                   fieldRef:

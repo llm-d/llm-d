@@ -15,7 +15,7 @@ Install [inference cost tracking](../../../guides/recipes/observability/inferenc
 | `compute_time` | Costs split by vLLM prefill/decode time — most accurate |
 | `prefix_caching_off` | Time-based split, but prefix caching is disabled |
 | `multiplier` | Fixed 2.5× ratio used when timing metrics are unavailable |
-| *(empty)* | No tokens processed in the window, or the model-name join failed |
+| *(empty)* | Always on blended rows (`phase=""`). On `prompt` or `generation` rows: no tokens processed in the window, or the model-name join failed |
 
 > [!NOTE]
 > The `workload_type` label is currently always `inference`. Future values may include `training`, `fine-tuning`, etc.
@@ -23,7 +23,7 @@ Install [inference cost tracking](../../../guides/recipes/observability/inferenc
 All three metrics are scraped from OpenCost's `/metrics` endpoint (port 9003) and flow into Prometheus via a ServiceMonitor. Quick check:
 
 ```bash
-kubectl port-forward -n llm-d-monitoring svc/opencost 9003:9003
+kubectl port-forward -n llm-d-monitoring svc/opencost-llm-d-monitoring 9003:9003
 curl -s http://localhost:9003/metrics | grep llm_
 ```
 

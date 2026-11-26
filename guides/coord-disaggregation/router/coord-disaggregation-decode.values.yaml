@@ -28,18 +28,99 @@ router:
     # (which active-request-scorer consumes) is local to this EPP process, so multiple
     # replicas would each see only a fraction of the per-endpoint load.
     replicas: 1
+    # TODO: Remove this image override once an official release including
+    # prefix-based-pd-decider's conditional-decode gate is published. Same reason
+    # as the single-EPP variant's override.
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-router-endpoint-picker
+      tag: "main"
+    flags:
+      # prefix-based-pd-decider (the conditional-decode gate below) is an Alpha plugin.
+      allow-experimental-plugins: true
     pluginsConfigFile: "coordinator-plugins.yaml"
     pluginsCustomConfig:
+      # This EPP is the one the Coordinator's conditional-decode step probes, so it
+      # carries the same gate and decode-side prefix signal as the single-EPP variant
+      # (router/coord-disaggregation.values.yaml) -- see the comments there. Without
+      # prefix-based-pd-decider the EPP default-denies `Prefer: if-available` with 412
+      # (llm-d-router#2335) and the fast path never runs.
       coordinator-plugins.yaml: |
         apiVersion: llm-d.ai/v1
         kind: EndpointPickerConfig
         plugins:
+        # Real engine token IDs. This EPP's pool is decode-only, and
+        # endpointDiscovery can only map endpoints the pool already supplies --
+        # portRules pick a port per endpoint, they do not discover pods outside it
+        # -- so a prefill selector here would reject every endpoint and leave the
+        # render picker empty. Render through the same Service the Coordinator's own
+        # render step uses (render/service.yaml, which fronts the Ready prefill
+        # pods); the trade against endpointDiscovery is Service load balancing
+        # instead of per-endpoint round-robin and the alternate-endpoint retry.
+        - type: token-producer
+          parameters:
+            modelName: Qwen/Qwen3-VL-32B-Instruct
+            vllm:
+              url: http://coord-disaggregation-render:8000
+              prefillOnly: true
+              messagesRenderMode: native
+              omitMMKwargs: true
+              timeout: 15s
+              mmTimeout: 15s
+        - type: approx-prefix-cache-producer
+          name: decode-prefix-producer
+          parameters:
+            autoTune: true
+            maxPrefixTokensToMatch: 0
+            maxPrefixBlocksToMatch: 0
+        # Pins all phases of a request to one DisaggregatedSet revision during a
+        # rollout. The screener does not read the InferencePool: it watches Pods
+        # through the manager cache (namespace-scoped, no label selector) and keeps
+        # the ones matching its own scope, so this role-scoped EPP still sees every
+        # role of the set. Each EPP is a single process, so the local coordination
+        # fallback covers the encode fan-out, and the forwarded
+        # x-llm-d-disagg-revision pins prefill to the same revision as decode.
+        - type: disaggregatedset-rollout-screener
+          parameters:
+            scope:
+              labelSelector: "llm-d.ai/guide=coord-disaggregation"
+            revisionGating:
+              mode: max-role
+              requiredRoles: [encode, prefill, decode]
+              # Keep the turns of one session on one revision during a rollout.
+              # The default random draw spreads consecutive turns across the old and
+              # new revisions, so each switch lands on pods that do not hold the
+              # session's KV cache and the prefix is recomputed. This guide's
+              # multimodal requests have no text conversation prefix to key on, so
+              # prefixCache sends them to the revision holding the longest cached
+              # prefix -- the same decode-side index the gate reads, which is why
+              # both producers are declared above the screener (the match info has
+              # to cover every revision's endpoints, so they run during request
+              # handling rather than after screening).
+              affinity:
+                mode: prefix
+                sources:
+                - header: x-session-id
+                prefixCache:
+                  producerName: decode-prefix-producer
         - type: inflight-load-producer
         - type: active-request-scorer
+        - type: prefix-cache-scorer
+          name: decode-prefix-scorer
+          parameters:
+            prefixMatchInfoProducerName: decode-prefix-producer
+        - type: prefix-based-pd-decider
+          parameters:
+            # Keep in step with the single-EPP variant; see the tuning note there
+            # (8192 = decode's derived --max-num-batched-tokens on a >=70 GiB
+            # non-A100 GPU; confirm from the decode pod's startup log).
+            nonCachedTokens: 8192
+            prefixMatchInfoProducerName: decode-prefix-producer
         - type: max-score-picker
         schedulingProfiles:
         - name: default
           plugins:
+          - pluginRef: decode-prefix-scorer
           - pluginRef: active-request-scorer
           - pluginRef: max-score-picker
 

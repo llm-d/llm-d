@@ -69,4 +69,4 @@ At a high level:
 [verl-multinode]: https://verl.readthedocs.io/en/latest/start/multinode.html
 [kuberay-guide]: https://docs.ray.io/en/latest/cluster/kubernetes/examples/verl-post-training.html
 [verl-docs]: https://verl.readthedocs.io/en/latest/
-[scheduler-customization]:  https://github.com/llm-d-incubation/py-inference-scheduler/blob/main/docs/scheduler_customization.md
+[scheduler-customization]:  https://github.com/llm-d-incubation/py-inference-scheduler/blob/main/docs/guides/scheduler_customization.md

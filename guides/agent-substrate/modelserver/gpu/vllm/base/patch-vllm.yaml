@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-vllm-decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          # tiered-prefix-cache's arguments plus a 64k context window. Qwen3-32B
+          # ships with a 32k window, so --hf-overrides extends its rotary position
+          # embeddings (YaRN, factor 2) to match --max-model-len=65536.
+          args:
+            - |
+              exec vllm serve \
+                Qwen/Qwen3-32B \
+                --tensor-parallel-size=2 \
+                --kv-transfer-config \
+                '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":322122547200}}' \
+                --enable-auto-tool-choice \
+                --tool-call-parser=hermes \
+                --reasoning-parser=qwen3 \
+                --max-model-len=65536 \
+                --hf-overrides '{"rope_scaling":{"rope_type":"yarn","factor":2.0,"original_max_position_embeddings":32768},"max_position_embeddings":65536}' \
+                --shutdown-timeout=45

@@ -20,7 +20,6 @@ This directory contains Kustomize Components that define the **default container
 │   ├── nightly
 │   └── release
 ├── cpu-vllm
-│   ├── llm-d
 │   ├── nightly
 │   └── release
 ├── gpu-sglang
@@ -37,6 +36,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── biren-vllm
 │   └── release
+├── enflame-vllm
+│   └── release
 ├── metax-vllm
 │   └── release
 ├── mthreads-sglang
@@ -46,12 +47,16 @@ This directory contains Kustomize Components that define the **default container
 ├── npu-vllm
 │   └── release
 ├── routing-sidecar
-│   ├── nightly
-│   └── release
+│   ├── nightly
+│   └── release
+├── torch-tpu-vllm
+│   ├── nightly
+│   └── release
+├── tpu-sglang
+│   └── release
 ├── tpu-vllm
-│   ├── nightly
-│   ├── release
-│   └── release-v0.26.0
+│   ├── nightly
+│   └── release
 ├── xpu-sglang
 │   ├── nightly
 │   └── release

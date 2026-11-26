@@ -1,6 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 images:
-  - name: REPLACE_MODEL_SERVER_IMAGE
-    newName: docker.io/vllm/vllm-openai-rocm
-    newTag: nightly-81198e97ba7eee2a22540caaa756b7fdddcb4d93
+- name: REPLACE_MODEL_SERVER_IMAGE
+  newName: ghcr.io/llm-d/vllm-openai-rocm
+  newTag: v0.32.0-rc.2

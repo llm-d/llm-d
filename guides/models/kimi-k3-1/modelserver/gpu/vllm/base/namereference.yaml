@@ -1,0 +1,11 @@
+# Kustomize nameReference configuration for LeaderWorkerSet volume references.
+nameReference:
+  - kind: ConfigMap
+    version: v1
+    fieldSpecs:
+      - kind: LeaderWorkerSet
+        group: leaderworkerset.x-k8s.io
+        path: spec/leaderWorkerTemplate/leaderTemplate/spec/volumes/configMap/name
+      - kind: LeaderWorkerSet
+        group: leaderworkerset.x-k8s.io
+        path: spec/leaderWorkerTemplate/workerTemplate/spec/volumes/configMap/name

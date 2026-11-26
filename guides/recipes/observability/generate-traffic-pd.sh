@@ -21,7 +21,7 @@
 set -e
 
 # Configuration
-ENDPOINT="${ENDPOINT:-http://localhost:8000/v1}"
+ENDPOINT="${3:-${ENDPOINT:-http://localhost:8000/v1}}"
 CONCURRENT_WORKERS=${1:-6}
 DURATION_MINUTES=${2:-5}
 MODEL_NAME="${MODEL_NAME:-meta-llama/Llama-3.1-8B-Instruct}"
@@ -32,6 +32,17 @@ mkdir -p "$STATS_DIR"
 : > "$STATS_DIR/total"
 : > "$STATS_DIR/success"
 : > "$STATS_DIR/fail"
+
+cleanup() {
+    local pids
+    pids=$(jobs -p 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        kill $pids 2>/dev/null || true
+    fi
+    rm -rf "$STATS_DIR"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 increment_stat() {
     local stat_type=$1  # total, success, or failure
@@ -165,7 +176,7 @@ worker_load_generator() {
 
     echo "[Worker $worker_id] Started with pattern: $pattern"
 
-    while [ $(date +%s) -lt $end_time ]; do
+    while [ "$(date +%s)" -lt "$end_time" ]; do
         request_count=$((request_count + 1))
 
         # Select prompt and parameters based on pattern
@@ -294,14 +305,14 @@ echo "============================================================"
 echo ""
 
 # Show periodic statistics
-while [ $(date +%s) -lt $end_time ]; do
+while [ "$(date +%s)" -lt "$end_time" ]; do
     sleep 10
-    read total success fail <<< "$(get_stats)"
+    read -r total success fail <<< "$(get_stats)"
     current_time=$(date +%s)
     elapsed=$((current_time - start_time))
     remaining=$((end_time - current_time))
 
-    if [ $total -gt 0 ]; then
+    if [ "$total" -gt 0 ]; then
         success_rate=$((success * 100 / total))
         throughput=$(awk "BEGIN {printf \"%.1f\", $total / $elapsed}")
     else
@@ -316,7 +327,7 @@ done
 wait
 
 # Final statistics
-read total success fail <<< "$(get_stats)"
+read -r total success fail <<< "$(get_stats)"
 duration=$(($(date +%s) - start_time))
 throughput=$(awk "BEGIN {printf \"%.2f\", $total / $duration}")
 

@@ -67,7 +67,7 @@ Examples:
   # JSON output for CI pipelines (requires jq)
   ./healthcheck.sh -o json
 EOF
-  exit 0
+  exit "${1:-0}"
 }
 
 # ── Flag parsing ─────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ while [[ $# -gt 0 ]]; do
     --api)                API_MODE="$2"; shift 2 ;;
     --require-health)     REQUIRE_HEALTH="true"; shift 1 ;;
     -h|--help)            show_help ;;
-    *) echo "Unknown option: $1" >&2; show_help ;;
+    *) echo "Unknown option: $1" >&2; show_help 1 ;;
   esac
 done
 
@@ -140,15 +140,16 @@ MODELS_RESULT=""
 INFER_RESULT=""
 
 pass() { CHECKS_TOTAL=$((CHECKS_TOTAL + 1)); CHECKS_PASSED=$((CHECKS_PASSED + 1)); }
+# warn and fail end each entry with a real newline, which report_json splits on
 warn() {
   CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
   CHECKS_WARNED=$((CHECKS_WARNED + 1))
-  WARNINGS="${WARNINGS}  - $1\n"
+  WARNINGS="${WARNINGS}  - $1"$'\n'
 }
 fail() {
   CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
   CHECKS_FAILED=$((CHECKS_FAILED + 1))
-  FAILURES="${FAILURES}  - $1\n"
+  FAILURES="${FAILURES}  - $1"$'\n'
 }
 
 # ── Check 1: /health endpoint (optional) ─────────────────────────────────────

@@ -22,11 +22,19 @@ router:
             prefixMatchInfoProducerName: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer
           name: gpu-prefix-cache-producer
+          parameters:
+            blockSizeTokens: 4352
+            maxPrefixTokensToMatch: 262144
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
             autoTune: false
-            lruCapacityPerServer: 10000  # Allocating 10,000 blocks for Qwen3-Coder-480B-A35B-Instruct.
+            # 4352-token router blocks (engine --block-size), 262k match window, LRU sized for the 256 GiB host tier
+            # per group: same engine envelope as single-host/tpu-v7.values.yaml and the
+            # Qwen3.5-397B model guide (autoTune ignores the host tier, llm-d-router#1650).
+            blockSizeTokens: 4352
+            maxPrefixTokensToMatch: 262144
+            lruCapacityPerServer: 46200
         - type: queue-scorer
         - type: kv-cache-utilization-scorer
         - type: prefix-cache-scorer

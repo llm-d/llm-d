@@ -18,7 +18,7 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: optimized-baseline-keda-epp
+  name: ${SCALEDOBJECT_NAME}
   namespace: ${NAMESPACE}
 spec:
   scaleTargetRef:
@@ -33,7 +33,7 @@ spec:
   maxReplicaCount: 8
   advanced:
     horizontalPodAutoscalerConfig:
-      name: keda-hpa-optimized-baseline
+      name: ${HPA_NAME}
       # Startup-time mitigation. Model-server pods take minutes to load a model
       # and become Ready; while a replica starts it serves nothing, so demand
       # stays elevated (scale-up overshoot) then collapses once Ready (scale-down

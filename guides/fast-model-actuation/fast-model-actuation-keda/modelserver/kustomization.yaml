@@ -5,18 +5,9 @@ resources:
   - ../../modelserver
 
 patches:
-  - target:
-      kind: InferenceServerConfig
-      name: fma-isc
-    patch: |-
-      apiVersion: fma.llm-d.ai/v1alpha1
-      kind: InferenceServerConfig
-      metadata:
-        name: fma-isc
-      spec:
-        modelServerConfig:
-          labels:
-            llm-d.ai/guide: "fast-model-actuation-keda"
+  # No InferenceServerConfig patch: routing labels live on the requester Pod
+  # template (TCP-proxy style, FMA #831), and the base template's
+  # llm-d.ai/model label carries over.
   # Start at 1 replica, the ScaledObject floor at standup -- NOT 0. The EPP emits
   # llm_d_epp_flow_control_queue_size only once it has a ready backend endpoint.
   # Otherwise the series does not exist and KEDA's query returns empty, which the

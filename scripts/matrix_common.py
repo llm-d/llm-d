@@ -116,6 +116,7 @@ GUIDES = [
     ("Multimodal Serving (E-Disaggregation)", "../guides/multimodal-serving/e-disaggregation/README.md", "multimodal-serving-e-disaggregation", None),
     ("Fast Model Actuation + KEDA Autoscaling", "../guides/fast-model-actuation/fast-model-actuation-keda/README.md", "fast-model-actuation-keda", None),
     ("Agentic API", "../guides/agentic-api/README.md", "agentic-api", None),
+    ("Pod Snapshots", "../guides/pod-snapshot/README.md", "pod-snapshot", None),
 ]
 
 # ---------------------------------------------------------------------------

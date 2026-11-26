@@ -17,6 +17,7 @@ env:
     MODEL: {default: "Qwen/Qwen3-32B"}
 
     # Deployment the ScaledObject targets, and the KEDA-managed objects it creates.
+    # All three names are rendered into the overlays by envsubst at apply time.
     TARGET_DEPLOYMENT: {default: "optimized-baseline-nvidia-gpu-vllm-decode"}
     SCALEDOBJECT_NAME: {default: "optimized-baseline-keda-epp"}
     HPA_NAME: {default: "keda-hpa-optimized-baseline"}
@@ -102,16 +103,24 @@ deploy:
       run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
   apply_k8s_queue:
     - when: {SIGNAL: [queue], ENV: [existing]}
-      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+      run: |
+        : "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+          kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
   apply_k8s_saturation:
     - when: {SIGNAL: [saturation], ENV: [existing]}
-      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+      run: |
+        : "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+          kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
   apply_ocp_queue:
     - when: {SIGNAL: [queue], ENV: [ocp]}
-      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+      run: |
+        : "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+          kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
   apply_ocp_saturation:
     - when: {SIGNAL: [saturation], ENV: [ocp]}
-      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+      run: |
+        : "${NAMESPACE:?}" "${MODEL:?}" "${TARGET_DEPLOYMENT:?}" "${EPP_SERVICE:?}" "${INFERENCE_POOL:?}" "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+          kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
 
 verify:
   # ScaledObject Ready=True confirms the scaler config is valid; KEDA then creates
@@ -193,10 +202,10 @@ cleanup:
   - when: {SIGNAL: [inflight], ENV: [ocp]}
     run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [queue], ENV: [existing]}
-    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [saturation], ENV: [existing]}
-    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [queue], ENV: [ocp]}
-    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [saturation], ENV: [ocp]}
-    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/saturation | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -

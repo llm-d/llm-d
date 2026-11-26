@@ -8,16 +8,14 @@ IMAGE_REGISTRY_ORG ?= llm-d
 IMAGE_REGISTRY_REPO ?= llm-d
 DOCKERFILE_DIR = docker
 
-# DEVICE, options: ['xpu', 'cpu']
+# DEVICE, options: ['xpu'].
 DEVICE ?= xpu
 
 ifeq ($(DEVICE), xpu)
 	DOCKERFILE ?= Dockerfile.xpu
-else ifeq ($(DEVICE), cpu)
-	DOCKERFILE ?= Dockerfile.cpu
-endif # Maybe we break out version per image because they share no common bits --> independent release cycles
+endif
 
-VERSION ?= v0.9.0
+VERSION ?= v1.0.0
 
 # New tag to use if you would like to use `make image-retag`
 NEW_TAG ?= sha256...
@@ -42,6 +40,9 @@ IMAGE_BASE ?= $(REGISTRY)/$(IMAGE_REGISTRY_ORG)/$(IMAGE_REGISTRY_REPO)-$(DEVICE)
 
 BUILD_CONTEXT ?= .
 DOCKERFILE_PATH = $(DOCKERFILE_DIR)/$(DOCKERFILE)
+
+VLLM_OMNI_CONTEXT ?= ../vllm-omni
+VLLM_OMNI_IMAGE_BASE ?= $(REGISTRY)/$(IMAGE_REGISTRY_ORG)/$(IMAGE_REGISTRY_REPO)-xpu-omni
 
 IMG := $(IMAGE_BASE):$(VERSION)
 
@@ -125,10 +126,28 @@ buildah-build: check-builder ## Build and push image (multi-arch if supported)
 image-build: check-container-tool ## Build Docker image using $(CONTAINER_TOOL)
 	@printf "\033[33;1m==== Building Docker image $(IMG) for linux/$(ARCH) ====\033[0m\n"
 	$(CONTAINER_TOOL) build --progress=plain --platform linux/$(ARCH) \
+		$(if $(HTTP_PROXY),--build-arg HTTP_PROXY=$(HTTP_PROXY)) \
+		$(if $(HTTPS_PROXY),--build-arg HTTPS_PROXY=$(HTTPS_PROXY)) \
+		$(if $(NO_PROXY),--build-arg NO_PROXY=$(NO_PROXY)) \
 		--build-arg USE_SCCACHE=$(USE_SCCACHE) \
 		--build-arg MAX_JOBS=$(MAX_JOBS) \
 		$(if $(filter xpu,$(DEVICE)),--build-arg BASE_IMAGE=$(VLLM_XPU_BASE_IMAGE)) \
 		-t $(IMG) -f $(DOCKERFILE_PATH) $(BUILD_CONTEXT)
+
+.PHONY: image-build-xpu-omni
+image-build-xpu-omni: ## Build the XPU vLLM-Omni image from a local vLLM-Omni checkout
+	$(MAKE) image-build \
+		DEVICE=xpu \
+		DOCKERFILE=Dockerfile.xpu-omni \
+		BUILD_CONTEXT=$(VLLM_OMNI_CONTEXT) \
+		IMAGE_BASE=$(VLLM_OMNI_IMAGE_BASE) \
+		VLLM_XPU_BASE_IMAGE=$(VLLM_OMNI_BASE_IMAGE)
+
+.PHONY: image-push-xpu-omni
+image-push-xpu-omni: ## Push the XPU vLLM-Omni image
+	$(MAKE) image-push \
+		DEVICE=xpu \
+		IMAGE_BASE=$(VLLM_OMNI_IMAGE_BASE)
 
 .PHONY: image-push
 image-push: check-container-tool ## Push Docker image $(IMG) to registry

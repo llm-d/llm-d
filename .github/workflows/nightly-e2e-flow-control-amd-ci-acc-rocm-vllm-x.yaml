@@ -31,6 +31,11 @@ on:
         required: false
         type: 'string'
         default: 'sanity_random.yaml'
+      verbose:
+        description: 'Ignored (bespoke E2E, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'false'
       cleanup:
         description: 'Cleanup the llm-d stack stood up by this workflow'
         required: false

@@ -1,0 +1,17 @@
+# Google Managed Prometheus (GMP) managed-collection scrape config for the
+# Coordinator. GMP does not read the prometheus-operator PodMonitor next to
+# this file, so on GKE apply this instead of the kustomization.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

@@ -1,0 +1,234 @@
+- op: add
+  path: /metadata/annotations
+  value:
+    leaderworkerset.sigs.k8s.io/exclusive-topology: "cloud.google.com/gke-nodepool"
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/metadata/labels/llm-d.ai~1inference-serving
+  value: "true"
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/terminationGracePeriodSeconds
+  value: 75
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/nodeSelector
+  value:
+    cloud.google.com/gke-tpu-accelerator: tpu7x
+    cloud.google.com/gke-tpu-topology: 2x2x2
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/lifecycle
+  value:
+    preStop:
+      exec:
+        command: ["/bin/sleep", "15"]
+- op: replace
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/command
+  value: ["/bin/bash", "-c"]
+- op: replace
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/args
+  value:
+    - |
+      set -euo pipefail
+      ray start --head --port=6379
+      until [ "$(python3 -c "import ray; ray.init(address='auto', logging_level='error'); print(sum(1 for n in ray.nodes() if n['Alive']))" 2>/dev/null || echo 0)" -ge "${LWS_GROUP_SIZE:-2}" ]; do
+        echo "Waiting for ${LWS_GROUP_SIZE:-2} Ray nodes to join..."
+        sleep 5
+      done
+      exec vllm serve zai-org/GLM-5.2-FP8 \
+        --tokenizer=zai-org/GLM-5.2-FP8 \
+        --host=0.0.0.0 \
+        --port=8000 \
+        --data-parallel-size=16 \
+        --tensor-parallel-size=1 \
+        --attention-backend=CUSTOM \
+        --max-model-len=32768 \
+        --max-num-seqs=64 \
+        --max-num-batched-tokens=1024 \
+        --kv-cache-dtype=fp8 \
+        --gpu-memory-utilization=0.9 \
+        --enable-expert-parallel \
+        --enable-ep-weight-filter \
+        --enable-prefix-caching \
+        --enable-auto-tool-choice \
+        --tool-call-parser=glm47 \
+        --reasoning-parser=glm45 \
+        --api-server-count=1 \
+        --safetensors-load-strategy=prefetch \
+        --async-scheduling \
+        --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+        --shutdown-timeout=45
+- op: replace
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/env
+  value:
+    # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+    - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+      value: "1"
+    # Node-local HuggingFace cache (hostPath), shared across pods and restarts.
+    - name: HF_HOME
+      value: /root/.cache/huggingface
+    - name: VLLM_ENGINE_READY_TIMEOUT_S
+      value: "3600"
+    - name: TPU_MULTIHOST_BACKEND
+      value: "ray"
+    - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
+      value: "1"
+    - name: JAX_PLATFORMS
+      value: ""
+    - name: PJRT_DEVICE
+      value: "TPU"
+    - name: VLLM_TARGET_DEVICE
+      value: "tpu"
+    - name: TPU_SPARSE_MLA_NOPE_LAYOUT
+      value: "tensorcore"
+    - name: TPU_SPARSE_MLA_ROPE_LAYOUT
+      value: "tensorcore"
+    - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+      value: "0"
+    - name: VLLM_USE_AOT_COMPILE
+      value: "0"
+    - name: MOE_REQUANTIZE_BLOCK_SIZE
+      value: "512"
+    - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+      value: "0"
+    - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+      value: "false"
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+          optional: true
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/resources
+  value:
+    limits:
+      google.com/tpu: 4
+    requests:
+      google.com/tpu: 4
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/startupProbe
+  value:
+    httpGet:
+      path: /v1/models
+      port: modelserver
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 120
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/livenessProbe
+  value:
+    httpGet:
+      path: /health
+      port: modelserver
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/readinessProbe
+  value:
+    httpGet:
+      path: /v1/models
+      port: modelserver
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/containers/0/volumeMounts
+  value:
+    - mountPath: /dev/shm
+      name: dshm
+    - mountPath: /root/.cache/huggingface
+      name: huggingface-cache
+- op: add
+  path: /spec/leaderWorkerTemplate/leaderTemplate/spec/volumes
+  value:
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 128Gi
+    - name: huggingface-cache
+      hostPath:
+        path: /var/cache/huggingface
+        type: DirectoryOrCreate
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/nodeSelector
+  value:
+    cloud.google.com/gke-tpu-accelerator: tpu7x
+    cloud.google.com/gke-tpu-topology: 2x2x2
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/command
+  value: ["/bin/bash", "-c"]
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/args
+  value:
+    - |
+      set -euo pipefail
+      until ray start --block --address="${LWS_LEADER_ADDRESS}:6379"; do
+        echo "Waiting for Ray head at ${LWS_LEADER_ADDRESS}:6379..."
+        sleep 5
+      done
+- op: replace
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/env
+  value:
+    # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+    - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+      value: "1"
+    # Node-local HuggingFace cache (hostPath), shared across pods and restarts.
+    - name: HF_HOME
+      value: /root/.cache/huggingface
+    - name: VLLM_ENGINE_READY_TIMEOUT_S
+      value: "3600"
+    - name: TPU_MULTIHOST_BACKEND
+      value: "ray"
+    - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
+      value: "1"
+    - name: JAX_PLATFORMS
+      value: ""
+    - name: PJRT_DEVICE
+      value: "TPU"
+    - name: VLLM_TARGET_DEVICE
+      value: "tpu"
+    - name: TPU_SPARSE_MLA_NOPE_LAYOUT
+      value: "tensorcore"
+    - name: TPU_SPARSE_MLA_ROPE_LAYOUT
+      value: "tensorcore"
+    - name: VLLM_USE_BREAKABLE_CUDAGRAPH
+      value: "0"
+    - name: VLLM_USE_AOT_COMPILE
+      value: "0"
+    - name: MOE_REQUANTIZE_BLOCK_SIZE
+      value: "512"
+    - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+      value: "0"
+    - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+      value: "false"
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+          optional: true
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/resources
+  value:
+    limits:
+      google.com/tpu: 4
+    requests:
+      google.com/tpu: 4
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/volumeMounts
+  value:
+    - mountPath: /dev/shm
+      name: dshm
+    - mountPath: /root/.cache/huggingface
+      name: huggingface-cache
+- op: add
+  path: /spec/leaderWorkerTemplate/workerTemplate/spec/volumes
+  value:
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 128Gi
+    - name: huggingface-cache
+      hostPath:
+        path: /var/cache/huggingface
+        type: DirectoryOrCreate

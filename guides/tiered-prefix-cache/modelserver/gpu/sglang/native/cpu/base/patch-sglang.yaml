@@ -17,6 +17,8 @@ spec:
             - "--page-size=64"
             - "--mem-fraction-static=0.9"
             - "--enable-metrics"
+            - "--tool-call-parser=qwen"
+            - "--reasoning-parser=qwen3"
             - "--enable-hierarchical-cache"
             # Keep flags in "--flag=value" form so llm-d-infra's CI model
             # detection does not mistake bare option values for the model name.

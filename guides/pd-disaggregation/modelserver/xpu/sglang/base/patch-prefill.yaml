@@ -1,0 +1,105 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: prefill
+      spec:
+        replicas: 1
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              securityContext:
+                fsGroup: 107
+                supplementalGroups:
+                  - 107
+              containers:
+                - name: modelserver
+                  command: ["/bin/bash", "-lc"]
+                  args:
+                    - |
+                      set -eo pipefail
+                      source /opt/intel/oneapi/setvars.sh --force
+                      exec python3 -m sglang.launch_server \
+                        --model-path=Qwen/Qwen3-0.6B \
+                        --host=0.0.0.0 \
+                        --port=8000 \
+                        --device=xpu \
+                        --dtype=float16 \
+                        --tensor-parallel-size=1 \
+                        --page-size=64 \
+                        --disaggregation-mode=prefill \
+                        --disaggregation-transfer-backend=nixl \
+                        --enable-metrics
+                  env:
+                    - name: HF_TOKEN
+                      valueFrom:
+                        secretKeyRef:
+                          name: llm-d-hf-token
+                          key: HF_TOKEN
+                    - name: SGLANG_USE_SGL_XPU
+                      value: "1"
+                    - name: ONEAPI_DEVICE_SELECTOR
+                      value: level_zero:0
+                    - name: ZE_AFFINITY_MASK
+                      value: "0"
+                    - name: SYCL_CACHE_PERSISTENT
+                      value: "1"
+                    # Early send of cached-prefix KV uses torch.cuda.Event and crashes on XPU;
+                    # the fix (sgl-project/sglang#43299) is not merged yet.
+                    - name: SGLANG_DISAGG_PREFILL_EARLY_SEND_CACHED_PREFIX
+                      value: "0"
+                    - name: UCX_TLS
+                      value: tcp,ze_copy
+                    - name: UCX_POSIX_USE_PROC_LINK
+                      value: "n"
+                    # The UCX memtype cache does not track Level Zero allocations, so UCX
+                    # would detect XPU KV memory as host memory and fail registration
+                    # or the transfer. Disabling it lets the ze_copy transport detect it.
+                    - name: UCX_MEMTYPE_CACHE
+                      value: "n"
+                  resources:
+                    requests:
+                      cpu: "4"
+                      memory: 12Gi
+                    limits:
+                      cpu: "8"
+                      memory: 24Gi
+                    claims:
+                      - name: xpu-prefill-claim
+                  volumeMounts:
+                    - name: dshm
+                      mountPath: /dev/shm
+                    - name: sglang-cache
+                      mountPath: /.cache
+                  # /v1/models responds before SGLang completes its generation warmup.
+                  startupProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    initialDelaySeconds: 15
+                    periodSeconds: 30
+                    timeoutSeconds: 5
+                    failureThreshold: 120
+                  livenessProbe:
+                    periodSeconds: 10
+                    timeoutSeconds: 30
+                    failureThreshold: 10
+                  readinessProbe:
+                    httpGet:
+                      path: /health
+                      port: modelserver
+                    periodSeconds: 10
+                    timeoutSeconds: 30
+                    failureThreshold: 3
+              resourceClaims:
+                - name: xpu-prefill-claim
+                  resourceClaimTemplateName: xpu-prefill-claim
+              volumes:
+                - name: dshm
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 1Gi
+                - name: sglang-cache
+                  emptyDir: {}

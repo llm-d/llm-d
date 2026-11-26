@@ -1,3 +1,9 @@
+# TPU7x multi-host (HOST_TYPE=multi-host): one TP=16 engine per 2x2x2 slice (2 hosts x 4 chips)
+# under a LeaderWorkerSet with Ray. Same workload envelope as the single-host overlays and the
+# Qwen3.5-397B model guide (fp8 KV, 262k context, HBM at 0.90, hybrid-model prefix-cache flags);
+# the host tier is a single 256 GiB pool on the leader (store_server_ip), which the workers share
+# through tpu-sync. cpu_bytes_to_use is per engine and there is one engine, so this matches the
+# 8 x 32 GiB total of the single-host DP=8 pods.
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
@@ -37,80 +43,142 @@ spec:
               preStop:
                 exec:
                   command: ["/bin/sleep", "15"]
-            env:
-            - name: SKIP_JAX_PRECOMPILE
-              value: "0"
-            - name: TPU_MULTIHOST_BACKEND
-              value: ray
-            - name: RAY_RESERVE_CPU_FOR_RAYLET
-              value: "1"
-            - name: RAY_health_check_failure_threshold
-              value: "100"                            # Allow 100 missed GCS health checks before marking node dead
-            - name: RAY_health_check_timeout_ms
-              value: "20000"                          # Timeout for each GCS health check ping
-            - name: RAY_health_check_period_ms
-              value: "10000"                          # Ping interval for GCS health check
-            - name: RAY_num_heartbeats_timeout
-              value: "300000"                         # Allow 300 missed heartbeats instead of default 30
-            - name: RAY_raylet_heartbeat_timeout_milliseconds
-              value: "3000000"                        # Drop ping intervals slightly to minimize chatter
-            - name: RAY_grpc_keepalive_timeout_ms
-              value: "3000000"
-            - name: RAY_CGRAPH_get_timeout
-              value: "6000"
-            - name: RAY_CGRAPH_submit_timeout
-              value: "6000"
-            - name: TPU_BACKEND_TYPE
-              value: jax
-            - name: MODEL_IMPL_TYPE
-              value: vllm
-            - name: JAX_PLATFORMS
-              value: ""
-            - name: PJRT_DEVICE
-              value: "TPU"
-            - name: NEW_MODEL_DESIGN
-              value: "0"
-            - name: PROMETHEUS_MULTIPROC_DIR
-              value: "/tmp/prometheus_multiproc"
-            - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
-              value: "10000"
-            - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
-              value: "1024"
-            command: ["/bin/sh", "-c"]
+            command: ["/bin/bash", "-c"]
             args:
               - |
-                bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh leader --ray_cluster_size=$(LWS_GROUP_SIZE);
-                exec env VLLM_DISABLE_SHARED_EXPERTS_STREAM=1 vllm serve --port 8000 \
-                  --model=Qwen/Qwen3-Coder-480B-A35B-Instruct \
-                  --enable-prefix-caching \
-                  --async-scheduling \
-                  --enable-chunked-prefill \
+                set -euo pipefail
+                ray start --head --port=6379
+                until [ "$(python3 -c "import ray; ray.init(address='auto', logging_level='error'); print(sum(1 for n in ray.nodes() if n['Alive']))" 2>/dev/null || echo 0)" -ge "${LWS_GROUP_SIZE:-2}" ]; do
+                  echo "Waiting for ${LWS_GROUP_SIZE:-2} Ray nodes to join..."
+                  sleep 5
+                done
+                LEADER_IP=$(hostname -i | awk '{print $1}')
+                exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+                  --port=8000 \
+                  --tensor-parallel-size=16 \
                   --enable-expert-parallel \
-                  --seed 42 \
-                  --tensor-parallel-size 16 \
-                  --gpu-memory-utilization=0.8 \
-                  --max-model-len=71200 \
-                  --kv-transfer-config '{"kv_connector":"TPUOffloadConnector","kv_connector_module_path":"tpu_inference.offload.tpu_offload_connector","kv_role":"kv_both"}' \
+                  --enable-ep-weight-filter \
+                  --attention-backend=CUSTOM \
+                  --language-model-only \
+                  --kv-cache-dtype=fp8 \
+                  --block-size=4352 \
+                  --gpu-memory-utilization=0.90 \
+                  --max-model-len=262144 \
+                  --max-num-batched-tokens=4384 \
+                  --max-num-seqs=32 \
+                  --no-disable-hybrid-kv-cache-manager \
+                  --mamba-cache-mode=align \
+                  --no-async-scheduling \
+                  --enable-prefix-caching \
+                  --prefix-cache-retention-interval=0 \
+                  --enable-auto-tool-choice \
+                  --tool-call-parser=qwen3_coder \
+                  --reasoning-parser=qwen3 \
+                  --kv-transfer-config "{
+                    \"kv_connector\":\"TPURaidenOffloadingConnector\",
+                    \"kv_connector_module_path\":\"vllm_torchtpu.offload.raiden_connector\",
+                    \"kv_role\":\"kv_both\",
+                    \"kv_connector_extra_config\":{\"cpu_bytes_to_use\":274877906944,\"raiden_controller_port\":47800,\"store_server_ip\":\"${LEADER_IP}\"}
+                  }" \
+                  --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
                   --shutdown-timeout=45
+            env:
+              # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+              - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                value: "1"
+              # Node-local HuggingFace cache (hostPath), shared across pods and restarts.
+              - name: HF_HOME
+                value: /root/.cache/huggingface
+              - name: VLLM_ENGINE_READY_TIMEOUT_S
+                value: "3600"
+              - name: TPU_MULTIHOST_BACKEND
+                value: "ray"
+              - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
+                value: "1"
+              - name: JAX_PLATFORMS
+                value: ""
+              - name: PJRT_DEVICE
+                value: "TPU"
+              - name: VLLM_TARGET_DEVICE
+                value: "tpu"
+              - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                value: "false"
+              - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+                value: "0"
+              - name: TPU_GDN_CONV_QK_PAIR_LAYOUT
+                value: "0"
+              - name: TPU_USE_RAIDEN_KV_CACHE_MANAGER
+                value: "1"
+              - name: TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL
+                value: "1"
+              - name: TPU_VLLM_SKIP_DYNAMIC_SMEM_NEGOTIATION_FLAG
+                value: "1"
+              - name: TPU_RAIDEN_QWEN35_ADMISSION
+                value: "1"
+              - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+                value: "1"
+              - name: TPU_RAIDEN_CLIENT_IMPL
+                value: "cpp"
+              - name: TPU_PREMAPPED_BUFFER_SIZE
+                value: "17179869184"
+              - name: TPU_KV_SHM_POOL_GB
+                value: "8"
+              - name: PYTHONHASHSEED
+                value: "0"
+              - name: RAIDEN_EXPECTED_WORKERS_TIMEOUT_S
+                value: "900"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
             resources:
+              requests:
+                google.com/tpu: "4"
+                memory: 850Gi
               limits:
                 google.com/tpu: "4"
+                memory: 850Gi
             ports:
               - containerPort: 8000
                 name: modelserver
                 protocol: TCP
-            readinessProbe:
-              tcpSocket:
-                port: 8000
+            startupProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
               initialDelaySeconds: 15
-              periodSeconds: 1
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 120
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: modelserver
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /v1/models
+                port: modelserver
+              periodSeconds: 5
+              timeoutSeconds: 2
+              failureThreshold: 3
             volumeMounts:
               - mountPath: /dev/shm
                 name: dshm
+              - mountPath: /root/.cache/huggingface
+                name: huggingface-cache
         volumes:
           - name: dshm
             emptyDir:
               medium: Memory
+          - name: huggingface-cache
+            hostPath:
+              path: /var/cache/huggingface
+              type: DirectoryOrCreate
     workerTemplate:
       spec:
         initContainers:
@@ -128,56 +196,82 @@ spec:
         containers:
           - name: modelserver-worker
             image: REPLACE_MODEL_SERVER_IMAGE
-            command: ["/bin/sh", "-c"]
+            command: ["/bin/bash", "-c"]
             args:
               - |
-                bash /workspace/vllm/examples/ray_serving/multi-node-serving.sh worker --ray_address=$(LWS_LEADER_ADDRESS)
+                set -euo pipefail
+                until ray start --block --address="${LWS_LEADER_ADDRESS}:6379"; do
+                  echo "Waiting for Ray head at ${LWS_LEADER_ADDRESS}:6379..."
+                  sleep 5
+                done
             resources:
+              requests:
+                google.com/tpu: "4"
+                memory: 850Gi
               limits:
                 google.com/tpu: "4"
+                memory: 850Gi
             env:
-            - name: SKIP_JAX_PRECOMPILE
-              value: "0"
-            - name: TPU_MULTIHOST_BACKEND
-              value: ray
-            - name: RAY_RESERVE_CPU_FOR_RAYLET
-              value: "1"
-            - name: RAY_health_check_failure_threshold
-              value: "100"                            # Allow 100 missed GCS health checks before marking node dead
-            - name: RAY_health_check_timeout_ms
-              value: "20000"                          # Timeout for each GCS health check ping
-            - name: RAY_health_check_period_ms
-              value: "10000"                          # Ping interval for GCS health check
-            - name: RAY_num_heartbeats_timeout
-              value: "300000"                         # Allow 300 missed heartbeats instead of default 30
-            - name: RAY_raylet_heartbeat_timeout_milliseconds
-              value: "3000000"                        # Drop ping intervals slightly to minimize chatter
-            - name: RAY_grpc_keepalive_timeout_ms
-              value: "3000000"
-            - name: RAY_CGRAPH_get_timeout
-              value: "6000"
-            - name: RAY_CGRAPH_submit_timeout
-              value: "6000"
-            - name: TPU_BACKEND_TYPE
-              value: jax
-            - name: MODEL_IMPL_TYPE
-              value: vllm
-            - name: JAX_PLATFORMS
-              value: ""
-            - name: PJRT_DEVICE
-              value: "TPU"
-            - name: NEW_MODEL_DESIGN
-              value: "0"
-            - name: PROMETHEUS_MULTIPROC_DIR
-              value: "/tmp/prometheus_multiproc"
-            - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
-              value: "10000"
-            - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
-              value: "1024"
+              # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+              - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+                value: "1"
+              # Node-local HuggingFace cache (hostPath), shared across pods and restarts.
+              - name: HF_HOME
+                value: /root/.cache/huggingface
+              - name: VLLM_ENGINE_READY_TIMEOUT_S
+                value: "3600"
+              - name: TPU_MULTIHOST_BACKEND
+                value: "ray"
+              - name: RAY_EXPERIMENTAL_NOSET_TPU_VISIBLE_CHIPS
+                value: "1"
+              - name: JAX_PLATFORMS
+                value: ""
+              - name: PJRT_DEVICE
+                value: "TPU"
+              - name: VLLM_TARGET_DEVICE
+                value: "tpu"
+              - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+                value: "false"
+              - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+                value: "0"
+              - name: TPU_GDN_CONV_QK_PAIR_LAYOUT
+                value: "0"
+              - name: TPU_USE_RAIDEN_KV_CACHE_MANAGER
+                value: "1"
+              - name: TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL
+                value: "1"
+              - name: TPU_VLLM_SKIP_DYNAMIC_SMEM_NEGOTIATION_FLAG
+                value: "1"
+              - name: TPU_RAIDEN_QWEN35_ADMISSION
+                value: "1"
+              - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+                value: "1"
+              - name: TPU_RAIDEN_CLIENT_IMPL
+                value: "cpp"
+              - name: TPU_PREMAPPED_BUFFER_SIZE
+                value: "17179869184"
+              - name: TPU_KV_SHM_POOL_GB
+                value: "8"
+              - name: PYTHONHASHSEED
+                value: "0"
+              - name: RAIDEN_EXPECTED_WORKERS_TIMEOUT_S
+                value: "900"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
             volumeMounts:
               - mountPath: /dev/shm
                 name: dshm
+              - mountPath: /root/.cache/huggingface
+                name: huggingface-cache
         volumes:
           - name: dshm
             emptyDir:
               medium: Memory
+          - name: huggingface-cache
+            hostPath:
+              path: /var/cache/huggingface
+              type: DirectoryOrCreate

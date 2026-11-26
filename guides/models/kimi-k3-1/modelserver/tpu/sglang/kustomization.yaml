@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../../recipes/modelserver/base/multi-host/default
+
+namePrefix: kimi-k3-1-tpu-sglang-
+
+# No graceful-shutdown component: patch-sglang.yaml replaces both container lists, which would
+# drop its worker patch, so the leader sets the same preStop + grace period itself.
+components:
+  - ../../../../../recipes/modelserver/components/images/tpu-sglang/release
+
+# Kimi-K3.1's sparse-MLA / DSA indexer backend (pallas_tpu_mla_sparse) is only in SGLang's
+# Kimi-K3.1 TPU build (sglang 0.5.22, sglang_tpu 0.1.1), not in the v0.1.0-tpu release the
+# shared component pins; pinned by digest. This also resolves the image placeholder in
+# patch-sglang.yaml, which replaces the container lists after the component has run.
+# TODO: drop this override once a release *-tpu tag carries Kimi-K3.1 support (day-0 guide:
+# the model launched on this dev build).
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/lmsysorg/sglang
+    digest: sha256:84fa8579cfb609d383a64fdd64c0036045140c905b7bd8a5ee9e6cadfe3cf433
+
+labels:
+  - pairs:
+      llm-d.ai/guide: kimi-k3-1
+      llm-d.ai/model: Kimi-K3.1-Pro
+      llm-d.ai/accelerator-variant: tpu
+      llm-d.ai/accelerator-vendor: google
+      llm-d.ai/backend: torch-tpu
+      llm-d.ai/engine-type: sglang
+    includeSelectors: true
+    includeTemplates: true
+    fields:
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/leaderTemplate/metadata/labels
+        create: true
+      - group: leaderworkerset.x-k8s.io
+        version: v1
+        kind: LeaderWorkerSet
+        path: spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        create: true
+
+patches:
+  - path: patch-sglang.yaml
+    target:
+      group: leaderworkerset.x-k8s.io
+      version: v1
+      kind: LeaderWorkerSet
+      name: decode

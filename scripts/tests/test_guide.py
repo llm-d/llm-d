@@ -122,6 +122,33 @@ def test_list_env_values_fail_validation_and_cli_emit(tmp_path, capsys, spec, fi
     assert "export BAD=" not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "section, steps, path",
+    [
+        ("deploy", [{"run": "echo gke", "when": {"FLAVOR": ["gek"]}}], "deploy[0]"),
+        ("deploy", {"gateway": [{"run": "echo gke", "when": {"FLAVOR": ["gek"]}}]}, "deploy.gateway[0]"),
+        ("cleanup", [{"run": "echo gke", "when": {"FLAVOR": ["gek"]}}], "cleanup[0]"),
+    ],
+)
+def test_when_value_outside_declared_values_fails_validation(section, steps, path):
+    # A typo'd when: value would otherwise pass check and drop the step from
+    # every emitted script, since --var already rejects that value.
+    data = _minimal(**{section: steps})
+    msgs = [str(f) for f in guide.check_yaml(data)]
+    assert any(f"{path}:" in m and "'gek'" in m and "not in declared values" in m for m in msgs)
+
+    fixed = yaml.safe_load(yaml.safe_dump(data).replace("gek", "gke"))
+    assert not [str(f) for f in guide.check_yaml(fixed)]
+
+
+def test_when_value_check_skips_malformed_steps_and_free_variables():
+    # A step that is not a map gets its schema error, not a crash, and a
+    # variable without a values: list accepts any when: value.
+    data = _minimal(deploy=["echo not a map", {"run": "echo ns", "when": {"NAMESPACE": ["anything"]}}])
+    msgs = [str(f) for f in guide.check_yaml(data)]
+    assert len(msgs) == 1 and "deploy[0]" in msgs[0] and "must be a map" in msgs[0]
+
+
 def test_non_bool_sensitive_flag_fails_validation():
     # `sensitive: "true"` passed validation as non-sensitive but was treated
     # as sensitive by render and emit — the export silently vanished.
@@ -179,6 +206,46 @@ def test_when_filter_uses_default_and_override():
     assert "echo base-only" in by_default and "echo gke-only" not in by_default
     overridden = guide.emit_script(data, ["deploy"], {"FLAVOR": "gke"})
     assert "echo gke-only" in overridden and "echo base-only" not in overridden
+
+
+_BOOL_GUIDE = """
+name: test-guide
+env:
+  static:
+    MONITORING: {default: "false", values: %s}
+deploy:
+  - run: echo always
+  - when: {MONITORING: [true]}
+    run: echo monitoring
+"""
+
+
+def test_unquoted_yaml_boolean_values_accept_string_default():
+    # `values: [false, true]` parses as Python bools; the default is a string.
+    data = yaml.safe_load(_BOOL_GUIDE % "[false, true]")
+    findings = guide.check_yaml(data)
+    assert findings.ok(), findings.errors
+    out = guide.emit_script(data, ["deploy"], {"MONITORING": "true"})
+    assert "echo monitoring" in out
+
+
+def test_unquoted_yaml_boolean_in_when_matches_override():
+    # check passes with quoted values, so an unquoted `when:` list must not
+    # silently drop the gated step from the emitted script.
+    data = yaml.safe_load(_BOOL_GUIDE % '["false", "true"]')
+    assert guide.check_yaml(data).ok()
+    assert "echo monitoring" not in guide.emit_script(data, ["deploy"])
+    out = guide.emit_script(data, ["deploy"], {"MONITORING": "true"})
+    assert "echo monitoring" in out
+
+
+def test_unquoted_yaml_booleans_render_as_yaml_spells_them():
+    # The README must offer values that `--var` accepts, not str(True).
+    data = yaml.safe_load(_BOOL_GUIDE % "[false, true]")
+    assert "options: false, true" in guide.render_path(data, "env.static")
+    assert "# only when MONITORING=true:" in guide.render_path(data, "deploy")
+    with pytest.raises(guide.GuideError, match=r"\['false', 'true'\]"):
+        guide.emit_script(data, ["deploy"], {"MONITORING": "True"})
 
 
 def test_when_on_sensitive_var_without_override_is_an_error():
@@ -299,6 +366,26 @@ def test_cli_selection_flags_still_guarded(command, tmp_path, capsys):
     rc = guide.main([command, str(tmp_path), "--yaml", str(tmp_path / "guide.yaml")])
     assert rc == 2
     assert "not both" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# model guide monitoring cleanup
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("model", ["nemotron-3-ultra", "qwen3-5-397b"])
+@pytest.mark.parametrize("monitoring", [None, "false", "true"])
+def test_model_monitoring_cleanup_matches_deployment(model, monitoring):
+    model_guide = guide.Guide.load(GUIDES_DIR / "models" / model)
+    variables = {} if monitoring is None else {"MONITORING": monitoring}
+    deploy = model_guide.emit(["deploy.monitoring"], variables=variables)
+    cleanup = model_guide.emit(["cleanup"], variables=variables)
+    monitoring_path = "${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd"
+
+    assert (monitoring_path in deploy) == (monitoring == "true")
+    assert (monitoring_path in cleanup) == (monitoring == "true")
+    assert "helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}" in cleanup
+    assert "kubectl delete namespace ${NAMESPACE}" in cleanup
 
 
 # --------------------------------------------------------------------------

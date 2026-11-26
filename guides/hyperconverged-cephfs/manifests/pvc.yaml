@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-d-kv-cache-storage  # If you change this, update modelserver/gpu/vllm/base/patch-vllm.yaml accordingly.
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: ${KV_CACHE_PVC_SIZE}
+  storageClassName: ${STORAGE_CLASS}

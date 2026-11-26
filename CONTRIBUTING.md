@@ -52,7 +52,7 @@ All features involving public APIs, behavior between core components, or new cor
    * **Proposal**: Can include User Stories ("As a User I want to X"), should have enough detail that reviewers can understand exactly what you're proposing, but should not include things like API designs or implementation. What is the desired outcome and how do we measure success?
    * **Design Details**: Should contain enough information that the specifics of your change are understandable. This may include API specs (though not always required) or even code snippets. If there's any ambiguity about HOW your proposal will be implemented, this is the place to discuss them.
    * **Alternatives**: Provide alternative implementations/proposals and a short summary of why they were rejected
-   * **Release Notes**" Call out any impact on user facing aspects, such as documentation, release notes,
+   * **Release Notes**: Call out any impact on user facing aspects, such as documentation, release notes,
    deprecation and replacement of existing functionality, etc.
 3. Get review from impacted component maintainers
 4. Get approval from project maintainers
@@ -201,6 +201,7 @@ EOF
   * Add automatically with `git commit -s`
   * See [PR_SIGNOFF.md](PR_SIGNOFF.md) for configuration details
   * Required for all contributions per [Developer Certificate of Origin](https://developercertificate.org/)
+* **Area labels**: Pull requests are labeled automatically by changed paths (`area/*` and `docs-only`), and both PR and issue descriptions accept `/area <name>` lines; see [`.github/area_taxonomy.md`](.github/area_taxonomy.md) for the full taxonomy.
 
 ## Code Organization and Ownership
 

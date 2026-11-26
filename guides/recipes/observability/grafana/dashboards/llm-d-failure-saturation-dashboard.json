@@ -732,9 +732,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(up{job=\"gaie-optimized-baseline-epp\",namespace=~\"$namespace\"}[5m])",
+          "expr": "avg_over_time(up{job=~\"${epp_job:raw}\",namespace=~\"$namespace\"}[5m])",
           "instant": false,
-          "legendFormat": "Scheduler",
+          "legendFormat": "{{job}} / {{instance}}",
           "range": true,
           "refId": "A"
         }
@@ -1100,6 +1100,18 @@
         "refresh": 2,
         "regex": "",
         "type": "query"
+      },
+      {
+        "current": {
+          "text": "(.+[-_/])?epp([-_/].+)?",
+          "value": "(.+[-_/])?epp([-_/].+)?"
+        },
+        "description": "Prometheus job label regex used by the Scheduler Health panel",
+        "label": "EPP scrape job",
+        "name": "epp_job",
+        "options": [],
+        "query": "(.+[-_/])?epp([-_/].+)?",
+        "type": "textbox"
       }
     ]
   },

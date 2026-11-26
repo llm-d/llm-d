@@ -7,7 +7,7 @@ resources:
 namePrefix: tpu-v7-vllm-
 
 components:
-  - ../../../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
 
 patches:
   - path: patch-vllm.yaml

@@ -6,7 +6,7 @@ resources:
 namePrefix: precise-prefix-cache-routing-tpu-v6-vllm-
 
 components:
-  - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+  - ../../../../../../recipes/modelserver/components/images/torch-tpu-vllm/release
 
 labels:
   - pairs:
@@ -14,6 +14,7 @@ labels:
       llm-d.ai/model: Qwen3-32B
       llm-d.ai/accelerator-variant: tpu
       llm-d.ai/accelerator-vendor: google
+      llm-d.ai/backend: torch-tpu
     includeSelectors: true
     includeTemplates: true
 patches:

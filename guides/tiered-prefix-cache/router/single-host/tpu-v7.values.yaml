@@ -1,0 +1,62 @@
+## tiered-prefix-cache router overrides for Google TPU v7 (single-host).
+## Layer on top of: recipes/router/base.values.yaml and single-host/tiered-prefix-cache-cpu.values.yaml
+##
+## Same plugin chain as the default single-host values; only the producers are sized for
+## the TPU7x Qwen3.5-397B-A17B-FP8 engines (DP=8 x TP=1, fp8 KV, 262k context,
+## 32 GiB host tier per engine). Mirrors guides/models/qwen3-5-397b/router.
+
+router:
+  extraServicePorts:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8081
+
+  epp:
+    pluginsConfigFile: "tiered-prefix-cache-plugins.yaml"
+    pluginsCustomConfig:
+      tiered-prefix-cache-plugins.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: no-hit-lru-scorer
+          parameters:
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
+        - type: approx-prefix-cache-producer
+          name: gpu-prefix-cache-producer
+          parameters:
+            # Engine --block-size=4352 on TPU7x and the 262k context.
+            blockSizeTokens: 4352
+            maxPrefixTokensToMatch: 262144
+        - type: approx-prefix-cache-producer
+          name: cpu-prefix-cache-producer
+          parameters:
+            blockSizeTokens: 4352
+            maxPrefixTokensToMatch: 262144
+            # autoTune sizes the LRU from HBM blocks only and ignores the host tier
+            # (llm-d/llm-d-router#1650). Sized for the offload-extended cache like the
+            # Qwen3.5-397B model guide (8 engines x 32 GiB host tier per pod).
+            autoTune: false
+            lruCapacityPerServer: 46200
+        - type: queue-scorer
+        - type: kv-cache-utilization-scorer
+        - type: prefix-cache-scorer
+          name: gpu-prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: gpu-prefix-cache-producer
+        - type: prefix-cache-scorer
+          name: cpu-prefix-cache-scorer
+          parameters:
+            prefixMatchInfoProducerName: cpu-prefix-cache-producer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: queue-scorer
+          - pluginRef: kv-cache-utilization-scorer
+          - pluginRef: gpu-prefix-cache-scorer
+          - pluginRef: cpu-prefix-cache-scorer
+          - pluginRef: no-hit-lru-scorer
+
+  modelServers:
+    matchLabels:
+      llm-d.ai/guide: "tiered-prefix-cache"

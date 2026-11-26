@@ -52,6 +52,11 @@ on:
         required: false
         default: 'true'
         type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
 
 #  push:
 #    branches:
@@ -95,6 +100,7 @@ jobs:
       harness: ${{ inputs.harness || 'inference-perf' }}
       workload: ${{ inputs.workload || 'sanity_random.yaml' }}
       cleanup: ${{ inputs.cleanup || 'true' }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
     secrets: inherit
 
   update-badge:
@@ -107,3 +113,4 @@ jobs:
       result: ${{ needs.nightly.result }}
       dry_run: ${{ inputs.dry_run || 'false' }}
       failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

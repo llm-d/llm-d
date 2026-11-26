@@ -1,0 +1,53 @@
+## pd-disaggregation router overrides for Google TPU v7 (Qwen3.5-397B-A17B-FP8).
+## Layer after pd-disaggregation.values.yaml (deploy.accelerator_values sets ACCELERATOR_VALUES).
+##
+## Same plugin chain as the default values; only the producer and the affinity gate are
+## sized for the TPU7x P/D engines: prefill runs --block-size=4352 with PCP=8 and a 262k
+## context, so the router must hash prefixes on 4352-token blocks and track the full
+## context, and the gate uses the throughput measured on this topology.
+## Mirrors guides/models/qwen3-5-397b/router/qwen3-5-397b-disagg.values.yaml.
+
+router:
+  epp:
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          parameters:
+            # Prefill block size on TPU7x (--block-size=4352) and the 262k context.
+            blockSizeTokens: 4352
+            maxPrefixTokensToMatch: 262144
+            # autoTune sizes the LRU from HBM blocks only and ignores the prefill host
+            # tier (llm-d/llm-d-router#1650); sized for the offload-extended cache.
+            autoTune: false
+            lruCapacityPerServer: 4000000
+        - type: inflight-load-producer
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured on the TPU7x PCP=8 prefill (Qwen3.5-397B-A17B-FP8); see the
+            # Qwen3.5-397B model guide. Re-measure for other hardware/models.
+            peakPrefillThroughput: 16444
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker

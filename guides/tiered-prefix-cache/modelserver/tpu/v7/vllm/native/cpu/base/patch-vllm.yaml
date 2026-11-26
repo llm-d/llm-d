@@ -1,3 +1,22 @@
+# TPU7x host-DRAM tier (VARIANT=cpu): HBM -> host DRAM through Torch TPU's
+# TPURaidenOffloadingConnector (tpu-sync). The engine is the Qwen3.5-397B model guide's
+# unified layout (guides/models/qwen3-5-397b) without MTP: 8 data-parallel engines
+# (DP=8, TP=1) with expert parallelism on one 2x2x1 slice, fp8 KV cache, 262k context,
+# --gpu-memory-utilization=0.90 so HBM holds as much KV as it safely can.
+#
+# Tier sizing fills the lower-latency tiers first: HBM at 0.90, then host DRAM.
+# cpu_bytes_to_use is per DP engine: 32 GiB x 8 engines = 256 GiB pinned host tier per
+# pod, plus 8 x 16 GiB TPU_PREMAPPED_BUFFER_SIZE staging buffers, inside the 850Gi
+# request (tpu7x-standard-4t has ~919 GiB allocatable). 64 GiB per engine also fits but
+# measured 798 GiB RSS, leaving ~50 GiB headroom; 32 GiB is the validated default. The fs variant layers the
+# filesystem tier on top of this, it does not replace it.
+#
+# Qwen3.5 is a hybrid (Gated DeltaNet + attention) model: --mamba-cache-mode=align and
+# --no-disable-hybrid-kv-cache-manager keep the linear-attention state prefix-cacheable
+# alongside the attention KV. --no-async-scheduling and TPU_RAIDEN_QWEN35_ADMISSION=1 are
+# the 262k / DP=8 admission settings from the model guide. PYTHONHASHSEED=0 keeps
+# prefix-block hashes identical across engines and replicas;
+# TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL=1 is required by the tpu-sync KV-cache manager.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,8 +29,66 @@ spec:
         cloud.google.com/gke-tpu-topology: 2x2x1
       containers:
         - name: modelserver
+          command: ["vllm", "serve"]
+          args:
+            - "Qwen/Qwen3.5-397B-A17B-FP8"
+            - "--kv-transfer-config"
+            - '{"kv_connector":"TPURaidenOffloadingConnector","kv_connector_module_path":"vllm_torchtpu.offload.raiden_connector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":34359738368,"raiden_controller_port":47800}}'
+            - "--enable-prefix-caching"
+            - "--prefix-cache-retention-interval=0"
+            - "--port=8000"
+            - "--data-parallel-size=8"
+            - "--tensor-parallel-size=1"
+            - "--enable-expert-parallel"
+            - "--enable-ep-weight-filter"
+            - "--attention-backend=CUSTOM"
+            - "--language-model-only"
+            - "--kv-cache-dtype=fp8"
+            - "--block-size=4352"
+            - "--gpu-memory-utilization=0.90"
+            - "--max-model-len=262144"
+            - "--max-num-batched-tokens=4384"
+            - "--max-num-seqs=32"
+            - "--no-disable-hybrid-kv-cache-manager"
+            - "--mamba-cache-mode=align"
+            - "--no-async-scheduling"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=qwen3_coder"
+            - "--reasoning-parser=qwen3"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=45"
+          env:
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "3600"
+            - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+              value: "1"
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: TPU_USE_RAIDEN_KV_CACHE_MANAGER
+              value: "1"
+            - name: TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL
+              value: "1"
+            - name: TPU_VLLM_SKIP_DYNAMIC_SMEM_NEGOTIATION_FLAG
+              value: "1"
+            - name: TPU_RAIDEN_QWEN35_ADMISSION
+              value: "1"
+            - name: TPU_RAIDEN_CLIENT_IMPL
+              value: "cpp"
+            - name: TPU_PREMAPPED_BUFFER_SIZE
+              value: "17179869184"
+            - name: TPU_KV_SHM_POOL_GB
+              value: "8"
+            - name: PYTHONHASHSEED
+              value: "0"
           resources:
             requests:
+              cpu: "64"
               google.com/tpu: 4
+              memory: 850Gi
             limits:
               google.com/tpu: 4
+              memory: 850Gi

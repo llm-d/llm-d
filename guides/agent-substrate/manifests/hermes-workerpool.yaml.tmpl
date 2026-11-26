@@ -1,0 +1,45 @@
+# Agent Substrate WorkerPool for 1,000 Hermes Agent sandboxes (Substrate v1.0.0+).
+#
+# Sizing notes (validated on 18 x c4d-standard-16 nodes = ~56 agents/node):
+#   - `HERMES_WORKER_REPLICAS=1080` (60 workers x 18 nodes) leaves ~4 spare
+#     workers per node, enough for every agent to run at once. A suspended
+#     agent holds no worker, so a fleet that is suspended between turns can
+#     run on a smaller pool sized to its concurrent turns.
+#   - `limits.memory: 1536Mi` covers the ~180 MiB Hermes RSS, gVisor sentry, and
+#     the ~150 MiB checkpoint page cache charged during suspend.
+#   - `requests.memory: 880Mi` evenly spreads ~60 workers per 64 GiB node
+#     without needing topologySpreadConstraints on WorkerPool.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${ATESPACE}
+---
+apiVersion: ate.dev/v1
+kind: WorkerPool
+metadata:
+  name: hermes-workerpool
+  namespace: ${ATESPACE}
+  labels:
+    workload: hermes
+    llm-d.ai/guide: agent-substrate
+spec:
+  replicas: ${HERMES_WORKER_REPLICAS}
+  # No configRef: the pool follows the cluster's default gVisor SandboxConfig.
+  sandboxClasses:
+    - name: gvisor
+  workerImage: ${SUBSTRATE_WORKER_IMAGE}
+  template:
+    nodeSelector:
+      pool: hermes
+    tolerations:
+      - key: ate.dev/sandboxClass
+        operator: Equal
+        value: hermes
+        effect: NoSchedule
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1536Mi
+      requests:
+        cpu: 10m
+        memory: 880Mi

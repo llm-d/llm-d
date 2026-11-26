@@ -7,11 +7,14 @@ resources:
 # delays are shortened below so the guide demonstrates scale-to-zero in about a
 # minute instead of ten; production values belong nearer the upstream defaults.
 patches:
+  # No `name` selector: the upstream keda-epp queue overlay names its
+  # ScaledObject with the envsubst placeholder ${SCALEDOBJECT_NAME}, which
+  # kustomize's patch selector cannot match literally. This chain carries
+  # exactly one ScaledObject, so kind alone identifies it.
   - target:
       group: keda.sh
       version: v1alpha1
       kind: ScaledObject
-      name: optimized-baseline-keda-epp
     patch: |-
       - op: remove
         path: /metadata/namespace

@@ -1,0 +1,158 @@
+# Qwen3.5-397B-A17B-FP8 prefill on one TPU7x 2x2x1 node (4 chips, 8 TensorCores).
+#
+# Engine: PCP=8 (prefill context parallel) x TP=1 with expert parallelism.
+# KV leaves this pod two ways, through one TPUMultiConnector (first child = higher priority):
+#   1. TPURaidenOffloadingConnector (kv_both): host-DRAM KV tier, 64 GiB pinned. Blocks evicted
+#      from HBM are kept here and restored on a later prefix hit.
+#   2. TPURaidenConnector (kv_producer, kv_port 14579): tpu-sync Stage-3 transfer to decode, which
+#      reshards the 8 PCP shards onto decode's 8 DP engines.
+# Prefix caching on this hybrid (Gated DeltaNet + attention) model needs
+# --mamba-cache-mode=align, the unified block pool and a block size that Stage-3 accepts
+# (4352 = 17 x 256, matching the hybrid mamba_state_fit block size and divisible by --cp-kv-cache-interleave-size=256).
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+    - name: prefill
+      spec:
+        leaderWorkerTemplate:
+          workerTemplate:
+            spec:
+              nodeSelector:
+                cloud.google.com/gke-tpu-topology: "2x2x1"
+                cloud.google.com/gke-tpu-accelerator: "tpu7x"
+              containers:
+                - name: modelserver
+                  command: ["/bin/bash", "-c"]
+                  args:
+                    - |
+                      set -euo pipefail
+                      if [[ "${POD_IP}" == *":"* ]]; then
+                        HOST_ADDR="::"
+                        export VLLM_HOST_IP="[${POD_IP}]"
+                      else
+                        HOST_ADDR="0.0.0.0"
+                        export VLLM_HOST_IP="${POD_IP}"
+                      fi
+                      exec vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
+                        --host "${HOST_ADDR}" \
+                        --port=8000 \
+                        --trust-remote-code \
+                        --seed=42 \
+                        --max-model-len=262144 \
+                        --max-num-batched-tokens=16384 \
+                        --long-prefill-token-threshold=16384 \
+                        --max-num-seqs=8 \
+                        --tensor-parallel-size=1 \
+                        --prefill-context-parallel-size=8 \
+                        --cp-kv-cache-interleave-size=256 \
+                        --enable-expert-parallel \
+                        --enable-ep-weight-filter \
+                        --disable-custom-all-reduce \
+                        --gpu-memory-utilization=0.90 \
+                        --kv-cache-dtype=fp8 \
+                        --block-size=4352 \
+                        --language-model-only \
+                        --attention-backend=CUSTOM \
+                        --no-disable-hybrid-kv-cache-manager \
+                        --mamba-cache-mode=align \
+                        --enable-prefix-caching \
+                        --prefix-cache-retention-interval=0 \
+                        --enable-prompt-tokens-details \
+                        --no-async-scheduling \
+                        --enable-auto-tool-choice \
+                        --tool-call-parser=qwen3_coder \
+                        --reasoning-parser=qwen3 \
+                        --no-enable-log-requests \
+                        --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+                        --shutdown-timeout=45 \
+                        --speculative-config='{"method":"mtp","num_speculative_tokens":1}' \
+                        --compilation-config='{
+                          "backend":"vllm_torchtpu.compilation.tpu_compiler.TpuCompilerAdaptor",
+                          "compile_sizes":[4096],
+                          "inductor_compile_config":{"enable_auto_functionalized_v2":false,"size_asserts":false,"alignment_asserts":false,"scalar_asserts":false}
+                        }' \
+                        --kv-transfer-config='{
+                          "kv_connector":"TPUMultiConnector",
+                          "kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_multi_connector",
+                          "kv_role":"kv_producer",
+                          "kv_connector_extra_config":{"connectors":[
+                            {"kv_connector":"TPURaidenOffloadingConnector","kv_connector_module_path":"vllm_torchtpu.offload.raiden_connector",
+                             "kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":68719476736,"raiden_controller_port":47800}},
+                            {"kv_connector":"TPURaidenConnector","kv_connector_module_path":"vllm_torchtpu.distributed.kv_transfer.tpu_connector","kv_role":"kv_producer","kv_port":14579}
+                          ]}
+                        }'
+                  ports:
+                    - containerPort: 14579
+                      name: kv-rendezvous
+                      protocol: TCP
+                  env:
+                    # tpu-sync advertises this address to the decode engine in the Stage-3 handshake. It
+                    # must be the pod IP (not a Service IP) so decode can match the sender.
+                    - name: TPU_RAIDEN_ADVERTISE_HOST
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.podIP
+                    # Unique per pod, so the overlay can be scaled to xPyD by raising replicas.
+                    - name: TPU_RAIDEN_ENGINE_ID
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.name
+                    # -- TPU / XLA runtime
+                    - {name: PYTHONNOUSERSITE, value: "1"}
+                    - {name: PJRT_DEVICE, value: TPU}
+                    - {name: TPU_ACCELERATOR_TYPE, value: tpu7x}
+                    - {name: VLLM_XLA_CHECK_RECOMPILATION, value: "0"}
+                    - {name: TPU_EVICT_WEIGHTS_PAGE_CACHE, value: "1"}   # drop weight-file page cache after load (local-path loads)
+                    - {name: VLLM_ALLOW_LONG_MAX_MODEL_LEN, value: "1"}
+                    - {name: XLA_PYTHON_CLIENT_PREALLOCATE, value: "false"}
+                    - {name: TPU_PREMAPPED_BUFFER_SIZE, value: "17179869184"}
+                    - {name: TPU_VLLM_SKIP_DYNAMIC_SMEM_NEGOTIATION_FLAG, value: "1"}
+                    # Unified KV pool: required for prefix caching on the hybrid model and for tpu-sync.
+                    - {name: TPU_VLLM_ENABLE_UNIFIED_BLOCK_POOL, value: "1"}
+                    # -- tpu-sync KV transfer
+                    - {name: TPU_USE_RAIDEN_KV_CACHE_MANAGER, value: "1"}
+                    - {name: TPU_RAIDEN_CLIENT_IMPL, value: cpp}
+                    - {name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS, value: "false"}
+                    - {name: TORCHINDUCTOR_AUTOGRAD_CACHE, value: "0"}
+                    - {name: TPU_RAIDEN_QWEN35_ADMISSION, value: "1"}
+                    - {name: TPU_KV_RESHARD_TRANSPORT, value: raiden}
+                    # Must equal --prefill-context-parallel-size: one transfer rank per PCP shard.
+                    - {name: TPU_RAIDEN_TRANSFER_PARALLELISM, value: "8"}
+                    - {name: TPU_GDN_CONV_QK_PAIR_LAYOUT, value: "1"}
+                    - {name: TPU_RAIDEN_JOB_NAME, value: prefill}
+                    # Must differ from decode's and be a valid C identifier (no hyphens).
+                    - {name: TPU_KV_TRANSFER_NAMESPACE, value: llm_d_pd_prefill}
+                    - {name: TPU_RAIDEN_RESHARD_IMPL, value: store}
+                    # Must not overlap decode's port bases; each of the 8 transfer ranks uses base + rank.
+                    - {name: TPU_RAIDEN_RESHARD_PORT_BASE, value: "27000"}
+                    - {name: TPU_RAIDEN_STORE_DISPATCH_PORT_BASE, value: "27100"}
+                    - {name: TPU_KV_SHM_POOL_GB, value: "8"}
+                    - {name: TPU_P2P_WAIT_PULL_TIMEOUT, value: "600"}
+                    # -- compile cache (per-pod emptyDir mounted at /.cache by tpu/common)
+                    - {name: TORCH_TPU_TIER2_COMPILATION_CACHE, value: disabled}
+                    - {name: TORCH_TPU_INTERNAL_TIER2_COMPILATION_CACHE, value: disabled}
+                    - {name: VLLM_CACHE_ROOT, value: /.cache/vllm-cache}
+                    - {name: TORCHINDUCTOR_CACHE_DIR, value: /.cache/torchinductor}
+                    # -- vLLM plumbing
+                    - {name: VLLM_PLUGINS, value: torchtpu}
+                    - {name: VLLM_TARGET_DEVICE, value: tpu}
+                    - {name: VLLM_ENGINE_READY_TIMEOUT_S, value: "3600"}
+                    - {name: VLLM_NO_USAGE_STATS, value: "1"}
+                    # Same prefix-cache block hashes on every engine (vLLM seeds them randomly otherwise).
+                    - {name: PYTHONHASHSEED, value: "0"}
+                    - {name: TPU_STDERR_LOG_LEVEL, value: "3"}
+                    - {name: TPU_MIN_LOG_LEVEL, value: "3"}
+                    - {name: TF_CPP_MIN_LOG_LEVEL, value: "3"}
+                  resources:
+                    # 64 GiB of pinned host KV plus the runtime; 600Gi was OOMKilled in testing.
+                    # tpu7x-standard-4t nodes have ~919Gi allocatable.
+                    limits:
+                      memory: 850Gi
+                      google.com/tpu: 4
+                    requests:
+                      cpu: "64"
+                      memory: 850Gi
+                      google.com/tpu: 4

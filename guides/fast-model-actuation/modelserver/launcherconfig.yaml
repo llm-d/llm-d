@@ -3,7 +3,11 @@ kind: LauncherConfig
 metadata:
   name: fma-launcher
 spec:
+  # One pool port per instance; the EPP targets the requester's proxy, so
+  # pool ports stay private to each launcher<->requester pairing. 8001 is
+  # the launcher service port, forbidden in the pool.
   maxInstances: 2
+  inferencePorts: [8000, 8002]
   podTemplate:
     spec:
       # Run launcher pods as the fma-launcher SA (rbac/role.yaml) so the
@@ -14,7 +18,7 @@ spec:
       containers:
         - name: inference-server
           # Keep this tag in sync with FMA_VERSION in guide.yaml / the guide env.
-          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/launcher:v0.6.5
+          image: ghcr.io/llm-d-incubation/llm-d-fast-model-actuation/launcher:v0.8.0
           command: ["/bin/bash", "-c"]
           args:
             - |

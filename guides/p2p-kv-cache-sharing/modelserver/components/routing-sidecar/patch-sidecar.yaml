@@ -1,0 +1,37 @@
+# Routing sidecar in front of the engine: on a request that carries the
+# KV-cache-source header, it validates the kv_transfer_params.remote_kv_source
+# block the router wrote into the body and forwards it, so the engine pulls.
+# The router computes the source's P2P port (the p2p-source-producer's
+# p2pConnectorPort plus the endpoint's data parallel rank), so the sidecar
+# takes no P2P port flag.
+# POD_IP is the sidecar's own routable address (data-parallel rank routing).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: routing-proxy
+          args:
+            - --port=8000
+            - --model-server-port=8200
+            - --kv-connector=offloading
+            - --secure-serving=false
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          image: REPLACE_ROUTING_SIDECAR_IMAGE
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: sidecar
+              protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true

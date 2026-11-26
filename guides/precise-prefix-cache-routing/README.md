@@ -30,8 +30,8 @@ This guide includes configurations for the following accelerator and model serve
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool) |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · vLLM 0.29 · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) · vLLM 0.29 |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | 2 replicas |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -40,10 +40,14 @@ This guide includes configurations for the following accelerator and model serve
 > [!NOTE]
 > The router and the model servers must agree on two things:
 >
-> - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together.
+> - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together. **TPU v6e** is the exception: `--block-size=64` runs out of SMEM on Torch TPU, so the `tpu/v6` overlay sets `--block-size=256` and [`router/tpu-v6e.values.yaml`](router/tpu-v6e.values.yaml) sets `blockSizeTokens: 256` to match.
 > - **Model.** The `token-producer` `modelName` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values is `Qwen/Qwen3-32B`. On an accelerator that serves another model (e.g. Intel XPU's `Qwen/Qwen3-0.6B`), set it to `MODEL` in the values file you're deploying before installing the router: with vLLM the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 
 For wide-EP LWS deployments (multi-port DP model servers), use the precise prefix-cache routing mode in the [GLM-5.2 guide](../models/glm-5-2/README.md#installation-instructions) instead of the manifests here.
+
+**Google TPU on GKE.** Weights are downloaded once per node into `/var/cache/huggingface` (a `hostPath`), so size the boot disk for the checkpoint: ≥ 200 GB for Qwen3-32B on v6e (66 GB), ≥ 1 TB for Qwen3.5-397B-A17B-FP8 on TPU7x (406 GB: a 600 GB disk leaves only ~20 GiB of allocatable headroom once the image and compile cache are counted; the 100 GB node-auto-provisioning default is evicted mid-download).
+Annotate the pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` under the `OPTIMIZE_UTILIZATION` autoscaler profile; the Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
+The TPU7x overlay runs DP=2 × TP=4 so per-rank KV events are exercised with a small rank count; for the tuned Qwen3.5-397B layout (DP=8 × TP=1, EP, 262k context, host KV tier, MTP) see the [Qwen3.5-397B model guide](../models/qwen3-5-397b/README.md).
 
 > [!NOTE]
 > The router runs as a **single replica**: the `token-load-scorer`'s in-flight token accounting is local to each router process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index is not HA-safe either: on a warm fleet, a replica that starts later than the others misses every prefix cached before its replay window and everything built on those, until they are evicted (see [Index recovery](#index-recovery)). Active-active HA (`--set router.epp.replicas=2`) therefore needs both shared in-flight state and a complete index at start, which today means the experimental [snapshot option](#optional-configuration).
@@ -558,7 +562,7 @@ The settings below are commented out in [`router/precise-prefix-cache-routing.va
 
 ### Metrics
 
-With `MONITORING=true`, Prometheus scrapes the router's metrics. `indexerConfig.kvBlockIndexConfig.enableMetrics: true` (set in this guide) adds the KV-index metrics:
+With `MONITORING=true`, Prometheus scrapes the router's metrics. The `llm_d_epp_kv_cache_events_*` metrics are always recorded; `indexerConfig.kvBlockIndexConfig.enableMetrics: true` (set in this guide) adds the `llm_d_epp_kv_cache_index_*` metrics:
 
 | Metric | What it tells you |
 | --- | --- |
@@ -572,6 +576,8 @@ With `MONITORING=true`, Prometheus scrapes the router's metrics. `indexerConfig.
 | `llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens` | Per-request histograms; the ratio of their `_sum`s is the share of prompt tokens the router predicted the chosen endpoint had cached. Compare it with the model servers' prefix-cache hit rate (below). |
 
 To tell **low prefix reuse** apart from an **incomplete index**, compare the same token share on both sides. On the router, divide `llm_d_epp_prefix_predicted_cached_tokens_sum` by `llm_d_epp_prefix_prompt_tokens_sum` (the prompt tokens the router predicted the chosen endpoint had cached); on the model servers, divide `vllm:prefix_cache_hits_total` by `vllm:prefix_cache_queries_total`. With a complete index the two track each other closely. If the model servers' share is clearly higher, the index is missing blocks: check the subscriber, error and queue metrics above, and see [Index recovery](#index-recovery). If both are low, the workload simply shares little prefix.
+
+The `llm-d-kv-cache-index` Grafana dashboard charts these metrics, split by router replica where replicas keep separate state, and includes this hit-rate comparison; see [Use Grafana Dashboards](../../docs/operations/observability/dashboards.md).
 
 ### Tracing
 

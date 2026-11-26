@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  replicas: 2
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x4"
+        cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      containers:
+        - name: modelserver
+          command: ["python3", "-m", "sglang.launch_server"]
+          args:
+            - "--model-path=Qwen/Qwen3-32B"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            - "--device=tpu"
+            - "--dtype=bfloat16"
+            - "--enable-metrics"
+            - "--tensor-parallel-size=8"
+            - "--enable-torch-compile"
+            - "--context-length=16384"
+            - "--max-running-requests=64"
+            - "--torch-compile-max-bs=64"
+            - "--chunked-prefill-size=8192"
+            - "--max-prefill-tokens=8192"
+            - "--tpu-compile-tokens"
+            - "2048"
+            - "8192"
+            - "--tpu-compile-bs"
+            - "8"
+            - "64"
+            - "--max-total-tokens=131072"
+            - "--mem-fraction-static=0.75"
+            - "--watchdog-timeout=3600"
+            - "--tool-call-parser=qwen"
+            - "--reasoning-parser=qwen3"
+            # Uncomment for distributed tracing
+            # - "--enable-trace"
+            # - "--otlp-traces-endpoint=http://otel-collector:4317"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /.cache/huggingface
+            - name: SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION
+              value: "0"
+            # Uncomment for distributed tracing env vars
+            # - name: OTEL_SERVICE_NAME
+            #   value: "sglang-decode"
+            # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            #   value: "http://otel-collector:4317"
+            # - name: OTEL_TRACES_EXPORTER
+            #   value: "otlp"
+            # - name: OTEL_TRACES_SAMPLER
+            #   value: "parentbased_traceidratio"
+            # - name: OTEL_TRACES_SAMPLER_ARG
+            #   value: "0.1"
+          resources:
+            limits:
+              google.com/tpu: "8"
+            requests:
+              google.com/tpu: "8"
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /.cache
+              name: sglang-cache
+          # /v1/models responds before SGLang completes its generation warmup.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: modelserver
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 20Gi
+        - name: sglang-cache
+          emptyDir:
+            medium: Memory
+            sizeLimit: 120Gi

@@ -3,7 +3,7 @@
 This recipe is optimized for agentic code generation; see the
 [agentic workloads section of the Models overview](../../../docs/well-lit-paths/models/README.md#agentic-workloads)
 for the workload framing, and the [GLM-5.2](../glm-5-2/README.md) and
-[Qwen3-Coder-480B](../qwen3-coder-480b/README.md) guides for the other models benchmarked against
+[Qwen3.5-397B](../qwen3-5-397b/README.md) guides for the other models benchmarked against
 the same workload.
 
 ## Overview
@@ -21,11 +21,14 @@ configuration layers the agentic optimizations onto disaggregated serving:
   replicas) — to extend the cacheable working set far beyond HBM for long, resumable sessions.
 - **FP8 block weights + FP8 KV cache** to fit the `~563 GB` of weights at `TP=8` and leave KV
   headroom; the MoE is served with Expert Parallelism.
-- **`VLLM_PREFIX_CACHE_RETENTION_INTERVAL=0`** to raise multi-turn prefix-cache hit rates. This is
-  enabled here because `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` is a
+- **`--prefix-cache-retention-interval=0`** keeps only the Mamba prefix-cache checkpoints a
+  follow-up turn resumes from (the latest replay boundary and shared-prefix junctions); it was
+  enabled for multi-turn prefix-cache hit rates. It applies because
+  `RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block` is a
   [Mamba-hybrid model](https://huggingface.co/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block/blob/main/config.json)
-  (`NemotronHForCausalLM`); vLLM rejects the flag on full-attention models, so it is set
-  per-deployment rather than in the baseline manifests.
+  (`NemotronHForCausalLM`); vLLM rejects non-zero values on full-attention models. `0` is vLLM's
+  default since v0.30 and is set explicitly here so the setting is visible. The older
+  `VLLM_PREFIX_CACHE_RETENTION_INTERVAL` environment variable was removed in vLLM v0.30.
 
 > 🚧 This deployment uses development images (the endpoint-picker and the disaggregation routing
 > sidecar) for the P/D-disaggregation scheduling plugins. Pin them to a release before relying on
@@ -355,6 +358,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/model
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring-pd --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->

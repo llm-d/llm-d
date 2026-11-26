@@ -1,0 +1,66 @@
+# TPU7x filesystem tier (VARIANT=fs): HBM -> host DRAM -> shared ReadWriteMany filesystem.
+# Builds on ../../cpu/base and keeps its tiers as they are (HBM at 0.90, 32 GiB pinned host
+# tier per DP engine): the filesystem is a third tier behind them, not a replacement for
+# them. The only change is the storage tier on TPURaidenOffloadingConnector
+# (raiden_storage_path on the llm-d-kv-cache-storage PVC, mounted at /mnt/files-storage).
+#
+# Every block the connector offloads is written to the host tier and, write-through, to the
+# storage tier; a save completes only once the files are written. On a miss in HBM and the
+# host tier, a block found in storage is recalled into host staging blocks taken from the
+# host tier and then copied to HBM, so a replica that has never seen a prefix restores it
+# from the filesystem. Validated with
+# Google Cloud Managed Lustre (manifests/backends/lustre). Storage keys are the
+# prefix-block hashes, so PYTHONHASHSEED=0 (set in cpu/base) is required for replicas to
+# read each other's blocks. Files are keyed under a per-model directory that defaults to
+# the served model name, so no raiden_storage_model_name is set here; set one only to
+# share or isolate a directory deliberately. raiden_storage_properties enables the
+# store's metadata cache (1 Mi entries, 24 h TTL) so lookups of hot prefixes do not touch
+# the filesystem; see the README's storage-tier property table for the full list.
+#
+# `args` is a list, so the whole list is repeated here; keep it in sync with cpu/base.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decode
+spec:
+  template:
+    spec:
+      containers:
+        - name: modelserver
+          args:
+            - "Qwen/Qwen3.5-397B-A17B-FP8"
+            - "--kv-transfer-config"
+            - >-
+              {"kv_connector":"TPURaidenOffloadingConnector","kv_connector_module_path":"vllm_torchtpu.offload.raiden_connector","kv_role":"kv_both",
+              "kv_connector_extra_config":{"cpu_bytes_to_use":34359738368,"raiden_controller_port":47800,"raiden_storage_path":"/mnt/files-storage/kv",
+              "raiden_storage_properties":{"direct_io":true,"metadata_cache_max_entries":1048576,"metadata_cache_ttl_secs":86400}}}
+            - "--enable-prefix-caching"
+            - "--prefix-cache-retention-interval=0"
+            - "--port=8000"
+            - "--data-parallel-size=8"
+            - "--tensor-parallel-size=1"
+            - "--enable-expert-parallel"
+            - "--enable-ep-weight-filter"
+            - "--attention-backend=CUSTOM"
+            - "--language-model-only"
+            - "--kv-cache-dtype=fp8"
+            - "--block-size=4352"
+            - "--gpu-memory-utilization=0.90"
+            - "--max-model-len=262144"
+            - "--max-num-batched-tokens=4384"
+            - "--max-num-seqs=32"
+            - "--no-disable-hybrid-kv-cache-manager"
+            - "--mamba-cache-mode=align"
+            - "--no-async-scheduling"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=qwen3_coder"
+            - "--reasoning-parser=qwen3"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
+            - "--shutdown-timeout=45"
+          volumeMounts:
+            - name: files-storage
+              mountPath: /mnt/files-storage
+      volumes:
+        - name: files-storage
+          persistentVolumeClaim:
+            claimName: llm-d-kv-cache-storage

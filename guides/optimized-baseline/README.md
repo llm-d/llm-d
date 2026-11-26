@@ -6,6 +6,7 @@
 [![E2E (CKS GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-cks-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-cks-acc-gpu-vllm-x.yaml)
 [![E2E (GKE GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-gke-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-gke-acc-gpu-vllm-x.yaml)
 [![E2E (GKE TPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-gke-acc-tpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-gke-acc-tpu-vllm-x.yaml)
+[![E2E (GKE TPU SGLang)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-gke-acc-tpu-sglang-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-gke-acc-tpu-sglang-x.yaml)
 [![E2E (OCP GPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-ibm-acc-gpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-ibm-acc-gpu-vllm-x.yaml)
 [![E2E (Intel XPU)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-intel-acc-xpu-vllm-x.yaml/badge.svg)](https://github.com/llm-d/llm-d/actions/workflows/consolidate-status-optimized-baseline-intel-acc-xpu-vllm-x.yaml)
 
@@ -25,9 +26,9 @@ This guide deploys the recommended out of the box [configuration](https://github
 
 The optimized-baseline defaults to two main routing criteria:
 
-- **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
+* **Prefix-cache aware** using the [prefix cache affinity filter](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/filter/prefixcacheaffinity/README.md), which narrows candidates to "sticky" endpoints with high estimated prompt prefix cache reuse, with a saturation-aware override that spreads load when endpoints get hot.
 
-- **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
+* **Load-aware** using the [token load scorer](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload/README.md), which scores endpoints based on the total prefill token load handled by each model server.
 
 Both plugins are used with their built-in defaults — no per-deployment tuning is required for this guide's reference setup (Qwen3-32B on H100 80&nbsp;GB, TP=2). If you deploy a **different model or accelerator**, the saturation-aware override gate keys off the `peakPrefillThroughput` of the filter, which is hardware- and model-specific; measure your own with the shared [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
 
@@ -41,15 +42,16 @@ This guide includes configurations for the following accelerator and model serve
 | NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | 🟡 community | — | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | ✅ validated | Instinct MI355X · 2 replicas × TP=2 (4 GPUs) |
 | Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | — | — | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
-| Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · nightly runs on Spot capacity |
-| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
-| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=8) |
+| Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · nightly runs on Spot capacity |
+| Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8, 16k context) · Torch TPU (`torch-tpu-vllm` / `sglang:v0.1.0-tpu`) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
+| Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | — | — | GKE only · 2 replicas × 4 chips (`2x2x1`) · vLLM (`torch-tpu-vllm`): Qwen3.5-397B-A17B-FP8 (DP=8 × TP=1, EP, fp8 KV, 262k context, no KV offload or MTP); SGLang (`sglang:v0.1.0-tpu`): `Qwen/Qwen3-32B` (TP=8, 16k context) |
 | Google TPU v7 (dynamic slicing) | `tpu/v7-dynamic-slice` | `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` | 🟡 community | — | — | — | GKE dynamic slicing + Kueue · one sub-slice per replica (`TPU_SLICE_TOPOLOGY`: `2x2x1`, `2x2x2`); see [below](#2-deploy-the-model-server) |
 | Rebellions NPU | `npu` | `openai/gpt-oss-120b` | 🟡 community | — | — | — | RBLN-CR series · 2 replicas × 1 NPU via DRA |
 | CPU | `cpu` | `meta-llama/Llama-3.2-3B-Instruct` | 🟡 community | — | — | — | x86 with AMX or AVX512-BF16 (Sapphire Rapids+, GCP C3, AMD Zen 4+) · 2 replicas × 64 cores / 64 GiB (CPUs without AMX/AVX512-BF16, e.g. Cascade/Ice Lake, need `--dtype=float32` for the bf16 model) |
 | Iluvatar GPU | `iluvatar` | `deepseek-ai/DeepSeek-V4-Flash` | 🟡 community | — | — | — | BI-V150 (dual-die) · 1 replica × 4 GPUs |
 | MetaX GPU | `metax` | `deepseek-ai/DeepSeek-R1-Distill-Llama-70B` | 🟡 community | — | — | — | 2 replicas × TP=8 (16 GPUs) |
 | Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
+| Enflame GCU | `enflame` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | S60 · 2 replicas × TP=4 (8 GCUs, one replica per 4 GCUs) |
 | Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -66,19 +68,25 @@ performance tuning.
 
 The MThreads **SGLang** overlay colocates prefill and decode for
 `DeepSeek-V4-Flash-0731-FP8-mt` (`--tp 8 --ep 8`) on one 8-GPU node. See
-[Deploying on Moore Threads S5000 (SGLang, colocated, no PD)](#deploying-on-moore-threads-s5000-sglang-colocated-no-pd).
+the [MThreads SGLang overlay](./modelserver/mthreads/sglang/).
+
+The Enflame overlay serves `Qwen/Qwen3-32B` with vLLM. Cards are claimed through
+DRA (`gcu.gcu-dra.enflame.com`). It is recommended to use with HAMi-DRA. Set
+`ACCELERATOR_TYPE=enflame`, `MODEL_SERVER=vllm`, and `MODEL=Qwen/Qwen3-32B`. The
+image is TopsRider 3.8.107 (`vllm` 0.20.2), running float16 in eager mode, and the
+host `enflame` driver must be the matching 1.9.2401 build.
 
 ## Prerequisites
 
-- Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
+* Have the [proper client tools installed on your local system](../../helpers/client-setup/README.md) to use this guide.
 
-- Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
+* Ensure your cluster has enough accelerators for your configuration (default NVIDIA GPU configuration: 2 replicas with tensor parallelism 2, 4 GPUs in total). If your cluster has fewer resources, adjust `replicas` and `--tensor-parallel-size` in the model server patch for your environment (e.g., [patch for vLLM on GPU](./modelserver/gpu/vllm/base/patch-vllm.yaml)).
 
-- For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
+* For DRA-based overlays (Intel XPU, Rebellions NPU), install the accelerator's resource driver and verify its DeviceClass before deployment. These manifests use the `resource.k8s.io/v1` DRA APIs, which require **Kubernetes 1.34+**; on 1.32/1.33 the driver may install but these overlays will still fail to apply.
 
-- Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
+* Create a [HuggingFace token](../../helpers/hf-token.md) and export it as `HF_TOKEN` in your shell.
 
-- (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
+* (Optional) Set up the [monitoring stack](../../docs/operations/observability/setup.md) if you plan to enable Prometheus monitoring.
 
 ### Get the guide
 
@@ -104,7 +112,7 @@ export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, biren, mthreads
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, biren, enflame, mthreads
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm, atom
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2
@@ -209,7 +217,7 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 </details>
 <!-- tabs:end -->
 
-**(Rebellions NPU only) Layer the NPU router values**, which drop the prefix-cache affinity filter because the NPU overlay serves with prefix caching off:
+**(Rebellions NPU only) Layer the NPU router values**, which match prefixes at the runtime's 512-token sub-block instead of its 4096-token KV block and set the NPU's measured `peakPrefillThroughput`:
 
 <!-- guide:deploy.accelerator_values[0] start -->
 <!-- llm-d-cicd:skip start -->
@@ -218,6 +226,16 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/npu.rbln.
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[0] end -->
+
+**(Google TPU7x vLLM only) Layer the TPU7x router values**, which hash prefixes on the engine's 4352-token blocks, track the full 262k context, and use the affinity gate measured on this topology (skip for SGLang on TPU7x, which serves `Qwen/Qwen3-32B` with standard router values):
+
+<!-- guide:deploy.accelerator_values[1] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[1] end -->
 
 **Deploy the router** in **one** of two modes: Standalone Mode (the default, used by every other guide) or Gateway Mode, which fronts the `InferencePool` with a Kubernetes Gateway–managed proxy. The Verification section below has matching steps for each mode:
 
@@ -277,7 +295,7 @@ helm install ${GUIDE_NAME} \
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
-The NVIDIA GPU, AMD, CPU, Intel XPU, and TPU v5p/v6/v7 (including dynamic-slice) vLLM overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). The Iluvatar, MetaX, Biren, Moore Threads, and Rebellions NPU overlays do not drain yet. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
+The NVIDIA GPU, AMD, CPU, Intel XPU, TPU v5p/v6/v7 (including dynamic-slice), MetaX, and Moore Threads vLLM overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml) (120s on MetaX and Moore Threads). The Iluvatar, Biren, Enflame, and Rebellions NPU overlays do not drain yet. To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
 
 **Apply the Kustomize overlays** for your specific backend (`INFRA_PROVIDER=gke` applies only to accelerators available on GKE: NVIDIA GPU, TPU, and CPU; use `base` elsewhere):
 
@@ -332,6 +350,13 @@ Notes:
 * Different shapes (and the [P/D dynamic-slice recipes](../pd-disaggregation/modelserver/tpu/v7-dynamic-slice/vllm/base/)) can share the same node pools and `ClusterQueue`; this is the primary utilization benefit over static per-topology node pools.
 * On failure of a host in a multi-host group, `RecreateGroupOnPodRestart` restarts the group and the slice controller re-forms the sub-slice on healthy partitions.
 * Not yet covered by nightly E2E: a run needs at least one full TPU7x cube (a `4x4x4` sub-block of 64 chips, 16 `tpu7x-standard-4t` nodes) in an All Capacity mode reservation. Until then the overlays are validated by kustomize dry-run in CI and by load tests on internal Google Cloud capacity during the dynamic-slicing beta.
+
+**GKE TPU node requirements (v6e and TPU7x):**
+
+* **Boot disk**: weights are downloaded once per node into `/var/cache/huggingface` (a `hostPath`), so the boot disk must hold the checkpoint above the kubelet ephemeral-storage eviction threshold or the pod is evicted mid-download and the node recycled. The 100 GB node-auto-provisioning default is too small for either model: use ≥ 200 GB for Qwen3-32B on v6e (66 GB) and ≥ 1 TB for Qwen3.5-397B-A17B-FP8 on TPU7x (406 GB; a 600 GB disk works but leaves only ~20 GiB of allocatable headroom).
+* **Cluster autoscaler**: under `OPTIMIZE_UTILIZATION` a one-pod TPU node is scaled down beneath the model server; annotate pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`.
+* The Deployment uses `strategy: Recreate` because TPU node pools are fixed-size.
+* The TPU7x **vLLM** overlay runs the same engine layout as the [Qwen3.5-397B model guide](../models/qwen3-5-397b/README.md) (DP=8 × TP=1, EP, fp8 KV, 262k context) without KV offload or speculative decoding: it is the baseline the model guide and the tiered-prefix-cache guide add features to. The TPU7x **SGLang** overlay serves `Qwen/Qwen3-32B` (TP=8, 16k context); keep `MODEL=Qwen/Qwen3-32B` and skip `router/tpu-v7.values.yaml` when deploying with `MODEL_SERVER=sglang`.
 
 </details>
 <!-- tabs:end -->
@@ -497,7 +522,7 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 <summary><b>vLLM</b></summary>
 
 | Signal | Why it matters for the optimized baseline | Where to look |
-|--------|-------------------------------------------|---------------|
+| --- | --- | --- |
 | Per-pod load (`llm_d_epp_request_total`, `vllm:num_requests_running`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
 | Prefix cache hit rate (`vllm:prefix_cache_hits_total` / `vllm:prefix_cache_queries_total`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
 | Per-pod KV cache utilization and queue depth (`vllm:kv_cache_usage_perc`, `vllm:num_requests_waiting`) | These drive the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
@@ -511,7 +536,7 @@ This path is defined by its two routing objectives: **prefix-cache affinity** (r
 SGLang deployments expose the equivalent signals under `sglang:*`; the [PromQL reference](../../docs/operations/observability/promql.md) lists both engines.
 
 | Signal | Why it matters for the optimized baseline | Where to look |
-|--------|-------------------------------------------|---------------|
+| --- | --- | --- |
 | Per-pod load (`llm_d_epp_request_total`, `sglang:num_running_reqs`) | The load-aware scorer should keep QPS and active requests roughly even across pods. A persistently hot pod next to idle ones means balancing is not taking effect | [PromQL → Routing & Load Balancing](../../docs/operations/observability/promql.md#routing--load-balancing) |
 | Prefix cache hit rate (`sglang:cache_hit_rate`, or `sglang:cached_tokens_total{cache_source="device"}` / `sglang:prompt_tokens_total` on images where `sglang:cache_hit_rate` reports `0`) | The prefix-affinity filter is only helping if hit rate stays high. A falling ratio means requests are not landing on sticky endpoints | [PromQL → Prefix Caching](../../docs/operations/observability/promql.md#prefix-caching) |
 | Per-pod KV cache utilization (`sglang:token_usage`) | Drives the saturation-aware override. If one pod sits near saturation while others are cold, the override is either not firing or mis-tuned | [PromQL → Basic Model Serving](../../docs/operations/observability/promql.md#basic-model-serving) |
@@ -528,9 +553,9 @@ SGLang deployments expose the equivalent signals under `sglang:*`; the [PromQL r
 
 ### Common failure modes
 
-- **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
-- **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
-- **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency (`llm_d_epp_plugin_duration_seconds`) and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
+* **Uneven load across pods** (some hot, some idle) — the load-aware scorer or the saturation override is not spreading work. On **non-default hardware** this usually means `peakPrefillThroughput` is miscalibrated, so the override never gates in; measure it with the [calibration recipe](../recipes/router/calibration/README.md) and set it on the filter.
+* **Low prefix cache hit rate** — either the prompt mix is not prefix-sticky, or the saturation override is spreading so aggressively that it defeats affinity. Compare hit rate against per-pod saturation; if pods are cold but hit rate is still low, the issue is the prompt pattern, not the override.
+* **TTFT/ITL regression with balanced load and healthy cache** — look at routing decision latency (`llm_d_epp_plugin_duration_seconds`) and model-server queue depth before touching the routing config; the bottleneck is likely the model servers, not the scheduler.
 
 For alert rules covering these signals, see [Alerting](../../docs/operations/observability/alerting.md).
 
@@ -576,3 +601,16 @@ kubectl delete namespace ${NAMESPACE}
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:cleanup.rest end -->
+
+## Tuning
+
+<!-- tabs:start group=engine -->
+<details>
+<summary><b>SGLang</b></summary>
+
+The NVIDIA GPU overlay enables SGLang's Rust HTTP frontend by default: the `SGLANG_RUST_SERVER=1` environment variable is set on the `modelserver` container in [patch-sglang.yaml](./modelserver/gpu/sglang/base/patch-sglang.yaml). It requires SGLang `v0.5.22` or newer. To fall back to the Python/uvicorn frontend, remove the environment variable from the patch.
+
+If you tune `--dp-size` beyond `1`, the frontend choice determines whether the EPP sees each DP rank as its own endpoint or only the pod as a whole; see [Data Parallelism (DP)](../../docs/architecture/model-servers/sglang.md#data-parallelism-dp) in the architecture docs.
+
+</details>
+<!-- tabs:end -->

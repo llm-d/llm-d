@@ -1,0 +1,179 @@
+name: Nightly - Pod Snapshot E2E (GKE GPU SGLang)
+
+# Nightly regression test for the GKE Pod Snapshots guide (guides/pod-snapshot)
+# with the SGLang model server on H100 GPUs.
+#
+# Deploys via guides/pod-snapshot/scripts/nightly-deploy-gke.sh, which empties
+# the GCS snapshot bucket (the namespace is fresh), emits the guide.yaml
+# commands, and waits for Pod 1 (cold start + snapshot) and Pod 2 (restore from
+# the snapshot) to be Ready. After the reusable's smoke loop, it hands off (via
+# --extra-validate) to e2e-validate-pod-snapshot.sh, which runs
+# guides/pod-snapshot/scripts/check_thresholds.py to compute the composite
+# startup/restore metrics and fail the run on threshold regressions.
+#
+# Why not the shared benchmark reusable? Two reasons:
+#   1. Pod Snapshots require a GKE cluster (llm-d-e2e-pod-snapshot-us-central1)
+#      with --enable-pod-snapshots, --enable-image-streaming, a gVisor GPU node
+#      pool, and a hierarchical-namespace GCS bucket
+#      (llm-d-scale-pod-snapshots-us-central1).
+#   2. This workflow validates the two-stage Pod 1 cold-start checkpoint -> Pod 2
+#      restore lifecycle and per-phase startup/restore latency thresholds, which
+#      the single-stage benchmark standup does not coordinate.
+
+on:
+  schedule:
+    - cron: '0 19 * * *'  # 19:00 UTC daily (staggered from vLLM lane at 18:00 UTC)
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip cleanup after tests (for debugging)'
+        required: false
+        default: 'false'
+      pr_number:
+        description: 'PR number for comment-back (set by /test-nightly)'
+        required: false
+        default: ''
+      pr_repo:
+        description: 'Repo for PR comment-back'
+        required: false
+        default: 'llm-d/llm-d'
+      # This is a bespoke e2e, not a benchmark run, so the parameters below are
+      # accepted and ignored — except cleanup (mapped to skip_cleanup) and
+      # update_badge/dry_run (consumed by the badge job). They must stay
+      # declared: slash-test-nightly.yaml sends its DEFAULT_PARAMS to every
+      # nightly-e2e-* workflow whether or not the user passes any, and its 422
+      # fallback only retries without pr_number/pr_repo — so an undeclared
+      # parameter makes /test-nightly undispatchable for this lane. Keep this
+      # set in sync with SUPPORTED_PARAMS in slash-test-nightly.yaml.
+      decode_pods:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      prefill_pods:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        type: 'string'
+        default: 'auto'
+      gateway_class:
+        description: 'Ignored (guide is standalone/epponly)'
+        required: false
+        default: 'epponly'
+      monitoring_enabled:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: true
+        type: 'string'
+        default: 'false'
+      dry_run:
+        description: 'Affects the badge only; this lane has no dry-run path'
+        required: false
+        default: 'false'
+      verbose:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        default: 'false'
+        type: 'string'
+      harness:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        default: 'inference-perf'
+        type: 'string'
+      workload:
+        description: 'Ignored (bespoke e2e, no benchmark)'
+        required: false
+        default: 'sanity_random.yaml'
+        type: 'string'
+      cleanup:
+        description: 'Cleanup the llm-d stack stood up by this workflow'
+        required: false
+        default: 'true'
+        type: string
+      update_badge:
+        description: 'Update the badge on gh-pages ("true", "false")'
+        required: false
+        default: 'true'
+        type: string
+      matrix_type:
+        description: 'Will this workflow be part of a "nightly" (default) run or "release-X.Y.Z[rc]" run?'
+        required: false
+        default: 'nightly'
+        type: 'string'
+      harness_resources:
+        description: 'CPU/Memory limits for the harness pod running llm-d-benchmark workloads (default 32/64Gi)'
+        required: false
+        default: '32/64Gi'
+        type: 'string'
+
+permissions:
+  contents: write  # update-badge job commits the badge to the badges branch
+  actions: read
+
+concurrency:
+  # Shared by the vLLM and SGLang lanes: both use the same cluster and the same
+  # GCS snapshot bucket, and each run empties that bucket so Pod 1 is a true cold
+  # start. They must not overlap. Queue the second run instead of cancelling the first.
+  # Caveat: GitHub keeps only one pending run per group, so a third arrival (e.g. a
+  # manual dispatch while the SGLang run is queued) silently cancels the queued one.
+  group: nightly-e2e-pod-snapshot-gke-gpu
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    if: github.repository == 'llm-d/llm-d'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-nightly-e2e-gke.yaml@main
+    with:
+      guide_name: pod-snapshot
+      # Kept short: the cluster-scoped PodSnapshotStorageConfig is named
+      # <namespace>-pod-snapshot-storage-config, and gke-pod-snapshot-agent copies
+      # that name into a label value truncated to 63 characters. A longer name can be
+      # cut at a '-', which makes the label invalid and silently disables snapshots.
+      namespace: llm-d-nightly-pod-snapshot-sglang
+      gateway_host: 'pod-snapshot-epp'
+      # Both pod-snapshot lanes share the 2-GPU cluster and GCS bucket across two
+      # namespaces; tear down any leftover sibling namespace (e.g. after skip_cleanup)
+      # and its PodSnapshot CRs before nightly-deploy-gke.sh wipes the bucket.
+      # Best effort, but stderr stays visible: a delete that times out means the
+      # sibling's pods may still hold the GPUs, which Pod 1 then waits on.
+      pre_deploy_script: |
+        kubectl delete podsnapshots --all -n llm-d-nightly-pod-snapshot-vllm --ignore-not-found --timeout=60s || true
+        kubectl delete namespace llm-d-nightly-pod-snapshot-vllm --ignore-not-found --timeout=120s || true
+      custom_deploy_script: |
+        MODEL_SERVER=sglang \
+          bash guides/pod-snapshot/scripts/nightly-deploy-gke.sh
+      # Everything after -- is forwarded to e2e-validate-pod-snapshot.sh.
+      e2e_validate_args: '--extra-validate pod-snapshot -- --engine sglang'
+      gke_cluster_name: llm-d-e2e-pod-snapshot-us-central1
+      gke_cluster_zone: us-central1
+      # Two single-GPU Qwen3-32B replicas (Pod 1 cold start + snapshot, Pod 2 restore).
+      required_gpus: 2
+      recommended_gpus: 2
+      accelerator_type: H100
+      pod_wait_timeout: '40m'
+      # The deploy script already waits for Pod 1 snapshot and Pod 2 restore;
+      # this is a brief grace for the EPP to finish backend discovery before
+      # the smoke loop fires (reusable default is 180s).
+      pod_readiness_delay: 60
+      # Check GPU availability runs before Clean up previous nightly resources in the
+      # reusable workflow; allow_gpu_preemption lets the check pass when a prior run
+      # used skip_cleanup=true so cleanup and pre_deploy_script can free the 2 GPUs.
+      allow_gpu_preemption: true
+      llm_d_ref: ${{ github.ref }}
+      skip_cleanup: ${{ github.event.inputs.skip_cleanup == 'true' || github.event.inputs.cleanup == 'false' }}
+      pr_number: ${{ github.event.inputs.pr_number }}
+      pr_repo: ${{ github.event.inputs.pr_repo }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}
+    secrets: inherit
+
+  update-badge:
+    needs: [nightly]
+    if: always() && github.repository == 'llm-d/llm-d' && inputs.update_badge != 'false'
+    uses: llm-d/llm-d-infra/.github/workflows/reusable-update-badge.yaml@main
+    with:
+      badge_name: pod-snapshot-gke-sglang
+      badge_label: "SGLANG GPU"
+      result: ${{ needs.nightly.result }}
+      dry_run: ${{ inputs.dry_run || 'false' }}
+      # The e2e reusable declares no outputs, so failure_category resolves empty
+      # and the badge falls back to a plain pass/fail (no category granularity).
+      failure_category: ${{ needs.nightly.outputs.failure_category }}
+      matrix_type: ${{ inputs.matrix_type || 'nightly' }}

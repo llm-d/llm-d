@@ -147,13 +147,20 @@ resources:
   - ${REL}/guides/workload-autoscaling/keda-epp/optimized-baseline/overlays/ocp/inflight/
 patches:
   # The leaf carries \${...} placeholders that apply -k cannot resolve, so pin the
-  # target Deployment and the trigger query here. maxReplicaCount is capped at the GPU
+  # resource names, target Deployment and the trigger query here.
+  # Select by kind because the queue/saturation leaf names are placeholders. maxReplicaCount is capped at the GPU
   # budget the nightly reserves (2), rather than the guide's default of 8. Both scaleUp
   # and scaleDown stabilizationWindowSeconds are lowered 300 -> 60 so the scale-event
   # validator can observe the scale-UP and scale-DOWN decisions within the run; at the
   # guide default of 300 the HPA holds scale-up for up to 5 min (ScaleUpStabilized),
   # past the validator's timeout. Nightly only; the guide default stays 300.
   - patch: |-
+      - op: replace
+        path: /metadata/name
+        value: ${SCALEDOBJECT}
+      - op: replace
+        path: /spec/advanced/horizontalPodAutoscalerConfig/name
+        value: ${SCALEDOBJECT}-hpa
       - op: replace
         path: /spec/scaleTargetRef/name
         value: ${DECODE_DEPLOYMENT}
@@ -172,7 +179,6 @@ patches:
         value: 60
     target:
       kind: ScaledObject
-      name: ${SCALEDOBJECT}
   # ClusterRoleBindings are cluster-scoped; suffix a namespace hash so concurrent
   # deployments do not collide. The subject namespace is pinned too, or the
   # binding grants the wrong namespace and KEDA's Thanos queries get 401/403.

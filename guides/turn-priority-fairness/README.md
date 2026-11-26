@@ -30,7 +30,7 @@ those prefixes resident instead of letting capacity pressure evict them mid-sess
 It is a scoring **strategy** of the `program-aware-fairness` flow-control plugin, not a standalone
 feature. Each waiting flow is scored:
 
-```
+```text
 score = turnNumber + turnPriorityTimeWeight * headWaitSeconds
 ```
 
@@ -121,7 +121,7 @@ accelerator listed in the
 the score are a raw count and raw seconds. Head wait is bounded by `defaultRequestTTL`, because a
 request that exceeds it is shed. A waiting request therefore accrues at most:
 
-```
+```text
 turnPriorityTimeWeight * defaultRequestTTL
 ```
 
@@ -134,7 +134,7 @@ than a guarantee.
 
 To let a newcomer overtake depth *D* within the TTL:
 
-```
+```text
 turnPriorityTimeWeight >= D / defaultRequestTTL
 ```
 
@@ -345,12 +345,12 @@ kubectl apply -f ${REPO_ROOT}/guides/${GUIDE_NAME}/objectives.yaml -n ${NAMESPAC
 ```
 <!-- guide:deploy.objectives end -->
 
-`v1alpha2` is the only version the current router release serves. Later releases deprecate it and
-use `llm-d.ai/v1`, where the pool reference is `poolRefs` (a list).
+The router CRDs must serve `llm-d.ai/v1`. In this API version, the pool reference is provided
+through `poolRefs`, a list.
 
 Clients then name that objective per request:
 
-```
+```text
 x-llm-d-inference-objective: agentic-sessions
 ```
 
@@ -509,10 +509,10 @@ default fairness policy and turn-priority never ran.
 This guide uses [`llmdbenchmark`](https://github.com/llm-d/llm-d-benchmark) — the supported standard CLI for llm-d performance benchmarking.
 
 > [!IMPORTANT]
-> **For more in-depth explanation and features for benchmarking llm-d guides, see [`helpers/benchmark.md`](../../docs/operations/validation/benchmark.md).**
+> **For more in-depth explanation and features for benchmarking llm-d guides, see [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).**
 >
-> The Benchmarking section below contains only the **turn-priority-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`helpers/benchmark.md`](../../docs/operations/validation/benchmark.md).
-
+> The Benchmarking section below contains only the **turn-priority-specific commands** needed to drive the stack you just deployed — for everything else (and especially when something goes wrong), start at [`docs/operations/validation/benchmark.md`](../../docs/operations/validation/benchmark.md).
+>
 > [!TIP]
 > If you stood the stack up with `llmdbenchmark` rather than Helm (see
 > [Installation Instructions](#installation-instructions)), `experiment` stands the stack up once,
@@ -643,7 +643,7 @@ The prefix-cache hit rate shows this mechanism directly:
 > work admitted. That is the point of pairing the long band TTL with the weight: the queue absorbs
 > the backlog instead of shedding it. Shorten the TTL and the same weight covers only a few turns,
 > so new sessions are shed rather than queued.
-
+>
 > [!NOTE]
 > `fcfs` here is the `global-strict-fairness-policy`, running the same `flowControl` gate,
 > `maxConcurrency` and band layout as the other arm. It is the fairness policy alone that differs, so

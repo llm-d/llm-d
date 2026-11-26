@@ -4,6 +4,10 @@ metadata:
   name: decode
 spec:
   replicas: 3
+  # TPU node pools are fixed-size: a RollingUpdate needs a spare 8-chip node to
+  # surge onto, so the rollout deadlocks with the new pod Pending.
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -44,19 +48,22 @@ spec:
                 --tensor-parallel-size 8 \
                 --shutdown-timeout=45
           env:
+            # Drop the checkpoint's page cache once weights are in HBM (frees host RAM).
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
-            - name: PROMETHEUS_MULTIPROC_DIR
-              value: "/tmp/prometheus_multiproc"
-            - name: SKIP_JAX_PRECOMPILE
-              value: "0"
-            - name: TPU_OFFLOAD_NUM_CPU_CHUNKS
-              value: "25000"
-            - name: TPU_OFFLOAD_NUM_STAGING_BLOCKS
-              value: "1000"
+          # vLLM's TP worker ring buffer (ShmRingBuffer) and the Torch TPU host
+          # KV pool both live in /dev/shm; the container default (64 MiB) is
+          # too small and the engine core fails at startup.
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /root/.cache
+              name: torch-compile-cache
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -70,3 +77,9 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+        - name: torch-compile-cache
+          emptyDir: {}

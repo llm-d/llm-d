@@ -37,7 +37,9 @@ channels:
     - nightly-e2e-agentic-api-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-async-multitenant-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-async-multitenant-holdback-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-fast-model-actuation-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-ibm-acc-gpu-vllm-x.yaml
+    - nightly-e2e-fast-model-actuation-keda-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-fast-model-actuation-keda-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-flow-control-amd-ci-acc-rocm-vllm-x.yaml
     - nightly-e2e-flow-control-gke-acc-gpu-vllm-x.yaml
@@ -47,6 +49,7 @@ channels:
     - nightly-e2e-optimized-baseline-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-gpu-sglang-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-gpu-vllm-x.yaml
+    - nightly-e2e-optimized-baseline-gke-acc-tpu-sglang-x.yaml
     - nightly-e2e-optimized-baseline-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-optimized-baseline-intel-acc-xpu-vllm-x.yaml
@@ -58,6 +61,8 @@ channels:
     - nightly-e2e-pd-disaggregation-gke-acc-tpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-pd-disaggregation-intel-acc-xpu-vllm-x.yaml
+    - nightly-e2e-pod-snapshot-gke-acc-gpu-sglang-x.yaml
+    - nightly-e2e-pod-snapshot-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-amd-ci-acc-rocm-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-cks-acc-gpu-vllm-x.yaml
     - nightly-e2e-precise-prefix-cache-routing-gke-acc-gpu-vllm-x.yaml
@@ -78,6 +83,7 @@ channels:
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-gpu-vllm-native.yaml
+    - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-sglang-native.yaml
     - nightly-e2e-tiered-prefix-cache-gke-cpu-tpu-vllm-native.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-lmcache.yaml
     - nightly-e2e-tiered-prefix-cache-ibm-cpu-gpu-vllm-native.yaml
@@ -89,6 +95,7 @@ channels:
     - nightly-e2e-wide-ep-ibm-acc-gpu-vllm-x.yaml
     - nightly-e2e-wide-ep-intel-acc-xpu-vllm-x.yaml
     - nightly-e2e-workload-autoscaling-keda-epp-amd-acc-rocm-vllm-x.yaml
+    - nightly-e2e-workload-autoscaling-keda-epp-gke-acc-gpu-vllm-x.yaml
     - nightly-e2e-workload-autoscaling-keda-epp-ibm-acc-gpu-vllm-x.yaml
 
 # Nightly workflows deliberately NOT notified. Every entry needs a reason:

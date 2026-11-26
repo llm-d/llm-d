@@ -4,6 +4,10 @@ metadata:
   name: decode
 spec:
   replicas: 2
+  # TPU node pools are fixed-size: a RollingUpdate needs a spare 8-chip node to
+  # surge onto, so the rollout deadlocks with the new pod Pending.
+  strategy:
+    type: Recreate
   template:
     spec:
       nodeSelector:
@@ -15,8 +19,14 @@ spec:
           args:
             - "Qwen/Qwen3-32B"
             - "--port=8000"
-            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             - "--tensor-parallel-size=8"
+            - "--attention-backend=CUSTOM"
+            - "--max-model-len=16384"
+            - "--max-num-seqs=64"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+            - "--reasoning-parser=qwen3"
+            - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models"
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
@@ -24,11 +34,22 @@ spec:
             # - "--otlp-traces-endpoint=http://otel-collector:4317"
             # - "--collect-detailed-traces=all"
           env:
+            - name: TPU_EVICT_WEIGHTS_PAGE_CACHE
+              value: "1"
+            - name: TORCH_TPU_INTERNAL_MATERIALIZE_COLLECTIVE_TENSORS
+              value: "false"
+            - name: TORCHINDUCTOR_AUTOGRAD_CACHE
+              value: "0"
+            - name: VLLM_TARGET_DEVICE
+              value: "tpu"
+            - name: PJRT_DEVICE
+              value: "TPU"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: llm-d-hf-token
                   key: HF_TOKEN
+                  optional: true
             # Uncomment for distributed tracing env vars
             # - name: OTEL_SERVICE_NAME
             #   value: "vllm-decode"
@@ -42,9 +63,12 @@ spec:
             #   value: "0.1"
           resources:
             limits:
-              google.com/tpu: "8"
+              memory: 256Gi
+              google.com/tpu: 8
             requests:
-              google.com/tpu: "8"
+              memory: 256Gi
+              cpu: "64"
+              google.com/tpu: 8
           volumeMounts:
             - mountPath: /.cache
               name: torch-compile-cache
@@ -52,6 +76,8 @@ spec:
               name: triton-cache
             - mountPath: /.config
               name: vllm-config
+            - mountPath: /dev/shm
+              name: dshm
           startupProbe:
             initialDelaySeconds: 15
             periodSeconds: 30
@@ -72,3 +98,6 @@ spec:
           emptyDir: {}
         - name: vllm-config
           emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory

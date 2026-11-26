@@ -8,6 +8,7 @@ namePrefix: optimized-baseline-mthreads-vllm-
 
 components:
   - ../../../../../recipes/modelserver/components/images/mthreads-vllm/release
+  - ../../../../../recipes/modelserver/components/graceful-shutdown
 
 labels:
   - pairs:

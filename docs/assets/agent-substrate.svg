@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 566" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#000000"/>
+    </marker>
+  </defs>
+
+  <!-- White canvas with purple border (llm-d branding) -->
+  <rect x="2" y="2" width="896" height="562" fill="#ffffff" stroke="#9f659f" stroke-width="3"/>
+
+  <!-- Title -->
+  <text x="450" y="28" text-anchor="middle" font-size="13" font-weight="bold" fill="#000000">Stateful Agent Sandboxes on Agent Substrate with llm-d</text>
+
+  <!-- Fleet driver -->
+  <rect x="330" y="44" width="240" height="46" rx="3" fill="#f3f3f3" stroke="#d9d2e9" stroke-width="1"/>
+  <text x="450" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#000000">Hermes Fleet Driver</text>
+  <text x="450" y="79" text-anchor="middle" font-size="8.5" fill="#666666">1,000 sessions · 3 traffic tiers</text>
+
+  <!-- Driver request labels -->
+  <text x="462" y="106" font-size="8" fill="#444444">POST /v1/chat/completions</text>
+  <text x="462" y="118" font-size="8" fill="#444444">X-Hermes-Session-Id: agent-NNNN-g1 · x-llm-d-inference-objective: &lt;tier&gt;</text>
+
+  <!-- Agent Substrate -->
+  <rect x="30" y="130" width="840" height="170" rx="5" fill="#e8f4e8" stroke="#82b366" stroke-width="1.5"/>
+  <text x="46" y="149" font-size="11" font-weight="bold" fill="#000000">Agent Substrate</text>
+  <text x="46" y="163" font-size="8" fill="#666666">1,080 gVisor workers</text>
+
+  <rect x="350" y="158" width="200" height="38" rx="3" fill="#ffffff" stroke="#82b366" stroke-width="1"/>
+  <text x="450" y="174" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">atenet-router</text>
+  <text x="450" y="188" text-anchor="middle" font-size="8" fill="#666666">:443, mTLS</text>
+
+  <!-- Driver to atenet-router (drawn after the Agent Substrate box so the arrowhead stays visible) -->
+  <line x1="450" y1="90" x2="450" y2="156" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- atenet-router to the three agent groups -->
+  <line x1="450" y1="196" x2="450" y2="214" stroke="#000000" stroke-width="1.5"/>
+  <line x1="180" y1="214" x2="720" y2="214" stroke="#000000" stroke-width="1.5"/>
+  <line x1="180" y1="214" x2="180" y2="232" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="450" y1="214" x2="450" y2="232" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="720" y1="214" x2="720" y2="232" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="560" y="208" font-size="8" fill="#444444">auto-wake from the golden or per-agent snapshot</text>
+
+  <rect x="60" y="234" width="240" height="50" rx="3" fill="#ffffff" stroke="#82b366" stroke-width="1"/>
+  <text x="180" y="254" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">Hermes agents 0001–0100</text>
+  <text x="180" y="270" text-anchor="middle" font-size="8" fill="#666666">premium-traffic · SQLite state in /data</text>
+
+  <rect x="330" y="234" width="240" height="50" rx="3" fill="#ffffff" stroke="#82b366" stroke-width="1"/>
+  <text x="450" y="254" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">Hermes agents 0101–0400</text>
+  <text x="450" y="270" text-anchor="middle" font-size="8" fill="#666666">standard-traffic · SQLite state in /data</text>
+
+  <rect x="600" y="234" width="240" height="50" rx="3" fill="#ffffff" stroke="#82b366" stroke-width="1"/>
+  <text x="720" y="254" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">Hermes agents 0401–1000</text>
+  <text x="720" y="270" text-anchor="middle" font-size="8" fill="#666666">best-effort-traffic · SQLite state in /data</text>
+
+  <!-- Agents to the llm-d Router -->
+  <line x1="180" y1="284" x2="180" y2="318" stroke="#000000" stroke-width="1.5"/>
+  <line x1="450" y1="284" x2="450" y2="318" stroke="#000000" stroke-width="1.5"/>
+  <line x1="720" y1="284" x2="720" y2="318" stroke="#000000" stroke-width="1.5"/>
+  <line x1="180" y1="318" x2="720" y2="318" stroke="#000000" stroke-width="1.5"/>
+  <line x1="450" y1="318" x2="450" y2="356" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="462" y="333" font-size="8" fill="#444444">OpenAI /v1/chat/completions</text>
+  <text x="462" y="345" font-size="8" fill="#444444">X-Hermes-Session-Id and x-llm-d-inference-objective forwarded by sitecustomize.py</text>
+
+  <!-- llm-d Router -->
+  <rect x="30" y="358" width="840" height="112" rx="5" fill="#e6e6fa" stroke="#9f659f" stroke-width="2"/>
+  <text x="46" y="377" font-size="11" font-weight="bold" fill="#000000">llm-d Router (Endpoint Picker)</text>
+
+  <rect x="50" y="388" width="220" height="68" rx="3" fill="#ffffff" stroke="#9f659f" stroke-width="1"/>
+  <text x="160" y="408" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">1. agent-identity</text>
+  <text x="160" y="426" text-anchor="middle" font-size="8" fill="#666666">x-hermes-session-id becomes</text>
+  <text x="160" y="438" text-anchor="middle" font-size="8" fill="#666666">the flow-control FairnessID</text>
+
+  <line x1="270" y1="422" x2="298" y2="422" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="300" y="388" width="260" height="68" rx="3" fill="#ffffff" stroke="#9f659f" stroke-width="1"/>
+  <text x="430" y="408" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">2. Flow Control admission</text>
+  <text x="430" y="426" text-anchor="middle" font-size="8" fill="#666666">bands 100 (premium) · 0 (standard) · -10 (best-effort)</text>
+  <text x="430" y="438" text-anchor="middle" font-size="8" fill="#666666">round-robin fairness per Hermes session</text>
+
+  <line x1="560" y1="422" x2="588" y2="422" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="590" y="388" width="260" height="68" rx="3" fill="#ffffff" stroke="#9f659f" stroke-width="1"/>
+  <text x="720" y="408" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">3. Scheduling profile</text>
+  <text x="720" y="426" text-anchor="middle" font-size="8" fill="#666666">prefix-cache-scorer (3) · session-affinity-scorer (2)</text>
+  <text x="720" y="438" text-anchor="middle" font-size="8" fill="#666666">token-load-scorer (2) · kv-cache-utilization-scorer (1)</text>
+
+  <!-- Router to model servers -->
+  <line x1="720" y1="456" x2="720" y2="486" stroke="#000000" stroke-width="1.5"/>
+  <line x1="340" y1="486" x2="720" y2="486" stroke="#000000" stroke-width="1.5"/>
+  <line x1="340" y1="486" x2="340" y2="502" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="560" y1="486" x2="560" y2="502" stroke="#000000" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="240" y="504" width="200" height="46" rx="3" fill="#e1d5e7" stroke="#9673a6" stroke-width="1.5"/>
+  <text x="340" y="523" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">vLLM replica 1</text>
+  <text x="340" y="539" text-anchor="middle" font-size="8" fill="#666666">HBM + Host-DRAM KV offload</text>
+
+  <rect x="460" y="504" width="200" height="46" rx="3" fill="#e1d5e7" stroke="#9673a6" stroke-width="1.5"/>
+  <text x="560" y="523" text-anchor="middle" font-size="10" font-weight="bold" fill="#000000">vLLM replicas 2..N</text>
+  <text x="560" y="539" text-anchor="middle" font-size="8" fill="#666666">HBM + Host-DRAM KV offload</text>
+</svg>

@@ -202,6 +202,8 @@ GKE recommends [Topology Aware Scheduling with Kueue and LeaderWorkerSet](https:
 
 For general TPU node pool setup on GKE (`ct5p`, `ct5lp`, `ct6e`, `tpu7x`), follow the [TPUs in GKE documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
 
+For how TPUs map onto llm-d — chips vs devices, slice topologies, the Torch TPU engine stack, and which well-lit paths and model guides have TPU v6e / TPU7x configurations — see the [Google Cloud TPU page](./tpu/README.md).
+
 ### TPU Dynamic Slicing on GKE
 
 This section covers the llm-d-specific configuration for serving model servers on GKE Ironwood (TPU7x) dynamic sub-slices. It is the infrastructure prerequisite for the dynamic-slice recipes in the well-lit path guides:

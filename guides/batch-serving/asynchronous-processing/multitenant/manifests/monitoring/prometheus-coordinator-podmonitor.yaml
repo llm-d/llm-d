@@ -1,0 +1,15 @@
+# Scrapes the coordinator deployed in README step 4; selects nothing until it is deployed.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: llm-d-coordinator
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

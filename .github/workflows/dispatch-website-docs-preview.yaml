@@ -1,0 +1,73 @@
+name: Dispatch website docs PR preview
+
+# When a pull request changes docs (or related community root files), notify
+# llm-d/llm-d.github.io to sync this PR's tip, build the full site, and publish
+# a Netlify alias preview. The website workflow comments the preview URL back
+# on this PR when LLM_D_PR_COMMENT_TOKEN is configured there.
+#
+# Requires repository secret `WEBSITE_SYNC_TOKEN` (same as dispatch-website-sync):
+# a fine-grained PAT scoped to llm-d/llm-d.github.io with Contents: read and
+# write so it can create a repository_dispatch. Fork PRs skip this job (no
+# secrets).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "docs/**"
+      - "guides/**"
+      - "CONTRIBUTING.md"
+      - "CODE_OF_CONDUCT.md"
+      - "SECURITY.md"
+      - "SIGS.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  notify-website-preview:
+    name: notify-website-preview
+    runs-on: ubuntu-latest
+    # Same-repo PRs only (secrets unavailable / unsafe for fork workflows).
+    if: >
+      github.repository == 'llm-d/llm-d' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    steps:
+      - name: Check WEBSITE_SYNC_TOKEN
+        id: token
+        env:
+          WEBSITE_SYNC_TOKEN: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+        run: |
+          if [ -z "${WEBSITE_SYNC_TOKEN:-}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "WEBSITE_SYNC_TOKEN is not set; skipping website preview dispatch" >&2
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger docs-pr-preview on llm-d.github.io
+        if: steps.token.outputs.present == 'true'
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          repository: llm-d/llm-d.github.io
+          event-type: docs-pr-preview
+          client-payload: |
+            {
+              "source_repo": "${{ github.repository }}",
+              "head_repo": "${{ github.event.pull_request.head.repo.full_name }}",
+              "pr_number": "${{ github.event.pull_request.number }}",
+              "ref": "${{ github.event.pull_request.head.ref }}",
+              "sha": "${{ github.event.pull_request.head.sha }}"
+            }
+
+      - name: Preview pointer
+        if: steps.token.outputs.present == 'true'
+        run: |
+          echo "Dispatched docs-pr-preview for PR #${{ github.event.pull_request.number }}"
+          echo "Watch: https://github.com/llm-d/llm-d.github.io/actions/workflows/docs-pr-preview.yml"
