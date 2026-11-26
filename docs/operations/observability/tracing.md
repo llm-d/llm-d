@@ -229,6 +229,8 @@ Applying the tracing overlay updates the existing model server Deployment and re
 
 The shared [vLLM Deployment component](../../../guides/recipes/observability/tracing/components/vllm-deployment/kustomization.yaml) enables tracing with `--otlp-traces-endpoint=$(OTEL_EXPORTER_OTLP_ENDPOINT)`. Kubernetes expands the endpoint variable when starting the container. The component exports to the same-namespace collector as `vllm-decode`, with a `parentbased_traceidratio` sampler and a `0.1` ratio for root spans. Child spans follow the parent's sampling decision.
 
+It also tags each span's resource with `k8s.pod.name` via `OTEL_RESOURCE_ATTRIBUTES`, whose `$(OTEL_POD_NAME)` expansion (a downward-API `fieldRef`) resolves at container start, so a trace can show which vLLM pod served the request.
+
 Check the deployed configuration:
 
 ```bash
@@ -467,6 +469,8 @@ When tracing is enabled, these environment variables are set on model server and
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector endpoint (`http://otel-collector:4317`) |
 | `OTEL_TRACES_SAMPLER` | Sampler type (e.g., `parentbased_traceidratio`) |
 | `OTEL_TRACES_SAMPLER_ARG` | Sampling ratio (`1.0` = 100%, `0.1` = 10%, `0.05` = 5%) |
+| `OTEL_POD_NAME` | Pod name (downward-API `fieldRef`); set by the vLLM component only |
+| `OTEL_RESOURCE_ATTRIBUTES` | Resource attributes for the spans, e.g., `k8s.pod.name=$(OTEL_POD_NAME)`; set by the vLLM component only |
 
 ## Cleanup
 

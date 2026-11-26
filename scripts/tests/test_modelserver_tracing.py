@@ -51,7 +51,13 @@ TRACING_ENV = {
     "OTEL_TRACES_EXPORTER": "otlp",
     "OTEL_TRACES_SAMPLER": "parentbased_traceidratio",
     "OTEL_TRACES_SAMPLER_ARG": "0.1",
+    "OTEL_RESOURCE_ATTRIBUTES": "k8s.pod.name=$(OTEL_POD_NAME)",
 }
+# OTEL_POD_NAME carries no literal value (it is a downward-API fieldRef), so
+# it is tracked separately from the literal TRACING_ENV values.
+TRACING_POD_ENV = "OTEL_POD_NAME"
+TRACING_POD_ENV_REF = {"name": TRACING_POD_ENV, "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}}
+TRACING_ENV_NAMES = set(TRACING_ENV) | {TRACING_POD_ENV}
 
 
 def build(path, *, check=True):
@@ -216,13 +222,17 @@ def test_tracing_composition_per_provider(tmp_path, guide, provider):
         env["name"]: env["value"] for env in container["env"]
         if env["name"] in TRACING_ENV
     } == TRACING_ENV
+    # The pod name is a fieldRef, and it must be ordered before
+    # OTEL_RESOURCE_ATTRIBUTES so the $(OTEL_POD_NAME) expansion resolves.
+    assert container["env"][names.index(TRACING_POD_ENV)] == TRACING_POD_ENV_REF
+    assert names.index(TRACING_POD_ENV) < names.index("OTEL_RESOURCE_ATTRIBUTES")
 
     # Removing only tracing configuration must recover every original resource.
     restored = copy.deepcopy(traced)
     restored_container = modelserver(restored)
     restored_container["args"] = restored_container["args"][:-len(TRACING_ARGS)]
     restored_container["env"] = [
-        env for env in restored_container["env"] if env["name"] not in TRACING_ENV
+        env for env in restored_container["env"] if env["name"] not in TRACING_ENV_NAMES
     ]
     assert restored == baseline
 
@@ -277,8 +287,8 @@ def test_component_replaces_existing_tracing_env_without_leaving_value_from(tmp_
     assert len(entries) == len(TRACING_ENV)
     assert all(set(env) == {"name", "value"} for env in entries)
     assert {env["name"]: env["value"] for env in entries} == TRACING_ENV
-    assert [env for env in container["env"] if env["name"] not in TRACING_ENV] == [
-        env for env in original["env"] if env["name"] not in TRACING_ENV
+    assert [env for env in container["env"] if env["name"] not in TRACING_ENV_NAMES] == [
+        env for env in original["env"] if env["name"] not in TRACING_ENV_NAMES
     ]
 
 
