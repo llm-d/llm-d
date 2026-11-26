@@ -421,6 +421,7 @@ def test_nightly_modelserver_mirror_matches_guide(flow_control):
 # --------------------------------------------------------------------------
 
 MONITORING_CLEANUP_GUIDES = [
+    "flow-control",
     "multimodal-serving",
     "omni-serving",
     "optimized-baseline",
