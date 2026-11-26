@@ -1,0 +1,3 @@
+# NVIDIA GPU (ACCELERATOR=gpu). Layer after aggregation.values.yaml, like amd.aggregation.values.yaml.
+# aggregation.values.yaml is calibrated for this lane already, so there is nothing to override;
+# the file exists so the router install can always pass -f router/${ACCELERATOR}.aggregation.values.yaml.

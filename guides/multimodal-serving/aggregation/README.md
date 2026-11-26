@@ -28,9 +28,10 @@ This guide includes configurations for the following accelerators and inference 
 
 | Backend            | Directory                  | Model                        | Notes                                      |
 | ------------------ | -------------------------- | ---------------------------- | ------------------------------------------ |
-| NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`INFRA_PROVIDER` options: `base`, `gke`)                      |
-| Intel XPU          | `modelserver/xpu/vllm/base/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60            |
-| Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas |
+| NVIDIA GPU         | `modelserver/gpu/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Default configuration (`ACCELERATOR_TYPE=gpu`; `INFRA_PROVIDER` options: `base`, `gke`)                      |
+| AMD GPU            | `modelserver/amd/vllm/${INFRA_PROVIDER}/`    | `Qwen/Qwen3-VL-32B-Instruct` | Instinct MI355X, 8 replicas × TP=2 (`ACCELERATOR_TYPE=amd`; `INFRA_PROVIDER` options: `base`, `amd-ci`); router calibration in [`router/amd.aggregation.values.yaml`](router/amd.aggregation.values.yaml) |
+| Intel XPU          | `modelserver/xpu/vllm/base/`    | `Qwen/Qwen3-VL-32B-Instruct` | Intel Arc Pro B60 (`ACCELERATOR_TYPE=xpu`, `INFRA_PROVIDER=base`)            |
+| Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-vl/` | `Qwen/Qwen3-VL-32B-Instruct` | GKE `tpu7x`, `2x2x1` slice, TP=4, 4 chips per replica, 8 replicas (`ACCELERATOR_TYPE=tpu/v7`, `INFRA_PROVIDER=qwen3-vl`) |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/gemma4/`   | `google/gemma-4-31B-it`      | Same hardware (`TP=8`); <br/>needs the Gemma 4 token estimate in the [router values](#1-deploy-the-llm-d-router) |
 | Google TPU v7      | `modelserver/tpu/v7/vllm/qwen3-5-397b/` | `Qwen/Qwen3.5-397B-A17B-FP8` | Same hardware (`TP=8, EP=8`) |
 
@@ -58,6 +59,9 @@ This guide includes configurations for the following accelerators and inference 
    source ${REPO_ROOT}/guides/env.sh
    export GUIDE_NAME="aggregation"
    export NAMESPACE=llm-d-aggregation
+   export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v7 (table above)
+   export ACCELERATOR=${ACCELERATOR_TYPE} # keep equal to ACCELERATOR_TYPE; selects the router values overlay
+   export INFRA_PROVIDER=base # per accelerator: gpu base | gke; amd base | amd-ci; xpu base; tpu/v7 qwen3-vl | gemma4 | qwen3-5-397b
    ```
 
 4. Install the Gateway API Inference Extension CRDs:
@@ -90,18 +94,33 @@ This guide includes configurations for the following accelerators and inference 
 
 ### 1. Deploy the llm-d Router
 
+**Prepare the paths to the `helm` values files** for the `llm-d` router (used in the deployment commands below). [`router/aggregation.values.yaml`](router/aggregation.values.yaml) carries the multimodal plugin configuration, calibrated on NVIDIA H200; the per-accelerator file layered on top overrides what differs on that hardware (`amd.aggregation.values.yaml` carries the AMD router calibration; the others are empty):
+
+<!-- guide:deploy.router_values start -->
+```bash
+# Paths to values files
+export ROUTER_BASE_VALUES="${REPO_ROOT}/guides/recipes/router/base.values.yaml"
+export ROUTER_VALUES="${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml"
+# Per-accelerator override, layered last: router/${ACCELERATOR}.${GUIDE_NAME}.values.yaml
+export ROUTER_ACCELERATOR_VALUES="${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${ACCELERATOR}.${GUIDE_NAME}.values.yaml"
+```
+<!-- guide:deploy.router_values end -->
+
 #### Standalone Mode
 
 Deploy the llm-d Router in **Standalone Mode** overlaying router custom configurations:
 
+<!-- guide:deploy.standalone start -->
 ```bash
 # Run from the root of the llm-d repo
 helm install ${GUIDE_NAME} \
     ${ROUTER_STANDALONE_CHART} \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${ROUTER_BASE_VALUES} \
+    -f ${ROUTER_VALUES} \
+    -f ${ROUTER_ACCELERATOR_VALUES} \
     -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
+<!-- guide:deploy.standalone end -->
 
 > [!IMPORTANT]
 > The `token-producer` estimate in the router values must match the model you deploy in step 2.
@@ -109,7 +128,8 @@ helm install ${GUIDE_NAME} \
 > deploy `google/gemma-4-31B-it`, swap in the commented-out `estimate:` block in
 > [`router/aggregation.values.yaml`](router/aggregation.values.yaml) — Gemma 4 allocates a fixed token
 > budget per image, so the resolution-based estimator would mis-price every multimodal request and skew
-> routing with no error to signal it.
+> routing with no error to signal it. [`router/amd.aggregation.values.yaml`](router/amd.aggregation.values.yaml) repeats the
+> plugin block (Helm cannot override one field inside it), so apply the same swap there on AMD.
 
 <details>
 <summary><h4>Gateway Mode</h4></summary>
@@ -123,8 +143,9 @@ To use a Kubernetes Gateway managed proxy rather than the standalone version, fo
 export PROVIDER_NAME=gke # options: none, gke, agentgateway, istio
 helm install ${GUIDE_NAME} \
     ${ROUTER_GATEWAY_CHART}  \
-    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
-    -f ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/router/${GUIDE_NAME}.values.yaml \
+    -f ${ROUTER_BASE_VALUES} \
+    -f ${ROUTER_VALUES} \
+    -f ${ROUTER_ACCELERATOR_VALUES} \
     --set provider.name=${PROVIDER_NAME} \
     --set httpRoute.create=true \
     --set httpRoute.inferenceGatewayName=llm-d-inference-gateway \
@@ -135,29 +156,31 @@ helm install ${GUIDE_NAME} \
 
 ### 2. Deploy the Model Server
 
-Apply the Kustomize overlays for your specific backend (defaulting to NVIDIA GPU / vLLM):
+Apply the Kustomize overlay for the accelerator and provider chosen in the [environment variables](#prerequisites) (`ACCELERATOR_TYPE` and `INFRA_PROVIDER`; the table above lists the valid pairs):
 
+<!-- guide:deploy.modelserver start -->
 ```bash
-export INFRA_PROVIDER=gke # base | gke
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
+kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/vllm/${INFRA_PROVIDER}/
 ```
+<!-- guide:deploy.modelserver end -->
 
 <details>
 <summary><h4>Other Accelerators</h4></summary>
 
+The same command deploys every lane; only the two variables change:
+
 ```bash
+# AMD GPU (INFRA_PROVIDER=amd-ci is the CI overlay)
+export ACCELERATOR_TYPE=amd ACCELERATOR=amd INFRA_PROVIDER=base
+
 # Intel XPU
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/base/
+export ACCELERATOR_TYPE=xpu ACCELERATOR=xpu INFRA_PROVIDER=base
 
-# Google TPU v7 — Qwen3-VL-32B-Instruct
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
-
-# Google TPU v7 — google/gemma-4-31B-it
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
-
-# Google TPU v7 — Qwen/Qwen3.5-397B-A17B-FP8
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-5-397b/
+# Google TPU v7: INFRA_PROVIDER picks the model: qwen3-vl (Qwen3-VL-32B-Instruct), gemma4 (google/gemma-4-31B-it), qwen3-5-397b (Qwen/Qwen3.5-397B-A17B-FP8)
+export ACCELERATOR_TYPE=tpu/v7 ACCELERATOR=tpu/v7 INFRA_PROVIDER=qwen3-vl
 ```
+
+Set them before the [router](#1-deploy-the-llm-d-router) step too: the router values overlay `router/${ACCELERATOR}.${GUIDE_NAME}.values.yaml` follows the same variable.
 
 > [!NOTE]
 > Intel XPU deployments use Kubernetes Dynamic Resource Allocation (DRA) with `resource.k8s.io/v1` `ResourceClaimTemplate` resources and per-container `resources.claims`. Ensure your cluster supports DRA, has the Intel device plugin/DRA components installed, and exposes the `gpu.intel.com` `DeviceClass` before applying this overlay.
@@ -254,13 +277,7 @@ To tear down and clean up all deployed resources:
 
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/gpu/vllm/${INFRA_PROVIDER}/
-# For Intel XPU:
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/xpu/vllm/base/
-# For Google TPU v7:
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-vl/
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/gemma4/
-# kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/tpu/v7/vllm/qwen3-5-397b/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/multimodal-serving/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/vllm/${INFRA_PROVIDER}/
 ```
 
 <!-- llm-d-cicd:skip start -->
