@@ -35,7 +35,7 @@
         "x": 0,
         "y": 0
       },
-      "description": "One row per fairness ID: a tenant or a session, depending on what sets it. Values are totals since the EPP started counting the fairness ID, for fairness IDs with requests in the time range. They come from the EPP request metrics, summed over EPP pods. TTFT is measured at the EPP, from request received to first response byte. Uncached tokens are prompt tokens minus cached tokens: the prompt the model server had to prefill. Cached tokens are reported only when the model server returns them (vLLM: --enable-prompt-tokens-details); otherwise the uncached and cached share columns are empty. The row \"other (over label limit)\" appears when the EPP reached --fairness-id-metric-label-limit; it holds the requests of every fairness ID after the limit. The row \"default-flow (no fairness ID)\" holds requests that carried no fairness ID.",
+      "description": "One row per fairness ID: a tenant or a session, depending on what sets it. Values are totals since the EPP started counting the fairness ID. They come from the EPP request metrics, summed over EPP pods. TTFT is measured at the EPP, from request received to first response byte. Uncached tokens are prompt tokens minus cached tokens: the prompt the model server had to prefill. Cached tokens are reported only when the model server returns them (vLLM: --enable-prompt-tokens-details); otherwise the uncached and cached share columns are empty. The row \"other (over label limit)\" appears when the EPP reached --fairness-id-metric-label-limit; it holds the requests of every fairness ID after the limit. The row \"default-flow (no fairness ID)\" holds requests that carried no fairness ID.",
       "targets": [
         {
           "refId": "A",
