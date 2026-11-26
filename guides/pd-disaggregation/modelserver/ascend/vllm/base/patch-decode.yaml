@@ -1,0 +1,254 @@
+# Same-node Ascend 910B3 / HAMi / TP=1. Set site placement and local weights before applying.
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+  - name: decode
+    spec:
+      # Both NPUs are allocated. Release a card before replacing this singleton.
+      rolloutStrategy:
+        rollingUpdateConfiguration:
+          maxSurge: 0
+          maxUnavailable: 1
+      leaderWorkerTemplate:
+        workerTemplate:
+          spec:
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                  - matchFields:
+                    - key: metadata.name
+                      operator: In
+                      values:
+                      - REPLACE_ASCEND_NODE
+            nodeSelector:
+              kubernetes.io/arch: arm64
+              kubernetes.io/os: linux
+            schedulerName: hami-scheduler
+            terminationGracePeriodSeconds: 60
+            containers:
+            - name: modelserver
+              imagePullPolicy: IfNotPresent
+              command:
+              - bash
+              - -ec
+              - |
+                source /usr/local/Ascend/ascend-toolkit/set_env.sh || exit 1
+                if [ -f /usr/local/Ascend/nnal/atb/set_env.sh ]; then
+                  source /usr/local/Ascend/nnal/atb/set_env.sh || exit 1
+                fi
+                if [ "${TP_SIZE:-}" != 1 ]; then
+                  echo 'HCCS requires TP_SIZE=1' >&2
+                  exit 1
+                fi
+                case "${ASCEND_VISIBLE_DEVICES:-}" in
+                  ''|*[!0-9]*)
+                    echo 'Expected one numeric physical NPU ID' >&2
+                    exit 1
+                    ;;
+                esac
+                : "${HCCS_NET_INSTANCE_ID:?Pod node name is required for HCCS}"
+                printf -v ASCEND_LOCAL_COMM_RES \
+                  '{"version":"1.3","net_instance_id":"%s","endpoint_list":[{"protocol":"hccs","comm_id":"%s","placement":"device"}]}' \
+                  "$HCCS_NET_INSTANCE_ID" "$ASCEND_VISIBLE_DEVICES"
+                export ASCEND_LOCAL_COMM_RES
+                test -r "${MODEL_PATH}/config.json"
+                : "${KV_TRANSFER_CONFIG:?KV_TRANSFER_CONFIG is required for PD}"
+                exec "$@"
+              - --
+              - python
+              - -m
+              - vllm.entrypoints.openai.api_server
+              args:
+              - --model
+              - $(MODEL_PATH)
+              - --served-model-name
+              - $(SERVED_MODEL_NAME)
+              - --host
+              - 0.0.0.0
+              - --port
+              - $(HTTP_PORT)
+              - --tensor-parallel-size
+              - $(TP_SIZE)
+              - --max-model-len
+              - $(MAX_MODEL_LEN)
+              - --max-num-batched-tokens
+              - '4096'
+              - --max-num-seqs
+              - '8'
+              - --gpu-memory-utilization
+              - $(GPU_MEMORY_UTILIZATION)
+              - --enforce-eager
+              - --no-enable-prefix-caching
+              - --kv-transfer-config
+              - $(KV_TRANSFER_CONFIG)
+              env:
+              - name: HTTP_PORT
+                value: '8200'
+              - name: KV_TRANSFER_CONFIG
+                value: '{"kv_connector":"MooncakeConnectorV1","kv_role":"kv_consumer","kv_port":30100,"kv_connector_extra_config":{"prefill":{"dp_size":1,"tp_size":1},"decode":{"dp_size":1,"tp_size":1}}}'
+              - name: SERVED_MODEL_NAME
+                value: Qwen3-0.6B
+              - name: TP_SIZE
+                value: '1'
+              - name: MODEL_PATH
+                value: /models/model
+              - name: HF_HUB_OFFLINE
+                value: '1'
+              - name: TRANSFORMERS_OFFLINE
+                value: '1'
+              - name: GPU_MEMORY_UTILIZATION
+                value: '0.5'
+              - name: MAX_MODEL_LEN
+                value: '4096'
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: '120'
+              - name: LD_LIBRARY_PATH
+                value: /vllm-workspace/vllm-ascend/vllm_ascend/lib64:/vllm-workspace/vllm-ascend/vllm_ascend:/usr/local/lib64:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/devlib:/usr/local/Ascend/driver/lib64:/usr/local/lib
+              - name: ASCEND_GLOBAL_RESOURCE_CONFIG
+                value: '{"comm_resource_config.protocol_desc":["hccs:device"]}'
+              - name: HCCS_NET_INSTANCE_ID
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+              - name: PYTORCH_NPU_ALLOC_CONF
+                value: expandable_segments:True
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: VLLM_HOST_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: HCCL_IF_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: HCCL_SOCKET_IFNAME
+                value: eth0
+              - name: GLOO_SOCKET_IFNAME
+                value: eth0
+              - name: TP_SOCKET_IFNAME
+                value: eth0
+              ports:
+              - $patch: replace
+              - name: modelserver
+                containerPort: 8200
+                protocol: TCP
+              - name: kv-handshake
+                containerPort: 30100
+                protocol: TCP
+              resources:
+                limits:
+                  cpu: '16'
+                  memory: 128Gi
+                  huawei.com/Ascend910B3: '1'
+                requests:
+                  cpu: '16'
+                  memory: 128Gi
+                  huawei.com/Ascend910B3: '1'
+              volumeMounts:
+              - mountPath: /models/model
+                name: model-weights
+                readOnly: true
+              - mountPath: /dev/shm
+                name: shm
+              - mountPath: /usr/local/Ascend/driver
+                name: ascend-driver
+                readOnly: true
+              - mountPath: /usr/local/Ascend/firmware
+                name: ascend-firmware
+                readOnly: true
+              - mountPath: /etc/ascend_install.info
+                name: ascend-install
+                readOnly: true
+              - mountPath: /var/queue_schedule
+                name: queue-schedule
+                readOnly: false
+              - mountPath: /etc/hccn.conf
+                name: hccn-conf
+                readOnly: true
+              startupProbe:
+                failureThreshold: 120
+                initialDelaySeconds: 15
+                periodSeconds: 30
+                timeoutSeconds: 5
+              livenessProbe:
+                timeoutSeconds: 30
+                periodSeconds: 30
+                failureThreshold: 10
+              readinessProbe:
+                httpGet:
+                  path: /health
+                timeoutSeconds: 30
+                periodSeconds: 30
+                failureThreshold: 3
+              securityContext:
+                privileged: false
+                runAsUser: 0
+                allowPrivilegeEscalation: false
+            initContainers:
+            - name: routing-proxy
+              imagePullPolicy: IfNotPresent
+              args:
+              - --port=8000
+              - --model-server-port=8200
+              # The sidecar forwards KV metadata over HTTP. The engine transfers KV over HCCS.
+              - --kv-connector=nixlv2
+              - --secure-serving=false
+              - --zap-log-level=1
+              ports:
+              - $patch: replace
+              - name: sidecar
+                containerPort: 8000
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: '1'
+                  memory: 512Mi
+              securityContext:
+                privileged: false
+                capabilities:
+                  drop:
+                  - ALL
+              readinessProbe:
+                tcpSocket:
+                  port: sidecar
+                periodSeconds: 5
+                timeoutSeconds: 2
+                failureThreshold: 3
+            volumes:
+            - hostPath:
+                path: /REPLACE_MODEL_DIRECTORY
+                type: Directory
+              name: model-weights
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 16Gi
+              name: shm
+            - hostPath:
+                path: /usr/local/Ascend/driver
+                type: Directory
+              name: ascend-driver
+            - hostPath:
+                path: /usr/local/Ascend/firmware
+                type: Directory
+              name: ascend-firmware
+            - hostPath:
+                path: /etc/ascend_install.info
+                type: File
+              name: ascend-install
+            - hostPath:
+                path: /var/queue_schedule
+                type: File
+              name: queue-schedule
+            - name: hccn-conf
+              hostPath:
+                path: /etc/hccn.conf
+                type: File

@@ -43,6 +43,7 @@ This guide includes configurations for the following accelerator and model serve
 | MetaX GPU | `metax` | `Qwen/Qwen3-32B` | 🟡 community | — | C500X · 1P (TP=2) + 1D (TP=4) · NIXL over TCP |
 | Biren GPU | `biren` | `Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8` | 🟡 community | — | 166M · 1P+1D, each TP=4 · NixlConnector over RDMA (UCX_TLS=rc_v) |
 | Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | MTT S5000 · vLLM 1P TP=4 + 1D TP=4, Mooncake TCP; SGLang 1P+1D TP=8, Mooncake RDMA |
+| Huawei Ascend | `ascend` | `Qwen3-0.6B` | 🟡 community | 🟡 community | 910B3 ARM64/HAMi · same-node 1P+1D (TP=1) · vLLM Mooncake/HCCS; SGLang native Ascend/MemFabric |
 | Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | 4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
@@ -65,6 +66,8 @@ P/D disaggregation requires a KV transfer connector to move KV cache blocks from
 | NixlConnector | `biren/vllm/base` | RDMA (`UCX_TLS=rc_v`) | Biren 166M, `kv_buffer_device=cpu`. See the [Biren tab](#2-deploy-the-model-server). |
 | MooncakeConnector | `mthreads/vllm/base` | TCP via Mooncake MUSA transport | MTT S5000 compatibility path; requires the same TP on prefill and decode. See the [Moore Threads tab](#2-deploy-the-model-server). |
 | SGLang mooncake | `mthreads/sglang/base` | RDMA via Mooncake Transfer Engine | SGLang `--disaggregation-transfer-backend mooncake` (not vLLM `MooncakeConnector`). Same TP on prefill and decode. |
+| MooncakeConnectorV1 | `ascend/vllm/base` | HCCS on the same node | One whole NPU per role. See the [Huawei Ascend tab](#2-deploy-the-model-server). |
+| SGLang ascend | `ascend/sglang/base` | Ascend MemFabric | One Prefill IPv4 and a configuration store. See the [Huawei Ascend tab](#2-deploy-the-model-server). |
 | SGLang raiden | `tpu/v7/sglang` | TCP over DCN via tpu-sync | SGLang `--disaggregation-transfer-backend raiden` on Torch TPU; the decode pulls each chunk's pages as the prefill commits them. See the [Google TPU tab](#2-deploy-the-model-server). |
 
 NIXL works over TCP, but RDMA networking (InfiniBand, RoCE, EFA) is **highly recommended** for production.
@@ -129,7 +132,7 @@ git clone https://github.com/llm-d/llm-d.git && cd llm-d && git checkout ${BRANC
 | `amd` | `nixl/base`, `nixl/oci`, `nixl/tensorwave`, `moriio/base` |
 | `xpu` | `base`, `rdma` |
 | `tpu/v5p`, `tpu/v6`, `tpu/v7`, `tpu/v7-dynamic-slice` | `gke` |
-| `iluvatar`, `metax`, `biren`, `mthreads`, `npu` | `base` |
+| `iluvatar`, `metax`, `biren`, `mthreads`, `ascend`, `npu` | `base` |
 
 - `base`: generic Kubernetes cluster.
 - `gke`: on NVIDIA GPU, GKE A3/A4 with GPU DRA and DRANet RoCE (see the platform table in [Prerequisites](#prerequisites)); `gke/a4x` and `gke/a4xmax` target GKE A4X / A4X Max (GB200 / GB300). On TPU, the GKE TPU node pools described in the model server step.
@@ -149,7 +152,7 @@ export NAMESPACE=llm-d-pd-disaggregation
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
 export ACCELERATOR_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, biren, mthreads, npu
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, iluvatar, metax, biren, mthreads, ascend, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export INFRA_PROVIDER=base # options: base, gke, gke/a4x, gke/a4xmax, coreweave, aws, cks-mooncake, nixl/base, nixl/amd-ci, nixl/oci, nixl/tensorwave, moriio/base, moriio/amd-ci, moriio/amd-ci-1p1d-tp8, rdma; valid values per accelerator: table above
 export MODEL=openai/gpt-oss-120b # set to the model your accelerator serves (Supported Accelerators and Model Servers table); the AMD MoRIIO overlays (INFRA_PROVIDER=moriio/*) serve Qwen/Qwen3-32B
@@ -283,6 +286,31 @@ export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.va
 ```
 <!-- llm-d-cicd:skip end -->
 <!-- guide:deploy.accelerator_values[1] end -->
+
+<details data-when="ACCELERATOR_TYPE=ascend">
+<summary>Huawei Ascend router values</summary>
+
+Load the Ascend 1P1D routing profile. If the site manages its router with rendered manifests, apply these values through its existing deployment procedure and skip the Helm install below.
+
+<!-- guide:deploy.accelerator_values[2] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/ascend.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[2] end -->
+
+For `MODEL_SERVER=sglang`, append the SGLang engine type and deployment selector.
+
+<!-- guide:deploy.accelerator_values[3] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="${ACCELERATOR_VALUES} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/ascend-sglang.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[3] end -->
+
+</details>
 
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
@@ -591,6 +619,47 @@ The routing sidecar sets `bootstrap_host` to the InferencePool **Pod IP**. Moonc
 Treat the vLLM path as a compatibility smoke test until a clean multi-hour soak and hardware-specific calibration have been completed.
 
 </details>
+<details data-when="ACCELERATOR_TYPE=ascend">
+<summary><b>Huawei Ascend</b></summary>
+
+<!-- guide:deploy.modelserver.ascend[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+(
+  set -eu
+  overlay="${ASCEND_MODEL_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}}"
+  manifest="${ASCEND_MODEL_MANIFEST:-ascend-${NAMESPACE}-${MODEL_SERVER}.yaml}"
+  rendered=$(mktemp "${manifest}.XXXXXX")
+  trap 'rm -f -- "$rendered"' EXIT
+  kubectl kustomize "$overlay" > "$rendered"
+  if [ ! -s "$rendered" ] || grep -n 'REPLACE_' "$rendered"; then
+    echo 'Render a model manifest with all Ascend site placeholders filled.' >&2
+    exit 1
+  fi
+  kubectl apply -n "${NAMESPACE}" --server-side --dry-run=server -f "$rendered"
+  mv -- "$rendered" "$manifest"
+  kubectl apply -n "${NAMESPACE}" --server-side -f "$manifest"
+  printf 'Keep %s for cleanup.\n' "$manifest"
+)
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.modelserver.ascend[0] end -->
+
+The `ascend` overlay serves `Qwen3-0.6B` with vLLM or SGLang (`pd-disagg-ascend-vllm` / `pd-disagg-ascend-sglang`) on one Linux ARM64 Ascend 910B3 node, with **1 Prefill + 1 Decode** at `TP=1` and one whole NPU per role. Set `ACCELERATOR_TYPE=ascend`, `MODEL_SERVER=vllm` or `sglang`, `INFRA_PROVIDER=base`, and `MODEL=Qwen3-0.6B`.
+
+**Requirements:**
+
+- One 910B3 node with two allocatable `huawei.com/Ascend910B3` devices, HAMi (`hami-scheduler`), and host drivers compatible with the engine's CANN runtime. Confirm that the two roles get distinct physical NPUs.
+- Kubernetes with native sidecar support, InferencePool v1, and LWS with `DisaggregatedSet` enabled. On clusters that already run a shared LWS controller watching `${NAMESPACE}`, skip the Helm LWS install step above instead of running `helm upgrade --install`.
+- Readable model weights on the node. Skip creating `llm-d-hf-token` when using local weights.
+
+**Configuration notes:**
+
+- Replace `REPLACE_ASCEND_NODE` and `/REPLACE_MODEL_DIRECTORY` in the role patches, or supply a site overlay via `ASCEND_MODEL_OVERLAY`. Keep the applied `ASCEND_MODEL_MANIFEST` for cleanup if the site overlay renames resources.
+- vLLM uses the `nixlv2` sidecar handoff and transfers KV via `MooncakeConnectorV1` over same-node HCCS. SGLang uses the `sglang` sidecar handoff (bootstrap port `34000`) and its native `ascend`/MemFabric backend with the headless MF-store Service on port `22222`; keep SGLang at one Prefill and one slice, and keep store Service and role env names in sync if renamed. Both NPUs are allocated (`maxSurge: 0`, `maxUnavailable: 1`), so replacing a role briefly interrupts serving; if SGLang Prefill gets a new IP, restart Decode if it still points to the old store address.
+- For KV transfer validation (including ARM64 nodes without a compatible curl Pod image), use [Verify Ascend KV transfer](#verify-ascend-kv-transfer).
+
+</details>
 <!-- tabs:end -->
 
 ### 3. Enable Monitoring (optional)
@@ -728,6 +797,62 @@ kubectl get --raw "/api/v1/namespaces/${NAMESPACE}/services/${GUIDE_NAME}-epp:90
 
 Performance benchmarks for this configuration are not part of this guide: they live with the model-specific guides.
 
+### Verify Ascend KV transfer
+
+Run during an isolated request window. If the site uses a different router release name, export `RELEASE` in both terminals and confirm its `InferencePool` selects both roles on port `8000`. Start `kubectl -n "$NAMESPACE" port-forward --address 127.0.0.1 "svc/${RELEASE:-$GUIDE_NAME}-epp" 18081:80` in another terminal, then run the block below (for scripted runs, emit only `verify.tests.ascend`):
+
+<!-- guide:verify.tests.ascend[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+(
+  set -euo pipefail
+  selector="llm-d.ai/deployment=ascend-${MODEL_SERVER}-pd,leaderworkerset.sigs.k8s.io/worker-index=0"
+  p=$(kubectl -n "$NAMESPACE" get pods -l "$selector,llm-d.ai/role=prefill" -o name)
+  d=$(kubectl -n "$NAMESPACE" get pods -l "$selector,llm-d.ai/role=decode" -o name)
+  if [[ -z "$p" || -z "$d" || "$p" == *$'\n'* || "$d" == *$'\n'* ]]; then
+    echo 'Expected exactly one Prefill Pod and one Decode Pod.' >&2
+    exit 1
+  fi
+  kubectl -n "$NAMESPACE" wait --for=condition=Ready "$p" "$d" --timeout=60s
+  out=$(mktemp -d "${TMPDIR:-/tmp}/ascend-kv.XXXXXX")
+  printf 'Saving request evidence to %s\n' "$out"
+  kubectl -n "$NAMESPACE" get inferencepool "${RELEASE:-$GUIDE_NAME}" -o yaml > "$out/pool.yaml"
+  snapshot() {
+    kubectl -n "$NAMESPACE" get "$p" "$d" -o json > "$out/$1-pods.json"
+    if [ "$MODEL_SERVER" = sglang ]; then
+      kubectl get --raw "/api/v1/namespaces/$NAMESPACE/pods/${p#pod/}:8000/proxy/metrics" > "$out/$1-prefill.prom"
+      kubectl get --raw "/api/v1/namespaces/$NAMESPACE/pods/${d#pod/}:8200/proxy/metrics" > "$out/$1-decode.prom"
+    fi
+  }
+  snapshot before
+  start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  request_id="ascend-pd-$(date -u +%Y%m%d%H%M%S)-$$"
+  printf '%s %s\n' "$start" "$request_id" > "$out/request-id.txt"
+  prompt=$(printf 'The prefill worker computes the prompt and the decode worker continues the answer. %.0s' {1..60})
+  jq -n --arg model "$MODEL" --arg prompt "${prompt}Summarize this in one sentence." \
+    '{model: $model, prompt: $prompt, max_tokens: 64, stream: false}' > "$out/request.json"
+  curl --noproxy '*' --fail-with-body -sS --max-time 300 \
+    -H 'Content-Type: application/json' -H "X-Request-Id: $request_id" \
+    --data-binary "@$out/request.json" -D "$out/response.headers" -o "$out/response.json" \
+    http://127.0.0.1:18081/v1/completions
+  jq -e '.choices[0] | (.text | type == "string") and (.finish_reason != null)' "$out/response.json"
+  snapshot after
+  for phase in before after; do
+    jq -S '[.items[] | {uid: .metadata.uid, restarts: [.status.containerStatuses[], .status.initContainerStatuses[]? | {name, restartCount}]}] | sort_by(.uid)' \
+      "$out/$phase-pods.json" > "$out/$phase-identity.json"
+  done
+  diff -u "$out/before-identity.json" "$out/after-identity.json"
+  kubectl -n "$NAMESPACE" logs "deploy/${RELEASE:-$GUIDE_NAME}-epp" -c epp --timestamps --since-time="$start" > "$out/epp.log"
+  kubectl -n "$NAMESPACE" logs "$d" -c routing-proxy --timestamps --since-time="$start" > "$out/sidecar.log"
+  kubectl -n "$NAMESPACE" logs "$p" -c modelserver --timestamps --since-time="$start" > "$out/prefill.log"
+  kubectl -n "$NAMESPACE" logs "$d" -c modelserver --timestamps --since-time="$start" > "$out/decode.log"
+)
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:verify.tests.ascend[0] end -->
+
+Match the EPP-selected Pod IPs and sidecar handoff to the response. For vLLM, require a successful Decode `MooncakeConnectorV1` KV read for that request. For SGLang, check positive deltas on Prefill `sglang:kv_transfer_total_mb_sum` and Decode `sglang:per_stage_req_latency_seconds_count{stage="decode_transferred"}` over the isolated window (or request-correlated Decode receipt) with no matching transfer failure.
+
 ## Observability & Troubleshooting
 
 Once monitoring is enabled, use the signals below to operate P/D disaggregation under **sustained load in production or benchmark scenarios** (note that the small number of requests in [Verification](#verification) is only a smoke check and does not produce steady-state pool utilization or saturation signals). This section covers the metrics that matter **for this path** and how to read them; full metric definitions live in the [metric reference](../../docs/operations/observability/metrics.md#metric-reference) and ready-to-run queries in the [PromQL reference](../../docs/operations/observability/promql.md).
@@ -768,6 +893,8 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 <!-- guide:cleanup.modelserver end -->
 
 On DisaggregatedSet paths, deleting the set cascades to its LeaderWorkerSets, their pods, and per-slice Services. For TPU dynamic sub-slices, delete the overlay before removing any node pools so that Kueue releases the `Slice` resources it created.
+
+For Ascend, stop any local port-forward. If you deployed through a site overlay that renames resources (such as the SGLang store Service), delete the model server with `kubectl delete -n "${NAMESPACE}" -f "${ASCEND_MODEL_MANIFEST:-ascend-${NAMESPACE}-${MODEL_SERVER}.yaml}"` instead of `-k`. On a shared namespace or site-managed Router/LWS/monitoring stack, stop after deleting the model server (emit/run only `cleanup.modelserver` or `kubectl delete -f`, and skip the Router/monitoring/namespace steps below).
 
 <!-- guide:cleanup.rest start -->
 ```bash

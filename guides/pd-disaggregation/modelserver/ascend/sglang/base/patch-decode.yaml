@@ -1,0 +1,249 @@
+apiVersion: disaggregatedset.x-k8s.io/v1
+kind: DisaggregatedSet
+metadata:
+  name: pd-disagg
+spec:
+  roles:
+  - name: decode
+    spec:
+      # Both NPUs are allocated. Release a card before replacing Decode.
+      rolloutStrategy:
+        rollingUpdateConfiguration:
+          maxSurge: 0
+          maxUnavailable: 1
+      leaderWorkerTemplate:
+        workerTemplate:
+          spec:
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                  - matchFields:
+                    - key: metadata.name
+                      operator: In
+                      values:
+                      - REPLACE_ASCEND_NODE
+            nodeSelector:
+              kubernetes.io/arch: arm64
+              kubernetes.io/os: linux
+            schedulerName: hami-scheduler
+            terminationGracePeriodSeconds: 60
+            containers:
+            - name: modelserver
+              imagePullPolicy: IfNotPresent
+              command:
+              - bash
+              - -ec
+              - |
+                source /usr/local/Ascend/ascend-toolkit/set_env.sh || exit 1
+                source /usr/local/Ascend/nnal/atb/set_env.sh || exit 1
+                # One slice, one single-Pod instance per role. Store discovery is one-shot.
+                test -r "${MODEL_PATH}/config.json" || { echo "Missing model config.json: ${MODEL_PATH}" >&2; exit 1; }
+                count=0
+                while :; do
+                  ips=( $(getent hosts "${ASCEND_MF_STORE_HOST}" | awk '$1 ~ /^[0-9]+\./ {print $1}' | sort -u) )
+                  if [ "${#ips[@]}" -eq 1 ]; then PREFILL_IP=${ips[0]}; break; fi
+                  count=$((count + 1))
+                  if [ "$count" -ge 150 ]; then echo "Expected exactly one Prefill IPv4; check store EndpointSlice/DNS/replicas" >&2; exit 1; fi
+                  echo "Waiting for exactly one Prefill address: ${ASCEND_MF_STORE_HOST}" >&2
+                  sleep 2
+                done
+                export ASCEND_MF_STORE_URL="tcp://${PREFILL_IP}:${ASCEND_MF_STORE_PORT}"
+                echo "role=decode MF_STORE=${ASCEND_MF_STORE_URL} HTTP=${HTTP_PORT}"
+                exec "$@"
+              - --
+              - python3
+              - -m
+              - sglang.launch_server
+              args:
+              - --model-path
+              - $(MODEL_PATH)
+              - --served-model-name
+              - $(SERVED_MODEL_NAME)
+              - --mem-fraction-static
+              - $(MEM_FRACTION_STATIC)
+              - --disable-radix-cache
+              - --tp-size
+              - $(TP_SIZE)
+              - --dp-size
+              - '1'
+              - --nnodes
+              - '1'
+              - --node-rank
+              - '0'
+              - --base-gpu-id
+              - '0'
+              - --disaggregation-mode
+              - decode
+              - --disaggregation-transfer-backend
+              - $(KV_TRANSFER_BACKEND)
+              - --port
+              - $(HTTP_PORT)
+              - --disaggregation-bootstrap-port
+              - $(BOOTSTRAP_PORT)
+              - --host
+              - 0.0.0.0
+              - --enable-metrics
+              env:
+              - $patch: replace
+              - name: SERVED_MODEL_NAME
+                value: Qwen3-0.6B
+              - name: HTTP_PORT
+                value: '8200'
+              - name: BOOTSTRAP_PORT
+                value: '34000'
+              - name: TP_SIZE
+                value: '1'
+              - name: LD_LIBRARY_PATH
+                value: /usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/lib64:/usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/devlib:/usr/local/Ascend/driver/lib64:/usr/local/lib
+              - name: PYTORCH_NPU_ALLOC_CONF
+                value: expandable_segments:True
+              - name: HCCL_SOCKET_IFNAME
+                value: lo
+              - name: GLOO_SOCKET_IFNAME
+                value: lo
+              - name: SGLANG_PORT
+                value: '8200'
+              - name: ASCEND_MF_STORE_HOST
+                value: REPLACE_STORE_SERVICE
+              - name: ASCEND_MF_STORE_PORT
+                value: '22222'
+              - name: MODEL_PATH
+                value: /models/model
+              - name: KV_TRANSFER_BACKEND
+                value: ascend
+              - name: POD_IP
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: HF_HUB_OFFLINE
+                value: '1'
+              - name: TRANSFORMERS_OFFLINE
+                value: '1'
+              - name: MEM_FRACTION_STATIC
+                value: '0.8'
+              ports:
+              - $patch: replace
+              - containerPort: 8200
+                name: modelserver
+                protocol: TCP
+              securityContext:
+                $patch: replace
+                privileged: false
+                runAsUser: 0
+                allowPrivilegeEscalation: false
+              resources:
+                limits:
+                  cpu: '16'
+                  huawei.com/Ascend910B3: '1'
+                  memory: 128Gi
+                requests:
+                  cpu: '16'
+                  huawei.com/Ascend910B3: '1'
+                  memory: 128Gi
+              volumeMounts:
+              - mountPath: /models/model
+                name: model-weights
+                readOnly: true
+              - mountPath: /dev/shm
+                name: shm
+              - mountPath: /.config
+                name: metrics-volume
+              - mountPath: /usr/local/Ascend/driver
+                name: ascend-driver
+                readOnly: true
+              - mountPath: /usr/local/Ascend/tools
+                name: ascend-tools
+                readOnly: true
+              - mountPath: /usr/local/Ascend/firmware
+                name: ascend-firmware
+                readOnly: true
+              - mountPath: /etc/ascend_install.info
+                name: ascend-install
+                readOnly: true
+              - mountPath: /var/queue_schedule
+                name: queue-schedule
+                readOnly: false
+              - mountPath: /usr/local/sbin
+                name: ascend-sbin
+                readOnly: true
+              startupProbe:
+                failureThreshold: 120
+                initialDelaySeconds: 15
+                periodSeconds: 30
+                timeoutSeconds: 5
+              livenessProbe:
+                failureThreshold: 10
+                periodSeconds: 30
+                timeoutSeconds: 30
+              readinessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /health
+                periodSeconds: 30
+                timeoutSeconds: 30
+            initContainers:
+            - name: routing-proxy
+              imagePullPolicy: IfNotPresent
+              args:
+              - --port=8000
+              - --model-server-port=8200
+              - --kv-connector=sglang
+              - --secure-serving=false
+              - --zap-log-level=1
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: '1'
+                  memory: 512Mi
+              securityContext:
+                privileged: false
+                capabilities:
+                  drop:
+                  - ALL
+              readinessProbe:
+                tcpSocket:
+                  port: sidecar
+                periodSeconds: 5
+                timeoutSeconds: 2
+                failureThreshold: 3
+              env:
+              - name: SGLANG_BOOTSTRAP_PORT
+                value: '34000'
+            volumes:
+            - hostPath:
+                path: /REPLACE_MODEL_DIRECTORY
+                type: Directory
+              name: model-weights
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 16Gi
+              name: shm
+            - emptyDir: {}
+              name: metrics-volume
+            - hostPath:
+                path: /usr/local/Ascend/driver
+                type: Directory
+              name: ascend-driver
+            - hostPath:
+                path: /usr/local/Ascend/toolbox/latest
+                type: Directory
+              name: ascend-tools
+            - hostPath:
+                path: /usr/local/Ascend/firmware
+                type: Directory
+              name: ascend-firmware
+            - hostPath:
+                path: /etc/ascend_install.info
+                type: File
+              name: ascend-install
+            - hostPath:
+                path: /var/queue_schedule
+                type: File
+              name: queue-schedule
+            - hostPath:
+                path: /usr/local/sbin
+                type: Directory
+              name: ascend-sbin

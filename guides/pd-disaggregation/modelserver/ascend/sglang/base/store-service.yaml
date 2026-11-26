@@ -1,0 +1,19 @@
+# The Ascend/MemFabric backend still needs one Prefill configuration-store endpoint.
+apiVersion: v1
+kind: Service
+metadata:
+  name: store
+spec:
+  clusterIP: None
+  ports:
+  - name: mf-store
+    port: 22222
+    protocol: TCP
+    targetPort: mf-store
+  # Prefill resolves its own store address before the model becomes ready.
+  publishNotReadyAddresses: true
+  selector:
+    disaggregatedset.x-k8s.io/name: REPLACE_DISAGGREGATED_SET
+    disaggregatedset.x-k8s.io/role: prefill
+    leaderworkerset.sigs.k8s.io/worker-index: '0'
+    llm-d.ai/deployment: REPLACE_ASCEND_DEPLOYMENT

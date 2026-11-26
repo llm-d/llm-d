@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../../../recipes/modelserver/base/single-host/pd-disaggregatedset/sglang
+  - store-service.yaml
+
+nameSuffix: -ascend-sglang
+
+components:
+  - ../../../../../recipes/modelserver/components/images/ascend-sglang/release
+  - ../../../../../recipes/modelserver/components/images/routing-sidecar/release
+
+labels:
+  - pairs:
+      llm-d.ai/accelerator-variant: ascend
+      llm-d.ai/accelerator-vendor: huawei
+      llm-d.ai/engine-type: sglang
+      llm-d.ai/guide: pd-disaggregation
+      llm-d.ai/inference-serving: 'true'
+      llm-d.ai/model: qwen3-0-6b
+      llm-d.ai/deployment: ascend-sglang-pd
+    fields:
+      - path: spec/roles/spec/leaderWorkerTemplate/workerTemplate/metadata/labels
+        kind: DisaggregatedSet
+        create: true
+
+patches:
+  - path: patch-prefill.yaml
+  - path: patch-decode.yaml
+
+replacements:
+  - source:
+      kind: Service
+      fieldPath: metadata.name
+    targets:
+      - select:
+          kind: DisaggregatedSet
+        fieldPaths:
+          - spec.roles.*.spec.leaderWorkerTemplate.workerTemplate.spec.containers.[name=modelserver].env.[name=ASCEND_MF_STORE_HOST].value
+  - source:
+      kind: DisaggregatedSet
+      fieldPath: metadata.name
+    targets:
+      - select:
+          kind: Service
+        fieldPaths:
+          - spec.selector.[disaggregatedset.x-k8s.io/name]
+  - source:
+      kind: DisaggregatedSet
+      fieldPath: metadata.labels.[llm-d.ai/deployment]
+    targets:
+      - select:
+          kind: Service
+        fieldPaths:
+          - spec.selector.[llm-d.ai/deployment]

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+images:
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: quay.io/ascend/sglang
+    newTag: cann9.1.0-910b-20261103-arm64

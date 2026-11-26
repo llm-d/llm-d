@@ -16,6 +16,10 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── amd-vllm-omni
 │   └── release
+├── ascend-sglang
+│   └── release
+├── ascend-vllm
+│   └── release
 ├── coordinator
 │   ├── nightly
 │   └── release
@@ -67,6 +71,9 @@ This directory contains Kustomize Components that define the **default container
 ```
 
 **NOTE**: This overlay view was generated with `tree -I 'kustomization.yaml' -I 'README.md'`.
+
+For Ascend, `release` identifies the default image component. The guide's
+support matrix records the hardware validation status.
 
 ### Why are there both `llm-d` and `vllm` images?
 

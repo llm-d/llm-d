@@ -100,6 +100,13 @@ support:
       providers:
         - {name: base, label: "Kubernetes (base)"}
       engines: {vllm: community, sglang: community}
+    ascend:
+      label: Huawei Ascend
+      notes: "910B3 ARM64/HAMi · same-node 1P+1D (TP=1) · vLLM Mooncake/HCCS; SGLang native Ascend/MemFabric"
+      model: Qwen3-0.6B
+      providers:
+        - {name: base, label: "Kubernetes (base)"}
+      engines: {vllm: community, sglang: community}
     npu:
       label: Rebellions NPU
       notes: "4 NPUs + 1 RoCE VF per pod via DRA · 1P (PP=4) + 1D (DP=4, EP) · RblnNixlConnector"
@@ -122,7 +129,7 @@ env:
     # Extra router values for accelerators that need them (set by deploy.accelerator_values).
     ACCELERATOR_VALUES: {default: ""}
 
-    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, npu]}
+    ACCELERATOR_TYPE: {default: gpu, values: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", "tpu/v7-dynamic-slice", iluvatar, metax, biren, mthreads, ascend, npu]}
     MODEL_SERVER: {default: vllm, values: [vllm, sglang]}
     # The overlay is modelserver/<ACCELERATOR_TYPE>/<MODEL_SERVER>/<INFRA_PROVIDER>/.
     # The leaf selects the platform and, where an accelerator offers multiple
@@ -152,7 +159,7 @@ prerequisites:
   # controller from the GKE cluster preparation). skip_in ci:
   # the nightly clusters already run LWS, and a second release would collide.
   lws:
-    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", iluvatar, metax, biren, mthreads, npu]}
+    - when: {ACCELERATOR_TYPE: [gpu, amd, xpu, "tpu/v5p", "tpu/v6", "tpu/v7", iluvatar, metax, biren, mthreads, ascend, npu]}
       skip_in: [ci]
       run: |
         # helm upgrade never updates CRDs, so apply the chart's CRDs first (see LWS
@@ -215,6 +222,12 @@ deploy:
     - when: {ACCELERATOR_TYPE: ["tpu/v7"], MODEL_SERVER: [vllm]}
       skip_in: [ci]
       run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/tpu-v7.values.yaml"
+    - when: {ACCELERATOR_TYPE: [ascend]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/ascend.values.yaml"
+    - when: {ACCELERATOR_TYPE: [ascend], MODEL_SERVER: [sglang]}
+      skip_in: [ci]
+      run: export ACCELERATOR_VALUES="${ACCELERATOR_VALUES} -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/ascend-sglang.values.yaml"
 
   standalone:
     - run: |
@@ -278,6 +291,26 @@ deploy:
         run: |
           kubectl apply -n ${NAMESPACE} \
             -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
+    ascend:
+      - when: {ACCELERATOR_TYPE: [ascend]}
+        skip_in: [ci]
+        run: |
+          (
+            set -eu
+            overlay="${ASCEND_MODEL_OVERLAY:-${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}}"
+            manifest="${ASCEND_MODEL_MANIFEST:-ascend-${NAMESPACE}-${MODEL_SERVER}.yaml}"
+            rendered=$(mktemp "${manifest}.XXXXXX")
+            trap 'rm -f -- "$rendered"' EXIT
+            kubectl kustomize "$overlay" > "$rendered"
+            if [ ! -s "$rendered" ] || grep -n 'REPLACE_' "$rendered"; then
+              echo 'Render a model manifest with all Ascend site placeholders filled.' >&2
+              exit 1
+            fi
+            kubectl apply -n "${NAMESPACE}" --server-side --dry-run=server -f "$rendered"
+            mv -- "$rendered" "$manifest"
+            kubectl apply -n "${NAMESPACE}" --server-side -f "$manifest"
+            printf 'Keep %s for cleanup.\n' "$manifest"
+          )
     npu:
       - when: {ACCELERATOR_TYPE: [npu]}
         run: |
@@ -330,6 +363,53 @@ verify:
                 | grep -E '^(vllm:(request_success_total|prompt_tokens_total|external_prefix_cache_hits_total)|sglang:(num_requests_total|prompt_tokens_total))' || true
             done
           done
+    ascend:
+      - when: {ACCELERATOR_TYPE: [ascend]}
+        skip_in: [ci]
+        run: |
+          (
+            set -euo pipefail
+            selector="llm-d.ai/deployment=ascend-${MODEL_SERVER}-pd,leaderworkerset.sigs.k8s.io/worker-index=0"
+            p=$(kubectl -n "$NAMESPACE" get pods -l "$selector,llm-d.ai/role=prefill" -o name)
+            d=$(kubectl -n "$NAMESPACE" get pods -l "$selector,llm-d.ai/role=decode" -o name)
+            if [[ -z "$p" || -z "$d" || "$p" == *$'\n'* || "$d" == *$'\n'* ]]; then
+              echo 'Expected exactly one Prefill Pod and one Decode Pod.' >&2
+              exit 1
+            fi
+            kubectl -n "$NAMESPACE" wait --for=condition=Ready "$p" "$d" --timeout=60s
+            out=$(mktemp -d "${TMPDIR:-/tmp}/ascend-kv.XXXXXX")
+            printf 'Saving request evidence to %s\n' "$out"
+            kubectl -n "$NAMESPACE" get inferencepool "${RELEASE:-$GUIDE_NAME}" -o yaml > "$out/pool.yaml"
+            snapshot() {
+              kubectl -n "$NAMESPACE" get "$p" "$d" -o json > "$out/$1-pods.json"
+              if [ "$MODEL_SERVER" = sglang ]; then
+                kubectl get --raw "/api/v1/namespaces/$NAMESPACE/pods/${p#pod/}:8000/proxy/metrics" > "$out/$1-prefill.prom"
+                kubectl get --raw "/api/v1/namespaces/$NAMESPACE/pods/${d#pod/}:8200/proxy/metrics" > "$out/$1-decode.prom"
+              fi
+            }
+            snapshot before
+            start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            request_id="ascend-pd-$(date -u +%Y%m%d%H%M%S)-$$"
+            printf '%s %s\n' "$start" "$request_id" > "$out/request-id.txt"
+            prompt=$(printf 'The prefill worker computes the prompt and the decode worker continues the answer. %.0s' {1..60})
+            jq -n --arg model "$MODEL" --arg prompt "${prompt}Summarize this in one sentence." \
+              '{model: $model, prompt: $prompt, max_tokens: 64, stream: false}' > "$out/request.json"
+            curl --noproxy '*' --fail-with-body -sS --max-time 300 \
+              -H 'Content-Type: application/json' -H "X-Request-Id: $request_id" \
+              --data-binary "@$out/request.json" -D "$out/response.headers" -o "$out/response.json" \
+              http://127.0.0.1:18081/v1/completions
+            jq -e '.choices[0] | (.text | type == "string") and (.finish_reason != null)' "$out/response.json"
+            snapshot after
+            for phase in before after; do
+              jq -S '[.items[] | {uid: .metadata.uid, restarts: [.status.containerStatuses[], .status.initContainerStatuses[]? | {name, restartCount}]}] | sort_by(.uid)' \
+                "$out/$phase-pods.json" > "$out/$phase-identity.json"
+            done
+            diff -u "$out/before-identity.json" "$out/after-identity.json"
+            kubectl -n "$NAMESPACE" logs "deploy/${RELEASE:-$GUIDE_NAME}-epp" -c epp --timestamps --since-time="$start" > "$out/epp.log"
+            kubectl -n "$NAMESPACE" logs "$d" -c routing-proxy --timestamps --since-time="$start" > "$out/sidecar.log"
+            kubectl -n "$NAMESPACE" logs "$p" -c modelserver --timestamps --since-time="$start" > "$out/prefill.log"
+            kubectl -n "$NAMESPACE" logs "$d" -c modelserver --timestamps --since-time="$start" > "$out/decode.log"
+          )
     router_metrics:
       # The router's /metrics endpoint requires authentication unless the
       # monitoring values (MONITORING=true) are applied.

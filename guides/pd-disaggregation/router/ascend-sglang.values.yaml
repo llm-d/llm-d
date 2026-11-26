@@ -1,0 +1,9 @@
+# Layer after ascend.values.yaml only when Ascend SGLang is selected.
+# Sets the model server type and endpoint match labels for SGLang.
+# Inherits the EPP and proxy configuration from ascend.values.yaml.
+router:
+  modelServers:
+    type: sglang
+    matchLabels:
+      llm-d.ai/deployment: ascend-sglang-pd
+      llm-d.ai/engine-type: sglang
