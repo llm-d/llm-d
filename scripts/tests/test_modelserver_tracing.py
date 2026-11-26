@@ -1,4 +1,11 @@
-"""Offline rendering checks for the opt-in vLLM tracing overlays.
+"""Offline rendering checks for the opt-in vLLM tracing component.
+
+The shared ``vllm-deployment`` Kustomize component is composed with every
+vLLM provider overlay in the tracing guides. Overlays whose model server runs
+``vllm serve`` directly in a ``Deployment`` compose cleanly; the rest (shell
+launchers, vendor entrypoints, ``LeaderWorkerSet``) are rejected by the
+component's guard. Compatibility is probed dynamically, so a new compatible
+accelerator is covered automatically without touching these tests.
 
 Run from the repository root:
 
@@ -17,22 +24,22 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPONENT = REPO_ROOT / "guides/recipes/observability/tracing/components/vllm-deployment"
-TRACING_GUIDES = sorted(
-    path.parent.parent.name
-    for path in (REPO_ROOT / "guides").glob("*/modelserver/tracing")
-    if path.is_dir()
-)
-TRACING_EXCLUSIONS = {
+TRACING_GUIDES = ["optimized-baseline", "precise-prefix-cache-routing"]
+# vLLM provider overlays that cannot take the component: their model server
+# does not run ``vllm serve`` directly in a kind: Deployment. Probing them
+# must be rejected, so they are listed to keep the expected set explicit and
+# to stay in sync with the "excluded configurations" note in the tracing docs.
+EXPECTED_INCOMPATIBLE = {
     "optimized-baseline": {
-        "gpu/vllm/ocp",  # Shell launcher for the node-local model cache.
-        "biren/vllm/base",  # Vendor entrypoint wraps vllm serve.
-        "iluvatar/vllm/base",  # Shell launcher configures the accelerator.
+        Path("gpu/vllm/ocp"),  # Shell launcher for the node-local model cache.
+        Path("biren/vllm/base"),  # Vendor entrypoint wraps vllm serve.
+        Path("iluvatar/vllm/base"),  # Shell launcher configures the accelerator.
         # Dynamic slices use LeaderWorkerSets instead of Deployments.
-        "tpu/v7-dynamic-slice/vllm/2x2x1",
-        "tpu/v7-dynamic-slice/vllm/2x2x2",
+        Path("tpu/v7-dynamic-slice/vllm/2x2x1"),
+        Path("tpu/v7-dynamic-slice/vllm/2x2x2"),
     },
     "precise-prefix-cache-routing": {
-        "gpu/vllm/ocp",  # Shell launcher for the node-local model cache.
+        Path("gpu/vllm/ocp"),  # Shell launcher for the node-local model cache.
     },
 }
 TRACING_ARGS = [
@@ -69,52 +76,133 @@ def modelserver(resources):
     return container
 
 
-def overlay_paths(root):
-    return {manifest.parent.relative_to(root) for manifest in root.rglob("kustomization.yaml")}
+def vllm_provider_overlays(guide):
+    """All ``<accel>/.../vllm/<provider>`` overlay dirs (with a kustomization).
+
+    Relative to ``guides/<guide>/modelserver``, e.g. ``gpu/vllm/base`` or
+    ``tpu/v7-dynamic-slice/vllm/2x2x1``.
+    """
+    root = REPO_ROOT / "guides" / guide / "modelserver"
+    providers = set()
+    for engine in root.rglob("vllm"):
+        if not engine.is_dir():
+            continue
+        for provider in engine.iterdir():
+            if provider.is_dir() and (provider / "kustomization.yaml").is_file():
+                providers.add(provider.relative_to(root))
+    return sorted(providers)
 
 
-def tracing_overlays(guide):
-    return overlay_paths(REPO_ROOT / "guides" / guide / "modelserver" / "tracing")
+def write_overlay(path, resources, *, components=(), patches=()):
+    path.mkdir(parents=True, exist_ok=True)
+    data = {
+        "apiVersion": "kustomize.config.k8s.io/v1beta1",
+        "kind": "Kustomization",
+        "resources": [os.path.relpath(resource, path) for resource in resources],
+    }
+    if components:
+        data["components"] = [os.path.relpath(component, path) for component in components]
+    if patches:
+        data["patches"] = list(patches)
+    (path / "kustomization.yaml").write_text(yaml.safe_dump(data))
 
 
-def test_tracing_exclusions_reference_existing_guides():
-    stale = TRACING_EXCLUSIONS.keys() - set(TRACING_GUIDES)
-    assert not stale, (
-        f"Remove TRACING_EXCLUSIONS entries for guides without a tracing directory: {sorted(stale)}"
-    )
+def compose(target, guide, provider):
+    """Write the docs' outer Kustomization composing a provider overlay with
+    the shared component, then return its path."""
+    root = REPO_ROOT / "guides" / guide / "modelserver"
+    write_overlay(target, [root / provider], components=[COMPONENT])
+    return target
+
+
+def tracing_applied(traced):
+    """True when the component enabled tracing on exactly one vLLM Deployment.
+
+    The component only patches ``kind: Deployment`` with label
+    ``llm-d.ai/role=decode``; an overlay that renders no such workload (for
+    example a ``LeaderWorkerSet``) composes successfully but is left
+    unchanged, so it does not count as traced.
+    """
+    deployments = [item for item in traced if item["kind"] == "Deployment"]
+    if len(deployments) != 1:
+        return False
+    container = deployments[0]["spec"]["template"]["spec"]["containers"][0]
+    if container.get("name") != "modelserver":
+        return False
+    return any(arg in TRACING_ARGS for arg in container["args"])
+
+
+def probe(target, guide, provider):
+    """Compose a provider overlay with the component and classify it.
+
+    Returns ``(result, applied)`` where ``result`` is the build process and
+    ``applied`` is True only when the component enabled tracing on a single
+    vLLM Deployment. Shell launchers and vendor entrypoints fail the
+    component's guard (non-zero exit); ``LeaderWorkerSet`` overlays build
+    cleanly but are left unchanged (``applied`` is False).
+    """
+    result = build(compose(target, guide, provider), check=False)
+    if result.returncode != 0:
+        return result, False
+    return result, tracing_applied(list(yaml.safe_load_all(result.stdout)))
+
+
+PROVIDERS = [
+    (guide, provider.as_posix())
+    for guide in TRACING_GUIDES
+    for provider in vllm_provider_overlays(guide)
+]
+
+
+def test_tracing_guides_declared():
+    for guide in TRACING_GUIDES:
+        assert (REPO_ROOT / "guides" / guide / "modelserver").is_dir(), guide
+        assert guide in EXPECTED_INCOMPATIBLE, (
+            f"Add {guide!r} to EXPECTED_INCOMPATIBLE (use set() if none are incompatible)"
+        )
+        assert vllm_provider_overlays(guide), f"No vLLM overlays found for {guide!r}"
 
 
 @pytest.mark.parametrize("guide", TRACING_GUIDES)
-def test_tracing_covers_vllm_provider_overlays(guide):
-    assert guide in TRACING_EXCLUSIONS, (
-        f"Add {guide!r} to TRACING_EXCLUSIONS (use set() if no provider overlays are excluded)"
+def test_probed_incompatible_providers_match_expected(tmp_path, guide):
+    """The component must trace exactly the overlays not in EXPECTED_INCOMPATIBLE.
+
+    This is the single source of truth for compatibility: a stale entry, a
+    newly incompatible overlay, or an overlay that should trace fails here,
+    while a new compatible accelerator passes without touching this table.
+    """
+    not_traced = set()
+    for provider in vllm_provider_overlays(guide):
+        target = tmp_path / provider.as_posix().replace("/", "_")
+        result, applied = probe(target, guide, provider)
+        if not applied:
+            not_traced.add(provider)
+    expected = EXPECTED_INCOMPATIBLE[guide]
+    assert not_traced == expected, (
+        f"{guide!r}: overlays the component does not trace "
+        f"{sorted(p.as_posix() for p in not_traced)} != "
+        f"expected {sorted(p.as_posix() for p in expected)}. "
+        f"Update EXPECTED_INCOMPATIBLE and the tracing docs if an overlay changed."
     )
+
+
+@pytest.mark.parametrize("guide,provider", PROVIDERS)
+def test_tracing_composition_per_provider(tmp_path, guide, provider):
+    prov = Path(provider)
     root = REPO_ROOT / "guides" / guide / "modelserver"
-    traced = tracing_overlays(guide)
-    # A provider directory follows vllm. Nightly entry points end at vllm.
-    providers = {
-        path for path in overlay_paths(root)
-        if path.parts[:1] != ("tracing",) and "vllm" in path.parts[:-1]
-    }
-    exclusions = {Path(path) for path in TRACING_EXCLUSIONS[guide]}
 
-    assert traced, f"No tracing overlays found for {guide!r}"
-    assert exclusions <= providers, "Remove exclusions for provider overlays that no longer exist"
-    assert traced == providers - exclusions, "Keep tracing overlays and provider exclusions in sync"
+    if prov in EXPECTED_INCOMPATIBLE[guide]:
+        target = tmp_path / "overlay"
+        result, applied = probe(target, guide, prov)
+        assert not applied
+        # Shell launchers / vendor entrypoints trip the component guard;
+        # LeaderWorkerSet overlays build cleanly but are left unchanged.
+        if result.returncode != 0:
+            assert "test failed" in result.stderr.lower() or "test operation" in result.stderr.lower()
+        return
 
-
-@pytest.mark.parametrize(
-    "guide,variant",
-    [
-        (guide, variant.as_posix())
-        for guide in TRACING_GUIDES
-        for variant in sorted(tracing_overlays(guide))
-    ],
-)
-def test_tracing_preserves_complete_provider_configuration(guide, variant):
-    root = REPO_ROOT / "guides" / guide / "modelserver"
-    baseline = build(root / variant)
-    traced = build(root / "tracing" / variant)
+    baseline = build(root / prov)
+    traced = build(compose(tmp_path / "overlay", guide, prov))
     original = modelserver(baseline)
     container = modelserver(traced)
 
@@ -139,22 +227,8 @@ def test_tracing_preserves_complete_provider_configuration(guide, variant):
     assert restored == baseline
 
 
-def write_overlay(path, resources, *, components=(), patches=()):
-    path.mkdir(parents=True, exist_ok=True)
-    data = {
-        "apiVersion": "kustomize.config.k8s.io/v1beta1",
-        "kind": "Kustomization",
-        "resources": [os.path.relpath(resource, path) for resource in resources],
-    }
-    if components:
-        data["components"] = [os.path.relpath(component, path) for component in components]
-    if patches:
-        data["patches"] = list(patches)
-    (path / "kustomization.yaml").write_text(yaml.safe_dump(data))
-
-
 def test_collector_and_sampling_can_be_overridden_without_replacing_args(tmp_path):
-    overlay = REPO_ROOT / "guides/optimized-baseline/modelserver/tracing/gpu/vllm/base"
+    base = REPO_ROOT / "guides/optimized-baseline/modelserver/gpu/vllm/base"
     endpoint = "http://otel-collector.observability.svc.cluster.local:4317"
     patch = {
         "apiVersion": "apps/v1",
@@ -168,15 +242,20 @@ def test_collector_and_sampling_can_be_overridden_without_replacing_args(tmp_pat
             ],
         }]}}},
     }
-    write_overlay(tmp_path, [overlay], patches=[{
+    overlay = tmp_path / "overlay"
+    write_overlay(overlay, [base], components=[COMPONENT], patches=[{
         "target": {"kind": "Deployment", "labelSelector": "llm-d.ai/role=decode"},
         "patch": yaml.safe_dump(patch),
     }])
-    container = modelserver(build(tmp_path))
+    container = modelserver(build(overlay))
     env = {item["name"]: item.get("value") for item in container["env"]}
     assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == endpoint
     assert env["OTEL_TRACES_SAMPLER_ARG"] == "1.0"
-    assert container["args"] == modelserver(build(overlay))["args"]
+    # The env override replaces only sampling/endpoint; the component still
+    # appends the tracing argument exactly once.
+    plain_args = modelserver(build(compose(tmp_path / "plain", "optimized-baseline",
+                                           Path("gpu/vllm/base"))))["args"]
+    assert container["args"] == plain_args
 
 
 def test_component_replaces_existing_tracing_env_without_leaving_value_from(tmp_path):

@@ -877,8 +877,6 @@ def check_support_repo(guide: Any, guide_dir: Path, repo_root: Path | None = Non
         for eng_dir in sorted(p for p in ms_dir.rglob("*") if p.is_dir() and p.name in engine_values):
             overlay = eng_dir.relative_to(ms_dir)
             accel_parts = overlay.parts[:-1]
-            if accel_parts and accel_parts[0] == "tracing":
-                accel_parts = accel_parts[1:]
             accel = Path(*accel_parts).as_posix()
             if accel == "." or eng_dir.parent == ms_dir:
                 continue

@@ -130,7 +130,7 @@ Set the collector endpoint according to your Step 1 backend:
 
 ### vLLM Deployment Overlays
 
-The [Optimized Baseline](../../../guides/optimized-baseline/README.md) and [Precise Prefix-Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) guides provide opt-in tracing overlays for vLLM Deployments. Use the environment variables from your running guide, including `REPO_ROOT`, `GUIDE_NAME`, `NAMESPACE`, `ACCELERATOR_TYPE`, `MODEL_SERVER`, and `INFRA_PROVIDER`.
+The [Optimized Baseline](../../../guides/optimized-baseline/README.md) and [Precise Prefix-Cache Routing](../../../guides/precise-prefix-cache-routing/README.md) guides support opt-in tracing for vLLM Deployments: you compose the shared tracing component with the guide's own accelerator/provider overlay, and the commands below build that overlay for you. Use the environment variables from your running guide, including `REPO_ROOT`, `GUIDE_NAME`, `NAMESPACE`, `ACCELERATOR_TYPE`, `MODEL_SERVER`, and `INFRA_PROVIDER`.
 
 All listed overlays were rendered offline with Kustomize. The last column records which configurations were also run with tracing enabled.
 
@@ -144,27 +144,35 @@ All listed overlays were rendered offline with Kustomize. The last column record
 | Optimized Baseline | `amd` | `amd-ci` | Startup with tracing unverified |
 | Optimized Baseline | `npu`, `metax`, `mthreads`, `enflame` | `base` | Startup with tracing unverified |
 
-These overlays configure containers that execute `vllm serve` directly. OpenShift GPU (`gpu/vllm/ocp`), Biren, and Iluvatar use wrapper launchers and require separate configuration, as do TPU dynamic-slice LeaderWorkerSets, DisaggregatedSets, routing proxies, and other serving engines.
+The component configures the `modelserver` container of a vLLM `Deployment` that executes `vllm serve` directly. OpenShift GPU (`gpu/vllm/ocp`), Biren, and Iluvatar use wrapper launchers, and the TPU dynamic-slice overlays use LeaderWorkerSets instead of a Deployment; none of these are configured by the component and require separate configuration (see [Other Workloads and Serving Engines](#other-workloads-and-serving-engines)). DisaggregatedSets, routing proxies, and other serving engines are likewise out of scope.
 
-Select the overlay for the same accelerator and provider as your deployment. If your configuration has no tracing overlay, skip the remaining commands in this subsection and see [Other Workloads and Serving Engines](#other-workloads-and-serving-engines).
+The overlay you compose must use the same accelerator and provider as your deployment (`${ACCELERATOR_TYPE}`, `${MODEL_SERVER}`, and `${INFRA_PROVIDER}`). Set the base overlay path and the scratch directory where the composed overlay will live. The scratch directory sits one level below the repository root so the composed Kustomization can reference the guide's overlay and the shared component by relative path (Kustomize does not accept absolute entries in `resources:` or `components:`):
 
 ```bash
-export MODEL_SERVER_TRACING="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/tracing/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
-export MODEL_SERVER_APPLY="${MODEL_SERVER_TRACING}"
-export MODEL_SERVER_GKE_TRACING="${REPO_ROOT}/tracing-gke-${GUIDE_NAME}-${ACCELERATOR_TYPE//\//-}-${MODEL_SERVER}-${INFRA_PROVIDER}"
+export MODEL_SERVER_BASE="${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}"
+export MODEL_SERVER_TRACING="${REPO_ROOT}/tracing-${GUIDE_NAME}-${ACCELERATOR_TYPE//\//-}-${MODEL_SERVER}-${INFRA_PROVIDER}"
 ```
 
-For GKE Managed OpenTelemetry, create an outer Kustomization before applying the tracing overlay. It uses the selected overlay as a resource and sets the managed collector endpoint on the `modelserver` container. Keep this directory for future updates and reapply it to preserve the endpoint. For a collector deployed in the workload namespace, use the selected overlay directly.
+If your configuration is one of the unsupported layouts above (a shell launcher, vendor entrypoint, or LeaderWorkerSet), skip the remaining commands in this subsection and see [Other Workloads and Serving Engines](#other-workloads-and-serving-engines).
 
-Run this block once to create the GKE override:
+Create the composed overlay. It references the guide's overlay as a resource and layers the shared tracing component on top. Keep this directory for future updates and reapply it so the tracing configuration survives guide upgrades.
 
 ```bash
-mkdir "${MODEL_SERVER_GKE_TRACING}" &&
-  cat > "${MODEL_SERVER_GKE_TRACING}/kustomization.yaml" <<EOF
+mkdir -p "${MODEL_SERVER_TRACING}" &&
+  cat > "${MODEL_SERVER_TRACING}/kustomization.yaml" <<EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../guides/${GUIDE_NAME}/modelserver/tracing/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+  - ../guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
+components:
+  - ../guides/recipes/observability/tracing/components/vllm-deployment
+EOF
+```
+
+If you are using GKE Managed OpenTelemetry, add a patch to that same `kustomization.yaml` (keep the `resources` and `components` entries) that sets the managed collector endpoint on the `modelserver` container. If your collector runs in the workload namespace (the OSS layout, or the GKE self-managed fallback from Step 1), the component's default endpoint already points there, so leave the file as created above.
+
+```bash
+cat >> "${MODEL_SERVER_TRACING}/kustomization.yaml" <<EOF
 patches:
   - target:
       group: apps
@@ -187,18 +195,18 @@ patches:
 EOF
 ```
 
-Select the saved GKE override for both the initial apply and subsequent updates:
+Use the composed overlay as the one to apply:
 
 ```bash
-export MODEL_SERVER_APPLY="${MODEL_SERVER_GKE_TRACING}"
+export MODEL_SERVER_APPLY="${MODEL_SERVER_TRACING}"
 ```
 
 Render, validate, and apply the chosen configuration:
 
 ```bash
 (
-  if [[ ! -f "${MODEL_SERVER_TRACING}/kustomization.yaml" ]]; then
-    echo "${GUIDE_NAME} ${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER} has no tracing overlay" >&2
+  if [[ ! -f "${MODEL_SERVER_BASE}/kustomization.yaml" ]]; then
+    echo "${GUIDE_NAME} ${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER} has no base overlay" >&2
     exit 1
   fi
 
@@ -236,18 +244,18 @@ Use the same outer overlay pattern to persist a custom collector endpoint or roo
 
 ### Composing the Component
 
-The tracing overlays reference a complete accelerator/provider overlay as a resource and apply the component afterward. For example, `guides/optimized-baseline/modelserver/tracing/gpu/vllm/base/kustomization.yaml` contains:
+The composed overlay references a complete accelerator/provider overlay as a resource and layers the shared component on top. The block above produces a `kustomization.yaml` like this for `optimized-baseline` on `gpu`/`base`, stored in `${REPO_ROOT}/tracing-optimized-baseline-gpu-vllm-base/`:
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../../../gpu/vllm/base
+  - ../guides/optimized-baseline/modelserver/gpu/vllm/base
 components:
-  - ../../../../../../recipes/observability/tracing/components/vllm-deployment
+  - ../guides/recipes/observability/tracing/components/vllm-deployment
 ```
 
-Keep this outer overlay parallel to the original accelerator directories. Kustomize rejects a descendant overlay that references its own ancestor. Components run before patches in the same Kustomization, so adding the component directly to a guide's base allows the guide's full `args` patch to overwrite the tracing flag. The component checks the first container's name and command before appending the endpoint argument.
+Build the outer overlay in a scratch directory, not inside the guide's tree. Kustomize rejects a descendant overlay that references its own ancestor, so the component cannot be added to the guide's base overlay itself, and its `resources:` and `components:` entries must be relative to the scratch directory. The component checks the first container's name and command before appending the endpoint argument, so unsupported layouts (shell launchers, vendor entrypoints, LeaderWorkerSets) fail or are skipped rather than silently misconfigured.
 
 ### Other Workloads and Serving Engines
 
