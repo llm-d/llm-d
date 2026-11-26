@@ -2,23 +2,25 @@
 
 ## Caching Model Weights on the Node
 
-Include this component when model-server pods download their weights to the container's writable layer while several pods share a node: each pod downloads its own copy to the node disk, which the scheduler does not account for and the kubelet eventually evicts. The component is platform- and model-independent; any overlay whose pods share a node and pull the same weights can use it.
+Include this component when model-server pods download their weights to the container's writable layer while several pods share a node: each pod downloads its own copy to the node disk, which the scheduler does not account for and the kubelet eventually evicts. The component is platform- and model-independent; any overlay whose pods share a node and pull the same weights can use it, as long as its namespace allows `hostPath` volumes.
+
+The component mounts a `hostPath` volume, so it does not work in namespaces that enforce the Pod Security `baseline` or `restricted` level, or under OpenShift's `restricted-v2` SCC. All three reject pods with a `hostPath` volume, and the admission error does not point back to this component. In those namespaces, use the PVC-backed [`model-cache`](../model-cache/kustomization.yaml) component instead.
 
 ### Diagnosis
 
-Model weights land in `/root/.cache/huggingface` unless `HF_HOME` says otherwise, so the overlay's `/.cache` (torch), `/.triton`, and `/.config` mounts receive nothing:
+Model weights land in `/root/.cache/huggingface` unless `HF_HOME` says otherwise, so cache mounts at other paths, such as a `/.cache` mount for torch, do not receive them. Check how much a model server holds there, replacing `<model-server-pod>` with one of the guide's model-server pods:
 
 ```bash
-kubectl -n "${NAMESPACE}" exec deploy/mm-baseline-nvidia-gpu-vllm-decode -- du -sh /root/.cache/huggingface
+kubectl -n "${NAMESPACE}" exec <model-server-pod> -- du -sh /root/.cache/huggingface
 ```
 
 When the node runs out of disk, pods cycle through `Evicted` and the node reports `DiskPressure`:
 
-```
+```text
 The node was low on resource: ephemeral-storage
 ```
 
-The eviction threshold defaults to 10% of the node disk, so a node holding four TP=2 pods of a 63 GB model needs roughly 4 × 63 GB plus the image.
+The eviction threshold defaults to 10% of the node disk. For example, a node holding four TP=2 pods of a 63 GB model needs roughly 4 × 63 GB plus the image.
 
 ### Fix
 
