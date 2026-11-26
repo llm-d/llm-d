@@ -53,6 +53,7 @@ This guide includes configurations for the following accelerator and model serve
 | Biren GPU | `biren` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | BR166M · 2 replicas × TP=8 (16 GPUs) |
 | Enflame GCU | `enflame` | `Qwen/Qwen3-32B` | 🟡 community | — | — | — | S60 · 2 replicas × TP=4 (8 GCUs, one replica per 4 GCUs) |
 | Moore Threads GPU | `mthreads` | `Qwen/Qwen3-32B` | 🟡 community | 🟡 community | — | — | MTT S5000 · vLLM Qwen3-32B TP=8 (1 replica); SGLang colocated DeepSeek-V4-Flash (no PD) |
+| Hygon HCU | `hygon` | `Qwen3-32B` | — | 🟡 community | — | — | BW1000 64 GiB · SGLang colocated, loads `Qwen/Qwen3-32B` and serves it as `Qwen3-32B` · 2 replicas × TP=4 (8 HCUs), `hygon.com/hcunum: 4` per pod · requires HAMi (`hami-scheduler`) · not covered by the default H100 calibration |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -112,7 +113,7 @@ export GUIDE_NAME=optimized-baseline
 export NAMESPACE=llm-d-optimized-baseline
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, biren, enflame, mthreads
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, tpu/v7-dynamic-slice, npu, cpu, iluvatar, metax, biren, enflame, mthreads, hygon
 export MODEL_SERVER=vllm # options: vllm, sglang, trtllm, atom
 export INFRA_PROVIDER=base # options: base, gke, amd-ci
 export TPU_SLICE_TOPOLOGY=2x2x1 # options: 2x2x1, 2x2x2

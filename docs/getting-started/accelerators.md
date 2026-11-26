@@ -15,6 +15,7 @@ Maintainers for each accelerator type are listed below. See our well-lit path gu
 | Google | [TPU](../infrastructure/providers/gke/README.md) | Edwin Hernandez (@Edwinhr716), Cong Liu (@liu-cong, <congliu.thu@gmail.com>) |
 | Iluvatar | BI-V150 | ShiChun Yu, <shichun.yu@iluvatar.com>, Mengxuan Li(@archlitchi,<mengxuan.li@dynamia.ai>) |
 | Intel | XPU | Yuan Wu (@yuanwu2017, <yuan.wu@intel.com>) |
+| Hygon | BW1000 HCU | kinglong08 (@kinglong08, <ise_longlong@163.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | MetaX | C500X GPU | Lianjie Zhang (@lianjiezh, <lianjie.zhang@metax-tech.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | Moore Threads | MTT S5000 GPU | Jingzhi Xue (@gingerXue, <jingzhi.xue@mthreads.com>), Mengxuan Li (@archlitchi, <mengxuan.li@dynamia.ai>) |
 | NVIDIA | GPU | Will Eaton (<weaton@redhat.com>), Greg (<grpereir@redhat.com>) |
@@ -103,6 +104,14 @@ The CoreX image defaults to eager unless `VLLM_ENFORCE_CUDA_GRAPH=1` is set. The
 
 Without `cuda_copy`/`cuda_ipc`, UCX misdetects VRAM as host memory and the prefill engine crashes (SIGSEGV) during the KV read.
 
+## Hygon BW1000 HCU
+
+Hygon BW1000 HCUs (64&nbsp;GiB, DTK) are supported for community-contributed paths. The device plugin must expose `hygon.com/hcunum` and pods must be scheduled by `hami-scheduler`.
+
+P/D disaggregation uses SGLang with Mooncake over RoCE; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) Hygon overlay (`modelserver/hygon/sglang/`). That overlay serves `Qwen3-32B` as one `DisaggregatedSet` with a prefill and a decode role, each TP=4, with `--model-path Qwen/Qwen3-32B`, and needs the [HCU device plugin](https://github.com/HYGON-AI/k8s-hcu-device-plugin) `v3.0.2` or newer.
+
+The [optimized baseline](../../guides/optimized-baseline/README.md) overlay (`modelserver/hygon/sglang/`) serves `Qwen3-32B` colocated, two replicas at TP=4 (8 HCUs), with the same `--model-path`. Set `MODEL=Qwen3-32B` for both the P/D guide and the optimized baseline.
+
 ## MetaX C500X
 
 MetaX C500X GPUs are supported for community-contributed well-lit paths. The device plugin must expose `metax-tech.com/gpu`. P/D disaggregation uses vLLM `NixlConnector` over TCP; see the [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md) MetaX overlay (`modelserver/metax/vllm/`).
@@ -110,7 +119,7 @@ MetaX C500X GPUs are supported for community-contributed well-lit paths. The dev
 ## Enflame S60
 
 Enflame S60 GCUs are supported for a community optimized-baseline path. The engine is vLLM 0.20.2 from the TopsRider 3.8.107
-S60 image (`registry-egc.enflame-tech.com/enflame/topsrider3.8.107_image_s60:v1.0`). The Enflame DRA driver must publish DeviceClass `gcu.gcu-dra.enflame.com`. 
+S60 image (`registry-egc.enflame-tech.com/enflame/topsrider3.8.107_image_s60:v1.0`). The Enflame DRA driver must publish DeviceClass `gcu.gcu-dra.enflame.com`.
 
 ## Biren 166M
 

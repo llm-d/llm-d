@@ -233,6 +233,79 @@ For Wide Expert Parallelism, map GPUs to specific HCAs for optimal topology:
 - The libfabric plugin auto-discovers GPU-to-EFA topology via hwloc for optimal multi-rail placement
 - UCCL backend also supports EFA, however, it requires compiling with the `USE_EFA` option — see [UCCL](#uccl)
 
+#### Hygon HCU
+
+Hygon BW1000 nodes reach the RoCE fabric through Mellanox HCAs. The [P/D disaggregation `hygon` overlay](../../../guides/pd-disaggregation/README.md#2-deploy-the-model-server) moves KV cache with the Mooncake Transfer Engine (SGLang `--disaggregation-transfer-backend mooncake`), which needs:
+
+- An RDMA device plugin exposing `rdma/hca_shared_devices_a` (edit the resource name in the overlay patches if yours differs). It mounts the HCA devices into the pod. Each pod requests one.
+- `IPC_LOCK`, `SYS_RESOURCE`, and `SYS_ADMIN` capabilities so Mooncake can pin memory.
+- A pod address on every RoCE NIC, attached with Multus. Mooncake picks the RDMA path from the pod IP and fails with `Failed to modify QP to RTR` when the RoCE GID is not on that IP. Requesting the device resource alone is not enough.
+
+Multus installs the CRD `network-attachment-definitions.k8s.cni.cncf.io` and the node agent. The eight rail objects `roce-rail-1` through `roce-rail-8` are cluster configuration: apply them in namespace `default`, with the whereabouts IPAM plugin installed to hand out addresses. The overlay's pod annotation `k8s.v1.cni.cncf.io/networks` attaches them as `rdma1` through `rdma8`.
+
+Each rail is a macvlan on one host RoCE netdev. `master` is resolved on the node where the pod is scheduled, so every node that can run these pods needs that netdev name. The names and subnets below are from the two BW1000 nodes the overlay was validated on; replace them with your own:
+
+| Name | HCA | `master` | Range |
+| --- | --- | --- | --- |
+| `roce-rail-1` | `mlx5_0` | `ens73f0np0` | `192.168.101.0/24` |
+| `roce-rail-2` | `mlx5_1` | `ens73f1np1` | `192.168.102.0/24` |
+| `roce-rail-3` | `mlx5_2` | `ens76f0np0` | `192.168.103.0/24` |
+| `roce-rail-4` | `mlx5_3` | `ens76f1np1` | `192.168.104.0/24` |
+| `roce-rail-5` | `mlx5_4` | `ens82f0np0` | `192.168.105.0/24` |
+| `roce-rail-6` | `mlx5_5` | `ens82f1np1` | `192.168.106.0/24` |
+| `roce-rail-7` | `mlx5_6` | `ens93f0np0` | `192.168.107.0/24` |
+| `roce-rail-8` | `mlx5_7` | `ens93f1np1` | `192.168.108.0/24` |
+
+`roce-rail-1` looks like this. Repeat the same object for `roce-rail-2` through `roce-rail-8`, changing the name, `roce.hca`, `master`, and `range` from the table. Map an HCA to its netdev with `ls /sys/class/infiniband/mlx5_0/device/net`.
+
+```yaml
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: roce-rail-1
+  namespace: default
+  annotations:
+    roce.hca: mlx5_0
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "roce-rail-1",
+      "plugins": [
+        {
+          "type": "macvlan",
+          "master": "ens73f0np0",
+          "mode": "bridge",
+          "ipam": {
+            "type": "whereabouts",
+            "range": "192.168.101.0/24",
+            "range_start": "192.168.101.10",
+            "range_end": "192.168.101.250"
+          }
+        },
+        {
+          "type": "tuning",
+          "sysctl": {
+            "net.ipv4.conf.all.arp_ignore": "1",
+            "net.ipv4.conf.all.arp_announce": "2"
+          }
+        }
+      ]
+    }
+```
+
+Renaming the objects means editing `k8s.v1.cni.cncf.io/networks` in the overlay's prefill and decode patches so the names still match. If the HCAs are not named `mlx5_0` through `mlx5_7`, also change `NCCL_IB_HCA` there; the overlay passes it to `--disaggregation-ib-device`.
+
+Check the CRD, the rails, and the addresses a running pod received:
+
+```bash
+kubectl get crd network-attachment-definitions.k8s.cni.cncf.io
+kubectl get net-attach-def -n default
+kubectl get net-attach-def -n default roce-rail-1 -o yaml
+kubectl get pod -n ${NAMESPACE} -l llm-d.ai/guide=pd-disaggregation \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{.metadata.annotations.k8s\.v1\.cni\.cncf\.io/network-status}{"\n\n"}{end}'
+```
+
 ## Verifying Network Performance
 
 After deploying model servers, verify two things:

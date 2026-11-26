@@ -38,6 +38,8 @@ This directory contains Kustomize Components that define the **default container
 │   └── release
 ├── enflame-vllm
 │   └── release
+├── hygon-sglang
+│   └── release
 ├── metax-vllm
 │   └── release
 ├── mthreads-sglang
