@@ -193,5 +193,4 @@ The Ascend P/D community profile serves `Qwen3-0.6B` with vLLM or SGLang on a
 single Linux ARM64 910B3 node with HAMi and local weights. It runs one prefill
 pod and one decode pod at `TP=1` each. See the
 [P/D Disaggregation guide](../../guides/pd-disaggregation/README.md#2-deploy-the-model-server) for
-deployment prerequisites and KV transfer verification. Hardware qualification,
-named maintainership, and per-release verification are pending.
+deployment prerequisites and KV transfer verification.
