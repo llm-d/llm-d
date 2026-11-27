@@ -1,0 +1,123 @@
+# Automatically adds open, non-draft PRs to the GitHub merge queue once all required
+# status checks pass, the PR has an APPROVED review decision, and no blocking labels
+# (`hold`, `do-not-merge/hold`, `do-not-merge/work-in-progress`, `needs-rebase`,
+# `re-approve`) are present. Runs on PR/check events and on an hourly schedule to
+# catch PRs that missed an event trigger or were evicted from the merge queue.
+
+name: Auto Merge Queue
+
+on:
+  schedule:
+    # Run hourly at :17 to avoid top-of-hour GitHub Actions cron contention.
+    - cron: "17 * * * *"
+  workflow_run:
+    workflows:
+      - "CI - PR Checks"
+      - "CI Guides Check"
+      - "CI Guide Dry Run"
+      - "CI Site Preview"
+      - "CI Verify Component Images"
+      - "Check Signed Commits"
+      - "Hold gate"
+      - "PR Needs Rebase"
+      - "PR Review Gate"
+    types: [completed]
+  pull_request_target:
+    types: [labeled, unlabeled, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to evaluate (leave empty to sweep all open PRs)"
+        required: false
+        type: string
+
+# Write scopes are for the github.token fallback below: enqueuePullRequest is a merge
+# action, which requires contents: write.
+permissions:
+  contents: write
+  pull-requests: write
+
+# The conclusion is part of the group so a non-success workflow_run, whose job is
+# skipped, cannot cancel a success run for the same head SHA. Scheduled sweeps use
+# their own non-cancelling group so they serialize without interfering with events.
+concurrency:
+  group: >-
+    pr-merge-queue-${{
+    github.event_name == 'schedule' && 'schedule' ||
+    github.event.pull_request.head.sha ||
+    github.event.workflow_run.head_sha ||
+    github.event.issue.number ||
+    github.run_id
+    }}-${{ github.event.workflow_run.conclusion || 'event' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+jobs:
+  enqueue:
+    name: Enqueue ready PR to merge queue
+    timeout-minutes: 10
+    if: >-
+      (
+        github.event_name == 'schedule' &&
+        github.repository == 'llm-d/llm-d'
+      ) ||
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success'
+      ) ||
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.pull_request.draft == false &&
+        (
+          github.event.action == 'unlabeled' ||
+          github.event.action == 'ready_for_review' ||
+          github.event.action == 'reopened' ||
+          (
+            github.event.action == 'labeled' &&
+            (github.event.label.name == 'lgtm' || github.event.label.name == 'approved')
+          )
+        )
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        (contains(github.event.comment.body, '/lgtm') || contains(github.event.comment.body, '/approve'))
+      )
+    runs-on: ubuntu-latest
+    # The secrets context is not available in a step if; evaluate it here.
+    env:
+      HAS_APP: ${{ secrets.MERGE_QUEUE_APP_ID != '' && secrets.MERGE_QUEUE_APP_PRIVATE_KEY != '' }}
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch || github.ref_name }}
+          sparse-checkout: |
+            .github/scripts/pr-merge-queue.cjs
+            .github/scripts/pr-needs-rebase.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      # A GitHub App token (or PAT via WORKFLOW_TOKEN) is needed so merge_group
+      # required checks trigger: events caused by github.token do not trigger
+      # workflows. Set MERGE_QUEUE_APP_ID and MERGE_QUEUE_APP_PRIVATE_KEY to
+      # switch from WORKFLOW_TOKEN to a dedicated GitHub App without editing
+      # this workflow.
+      - name: Generate GitHub App token
+        id: app-token
+        if: ${{ env.HAS_APP == 'true' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.MERGE_QUEUE_APP_ID }}
+          private-key: ${{ secrets.MERGE_QUEUE_APP_PRIVATE_KEY }}
+
+      - name: Evaluate and enqueue pull request
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ steps.app-token.outputs.token || secrets.WORKFLOW_TOKEN || github.token }}
+          script: |
+            const { runMergeQueueCheck } = require('./.github/scripts/pr-merge-queue.cjs');
+            await runMergeQueueCheck({ github, context });

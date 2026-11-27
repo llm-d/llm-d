@@ -54,6 +54,14 @@ jobs:
           script: |
             const run = context.payload.workflow_run;
             const { owner, repo } = context.repo;
+            const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner, repo, run_id: run.id, per_page: 20,
+            });
+            const names = new Set(artifacts.filter((a) => !a.expired).map((a) => a.name));
+            if (!names.has('site-preview') || !names.has('site-preview-meta')) {
+              core.notice(`Run ${run.id} did not upload preview artifacts (build skipped); nothing to deploy.`);
+              return;
+            }
             let number = (run.pull_requests || []).find((p) => p.head.sha === run.head_sha)?.number;
             if (!number && run.head_repository) {
               const { data } = await github.rest.pulls.list({

@@ -3,18 +3,44 @@ name: CI Guide Dry Run
 on:
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/ci-kustomize-dry-run.yaml
-      - .github/scripts/**
-      - guides/**
-      - helpers/client-setup/**
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  check-changes:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      dry_run: ${{ steps.filter.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            dry_run:
+              - '.github/workflows/ci-kustomize-dry-run.yaml'
+              - '.github/scripts/**'
+              - 'guides/**'
+              - 'helpers/client-setup/**'
+
   dry-run:
+    needs: check-changes
+    if: >-
+      !cancelled() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.check-changes.result == 'success' && needs.check-changes.outputs.dry_run == 'true')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

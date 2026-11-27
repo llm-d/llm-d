@@ -14,29 +14,51 @@ name: CI Site Preview
 on:
   pull_request:
     branches: [main]
-    # What llmd-site sync reads from llm-d/llm-d: docs/**, the guides listed
-    # in docs/well-lit-paths/guides.yaml (all under guides/), and the
-    # community pages mirrored from the repo root (llm-d.github.io's
-    # docs-sync.yaml). Same list as dispatch-website-sync.yaml.
-    paths:
-      - .github/workflows/ci-site-preview.yaml
-      - docs/**
-      - guides/**
-      - CONTRIBUTING.md
-      - CODE_OF_CONDUCT.md
-      - SECURITY.md
-      - SIGS.md
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-site-preview-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  check-changes:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      site: ${{ steps.filter.outputs.site }}
+    steps:
+      - uses: actions/checkout@v7
+      # What llmd-site sync reads from llm-d/llm-d: docs/**, the guides listed
+      # in docs/well-lit-paths/guides.yaml (all under guides/), and the
+      # community pages mirrored from the repo root (llm-d.github.io's
+      # docs-sync.yaml). Same list as dispatch-website-sync.yaml.
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            site:
+              - '.github/workflows/ci-site-preview.yaml'
+              - 'docs/**'
+              - 'guides/**'
+              - 'CONTRIBUTING.md'
+              - 'CODE_OF_CONDUCT.md'
+              - 'SECURITY.md'
+              - 'SIGS.md'
+
   build:
+    needs: check-changes
+    if: >-
+      !cancelled() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.check-changes.result == 'success' && needs.check-changes.outputs.site == 'true')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -94,6 +116,7 @@ jobs:
         run: ./bin/llmd-site build
 
       - name: Upload the site preview
+        if: github.event_name != 'merge_group'
         uses: actions/upload-artifact@v7
         with:
           name: site-preview
@@ -125,6 +148,7 @@ jobs:
           retention-days: 7
 
       - name: Job summary
+        if: github.event_name != 'merge_group'
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |

@@ -4,6 +4,15 @@ on:
   pull_request:
     branches:
       - main
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pre-commit:
@@ -40,9 +49,10 @@ jobs:
       - name: Run pre-commit
         uses: j178/prek-action@v2
         with:
-          extra-args: --from-ref origin/main --to-ref HEAD
+          extra-args: ${{ github.event_name == 'merge_group' && format('--from-ref {0} --to-ref {1}', github.event.merge_group.base_sha, github.event.merge_group.head_sha) || '--from-ref origin/main --to-ref HEAD' }}
 
       - name: Run unit tests
         run: |
           python3 -m unittest discover -t . -s docker/scripts/snapshot
           uv run --with pyyaml python3 -m unittest scripts/tests/test_labeler.py
+          node --test .github/scripts/pr-merge-queue.test.cjs
