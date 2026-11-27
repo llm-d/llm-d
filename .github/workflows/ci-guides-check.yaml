@@ -20,8 +20,11 @@ on:
       - docs/well-lit-paths/guides.yaml
       - .github/workflows/nightly-e2e-*.yaml
       - scripts/guide.py
+      - scripts/lint-dockerfile-envvars.py
+      - scripts/lint-envvars.py
       - scripts/matrix_common.py
       - scripts/seed-release-badges.py
+      - scripts/sync-release-matrix.py
       - scripts/tests/**
       - .github/scripts/nightly-e2e-verification/**
       - docs/operations/validation/smoke-test/**
