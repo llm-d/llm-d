@@ -593,7 +593,7 @@ Both overlays request `mthreads.com/gpu` and run prefill and decode as one `Disa
 
 - Moore Threads GPU Operator / device plugin exposing `mthreads.com/gpu`, plus RuntimeClass `mthreads`.
 - InfiniBand device plugin exposing `rdma/ib` (edit the resource name in the patches if yours differs, e.g. `rdma/hca` or `rdma/roce_gdr`). `mt_peermem` is a **node** module for GPUDirect RDMA; load it on the node, do not request it as a Pod resource.
-- Image `registry.mthreads.com/devtech/sglang-dsv4:1.0` (air-gapped sites can retag).
+- Image `registry.mthreads.com/devtech/sglang-dsv4:3.1-20260907` (air-gapped sites can retag).
 - Pods get `IPC_LOCK` and Unconfined seccomp so Mooncake can pin memory. They are not privileged.
 - Prefill↔Decode reachability on HTTP 8000/8200 and Mooncake bootstrap TCP **8998**, plus RDMA between the injected IB devices.
 

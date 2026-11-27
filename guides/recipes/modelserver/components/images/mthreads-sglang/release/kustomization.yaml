@@ -4,4 +4,4 @@ kind: Component
 images:
   - name: REPLACE_MODEL_SERVER_IMAGE
     newName: registry.mthreads.com/devtech/sglang-dsv4
-    newTag: "1.0"
+    newTag: "3.1-20260907"
