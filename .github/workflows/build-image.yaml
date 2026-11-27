@@ -92,11 +92,11 @@ jobs:
         id: resolve
         run: |
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            echo "registry=${{ env.STAGING_REGISTRY}}" >> $GITHUB_OUTPUT
-            echo "is_pr=true" >> $GITHUB_OUTPUT
+            echo "registry=${{ env.STAGING_REGISTRY}}" >> "$GITHUB_OUTPUT"
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
           else
-            echo "registry=${{ env.PRODUCTION_REGISTRY}}" >> $GITHUB_OUTPUT
-            echo "is_pr=false" >> $GITHUB_OUTPUT
+            echo "registry=${{ env.PRODUCTION_REGISTRY}}" >> "$GITHUB_OUTPUT"
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
           fi
 
   detect-changes:
@@ -111,9 +111,11 @@ jobs:
         if: inputs.force_build == true
         id: force
         run: |
-          echo "xpu=true" >> $GITHUB_OUTPUT
-          echo "xpu-omni=true" >> $GITHUB_OUTPUT
-          echo "sglang-xpu=true" >> $GITHUB_OUTPUT
+          {
+            echo "xpu=true"
+            echo "xpu-omni=true"
+            echo "sglang-xpu=true"
+          } >> "$GITHUB_OUTPUT"
       # shim to convert comma-separated platforms input into same boolean outputs as path filter
       # covers both the workflow_call override and workflow_dispatch
       - name: Parse platforms input
@@ -129,9 +131,11 @@ jobs:
               *) printf 'false' ;;
             esac
           }
-          echo "xpu=$(has_platform xpu)" >> $GITHUB_OUTPUT
-          echo "xpu-omni=$(has_platform xpu-omni)" >> $GITHUB_OUTPUT
-          echo "sglang-xpu=$(has_platform sglang-xpu)" >> $GITHUB_OUTPUT
+          {
+            echo "xpu=$(has_platform xpu)"
+            echo "xpu-omni=$(has_platform xpu-omni)"
+            echo "sglang-xpu=$(has_platform sglang-xpu)"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
@@ -150,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set target registry
-        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@v7
@@ -172,7 +176,7 @@ jobs:
 
       - name: Compute short SHA from checkout
         id: short-sha
-        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Extract metadata
         id: meta
@@ -247,7 +251,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Set target registry
-        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@v7
@@ -260,7 +264,7 @@ jobs:
         run: |
           # Read prebuilt XPU base image ref from docker/common-versions
           source docker/common-versions
-          echo "base_image=${VLLM_XPU_BASE_IMAGE}" >> $GITHUB_OUTPUT
+          echo "base_image=${VLLM_XPU_BASE_IMAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -276,16 +280,16 @@ jobs:
         id: set-tag
         run: |
           TAG="sha-$(git rev-parse --short HEAD)"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           PR_TAG="${{ github.event.pull_request.number }}"
           if [ -n "${PR_TAG}" ]; then
-            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+            echo "pr_tag=pr-${PR_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Calculate Cache Bust Timestamp
         id: cache_buster_timestamp
         run: |
-          echo "cache_buster_timestamp=$(date)" >> $GITHUB_OUTPUT
+          echo "cache_buster_timestamp=$(date)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push the image
         id: build-and-push
@@ -363,10 +367,12 @@ jobs:
         id: common-versions
         run: |
           source docker/common-versions
-          echo "repository=${VLLM_OMNI_REPOSITORY}" >> $GITHUB_OUTPUT
-          echo "ref=${VLLM_OMNI_REF}" >> $GITHUB_OUTPUT
-          echo "short_ref=${VLLM_OMNI_REF:0:8}" >> $GITHUB_OUTPUT
-          echo "base_image=${VLLM_OMNI_BASE_IMAGE}" >> $GITHUB_OUTPUT
+          {
+            echo "repository=${VLLM_OMNI_REPOSITORY}"
+            echo "ref=${VLLM_OMNI_REF}"
+            echo "short_ref=${VLLM_OMNI_REF:0:8}"
+            echo "base_image=${VLLM_OMNI_BASE_IMAGE}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Checkout vLLM-Omni source
         uses: actions/checkout@v7
@@ -389,11 +395,11 @@ jobs:
       - name: Set image tags
         id: set-tag
         run: |
-          echo "tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "source_tag=sha-${{ steps.common-versions.outputs.short_ref }}" >> $GITHUB_OUTPUT
+          echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "source_tag=sha-${{ steps.common-versions.outputs.short_ref }}" >> "$GITHUB_OUTPUT"
           PR_TAG="${{ github.event.pull_request.number }}"
           if [ -n "${PR_TAG}" ]; then
-            echo "pr_tag=pr-${PR_TAG}" >> $GITHUB_OUTPUT
+            echo "pr_tag=pr-${PR_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push the image
@@ -461,7 +467,7 @@ jobs:
     runs-on: vllm-runner
     steps:
       - name: Set target registry
-        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> $GITHUB_ENV
+        run: echo "REGISTRY=${{ needs.resolve-registry.outputs.registry }}" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@v7
@@ -473,10 +479,12 @@ jobs:
         id: common-versions
         run: |
           source docker/common-versions
-          echo "repository=${SGLANG_XPU_REPOSITORY}" >> $GITHUB_OUTPUT
-          echo "ref=${SGLANG_XPU_REF}" >> $GITHUB_OUTPUT
-          echo "kernel_repo=${SGLANG_XPU_KERNEL_REPO:-}" >> $GITHUB_OUTPUT
-          echo "kernel_ref=${SGLANG_XPU_KERNEL_REF:-}" >> $GITHUB_OUTPUT
+          {
+            echo "repository=${SGLANG_XPU_REPOSITORY}"
+            echo "ref=${SGLANG_XPU_REF}"
+            echo "kernel_repo=${SGLANG_XPU_KERNEL_REPO:-}"
+            echo "kernel_ref=${SGLANG_XPU_KERNEL_REF:-}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Checkout SGLang source
         uses: actions/checkout@v7
@@ -495,10 +503,12 @@ jobs:
         env:
           SGLANG_REPOSITORY: ${{ inputs.sglang_xpu_repository || steps.common-versions.outputs.repository }}
         run: |
-          echo "llmd_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-          echo "llmd_short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
-          echo "sglang_repo=https://github.com/${SGLANG_REPOSITORY}.git" >> $GITHUB_OUTPUT
-          echo "sglang_sha=$(git -C .cache/sglang-src rev-parse HEAD)" >> $GITHUB_OUTPUT
+          {
+            echo "llmd_sha=$(git rev-parse HEAD)"
+            echo "llmd_short_sha=$(git rev-parse --short=7 HEAD)"
+            echo "sglang_repo=https://github.com/${SGLANG_REPOSITORY}.git"
+            echo "sglang_sha=$(git -C .cache/sglang-src rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -568,7 +578,7 @@ jobs:
             echo "- SGLang repository: \`${SGLANG_REPOSITORY}\`"
             echo "- Requested ref: \`${SGLANG_REF}\`"
             echo "- Resolved revision: \`${SGLANG_SHA}\`"
-          } >> $GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
