@@ -23,6 +23,10 @@ OPENCOST_IMAGE_REGISTRY=""
 OPENCOST_IMAGE_REPO=""
 OPENCOST_IMAGE_TAG=""
 
+# OpenCost Helm chart version. Pinned so the customPricing values below keep
+# meaning what this script expects.
+OPENCOST_CHART_VERSION="${OPENCOST_CHART_VERSION:-2.5.34}"
+
 # Helm release name for OpenCost — derived from namespace after parse_args so it is
 # unique per install and avoids ClusterRole name collisions when multiple OpenCost
 # instances exist on the same cluster.
@@ -573,21 +577,13 @@ install_opencost() {
     $KCMD create namespace "${OPENCOST_NAMESPACE}"
   fi
 
-  # Deploy pricing ConfigMap with Helm adoption annotations so the opencost
-  # Helm release can manage it without ownership conflicts.
-  log_info "Deploying pricing ConfigMap..."
-  $KCMD create configmap opencost-custom-pricing \
-    --from-file=default.json="${OPENCOST_PRICING_JSON}" \
-    --namespace "${OPENCOST_NAMESPACE}" \
-    --dry-run=client -o yaml \
-  | $KCMD annotate --local -f - \
-      meta.helm.sh/release-name="${OPENCOST_RELEASE_NAME}" \
-      meta.helm.sh/release-namespace="${OPENCOST_NAMESPACE}" \
-      -o yaml \
-  | $KCMD label --local -f - \
-      app.kubernetes.io/managed-by=Helm \
-      -o yaml \
-  | $KCMD apply -f -
+  # The confirmed prices go to the OpenCost chart as customPricing.costModel.
+  # The chart writes them into the opencost-custom-pricing ConfigMap as one
+  # top-level key per price, the form OpenCost's ConfigMap watcher reads. (A
+  # single default.json key is rejected by the watcher, and the chart doesn't
+  # mount the ConfigMap as a file.)
+  local cost_model
+  cost_model=$(jq -r 'del(.provider) | to_entries[] | "      \(.key): \(.value | tostring | tojson)"' "${OPENCOST_PRICING_JSON}")
 
   # Deploy metrics-config ConfigMap with Helm adoption annotations.
   log_info "Deploying metrics-config ConfigMap..."
@@ -626,6 +622,10 @@ opencost:
       INFERENCE_MODEL_LABEL: "llm-d.ai/model"
       INFERENCE_SHARED_INFRA_LABEL: "llm-d.ai/inference-shared"
       INFERENCE_SHARED_INFRA_LABEL_VALUE: "true"
+      # Price every node with the confirmed prices. Without it, on a cloud
+      # OpenCost uses that cloud's pricing instead; without a billing API key,
+      # its fallback prices a GPU node at a single vCPU's rate.
+      USE_CUSTOM_PROVIDER: "true"
   prometheus:
     internal:
       enabled: true
@@ -644,6 +644,10 @@ opencost:
   customPricing:
     enabled: true
     configmapName: opencost-custom-pricing
+    createConfigmap: true
+    provider: custom
+    costModel:
+${cost_model}
 EOF
 
   log_info "Installing OpenCost in namespace ${OPENCOST_NAMESPACE}..."
@@ -657,6 +661,7 @@ EOF
     )
   fi
   $HCMD install "${OPENCOST_RELEASE_NAME}" opencost-charts/opencost \
+    --version "${OPENCOST_CHART_VERSION}" \
     --namespace "${OPENCOST_NAMESPACE}" \
     --create-namespace \
     -f "${OPENCOST_VALUES_YAML}" \
@@ -720,6 +725,8 @@ uninstall_opencost() {
     log_warn "OpenCost release '${OPENCOST_RELEASE_NAME}' not found in namespace ${OPENCOST_NAMESPACE}."
   fi
 
+  # The Helm release owns this ConfigMap now; installs from older versions of
+  # this script created it themselves.
   if $KCMD get configmap opencost-custom-pricing -n "${OPENCOST_NAMESPACE}" &>/dev/null; then
     $KCMD delete configmap opencost-custom-pricing -n "${OPENCOST_NAMESPACE}"
   fi

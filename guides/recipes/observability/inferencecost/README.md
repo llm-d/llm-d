@@ -9,7 +9,7 @@ llm-d already collects rich performance metrics via vLLM (token throughput, late
 Bridging that gap requires joining two separate data sources that have historically lived in different systems:
 
 | Data source | What it provides | What it lacks |
-|---|---|---|
+| --- | --- | --- |
 | vLLM Prometheus metrics | Token counts, latency, cache hit rate | Infrastructure cost per token |
 | Kubernetes allocation (CPU/GPU/RAM) | Infrastructure cost per pod | Which model generated the cost |
 
@@ -33,7 +33,7 @@ The join key is `model_name:namespace`.
 The following Prometheus metrics are produced by OpenCost after install:
 
 | Metric | Labels | Description |
-|---|---|---|
+| --- | --- | --- |
 | `llm_total_hourly_cost` | `model_name`, `model_version`, `namespace`, `cost_basis`, `workload_type` | Instantaneous hourly infrastructure cost rate ($/hour) attributed to the model — not a cumulative counter. `cost_basis` is `allocation` (max(request,usage) × price + idle/shared share; use for chargeback) or `usage` (actual consumption only, excludes idle and shared infra; use for efficiency analysis) |
 | `llm_cost_per_million_tokens` | `model_name`, `model_version`, `namespace`, `cost_basis`, `phase`, `allocation_method`, `workload_type` | Cost per 1M tokens. `phase` is empty for blended (input+output combined), `prompt` for input-only, or `generation` for output-only. `allocation_method` is `compute_time` (split by vLLM prefill/decode time), `prefix_caching_off` (time-based split, prefix caching disabled), `multiplier` (fixed 2.5× ratio, timing metrics unavailable), or empty. It is always empty on blended rows (`phase=""`); on `prompt` or `generation` rows, empty means no tokens were processed or the model-name join failed |
 | `llm_cache_savings_fraction` | `model_name`, `model_version`, `namespace`, `workload_type` | Fraction of prompt tokens served from the KV cache (0–1); zero when prefix caching is disabled, no cache hits occurred, or `vllm:prefix_cache_hits_total` is missing |
@@ -78,7 +78,7 @@ The installer:
 ### Options
 
 | Flag | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `-n`, `--namespace` | `llm-d-monitoring` | Namespace to install OpenCost into |
 | `--prometheus-endpoint` | auto-detected | Override the Prometheus service URL |
 | `--prometheus-release-name` | `llmd` | Helm release name of the kube-prometheus-stack |
@@ -105,7 +105,7 @@ The installer:
 
 ### Pricing config format
 
-The installer writes a ConfigMap (`opencost-custom-pricing`) from the prices you confirm. To prepare one in advance:
+The installer passes the prices you confirm to the OpenCost chart, which writes the `opencost-custom-pricing` ConfigMap. These confirmed prices now replace the cloud pricing API on GKE, EKS and AKS too (`USE_CUSTOM_PROVIDER=true`), so after an upgrade your costs follow the prices you confirmed rather than the cloud's public price list. To prepare a pricing file in advance:
 
 ```json
 {
@@ -143,7 +143,7 @@ curl -s http://localhost:9003/metrics | grep llm_
 
 Expected output includes lines like:
 
-```
+```text
 llm_cost_per_million_tokens{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation",phase="",allocation_method=""} 4.21
 llm_total_hourly_cost{model_name="Qwen3-32B",model_version="unknown",namespace="llm-d",cost_basis="allocation"} 0.037
 ```
@@ -156,7 +156,7 @@ If the metrics are empty, generate some traffic first (the module requires at le
 kubectl port-forward -n llm-d-monitoring svc/opencost-llm-d-monitoring 9090:9090
 ```
 
-Open http://localhost:9090. The **Allocation** view shows cost broken down by `llm-d.ai/model` label. The inference cost gauges appear in Prometheus under the `llm_*` prefix.
+Open <http://localhost:9090>. The **Allocation** view shows cost broken down by `llm-d.ai/model` label. The inference cost gauges appear in Prometheus under the `llm_*` prefix.
 
 ### Query the REST API
 
@@ -195,7 +195,7 @@ The script checks:
 The installer configures OpenCost's exporter with the following environment variables:
 
 | Variable | Value | Description |
-|---|---|---|
+| --- | --- | --- |
 | `INFERENCE_COST_ENABLED` | `true` | Activates the inference cost module |
 | `INFERENCE_MODEL_LABEL` | `llm-d.ai/model` | Pod label whose value must exactly match vLLM's `model_name` metric label — used as the join key for cost attribution |
 | `INFERENCE_SHARED_INFRA_LABEL` | `llm-d.ai/inference-shared` | Pod label that identifies shared infrastructure pods |
@@ -236,7 +236,7 @@ vLLM reports the model name it was started with as the `model_name` label in Pro
 
 ## File layout
 
-```
+```text
 inferencecost/
 ├── install-opencost.sh          # Installer and validator
 ├── manifests/
