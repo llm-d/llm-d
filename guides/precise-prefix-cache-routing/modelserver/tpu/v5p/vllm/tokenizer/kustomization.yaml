@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tokenizer pool of the TPU v5p vLLM model server (../base): its vLLM release, its model
+# and its rendering flags, so the pool returns the model server's token IDs.
+resources:
+  - ../../../../../tokenizer
+
+components:
+  # The model server's image component: the pool follows its release.
+  - ../../../../../../recipes/modelserver/components/images/tpu-vllm/release
+
+images:
+  # The CPU build of that release. Only the name changes; the tag stays.
+  - name: docker.io/vllm/vllm-tpu
+    newName: docker.io/vllm/vllm-openai-cpu
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: precise-prefix-cache-routing-tokenizer
+    patch: |-
+      # The context length of ../base/patch-vllm.yaml.
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: "--max-model-len=4096"

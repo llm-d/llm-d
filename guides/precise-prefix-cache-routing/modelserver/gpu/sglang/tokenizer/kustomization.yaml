@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tokenizer pool of the NVIDIA GPU SGLang model server (../base). SGLang serves no
+# /v1/*/render endpoints, so the pool tokenizes with vLLM's tokenizer for the
+# model SGLang serves.
+resources:
+  - ../../../../tokenizer
+
+components:
+  - ../../../../../recipes/modelserver/components/images/cpu-vllm/release

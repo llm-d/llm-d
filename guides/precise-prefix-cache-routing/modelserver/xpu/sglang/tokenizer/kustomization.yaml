@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tokenizer pool of the Intel XPU SGLang model server (../base). SGLang serves no
+# /v1/*/render endpoints, so the pool tokenizes with vLLM's tokenizer for the
+# model SGLang serves.
+resources:
+  - ../../../../tokenizer
+
+components:
+  - ../../../../../recipes/modelserver/components/images/cpu-vllm/release
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: precise-prefix-cache-routing-tokenizer
+    patch: |-
+      # The model of ../base/patch-sglang.yaml.
+      - op: replace
+        path: /spec/template/spec/containers/0/args/0
+        value: "Qwen/Qwen3-0.6B"

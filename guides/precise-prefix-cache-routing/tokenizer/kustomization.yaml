@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tokenizer pool for precise-prefix-cache-routing: CPU-only vLLM render servers
+# (`vllm launch render`) behind a Service. The router's token-producer renders
+# every prompt on it (`vllm.url` in ../router/*.values.yaml), so tokenization
+# runs on its own CPUs and scales by itself, apart from the model servers.
+#
+# This is the shared base. Apply the overlay next to your model server instead,
+# ../modelserver/<accelerator>/<engine>/tokenizer/: it sets the three things
+# that make the pool return the model server's token IDs, which are the vLLM
+# release (the CPU build of the model server's image tag), the model, and the
+# model server's rendering flags (tool and reasoning parsers, context length).
+namePrefix: precise-prefix-cache-routing-
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+
+# The guide label lands on resource metadata only, never on the pod template or
+# selectors (kustomize `labels` defaults to includeSelectors: false and
+# includeTemplates: false). `llm-d.ai/guide: precise-prefix-cache-routing` is
+# the InferencePool selector (router `modelServers.matchLabels`): a tokenizer
+# pod that carried it would be routed to as a model server, and the router
+# would try to subscribe to a KV-event socket the pod does not have.
+labels:
+  - pairs:
+      llm-d.ai/guide: precise-prefix-cache-routing

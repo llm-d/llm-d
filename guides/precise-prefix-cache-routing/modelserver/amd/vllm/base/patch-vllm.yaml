@@ -11,7 +11,9 @@ spec:
           command: ["vllm", "serve"]
           args:
             - "Qwen/Qwen3-32B"
-            # vLLM 0.30 requires this to serve /v1/*/render for token-producer.
+            # Serves /v1/*/render on the model server (vLLM 0.30 and later need the
+            # flag), for the token-producer's `vllm.endpointDiscovery` option. The
+            # default renders on the tokenizer pool (../tokenizer/).
             - "--enable-scale-out"
             - "--disable-access-log-for-endpoints=/health,/metrics,/v1/models,/v1/completions/render,/v1/chat/completions/render"
             - "--tensor-parallel-size=2"
