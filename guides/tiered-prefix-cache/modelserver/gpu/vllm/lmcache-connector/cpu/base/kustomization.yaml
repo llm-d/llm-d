@@ -11,5 +11,13 @@ labels:
       llm-d.ai/guide: tiered-prefix-cache
     includeSelectors: true
     includeTemplates: true
+
+# Script that starts the LMCache MP server next to vLLM in the model server
+# container. The name gets a content hash, so editing the script rolls the pods.
+configMapGenerator:
+  - name: lmcache-mp-launcher
+    files:
+      - launch-with-lmcache-mp.sh
+
 patches:
   - path: patch-vllm.yaml
