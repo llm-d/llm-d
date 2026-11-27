@@ -1,0 +1,64 @@
+# Hybrid request/token overlay for the shared P/D router configuration.
+# Layer after pd-disaggregation.values.yaml; replace both limit placeholders.
+# For accelerator-specific routing, follow ../flow-control.md.
+router:
+  epp:
+    pluginsCustomConfig:
+      pd-config.yaml: |
+        apiVersion: llm-d.ai/v1
+        kind: EndpointPickerConfig
+        featureGates:
+        - flowControl
+        flowControl:
+          saturationDetector:
+            pluginRef: pd-hybrid
+        plugins:
+        - type: always-disagg-pd-decider
+        - type: disagg-profile-handler
+          parameters:
+            deciders:
+              prefill: always-disagg-pd-decider
+        - type: prefill-filter
+        - type: decode-filter
+        - type: approx-prefix-cache-producer
+          parameters:
+            # 5k-ISL gpt-oss-120b reference workload; a modest match window
+            # keeps EPP prefix-matching cheap.
+            maxPrefixTokensToMatch: 131072
+        - type: inflight-load-producer
+          parameters:
+            addEstimatedOutputTokens: false
+        - name: pd-hybrid
+          type: concurrency-detector
+          parameters:
+            concurrencyMode: hybrid
+            inFlightLoadProducerName: inflight-load-producer
+            maxConcurrency: <REQUEST_LIMIT>
+            maxTokenConcurrency: <TOKEN_LIMIT>
+        - type: prefix-cache-affinity-filter
+          parameters:
+            # Measured with guides/recipes/router/calibration/calibrate.sh
+            # through the full P/D path on the reference fleet (gpt-oss-120b,
+            # 8x prefill TP=1 on H200, chunk 8192). Includes the NIXL KV
+            # transfer + sidecar hop, so it is the operational ceiling the
+            # gate acts on. Re-measure for other hardware/models.
+            peakPrefillThroughput: 33821
+        - type: token-load-scorer
+        - type: active-request-scorer
+        - type: max-score-picker
+        schedulingProfiles:
+        # Prefill does the prompt pass: keep prefix groups on cache-warm pods
+        # (affinity filter) and pick by queued prefill token load.
+        - name: prefill
+          plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: prefix-cache-affinity-filter
+          - pluginRef: token-load-scorer
+          - pluginRef: max-score-picker
+        # Pure decode is bound by concurrent in-flight requests, not prefill
+        # throughput: pick the least-busy endpoint.
+        - name: decode
+          plugins:
+          - pluginRef: decode-filter
+          - pluginRef: active-request-scorer
+          - pluginRef: max-score-picker
