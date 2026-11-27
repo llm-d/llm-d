@@ -378,7 +378,7 @@ stateDiagram-v2
 The `Drop Reason` column lists the value emitted in the `x-llm-d-request-dropped-reason` response header, which lets operators distinguish the precise cause of a drop on the wire (e.g., for alerting or client-side retry logic).
 
 | Queue Outcome | Internal Error Code | HTTP Status | Drop Reason (`x-llm-d-request-dropped-reason`) | Description |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `QueueOutcomeRejectedCapacity` | `ResourceExhausted` | 429 (Too Many Requests) | `rejected-saturated` | Rejection because queue capacity limits were met (Global or Per-Band). |
 | In-flight eviction (`enableEviction: true`) | *(ImmediateResponse, no internal code)* | 429 (Too Many Requests) | `evicted` | Post-dispatch reclamation, not a `QueueOutcome`: an already-dispatched, negative-priority request is ended to reclaim capacity for blocked higher-priority demand. Returned as an Envoy `ImmediateResponse`, so it carries no internal error code. The evicted caller owns retry. See [In-Flight Eviction](#in-flight-eviction). |
 | `QueueOutcomeEvictedTTL` | `ResourceExhausted` | 429 (Too Many Requests) | `rejected-ttl-expired` | Eviction from queue because the request's TTL expired while the pool still had endpoints. |
@@ -456,7 +456,7 @@ Traditional metrics like GPU utilization fail to quantify unfulfilled demand bec
 The Flow Control layer exposes detailed metrics to track queuing dynamics and system health.
 
 | Metric Name | Metric Type | Description | Labels |
-|:---|:---|:---|:---|
+| :--- | :--- | :--- | :--- |
 | `llm_d_epp_flow_control_request_queue_duration_seconds` | Histogram | Time requests spend in the Flow Control layer from enqueue to final outcome. | `fairness_id`, `priority`, `outcome`, `inference_pool`, `model_name`, `target_model_name` |
 | `llm_d_epp_flow_control_queue_size` | Gauge | Current number of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |
 | `llm_d_epp_flow_control_queue_bytes` | Gauge | Current total size in bytes of requests actively held in the Flow Control queue. | `fairness_id`, `priority`, `inference_pool`, `model_name`, `target_model_name` |

@@ -2,23 +2,23 @@
 
 This section covers the hardware and software requirements for llm-d, cluster configuration, accelerator specs, and platform adaptations across diverse physical execution environments.
 
-### [Kubernetes Infrastructure Providers](providers/README.md)
+## [Kubernetes Infrastructure Providers](providers/README.md)
 
 Provider-specific cluster setup notes (AKS, DigitalOcean, GKE and [Google Cloud TPU](providers/gke/tpu/README.md), minikube, OpenShift, and OpenShift on AWS).
 
-### [Kubernetes Gateways](gateway/README.md)
+## [Kubernetes Gateways](gateway/README.md)
 
 Configuring ingress controllers, Gateway API, and service meshes.
 
-### [Model Server Orchestration](model-server-orchestration.md)
+## [Model Server Orchestration](model-server-orchestration.md)
 
 Installing the LeaderWorkerSet controller, which serves the `LeaderWorkerSet` API for multi-host inference and the `DisaggregatedSet` API for multi-role topologies such as prefill/decode disaggregation, and Kueue for Topology Aware Scheduling.
 
-### [Non-K8s & Bare-Metal Deployments](no-kubernetes-deployment.md)
+## [Non-K8s & Bare-Metal Deployments](no-kubernetes-deployment.md)
 
 Running the llm-d routing stack on bare metal, HPC Slurm schedulers, or Ray via file-based worker discovery.
 
-### [RDMA & Networking Configuration](rdma/README.md)
+## [RDMA & Networking Configuration](rdma/README.md)
 
 Orchestrating multi-host replica topologies and RDMA networking fabrics.
 

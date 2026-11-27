@@ -93,7 +93,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 ### Request Volume & Success
 
 | Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| --- | --- | --- | --- |
 | `llm_d_epp_request_total` | Counter | Total request count | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 | `llm_d_epp_request_error_total` | Counter | Total error count | `model_name`, `target_model_name`, `fairness_id`, `priority`, `error_code` |
 | `llm_d_epp_request_running` | Gauge | Current active running requests | `model_name`, `target_model_name`, `fairness_id`, `priority` |
@@ -101,7 +101,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 ### Latency & SLOs
 
 | Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| --- | --- | --- | --- |
 | `llm_d_epp_request_duration_seconds` | Histogram | End-to-end response latency | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 | `llm_d_epp_request_ntpot_seconds` | Histogram | Normalized Time Per Output Token (NTPOT) | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 | `llm_d_epp_request_ttft_seconds` | Histogram | Time to first token (TTFT) | `model_name`, `target_model_name`, `fairness_id`, `priority`, `streaming` |
@@ -116,7 +116,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 ### Payload & Token Usage
 
 | Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| --- | --- | --- | --- |
 | `llm_d_epp_request_size_bytes` | Histogram | Incoming request body size in bytes | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 | `llm_d_epp_response_size_bytes` | Histogram | Outgoing response body size in bytes | `model_name`, `target_model_name`, `fairness_id`, `priority` |
 | `llm_d_epp_request_input_tokens` | Histogram | Input token count per request | `model_name`, `target_model_name`, `fairness_id`, `priority` |
@@ -128,7 +128,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 ### Processing Overhead, Model Rewrite & Request Gauges
 
 | Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| --- | --- | --- | --- |
 | `llm_d_epp_request_processing_duration_seconds` | Histogram | Time from request receipt until request body has been handled | *None* |
 | `llm_d_epp_response_processing_duration_seconds` | Histogram | EPP response processing latency | *None* |
 | `llm_d_epp_inference_request_metric` | Gauge | Consolidated gauge for request metrics | `plugin_name`, `plugin_type`, `model_name`, `target_model_name`, `type` |
@@ -139,7 +139,7 @@ The Request Handling subsystem exposes metrics tracking request volume, success,
 Emitted when an `InFlightLoadProducer` is configured:
 
 | Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| --- | --- | --- | --- |
 | `llm_d_epp_inflight_requests` | Gauge | Requests currently in flight on each endpoint | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` |
 | `llm_d_epp_inflight_tokens` | Gauge | Tokens currently in flight on each endpoint (uncached prompt tokens, optionally plus estimated output) | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` |
 
@@ -148,7 +148,7 @@ Emitted when an `InFlightLoadProducer` is configured:
 Opt-in metrics covering the ext_proc gRPC stream lifecycle (enabled via `--enable-grpc-stream-metrics`):
 
 | Metric | Type | Description | Labels |
-|--------|------|-------------|--------|
+| --- | --- | --- | --- |
 | `llm_d_epp_extproc_streams_inflight` | Gauge | Number of ext_proc gRPC streams currently open | *None* |
 | `llm_d_epp_extproc_stream_duration_seconds` | Histogram | Duration an ext_proc gRPC stream stays open in seconds | *None* |
 | `llm_d_epp_extproc_streams_total` | Counter | Total ext_proc gRPC streams completed by gRPC status code | `code` |

@@ -60,7 +60,7 @@ The precise implementation provides 100% accuracy by leveraging actual token dat
 ## Comparison Summary
 
 | Feature | Approximate | Precise |
-|---|---|---|
+| --- | --- | --- |
 | **Precision** | Heuristic (Character-based) | 100% (Token-based) |
 | **State Source** | Local EPP assumptions | Real-time `KVEvents` from Model Servers |
 | **Dependencies** | None | vLLM render endpoint, ZMQ |

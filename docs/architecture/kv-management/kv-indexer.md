@@ -106,11 +106,11 @@ Two shapes are supported for getting events from the model servers to the EPP:
 
 The Index is the hot data structure of the system: every scoring call queries it, every KV-event updates it. Multiple backends are available depending on desired memory and replication model:
 
-| Backend                 | Storage                                                                         | When to use                                                                                                                                                                | Tradeoff                                                                                                                                                       |
-|:------------------------|:--------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **In-Memory (default)** | Two-level LRU: outer cache keyed by block hash, inner cache of pods per block   | Default choice for most deployments                                                                                                                                        | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable                                                                |
-| **Cost-Aware Memory**   | Ristretto cache with admission control and cost-based eviction                  | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata)                                                                                    | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure                                     |
-| **Redis / Valkey**      | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed)            | Need for persistent or very-long lived index (uncommon)                                                                                                                    | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary   |
+| Backend | Storage | When to use | Tradeoff |
+| :--- | :--- | :--- | :--- |
+| **In-Memory (default)** | Two-level LRU: outer cache keyed by block hash, inner cache of pods per block | Default choice for most deployments | Lowest latency; fixed entry count (default 100M keys × 10 pod entries) makes sizing predictable |
+| **Cost-Aware Memory** | Ristretto cache with admission control and cost-based eviction | Workloads where per-entry size varies a lot (multimodal, variable-length LoRA metadata) | Budget specified in bytes (e.g. `2GiB`) rather than entry count; probabilistic admission can reject entries under pressure |
+| **Redis / Valkey** | External server (TCP; Valkey is Redis-wire-compatible, BSD-licensed) | Need for persistent or very-long lived index (uncommon) | Adds a network hop per lookup and ties EPP availability to the external store; shared state gives strong consistency across replicas but is rarely necessary |
 
 > [!IMPORTANT]
 > In-memory is typically the best option, offering low-latency, simple operations, and high availability via multi-replica deployment (each EPP replica in pod-discovery mode subscribes to every model-server's events independently and converges to the same index).
@@ -123,7 +123,8 @@ The Token Producer runs early in the scheduling cycle: it renders chat templates
 
 This role is implemented by the `token-producer` plugin. It does not access the KV-cache Index or score endpoints.
 
-The plugin uses the tokenizer-free `estimate` backend by default. For precise routing, select the exact-tokenization `vllm` backend with `modelName` and either `vllm.url` or `vllm.endpointDiscovery`. It calls vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`. `vllm.endpointDiscovery` renders on the pool's own model servers, round-robin across `Ready` endpoints; `vllm.url` points at one address, such as a sidecar in the EPP pod (loopback) or a dedicated render Service shared across EPP replicas.
+The plugin uses the tokenizer-free `estimate` backend by default. For precise routing, select the exact-tokenization `vllm` backend with `modelName` and either `vllm.url` or `vllm.endpointDiscovery`. It calls vLLM's render endpoints — `/v1/completions/render` and `/v1/chat/completions/render` over HTTP. Those endpoints are served by `vllm serve <model>` or by the GPU-less `vllm launch render <model>`.
+`vllm.endpointDiscovery` renders on the pool's own model servers, round-robin across `Ready` endpoints; `vllm.url` points at one address, such as a sidecar in the EPP pod (loopback) or a dedicated render Service shared across EPP replicas.
 
 ### Precise Prefix Cache Producer
 

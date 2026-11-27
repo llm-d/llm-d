@@ -80,7 +80,7 @@ On cold start the training server has no model to serve, so it fits a placeholde
 #### TTFT features
 
 | Feature | What it captures |
-|---------|------------------|
+| --- | --- |
 | KV Cache Usage % | Memory saturation and its effect on prefill scheduling |
 | Input Length | Prefill cost proxy — longer prompts dominate TTFT |
 | Queue Depth | Backlog before scheduling — more waiting requests delay first token |
@@ -91,7 +91,7 @@ On cold start the training server has no model to serve, so it fits a placeholde
 #### TPOT features
 
 | Feature | What it captures |
-|---------|------------------|
+| --- | --- |
 | KV Cache Usage % | Memory pressure during decode |
 | Input Length | Input token count (affects attention cost) |
 | Queue Depth | Queue contention that leaks into decode batching |
@@ -102,13 +102,13 @@ On cold start the training server has no model to serve, so it fits a placeholde
 
 Each prediction sidecar sustains roughly 300 QPS of prediction work on a `c4-standard-192` node (~192 vCPUs). Because the EPP makes one prediction per candidate pod, total prediction load scales with `cluster QPS × pod count`. Scale horizontally by adding prediction sidecars and updating the predictor URL list.
 
-| Cluster QPS | Avg prediction latency (ms)  | p99 prediction latency (ms)  | Prediction servers  |
-|-------------|------------------------------|------------------------------|---------------------|
-| 100         | 3.5                          | 46                           | 1                   |
-| 1,000       | 5.0                          | 49                           | 2                   |
-| 5,000       | ~27                          | ~74                          | 2                   |
-| 7,500       | ~35                          | ~96                          | 3                   |
-| 10,000      | ~48                          | ~137                         | 4                   |
+| Cluster QPS | Avg prediction latency (ms) | p99 prediction latency (ms) | Prediction servers |
+| --- | --- | --- | --- |
+| 100 | 3.5 | 46 | 1 |
+| 1,000 | 5.0 | 49 | 2 |
+| 5,000 | ~27 | ~74 | 2 |
+| 7,500 | ~35 | ~96 | 3 |
+| 10,000 | ~48 | ~137 | 4 |
 
 ### Streaming Mode
 
@@ -158,7 +158,7 @@ Because the predictor and its plugins run entirely in the EPP pod, predicted lat
 When the latency predictor is enabled, the EPP exposes Prometheus metrics for actual vs. predicted latency, prediction duration, and SLO violation tracking. The primary series are:
 
 | Metric | Description |
-|--------|-------------|
+| --- | --- |
 | `llm_d_epp_request_ttft_seconds` | Actual TTFT distribution. |
 | `llm_d_epp_request_predicted_ttft_seconds` | Predicted TTFT distribution. |
 | `llm_d_epp_request_ttft_prediction_duration_seconds` | Time spent generating TTFT predictions. |

@@ -18,8 +18,8 @@ This page lists the llm-d release artifacts and dependencies:
 
 llm-d uses the APIs defined in the Gateway API Inference Extension (GAIE) project:
 
-| CRD |  Purpose | Provider |
-|-----|----------|----------|
+| CRD | Purpose | Provider |
+| --- | --- | --- |
 | [InferencePool](../api-reference/inferencepool.md) | Defines a pool of inference endpoints (model servers) and configures the EPP and proxy for LLM-aware routing. | `kubernetes-sigs/gateway-api-inference-extension` |
 | [InferenceObjective](../api-reference/inferenceobjective.md) | Defines performance goals (priority, latency) for specific model workloads within a pool. | `llm-d/llm-d-router` |
 | [InferenceModelRewrite](../api-reference/inferencemodelrewrite.md) | Specifies rules for rewriting model names in request bodies, enabling traffic splitting and canary rollouts. | `llm-d/llm-d-router` |
@@ -43,8 +43,8 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extens
 llm-d Router is deployed via Helm. We offer charts for both Standalone and Gateway Mode:
 
 | Chart | Version | OCI Registry | Description |
-|-------|---------|--------------|-------------|
-| **Standalone Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-standalone` | Deploys an InferencePool and EPP with a standalone sidecar proxy (Envoy by default, agentgateway also supported via `router.proxy.proxyType=agentgateway`) in the EPP pod  |
+| --- | --- | --- | --- |
+| **Standalone Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-standalone` | Deploys an InferencePool and EPP with a standalone sidecar proxy (Envoy by default, agentgateway also supported via `router.proxy.proxyType=agentgateway`) in the EPP pod |
 | **Gateway Mode** | v0 | `oci://ghcr.io/llm-d/charts/llm-d-router-gateway` | Deploys an InferencePool and EPP for use with an existing Kubernetes Gateway (e.g. Istio, AgentGateway, Envoy AI Gateway, GKE) |
 
 The charts are currently published by the Gateway API Inference Extension (GAIE) project (see [standalone mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/standalone) and [gateway mode source](https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/config/charts/inferencepool)). Each well-lit path guide provides values files on top of the chart defaults to enable the functionality implemented in EPP.
@@ -58,15 +58,16 @@ The charts are currently published by the Gateway API Inference Extension (GAIE)
 llm-d releases the core EPP image as well as additional sidecar images for advanced functionality:
 
 | Image | Description | Version |
-|-------|-------------|---------|
+| --- | --- | --- |
 | `ghcr.io/llm-d/llm-d-router-endpoint-picker` | Core EPP image | main |
-| `ghcr.io/llm-d/llm-d-router-disagg-sidecar`     | Optional sidecar for model servers, enabling KV cache transfer for P/D | main |
-
+| `ghcr.io/llm-d/llm-d-router-disagg-sidecar` | Optional sidecar for model servers, enabling KV cache transfer for P/D | main |
 
 > [!IMPORTANT]
 > The EPP image was renamed from `ghcr.io/llm-d/llm-d-inference-scheduler`
 > in llm-d v0.8.0. The old package has been removed, so deployments must
 > update the image repository as well as the tag.
+
+<!-- -->
 
 > [!NOTE]
 > In a future release, the latency server images will be
@@ -86,17 +87,17 @@ The llm-d stack supports vLLM and SGLang.
 
 We recommend using the upstream images for most guides:
 
-| Engine        | Image             | Tag       |
-|---------------|-------------------|-----------|
-| **vLLM**             | `docker.io/vllm/vllm-openai`            | `v0.30.0`     |
-| **vLLM Omni**        | `docker.io/vllm/vllm-omni`              | `v0.28.0`     |
-| **vLLM TPU**         | `docker.io/vllm/vllm-tpu`               | `v0.29.0`     |
-| **vLLM XPU**         | `docker.io/vllm/vllm-openai-xpu`        | `v0.30.0`     |
-| **vLLM ROCM**        | `docker.io/vllm/vllm-openai-rocm`       | `v0.30.0`     |
-| **vLLM ROCM Omni**   | `docker.io/vllm/vllm-omni-rocm`         | `v0.28.0`     |
-| **vLLM CPU**         | `docker.io/vllm/vllm-openai-cpu`        | `v0.34.0`     |
-| **SGLang**           | `docker.io/lmsysorg/sglang`             | `v0.5.20`   |
-| **TRTLLM**           | `nvcr.io/nvidia/tensorrt-llm/release`   | `1.3.0rc28`   |
+| Engine | Image | Tag |
+| --- | --- | --- |
+| **vLLM** | `docker.io/vllm/vllm-openai` | `v0.30.0` |
+| **vLLM Omni** | `docker.io/vllm/vllm-omni` | `v0.28.0` |
+| **vLLM TPU** | `docker.io/vllm/vllm-tpu` | `v0.29.0` |
+| **vLLM XPU** | `docker.io/vllm/vllm-openai-xpu` | `v0.30.0` |
+| **vLLM ROCM** | `docker.io/vllm/vllm-openai-rocm` | `v0.30.0` |
+| **vLLM ROCM Omni** | `docker.io/vllm/vllm-omni-rocm` | `v0.28.0` |
+| **vLLM CPU** | `docker.io/vllm/vllm-openai-cpu` | `v0.34.0` |
+| **SGLang** | `docker.io/lmsysorg/sglang` | `v0.5.20` |
+| **TRTLLM** | `nvcr.io/nvidia/tensorrt-llm/release` | `1.3.0rc28` |
 
 ### Custom Images
 
@@ -107,13 +108,13 @@ In addition to the upstream images, llm-d also builds and releases vLLM images w
 * RIXL support on AMD ROCm
 
 | Image | Tag | Accelerator | Base OS | Architectures |
-|-------|-----|-------------|---------|---------------|
+| --- | --- | --- | --- | --- |
 | `ghcr.io/llm-d/llm-d-cuda` (deprecated) | - | NVIDIA GPU | RHEL UBI9 | amd64, arm64 |
 | `ghcr.io/llm-d/llm-d-aws`  (deprecated) | - | NVIDIA GPU + EFA | RHEL UBI9 | amd64, arm64 |
 | `ghcr.io/llm-d/llm-d-rocm` (deprecated) | - | AMD ROCm | RHEL UBI9 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu`               | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-xpu-sglang`        | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
-| `ghcr.io/llm-d/llm-d-cpu` (deprecated)  | `v0.10.0` | CPU | RHEL UBI9 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu` | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-xpu-sglang` | `v0.10.0` | Intel XPU | Ubuntu 24.04 | amd64 |
+| `ghcr.io/llm-d/llm-d-cpu` (deprecated) | `v0.10.0` | CPU | RHEL UBI9 | amd64 |
 
 ## 4. Well-Lit Path Guides
 
@@ -135,7 +136,7 @@ See the [full list of guides](../well-lit-paths/README.md) for more details.
 llm-d Router supports optional integration with Kubernetes Gateways. These are the versions we test against for the `v0.10.0` release:
 
 | Dependency | Tested Versions | Notes |
-|------------|-----------------|-------|
+| --- | --- | --- |
 | Gateway API CRDs | `v1.5.x` | Kubernetes SIG (required if using a Gateway) |
 | Istio | `1.29.x` | Default gateway provider |
 | AgentGateway | `v1.4.x` | Preferred for new deployments |
@@ -147,13 +148,13 @@ Install instructions live under [`guides/recipes/gateway/`](https://github.com/l
 The [Async Processor](https://github.com/llm-d/llm-d-async) is an optional component that pulls inference requests from a message queue, gates dispatch on pool capacity, and forwards them to llm-d Router. It is deployed via Helm — see the [asynchronous processing guide](../../guides/batch-serving/asynchronous-processing/README.md) and [Async Processor Operations](../operations/components/async-processor.md).
 
 | Chart | Version | OCI Registry | Description |
-|-------|---------|--------------|-------------|
+| --- | --- | --- | --- |
 | **Async Processor** | v1.0.0 | `oci://ghcr.io/llm-d/charts/llm-d-async` | Deploys the async processor with its queue backend (GCP Pub/Sub or Redis), worker pools, and dispatch gates |
 
 ### Images
 
 | Image | Description | Version |
-|-------|-------------|---------|
+| --- | --- | --- |
 | `ghcr.io/llm-d/llm-d-async` | Asynchronous dispatch processor for latency-insensitive traffic | v1.0.0 |
 
 Clients that publish requests or consume results can import the Go modules released alongside the image — `github.com/llm-d/llm-d-async/api`, `/pipeline`, and `/producer`, each tagged `v1.0.0`.
@@ -168,18 +169,18 @@ Clients that publish requests or consume results can import the Go modules relea
 ### Core Libraries
 
 | Repository | Language | Description |
-|------------|----------|-------------|
+| --- | --- | --- |
 | [llm-d/llm-d](https://github.com/llm-d/llm-d) | — | Main repo: docs, Dockerfiles, guides, CI |
 | [llm-d/llm-d-router](https://github.com/llm-d/llm-d-router) | Go | EPP routing engine and P/D sidecar |
 | [llm-d/llm-d-latency-predictor](https://github.com/llm-d/llm-d-latency-predictor) | Python | XGBoost training and prediction server |
 | [llm-d/llm-d-kv-cache](https://github.com/llm-d/llm-d-kv-cache) | Go, Python, CPP | KV-cache block locality indexer, FS offloading |
 | [llm-d/llm-d-workload-variant-autoscaler](https://github.com/llm-d/llm-d-workload-variant-autoscaler) | Go | SLO-aware workload autoscaler |
 | [llm-d/llm-d-async](https://github.com/llm-d/llm-d-async) | Go | Asynchronous request processor for latency insensitive traffic |
-| [llm-d/llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway) | Go | OpenAI-compatible API for submitting, tracking, and managing batch inference jobs.
+| [llm-d/llm-d-batch-gateway](https://github.com/llm-d/llm-d-batch-gateway) | Go | OpenAI-compatible API for submitting, tracking, and managing batch inference jobs. |
 
 ### Supporting Libraries
 
 | Repository | Language | Description |
-|------------|----------|-------------|
+| --- | --- | --- |
 | [llm-d/llm-d-benchmark](https://github.com/llm-d/llm-d-benchmark) | Python | Benchmarking framework |
 | [llm-d/llm-d-inference-sim](https://github.com/llm-d/llm-d-inference-sim) | Go | GPU-free vLLM simulator |

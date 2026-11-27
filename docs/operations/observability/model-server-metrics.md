@@ -5,7 +5,7 @@ Reference for the Prometheus metrics the model servers export: vLLM, including i
 ## vLLM
 
 | Metric | What it measures | Why it matters |
-| -------- | ----------------- | ---------------- |
+| --- | --- | --- |
 | `vllm:num_requests_running` | Active requests being processed | High values indicate GPU saturation; new requests will queue. Watch for sustained spikes |
 | `vllm:num_requests_waiting` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
 | `vllm:kv_cache_usage_perc` | KV cache utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full and requests may get preempted or rejected |
@@ -21,7 +21,7 @@ Reference for the Prometheus metrics the model servers export: vLLM, including i
 When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for the KV cache transfers between workers. See the [vLLM NixlConnector usage guide](https://docs.vllm.ai/en/latest/features/nixl_connector_usage/) for configuration details.
 
 | Metric | What it measures | Why it matters |
-| -------- | ------------------ | ---------------- |
+| --- | --- | --- |
 | `vllm:nixl_xfer_time_seconds` (histogram) | Time from posting a transfer until the backend reports completion, including submission and data movement | High tail latency can indicate network congestion, large transfers, or backend delays |
 | `vllm:nixl_post_time_seconds` (histogram) | Synchronous time spent submitting a transfer to the backend | A high value with otherwise normal transfer time points to descriptor setup or submission overhead |
 | `vllm:nixl_bytes_transferred` (histogram) | Bytes moved per transfer observation | Shows transfer size and KV cache data volume |
@@ -38,7 +38,7 @@ When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for
 When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), it exports metrics for KV blocks moved between the GPU and the offload tiers. The names below are available in vLLM v0.26.0 and later.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| --- | --- | --- |
 | `vllm:external_prefix_cache_queries_total` | Prompt tokens looked up through the KV connector | Denominator for the offload tier hit rate |
 | `vllm:external_prefix_cache_hits_total` | Prompt tokens the connector reported as cached at scheduling time | Offload tier hits. Counted before the load finishes, so read it together with load bytes |
 | `vllm:kv_offload_store_bytes_total` | Bytes stored from GPU to the offload tier | Eviction traffic into the tier |
@@ -53,7 +53,7 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 ## SGLang
 
 | Metric | What it measures | Why it matters |
-| -------- | ----------------- | ---------------- |
+| --- | --- | --- |
 | `sglang:num_running_reqs` | Active requests being processed | High values indicate GPU saturation; new requests will queue |
 | `sglang:num_queue_reqs` | Requests queued, waiting to be processed | Non-zero means pods are saturated. Primary signal for autoscaling decisions |
 | `sglang:token_usage` | KV cache token utilization (0.0 to 1.0) | Above 0.9 means GPU memory is nearly full |
@@ -68,7 +68,7 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 When HiCache is enabled (the SGLang path in the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), SGLang exports metrics for the host (CPU) tier.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| --- | --- | --- |
 | `sglang:hicache_host_used_tokens` | Tokens currently held in the host KV cache | Divide by `sglang:hicache_host_total_tokens` for host tier occupancy |
 | `sglang:hicache_host_total_tokens` | Host KV cache capacity in tokens | Denominator for host tier occupancy |
 | `sglang:evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
