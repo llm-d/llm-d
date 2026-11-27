@@ -20,18 +20,11 @@ repository](https://github.com/llm-d/llm-d/blob/main/DCO). In
 the case of an individual, DCO sign-off is accomplished by doing a Git
 "sign-off" on the commit.
 
-We prefer that commits contributed to this repository be signed and
-GitHub verified, but this is not strictly necessary or enforced.
+Every pull request runs two checks. `DCO` requires a `Signed-off-by:` trailer on every commit (`-s`). `Check Signed Commits` ([ci-signed-commits.yaml](.github/workflows/ci-signed-commits.yaml)) fails and comments on the pull request when a commit lacks a verified GPG or SSH signature (`-S`).
 
 ## Commit Sign-off
 
-Your submitted PR must pass the automated checks in order to be merged. One of these checks that each commit that you propose to contribute is signed-off. If you use the `git` shell command, this involves passing the `-s` flag on the command line. For example, the following command will create a signed-off commit but _not_ sign it.
-
-```shell
-git commit -s
-```
-
-Alternatively, the following command will create a commit that is both signed-off and signed.
+Pass both flags when committing:
 
 ```shell
 git commit -s -S
@@ -119,7 +112,7 @@ For Windows users, **Git Bash** is also highly recommended.
     ssh-keygen -t ed25519 -C "your_email"
     ```
 
-2. Press `Enter` to select the default option if prompted to set a save-file or passphrase for the key (you may choose to enter a passphrase if desired; this will prompt you to enter the passphrase every time you perform a DCO sign-off).
+2. Press `Enter` to select the default option if prompted to set a save-file or passphrase for the key (you may choose to enter a passphrase if desired; this prompts you to enter the passphrase every time you sign a commit).
    - The following output should generate a `randomart` image
 3. Use the following command to copy the **public** part of the new SSH key to your clipboard:
 
@@ -164,22 +157,12 @@ Whether it's editing files from llm-d.ai or directly from the llm-d Github, ther
 
 1. Changes made to any file are automatically committed to a new branch in your fork.
     - After clicking **Commit changes...**, write your commit message summary line and any extended description that you want. Then click **Propose changes**, review your changes, and then create the PR.
-    - When making the PR, make sure to specify the type of PR at the beginning of the PR's title (i.e. :bug: if it addresses a bug-type issue)
 
-1. If the PR addresses a specific issue that has already been opened in GitHub, make sure to include the open issue number in **Related Issue(s)** (i.e. `Fixes #NNNN`); this will cause GitHub to automatically close the Issue once the PR is merged. If you have finished addressing an open issue without getting it automatically closed then explicitly close it.
+1. If the PR addresses an open issue, reference it in the `Summary` section of the PR description (for example, `Fixes #<number>` to close the issue automatically on merge, or `Related: #<number>`). If you finish addressing an open issue without closing it automatically, close it explicitly.
 
 ## Repairing commits
 
-If you have already created a PR that proposes to merge a branch that
-adds commits that are not signed-off then you can repair this (and
-lack of signing, if you choose) by adding the signoff to each using
-`git commit -s --amend` on each of them. If you also want those
-commits signed then you would use `git commit -s -S --amend` or
-configure automatic signing. Following is an outline of how to do it
-for a branch that adds **exactly one** commit. If your branch adds
-more than one commit then you can extrapolate using `git cherry-pick -s -S`
-(or `git rebase -i HEAD~NN` and setting commits to `edit`) to build up a
-revised series of commits one-by-one.
+If a pull request has commits that lack a DCO sign-off or a signature, repair each one with `git commit -s -S --amend`. The outline below covers a branch that adds **exactly one** commit. For more than one, use `git cherry-pick -s -S` (or `git rebase -i HEAD~NN` and set commits to `edit`) to rebuild the series one commit at a time.
 
 The following instructions provide a basic walk-through if you have already created your own fork of the repository but yet not made a clone on your workstation.
 
@@ -195,9 +178,8 @@ The following instructions provide a basic walk-through if you have already crea
 6. Change your directory to the llm-d repo using `cd llm-d`.
 7. `git checkout` to the branch in your fork where the changes were committed.
     - The branch name should be written at the top of your submitted PR page and looks something like "patch-_X_" (where "X" should be the number of PRs made on your fork to date)
-8. Once in your branch, type `git commit -s --amend` to sign off your PR.
-    - The commit will also be signed if either you have set up automatic signing or both include the `-S` flag on that command and have set up your SSH or GPG key.
+8. Once on your branch, run `git commit -s -S --amend` to add the DCO sign-off and sign the commit. This needs a signing key; see [Signing Commits](#signing-commits).
     - You may extend that command with `-m` followed by a quoted commit message if you desire. Otherwise `git` will pop up an editor for you to use in making any desired adjustment to the commit message. After making any desired changes, save and exit the editor. FYI: in `vi` (which GitBash uses), when it is in Command mode (which is the normal mode, and contrasts with Insert mode) the keystrokes `:wq!` will attempt to save and then will exit no matter what.
 9. Type `git push -f origin [branch_name]`, replacing `[branch_name]` with the actual name of your branch.
 10. Navigate back to your PR github page.
-    - A green `dco-signoff: yes` label indicates that your PR is successfully signed
+    - `DCO` and `Check Signed Commits` should both pass.

@@ -197,10 +197,10 @@ EOF
   * Short, descriptive titles
   * Description of why the change was needed
   * Enough detail for someone reviewing git history to understand the scope
-* **DCO Sign-off**: All commits must include a valid DCO sign-off line (`Signed-off-by: Name <email@domain.com>`)
-  * Add automatically with `git commit -s`
-  * See [PR_SIGNOFF.md](PR_SIGNOFF.md) for configuration details
-  * Required for all contributions per [Developer Certificate of Origin](https://developercertificate.org/)
+* **DCO Sign-off and Commit Signing**: All commits must include a valid DCO sign-off line (`Signed-off-by: Name <email@domain.com>`), and `Check Signed Commits` expects a verified GPG or SSH signature
+  * Pass both `-s` (DCO sign-off) and `-S` (commit signature): `git commit -s -S`
+  * See [PR_SIGNOFF.md](PR_SIGNOFF.md) for signing setup and commit repair details
+  * DCO sign-off is required for all contributions per [Developer Certificate of Origin](https://developercertificate.org/)
 * **Area labels**: Pull requests are labeled automatically by changed paths (`area/*` and `docs-only`), and both PR and issue descriptions accept `/area <name>` lines; see [`.github/area_taxonomy.md`](.github/area_taxonomy.md) for the full taxonomy.
 
 ## Code Organization and Ownership
