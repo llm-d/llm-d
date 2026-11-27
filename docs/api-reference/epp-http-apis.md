@@ -12,6 +12,9 @@ This document lists the HTTP APIs the [Endpoint Picker (EPP)](../architecture/ro
 | `/v1/embeddings` | OpenAI Embeddings API | ✅ |
 | `/v1/messages` | Anthropic Messages API | ✅ |
 | `/inference/v1/generate` | vLLM Generate API | ✅ |
+| `/generate` | SGLang native Generate API (text or token IDs) | ✅ |
+
+SGLang's native `/generate` takes `text` or `input_ids` and generation settings under `sampling_params`, including `max_new_tokens`. The router supports raw-text tokenization and prefix-cache routing for this endpoint; see the [SGLang routing regression test](../../guides/precise-prefix-cache-routing/README.md#sglang-routing-regression-test).
 
 ---
 
