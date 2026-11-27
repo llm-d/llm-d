@@ -1,7 +1,7 @@
 name: Hardware or Platform Support
 description: Request or contribute support for new hardware accelerators or Kubernetes platforms
 title: "[HARDWARE/PLATFORM]: "
-labels: ["hardware", "platform-support", "documentation"]
+labels: ["hardware-support", "documentation"]
 assignees: []
 body:
   - type: markdown
