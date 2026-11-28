@@ -191,7 +191,7 @@ Each metrics source provides three main capabilities:
 **Saturation queries** (per-pod, 1-minute windows):
 
 | Query Name | PromQL | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `kv_cache_usage` | `max by (pod) (max_over_time(vllm:kv_cache_usage_perc{...}[1m]))` | KV cache utilization (0-1) |
 | `queue_length` | `max by (pod) (max_over_time(vllm:num_requests_waiting{...}[1m]))` | Pending request queue depth |
 | `cache_config_info` | `max by (pod, num_gpu_blocks, block_size) (vllm:cache_config_info{...})` | KV cache configuration (total capacity) |
@@ -204,7 +204,7 @@ Each metrics source provides three main capabilities:
 **Queueing model queries** (per-pod, 1-minute windows):
 
 | Query Name | PromQL | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `scheduler_dispatch_rate` | `sum by (endpoint_name) (rate(llm_d_epp_scheduler_attempts_total{status="success",...}[1m]))` | Per-pod arrival rate |
 | `avg_ttft` | `rate(vllm:time_to_first_token_seconds_sum[1m]) / rate(..._count[1m])` | Average time to first token |
 | `avg_itl` | `rate(vllm:inter_token_latency_seconds_sum[1m]) / rate(..._count[1m])` | Average inter-token latency |
@@ -212,13 +212,13 @@ Each metrics source provides three main capabilities:
 **Scale-to-zero query**:
 
 | Query Name | PromQL | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `model_request_count` | `sum(increase(vllm:request_success_total{...}[retentionPeriod]))` | Total requests in retention window |
 
 **Scale-from-zero** uses EPP (Endpoint Picker) metrics directly (not via Prometheus):
 
 | Metric | Purpose |
-|---|---|
+| --- | --- |
 | `llm_d_epp_flow_control_queue_size` | Pending requests in the EPP flow control queue |
 
 The replica metrics collector orchestrates query execution and populates per-pod metric data for consumption by the analyzers.
@@ -230,7 +230,7 @@ The VariantAutoscaling (short name: `va`) is the core CRD that represents an aut
 ### Spec
 
 | Field | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `scaleTargetRef` | object reference | (required) | Reference to the scalable resource (Deployment, StatefulSet, or LeaderWorkerSet) |
 | `modelID` | string | (required) | Unique identifier linking this VA to an InferencePool; all VAs with the same value form a variant group |
 | `minReplicas` | integer | `1` | Lower bound on replica count. Set to `0` to enable scale-to-zero |
@@ -242,7 +242,7 @@ Validation: `minReplicas <= maxReplicas`.
 ### Status
 
 | Field | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `desiredOptimizedAlloc.numReplicas` | integer | Target replica count from the optimization engine |
 | `desiredOptimizedAlloc.lastRunTime` | timestamp | Timestamp of the last optimization run |
 | `desiredOptimizedAlloc.accelerator` | string | *(Deprecated)* Accelerator type |
@@ -252,7 +252,7 @@ Validation: `minReplicas <= maxReplicas`.
 ### Conditions
 
 | Type | Description |
-|---|---|
+| --- | --- |
 | `TargetResolved` | Whether the scale target (Deployment/LWS) was found |
 | `MetricsAvailable` | Whether vLLM metrics are available from Prometheus |
 | `OptimizationReady` | Whether the optimization engine ran successfully |
@@ -406,7 +406,7 @@ data:
 Prometheus connectivity is configured via the unified config:
 
 | Setting | Source | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Prometheus URL | Config file / CLI | -- | Base URL for Prometheus API |
 | TLS config | Config file | -- | TLS certificates for Prometheus connection |
 
@@ -425,7 +425,7 @@ Key configuration decisions per VA:
 Key controller flags:
 
 | Flag | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `--config-file` | -- | Path to configuration file |
 | `--metrics-bind-address` | `:8080` | Metrics endpoint bind address |
 | `--health-probe-bind-address` | `:8081` | Health probe bind address |
@@ -477,7 +477,7 @@ The [HPA + WVA](../../../guides/workload-autoscaling/wva/README.md) approach rep
 ### Key Differences
 
 | | VA (Superseded) | HPA + WVA (Deprecated) |
-|---|---|---|
+| --- | --- | --- |
 | **Scaling object** | `VariantAutoscaling` CRD | Standard `HorizontalPodAutoscaler` |
 | **Scale target** | Managed by WVA via `scaleTargetRef` in VA spec | Managed by HPA via standard `scaleTargetRef` |
 | **WVA discovery** | WVA watches `VariantAutoscaling` resources | WVA discovers HPA via `llm-d.ai/managed: "true"` annotation |

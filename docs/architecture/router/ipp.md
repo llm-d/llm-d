@@ -18,7 +18,7 @@ IPP integrates with the Proxy via Envoy's [External Processing (ext-proc)](https
 Both IPP and EPP contribute to routing decisions:
 
 | Component | Routing Scope | Decision |
-|-----------|---------------|----------|
+| --- | --- | --- |
 | **IPP** | Pool-level | Which InferencePool? |
 | **EPP** | Endpoint-level | Which pod within the pool? |
 

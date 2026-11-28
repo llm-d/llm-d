@@ -51,7 +51,7 @@ On startup, the processor scans for jobs that were `in_progress` when a previous
 All Batch Gateway components share a pluggable storage layer:
 
 | Function | Options | Notes |
-|----------|---------|-------|
+| --- | --- | --- |
 | Jobs and files metadata | PostgreSQL, Redis, Valkey | PostgreSQL for production; Redis and Valkey for development/test only |
 | Priority queue | Redis, Valkey | Sorted set with SLO-based priority |
 | Event channels | Redis, Valkey | Pub/Sub for job cancellation and future supported events |

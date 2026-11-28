@@ -19,7 +19,7 @@ isolation rules, ownership semantics, scale-to-zero, and limitations.
 Four signals share that pipeline, each with its own deployable guide:
 
 | Signal | Scales on | Guide |
-|---|---|---|
+| --- | --- | --- |
 | **Queue depth** | Absolute per-replica queued-request and running-request targets | [keda-epp (`SIGNAL=queue`)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Pool saturation** | A normalized saturation ratio (0.0–1.0+), more portable across hardware | [keda-epp (`SIGNAL=saturation`)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Token backlog** | Seconds of prefill queue wait plus KV cache occupancy — for widely varying prompt sizes | [keda-epp-token-aware](../../../guides/workload-autoscaling/keda-epp-token-aware/README.md) |
@@ -56,7 +56,7 @@ variants has no current equivalent; the rest is covered, though in some cases by
 a different layer than the autoscaler:
 
 | Capability | WVA (deprecated) | KEDA + EPP |
-|---|---|---|
+| --- | --- | --- |
 | **Multiple variants of one model** | Optimally placed across models and topologies to minimize cost | Each Deployment scales independently; no cost-aware preference between variants |
 | **Limited accelerators** | Fair-share allocation across pools | Handled below the autoscaler by [Kueue](../../../guides/workload-autoscaling/kueue-rebalancing/README.md) — per-model quota floors in a shared cohort, with borrowing and preemption |
 | **Pending pods awareness** | Incorporated pending (unscheduled) pods into decisions | Available — a trigger can read replica counts from kube-state-metrics; the [slo-aware](../../../guides/workload-autoscaling/slo-aware/README.md) path discounts its ask by `readyReplicas/replicas` |

@@ -88,7 +88,7 @@ The individual guide README tells you how to set `${ENDPOINT_URL}`, `${GATEWAY_C
 Every `llmdbenchmark run` against a deployed stack follows the same shape: top-level flags before `run`, run-subcommand flags after.
 
 | Position | Flag | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | **Top-level** | `--spec guides/<guide-name>` | Which scenario this stack matches. Resolves to `config/specification/guides/<guide-name>.yaml` inside the repo. Required even in run-only mode because the CLI re-renders a plan to drive the harness pod. |
 | Top-level | `--workspace <dir>` | (Optional) Where rendered configs, logs, and collected results land on your local machine. If omitted, an auto-generated timestamped directory is used and its path is printed in the logs at the end of the run. |
 | Top-level | `--non-admin` | (Optional) Skip cluster-admin sanity checks. Use when running against a namespace where your user doesn't have cluster-wide privileges. |
@@ -273,7 +273,7 @@ For workloads no shipped profile matches — copy a `.yaml.in` template, edit it
 The run pipeline exposes three independent timeouts. Defaults are conservative; bump them when your cluster's StorageClass, image pull, or harness run is slower than the defaults assume.
 
 | Flag | Default | Controls |
-|---|---|---|
+| --- | --- | --- |
 | `--wait-timeout` | inherited from scenario's `harness.waitTimeout` or 3600s | "Waiting for pods to start" (deploy harness) **and** "Waiting for pods to complete" (the actual benchmark run). Each phase gets the full budget separately, so the worst case is twice this value. Set to `0` to dispatch and return without waiting. Combine it with `--no-cleanup`; otherwise post-run cleanup deletes the harness pod while it is still running. Only partial results, if any, reach the local workspace; fetch the complete results from the workload PVC later (see the `PVC results:` line in the run summary). With `--no-pvc` there is no PVC to fetch from; the results stay in the kept pods, so copy them out yourself. |
 | `--pvc-bind-timeout` | 240s | How long to wait for the harness workload PVC to reach the `Bound` phase. Bump for slow shared-storage backends (weka, gpfs, ceph) where first-bind in a fresh namespace can take several minutes. |
 | `--data-access-timeout` | 120s | How long to wait for the data-access pod that mounts the workload PVC to become Ready. |

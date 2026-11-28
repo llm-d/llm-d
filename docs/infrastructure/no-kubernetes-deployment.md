@@ -27,7 +27,7 @@ See the [no-Kubernetes deployment guide](../../guides/no-kubernetes-deployment) 
 
 Traffic flows the same way as the optimized-baseline path:
 
-```
+```text
 client -> Envoy listener :8081
        -> ext_proc gRPC :9002 (EPP picks endpoint, sets header)
        -> ORIGINAL_DST cluster

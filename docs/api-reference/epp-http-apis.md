@@ -124,7 +124,7 @@ curl -N -X POST http://${IP}/v1/chat/completions \
 <details>
 <summary>Streaming response (SSE)</summary>
 
-```
+```text
 data: {"id":"cmpl-abc124","object":"text_completion","created":1781036045,"model":"Qwen/Qwen3-VL-32B-Instruct","choices":[{"index":0,"text":"!","logprobs":null,"finish_reason":null,"stop_reason":null}]}
 
 data: {"id":"cmpl-abc124","object":"text_completion","created":1781036045,"model":"Qwen/Qwen3-VL-32B-Instruct","choices":[{"index":0,"text":" I","logprobs":null,"finish_reason":null,"stop_reason":null}]}
@@ -303,7 +303,7 @@ curl -N -X POST http://${IP}/v1/messages \
 <details>
 <summary>Streaming response (SSE)</summary>
 
-```
+```text
 event: message_start
 data: {"type":"message_start","message":{"id":"chatcmpl-abc126","content":[],"model":"Qwen/Qwen3-VL-32B-Instruct","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":234,"output_tokens":0}}}
 

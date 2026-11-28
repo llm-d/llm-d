@@ -9,7 +9,7 @@ Location:
 ## What It Checks
 
 | Check | Endpoint | Purpose |
-|-------|----------|---------|
+| --- | --- | --- |
 | (Optional) Liveness | `GET /health` | If exposed by your gateway; can be required via `--require-health` |
 | Readiness | `GET /v1/models` | Confirms OpenAI-compatible API is reachable; can auto-discover model when `jq` is available |
 | Inference | `POST /v1/completions` and/or `POST /v1/chat/completions` | End-to-end inference works; measures latency (auto-fallback supported) |
@@ -43,7 +43,7 @@ Location:
 ## Options
 
 | Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
+| --- | --- | --- | --- |
 | `-e, --endpoint` | `ENDPOINT` | `http://localhost:8000` | Base URL of the inference endpoint |
 | `-m, --model` | `MODEL_ID` | *(auto-discovered with jq)* | Model ID to query |
 | `-t, --timeout` | `TIMEOUT` | `30` | HTTP request timeout in seconds |
@@ -126,7 +126,7 @@ spec:
 
 ### Text (default)
 
-```
+```text
 ╔══════════════════════════════════════════╗
 ║         llm-d Health Check Report        ║
 ╠══════════════════════════════════════════╣

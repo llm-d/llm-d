@@ -52,7 +52,7 @@ All metric names use the current `llm_d_epp_*` prefix. Thresholds and `for:` win
 ### Availability and errors (`epp.availability`)
 
 | Alert | Severity | Fires when | Why it matters |
-|-------|----------|-----------|----------------|
+| --- | --- | --- | --- |
 | `EPPHighErrorRatio` | warning | Error ratio > 5% for 10m | Backend or routing failures are degrading a meaningful share of requests |
 | `EPPCriticalErrorRatio` | critical | Error ratio > 20% for 5m | The inference path is likely broken, not just degraded |
 | `EPPNoReadyEndpoints` | critical | `llm_d_epp_ready_endpoints == 0` for 2m | The pool has no routable endpoints — every request fails |
@@ -72,7 +72,7 @@ The error-ratio alerts are `0/0`-safe: with no traffic the expression yields no 
 ### EPP self-health (`epp.selfhealth`)
 
 | Alert | Severity | Fires when | Why it matters |
-|-------|----------|-----------|----------------|
+| --- | --- | --- | --- |
 | `EPPDataLayerPollErrors` | warning | `llm_d_epp_datalayer_poll_errors_total` increasing for 10m | A data source failed to poll — scheduling may be running on stale endpoint state |
 | `EPPDataLayerExtractErrors` | warning | `llm_d_epp_datalayer_extract_errors_total` increasing for 10m | A data extractor failed — scheduling may be running on stale state |
 | `EPPExtProcStreamErrors` | warning | `llm_d_epp_extproc_streams_total{code!~"OK\|Canceled"}` increasing for 10m | Envoy↔EPP `ext_proc` streams are terminating abnormally |
@@ -85,7 +85,8 @@ The error-ratio alerts are `0/0`-safe: with no traffic the expression yields no 
 These alerts cover the llm-d Coordinator, which runs the disaggregation pipeline (and the async-broker step) in front of the model servers. They are shipped as a separate `PrometheusRule` and are only relevant if your deployment runs the Coordinator.
 
 > [!IMPORTANT]
-> These rules only receive data once the Coordinator's own `/metrics` endpoint (named container port `metrics`, default `9090`) is scraped. Without it, `CoordinatorMetricsAbsent` fires permanently and the other alerts never evaluate. Create the Coordinator `PodMonitor` (or `PodMonitoring` on GKE) as described in [Collect Metrics](./metrics.md#step-3-scrape-coordinator-metrics). If you deployed the [coordinator disaggregation guide](../../../guides/coord-disaggregation/README.md), apply its `coordinator/monitoring` kustomization instead. Verify with `kubectl get podmonitors -n ${NAMESPACE}` and check that the `llm-d-coordinator` target shows `UP` at `http://localhost:9090/targets`.
+> These rules only receive data once the Coordinator's own `/metrics` endpoint (named container port `metrics`, default `9090`) is scraped. Without it, `CoordinatorMetricsAbsent` fires permanently and the other alerts never evaluate.
+> Create the Coordinator `PodMonitor` (or `PodMonitoring` on GKE) as described in [Collect Metrics](./metrics.md#step-3-scrape-coordinator-metrics). If you deployed the [coordinator disaggregation guide](../../../guides/coord-disaggregation/README.md), apply its `coordinator/monitoring` kustomization instead. Verify with `kubectl get podmonitors -n ${NAMESPACE}` and check that the `llm-d-coordinator` target shows `UP` at `http://localhost:9090/targets`.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -f guides/recipes/observability/alerts/coordinator-alerting-rules.yaml
@@ -95,7 +96,7 @@ kubectl get prometheusrules -n ${NAMESPACE}
 You should then see the `coordinator.availability` and `coordinator.steps` groups under **Status → Rule Health** in the Prometheus UI. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: coordinator-metrics`.
 
 | Alert | Severity | Fires when | Why it matters |
-|-------|----------|-----------|----------------|
+| --- | --- | --- | --- |
 | `CoordinatorHighErrorRatio` | warning | Error ratio > 5% for 10m | Pipeline or upstream failures are degrading a meaningful share of client requests |
 | `CoordinatorCriticalErrorRatio` | critical | Error ratio > 20% for 5m | The disaggregated inference path is likely broken, not just degraded |
 | `CoordinatorMetricsAbsent` | warning | `absent(llm_d_coordinator_request_total)` for 5m | Coarse cluster-wide signal: no Coordinator metrics at all — every Coordinator is down or scraping stopped |
@@ -128,10 +129,11 @@ kubectl get prometheusrules -n ${NAMESPACE}
 You should then see the `batch-gateway.rules` group under **Status → Rule Health** in the Prometheus UI.
 
 > [!IMPORTANT]
-> Every expression in this file is scoped with `namespace="batch-gateway"`, the namespace the Batch Gateway guide deploys into. The Batch Gateway metric names are unprefixed and generic (`jobs_processed_total`, `active_workers`), so an unscoped rule can pick up unrelated workloads. If you deployed into a different namespace, edit the matchers to match — applying the `PrometheusRule` into your namespace does **not** scope its queries. If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: batch-gateway-metrics` (not `app: epp-metrics`, which is specific to the EPP rule).
+> Every expression in this file is scoped with `namespace="batch-gateway"`, the namespace the Batch Gateway guide deploys into. The Batch Gateway metric names are unprefixed and generic (`jobs_processed_total`, `active_workers`), so an unscoped rule can pick up unrelated workloads. If you deployed into a different namespace, edit the matchers to match — applying the `PrometheusRule` into your namespace does **not** scope its queries.
+> If you bring your own Prometheus, its `ruleSelector` must match this resource's label, `app: batch-gateway-metrics` (not `app: epp-metrics`, which is specific to the EPP rule).
 
 | Alert | Severity | Fires when | Why it matters |
-|-------|----------|-----------|----------------|
+| --- | --- | --- | --- |
 | `BatchGatewayHighQueueWait` | warning | p95 `job_queue_wait_duration_seconds` > 300s for 15m | Jobs are backing up in the priority queue faster than workers drain it |
 | `BatchGatewayHighJobFailureRate` | warning | Failed share of `jobs_processed_total` > 10% for 10m | Job execution is failing at a rate users will notice |
 | `BatchGatewayExpiredJobsDetected` | warning | Expired share of `jobs_processed_total` > 3% for 10m | Jobs are aging out before execution — capacity or completion-window problem, not a code failure |

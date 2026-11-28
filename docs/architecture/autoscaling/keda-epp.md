@@ -73,7 +73,7 @@ The pipeline above is signal-agnostic: what changes between the deployable
 paths is which EPP metrics the triggers read and how thresholds are derived.
 
 | Signal | EPP metrics | Threshold is | Guide |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **In-flight load** (default) | `llm_d_epp_inflight_requests` | An absolute per-replica target (concurrency), tuned per deployment; no Flow Control required | [keda-epp (inflight signal)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Queue depth** | `llm_d_epp_flow_control_queue_size`, `llm_d_epp_request_running` | An absolute per-replica target, tuned per deployment | [keda-epp (queue signal)](../../../guides/workload-autoscaling/keda-epp/README.md) |
 | **Pool saturation** | `llm_d_epp_flow_control_pool_saturation`, `llm_d_epp_request_running` | A normalized ratio (0.0–1.0+), more portable across hardware | [keda-epp (saturation signal)](../../../guides/workload-autoscaling/keda-epp/README.md#choose-your-path) |
@@ -94,7 +94,7 @@ and active concurrency are both represented. The queue-based path is the
 canonical example:
 
 | Metric | Signal | KEDA metric type | Interpretation |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | EPP Flow Control queue size | Unfulfilled demand | `AverageValue` | Target aggregate queued requests per model server replica |
 | Running requests | Active concurrency | `AverageValue` | Target in-flight requests per model server replica |
 | Pool saturation ratio | Maximum endpoint saturation in the pool | `Value` | Compare the pool-wide ratio directly to the target; it is not divided by replicas |
