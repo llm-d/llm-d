@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Coordinator Disaggregation model-server monitoring.
+#
+# This is an overlay of the generic recipes/modelserver/components/monitoring-epd
+# component, which defines the encode, prefill and decode PodMonitors on the
+# "modelserver" port each role's vLLM container exposes. The labels transformer
+# scopes the PodMonitors to this guide's pods. A PD-only deployment (see the
+# PD-only note in ../../README.md) has no encode pods, so its encode PodMonitor
+# matches nothing.
+components:
+  - ../../../recipes/modelserver/components/monitoring-epd
+
+labels:
+  - pairs:
+      llm-d.ai/inference-serving: "true"
+      llm-d.ai/guide: coord-disaggregation
+      llm-d.ai/model: Qwen3-VL-32B-Instruct
+    includeSelectors: true
+    fields:
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: metadata/labels
+        create: true
+      - group: monitoring.coreos.com
+        version: v1
+        kind: PodMonitor
+        path: spec/selector/matchLabels
+        create: true
