@@ -420,6 +420,20 @@ def test_support_marker_renders_into_readme():
     assert "| NVIDIA GPU |" in g.render()
 
 
+def test_empty_bash_fence_between_markers_is_filled():
+    # The form guides/templates/README.md tells authors to write: an empty
+    # fence that the renderer fills.
+    md = (
+        "# T\n\n<!-- guide:deploy.modelserver start -->\n```bash\n```\n"
+        "<!-- guide:deploy.modelserver end -->\n"
+    )
+    g = guide.Guide.from_text(yaml.safe_dump(_guide(), sort_keys=False), md)
+    assert g.check().ok(), _errors(g.check())
+    rendered = g.render()
+    assert "```bash\n```" not in rendered
+    assert "echo common" in rendered
+
+
 # --------------------------------------------------------------------------
 # set-branch
 # --------------------------------------------------------------------------
