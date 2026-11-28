@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# SSL Bump test client. It is built with the same client-trust Component that
+# production clients use, so the test exercises the real CA trust and proxy
+# configuration.
+resources:
+- curl-test-deployment.yaml
+
+components:
+- ../https-ssl-bump/client-trust

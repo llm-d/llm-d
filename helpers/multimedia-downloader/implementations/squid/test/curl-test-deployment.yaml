@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: curl-ssl-test
+  labels:
+    app: curl-ssl-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: curl-ssl-test
+  template:
+    metadata:
+      labels:
+        app: curl-ssl-test
+    spec:
+      terminationGracePeriodSeconds: 1  # sleep ignores SIGTERM
+      containers:
+      - name: app
+        image: curlimages/curl:8.11.1
+        command: ["sleep", "infinity"]
