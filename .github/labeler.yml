@@ -104,6 +104,7 @@ area/router:
           - "guides/turn-priority-fairness/**"
           - "guides/thunder-agent/**"
           - "guides/multi-model-routing/**"
+          - "guides/multi-cluster-routing/**"
           - "guides/rollouts/**"
           - "guides/no-kubernetes-deployment/**"
           - "guides/workload-autoscaling/multi-inference-pool/**"
