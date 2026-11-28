@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 428" width="800" height="428">
+  <defs>
+    <style>
+      .sans { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    </style>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#2563eb" />
+    </marker>
+    <marker id="arr-teal" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0d9488" />
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#d97706" />
+    </marker>
+    <marker id="arr-violet" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#7c3aed" />
+    </marker>
+    <marker id="arr-slate" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#64748b" />
+    </marker>
+    <clipPath id="clip-tenant-a"><rect x="24" y="148" width="140" height="56" rx="7"/></clipPath>
+    <clipPath id="clip-thread-chat"><rect x="382" y="272" width="164" height="56" rx="7"/></clipPath>
+    <clipPath id="clip-tenant-b"><rect x="24" y="356" width="140" height="54" rx="7"/></clipPath>
+  </defs>
+  <rect x="1" y="1" width="798" height="426" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+  <!-- Header & Legend -->
+  <text x="22" y="29" class="sans" font-size="14" font-weight="700" fill="#0f172a">Workload Hierarchy Across Priority Bands</text>
+  <g transform="translate(322, 14)">
+    <rect width="152" height="22" rx="11" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+    <circle cx="13" cy="11" r="4.5" fill="#2563eb"/>
+    <text x="25" y="14" class="sans" font-size="11" font-weight="600" fill="#1e40af">Priority 100 · Critical</text>
+  </g>
+  <g transform="translate(482, 14)">
+    <rect width="148" height="22" rx="11" fill="#f0fdfa" stroke="#5eead4" stroke-width="1"/>
+    <circle cx="13" cy="11" r="4.5" fill="#0d9488"/>
+    <text x="25" y="14" class="sans" font-size="11" font-weight="600" fill="#115e59">Priority 0 · Standard</text>
+  </g>
+  <g transform="translate(638, 14)">
+    <rect width="142" height="22" rx="11" fill="#fffbeb" stroke="#fcd34d" stroke-width="1"/>
+    <circle cx="13" cy="11" r="4.5" fill="#d97706"/>
+    <text x="25" y="14" class="sans" font-size="11" font-weight="600" fill="#92400e">Priority -10 · Batch</text>
+  </g>
+  <line x1="20" y1="45" x2="780" y2="45" stroke="#e2e8f0" stroke-width="1"/>
+  <!-- Column Headers -->
+  <text x="94" y="61" text-anchor="middle" class="sans" font-size="12" font-weight="700" fill="#0f172a">1. Tenant</text>
+  <rect x="28" y="69" width="132" height="20" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="94" y="82" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#1e40af">Gateway-Stamped</text>
+  <text x="272" y="61" text-anchor="middle" class="sans" font-size="12" font-weight="700" fill="#0f172a">2. Program</text>
+  <rect x="206" y="69" width="132" height="20" rx="10" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="272" y="83" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#6b21a8">Client Hint · Root</text>
+  <text x="464" y="61" text-anchor="middle" class="sans" font-size="12" font-weight="700" fill="#0f172a">3. Thread</text>
+  <rect x="394" y="69" width="140" height="20" rx="10" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1"/>
+  <text x="464" y="83" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#6b21a8">Client Hint · Branch</text>
+  <text x="676" y="61" text-anchor="middle" class="sans" font-size="12" font-weight="700" fill="#0f172a">4. Request (Turns)</text>
+  <rect x="610" y="69" width="132" height="20" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="676" y="82" text-anchor="middle" class="sans" font-size="11" font-weight="600" fill="#1e40af">Gateway Ceiling</text>
+  <line x1="20" y1="96" x2="780" y2="96" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="176" y1="45" x2="176" y2="416" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="368" y1="45" x2="368" y2="416" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="560" y1="45" x2="560" y2="416" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4 4"/>
+  <!-- Row 1: team-alpha -->
+  <rect x="24" y="148" width="140" height="56" rx="7" fill="#f8fafc"/>
+  <rect x="24" y="148" width="4" height="56" fill="#1e40af" clip-path="url(#clip-tenant-a)"/>
+  <rect x="24" y="148" width="140" height="56" rx="7" fill="none" stroke="#94a3b8" stroke-width="1"/>
+  <text x="40" y="172" class="mono" font-size="12" font-weight="700" fill="#0f172a">team-alpha</text>
+  <text x="40" y="190" class="sans" font-size="11" fill="#64748b">Quota principal</text>
+  <line x1="164" y1="176" x2="188" y2="176" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <rect x="190" y="136" width="164" height="80" rx="7" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+  <text x="202" y="160" class="mono" font-size="12" font-weight="700" fill="#581c87">team-alpha/t-root</text>
+  <text x="202" y="180" class="sans" font-size="11" font-weight="600" fill="#7e22ce">Derived program ID</text>
+  <text x="202" y="200" class="sans" font-size="11" fill="#64748b">1 → N tree · 1 ID</text>
+  <path d="M 354 176 L 368 176 M 368 128 L 368 224" stroke="#7c3aed" stroke-width="1.5" fill="none"/>
+  <line x1="368" y1="128" x2="380" y2="128" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <line x1="368" y1="176" x2="380" y2="176" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <line x1="368" y1="224" x2="380" y2="224" stroke="#d97706" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+  <rect x="382" y="108" width="164" height="40" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="394" y="125" class="mono" font-size="11.5" font-weight="700" fill="#1e40af">t-root</text>
+  <text x="394" y="139" class="sans" font-size="11" fill="#2563eb">Planner · Pri 100</text>
+  <rect x="382" y="156" width="164" height="40" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1"/>
+  <text x="394" y="173" class="mono" font-size="11.5" font-weight="700" fill="#1e40af">t-worker-1</text>
+  <text x="394" y="187" class="sans" font-size="11" fill="#2563eb">Sub-agent · Pri 100</text>
+  <rect x="382" y="204" width="164" height="40" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1"/>
+  <text x="394" y="221" class="mono" font-size="11.5" font-weight="700" fill="#92400e">t-worker-2</text>
+  <text x="394" y="235" class="sans" font-size="11" fill="#d97706">Async bg · Pri -10</text>
+  <line x1="546" y1="128" x2="572" y2="128" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <rect x="574" y="112" width="62" height="32" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="605" y="132" text-anchor="middle" class="sans" font-size="11.5" font-weight="700" fill="#1e40af">Turn 1</text>
+  <line x1="636" y1="128" x2="714" y2="128" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-slate)"/>
+  <text x="673" y="120" text-anchor="middle" class="sans" font-size="11" fill="#64748b">tool wait</text>
+  <rect x="716" y="112" width="62" height="32" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="747" y="132" text-anchor="middle" class="sans" font-size="11.5" font-weight="700" fill="#1e40af">Turn 2</text>
+  <line x1="546" y1="180" x2="643" y2="180" stroke="#2563eb" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <line x1="546" y1="228" x2="643" y2="228" stroke="#d97706" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+  <path d="M 605 144 L 605 169 L 643 169" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3 2" fill="none" marker-end="url(#arr-violet)"/>
+  <path d="M 605 169 L 605 176 M 605 184 L 605 217 L 643 217" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3 2" fill="none" marker-end="url(#arr-violet)"/>
+  <rect x="645" y="160" width="62" height="32" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="676" y="180" text-anchor="middle" class="sans" font-size="11.5" font-weight="700" fill="#1e40af">Turn 1</text>
+  <rect x="645" y="208" width="62" height="32" rx="6" fill="#fffbeb" stroke="#d97706" stroke-width="1.5"/>
+  <text x="676" y="228" text-anchor="middle" class="sans" font-size="11.5" font-weight="700" fill="#92400e">Turn 1</text>
+  <path d="M 707 176 L 747 176 L 747 146" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3 2" fill="none" marker-end="url(#arr-violet)"/>
+  <line x1="707" y1="224" x2="766" y2="224" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-amber)"/>
+  <text x="734" y="215" text-anchor="middle" class="sans" font-size="11" fill="#92400e">async</text>
+  <line x1="176" y1="256" x2="780" y2="256" stroke="#e2e8f0" stroke-width="1"/>
+  <!-- Row 2: chat-9 -->
+  <path d="M 94 204 L 94 300 L 188 300" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arr-blue)"/>
+  <rect x="190" y="272" width="164" height="56" rx="7" fill="#faf5ff" stroke="#c084fc" stroke-width="1"/>
+  <text x="202" y="296" class="mono" font-size="12" font-weight="700" fill="#581c87">team-alpha/chat-9</text>
+  <text x="202" y="314" class="sans" font-size="11" fill="#64748b">Program = Thread</text>
+  <line x1="354" y1="300" x2="380" y2="300" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arr-violet)"/>
+  <rect x="382" y="272" width="164" height="56" rx="7" fill="#f8fafc"/>
+  <rect x="382" y="272" width="4" height="28" fill="#0d9488" clip-path="url(#clip-thread-chat)"/>
+  <rect x="382" y="300" width="4" height="28" fill="#d97706" clip-path="url(#clip-thread-chat)"/>
+  <rect x="382" y="272" width="164" height="56" rx="7" fill="none" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="398" y="296" class="mono" font-size="11.5" font-weight="700" fill="#0f172a">chat-9 / eval-4</text>
+  <text x="398" y="314" class="sans" font-size="11" fill="#475569">Chat (0) or Eval (-10)</text>
+  <line x1="546" y1="300" x2="572" y2="300" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr-slate)"/>
+  <rect x="574" y="284" width="56" height="32" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="602" y="304" text-anchor="middle" class="sans" font-size="11.5" font-weight="600" fill="#1e293b">Turn 1</text>
+  <line x1="630" y1="300" x2="646" y2="300" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr-slate)"/>
+  <rect x="648" y="284" width="56" height="32" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="676" y="304" text-anchor="middle" class="sans" font-size="11.5" font-weight="600" fill="#1e293b">Turn 2</text>
+  <line x1="704" y1="300" x2="720" y2="300" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arr-slate)"/>
+  <rect x="722" y="284" width="56" height="32" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="750" y="304" text-anchor="middle" class="sans" font-size="11.5" font-weight="600" fill="#1e293b">Turn 3</text>
+  <line x1="20" y1="344" x2="780" y2="344" stroke="#e2e8f0" stroke-width="1"/>
+  <!-- Row 3: Stateless org-api -->
+  <rect x="24" y="356" width="140" height="54" rx="7" fill="#f0fdfa"/>
+  <rect x="24" y="356" width="4" height="54" fill="#0d9488" clip-path="url(#clip-tenant-b)"/>
+  <rect x="24" y="356" width="140" height="54" rx="7" fill="none" stroke="#5eead4" stroke-width="1"/>
+  <text x="40" y="379" class="mono" font-size="12" font-weight="700" fill="#0f172a">org-api</text>
+  <text x="40" y="397" class="sans" font-size="11" fill="#0d9488">Tenant queue only</text>
+  <line x1="164" y1="383" x2="560" y2="383" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="232" y="371" width="272" height="24" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="368" y="386" text-anchor="middle" class="sans" font-size="11" font-weight="500" fill="#334155">Stateless bypass · zero Program or Thread</text>
+  <path d="M 560 383 L 560 366 L 572 366" stroke="#0d9488" stroke-width="1.5" fill="none" marker-end="url(#arr-teal)"/>
+  <path d="M 560 383 L 560 400 L 572 400" stroke="#d97706" stroke-width="1.5" fill="none" marker-end="url(#arr-amber)"/>
+  <rect x="574" y="353" width="204" height="26" rx="6" fill="#f0fdfa" stroke="#5eead4" stroke-width="1"/>
+  <text x="586" y="369.5" class="sans" font-size="11" font-weight="700" fill="#115e59">Req A · Single-turn (Pri 0)</text>
+  <rect x="574" y="387" width="204" height="26" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1"/>
+  <text x="586" y="403.5" class="sans" font-size="11" font-weight="700" fill="#92400e">Req B · Batch call (Pri -10)</text>
+</svg>

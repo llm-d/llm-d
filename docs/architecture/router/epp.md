@@ -41,6 +41,8 @@ The steps are:
 
 Asynchronously, the **Data layer** watches the Kubernetes API server for updates to relevant objects like InferencePools and Pods for endpoint discovery. It is also responsible for model servers metrics probing, and maintaining an internal state—such as a prefix cache tree—to inform the request processing components, flow control and request scheduling.
 
+See [Workload and State Model](workload-model.md) for how Request Handling, Flow Control, Request Scheduling, and the Data Layer join across the workload hierarchy (`Tenant → Program → Thread → Request`) and three replica-local state domains.
+
 ### Components
 
 The EPP is modular and pluggable, consisting of the following components:

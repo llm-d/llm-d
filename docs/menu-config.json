@@ -52,8 +52,9 @@
     "architecture/router/flow-control": { "position": 5, "label": "Flow Control" },
     "architecture/router/scheduling": { "position": 6, "label": "Request Scheduling" },
     "architecture/router/datalayer": { "position": 7, "label": "Data Layer" },
-    "architecture/router/configuration": { "position": 8, "label": "EPP Configuration" },
-    "architecture/router/latency-predictor": { "position": 9, "label": "Latency Predictor" },
+    "architecture/router/workload-model": { "position": 8, "label": "Workload and State Model" },
+    "architecture/router/configuration": { "position": 9, "label": "EPP Configuration" },
+    "architecture/router/latency-predictor": { "position": 10, "label": "Latency Predictor" },
     "architecture/router/ipp": { "hidden": true },
 
     "architecture/model-servers/vllm": { "position": 1, "label": "vLLM" },

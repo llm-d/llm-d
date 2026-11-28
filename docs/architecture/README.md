@@ -20,6 +20,7 @@ The [llm-d Router](router/README.md) is the intelligent entry point for inferenc
 - **[Flow Control](router/flow-control.md)**: Multi-priority queuing, fair-share scheduling, and proactive overload protection.
 - **[Request Scheduling](router/scheduling.md)**: Extensible Filter-Score-Pick pipeline selecting optimal candidate endpoints.
 - **[Data Layer](router/datalayer.md)**: Real-time telemetry ingestion from model servers and Kubernetes APIs.
+- **[Workload and State Model](router/workload-model.md)**: Multi-turn and multi-agent workload hierarchy (`Tenant → Program → Thread → Request`), ingress header trust boundary, and three replica-local state domains.
 - **[EPP Configuration](router/configuration.md)**: Declarative YAML configuration schema and plugin setup.
 - **[Latency Predictor](router/latency-predictor.md)**: Online ML regression models predicting TTFT and TPOT to enforce latency SLOs.
 
