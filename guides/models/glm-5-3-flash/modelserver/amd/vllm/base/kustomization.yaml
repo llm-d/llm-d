@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Recommended deployment, cluster-agnostic: 1P1D (TP=8 + EP per role, MoRI-IO READ)
+# with native CPU KV offloading on prefill. Needs two MI355X nodes with RDMA-capable
+# NICs reachable by MoRI-IO; see ../amd-ci for a worked cluster overlay.
+resources:
+  - ../common
+components:
+  - ../components/offloading-cpu

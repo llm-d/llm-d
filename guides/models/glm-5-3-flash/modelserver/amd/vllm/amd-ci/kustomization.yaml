@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The recommended deployment (../base: 1P1D + CPU KV offloading on prefill) on the
+# AMD-CI MI355X cluster.
+resources:
+  - ../common
+components:
+  - ../components/offloading-cpu
+  - ../../../../../../recipes/modelserver/components/model-cache
+  - ../components/amd-ci
